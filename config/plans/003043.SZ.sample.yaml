@@ -1,0 +1,82 @@
+schema_version: 1
+plan_id: huaya-smart
+version: 1
+symbol: 003043.SZ
+name: 华亚智能
+market: SZSE
+metadata:
+  report_at: "2026-08-06T01:16:00+08:00"
+  reference_price_fen: 6660
+activation:
+  mode: MANUAL
+position:
+  lot_size: 100
+  max_qty: 200
+  core_target_qty: 100
+  tactical_target_qty: 100
+levels:
+  low_buy:
+    low_fen: 6300
+    high_fen: 6450
+    include_low: true
+    include_high: true
+  pressure:
+    low_fen: 6880
+    high_fen: 7020
+    include_low: true
+    include_high: true
+  risk_line_fen: 6080
+  pressure_reference_fen: 6906
+entry:
+  condition:
+    type: ALL
+    conditions:
+      - type: PRICE_IN_ZONE
+        zone: LOW_BUY
+      - type: NO_NEW_LOW_FOR_BARS
+        bars: 2
+      - type: NON_DECREASING_CLOSE
+      - type: VOLUME_TO_PREVIOUS_LTE
+        max_ratio: "1.00"
+      - type: VOLUME_TO_MEDIAN_LTE
+        max_ratio: "1.50"
+        window_bars: 20
+      - type: ANY
+        conditions:
+          - type: MACD_HIST_IMPROVEMENT_GTE
+            minimum_improvement: "0.02"
+          - type: PRICE_RECLAIMS_INDICATOR
+            indicator: EMA10
+reduction:
+  condition:
+    type: ALL
+    conditions:
+      - type: PRICE_IN_ZONE
+        zone: PRESSURE
+      - type: SELLABLE_QUANTITY_GTE
+        quantity: 100
+      - type: ANY
+        conditions:
+          - type: UPPER_WICK_RATIO_GTE
+            minimum_ratio: "0.40"
+          - type: RETREAT_FROM_SESSION_HIGH_GTE
+            minimum_ratio: "0.01"
+          - type: ALL
+            conditions:
+              - type: VOLUME_TO_MEDIAN_LTE
+                max_ratio: "1.50"
+                window_bars: 20
+              - type: CLOSE_IN_BAR_LOWER_HALF
+          - type: CONSECUTIVE_CLOSES_BELOW_LEVEL
+            level: PRESSURE_REFERENCE
+            bars: 2
+risk:
+  condition:
+    type: OFFICIAL_CLOSE_BELOW_LEVEL
+    level: RISK_LINE
+blockers:
+  condition:
+    type: MANUAL_EVENT_RISK_CLEAR
+monitoring:
+  timeframe_minutes: 5
+  indicator_formula_version: ta-v1

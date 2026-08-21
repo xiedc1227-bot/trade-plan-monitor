@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trade-plan-monitor"
+version = "0.1.0"
+description = "Local AI-assisted monitor for deterministic A-share trade plans"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic==1.19.1",
+    "fastapi==0.141.1",
+    "httpx==0.28.1",
+    "pandas==3.0.5",
+    "pydantic==2.13.4",
+    "PyYAML==6.0.3",
+    "SQLAlchemy==2.0.52",
+    "tushare==1.4.29",
+    "uvicorn==0.52.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.3",
+]
+
+[project.scripts]
+trade-plan-monitor = "trade_plan_monitor.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "9.1"
+testpaths = ["tests"]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+

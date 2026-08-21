@@ -1,0 +1,47 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Packaging output
+build/
+dist/
+*.egg-info/
+
+# Coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Runtime data and SQLite files
+data/
+backups/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+
+# Frontend dependencies and generated output
+web/node_modules/
+web/dist/
+web/coverage/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
