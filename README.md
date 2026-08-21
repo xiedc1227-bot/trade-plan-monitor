@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T024` and checkpoints `C00`–`C09` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, and the pure deterministic decision engine. Alert work starts at `T025`, the monitoring runtime at `T028`, FastAPI routes at `T035`, the production Vue application shell at `T042`, and the multi-stock dashboard at `T047`; none is implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
+> Development status: tasks `T001`–`T026` and checkpoints `C00`–`C09` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, and a transactional alert outbox with restart deduplication, acknowledgement, and replay queries. Bounded channel dispatch starts at `T027`, the monitoring runtime at `T028`, FastAPI routes at `T035`, the production Vue application shell at `T042`, and the multi-stock dashboard at `T047`; none of those later slices is implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
 
 ## Product Goals
 
@@ -30,9 +30,10 @@ Last verified on 2026-08-22 with CPython 3.14.7.
 | AI configuration, write-only secrets, bounded provider adapter, prompts, and extraction | `T015`–`T017` | Complete |
 | Idempotent market history, `ta-v1` indicators, and provisional/official close reconciliation | `T018`–`T020` | Complete |
 | Typed conditions, low-zone episodes, pressure/risk evaluation, priority, hashes, and replay | `T021`–`T024` | Complete |
-| Alerts, monitoring runtime, API, and production UI | `T025`–`T059` | Pending |
+| Alert identity, typed payload, deterministic Chinese rendering, and transactional outbox | `T025`–`T026` | Complete |
+| Channel dispatch, monitoring runtime, API, and production UI | `T027`–`T059` | Pending |
 
-At checkpoint `C09`, all 792 backend tests pass. The decision/replay gate contains 273 tests, and whole-tree Ruff, scoped formatting, `compileall`, and `pip check` pass. Completed-checkpoint tests are deterministic and require no live Tushare or AI calls. `T025` is the next task and has not started.
+After `T026`, all 837 backend tests pass. The notification gate contains 44 tests, the unchanged decision/replay gate contains 273 tests, and whole-tree Ruff, scoped formatting, `compileall`, and `pip check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare or AI calls. Checkpoint `C10` remains open through `T027`; `T027` is the next task and has not started.
 
 ## Safety Boundaries
 
@@ -140,7 +141,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 
 | Command | Purpose | Availability |
 |---|---|---|
-| `python -m pytest -q` | Run the complete 792-test backend gate | Available |
+| `python -m pytest -q` | Run the complete 837-test backend gate | Available |
 | `python -m pytest tests/unit/test_package.py -q` | Run the stable package smoke test | Available |
 | `python -m pytest tests/integration/test_ai_provider_contract.py -q` | Verify the AI provider and extraction contract | Available |
 | `python -m pytest tests/unit/test_decision_engine.py tests/replay/test_decision_replay.py -q` | Run the deterministic decision and replay gate | Available |
@@ -170,6 +171,7 @@ trade-plan-monitor/
 │   ├── decision/       # Pure conditions, episodes, pressure/risk, priority, hashes
 │   ├── domain/         # Plan models, validation, codecs, and stable hashing
 │   ├── market_data/    # Normalization, history, aggregation, indicators, reconciliation
+│   ├── notifications/  # Deterministic alert values, rendering, and transactional outbox
 │   ├── state/          # SQLite models, migrations, repositories, UoW, backup
 │   ├── cli.py          # Reserved command declarations
 │   └── config.py       # Strict non-secret application configuration

@@ -73,6 +73,7 @@ The baseline migration also creates the approved cross-module support tables:
 request_idempotency(idempotency_key PRIMARY KEY, request_hash, status, response_code, response_json, created_at, updated_at)
 latest_quote(symbol PRIMARY KEY, price_fen, bar_end, received_at)
 alert_event(id PRIMARY KEY, sequence UNIQUE, dedup_key UNIQUE, payload_json, message_text, created_at, acknowledged_at)
+alert_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
 delivery_attempt(id PRIMARY KEY, event_id, channel, attempt, status, response_code, next_retry_at, delivered_at, error_code, UNIQUE(event_id, channel, attempt))
 ```
 
@@ -113,6 +114,7 @@ Through T024, the existing `evaluation_ledger(plan_hash, symbol, bucket_end, for
 - A new idempotency key creates `PENDING`. The same key and hash while pending produces `IDEMPOTENCY_IN_PROGRESS`; after `COMPLETED`, it replays the canonical stored response. The same key with a different SHA-256 request hash always produces `IDEMPOTENCY_KEY_REUSED`.
 - Repository failures expose stable codes such as `PLAN_VERSION_EXISTS`, `PLAN_SAVE_BLOCKED`, `PLAN_ACTIVATION_BLOCKED`, `PLAN_VERSION_NOT_FOUND`, `CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_IN_PROGRESS`, and `IDEMPOTENCY_CLAIM_NOT_FOUND`; later transport adapters map them to HTTP without exposing SQL or raw Session details.
 - `UnitOfWork` owns one explicit short transaction. Callers must invoke `commit()` for durability; leaving the context without a commit rolls back. Its public protocol exposes repositories plus `commit()`/`rollback()`, never the SQLAlchemy Session.
+- `UnitOfWork.alerts` exposes the session-bound `AlertOutbox`. Alert enqueue may therefore commit or roll back with state and audit writes. Append-only migration `0004_alert_sequence` backfills and preserves a singleton monotonic sequence high-water mark independently of alert-history deletion. Acknowledgement appends one `ALERT_ACKNOWLEDGED` audit and changes only `alert_event.acknowledged_at`; it never changes a position or records delivery success.
 
 ### Low-Zone Episode Cursor and Repository Contract
 
@@ -145,6 +147,7 @@ class UnitOfWork(Protocol):
     risk: RiskRepository
     evaluations: EvaluationRepository
     health: HealthRepository
+    alerts: AlertOutbox
 
     def commit(self) -> None: ...
     def rollback(self) -> None: ...

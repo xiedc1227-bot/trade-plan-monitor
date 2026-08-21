@@ -73,6 +73,7 @@ daily_price_limit(symbol, trade_date, up_limit_fen, down_limit_fen, received_at,
 request_idempotency(idempotency_key PRIMARY KEY, request_hash, status, response_code, response_json, created_at, updated_at)
 latest_quote(symbol PRIMARY KEY, price_fen, bar_end, received_at)
 alert_event(id PRIMARY KEY, sequence UNIQUE, dedup_key UNIQUE, payload_json, message_text, created_at, acknowledged_at)
+alert_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
 delivery_attempt(id PRIMARY KEY, event_id, channel, attempt, status, response_code, next_retry_at, delivered_at, error_code, UNIQUE(event_id, channel, attempt))
 ```
 
@@ -113,6 +114,7 @@ class PositionLot(BaseModel):
 - 新幂等键创建 `PENDING`。相同键和哈希在待处理时产生 `IDEMPOTENCY_IN_PROGRESS`；进入 `COMPLETED` 后重放已保存的规范响应。相同键对应不同 SHA-256 请求哈希时始终产生 `IDEMPOTENCY_KEY_REUSED`。
 - 仓储失败暴露稳定错误码，例如 `PLAN_VERSION_EXISTS`、`PLAN_SAVE_BLOCKED`、`PLAN_ACTIVATION_BLOCKED`、`PLAN_VERSION_NOT_FOUND`、`CONFLICT`、`IDEMPOTENCY_KEY_REUSED`、`IDEMPOTENCY_IN_PROGRESS` 和 `IDEMPOTENCY_CLAIM_NOT_FOUND`；后续传输适配器将其映射为 HTTP，但不暴露 SQL 或原始 Session 细节。
 - `UnitOfWork` 拥有一个显式短事务。调用方必须调用 `commit()` 才能持久化；退出上下文时未提交则回滚。其公共协议只暴露仓储及 `commit()`/`rollback()`，绝不暴露 SQLAlchemy Session。
+- `UnitOfWork.alerts` 暴露绑定 Session 的 `AlertOutbox`，因此提醒入队可以与状态及审计写入一起提交或回滚。追加迁移 `0004_alert_sequence` 回填并持久保存单例单调序号高水位，使其不受提醒历史删除影响。提醒确认追加一条 `ALERT_ACKNOWLEDGED` 审计，并且只修改 `alert_event.acknowledged_at`；绝不改变持仓，也不记录投递成功。
 
 ### 低吸事件游标与仓储契约
 
@@ -145,6 +147,7 @@ class UnitOfWork(Protocol):
     risk: RiskRepository
     evaluations: EvaluationRepository
     health: HealthRepository
+    alerts: AlertOutbox
 
     def commit(self) -> None: ...
     def rollback(self) -> None: ...

@@ -44,35 +44,73 @@ tests/integration/
 ## Event Contract
 
 ```python
-class AlertEvent(BaseModel):
+class AlertPayload(BaseModel):
     event_id: UUID
-    sequence: int
     dedup_key: str
     plan_id: str
+    plan_version: int
     plan_hash: str
     symbol: str
     name: str
-    signal_type: SignalType
+    signal_type: ActionableSignalType
     severity: Literal["INFO", "ACTION", "RISK", "CRITICAL"]
+    trading_date: date
+    cause_id: str
     evaluated_at: datetime
     market_data_at: datetime | None
     data_age_seconds: int | None
     price_fen: int | None
-    quantity: int
-    matched_conditions: list[ConditionEvidence]
-    blockers: list[ConditionEvidence]
+    quantity: int | None
+    bucket: PositionBucket | None
+    target_lot_id: str | None
+    matched_conditions: tuple[ConditionEvidence, ...]
+    satisfied_conditions: tuple[EvaluationEvidence, ...]
+    unmet_conditions: tuple[EvaluationEvidence, ...]
+    blockers: tuple[EvaluationEvidence, ...]
+    zone: DecisionZone
+    relevant_zone: AlertPriceZone | None
     risk_line_fen: int | None
-    next_step: str
+    next_step: NextStep
+
+class AlertEvent(AlertPayload):
+    sequence: int
     message_text: str
+    created_at: datetime
+    acknowledged_at: datetime | None
 ```
 
-Deduplication key:
+The payload is strict, frozen, and copy-revalidated. `BUY_CORE_READY` and
+`BUY_TACTICAL_READY` map to `ACTION`; `PRESSURE_REDUCE_READY` and `RISK_BREACH`
+map to `RISK`; `RISK_EXIT_READY` and `RISK_EXIT_PENDING_SETTLEMENT` map to
+`CRITICAL`. `RISK_BREACH` has no quantity, bucket, or target lot. The other five
+actionable signal types preserve the exact quantity/bucket/target-lot shape
+already validated by `SignalIntent`.
+
+The deduplication preimage is exactly five pipe-separated fields, with no
+surrounding whitespace:
 
 ```text
-sha256(plan_hash | trading_date | signal_type | episode_or_risk_transition_id | quantity)
+plan_hash|trading_date.isoformat()|signal_type.value|cause_id|quantity_text
 ```
 
+`quantity_text` is the base-10 integer or the empty string when quantity is
+`None`. SHA-256 hashes the UTF-8 bytes of that exact preimage and returns
+lowercase hexadecimal. The validated field domains exclude `|`, so the encoding
+is unambiguous.
+
 The unique database constraint atomically claims the event. The signal's state transitions, audit entry, and event enqueue use the same transaction.
+
+`AlertOutbox` is session-bound and exposed as `UnitOfWork.alerts`. `enqueue`
+serializes SQLite writers on a singleton durable high-water row before allocating
+the next sequence, stores canonical strict JSON, and flushes without committing.
+Deleting retained alert history cannot move that high-water mark backwards. A
+retry with the same deduplication
+identity and otherwise identical semantics returns the original event ID,
+sequence, text, and creation time even if the caller generated a replacement
+event ID; Decimal scale and signed zero do not create false conflicts, while
+other conflicting semantics fail with `ALERT_IDENTITY_CONFLICT`. Reads
+revalidate the payload and require its event ID and deduplication key to match
+the owning row.
 
 ## Textual Reminder
 
@@ -81,7 +119,8 @@ Every actionable message includes:
 - signal label/severity, stock name, and symbol;
 - evaluation time, market-data time, and age;
 - current price and suggested quantity where applicable;
-- matched conditions and blockers;
+- signal-matched conditions plus the complete satisfied, unmet, and blocker
+  partitions copied from `EvaluationResult`;
 - relevant zone, risk line, plan version, and event ID;
 - next step;
 - `仅提醒，不会自动下单`.
@@ -89,17 +128,29 @@ Every actionable message includes:
 Example shape:
 
 ```text
-【低吸买点成立】华亚智能（003043.SZ）
-时间：2026-08-07 10:25  行情：10:25（延迟18秒）
-价格：64.20元  建议：低吸100股
-成立：位于低吸区；两根5分钟K线未创新低；成交量收缩；MACD负柱改善
+【低吸底仓买点成立｜ACTION】华亚智能（003043.SZ）
+时间：2026-08-07 10:25  行情：2026-08-07 10:25（延迟18秒）
+价格：64.20元  建议：低吸底仓100股
+区间：低吸区63.00～64.50元（含下界、含上界）
+信号成立：价格位于低吸区【成立】（当前价=64.20元）
+结果成立：价格位于低吸区【成立】（当前价=64.20元）
+结果未成立：无
+阻断：无
 风险线：60.80元  计划：huaya-smart-v1
 下一步：人工确认后自行决定是否下单
-事件：<event-id>
+原因：episode-001
+事件：00000000-0000-0000-0000-000000000001
 仅提醒，不会自动下单。
 ```
 
 Routine `WAIT` state is visible in dashboard snapshots but does not create an alert event unless a health transition is configured as alertable.
+
+Evidence rendering retains composite `ALL`/`ANY` grouping, each node's
+three-valued outcome, parent facts, child order, missing-input codes, and every
+supplemental `RuleEvidence`. Decimal text is context-independent and normalizes
+scale and signed zero, so canonically equivalent decision facts render
+identically. `data_age_seconds` is derived from the displayed `market_data_at`,
+not from a potentially newer health-summary fact.
 
 ## Delivery Semantics
 
@@ -114,10 +165,26 @@ Logical tables:
 
 ```text
 alert_event(id, sequence UNIQUE, dedup_key UNIQUE, payload_json, message_text, created_at, acknowledged_at)
+alert_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
 delivery_attempt(id, event_id, channel, attempt, status, response_code, next_retry_at, delivered_at, error_code)
 ```
 
+Append-only migration `0004_alert_sequence` creates the singleton and backfills
+`last_sequence` from the existing maximum event sequence, or zero for an empty
+outbox.
+
 WebSocket replay retention is seven days; alert history retention defaults to one year and is configurable.
+
+`replay_after(sequence, limit=1000)` uses an exclusive non-negative sequence
+cursor, returns ascending events, and includes an event created exactly at the
+configured retention cutoff. `acknowledge(event_id)` records only the first
+acknowledgement time and appends one `ALERT_ACKNOWLEDGED` audit in the same
+transaction; repeated acknowledgement is idempotent. Neither operation creates
+a delivery attempt or modifies strategy state or position lots. T026 supplies
+these persistence queries only; channel dispatch and WebSocket publication are
+owned by T027 and T039 respectively. Stored-data and acknowledgement-integrity
+failures expose sanitized outbox errors without retaining raw SQL, parameters,
+payloads, context, or cause.
 
 ## Code Style
 
@@ -129,11 +196,21 @@ def render_alert(event: AlertPayload) -> str:
     return "\n".join(lines)
 ```
 
-Render user/AI-derived text as escaped plain text with length limits. Do not render arbitrary HTML.
+Render user/AI-derived text as escaped plain text with length limits. Do not
+render arbitrary HTML. The final message is limited to 16,384 characters and is
+built under an incremental remaining-character budget. Each evidence partition
+has at most 50 top-level items; one payload has at most 250 rendered evidence
+nodes, 512 facts, and 256 digits in any displayed numeric coefficient or
+integer. Reject control/format/surrogate/line-separator/paragraph-separator
+characters (`Cc`, `Cf`, `Cs`, `Zl`, and `Zp`) in interpolated names; only the
+renderer-owned newline is allowed in final text.
 
 ## Testing Strategy
 
-- Golden text tests for every actionable signal and missing optional fields.
+- Complete golden text tests for every actionable signal and missing optional fields.
+- Composite evidence tests preserve three-valued child outcomes, grouping,
+  parent facts, and supplemental rule evidence.
+- Decimal scale, signed-zero, and ambient-context invariance tests.
 - Deduplication tests across duplicate evaluations, retries, restarts, and concurrent enqueue attempts.
 - Transaction tests proving state and alert either commit together or both roll back.
 - WebSocket sequence/replay tests and seven-day retention boundaries.

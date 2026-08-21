@@ -44,35 +44,67 @@ tests/integration/
 ## 事件契约
 
 ```python
-class AlertEvent(BaseModel):
+class AlertPayload(BaseModel):
     event_id: UUID
-    sequence: int
     dedup_key: str
     plan_id: str
+    plan_version: int
     plan_hash: str
     symbol: str
     name: str
-    signal_type: SignalType
+    signal_type: ActionableSignalType
     severity: Literal["INFO", "ACTION", "RISK", "CRITICAL"]
+    trading_date: date
+    cause_id: str
     evaluated_at: datetime
     market_data_at: datetime | None
     data_age_seconds: int | None
     price_fen: int | None
-    quantity: int
-    matched_conditions: list[ConditionEvidence]
-    blockers: list[ConditionEvidence]
+    quantity: int | None
+    bucket: PositionBucket | None
+    target_lot_id: str | None
+    matched_conditions: tuple[ConditionEvidence, ...]
+    satisfied_conditions: tuple[EvaluationEvidence, ...]
+    unmet_conditions: tuple[EvaluationEvidence, ...]
+    blockers: tuple[EvaluationEvidence, ...]
+    zone: DecisionZone
+    relevant_zone: AlertPriceZone | None
     risk_line_fen: int | None
-    next_step: str
+    next_step: NextStep
+
+class AlertEvent(AlertPayload):
+    sequence: int
     message_text: str
+    created_at: datetime
+    acknowledged_at: datetime | None
 ```
 
-去重键：
+载荷为严格、冻结且复制时重新校验的值。`BUY_CORE_READY` 与
+`BUY_TACTICAL_READY` 映射为 `ACTION`；`PRESSURE_REDUCE_READY` 与
+`RISK_BREACH` 映射为 `RISK`；`RISK_EXIT_READY` 与
+`RISK_EXIT_PENDING_SETTLEMENT` 映射为 `CRITICAL`。`RISK_BREACH` 不携带数量、
+仓位桶或目标批次；其余五种可操作信号保留已经由 `SignalIntent` 校验的准确
+数量、仓位桶及目标批次形态。
+
+去重前像严格由五个竖线分隔字段组成，不含首尾空白：
 
 ```text
-sha256(plan_hash | trading_date | signal_type | episode_or_risk_transition_id | quantity)
+plan_hash|trading_date.isoformat()|signal_type.value|cause_id|quantity_text
 ```
 
+`quantity_text` 为十进制整数；数量为 `None` 时使用空字符串。SHA-256 对该准确
+前像的 UTF-8 字节进行哈希，并返回小写十六进制。经过校验的字段域均排除 `|`，
+因此该编码无歧义。
+
 数据库唯一约束以原子方式认领事件。信号状态转换、审计记录和事件入队必须使用同一个事务。
+
+`AlertOutbox` 绑定 Session，并通过 `UnitOfWork.alerts` 暴露。`enqueue` 在分配下一个
+序号前通过持久化单例高水位行串行化 SQLite 写者，保存规范严格 JSON，并只 flush 而
+不自行提交。删除保留期内的提醒历史不能使该高水位倒退。使用相同
+去重标识且其余语义相同的重试会返回原始事件 ID、序号、文本和创建时间，即使调用方
+重新生成了事件 ID；Decimal scale 与有符号零不会产生伪冲突，其他语义冲突则以
+`ALERT_IDENTITY_CONFLICT` 失败。读取时重新校验
+载荷，并要求其中的事件 ID 和去重键与所属数据库行一致。
 
 ## 文本提醒
 
@@ -81,7 +113,8 @@ sha256(plan_hash | trading_date | signal_type | episode_or_risk_transition_id | 
 - 信号标签和严重级别、股票名称及代码；
 - 评估时间、行情数据时间及数据年龄；
 - 当前价格，以及适用时的建议数量；
-- 已成立条件与阻断条件；
+- 信号匹配条件，以及从 `EvaluationResult` 原样复制的完整已成立、未成立和阻断
+  分区；
 - 相关价格区间、风险线、计划版本及事件 ID；
 - 下一步操作；
 - `仅提醒，不会自动下单`。
@@ -89,17 +122,28 @@ sha256(plan_hash | trading_date | signal_type | episode_or_risk_transition_id | 
 示例格式：
 
 ```text
-【低吸买点成立】华亚智能（003043.SZ）
-时间：2026-08-07 10:25  行情：10:25（延迟18秒）
-价格：64.20元  建议：低吸100股
-成立：位于低吸区；两根5分钟K线未创新低；成交量收缩；MACD负柱改善
+【低吸底仓买点成立｜ACTION】华亚智能（003043.SZ）
+时间：2026-08-07 10:25  行情：2026-08-07 10:25（延迟18秒）
+价格：64.20元  建议：低吸底仓100股
+区间：低吸区63.00～64.50元（含下界、含上界）
+信号成立：价格位于低吸区【成立】（当前价=64.20元）
+结果成立：价格位于低吸区【成立】（当前价=64.20元）
+结果未成立：无
+阻断：无
 风险线：60.80元  计划：huaya-smart-v1
 下一步：人工确认后自行决定是否下单
-事件：<event-id>
+原因：episode-001
+事件：00000000-0000-0000-0000-000000000001
 仅提醒，不会自动下单。
 ```
 
 常规 `WAIT` 状态在监控总览快照中可见，但不生成提醒事件；只有被配置为需要提醒的健康状态转换例外。
+
+证据渲染保留复合 `ALL`/`ANY` 分组、每个节点的三值结果、父节点事实、子节点
+顺序、缺失输入代码及全部补充 `RuleEvidence`。Decimal 文本不受上下文影响，
+并规范化 scale 与有符号零，因此规范等价的决策事实会生成相同文本。
+`data_age_seconds` 从实际展示的 `market_data_at` 推导，而不是取可能更新的健康
+摘要事实。
 
 ## 投递语义
 
@@ -114,10 +158,21 @@ sha256(plan_hash | trading_date | signal_type | episode_or_risk_transition_id | 
 
 ```text
 alert_event(id, sequence UNIQUE, dedup_key UNIQUE, payload_json, message_text, created_at, acknowledged_at)
+alert_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
 delivery_attempt(id, event_id, channel, attempt, status, response_code, next_retry_at, delivered_at, error_code)
 ```
 
+追加迁移 `0004_alert_sequence` 创建该单例，并从既有事件最大序号回填
+`last_sequence`；空 Outbox 则回填为零。
+
 WebSocket 回放默认保留 7 天；提醒历史默认保留 1 年，且可配置。
+
+`replay_after(sequence, limit=1000)` 使用排他性的非负序号游标，按升序返回事件，
+并包含恰好创建于配置保留截止时刻的事件。`acknowledge(event_id)` 只记录第一次确认
+时间，并在同一事务中追加一条 `ALERT_ACKNOWLEDGED` 审计；重复确认是幂等的。两项
+操作都不会创建投递尝试，也不会修改策略状态或持仓批次。T026 仅提供这些持久化查询；
+渠道投递和 WebSocket 发布分别由 T027 与 T039 负责。存储数据或确认完整性失败只暴露
+脱敏 Outbox 错误，不保留原始 SQL、参数、载荷、context 或 cause。
 
 ## 代码风格
 
@@ -129,11 +184,18 @@ def render_alert(event: AlertPayload) -> str:
     return "\n".join(lines)
 ```
 
-用户或 AI 产生的文本必须作为经过转义且有长度限制的纯文本渲染，不得渲染任意 HTML。
+用户或 AI 产生的文本必须作为经过转义且有长度限制的纯文本渲染，不得渲染任意
+HTML。最终消息最多 16,384 个字符，并按照增量剩余字符预算构建。每个证据分区
+最多包含 50 个顶层项；单个载荷最多包含 250 个待渲染证据节点、512 个事实，且
+任一待显示数值的系数或整数最多为 256 位。插值名称拒绝控制、格式、代理、行分隔
+和段落分隔字符（`Cc`、`Cf`、`Cs`、`Zl`、`Zp`）；最终文本只允许渲染器自身
+加入的换行符。
 
 ## 测试策略
 
-- 为每种可执行信号及缺少可选字段的情况编写文本黄金样例测试。
+- 为每种可执行信号及缺少可选字段的情况编写完整文本黄金样例测试。
+- 复合证据测试保留三值子节点结果、分组、父节点事实及补充规则证据。
+- 覆盖 Decimal scale、有符号零及环境上下文不变性。
 - 覆盖重复评估、重试、重启和并发入队的去重测试。
 - 证明状态与提醒要么同时提交、要么同时回滚的事务测试。
 - WebSocket 序号、回放及 7 天保留边界测试。

@@ -33,6 +33,7 @@ from trade_plan_monitor.state.database import (
 from trade_plan_monitor.state.models import (
     ActivePlan,
     AlertEvent,
+    AlertSequence,
     AuditLog,
     Base,
     EvaluationLedger,
@@ -62,6 +63,7 @@ EXPECTED_APP_TABLES = frozenset(
         "active_plan",
         "ai_provider_configuration",
         "alert_event",
+        "alert_sequence",
         "audit_log",
         "daily_bar",
         "daily_price_limit",
@@ -1546,7 +1548,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0003_episode_cursor"
+        assert first_revision == second_revision == "0004_alert_sequence"
     finally:
         engine.dispose()
 
@@ -1574,7 +1576,40 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0003_episode_cursor"
+                == "0004_alert_sequence"
+            )
+    finally:
+        engine.dispose()
+
+
+def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        _upgrade_to(engine, "0003_episode_cursor")
+        with create_session_factory(engine).begin() as session:
+            session.add(
+                AlertEvent(
+                    id="00000000-0000-0000-0000-000000000041",
+                    sequence=41,
+                    dedup_key="4" * 64,
+                    payload_json="{}",
+                    message_text="historical alert",
+                    created_at=_FIXED_NOW.isoformat(),
+                    acknowledged_at=None,
+                )
+            )
+
+        upgrade_database(engine)
+
+        with create_session_factory(engine)() as session:
+            sequence = session.get(AlertSequence, 1)
+            assert sequence is not None
+            assert sequence.last_sequence == 41
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0004_alert_sequence"
             )
     finally:
         engine.dispose()

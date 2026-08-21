@@ -117,6 +117,19 @@ class AlertEvent(Base):
     acknowledged_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class AlertSequence(Base):
+    """Singleton high-water mark that survives alert-history retention."""
+
+    __tablename__ = "alert_sequence"
+    __table_args__ = (
+        CheckConstraint("singleton_id = 1", name="ck_alert_sequence_singleton"),
+        CheckConstraint("last_sequence >= 0", name="ck_alert_sequence_nonnegative"),
+    )
+
+    singleton_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_sequence: Mapped[int] = mapped_column(Integer)
+
+
 class DeliveryAttempt(Base):
     __tablename__ = "delivery_attempt"
     __table_args__ = (
@@ -448,6 +461,7 @@ __all__ = [
     "ActivePlan",
     "AIProviderConfiguration",
     "AlertEvent",
+    "AlertSequence",
     "AuditLog",
     "Base",
     "DailyBar",

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from uuid import uuid4
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from trade_plan_monitor.notifications.outbox import (
+    DEFAULT_REPLAY_RETENTION,
+    AlertOutbox,
+)
 from trade_plan_monitor.state.repositories import (
     EpisodeRepository,
     EvaluationRepository,
@@ -44,6 +48,9 @@ class UnitOfWork(Protocol):
     @property
     def health(self) -> HealthRepository: ...
 
+    @property
+    def alerts(self) -> AlertOutbox: ...
+
     def commit(self) -> None: ...
 
     def rollback(self) -> None: ...
@@ -58,10 +65,14 @@ class SqlAlchemyUnitOfWork:
         *,
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
+        replay_retention: timedelta = DEFAULT_REPLAY_RETENTION,
     ) -> None:
+        if not isinstance(replay_retention, timedelta) or replay_retention <= timedelta(0):
+            raise ValueError("replay_retention must be a positive timedelta")
         self._session_factory = session_factory
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: str(uuid4()))
+        self._replay_retention = replay_retention
         self._session: Session | None = None
         self._plans: PlanRepository | None = None
         self._idempotency: IdempotencyRepository | None = None
@@ -70,6 +81,7 @@ class SqlAlchemyUnitOfWork:
         self._risk: RiskRepository | None = None
         self._evaluations: EvaluationRepository | None = None
         self._health: HealthRepository | None = None
+        self._alerts: AlertOutbox | None = None
 
     @property
     def plans(self) -> PlanRepository:
@@ -113,6 +125,12 @@ class SqlAlchemyUnitOfWork:
             raise RuntimeError("Unit of work is not active")
         return self._health
 
+    @property
+    def alerts(self) -> AlertOutbox:
+        if self._alerts is None:
+            raise RuntimeError("Unit of work is not active")
+        return self._alerts
+
     def __enter__(self) -> SqlAlchemyUnitOfWork:
         if self._session is not None:
             raise RuntimeError("Unit of work cannot be re-entered")
@@ -141,6 +159,12 @@ class SqlAlchemyUnitOfWork:
         )
         self._evaluations = EvaluationRepository(self._session)
         self._health = HealthRepository(self._session)
+        self._alerts = AlertOutbox(
+            self._session,
+            clock=self._clock,
+            id_factory=self._id_factory,
+            replay_retention=self._replay_retention,
+        )
         return self
 
     def commit(self) -> None:
@@ -169,6 +193,7 @@ class SqlAlchemyUnitOfWork:
             self._risk = None
             self._evaluations = None
             self._health = None
+            self._alerts = None
 
     def _require_session(self) -> Session:
         if self._session is None:
