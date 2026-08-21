@@ -10,7 +10,7 @@ When reviewing a structured plan, the user must be able to see exactly which con
 
 ## Tech Stack
 
-- Python 3.11+
+- Python 3.14.x (`>=3.14,<3.15`)
 - Pydantic 2 for boundary and domain validation
 - `Decimal` for user-entered prices; integer fen for comparison and storage
 - YAML/JSON for portable import and export
@@ -80,6 +80,7 @@ Monitoring conditions are typed data, never expression strings. Schema v1 suppor
 - `NON_DECREASING_CLOSE`
 - `VOLUME_TO_PREVIOUS_LTE`
 - `VOLUME_TO_MEDIAN_LTE`
+- `VOLUME_TO_MEDIAN_GTE`
 - `MACD_HIST_IMPROVEMENT_GTE`
 - `PRICE_RECLAIMS_INDICATOR`
 - `UPPER_WICK_RATIO_GTE`
@@ -95,6 +96,12 @@ Monitoring conditions are typed data, never expression strings. Schema v1 suppor
 - `LOWER_BAND_HITS_LTE`
 
 Each condition has its own Pydantic model and bounded parameters. Logical composition allows only `ALL` and `ANY`, with maximum depth 4 and at most 50 leaf conditions per plan.
+
+`VOLUME_TO_MEDIAN_LTE` uses `max_ratio`; `VOLUME_TO_MEDIAN_GTE` uses `minimum_ratio`. Both compare the latest completed-bar volume with the median of the specified number of preceding completed bars. `SELLABLE_QUANTITY_GTE` requires both an explicit `bucket` (`CORE` or `TACTICAL`) and a board-lot `quantity`, so one bucket can never satisfy another bucket's sellability rule.
+
+`PRICE_IN_ZONE` uses the latest valid normalized complete minute close. `PRICE_RECLAIMS_INDICATOR` scans every adjacent pair in the exact current 5-minute bucket against one selected current-date indicator value, requires `previous_price < indicator <= current_price` for at least one pair, and also requires the bucket-ending price to remain at or above the indicator; entering the bucket already above is not a reclaim. `LOWER_BAND_HITS_LTE` compares each selected complete 5-minute close with the `ta-v1` 5-minute lower-band point of the same identity and counts equality as a hit. `CONSECUTIVE_CLOSES_BELOW_LEVEL` itself requires the configured number of adjacent complete closes to be strictly below the named level. Pressure-specific after-touch eligibility is imposed later by T023 orchestration and is not a hidden leaf parameter.
+
+The four configured pressure rejection alternatives together are the complete definition of failure to hold; Schema v1 adds no fifth pressure condition.
 
 Unknown conditions, arbitrary formulas, scripts, SQL, field paths, dynamic imports, and external calls are invalid input.
 
@@ -162,4 +169,4 @@ Python uses `snake_case`, explicit enums, and immutable value objects where prac
 
 ## Open Questions
 
-None blocking. Adding condition types requires a schema upgrade and renewed review.
+None blocking. The approved 2026-08-21 correction adds `VOLUME_TO_MEDIAN_GTE` and makes the `SELLABLE_QUANTITY_GTE.bucket` field mandatory in the unreleased Schema v1 contract. After Schema v1 is released, adding condition types requires a schema upgrade and renewed review.

@@ -1,6 +1,6 @@
 import traceback
 from datetime import UTC, date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from inspect import Parameter, signature
 from typing import Protocol, get_type_hints
 from zoneinfo import ZoneInfo
@@ -12,6 +12,9 @@ from requests import Response
 from requests.exceptions import HTTPError, Timeout
 
 from trade_plan_monitor.market_data.aggregation import (
+    TA_FORMULA_VERSION,
+    FiveMinuteBar,
+    aggregate_five_minute_bar,
     expected_five_minute_ends,
     five_minute_bucket_end,
     is_complete_five_minute_bucket,
@@ -25,6 +28,10 @@ from trade_plan_monitor.market_data.models import (
     TradingDay,
 )
 from trade_plan_monitor.market_data.provider import MarketDataProvider
+from trade_plan_monitor.market_data.reconciliation import (
+    CloseReconciliationStatus,
+    reconcile_daily_close,
+)
 from trade_plan_monitor.market_data.sessions import (
     DEFAULT_DATA_GRACE,
     SourceTimeLabel,
@@ -81,6 +88,150 @@ def _daily_bar_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
+def _daily_bar(**overrides: object) -> DailyBar:
+    return DailyBar.model_validate(_daily_bar_payload(**overrides))
+
+
+def test_market_reconcile_15_00_provisional_close_remains_pending() -> None:
+    provisional = _daily_bar()
+
+    intent = reconcile_daily_close(
+        symbol=provisional.symbol,
+        current_trade_date=provisional.trade_date,
+        daily_bars=(provisional,),
+    )
+
+    assert intent.status is CloseReconciliationStatus.CLOSE_PENDING
+    assert intent.advance_close_risk is False
+    assert intent.provisional_bar == provisional
+    assert intent.official_bar is None
+    assert intent.close_delta_fen is None
+
+
+@pytest.mark.parametrize(
+    ("official_close_fen", "expected_delta"),
+    [(6_671, 0), (6_680, 9)],
+)
+def test_market_reconcile_current_official_close_matches_or_replaces_provisional(
+    official_close_fen: int,
+    expected_delta: int,
+) -> None:
+    provisional = _daily_bar()
+    official = _daily_bar(
+        close_fen=official_close_fen,
+        is_official=True,
+        received_at=_shanghai_time(15, 20),
+    )
+
+    forward = reconcile_daily_close(
+        symbol=provisional.symbol,
+        current_trade_date=provisional.trade_date,
+        daily_bars=(provisional, official),
+    )
+    reordered = reconcile_daily_close(
+        symbol=provisional.symbol,
+        current_trade_date=provisional.trade_date,
+        daily_bars=(official, provisional),
+    )
+
+    assert forward == reordered
+    assert forward.status is CloseReconciliationStatus.OFFICIAL_READY
+    assert forward.advance_close_risk is True
+    assert forward.provisional_bar == provisional
+    assert forward.official_bar == official
+    assert forward.close_delta_fen == expected_delta
+    assert forward.official_bar.is_official is True
+
+
+def test_market_reconcile_delayed_or_official_only_close_is_deterministic() -> None:
+    trade_date = date(2026, 8, 19)
+    pending = reconcile_daily_close(
+        symbol="003043.SZ",
+        current_trade_date=trade_date,
+        daily_bars=(),
+    )
+    official = _daily_bar(
+        is_official=True,
+        received_at=_shanghai_time(17, 0),
+    )
+    ready = reconcile_daily_close(
+        symbol="003043.SZ",
+        current_trade_date=trade_date,
+        daily_bars=(official,),
+    )
+
+    assert pending.status is CloseReconciliationStatus.CLOSE_PENDING
+    assert pending.advance_close_risk is False
+    assert ready.status is CloseReconciliationStatus.OFFICIAL_READY
+    assert ready.advance_close_risk is True
+    assert ready.provisional_bar is None
+    assert ready.official_bar == official
+    assert ready.close_delta_fen is None
+    assert ready == reconcile_daily_close(
+        symbol="003043.SZ",
+        current_trade_date=trade_date,
+        daily_bars=(official,),
+    )
+
+
+def test_market_reconcile_rejects_wrong_date_symbol_shape_or_duplicate_provenance() -> None:
+    provisional = _daily_bar()
+    wrong_date = _daily_bar(
+        trade_date=date(2026, 8, 18),
+        received_at=_shanghai_time(15, 0, day=18),
+    )
+    wrong_symbol = _daily_bar(symbol="600519.SH")
+
+    for bars in ((wrong_date,), (wrong_symbol,)):
+        with pytest.raises(ValueError, match="current trading date|symbol"):
+            reconcile_daily_close(
+                symbol=provisional.symbol,
+                current_trade_date=provisional.trade_date,
+                daily_bars=bars,
+            )
+
+    with pytest.raises(TypeError, match="tuple"):
+        reconcile_daily_close(
+            symbol=provisional.symbol,
+            current_trade_date=provisional.trade_date,
+            daily_bars=[provisional],  # type: ignore[arg-type]
+        )
+    with pytest.raises(TypeError, match="DailyBar"):
+        reconcile_daily_close(
+            symbol=provisional.symbol,
+            current_trade_date=provisional.trade_date,
+            daily_bars=(object(),),  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="at most 2"):
+        reconcile_daily_close(
+            symbol=provisional.symbol,
+            current_trade_date=provisional.trade_date,
+            daily_bars=(provisional, provisional, provisional),
+        )
+    with pytest.raises(ValueError, match="one provisional"):
+        reconcile_daily_close(
+            symbol=provisional.symbol,
+            current_trade_date=provisional.trade_date,
+            daily_bars=(provisional, provisional),
+        )
+
+
+def test_market_reconcile_intent_is_closed_immutable_and_revalidates_copy() -> None:
+    provisional = _daily_bar()
+    pending = reconcile_daily_close(
+        symbol=provisional.symbol,
+        current_trade_date=provisional.trade_date,
+        daily_bars=(provisional,),
+    )
+
+    with pytest.raises(ValidationError):
+        pending.advance_close_risk = True  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        pending.model_copy(update={"advance_close_risk": True})
+    with pytest.raises(ValidationError):
+        pending.model_copy(update={"official_bar": provisional})
+
+
 def test_market_models_minute_bar_preserves_normalized_units() -> None:
     bar = MinuteBar.model_validate(_minute_bar_payload())
 
@@ -94,6 +245,16 @@ def test_market_models_minute_bar_preserves_normalized_units() -> None:
     assert bar.volume_shares == 125_600
     assert bar.amount_yuan == Decimal("8079200.50")
     assert bar.bar_end.tzinfo is SHANGHAI
+
+
+def test_market_models_preserve_source_and_receipt_facts_for_persistence() -> None:
+    bar = MinuteBar.model_validate(_minute_bar_payload())
+    persistence_facts = bar.model_dump(mode="python")
+
+    assert persistence_facts["bar_end"] == _shanghai_time(9, 31)
+    assert persistence_facts["received_at"] == _shanghai_time(9, 31) + timedelta(seconds=12)
+    assert persistence_facts["volume_shares"] == 125_600
+    assert persistence_facts["amount_yuan"] == Decimal("8079200.50")
 
 
 def test_market_models_are_closed_and_immutable() -> None:
@@ -814,6 +975,231 @@ def test_market_complete_bucket_rejects_collection_that_misreports_length() -> N
         )
         is False
     )
+
+
+def _complete_minute_bars(
+    *,
+    bucket_end: datetime | None = None,
+) -> tuple[MinuteBar, ...]:
+    bucket_end = bucket_end or _shanghai_time(9, 35)
+    values = (
+        (6400, 6420, 6390, 6410, 100_000, "1000000.10"),
+        (6410, 6440, 6405, 6430, 110_000, "1100000.20"),
+        (6430, 6450, 6420, 6440, 120_000, "1200000.30"),
+        (6440, 6460, 6435, 6450, 130_000, "1300000.40"),
+        (6450, 6470, 6440, 6460, 140_000, "1400000.50"),
+    )
+    return tuple(
+        MinuteBar(
+            symbol="003043.SZ",
+            bar_end=bar_end,
+            open_fen=open_fen,
+            high_fen=high_fen,
+            low_fen=low_fen,
+            close_fen=close_fen,
+            volume_shares=volume_shares,
+            amount_yuan=Decimal(amount_yuan),
+            received_at=bar_end + timedelta(seconds=12),
+        )
+        for bar_end, (
+            open_fen,
+            high_fen,
+            low_fen,
+            close_fen,
+            volume_shares,
+            amount_yuan,
+        ) in zip(expected_five_minute_ends(bucket_end), values, strict=True)
+    )
+
+
+def test_market_aggregate_complete_five_minute_bar_is_exact_and_reorder_stable() -> None:
+    minutes = _complete_minute_bars()
+
+    aggregate = aggregate_five_minute_bar(
+        tuple(reversed(minutes)),
+        bucket_end=_shanghai_time(9, 35),
+        is_open=True,
+    )
+
+    assert aggregate == FiveMinuteBar(
+        symbol="003043.SZ",
+        bar_end=_shanghai_time(9, 35),
+        formula_version="ta-v1",
+        open_fen=6400,
+        high_fen=6470,
+        low_fen=6390,
+        close_fen=6460,
+        volume_shares=600_000,
+        amount_yuan=Decimal("6000001.50"),
+    )
+    assert (
+        aggregate_five_minute_bar(
+            minutes,
+            bucket_end=_shanghai_time(9, 35),
+            is_open=True,
+        )
+        == aggregate
+    )
+    assert TA_FORMULA_VERSION == "ta-v1"
+
+
+def test_market_aggregate_decimal_amount_is_exact_across_ambient_precision() -> None:
+    minutes = tuple(
+        minute.model_copy(update={"amount_yuan": Decimal("0.123456789")})
+        for minute in _complete_minute_bars()
+    )
+
+    with localcontext() as decimal_context:
+        decimal_context.prec = 6
+        low_precision = aggregate_five_minute_bar(
+            minutes,
+            bucket_end=_shanghai_time(9, 35),
+            is_open=True,
+        )
+    with localcontext() as decimal_context:
+        decimal_context.prec = 50
+        high_precision = aggregate_five_minute_bar(
+            minutes,
+            bucket_end=_shanghai_time(9, 35),
+            is_open=True,
+        )
+
+    assert low_precision == high_precision
+    assert low_precision is not None
+    assert low_precision.amount_yuan == Decimal("0.617283945")
+
+
+def test_market_aggregate_decimal_amount_has_a_safe_exact_digit_span() -> None:
+    minutes = _complete_minute_bars()
+    extreme_zero = minutes[0].model_copy(update={"amount_yuan": Decimal("0E-100000000")})
+    one_yuan = minutes[1].model_copy(update={"amount_yuan": Decimal("1")})
+    zero_tail = tuple(
+        minute.model_copy(update={"amount_yuan": Decimal("0")}) for minute in minutes[2:]
+    )
+
+    aggregate = aggregate_five_minute_bar(
+        (extreme_zero, one_yuan, *zero_tail),
+        bucket_end=_shanghai_time(9, 35),
+        is_open=True,
+    )
+
+    assert aggregate is not None
+    assert aggregate.amount_yuan == Decimal("1")
+
+    at_limit = minutes[0].model_copy(update={"amount_yuan": Decimal("1E-639")})
+    aggregate = aggregate_five_minute_bar(
+        (at_limit, one_yuan, *zero_tail),
+        bucket_end=_shanghai_time(9, 35),
+        is_open=True,
+    )
+
+    assert aggregate is not None
+    assert aggregate.amount_yuan == Decimal(f"1.{('0' * 638)}1")
+
+    beyond_limit = minutes[0].model_copy(update={"amount_yuan": Decimal("1E-640")})
+    with pytest.raises(ValueError, match="safe digit"):
+        aggregate_five_minute_bar(
+            (beyond_limit, one_yuan, *zero_tail),
+            bucket_end=_shanghai_time(9, 35),
+            is_open=True,
+        )
+
+    max_coefficient = Decimal("9" * 640)
+    huge_first = minutes[0].model_copy(update={"amount_yuan": max_coefficient})
+    huge_second = minutes[1].model_copy(update={"amount_yuan": max_coefficient})
+    with pytest.raises(ValueError, match="safe digit"):
+        aggregate_five_minute_bar(
+            (huge_first, huge_second, *zero_tail),
+            bucket_end=_shanghai_time(9, 35),
+            is_open=True,
+        )
+
+
+def test_market_aggregate_missing_duplicate_then_recovered_is_fail_closed_and_stable() -> None:
+    minutes = _complete_minute_bars()
+    missing = minutes[:-1]
+    duplicate_without_last = (*minutes[:-1], minutes[-2])
+
+    assert (
+        aggregate_five_minute_bar(
+            missing,
+            bucket_end=_shanghai_time(9, 35),
+            is_open=True,
+        )
+        is None
+    )
+    assert (
+        aggregate_five_minute_bar(
+            duplicate_without_last,
+            bucket_end=_shanghai_time(9, 35),
+            is_open=True,
+        )
+        is None
+    )
+
+    recovered = aggregate_five_minute_bar(
+        minutes,
+        bucket_end=_shanghai_time(9, 35),
+        is_open=True,
+    )
+    assert recovered is not None
+    assert (
+        recovered.symbol,
+        recovered.bar_end,
+        recovered.formula_version,
+    ) == ("003043.SZ", _shanghai_time(9, 35), "ta-v1")
+
+
+def test_market_aggregate_never_crosses_lunch_or_closed_unknown_day() -> None:
+    morning = _complete_minute_bars(bucket_end=_shanghai_time(11, 30))
+    afternoon = _complete_minute_bars(bucket_end=_shanghai_time(13, 5))
+    cross_lunch = (*morning[-3:], *afternoon[:2])
+
+    assert (
+        aggregate_five_minute_bar(
+            cross_lunch,
+            bucket_end=_shanghai_time(13, 5),
+            is_open=True,
+        )
+        is None
+    )
+    for is_open in (False, None):
+        assert (
+            aggregate_five_minute_bar(
+                afternoon,
+                bucket_end=_shanghai_time(13, 5),
+                is_open=is_open,
+            )
+            is None
+        )
+
+
+def test_market_aggregate_rejects_mixed_symbols_and_remains_immutable() -> None:
+    minutes = _complete_minute_bars()
+    mixed = (
+        *minutes[:-1],
+        minutes[-1].model_copy(update={"symbol": "600519.SH"}),
+    )
+
+    with pytest.raises(ValueError, match="one symbol"):
+        aggregate_five_minute_bar(
+            mixed,
+            bucket_end=_shanghai_time(9, 35),
+            is_open=True,
+        )
+
+    aggregate = aggregate_five_minute_bar(
+        minutes,
+        bucket_end=_shanghai_time(9, 35),
+        is_open=True,
+    )
+    assert aggregate is not None
+    with pytest.raises(ValidationError, match="frozen"):
+        aggregate.close_fen = 6500
+    with pytest.raises(ValidationError):
+        aggregate.model_copy(update={"close_fen": -1})
+    with pytest.raises(ValidationError, match="five-minute boundary"):
+        aggregate.model_copy(update={"bar_end": _shanghai_time(9, 36)})
 
 
 class _TushareStubClient:

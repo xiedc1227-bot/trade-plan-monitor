@@ -10,7 +10,7 @@ Tushare 是首版唯一行情源。内部适配器协议只用于确定性测试
 
 ## 技术栈
 
-- Python 3.11+
+- Python 3.14.x（`>=3.14,<3.15`）
 - Tushare Pro Python SDK，并在事件循环之外执行
 - pandas：数据规范化和指标序列
 - Pydantic 2：校验不可信的第三方返回值
@@ -43,7 +43,7 @@ src/trade_plan_monitor/market_data/
 ├── provider.py        # MarketDataProvider 协议
 ├── tushare.py         # Tushare 适配器和错误分类
 ├── sessions.py        # A 股分钟与交易时段语义
-├── aggregation.py     # 1 分钟到完整 5 分钟的幂等聚合
+├── aggregation.py     # 完整 5 分钟与临时日线聚合
 ├── indicators.py      # 版本化 ta-v1 指标
 └── reconciliation.py  # 临时收盘与官方收盘核对
 tests/unit/
@@ -90,10 +90,20 @@ Tushare 映射关系：
 - 逐行先解析 identity。任一非法或冲突 payload 都会永久使该响应中的 identity 失效，且不受行顺序影响；无法识别、未请求或缺失的行绝不使健康 identity 失效。
 - 十进制十次幂通过精确移位完成，不读取外部 decimal 精度。价格必须精确成为正整数分，股数必须精确成为非负整数；整数结果超过 640 个十进制位时，在分配前拒绝。
 - 只有一个交易时段内的全部预期分钟都存在时，才能生成完整 5 分钟 K 线；禁止跨午休聚合。
+- `aggregate_five_minute_bar` 只接受同一股票恰好五个规范化 `MinuteBar` 值组成的精确、可重复 tuple。分钟缺失、重复、股票混合、跨时段、休市日或未知交易日输入都不能生成 K 线；完整输入乱序后仍产生相同的不可变 `(symbol, bar_end, formula_version)` 值。
+- 5 分钟 `amount_yuan` 必须根据 decimal tuple 精确求和，且不读取外部 decimal context。零值不扩大指数跨度；非零对齐系数或最终求和超过 640 位安全跨度时，必须在大内存分配前失败关闭。
 - 完整性检查只接受由规范分钟结束时间组成的有界、可重复元组；任意迭代器或集合会在不被消费的情况下拒绝。
 - 不完整或过期数据立即阻止该股票产生可操作信号。
 - 最新完整分钟收盘价覆盖 `latest_quote`，不建立第二套报价历史。
-- 15:00 分钟只形成临时收盘；只有当前交易日的 `daily` 记录才能推进正式收盘风险状态。
+- `current_day_minutes` 判断上下文切片是不可变精确 tuple，包含当前日期首个规范分钟结束时间到 5 分钟判断截止时间（含两端）的全部规范完整分钟，最多 240 行，并保留规范午休边界。分钟缺失、重复、乱序、股票/日期混合、超出交易时段、晚于截止时间或任意迭代器输入均失败关闭。该切片复用持久化分钟历史，不建立第二套报价历史。
+- 行情持久化只接受有界的规范化值 list/tuple 批次，每次最多 1,000 行。分钟、日线和涨跌停修正只有在 `received_at` 更新时才能推进；同一回执时间出现冲突事实时失败关闭，较旧回放无害。
+- 行情历史读取必须提供明确的闭区间开始/结束边界，超过 10,000 行时失败关闭。日历读取同样要求范围；由于该表没有回执版本列，后续权威日历抓取可以修正相同 `(exchange, cal_date)`。
+- 持久化 5 分钟 K 线必须结束于交易时段内有效的 5 分钟边界。其 `(symbol, bar_end, formula_version)` identity 是确定性的，不能被冲突事实覆盖。
+- `aggregate_provisional_daily_bar(current_day_minutes=..., source_as_of=...)` 是 T032 为盘中指标生成当前日期临时 `DailyBar` 的纯边界。它根据精确切片确定性生成：首个开盘价、最高价最大值、最低价最小值、最后收盘价、股数成交量之和、精确元成交额之和、`is_official=False`，以及最新来源回执。其 `source_as_of` 是切片截止时间。截至 15:00 的聚合是临时收盘，绝不能改标或覆盖独立的官方行。只有当前交易日的官方 `daily` 行才能推进官方收盘风险状态。
+
+`reconcile_daily_close(symbol=..., current_trade_date=..., daily_bars=...)` 是纯边界，接收不可变 tuple；其中最多包含同一股票、精确日期下分别持久化的临时与官方 `DailyBar` 行。可变集合、超过两行、重复 provenance、股票混合和非当前日期都会失败关闭；输入顺序不可观察。
+
+不可变 `CloseReconciliationIntent` 分别保留 `provisional_bar` 与 `official_bar`，并暴露 `status`、`close_delta_fen` 和 `advance_close_risk`。没有当前日期官方行时，状态为 `CLOSE_PENDING`，官方行与差值均为 `None`，且不能推进收盘风险。存在所请求日期的真实 `DailyBar(is_official=True)` 时，状态为 `OFFICIAL_READY`；若两类行都存在，`close_delta_fen` 等于官方收盘减临时收盘，且只有保持原样的官方行获准进入下游风险判断。重复持久化记录和重启重建产生相同意图；该函数不执行持久化、调度、健康状态修改或风险判断。
 
 ## 指标定义
 
@@ -105,7 +115,15 @@ Tushare 映射关系：
 - RSI14 和 ATR14 使用 Wilder 平滑；
 - MA20/MA50/MA200 使用未复权收盘价。
 
-临时当日日线可以用于展示和动能证据，但必须标记为“临时”，且不能覆盖官方日线。
+`calculate_ta_v1` 接受只含一只股票和一种 K 线类型（`DailyBar` 或完整 `FiveMinuteBar`）的不可变 tuple，日期/时间 identity 必须严格递增，且最多包含 10,000 个值。同一日同时出现临时/官方行等重复日线日期时，必须先由核对流程解决，不能在计算时静默去重。
+
+整数分 OHLC 输入在 pandas 计算前只转换一次为有限浮点元。价格型输出为 `ema10_yuan`、`ema12_yuan`、`ema26_yuan`、`macd_yuan`、`macd_signal_yuan`、`macd_histogram_yuan`、`boll_middle_yuan`、`boll_upper_yuan`、`boll_lower_yuan`、`atr14_yuan` 以及 `ma20_yuan`/`ma50_yuan`/`ma200_yuan`；`rsi14` 是 0～100 的无量纲值。超出有限浮点计算范围的值失败关闭。
+
+RSI14 使用前 14 个收盘差值的平均上涨/下跌作为种子，首个值位于索引 14。ATR14 使用前 14 个真实波幅的简单平均作为种子，首个值位于索引 13。后续 RSI/ATR 使用 Wilder 递推 `(previous * 13 + current) / 14` 平滑。其他不足窗口明确返回 `None`；决策引擎把所需指标缺失视为阻断项。
+
+`IndicatorSeries` 和每个 `IndicatorPoint` 都是封闭且不可变的，公开复制更新会重新执行校验。固定 OHLCV 黄金测试锁定 pandas 3.0.5 下的 `ta-v1` 结果；任何有意的公式或兼容性变化都必须创建新公式版本并更新黄金值。
+
+当前日期日线指标计算必须只选择一个当前日期来源。临时聚合生成 `PROVISIONAL` provenance 及其精确切片截止 `source_as_of`；核对后的官方行生成 `OFFICIAL` provenance 和规范 15:00 `source_as_of`，并且只有在 `advance_close_risk=True` 时才有资格进入官方收盘判断。在 `calculate_ta_v1` 前，同时或隐式选择来源、缺失截止 provenance 以及混合来源都必须失败关闭；调用方将 `IndicatorSeries` 与所选来源事实配对。当前日期临时日线可用于展示和动能证据，但绝不能覆盖官方日线或推进官方收盘状态。
 
 ## 代码风格
 
@@ -133,6 +151,7 @@ class MinuteBar(BaseModel):
 - 覆盖分钟缺失、重复到达、恢复补充和完整 5 分钟只生成一次。
 - 使用固定 OHLCV 文件验证指标黄金值。
 - 覆盖临时/官方收盘一致、差异、延迟到达和下次启动恢复。
+- 覆盖精确/有缺口的判断当日切片、240 行上限、临时来源截止时间，以及拒绝同时或隐式选择当前日期指标来源。
 - 实盘测试确认 10 只股票批量结果、时间标签、成交量/额单位、延迟、能力状态和最后一分钟行为。
 
 ## 边界

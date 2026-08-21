@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "pressure": {
+    "zone": {
+      "lowFen": 6880,
+      "highFen": 7020,
+      "includeLow": true,
+      "includeHigh": true
+    },
+    "referenceFen": 6906,
+    "touchCases": [
+      {
+        "id": "inclusive-low",
+        "minuteClosesFen": [6800, 6880, 6800, 6800, 6800],
+        "expectedTouchIndex": 1
+      },
+      {
+        "id": "inclusive-high",
+        "minuteClosesFen": [6800, 7020, 6800, 6800, 6800],
+        "expectedTouchIndex": 1
+      },
+      {
+        "id": "first-inside-close-wins",
+        "minuteClosesFen": [6800, 6900, 6910, 6920, 6930],
+        "expectedTouchIndex": 1
+      },
+      {
+        "id": "intraminute-high-only",
+        "minuteClosesFen": [6800, 6800, 6800, 6800, 6800],
+        "rangeOverride": {"index": 2, "lowFen": 6800, "highFen": 6880},
+        "expectedTouchIndex": null
+      },
+      {
+        "id": "jump-up-without-inside-close",
+        "minuteClosesFen": [6800, 6879, 7021, 7021, 7021],
+        "expectedTouchIndex": null
+      },
+      {
+        "id": "jump-down-without-inside-close",
+        "minuteClosesFen": [7100, 7021, 6879, 6879, 6879],
+        "expectedTouchIndex": null
+      },
+      {
+        "id": "known-no-touch",
+        "minuteClosesFen": [6800, 6800, 6800, 6800, 6800],
+        "expectedTouchIndex": null
+      }
+    ],
+    "patterns": {
+      "upperWickRatio": "0.40",
+      "retreatRatio": "0.01",
+      "volumeToMedianRatio": "1.50",
+      "volumeWindowBars": 20,
+      "consecutiveBars": 2,
+      "quantity": 100
+    }
+  },
+  "risk": {
+    "lineFen": 6080,
+    "breachCloseFen": 6070,
+    "exitQuantity": 100,
+    "breachDate": "2026-08-06",
+    "confirmationDate": "2026-08-07"
+  }
+}

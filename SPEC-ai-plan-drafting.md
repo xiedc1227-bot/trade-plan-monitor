@@ -10,7 +10,7 @@ The user can configure an OpenAI-compatible service, test connectivity, paste a 
 
 ## Tech Stack
 
-- Python 3.11+
+- Python 3.14.x (`>=3.14,<3.15`)
 - `httpx` asynchronous HTTP client
 - Pydantic 2 for AI-output and plan-draft validation
 - Internal `AIProvider` protocol with an OpenAI-compatible adapter
@@ -61,6 +61,17 @@ Configurable non-secret fields include:
 
 Stable first-release bounds are: base URL at most 2,048 characters; timeout 1–120 seconds (default 30); retries 0–2 (default 2); input 1–200,000 characters (default 50,000); output 1–16,384 tokens (default 4,096); and temperature 0–0.3 (default 0). Redirects are never configurable and remain disabled. HTTP is accepted only for literal `localhost`, IPv4 loopback, or IPv6 loopback hosts; all other endpoints require HTTPS. Base URLs with credentials, query strings, or fragments are invalid.
 
+### Provider Adapter Contract
+
+The first adapter sends `POST {baseUrl}/chat/completions` with Bearer authentication. It uses `messages`, `temperature`, `max_completion_tokens`, and `stream=false`; it never sends tools and returns model content only as untrusted raw text.
+
+- API keys exist transiently only in the Authorization header and must contain printable ASCII characters. Requests send `Accept-Encoding: identity`.
+- Each attempt has the configured timeout and the complete operation uses at most `1 + max_retries` attempts. Transport failures, timeouts, HTTP 408, 429, and 5xx are retryable; numeric `Retry-After` and exponential delays are capped at 2 seconds. Cancellation always propagates.
+- Redirect responses are rejected; 401/403 map to authentication failure; other non-retryable 4xx responses map to rejection. Provider response bodies never cross the adapter error boundary.
+- Successful responses must be uncompressed or identity-encoded and are read as raw bytes with a 1,048,576-byte ceiling before JSON parsing. Any other content encoding is rejected without decompression.
+- The private provider envelope accepts standard response extensions, including token-detail fields, while mapping only `prompt_tokens`, `completion_tokens`, and `total_tokens` into the strict public `AIUsage` value.
+- Stable public error codes are `AUTHENTICATION`, `RATE_LIMITED`, `TRANSIENT`, `TIMEOUT`, `INVALID_RESPONSE`, `RESPONSE_TOO_LARGE`, `UNSAFE_REDIRECT`, `CONFIGURATION`, and `REJECTED`. `AIProviderError` exposes only the code, operation, and attempt count, and retains neither an exception cause nor context.
+
 The public secret-management capability is deliberately write/status-only:
 
 ```python
@@ -92,7 +103,11 @@ class PlanExtractionResult(BaseModel):
     status: Literal["SUCCEEDED", "INVALID_OUTPUT", "PROVIDER_ERROR", "CANCELLED"]
 ```
 
-Every executable field must point to a source location or short evidence excerpt. Unsupported instructions enter `unmapped_text`; they cannot become arbitrary formulas.
+Every non-null executable draft leaf must point to a source location or evidence excerpt containing at least four source characters. Optional null fields require no evidence. Evidence asserted by the model remains untrusted: every successful extraction includes the activation-blocking warning `AI_EVIDENCE_REVIEW_REQUIRED` until a trusted user reviews it.
+
+Unsupported instructions enter `unmapped_text`; they cannot become arbitrary formulas. Every model-produced `unmapped_text` item is normalized to `material=true` until trusted user review, regardless of the model-provided value.
+
+Raw model output is limited to 1,048,576 UTF-8 bytes, 10,000 JSON nodes, and depth 64. Duplicate JSON keys and non-finite numbers are rejected. The complete rendered prompt, including the generated schema, must fit the configured input-character limit before the provider is called. Provider cancellation propagates from extraction; `CANCELLED` is reserved for later orchestration/API job receipts and is not synthesized by this function.
 
 ### Prompt Contract
 
@@ -104,7 +119,7 @@ The prompt contains:
 - an explicit wrapper marking the user's plan as untrusted data;
 - no secrets, live positions, or unrelated reports.
 
-Prompts use immutable version identifiers such as `plan-extract-v1`. A prompt change creates a new version and updates golden fixtures.
+Prompts use immutable version identifiers such as `plan-extract-v1`. A prompt change creates a new version and updates golden fixtures. The complete `plan-extract-v1` prompt, including its generated schema and canonical `GOLDEN_PLAN_SOURCE`, is locked by SHA-256 `1b42865ce7dda121b64a62e15faa1213dd2be55cf654277f0801cd9c29d0dd22`; any template or schema change requires a new version and golden value.
 
 ### Review and Activation Boundary
 
@@ -120,14 +135,24 @@ AI can create drafts only. Activation requires:
 
 ```python
 async def extract_plan(
-    request: PlanExtractionRequest,
+    *,
+    request_id: UUID,
+    source_text: str,
+    config: AIProviderConfig,
     provider: AIProvider,
-    validator: PlanValidator,
 ) -> PlanExtractionResult:
+    prompt = build_plan_extraction_prompt(
+        source_text,
+        prompt_version=config.prompt_version,
+    )
+    request = PlanExtractionRequest(
+        request_id=request_id,
+        config=config,
+        prompt=prompt,
+    )
     raw = await provider.extract_plan(request)
-    parsed = parse_untrusted_json(raw.content)
-    draft = TradePlanDraft.model_validate(parsed)
-    return build_result(draft=draft, issues=validator.validate_draft(draft))
+    output = parse_untrusted_output(raw.content)
+    return validate_and_build_result(output=output, raw=raw)
 ```
 
 Keep service calls, JSON parsing, domain validation, and persistence separate. Model output is always data, never a command.
@@ -135,11 +160,11 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 ## Testing Strategy
 
 - Test configuration bounds, URL validation, secret redaction, prompt construction, JSON parsing, and issue mapping.
-- Use a fake OpenAI-compatible service for success, invalid JSON, schema mismatch, timeout, 401/403, 429, 5xx, retry, cancellation, and oversized output.
+- Use a fake OpenAI-compatible service for success, standard response extensions, invalid JSON, schema mismatch, real timeout, 401/403, 429, 5xx, retry, cancellation, compressed response, and oversized output.
 - Embed prompt-injection samples in plan text and verify they cannot alter the output contract or gain tool access.
 - Cover missing dates, ambiguous boundaries, unsupported text, and the Huaya Intelligent example plan.
 - Verify AI failure cannot affect already active monitoring plans.
-- Verify APIs and logs never return an API key or Authorization header.
+- Verify APIs, logs, serialized errors, and exception chains never return or retain an API key or Authorization header.
 
 ## Threat Model and Boundaries
 

@@ -10,7 +10,7 @@
 
 ## 技术栈
 
-- Python 3.11+
+- Python 3.14.x（`>=3.14,<3.15`）
 - SQLite WAL：唯一数据库
 - SQLAlchemy 2 与 Alembic
 - Pydantic 2：仓储 DTO
@@ -53,7 +53,7 @@ plan_source(id, source_text, source_hash, created_at)
 plan_version(id, plan_id, version, symbol, plan_hash, status, payload_json, source_id, revision, created_at)
 active_plan(symbol PRIMARY KEY, plan_version_id UNIQUE, activated_at, revision)
 position_lot(id, symbol, bucket, quantity, remaining_qty, acquired_trade_date, cost_fen, related_alert_id, closed_at)
-zone_episode(id, plan_hash, symbol, zone, started_at, episode_low_fen, bars_since_low, status, alerted_signal)
+zone_episode(id, plan_hash, symbol, zone, started_at, episode_low_fen, bars_since_low, status, alerted_signal, last_processed_bucket_end)
 risk_state(symbol PRIMARY KEY, plan_hash, status, breach_trade_date, prior_close_fen, revision, updated_at)
 evaluation_ledger(plan_hash, symbol, bucket_end, formula_version, result_hash, evaluated_at, UNIQUE(...))
 ai_provider_configuration(id, display_name, provider_type, base_url, model_name, key_ref, environment_variable, timeout_seconds, max_retries, max_input_chars, max_output_tokens, temperature_milli, prompt_version, enabled, revision, created_at, updated_at)
@@ -104,6 +104,8 @@ class PositionLot(BaseModel):
 - 修订号冲突返回 `409 CONFLICT` 和当前版本。
 - 计划激活、状态迁移、判断记录、审计和提醒入队在需要时使用同一短事务。
 
+截至 T024，现有 `evaluation_ledger(plan_hash, symbol, bucket_end, formula_version, ...)` 仍是仅限盘中的持久化合同。纯判断结果区分 `INTRADAY` 与 `OFFICIAL_CLOSE`，盘中 15:00 目标绝不能与同日官方收盘标识冲突。在 T032 持久化两类标识之前，必须通过单独审批的迁移和仓储修改增加无损 identity-kind 判别器；T024 不复用 `bucket_end`，也不修改该 schema。
+
 ### 计划仓储与工作单元契约
 
 - `save_draft` 接受类型化 `TradePlan`，重新执行跨字段保存校验，并在同一事务中保存源文本、规范 JSON、内容哈希、不可变版本和 `PLAN_DRAFT_SAVED` 审计。已有 `(plan_id, version)` 绝不覆盖。
@@ -111,6 +113,26 @@ class PositionLot(BaseModel):
 - 新幂等键创建 `PENDING`。相同键和哈希在待处理时产生 `IDEMPOTENCY_IN_PROGRESS`；进入 `COMPLETED` 后重放已保存的规范响应。相同键对应不同 SHA-256 请求哈希时始终产生 `IDEMPOTENCY_KEY_REUSED`。
 - 仓储失败暴露稳定错误码，例如 `PLAN_VERSION_EXISTS`、`PLAN_SAVE_BLOCKED`、`PLAN_ACTIVATION_BLOCKED`、`PLAN_VERSION_NOT_FOUND`、`CONFLICT`、`IDEMPOTENCY_KEY_REUSED`、`IDEMPOTENCY_IN_PROGRESS` 和 `IDEMPOTENCY_CLAIM_NOT_FOUND`；后续传输适配器将其映射为 HTTP，但不暴露 SQL 或原始 Session 细节。
 - `UnitOfWork` 拥有一个显式短事务。调用方必须调用 `commit()` 才能持久化；退出上下文时未提交则回滚。其公共协议只暴露仓储及 `commit()`/`rollback()`，绝不暴露 SQLAlchemy Session。
+
+### 低吸事件游标与仓储契约
+
+- `last_processed_bucket_end` 必须保存为规范 `Asia/Shanghai` ISO 8601 文本，并表示交易时段内完整 5 分钟边界。它不得早于 `five_minute_bucket_end(started_at)`，且必须进入重载 DTO、事件审计详情和规范事件审计哈希。
+- 事件判断只消费 `(last_processed_bucket_end, target.bucket_end]`。仓储修订拒绝游标倒退以及同游标上的任何状态变化；同游标且状态完全一致是幂等无操作。更晚游标可以应用严格创新低清零、有界进度、饱和、提醒或关闭。
+- 持久化生命周期只能向前：`ACTIVE` 可以保持 `ACTIVE` 或变为 `ALERTED`/`CLOSED`；`ALERTED` 可以保持 `ALERTED` 或变为 `CLOSED`；`CLOSED` 是终态。`ALERTED` 必须携带 `BUY_CORE_READY`/`BUY_TACTICAL_READY`，`ACTIVE` 禁止携带；提醒信号之后不能清除或替换。已提醒事件关闭后保留原信号。
+- 重放字节等价的初始 `start` 无害；持久化进度推进后重放原始 start 会返回当前记录而不倒退。在记录仍为初始状态时，冲突的 `episode_low_fen` 或游标会抛出 `EPISODE_IDENTITY_CONFLICT`，而不是掩盖确定性分歧。
+- 追加迁移 `0003_episode_cursor` 紧随 `0002_ai_provider_configuration`，新增 `VARCHAR(40) NOT NULL`。全新数据库或事件表为空的 `0002` 数据库可正常升级。由于旧游标无法无损推断，任何已有数据的 `0002` `zone_episode` 都必须在 DDL 前被发现并使升级原子失败，其 revision、结构和数据行保持不变；操作人员必须先备份，并明确清理/重建事件状态后再重试。
+
+### 行情历史与参考数据仓储契约
+
+- `MarketHistoryRepository` 持久化规范化分钟、日线值和确定性 5 分钟 K 线；`MarketReferenceRepository` 持久化交易日历与实际涨跌停值。两个仓储都不执行供应商调用、单位缩放、聚合、指标计算或收盘核对。
+- 精确 identity 分别为分钟 `(symbol, bar_end)`、5 分钟 `(symbol, bar_end, formula_version)`、日线 `(symbol, trade_date, is_official)`、日历 `(exchange, cal_date)`、涨跌停 `(symbol, trade_date)` 和最新价 `symbol`。
+- 分钟、日线和涨跌停行使用 `received_at` 确定修正顺序：较新事实覆盖，较旧事实忽略，相同重复无害，同回执冲突抛出 `MARKET_DATA_IDENTITY_CONFLICT`。由于 Schema 没有日历回执版本，后续权威日历调用会覆盖相同日历 identity。
+- 5 分钟 identity 不可变，并拒绝冲突事实；仓储在持久化前校验交易时段内的 5 分钟边界。
+- 每个规范化写批次都是最多 1,000 行的可重复 list/tuple。历史读取必须提供明确的闭区间日期/时间范围；所有历史/参考数据读取在返回行数超过 10,000 时失败关闭。
+- 持久化分钟和推进 `latest_quote` 在调用方拥有的同一事务中完成。更新的 K 线优先；修正同一 K 线时必须具有更新的回执。`latest_quote` 始终是可替换投影，不是第二套报价历史。
+- 判断上下文组装必须使用明确的闭区间边界读取 `minute_bar`，范围从当前交易日首个规范分钟结束时间到判断周期结束时间；超过 240 行或序列不精确时拒绝。不可变结果作为 `current_day_minutes` 提供。`latest_quote` 无法提供周期内穿越所需的此前观测，也无法提供触价 provenance 所需的历史。不得新增第二张报价历史表。
+- 连续盘中临时日线聚合与 15:00 临时收盘共享现有 `(symbol, trade_date, is_official=False)` identity，并且仅在 `received_at` 更新时推进；官方行保留独立的 `is_official=True` identity。不得新增压力状态表。T023 在纯编排期间从 `current_day_minutes` 临时推导 `pressure_touch_at`。
+- T018 暴露这些 Session 绑定仓储用于确定性持久化测试。应用 `UnitOfWork` 接线延后到负责原子运行时事务流的 T032；任何调用方都不得在数据库事务内执行 Tushare 请求。
 
 ## 代码风格
 
@@ -135,9 +157,12 @@ class UnitOfWork(Protocol):
 - 测试空数据库和历史版本迁移。
 - 验证单活动计划、判断标识、提醒标识和幂等键的唯一约束。
 - 覆盖持仓批次、部分卖出、底仓/机动仓、T+1、低吸事件、风险状态、健康和审计。
+- 覆盖事件游标 start/reload/revise/restart、精确审计哈希链、单向生命周期、同游标重放、冲突初始 start 和游标倒退。
+- 覆盖 `0003_episode_cursor` 从全新及空 `0002` 数据库升级，以及对已有事件状态的 `0002` 数据库在 DDL 前原子拒绝。
 - 模拟崩溃/重启，确认已提交事务可恢复、未提交事务回滚。
 - 并发激活和更新必须稳定返回 409 冲突。
 - 测试重复行情和延迟恢复的幂等写入。
+- 覆盖精确、有缺口、超限和仅有最新报价的判断历史读取，以及临时/官方日线 identity 分离。
 - 在 WAL 写入期间执行在线备份、`PRAGMA integrity_check`、恢复冒烟测试，并只保留最近 30 个成功备份。
 
 ## 边界

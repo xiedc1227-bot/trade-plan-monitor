@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
+from decimal import Decimal
 from hashlib import sha256
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -19,12 +20,32 @@ from trade_plan_monitor.domain.plan_codec import dump_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
 from trade_plan_monitor.domain.plan_validation import PlanValidationResult, validate_trade_plan
-from trade_plan_monitor.market_data.models import ProviderCapabilityStatus
+from trade_plan_monitor.market_data.aggregation import (
+    expected_five_minute_ends,
+    five_minute_bucket_end,
+)
+from trade_plan_monitor.market_data.models import (
+    DailyBar as NormalizedDailyBar,
+)
+from trade_plan_monitor.market_data.models import (
+    DailyLimit as NormalizedDailyLimit,
+)
+from trade_plan_monitor.market_data.models import (
+    MinuteBar as NormalizedMinuteBar,
+)
+from trade_plan_monitor.market_data.models import (
+    ProviderCapabilityStatus,
+)
+from trade_plan_monitor.market_data.models import (
+    TradingDay as NormalizedTradingDay,
+)
 from trade_plan_monitor.state.models import (
     ActivePlan,
     AuditLog,
+    DailyPriceLimit,
     EvaluationLedger,
     IdempotencyStatus,
+    LatestQuote,
     PlanSource,
     PlanVersion,
     PlanVersionStatus,
@@ -35,7 +56,17 @@ from trade_plan_monitor.state.models import (
     RiskState,
     SymbolHealth,
     SymbolHealthStatus,
+    TradingCalendar,
     ZoneEpisode,
+)
+from trade_plan_monitor.state.models import (
+    DailyBar as DailyBarRow,
+)
+from trade_plan_monitor.state.models import (
+    FiveMinuteBar as FiveMinuteBarRow,
+)
+from trade_plan_monitor.state.models import (
+    MinuteBar as MinuteBarRow,
 )
 
 IdFactory = Callable[[], str]
@@ -163,6 +194,12 @@ class ProviderHealthConflictError(RepositoryError):
     code = "PROVIDER_HEALTH_OBSERVATION_CONFLICT"
 
 
+class MarketDataIdentityConflictError(RepositoryError):
+    """One immutable market identity contains conflicting equal-version facts."""
+
+    code = "MARKET_DATA_IDENTITY_CONFLICT"
+
+
 class PlanVersionRecord(BaseModel):
     """Read-only application DTO for one persisted plan version."""
 
@@ -235,6 +272,7 @@ class EpisodeRecord(BaseModel):
     bars_since_low: int
     status: str
     alerted_signal: str | None
+    last_processed_bucket_end: datetime
 
 
 class RiskStateRecord(BaseModel):
@@ -298,6 +336,33 @@ class SymbolHealthRecord(BaseModel):
     gap_json: str
     error_streak: int
     revision: int
+
+
+class FiveMinuteBarRecord(BaseModel):
+    """Read-only deterministic five-minute persistence value."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    symbol: str
+    bar_end: datetime
+    formula_version: str
+    open_fen: int
+    high_fen: int
+    low_fen: int
+    close_fen: int
+    volume_shares: int
+    amount_yuan: Decimal
+
+
+class LatestQuoteRecord(BaseModel):
+    """Read-only latest complete-minute projection for one symbol."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    symbol: str
+    price_fen: int
+    bar_end: datetime
+    received_at: datetime
 
 
 class PlanRepository:
@@ -680,6 +745,7 @@ class EpisodeRepository:
         zone: str,
         started_at: datetime,
         episode_low_fen: int,
+        last_processed_bucket_end: datetime,
     ) -> EpisodeRecord:
         normalized_id = _bounded_text(episode_id, "episode_id", maximum=36)
         normalized_hash = _sha256_hash(plan_hash, "plan_hash")
@@ -687,6 +753,9 @@ class EpisodeRepository:
         normalized_zone = _identifier(zone, "zone", maximum=64)
         normalized_started_at = _aware_datetime(started_at, "started_at")
         normalized_low = _positive_integer(episode_low_fen, "episode_low_fen")
+        normalized_cursor = _episode_cursor(last_processed_bucket_end)
+        if normalized_cursor < five_minute_bucket_end(normalized_started_at):
+            raise ValueError("last_processed_bucket_end cannot precede the touch bucket")
         statement = sqlite_insert(ZoneEpisode).values(
             id=normalized_id,
             plan_hash=normalized_hash,
@@ -697,6 +766,7 @@ class EpisodeRepository:
             bars_since_low=0,
             status="ACTIVE",
             alerted_signal=None,
+            last_processed_bucket_end=normalized_cursor.isoformat(),
         )
         result = self._session.execute(
             statement.on_conflict_do_nothing(index_elements=[ZoneEpisode.id])
@@ -724,6 +794,33 @@ class EpisodeRepository:
                 raise EpisodeIdentityConflictError(
                     "Episode identifier is bound to another identity"
                 )
+            candidate_initial = EpisodeRecord(
+                id=normalized_id,
+                plan_hash=normalized_hash,
+                symbol=normalized_symbol,
+                zone=normalized_zone,
+                started_at=normalized_started_at,
+                episode_low_fen=normalized_low,
+                bars_since_low=0,
+                status="ACTIVE",
+                alerted_signal=None,
+                last_processed_bucket_end=normalized_cursor,
+            )
+            initial_hashes = tuple(
+                self._session.scalars(
+                    select(AuditLog.after_hash)
+                    .where(
+                        AuditLog.entity_type == "ZONE_EPISODE",
+                        AuditLog.entity_id == normalized_id,
+                        AuditLog.action == "ZONE_EPISODE_STARTED",
+                    )
+                    .limit(2)
+                )
+            )
+            if len(initial_hashes) != 1 or initial_hashes[0] != _episode_hash(candidate_initial):
+                raise EpisodeIdentityConflictError(
+                    "Episode identifier has conflicting initial state"
+                )
             return record
         self._append_audit(action="ZONE_EPISODE_STARTED", before=None, after=record)
         return record
@@ -743,6 +840,7 @@ class EpisodeRepository:
         bars_since_low: int,
         status: str,
         alerted_signal: str | None,
+        last_processed_bucket_end: datetime,
     ) -> EpisodeRecord:
         normalized_id = _bounded_text(episode_id, "episode_id", maximum=36)
         normalized_low = _positive_integer(episode_low_fen, "episode_low_fen")
@@ -753,6 +851,7 @@ class EpisodeRepository:
             if alerted_signal is None
             else _identifier(alerted_signal, "alerted_signal", maximum=64)
         )
+        normalized_cursor = _episode_cursor(last_processed_bucket_end)
         self._session.execute(
             update(ZoneEpisode)
             .where(ZoneEpisode.id == normalized_id)
@@ -763,24 +862,40 @@ class EpisodeRepository:
         if model is None:
             raise EpisodeNotFoundError("Zone episode was not found")
         before = _episode_record(model)
+        if normalized_cursor < before.last_processed_bucket_end:
+            raise EpisodeTransitionError("Episode cursor cannot move backwards")
+        incoming_state = (
+            normalized_low,
+            normalized_bars,
+            normalized_status,
+            normalized_signal,
+        )
+        current_state = (
+            before.episode_low_fen,
+            before.bars_since_low,
+            before.status,
+            before.alerted_signal,
+        )
+        if normalized_cursor == before.last_processed_bucket_end:
+            if incoming_state == current_state:
+                return before
+            raise EpisodeTransitionError("Episode state cannot change at the same cursor")
+        _validate_episode_lifecycle_transition(
+            before=before,
+            status=normalized_status,
+            alerted_signal=normalized_signal,
+        )
         if normalized_low > before.episode_low_fen:
             raise EpisodeTransitionError("Episode low cannot increase")
         if normalized_low < before.episode_low_fen and normalized_bars != 0:
             raise EpisodeTransitionError("A new episode low must reset bar progress")
         if normalized_low == before.episode_low_fen and normalized_bars < before.bars_since_low:
             raise EpisodeTransitionError("Episode bar progress cannot move backwards")
-        if (
-            normalized_low == before.episode_low_fen
-            and normalized_bars == before.bars_since_low
-            and normalized_status == before.status
-            and normalized_signal == before.alerted_signal
-        ):
-            return before
-
         model.episode_low_fen = normalized_low
         model.bars_since_low = normalized_bars
         model.status = normalized_status
         model.alerted_signal = normalized_signal
+        model.last_processed_bucket_end = normalized_cursor.isoformat()
         self._session.flush()
         after = _episode_record(model)
         self._append_audit(action="ZONE_EPISODE_REVISED", before=before, after=after)
@@ -804,6 +919,7 @@ class EpisodeRepository:
                 details_json=_canonical_json(
                     {
                         "barsSinceLow": after.bars_since_low,
+                        "lastProcessedBucketEnd": after.last_processed_bucket_end.isoformat(),
                         "status": after.status,
                         "symbol": after.symbol,
                         "zone": after.zone,
@@ -843,9 +959,7 @@ class RiskRepository:
         normalized_close = _positive_integer(prior_close_fen, "prior_close_fen")
         normalized_revision = _nonnegative_integer(expected_revision, "expected_revision")
         if breach_trade_date is not None:
-            normalized_breach_date = _calendar_date(
-                breach_trade_date, "breach_trade_date"
-            )
+            normalized_breach_date = _calendar_date(breach_trade_date, "breach_trade_date")
         else:
             normalized_breach_date = None
         if normalized_status == "CLEAR" and normalized_breach_date is not None:
@@ -945,9 +1059,7 @@ class EvaluationRepository:
         normalized_bucket_end = _canonical_market_datetime(bucket_end, "bucket_end")
         normalized_formula = _token(formula_version, "formula_version", maximum=32)
         normalized_result_hash = _sha256_hash(result_hash, "result_hash")
-        normalized_evaluated_at = _canonical_market_datetime(
-            evaluated_at, "evaluated_at"
-        )
+        normalized_evaluated_at = _canonical_market_datetime(evaluated_at, "evaluated_at")
         identity = (
             normalized_plan_hash,
             normalized_symbol,
@@ -1015,9 +1127,7 @@ class HealthRepository:
         normalized_checked_at = _canonical_market_datetime(checked_at, "checked_at")
         normalized_latency = _nonnegative_integer(latency_ms, "latency_ms")
         normalized_error = (
-            None
-            if error_code is None
-            else _identifier(error_code, "error_code", maximum=64)
+            None if error_code is None else _identifier(error_code, "error_code", maximum=64)
         )
         normalized_retry = (
             None
@@ -1047,9 +1157,7 @@ class HealthRepository:
         if current is not None and current.checked_at == normalized_checked_at:
             if current == incoming:
                 return current
-            raise ProviderHealthConflictError(
-                "Provider observation time has conflicting facts"
-            )
+            raise ProviderHealthConflictError("Provider observation time has conflicting facts")
 
         if current is None:
             self._session.add(
@@ -1072,9 +1180,7 @@ class HealthRepository:
             model.checked_at = normalized_checked_at.isoformat()
             model.latency_ms = normalized_latency
             model.error_code = normalized_error
-            model.next_retry_at = (
-                None if normalized_retry is None else normalized_retry.isoformat()
-            )
+            model.next_retry_at = None if normalized_retry is None else normalized_retry.isoformat()
         self._session.flush()
         return incoming
 
@@ -1122,9 +1228,7 @@ class HealthRepository:
         statement = sqlite_insert(SymbolHealth).values(
             symbol=normalized_symbol,
             status=normalized_status,
-            latest_bar_end=(
-                None if normalized_bar_end is None else normalized_bar_end.isoformat()
-            ),
+            latest_bar_end=(None if normalized_bar_end is None else normalized_bar_end.isoformat()),
             data_age_seconds=normalized_age,
             gap_json=gap_json,
             error_streak=normalized_streak,
@@ -1155,6 +1259,402 @@ class HealthRepository:
         if after is None:  # pragma: no cover - protected by successful upsert
             raise RepositoryError("Symbol health could not be reloaded")
         return after
+
+
+class MarketHistoryRepository:
+    """Persist normalized bar history and one replaceable latest-quote projection."""
+
+    _MAX_BATCH_ROWS = 1_000
+    _MAX_READ_ROWS = 10_000
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def upsert_minutes(self, bars: Sequence[NormalizedMinuteBar]) -> None:
+        """Persist validated minute rows without making arrival order observable."""
+
+        normalized = _normalized_batch(
+            bars,
+            NormalizedMinuteBar,
+            "bars",
+            maximum=self._MAX_BATCH_ROWS,
+        )
+        for bar in normalized:
+            persisted = self._upsert_minute(bar)
+            self._upsert_latest_quote(persisted)
+
+    def list_minutes(
+        self,
+        symbol: str,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> tuple[NormalizedMinuteBar, ...]:
+        normalized_symbol = _symbol(symbol)
+        normalized_start, normalized_end = _market_range(start, end)
+        statement = (
+            select(MinuteBarRow)
+            .where(
+                MinuteBarRow.symbol == normalized_symbol,
+                MinuteBarRow.bar_end >= normalized_start.isoformat(),
+                MinuteBarRow.bar_end <= normalized_end.isoformat(),
+            )
+            .order_by(MinuteBarRow.bar_end)
+            .limit(self._MAX_READ_ROWS + 1)
+        )
+        rows = self._session.scalars(statement).all()
+        _require_bounded_read(rows, self._MAX_READ_ROWS)
+        return tuple(_minute_value(row) for row in rows)
+
+    def get_latest_quote(self, symbol: str) -> LatestQuoteRecord | None:
+        row = self._session.get(LatestQuote, _symbol(symbol))
+        return None if row is None else _latest_quote_record(row)
+
+    def upsert_five_minute(
+        self,
+        *,
+        symbol: str,
+        bar_end: datetime,
+        formula_version: str,
+        open_fen: int,
+        high_fen: int,
+        low_fen: int,
+        close_fen: int,
+        volume_shares: int,
+        amount_yuan: Decimal,
+    ) -> FiveMinuteBarRecord:
+        normalized_symbol = _symbol(symbol)
+        normalized_end = _canonical_market_datetime(bar_end, "bar_end")
+        expected_five_minute_ends(normalized_end)
+        normalized_formula = _token(formula_version, "formula_version", maximum=32)
+        normalized_ohlc = _ohlc_fen(
+            open_fen=open_fen,
+            high_fen=high_fen,
+            low_fen=low_fen,
+            close_fen=close_fen,
+        )
+        normalized_volume = _nonnegative_integer(volume_shares, "volume_shares")
+        normalized_amount = _nonnegative_decimal(amount_yuan, "amount_yuan")
+        incoming = FiveMinuteBarRecord(
+            symbol=normalized_symbol,
+            bar_end=normalized_end,
+            formula_version=normalized_formula,
+            open_fen=normalized_ohlc[0],
+            high_fen=normalized_ohlc[1],
+            low_fen=normalized_ohlc[2],
+            close_fen=normalized_ohlc[3],
+            volume_shares=normalized_volume,
+            amount_yuan=normalized_amount,
+        )
+        identity = (
+            normalized_symbol,
+            normalized_end.isoformat(),
+            normalized_formula,
+        )
+        statement = sqlite_insert(FiveMinuteBarRow).values(
+            symbol=identity[0],
+            bar_end=identity[1],
+            formula_version=identity[2],
+            open_fen=incoming.open_fen,
+            high_fen=incoming.high_fen,
+            low_fen=incoming.low_fen,
+            close_fen=incoming.close_fen,
+            volume_shares=incoming.volume_shares,
+            amount_yuan=str(incoming.amount_yuan),
+        )
+        self._session.execute(
+            statement.on_conflict_do_nothing(
+                index_elements=[
+                    FiveMinuteBarRow.symbol,
+                    FiveMinuteBarRow.bar_end,
+                    FiveMinuteBarRow.formula_version,
+                ]
+            )
+        )
+        self._session.flush()
+        self._session.expire_all()
+        row = self._session.get(FiveMinuteBarRow, identity)
+        if row is None:  # pragma: no cover - protected by insert/primary key
+            raise RepositoryError("Five-minute bar could not be reloaded")
+        persisted = _five_minute_record(row)
+        if persisted != incoming:
+            raise MarketDataIdentityConflictError(
+                "Five-minute identity already has conflicting facts"
+            )
+        return persisted
+
+    def list_five_minute(
+        self,
+        symbol: str,
+        *,
+        start: datetime,
+        end: datetime,
+        formula_version: str | None = None,
+    ) -> tuple[FiveMinuteBarRecord, ...]:
+        normalized_start, normalized_end = _market_range(start, end)
+        statement = select(FiveMinuteBarRow).where(
+            FiveMinuteBarRow.symbol == _symbol(symbol),
+            FiveMinuteBarRow.bar_end >= normalized_start.isoformat(),
+            FiveMinuteBarRow.bar_end <= normalized_end.isoformat(),
+        )
+        if formula_version is not None:
+            statement = statement.where(
+                FiveMinuteBarRow.formula_version
+                == _token(formula_version, "formula_version", maximum=32)
+            )
+        rows = self._session.scalars(
+            statement.order_by(
+                FiveMinuteBarRow.bar_end,
+                FiveMinuteBarRow.formula_version,
+            ).limit(self._MAX_READ_ROWS + 1)
+        ).all()
+        _require_bounded_read(rows, self._MAX_READ_ROWS)
+        return tuple(_five_minute_record(row) for row in rows)
+
+    def upsert_daily_bars(self, bars: Sequence[NormalizedDailyBar]) -> None:
+        normalized = _normalized_batch(
+            bars,
+            NormalizedDailyBar,
+            "bars",
+            maximum=self._MAX_BATCH_ROWS,
+        )
+        for bar in normalized:
+            self._upsert_daily_bar(bar)
+
+    def list_daily_bars(
+        self,
+        symbol: str,
+        *,
+        start: date,
+        end: date,
+    ) -> tuple[NormalizedDailyBar, ...]:
+        normalized_start, normalized_end = _date_range(start, end)
+        rows = self._session.scalars(
+            select(DailyBarRow)
+            .where(
+                DailyBarRow.symbol == _symbol(symbol),
+                DailyBarRow.trade_date >= normalized_start,
+                DailyBarRow.trade_date <= normalized_end,
+            )
+            .order_by(DailyBarRow.trade_date, DailyBarRow.is_official)
+            .limit(self._MAX_READ_ROWS + 1)
+        ).all()
+        _require_bounded_read(rows, self._MAX_READ_ROWS)
+        return tuple(_daily_bar_value(row) for row in rows)
+
+    def _upsert_minute(self, bar: NormalizedMinuteBar) -> NormalizedMinuteBar:
+        values = _minute_values(bar)
+        statement = sqlite_insert(MinuteBarRow).values(**values)
+        statement = statement.on_conflict_do_update(
+            index_elements=[MinuteBarRow.symbol, MinuteBarRow.bar_end],
+            set_={
+                "open_fen": values["open_fen"],
+                "high_fen": values["high_fen"],
+                "low_fen": values["low_fen"],
+                "close_fen": values["close_fen"],
+                "volume_shares": values["volume_shares"],
+                "amount_yuan": values["amount_yuan"],
+                "received_at": values["received_at"],
+            },
+            where=MinuteBarRow.received_at < values["received_at"],
+        )
+        self._session.execute(statement)
+        self._session.flush()
+        self._session.expire_all()
+        row = self._session.get(MinuteBarRow, (bar.symbol, bar.bar_end.isoformat()))
+        if row is None:  # pragma: no cover - protected by insert/primary key
+            raise RepositoryError("Minute bar could not be reloaded")
+        persisted = _minute_value(row)
+        if persisted.received_at == bar.received_at and persisted != bar:
+            raise MarketDataIdentityConflictError(
+                "Minute identity and receipt time have conflicting facts"
+            )
+        return persisted
+
+    def _upsert_latest_quote(self, bar: NormalizedMinuteBar) -> None:
+        values = {
+            "symbol": bar.symbol,
+            "price_fen": bar.close_fen,
+            "bar_end": bar.bar_end.isoformat(),
+            "received_at": bar.received_at.isoformat(),
+        }
+        statement = sqlite_insert(LatestQuote).values(**values)
+        statement = statement.on_conflict_do_update(
+            index_elements=[LatestQuote.symbol],
+            set_={
+                "price_fen": values["price_fen"],
+                "bar_end": values["bar_end"],
+                "received_at": values["received_at"],
+            },
+            where=or_(
+                LatestQuote.bar_end < values["bar_end"],
+                and_(
+                    LatestQuote.bar_end == values["bar_end"],
+                    LatestQuote.received_at < values["received_at"],
+                ),
+            ),
+        )
+        self._session.execute(statement)
+        self._session.flush()
+        self._session.expire_all()
+        row = self._session.get(LatestQuote, bar.symbol)
+        if row is None:  # pragma: no cover - protected by insert/primary key
+            raise RepositoryError("Latest quote could not be reloaded")
+        persisted = _latest_quote_record(row)
+        if (
+            persisted.bar_end == bar.bar_end
+            and persisted.received_at == bar.received_at
+            and persisted.price_fen != bar.close_fen
+        ):
+            raise MarketDataIdentityConflictError("Latest quote identity has conflicting facts")
+
+    def _upsert_daily_bar(self, bar: NormalizedDailyBar) -> NormalizedDailyBar:
+        values = _daily_bar_values(bar)
+        statement = sqlite_insert(DailyBarRow).values(**values)
+        statement = statement.on_conflict_do_update(
+            index_elements=[
+                DailyBarRow.symbol,
+                DailyBarRow.trade_date,
+                DailyBarRow.is_official,
+            ],
+            set_={
+                "open_fen": values["open_fen"],
+                "high_fen": values["high_fen"],
+                "low_fen": values["low_fen"],
+                "close_fen": values["close_fen"],
+                "volume_shares": values["volume_shares"],
+                "amount_yuan": values["amount_yuan"],
+                "received_at": values["received_at"],
+            },
+            where=DailyBarRow.received_at < values["received_at"],
+        )
+        self._session.execute(statement)
+        self._session.flush()
+        self._session.expire_all()
+        identity = (bar.symbol, bar.trade_date, bar.is_official)
+        row = self._session.get(DailyBarRow, identity)
+        if row is None:  # pragma: no cover - protected by insert/primary key
+            raise RepositoryError("Daily bar could not be reloaded")
+        persisted = _daily_bar_value(row)
+        if persisted.received_at == bar.received_at and persisted != bar:
+            raise MarketDataIdentityConflictError(
+                "Daily-bar identity and receipt time have conflicting facts"
+            )
+        return persisted
+
+
+class MarketReferenceRepository:
+    """Persist normalized calendar and daily-limit reference facts."""
+
+    _MAX_BATCH_ROWS = 1_000
+    _MAX_READ_ROWS = 10_000
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def upsert_trading_days(self, days: Sequence[NormalizedTradingDay]) -> None:
+        normalized = _normalized_batch(
+            days,
+            NormalizedTradingDay,
+            "days",
+            maximum=self._MAX_BATCH_ROWS,
+        )
+        for day in normalized:
+            values = {
+                "exchange": day.exchange,
+                "cal_date": day.cal_date,
+                "is_open": day.is_open,
+                "previous_trade_date": day.previous_trade_date,
+            }
+            statement = sqlite_insert(TradingCalendar).values(**values)
+            self._session.execute(
+                statement.on_conflict_do_update(
+                    index_elements=[TradingCalendar.exchange, TradingCalendar.cal_date],
+                    set_={
+                        "is_open": values["is_open"],
+                        "previous_trade_date": values["previous_trade_date"],
+                    },
+                )
+            )
+            self._session.flush()
+            self._session.expire_all()
+            row = self._session.get(TradingCalendar, (day.exchange, day.cal_date))
+            if row is None:  # pragma: no cover - protected by insert/primary key
+                raise RepositoryError("Trading day could not be reloaded")
+            if _trading_day_value(row) != day:  # pragma: no cover - protected by upsert
+                raise RepositoryError("Trading day could not be updated")
+
+    def list_trading_days(
+        self,
+        exchange: str,
+        start: date,
+        end: date,
+    ) -> tuple[NormalizedTradingDay, ...]:
+        normalized_exchange = _exchange(exchange)
+        normalized_start, normalized_end = _date_range(start, end)
+        rows = self._session.scalars(
+            select(TradingCalendar)
+            .where(
+                TradingCalendar.exchange == normalized_exchange,
+                TradingCalendar.cal_date >= normalized_start,
+                TradingCalendar.cal_date <= normalized_end,
+            )
+            .order_by(TradingCalendar.cal_date)
+            .limit(self._MAX_READ_ROWS + 1)
+        ).all()
+        _require_bounded_read(rows, self._MAX_READ_ROWS)
+        return tuple(_trading_day_value(row) for row in rows)
+
+    def upsert_daily_limits(self, limits: Sequence[NormalizedDailyLimit]) -> None:
+        normalized = _normalized_batch(
+            limits,
+            NormalizedDailyLimit,
+            "limits",
+            maximum=self._MAX_BATCH_ROWS,
+        )
+        for limit in normalized:
+            values = {
+                "symbol": limit.symbol,
+                "trade_date": limit.trade_date,
+                "up_limit_fen": limit.up_limit_fen,
+                "down_limit_fen": limit.down_limit_fen,
+                "received_at": limit.received_at.isoformat(),
+            }
+            statement = sqlite_insert(DailyPriceLimit).values(**values)
+            statement = statement.on_conflict_do_update(
+                index_elements=[DailyPriceLimit.symbol, DailyPriceLimit.trade_date],
+                set_={
+                    "up_limit_fen": values["up_limit_fen"],
+                    "down_limit_fen": values["down_limit_fen"],
+                    "received_at": values["received_at"],
+                },
+                where=DailyPriceLimit.received_at < values["received_at"],
+            )
+            self._session.execute(statement)
+            self._session.flush()
+            self._session.expire_all()
+            row = self._session.get(
+                DailyPriceLimit,
+                (limit.symbol, limit.trade_date),
+            )
+            if row is None:  # pragma: no cover - protected by insert/primary key
+                raise RepositoryError("Daily limit could not be reloaded")
+            persisted = _daily_limit_value(row)
+            if persisted.received_at == limit.received_at and persisted != limit:
+                raise MarketDataIdentityConflictError(
+                    "Daily-limit identity and receipt time have conflicting facts"
+                )
+
+    def list_daily_limits(self, trade_date: date) -> tuple[NormalizedDailyLimit, ...]:
+        normalized_date = _calendar_date(trade_date, "trade_date")
+        rows = self._session.scalars(
+            select(DailyPriceLimit)
+            .where(DailyPriceLimit.trade_date == normalized_date)
+            .order_by(DailyPriceLimit.symbol)
+            .limit(self._MAX_READ_ROWS + 1)
+        ).all()
+        _require_bounded_read(rows, self._MAX_READ_ROWS)
+        return tuple(_daily_limit_value(row) for row in rows)
 
 
 class IdempotencyRepository:
@@ -1329,6 +1829,9 @@ def _episode_record(model: ZoneEpisode) -> EpisodeRecord:
         bars_since_low=model.bars_since_low,
         status=model.status,
         alerted_signal=model.alerted_signal,
+        last_processed_bucket_end=_episode_cursor(
+            datetime.fromisoformat(model.last_processed_bucket_end)
+        ),
     )
 
 
@@ -1338,6 +1841,7 @@ def _episode_hash(record: EpisodeRecord) -> str:
         "barsSinceLow": record.bars_since_low,
         "episodeLowFen": record.episode_low_fen,
         "id": record.id,
+        "lastProcessedBucketEnd": record.last_processed_bucket_end.isoformat(),
         "planHash": record.plan_hash,
         "startedAt": record.started_at.isoformat(),
         "status": record.status,
@@ -1362,9 +1866,7 @@ def _risk_state_record(model: RiskState) -> RiskStateRecord:
 def _risk_state_hash(record: RiskStateRecord) -> str:
     snapshot = {
         "breachTradeDate": (
-            None
-            if record.breach_trade_date is None
-            else record.breach_trade_date.isoformat()
+            None if record.breach_trade_date is None else record.breach_trade_date.isoformat()
         ),
         "planHash": record.plan_hash,
         "priorCloseFen": record.prior_close_fen,
@@ -1395,9 +1897,7 @@ def _provider_health_record(model: ProviderHealth) -> ProviderHealthRecord:
         latency_ms=model.latency_ms,
         error_code=model.error_code,
         next_retry_at=(
-            None
-            if model.next_retry_at is None
-            else datetime.fromisoformat(model.next_retry_at)
+            None if model.next_retry_at is None else datetime.fromisoformat(model.next_retry_at)
         ),
     )
 
@@ -1407,15 +1907,193 @@ def _symbol_health_record(model: SymbolHealth) -> SymbolHealthRecord:
         symbol=model.symbol,
         status=SymbolHealthStatus(model.status),
         latest_bar_end=(
-            None
-            if model.latest_bar_end is None
-            else datetime.fromisoformat(model.latest_bar_end)
+            None if model.latest_bar_end is None else datetime.fromisoformat(model.latest_bar_end)
         ),
         data_age_seconds=model.data_age_seconds,
         gap_json=model.gap_json,
         error_streak=model.error_streak,
         revision=model.revision,
     )
+
+
+def _minute_values(bar: NormalizedMinuteBar) -> dict[str, object]:
+    return {
+        "symbol": bar.symbol,
+        "bar_end": bar.bar_end.isoformat(),
+        "open_fen": bar.open_fen,
+        "high_fen": bar.high_fen,
+        "low_fen": bar.low_fen,
+        "close_fen": bar.close_fen,
+        "volume_shares": bar.volume_shares,
+        "amount_yuan": str(bar.amount_yuan),
+        "received_at": bar.received_at.isoformat(),
+    }
+
+
+def _minute_value(model: MinuteBarRow) -> NormalizedMinuteBar:
+    return NormalizedMinuteBar(
+        symbol=model.symbol,
+        bar_end=datetime.fromisoformat(model.bar_end),
+        open_fen=model.open_fen,
+        high_fen=model.high_fen,
+        low_fen=model.low_fen,
+        close_fen=model.close_fen,
+        volume_shares=model.volume_shares,
+        amount_yuan=Decimal(model.amount_yuan),
+        received_at=datetime.fromisoformat(model.received_at),
+    )
+
+
+def _five_minute_record(model: FiveMinuteBarRow) -> FiveMinuteBarRecord:
+    return FiveMinuteBarRecord(
+        symbol=model.symbol,
+        bar_end=_canonical_market_datetime(
+            datetime.fromisoformat(model.bar_end),
+            "bar_end",
+        ),
+        formula_version=model.formula_version,
+        open_fen=model.open_fen,
+        high_fen=model.high_fen,
+        low_fen=model.low_fen,
+        close_fen=model.close_fen,
+        volume_shares=model.volume_shares,
+        amount_yuan=Decimal(model.amount_yuan),
+    )
+
+
+def _daily_bar_values(bar: NormalizedDailyBar) -> dict[str, object]:
+    return {
+        "symbol": bar.symbol,
+        "trade_date": bar.trade_date,
+        "is_official": bar.is_official,
+        "open_fen": bar.open_fen,
+        "high_fen": bar.high_fen,
+        "low_fen": bar.low_fen,
+        "close_fen": bar.close_fen,
+        "volume_shares": bar.volume_shares,
+        "amount_yuan": str(bar.amount_yuan),
+        "received_at": bar.received_at.isoformat(),
+    }
+
+
+def _daily_bar_value(model: DailyBarRow) -> NormalizedDailyBar:
+    return NormalizedDailyBar(
+        symbol=model.symbol,
+        trade_date=model.trade_date,
+        is_official=model.is_official,
+        open_fen=model.open_fen,
+        high_fen=model.high_fen,
+        low_fen=model.low_fen,
+        close_fen=model.close_fen,
+        volume_shares=model.volume_shares,
+        amount_yuan=Decimal(model.amount_yuan),
+        received_at=datetime.fromisoformat(model.received_at),
+    )
+
+
+def _trading_day_value(model: TradingCalendar) -> NormalizedTradingDay:
+    return NormalizedTradingDay(
+        exchange=model.exchange,
+        cal_date=model.cal_date,
+        is_open=model.is_open,
+        previous_trade_date=model.previous_trade_date,
+    )
+
+
+def _daily_limit_value(model: DailyPriceLimit) -> NormalizedDailyLimit:
+    return NormalizedDailyLimit(
+        symbol=model.symbol,
+        trade_date=model.trade_date,
+        up_limit_fen=model.up_limit_fen,
+        down_limit_fen=model.down_limit_fen,
+        received_at=datetime.fromisoformat(model.received_at),
+    )
+
+
+def _latest_quote_record(model: LatestQuote) -> LatestQuoteRecord:
+    return LatestQuoteRecord(
+        symbol=model.symbol,
+        price_fen=model.price_fen,
+        bar_end=_canonical_market_datetime(
+            datetime.fromisoformat(model.bar_end),
+            "bar_end",
+        ),
+        received_at=_canonical_market_datetime(
+            datetime.fromisoformat(model.received_at),
+            "received_at",
+        ),
+    )
+
+
+def _normalized_batch[MarketValueT](
+    values: Sequence[MarketValueT],
+    expected_type: type[MarketValueT],
+    name: str,
+    *,
+    maximum: int,
+) -> tuple[MarketValueT, ...]:
+    if type(values) not in (list, tuple):
+        raise TypeError(f"{name} must be a list or tuple")
+    if len(values) > maximum:
+        raise ValueError(f"{name} must not exceed {maximum} rows")
+    if any(not isinstance(value, expected_type) for value in values):
+        raise TypeError(f"{name} must contain only {expected_type.__name__} values")
+    return tuple(values)
+
+
+def _market_range(start: datetime, end: datetime) -> tuple[datetime, datetime]:
+    normalized_start = _canonical_market_datetime(start, "start")
+    normalized_end = _canonical_market_datetime(end, "end")
+    if normalized_start > normalized_end:
+        raise ValueError("start cannot follow end")
+    return normalized_start, normalized_end
+
+
+def _date_range(start: date, end: date) -> tuple[date, date]:
+    normalized_start = _calendar_date(start, "start")
+    normalized_end = _calendar_date(end, "end")
+    if normalized_start > normalized_end:
+        raise ValueError("start cannot follow end")
+    return normalized_start, normalized_end
+
+
+def _require_bounded_read(values: Sequence[object], maximum: int) -> None:
+    if len(values) > maximum:
+        raise RepositoryError(f"Market history read limit exceeded ({maximum})")
+
+
+def _exchange(value: str) -> str:
+    if value not in {"SSE", "SZSE", "BSE"}:
+        raise ValueError("exchange must be SSE, SZSE, or BSE")
+    return value
+
+
+def _ohlc_fen(
+    *,
+    open_fen: int,
+    high_fen: int,
+    low_fen: int,
+    close_fen: int,
+) -> tuple[int, int, int, int]:
+    normalized = (
+        _positive_integer(open_fen, "open_fen"),
+        _positive_integer(high_fen, "high_fen"),
+        _positive_integer(low_fen, "low_fen"),
+        _positive_integer(close_fen, "close_fen"),
+    )
+    if normalized[2] > normalized[1]:
+        raise ValueError("low_fen cannot exceed high_fen")
+    if not normalized[2] <= normalized[0] <= normalized[1]:
+        raise ValueError("open_fen must be between low_fen and high_fen")
+    if not normalized[2] <= normalized[3] <= normalized[1]:
+        raise ValueError("close_fen must be between low_fen and high_fen")
+    return normalized
+
+
+def _nonnegative_decimal(value: Decimal, name: str) -> Decimal:
+    if not isinstance(value, Decimal) or not value.is_finite() or value < 0:
+        raise ValueError(f"{name} must be a finite non-negative Decimal")
+    return value
 
 
 def _canonical_json(value: object) -> str:
@@ -1447,7 +2125,7 @@ def _symbol(value: str) -> str:
 def _position_bucket(value: str | PositionBucket) -> PositionBucket:
     try:
         return PositionBucket(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise ValueError("bucket must be CORE or TACTICAL") from None
 
 
@@ -1511,19 +2189,55 @@ def _canonical_market_datetime(value: datetime, name: str) -> datetime:
     return _aware_datetime(value, name).astimezone(ZoneInfo("Asia/Shanghai"))
 
 
+def _episode_cursor(value: datetime) -> datetime:
+    expected_five_minute_ends(value)
+    return value.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+
+
+def _validate_episode_lifecycle_transition(
+    *,
+    before: EpisodeRecord,
+    status: str,
+    alerted_signal: str | None,
+) -> None:
+    valid_statuses = frozenset({"ACTIVE", "ALERTED", "CLOSED"})
+    valid_signals = frozenset({"BUY_CORE_READY", "BUY_TACTICAL_READY"})
+    if before.status not in valid_statuses or status not in valid_statuses:
+        raise EpisodeTransitionError("Episode status is not supported")
+    if status == "ACTIVE" and alerted_signal is not None:
+        raise EpisodeTransitionError("Active episode cannot retain an alerted signal")
+    if status == "ALERTED" and alerted_signal not in valid_signals:
+        raise EpisodeTransitionError("Alerted episode requires a supported buy signal")
+    if status == "CLOSED" and alerted_signal not in {None, *valid_signals}:
+        raise EpisodeTransitionError("Closed episode has an unsupported alerted signal")
+
+    allowed_statuses = {
+        "ACTIVE": frozenset({"ACTIVE", "ALERTED", "CLOSED"}),
+        "ALERTED": frozenset({"ALERTED", "CLOSED"}),
+        "CLOSED": frozenset(),
+    }
+    if status not in allowed_statuses[before.status]:
+        raise EpisodeTransitionError("Episode lifecycle cannot move backwards or reopen")
+    if before.alerted_signal is not None and alerted_signal != before.alerted_signal:
+        raise EpisodeTransitionError("Episode alerted signal cannot change or be cleared")
+    if before.alerted_signal is None and alerted_signal is not None:
+        if before.status != "ACTIVE" or status != "ALERTED":
+            raise EpisodeTransitionError("Episode signal can be set only when alerting")
+
+
 def _provider_status(
     value: str | ProviderCapabilityStatus,
 ) -> ProviderCapabilityStatus:
     try:
         return ProviderCapabilityStatus(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise ValueError("status is not a supported provider capability state") from None
 
 
 def _symbol_health_status(value: str | SymbolHealthStatus) -> SymbolHealthStatus:
     try:
         return SymbolHealthStatus(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise ValueError("status is not a supported per-symbol health state") from None
 
 
@@ -1568,7 +2282,12 @@ __all__ = [
     "IdempotencyKeyReuseError",
     "IdempotencyRecord",
     "IdempotencyRepository",
+    "FiveMinuteBarRecord",
+    "LatestQuoteRecord",
     "MaxPositionExceededError",
+    "MarketDataIdentityConflictError",
+    "MarketHistoryRepository",
+    "MarketReferenceRepository",
     "PlanActivationBlockedError",
     "PlanRepository",
     "PlanSaveBlockedError",

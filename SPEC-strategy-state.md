@@ -10,7 +10,7 @@ Restart must not lose state or duplicate alerts. Alert acknowledgement is not a 
 
 ## Tech Stack
 
-- Python 3.11+
+- Python 3.14.x (`>=3.14,<3.15`)
 - SQLite WAL as the only database
 - SQLAlchemy 2 and Alembic
 - Pydantic 2 repository DTOs
@@ -53,7 +53,7 @@ plan_source(id, source_text, source_hash, created_at)
 plan_version(id, plan_id, version, symbol, plan_hash, status, payload_json, source_id, revision, created_at)
 active_plan(symbol PRIMARY KEY, plan_version_id UNIQUE, activated_at, revision)
 position_lot(id, symbol, bucket, quantity, remaining_qty, acquired_trade_date, cost_fen, related_alert_id, closed_at)
-zone_episode(id, plan_hash, symbol, zone, started_at, episode_low_fen, bars_since_low, status, alerted_signal)
+zone_episode(id, plan_hash, symbol, zone, started_at, episode_low_fen, bars_since_low, status, alerted_signal, last_processed_bucket_end)
 risk_state(symbol PRIMARY KEY, plan_hash, status, breach_trade_date, prior_close_fen, revision, updated_at)
 evaluation_ledger(plan_hash, symbol, bucket_end, formula_version, result_hash, evaluated_at, UNIQUE(...))
 ai_provider_configuration(id, display_name, provider_type, base_url, model_name, key_ref, environment_variable, timeout_seconds, max_retries, max_input_chars, max_output_tokens, temperature_milli, prompt_version, enabled, revision, created_at, updated_at)
@@ -104,6 +104,8 @@ Sellable quantity derives from the trading calendar and acquisition date. Manual
 - A revision conflict returns `409 CONFLICT` and the current version.
 - Plan activation, state transition, evaluation ledger, audit, and alert enqueue use one short transaction when required.
 
+Through T024, the existing `evaluation_ledger(plan_hash, symbol, bucket_end, formula_version, ...)` remains an intraday-only persistence contract. Pure decision results distinguish `INTRADAY` from `OFFICIAL_CLOSE`, and an intraday 15:00 target must never collide with that date's official-close identity. Before T032 persists both kinds, a separately approved migration and repository change must add a lossless identity-kind discriminator; T024 does not overload `bucket_end` or change this schema.
+
 ### Plan Repository and Unit-of-Work Contract
 
 - `save_draft` accepts a typed `TradePlan`, reruns cross-field save validation, and stores the source, canonical JSON, content hash, immutable version, and `PLAN_DRAFT_SAVED` audit in one transaction. An existing `(plan_id, version)` is never overwritten.
@@ -111,6 +113,26 @@ Sellable quantity derives from the trading calendar and acquisition date. Manual
 - A new idempotency key creates `PENDING`. The same key and hash while pending produces `IDEMPOTENCY_IN_PROGRESS`; after `COMPLETED`, it replays the canonical stored response. The same key with a different SHA-256 request hash always produces `IDEMPOTENCY_KEY_REUSED`.
 - Repository failures expose stable codes such as `PLAN_VERSION_EXISTS`, `PLAN_SAVE_BLOCKED`, `PLAN_ACTIVATION_BLOCKED`, `PLAN_VERSION_NOT_FOUND`, `CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_IN_PROGRESS`, and `IDEMPOTENCY_CLAIM_NOT_FOUND`; later transport adapters map them to HTTP without exposing SQL or raw Session details.
 - `UnitOfWork` owns one explicit short transaction. Callers must invoke `commit()` for durability; leaving the context without a commit rolls back. Its public protocol exposes repositories plus `commit()`/`rollback()`, never the SQLAlchemy Session.
+
+### Low-Zone Episode Cursor and Repository Contract
+
+- `last_processed_bucket_end` is required canonical `Asia/Shanghai` ISO 8601 text for a complete session-contained 5-minute boundary. It cannot precede `five_minute_bucket_end(started_at)` and participates in reload DTOs, episode audit details, and the canonical episode audit hash.
+- Episode evaluation consumes only `(last_processed_bucket_end, target.bucket_end]`. Repository revision rejects cursor regression and any state change at the same cursor; an exact same-cursor state is an idempotent no-op. A later cursor may apply a strict-lower reset, bounded progress, saturation, alerting, or closure.
+- The durable lifecycle is forward-only: `ACTIVE` may remain `ACTIVE` or become `ALERTED`/`CLOSED`; `ALERTED` may remain `ALERTED` or become `CLOSED`; `CLOSED` is terminal. `BUY_CORE_READY`/`BUY_TACTICAL_READY` is required for `ALERTED`, forbidden for `ACTIVE`, and cannot later be cleared or replaced. A closed alerted episode retains its original signal.
+- Replaying a byte-equivalent initial `start` is harmless, and replaying the original start after durable progress returns the current record without rewinding it. While the record is still initial, a conflicting `episode_low_fen` or cursor raises `EPISODE_IDENTITY_CONFLICT` instead of hiding deterministic divergence.
+- Append-only migration `0003_episode_cursor` follows `0002_ai_provider_configuration` and adds `VARCHAR(40) NOT NULL`. A fresh database or an empty `0002` episode table upgrades normally. Because a legacy cursor cannot be inferred losslessly, any populated `0002` `zone_episode` is detected before DDL and the upgrade fails atomically with its revision, schema, and rows unchanged; operators must back up and explicitly clear/rebuild episode state before retrying.
+
+### Market History and Reference Repository Contract
+
+- `MarketHistoryRepository` persists normalized minute and daily values plus deterministic 5-minute bars. `MarketReferenceRepository` persists trading-calendar and actual daily-limit values. Neither repository performs provider calls, scaling, aggregation, indicator calculation, or close reconciliation.
+- Exact identities are minute `(symbol, bar_end)`, 5-minute `(symbol, bar_end, formula_version)`, daily `(symbol, trade_date, is_official)`, calendar `(exchange, cal_date)`, daily limit `(symbol, trade_date)`, and latest quote `symbol`.
+- Minute, daily, and daily-limit rows use `received_at` as their correction order: newer facts replace, older facts are ignored, identical duplicates are harmless, and equal-receipt conflicts raise `MARKET_DATA_IDENTITY_CONFLICT`. A later authoritative calendar call replaces the same calendar identity because the schema has no calendar receipt version.
+- Five-minute identities are immutable and reject conflicting facts. The repository validates a session-contained 5-minute boundary before persistence.
+- Each normalized write batch is a repeatable list/tuple of at most 1,000 rows. History reads require an explicit inclusive date/time range and every history/reference read fails closed above 10,000 returned rows.
+- Persisting a minute and advancing `latest_quote` occur in the same caller-owned transaction. A newer bar wins; a correction for the same bar requires a newer receipt. `latest_quote` remains a replaceable projection, not a second quote-history stream.
+- Decision-context assembly reads `minute_bar` with explicit inclusive bounds from the first canonical minute end of the current trading date through the evaluation bucket end and rejects more than 240 rows or any non-exact sequence. The immutable result is supplied as `current_day_minutes`. `latest_quote` cannot supply the prior observations required for in-bucket crossing or the history required for touch provenance. No second quote-history table is added.
+- Successive intraday provisional daily aggregates and the 15:00 provisional close share the existing `(symbol, trade_date, is_official=False)` identity and advance only on a newer `received_at`; the official row keeps the separate `is_official=True` identity. No pressure-state table is added. T023 derives `pressure_touch_at` transiently from `current_day_minutes` during pure orchestration.
+- T018 exposes these session-bound repositories for deterministic persistence tests. Application `UnitOfWork` wiring is deferred to T032, which owns the atomic runtime transaction flow; no caller may perform a Tushare request inside the database transaction.
 
 ## Code Style
 
@@ -135,9 +157,12 @@ Repositories expose domain operations rather than raw Session access. A database
 - Test migration from an empty database and historical versions.
 - Verify unique constraints for active plans, evaluation identities, alert identities, and idempotency keys.
 - Cover position lots, partial sells, core/tactical buckets, T+1, low-zone episodes, risk state, health, and audit.
+- Cover episode cursor start/reload/revise/restart, exact audit-hash chaining, forward-only lifecycle, same-cursor replay, conflicting initial start, and cursor regression.
+- Cover `0003_episode_cursor` upgrades from fresh and empty `0002` databases plus atomic pre-DDL refusal for populated `0002` episode state.
 - Simulate crash and restart to confirm committed recovery and uncommitted rollback.
 - Concurrent activation and update must return stable 409 conflicts.
 - Test idempotent writes for duplicate market data and delayed recovery.
+- Cover exact, gapped, oversized, and latest-quote-only decision-history reads plus provisional/official daily identity separation.
 - Run online backup during WAL writes, `PRAGMA integrity_check`, restore smoke tests, and retain only the latest 30 successful backups.
 
 ## Boundaries

@@ -177,6 +177,14 @@ class VolumeToMedianLteCondition(_DomainValue):
     window_bars: ConditionBars
 
 
+class VolumeToMedianGteCondition(_DomainValue):
+    """Require latest volume to meet a bounded rolling-median multiple."""
+
+    type: Literal["VOLUME_TO_MEDIAN_GTE"] = "VOLUME_TO_MEDIAN_GTE"
+    minimum_ratio: BoundedRatio
+    window_bars: ConditionBars
+
+
 class MacdHistImprovementGteCondition(_DomainValue):
     """Require a positive minimum MACD histogram improvement."""
 
@@ -241,9 +249,10 @@ class PositionBucketAvailableCondition(_DomainValue):
 
 
 class SellableQuantityGteCondition(_DomainValue):
-    """Require a minimum sellable A-share board-lot quantity."""
+    """Require a minimum sellable quantity in one explicit position bucket."""
 
     type: Literal["SELLABLE_QUANTITY_GTE"] = "SELLABLE_QUANTITY_GTE"
+    bucket: PositionBucket
     quantity: PositiveBoardLotQuantity
 
 
@@ -300,6 +309,7 @@ ConditionNode = Annotated[
     | NonDecreasingCloseCondition
     | VolumeToPreviousLteCondition
     | VolumeToMedianLteCondition
+    | VolumeToMedianGteCondition
     | MacdHistImprovementGteCondition
     | PriceReclaimsIndicatorCondition
     | UpperWickRatioGteCondition
@@ -338,9 +348,7 @@ def _count_condition_leaves(root: object) -> int:
     while stack:
         node, depth = stack.pop()
         if depth > _MAX_CONDITION_DEPTH:
-            raise ValueError(
-                f"condition nesting depth cannot exceed {_MAX_CONDITION_DEPTH}"
-            )
+            raise ValueError(f"condition nesting depth cannot exceed {_MAX_CONDITION_DEPTH}")
 
         tag, children = _condition_tag_and_children(node)
         if tag not in {"ALL", "ANY"}:
@@ -360,8 +368,7 @@ def _count_condition_leaves(root: object) -> int:
             continue
         if len(children) > _MAX_CONDITION_LEAVES:
             raise ValueError(
-                "logical condition cannot contain more than "
-                f"{_MAX_CONDITION_LEAVES} children"
+                f"logical condition cannot contain more than {_MAX_CONDITION_LEAVES} children"
             )
         stack.extend((child, depth + 1) for child in children)
 
@@ -483,6 +490,7 @@ __all__ = [
     "TradePlan",
     "TradingDayActivation",
     "UpperWickRatioGteCondition",
+    "VolumeToMedianGteCondition",
     "VolumeToMedianLteCondition",
     "VolumeToPreviousLteCondition",
 ]

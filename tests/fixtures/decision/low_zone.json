@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 2,
+  "zone": {
+    "lowFen": 6300,
+    "highFen": 6450,
+    "includeLow": true,
+    "includeHigh": true
+  },
+  "touchCases": [
+    {
+      "id": "inclusive-low",
+      "minuteClosesFen": [6500, 6500, 6300, 6400, 6400],
+      "expectedTouchIndex": 2,
+      "expectedEpisodeLowFen": 6300
+    },
+    {
+      "id": "inclusive-high",
+      "minuteClosesFen": [6500, 6450, 6500, 6500, 6500],
+      "expectedTouchIndex": 1,
+      "expectedEpisodeLowFen": 6450
+    },
+    {
+      "id": "first-inside-close-wins",
+      "minuteClosesFen": [6500, 6401, 6402, 6403, 6404],
+      "expectedTouchIndex": 1,
+      "expectedEpisodeLowFen": 6401
+    },
+    {
+      "id": "touch-minute-low-is-not-backfilled",
+      "minuteClosesFen": [6500, 6400, 6500, 6500, 6500],
+      "rangeOverride": {"index": 1, "lowFen": 6301, "highFen": 6400},
+      "expectedTouchIndex": 1,
+      "expectedEpisodeLowFen": 6400
+    },
+    {
+      "id": "post-touch-minute-low-updates-episode-low",
+      "minuteClosesFen": [6500, 6400, 6400, 6400, 6400],
+      "rangeOverride": {"index": 3, "lowFen": 6350, "highFen": 6400},
+      "expectedTouchIndex": 1,
+      "expectedEpisodeLowFen": 6350
+    },
+    {
+      "id": "intraminute-low-only",
+      "minuteClosesFen": [6500, 6500, 6500, 6500, 6500],
+      "rangeOverride": {"index": 2, "lowFen": 6400, "highFen": 6500},
+      "expectedTouchIndex": null,
+      "expectedEpisodeLowFen": null
+    },
+    {
+      "id": "jump-up-without-inside-close",
+      "minuteClosesFen": [6299, 6451, 6451, 6451, 6451],
+      "expectedTouchIndex": null,
+      "expectedEpisodeLowFen": null
+    },
+    {
+      "id": "jump-down-without-inside-close",
+      "minuteClosesFen": [6451, 6299, 6299, 6299, 6299],
+      "expectedTouchIndex": null,
+      "expectedEpisodeLowFen": null
+    }
+  ],
+  "episodeIdentity": {
+    "touchAt": "2026-08-07T11:13:00+08:00",
+    "expectedInitialCursor": "2026-08-07T11:15:00+08:00",
+    "expectedEpisodeId": "ep-2ebb6cc9611d33a2b2366c219dc7dc9d"
+  },
+  "crossDayReplay": {
+    "initialCursor": "2026-08-06T15:00:00+08:00",
+    "target": "2026-08-07T09:35:00+08:00",
+    "equalLowFen": 6380,
+    "startingBarsSinceLow": 0,
+    "expectedBarsSinceLow": 1
+  },
+  "confirmation": {
+    "startingLowFen": 6380,
+    "oneTickLowerFen": 6379,
+    "requiredBars": 2,
+    "quantity": 100
+  },
+  "positionCases": [
+    {"id": "empty", "coreQuantity": 0, "tacticalQuantity": 0, "expectedSignal": "BUY_CORE_READY"},
+    {"id": "tactical-only", "coreQuantity": 0, "tacticalQuantity": 100, "expectedSignal": "BUY_CORE_READY"},
+    {"id": "core-only", "coreQuantity": 100, "tacticalQuantity": 0, "expectedSignal": "BUY_TACTICAL_READY"},
+    {"id": "full", "coreQuantity": 100, "tacticalQuantity": 100, "expectedSignal": null}
+  ]
+}

@@ -1,11 +1,15 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 from threading import Barrier
 from zoneinfo import ZoneInfo
 
 import pytest
+from alembic import command
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import Engine, create_engine, event, inspect, select
 from sqlalchemy.engine.reflection import Inspector
@@ -37,6 +41,7 @@ from trade_plan_monitor.state.repositories import (
     BoardLotViolationError,
     DuplicatePlanVersionError,
     EpisodeIdentityConflictError,
+    EpisodeRecord,
     EpisodeTransitionError,
     EvaluationIdentityConflictError,
     IdempotencyInProgressError,
@@ -96,9 +101,43 @@ def _unit_of_work(engine: Engine) -> SqlAlchemyUnitOfWork:
     )
 
 
+def _episode_audit_hash(record: EpisodeRecord) -> str:
+    snapshot = {
+        "alertedSignal": record.alerted_signal,
+        "barsSinceLow": record.bars_since_low,
+        "episodeLowFen": record.episode_low_fen,
+        "id": record.id,
+        "lastProcessedBucketEnd": record.last_processed_bucket_end.isoformat(),
+        "planHash": record.plan_hash,
+        "startedAt": record.started_at.isoformat(),
+        "status": record.status,
+        "symbol": record.symbol,
+        "zone": record.zone,
+    }
+    canonical = json.dumps(
+        snapshot,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _pragma_value(engine: Engine, pragma: str) -> object:
     with engine.connect() as connection:
         return connection.exec_driver_sql(f"PRAGMA {pragma}").scalar_one()
+
+
+def _upgrade_to(engine: Engine, revision: str) -> None:
+    migrations_path = (
+        Path(__file__).resolve().parents[2] / "src" / "trade_plan_monitor" / "state" / "migrations"
+    )
+    alembic_config = Config()
+    alembic_config.set_main_option("script_location", str(migrations_path))
+    with engine.begin() as connection:
+        alembic_config.attributes["connection"] = connection
+        command.upgrade(alembic_config, revision)
 
 
 def test_position_lots_enforce_bucket_board_lot_maximum_and_t_plus_one(
@@ -127,14 +166,17 @@ def test_position_lots_enforce_bucket_board_lot_maximum_and_t_plus_one(
                 board_lot=100,
                 max_position_qty=300,
             )
-            assert work.positions.sellable_quantity(
-                "003043.SZ", trade_date=date(2026, 8, 21)
-            ) == 200
-            assert work.positions.sellable_quantity(
-                "003043.SZ",
-                trade_date=date(2026, 8, 21),
-                bucket="TACTICAL",
-            ) == 0
+            assert (
+                work.positions.sellable_quantity("003043.SZ", trade_date=date(2026, 8, 21)) == 200
+            )
+            assert (
+                work.positions.sellable_quantity(
+                    "003043.SZ",
+                    trade_date=date(2026, 8, 21),
+                    bucket="TACTICAL",
+                )
+                == 0
+            )
             work.commit()
 
         assert core.bucket == "CORE"
@@ -314,6 +356,12 @@ def test_low_zone_episode_identity_replays_and_revisions_are_deterministic(
 ) -> None:
     engine = create_sqlite_engine(tmp_path / "monitor.db")
     episode_id = "episode-1"
+    started_at = _FIXED_NOW + timedelta(minutes=1)
+    first_cursor = datetime(2026, 8, 21, 9, 35, tzinfo=ZoneInfo("Asia/Shanghai"))
+    lower_low_cursor = datetime(2026, 8, 21, 9, 40, tzinfo=ZoneInfo("Asia/Shanghai"))
+    progress_cursor = datetime(2026, 8, 21, 9, 45, tzinfo=ZoneInfo("Asia/Shanghai"))
+    saturated_cursor = datetime(2026, 8, 21, 9, 50, tzinfo=ZoneInfo("Asia/Shanghai"))
+    status_cursor = datetime(2026, 8, 21, 9, 55, tzinfo=ZoneInfo("Asia/Shanghai"))
 
     try:
         upgrade_database(engine)
@@ -323,8 +371,9 @@ def test_low_zone_episode_identity_replays_and_revisions_are_deterministic(
                 plan_hash="b" * 64,
                 symbol="003043.SZ",
                 zone="LOW_BUY",
-                started_at=_FIXED_NOW,
+                started_at=started_at,
                 episode_low_fen=6400,
+                last_processed_bucket_end=first_cursor,
             )
             work.commit()
 
@@ -334,8 +383,17 @@ def test_low_zone_episode_identity_replays_and_revisions_are_deterministic(
                 plan_hash="b" * 64,
                 symbol="003043.SZ",
                 zone="LOW_BUY",
-                started_at=_FIXED_NOW,
+                started_at=started_at,
                 episode_low_fen=6400,
+                last_processed_bucket_end=first_cursor,
+            )
+            no_op = work.episodes.revise(
+                episode_id,
+                episode_low_fen=6400,
+                bars_since_low=0,
+                status="ACTIVE",
+                alerted_signal=None,
+                last_processed_bucket_end=first_cursor,
             )
             lower_low = work.episodes.revise(
                 episode_id,
@@ -343,6 +401,7 @@ def test_low_zone_episode_identity_replays_and_revisions_are_deterministic(
                 bars_since_low=0,
                 status="ACTIVE",
                 alerted_signal=None,
+                last_processed_bucket_end=lower_low_cursor,
             )
             stable_bar = work.episodes.revise(
                 episode_id,
@@ -350,12 +409,57 @@ def test_low_zone_episode_identity_replays_and_revisions_are_deterministic(
                 bars_since_low=1,
                 status="ACTIVE",
                 alerted_signal=None,
+                last_processed_bucket_end=progress_cursor,
+            )
+            saturated = work.episodes.revise(
+                episode_id,
+                episode_low_fen=6300,
+                bars_since_low=1,
+                status="ACTIVE",
+                alerted_signal=None,
+                last_processed_bucket_end=saturated_cursor,
+            )
+            status_changed = work.episodes.revise(
+                episode_id,
+                episode_low_fen=6300,
+                bars_since_low=1,
+                status="ALERTED",
+                alerted_signal="BUY_CORE_READY",
+                last_processed_bucket_end=status_cursor,
             )
             work.commit()
 
         assert replayed == started
+        assert no_op == started
         assert lower_low.episode_low_fen == 6300
         assert stable_bar.bars_since_low == 1
+        assert saturated.last_processed_bucket_end == saturated_cursor
+        assert status_changed.last_processed_bucket_end == status_cursor
+        with _unit_of_work(engine) as work:
+            delayed_start_replay = work.episodes.start(
+                episode_id=episode_id,
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                zone="LOW_BUY",
+                started_at=started_at,
+                episode_low_fen=6400,
+                last_processed_bucket_end=first_cursor,
+            )
+            for non_original_low, non_original_cursor in (
+                (6500, first_cursor),
+                (6400, lower_low_cursor),
+            ):
+                with pytest.raises(EpisodeIdentityConflictError):
+                    work.episodes.start(
+                        episode_id=episode_id,
+                        plan_hash="b" * 64,
+                        symbol="003043.SZ",
+                        zone="LOW_BUY",
+                        started_at=started_at,
+                        episode_low_fen=non_original_low,
+                        last_processed_bucket_end=non_original_cursor,
+                    )
+        assert delayed_start_replay == status_changed
         with _unit_of_work(engine) as work:
             with pytest.raises(EpisodeTransitionError) as increased_low:
                 work.episodes.revise(
@@ -364,6 +468,9 @@ def test_low_zone_episode_identity_replays_and_revisions_are_deterministic(
                     bars_since_low=2,
                     status="ACTIVE",
                     alerted_signal=None,
+                    last_processed_bucket_end=datetime(
+                        2026, 8, 21, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")
+                    ),
                 )
             assert increased_low.value.code == "EPISODE_TRANSITION_INVALID"
             with pytest.raises(EpisodeTransitionError):
@@ -373,15 +480,44 @@ def test_low_zone_episode_identity_replays_and_revisions_are_deterministic(
                     bars_since_low=1,
                     status="ACTIVE",
                     alerted_signal=None,
+                    last_processed_bucket_end=datetime(
+                        2026, 8, 21, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")
+                    ),
                 )
+            with pytest.raises(EpisodeTransitionError, match="cursor cannot move backwards"):
+                work.episodes.revise(
+                    episode_id,
+                    episode_low_fen=6300,
+                    bars_since_low=1,
+                    status="ALERTED",
+                    alerted_signal="BUY_CORE_READY",
+                    last_processed_bucket_end=progress_cursor,
+                )
+            same_cursor_changes = (
+                (6200, 1, "ALERTED", "BUY_CORE_READY"),
+                (6300, 2, "ALERTED", "BUY_CORE_READY"),
+                (6300, 1, "ACTIVE", "BUY_CORE_READY"),
+                (6300, 1, "ALERTED", "BUY_TACTICAL_READY"),
+            )
+            for low, bars, status, signal in same_cursor_changes:
+                with pytest.raises(EpisodeTransitionError, match="same cursor"):
+                    work.episodes.revise(
+                        episode_id,
+                        episode_low_fen=low,
+                        bars_since_low=bars,
+                        status=status,
+                        alerted_signal=signal,
+                        last_processed_bucket_end=status_cursor,
+                    )
             with pytest.raises(EpisodeIdentityConflictError) as identity_conflict:
                 work.episodes.start(
                     episode_id=episode_id,
                     plan_hash="b" * 64,
                     symbol="600000.SH",
                     zone="LOW_BUY",
-                    started_at=_FIXED_NOW,
+                    started_at=started_at,
                     episode_low_fen=6400,
+                    last_processed_bucket_end=first_cursor,
                 )
             assert identity_conflict.value.code == "EPISODE_IDENTITY_CONFLICT"
 
@@ -393,7 +529,279 @@ def test_low_zone_episode_identity_replays_and_revisions_are_deterministic(
             "ZONE_EPISODE_STARTED",
             "ZONE_EPISODE_REVISED",
             "ZONE_EPISODE_REVISED",
+            "ZONE_EPISODE_REVISED",
+            "ZONE_EPISODE_REVISED",
         ]
+        assert all(
+            "lastProcessedBucketEnd" in json.loads(entry.details_json) for entry in episode_audits
+        )
+        expected_records = (started, lower_low, stable_bar, saturated, status_changed)
+        expected_hashes = tuple(_episode_audit_hash(record) for record in expected_records)
+        assert tuple(entry.after_hash for entry in episode_audits) == expected_hashes
+        assert tuple(entry.before_hash for entry in episode_audits) == (
+            None,
+            *expected_hashes[:-1],
+        )
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("episode_low_fen", "cursor"),
+    [
+        (6300, datetime(2026, 8, 21, 9, 35, tzinfo=ZoneInfo("Asia/Shanghai"))),
+        (6400, datetime(2026, 8, 21, 9, 40, tzinfo=ZoneInfo("Asia/Shanghai"))),
+        (6300, datetime(2026, 8, 21, 9, 40, tzinfo=ZoneInfo("Asia/Shanghai"))),
+    ],
+    ids=("different-initial-low", "different-initial-cursor", "different-both"),
+)
+def test_low_zone_episode_start_rejects_conflicting_initial_state(
+    tmp_path: Path,
+    episode_low_fen: int,
+    cursor: datetime,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    started_at = _FIXED_NOW + timedelta(minutes=1)
+    first_cursor = datetime(2026, 8, 21, 9, 35, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            work.episodes.start(
+                episode_id="episode-start-conflict",
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                zone="LOW_BUY",
+                started_at=started_at,
+                episode_low_fen=6400,
+                last_processed_bucket_end=first_cursor,
+            )
+            work.commit()
+
+        with _unit_of_work(engine) as work, pytest.raises(EpisodeIdentityConflictError):
+            work.episodes.start(
+                episode_id="episode-start-conflict",
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                zone="LOW_BUY",
+                started_at=started_at,
+                episode_low_fen=episode_low_fen,
+                last_processed_bucket_end=cursor,
+            )
+    finally:
+        engine.dispose()
+
+
+def test_low_zone_episode_start_uses_the_audited_initial_snapshot_for_a_late_cursor(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    started_at = _FIXED_NOW + timedelta(minutes=1)
+    touch_cursor = datetime(2026, 8, 21, 9, 35, tzinfo=ZoneInfo("Asia/Shanghai"))
+    late_initial_cursor = datetime(2026, 8, 21, 9, 40, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            initial = work.episodes.start(
+                episode_id="episode-late-initial-cursor",
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                zone="LOW_BUY",
+                started_at=started_at,
+                episode_low_fen=6400,
+                last_processed_bucket_end=late_initial_cursor,
+            )
+            work.commit()
+
+        with _unit_of_work(engine) as work:
+            exact_replay = work.episodes.start(
+                episode_id="episode-late-initial-cursor",
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                zone="LOW_BUY",
+                started_at=started_at,
+                episode_low_fen=6400,
+                last_processed_bucket_end=late_initial_cursor,
+            )
+            assert exact_replay == initial
+            for conflicting_low, conflicting_cursor in (
+                (6500, late_initial_cursor),
+                (6400, touch_cursor),
+            ):
+                with pytest.raises(EpisodeIdentityConflictError):
+                    work.episodes.start(
+                        episode_id="episode-late-initial-cursor",
+                        plan_hash="b" * 64,
+                        symbol="003043.SZ",
+                        zone="LOW_BUY",
+                        started_at=started_at,
+                        episode_low_fen=conflicting_low,
+                        last_processed_bucket_end=conflicting_cursor,
+                    )
+    finally:
+        engine.dispose()
+
+
+def test_low_zone_episode_repository_enforces_forward_only_lifecycle_across_restart(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "monitor.db"
+    engine = create_sqlite_engine(database_path)
+    started_at = _FIXED_NOW + timedelta(minutes=1)
+    first_cursor = datetime(2026, 8, 21, 9, 35, tzinfo=ZoneInfo("Asia/Shanghai"))
+    alerted_cursor = datetime(2026, 8, 21, 9, 40, tzinfo=ZoneInfo("Asia/Shanghai"))
+    closed_cursor = datetime(2026, 8, 21, 9, 45, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            work.episodes.start(
+                episode_id="episode-lifecycle",
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                zone="LOW_BUY",
+                started_at=started_at,
+                episode_low_fen=6400,
+                last_processed_bucket_end=first_cursor,
+            )
+            for status, signal in (
+                ("ACTIVE", "BUY_CORE_READY"),
+                ("ALERTED", None),
+                ("UNKNOWN", None),
+            ):
+                with pytest.raises(EpisodeTransitionError):
+                    work.episodes.revise(
+                        "episode-lifecycle",
+                        episode_low_fen=6400,
+                        bars_since_low=1,
+                        status=status,
+                        alerted_signal=signal,
+                        last_processed_bucket_end=alerted_cursor,
+                    )
+
+            alerted = work.episodes.revise(
+                "episode-lifecycle",
+                episode_low_fen=6400,
+                bars_since_low=1,
+                status="ALERTED",
+                alerted_signal="BUY_CORE_READY",
+                last_processed_bucket_end=alerted_cursor,
+            )
+            assert alerted.status == "ALERTED"
+
+            for status, signal in (
+                ("ACTIVE", None),
+                ("ALERTED", None),
+                ("ALERTED", "BUY_TACTICAL_READY"),
+            ):
+                with pytest.raises(EpisodeTransitionError):
+                    work.episodes.revise(
+                        "episode-lifecycle",
+                        episode_low_fen=6400,
+                        bars_since_low=1,
+                        status=status,
+                        alerted_signal=signal,
+                        last_processed_bucket_end=closed_cursor,
+                    )
+
+            closed = work.episodes.revise(
+                "episode-lifecycle",
+                episode_low_fen=6400,
+                bars_since_low=1,
+                status="CLOSED",
+                alerted_signal="BUY_CORE_READY",
+                last_processed_bucket_end=closed_cursor,
+            )
+            work.commit()
+        assert closed.status == "CLOSED"
+    finally:
+        engine.dispose()
+
+    reopened = create_sqlite_engine(database_path)
+    try:
+        with _unit_of_work(reopened) as work:
+            restored = work.episodes.get("episode-lifecycle")
+            assert restored == closed
+            later_cursor = datetime(2026, 8, 21, 9, 50, tzinfo=ZoneInfo("Asia/Shanghai"))
+            for status, signal in (
+                ("ACTIVE", None),
+                ("ALERTED", "BUY_CORE_READY"),
+                ("CLOSED", "BUY_CORE_READY"),
+            ):
+                with pytest.raises(EpisodeTransitionError):
+                    work.episodes.revise(
+                        "episode-lifecycle",
+                        episode_low_fen=6400,
+                        bars_since_low=1,
+                        status=status,
+                        alerted_signal=signal,
+                        last_processed_bucket_end=later_cursor,
+                    )
+    finally:
+        reopened.dispose()
+
+
+@pytest.mark.parametrize(
+    "cursor",
+    [
+        datetime(2026, 8, 21, 9, 35),
+        datetime(2026, 8, 21, 9, 35, tzinfo=UTC),
+        datetime(2026, 8, 21, 9, 36, tzinfo=ZoneInfo("Asia/Shanghai")),
+        datetime(2026, 8, 21, 12, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    ],
+)
+def test_low_zone_episode_cursor_requires_canonical_shanghai_five_minute_bucket(
+    tmp_path: Path,
+    cursor: datetime,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work, pytest.raises(ValueError):
+            work.episodes.start(
+                episode_id="episode-invalid-cursor",
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                zone="LOW_BUY",
+                started_at=_FIXED_NOW,
+                episode_low_fen=6400,
+                last_processed_bucket_end=cursor,
+            )
+    finally:
+        engine.dispose()
+
+
+def test_low_zone_episode_cursor_cannot_precede_its_touch_bucket(tmp_path: Path) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work, pytest.raises(ValueError, match="touch bucket"):
+            work.episodes.start(
+                episode_id="episode-cursor-before-touch",
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                zone="LOW_BUY",
+                started_at=datetime(
+                    2026,
+                    8,
+                    21,
+                    9,
+                    36,
+                    tzinfo=ZoneInfo("Asia/Shanghai"),
+                ),
+                episode_low_fen=6400,
+                last_processed_bucket_end=datetime(
+                    2026,
+                    8,
+                    21,
+                    9,
+                    35,
+                    tzinfo=ZoneInfo("Asia/Shanghai"),
+                ),
+            )
     finally:
         engine.dispose()
 
@@ -1138,7 +1546,74 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0002_ai_provider_configuration"
+        assert first_revision == second_revision == "0003_episode_cursor"
+    finally:
+        engine.dispose()
+
+
+def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        _upgrade_to(engine, "0002_ai_provider_configuration")
+        assert "last_processed_bucket_end" not in {
+            column["name"] for column in inspect(engine).get_columns("zone_episode")
+        }
+
+        upgrade_database(engine)
+
+        cursor_column = next(
+            column
+            for column in inspect(engine).get_columns("zone_episode")
+            if column["name"] == "last_processed_bucket_end"
+        )
+        assert cursor_column["nullable"] is False
+        assert cursor_column["type"].length == 40
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0003_episode_cursor"
+            )
+    finally:
+        engine.dispose()
+
+
+def test_sqlite_migration_rejects_populated_0002_episode_table_before_ddl(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    timestamp = "2026-08-21T09:30:00+08:00"
+
+    try:
+        _upgrade_to(engine, "0002_ai_provider_configuration")
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO zone_episode "
+                "(id, plan_hash, symbol, zone, started_at, episode_low_fen, "
+                "bars_since_low, status, alerted_signal) VALUES "
+                "('episode-existing', :plan_hash, '003043.SZ', 'LOW_BUY', :started_at, "
+                "6400, 0, 'ACTIVE', NULL)",
+                {"plan_hash": "b" * 64, "started_at": timestamp},
+            )
+
+        with pytest.raises(RuntimeError, match="refuses populated zone_episode"):
+            upgrade_database(engine)
+
+        inspector = inspect(engine)
+        assert "last_processed_bucket_end" not in {
+            column["name"] for column in inspector.get_columns("zone_episode")
+        }
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0002_ai_provider_configuration"
+            )
+            assert (
+                connection.exec_driver_sql("SELECT id FROM zone_episode").scalar_one()
+                == "episode-existing"
+            )
     finally:
         engine.dispose()
 

@@ -10,7 +10,7 @@ The module does not decide whether a trade condition is true. It receives an alr
 
 ## Tech Stack
 
-- Python 3.11+
+- Python 3.14.x (`>=3.14,<3.15`)
 - SQLite transactional outbox through `strategy-state`
 - Pydantic 2 event payloads
 - Jinja-free typed Python renderers to avoid template injection

@@ -11,13 +11,30 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Literal, Protocol, Self, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ModelWrapValidatorHandler,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
-from trade_plan_monitor.ai.models import SecretReference
+from trade_plan_monitor.ai.models import (
+    SecretReference,
+    _validation_error_without_inputs,
+)
 
 
 class _SecretValue(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        hide_input_in_errors=True,
+        strict=True,
+    )
 
 
 class SecretSource(StrEnum):
@@ -32,6 +49,22 @@ class SecretWrite(_SecretValue):
     """Transient replacement input whose representations remain masked."""
 
     value: SecretStr = Field(min_length=1, max_length=8_192)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def remove_validation_inputs(
+        cls,
+        value: object,
+        handler: ModelWrapValidatorHandler[Self],
+    ) -> Self:
+        safe_error: ValidationError | None = None
+        try:
+            return handler(value)
+        except ValidationError as error:
+            safe_error = _validation_error_without_inputs(error)
+        if safe_error is not None:
+            raise safe_error
+        raise AssertionError("validation boundary completed without a result")
 
     @field_validator("value")
     @classmethod

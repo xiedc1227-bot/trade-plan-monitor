@@ -132,6 +132,7 @@ _CONDITION_EVIDENCE: dict[str, frozenset[MarketEvidence]] = {
     "NON_DECREASING_CLOSE": frozenset({MarketEvidence.COMPLETED_5M_BARS}),
     "VOLUME_TO_PREVIOUS_LTE": frozenset({MarketEvidence.COMPLETED_5M_BARS}),
     "VOLUME_TO_MEDIAN_LTE": frozenset({MarketEvidence.COMPLETED_5M_BARS}),
+    "VOLUME_TO_MEDIAN_GTE": frozenset({MarketEvidence.COMPLETED_5M_BARS}),
     "MACD_HIST_IMPROVEMENT_GTE": frozenset({MarketEvidence.DAILY_INDICATORS}),
     "PRICE_RECLAIMS_INDICATOR": frozenset(
         {

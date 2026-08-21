@@ -334,6 +334,14 @@ def test_trading_day_is_parsed_as_a_date() -> None:
         ),
         (
             {
+                "type": "VOLUME_TO_MEDIAN_GTE",
+                "minimum_ratio": Decimal("1.50"),
+                "window_bars": 20,
+            },
+            "VolumeToMedianGteCondition",
+        ),
+        (
+            {
                 "type": "MACD_HIST_IMPROVEMENT_GTE",
                 "minimum_improvement": Decimal("0.02"),
             },
@@ -379,7 +387,11 @@ def test_trading_day_is_parsed_as_a_date() -> None:
             "PositionBucketAvailableCondition",
         ),
         (
-            {"type": "SELLABLE_QUANTITY_GTE", "quantity": 100},
+            {
+                "type": "SELLABLE_QUANTITY_GTE",
+                "bucket": "TACTICAL",
+                "quantity": 100,
+            },
             "SellableQuantityGteCondition",
         ),
         (
@@ -435,7 +447,7 @@ def test_condition_composition_supports_only_all_and_any() -> None:
     )
 
 
-def test_condition_json_schema_exposes_only_the_twenty_allowlisted_tags() -> None:
+def test_condition_json_schema_exposes_only_the_twenty_one_allowlisted_tags() -> None:
     schema = TradePlan.model_json_schema()
     definitions = schema["$defs"]
     mapping = definitions["EntryPolicy"]["properties"]["condition"]["discriminator"]["mapping"]
@@ -459,6 +471,7 @@ def test_condition_json_schema_exposes_only_the_twenty_allowlisted_tags() -> Non
         "RETREAT_FROM_SESSION_HIGH_GTE",
         "SELLABLE_QUANTITY_GTE",
         "UPPER_WICK_RATIO_GTE",
+        "VOLUME_TO_MEDIAN_GTE",
         "VOLUME_TO_MEDIAN_LTE",
         "VOLUME_TO_PREVIOUS_LTE",
     }
@@ -524,7 +537,12 @@ def test_condition_leaf_count_above_fifty_per_plan_fails() -> None:
         {"type": "UPPER_WICK_RATIO_GTE", "minimum_ratio": Decimal("1.01")},
         {"type": "OFFICIAL_CLOSE_BELOW_LEVEL", "level": "prices.risk"},
         {"type": "POSITION_BUCKET_AVAILABLE", "bucket": "ARBITRARY"},
-        {"type": "SELLABLE_QUANTITY_GTE", "quantity": 50},
+        {"type": "SELLABLE_QUANTITY_GTE", "quantity": 100},
+        {
+            "type": "SELLABLE_QUANTITY_GTE",
+            "bucket": "ARBITRARY",
+            "quantity": 100,
+        },
         {"type": "LOWER_BAND_HITS_LTE", "max_hits": 5, "window_bars": 4},
     ],
 )
@@ -1209,8 +1227,22 @@ def test_huaya_sample_is_valid_stable_and_round_trips() -> None:
         "ALL",
         "CONSECUTIVE_CLOSES_BELOW_LEVEL",
     )
+    sellable = plan.reduction.condition.conditions[1]
+    assert sellable.bucket == "TACTICAL"
+    pressure_volume = pressure_patterns.conditions[2].conditions[0]
+    assert pressure_volume.type == "VOLUME_TO_MEDIAN_GTE"
+    assert plan.blockers.condition.type == "ALL"
+    blocker_conditions = plan.blockers.condition.conditions
+    assert tuple(child.type for child in blocker_conditions) == (
+        "MANUAL_EVENT_RISK_CLEAR",
+        "DISTANCE_FROM_LIMIT_DOWN_GTE",
+        "LOWER_BAND_HITS_LTE",
+    )
+    assert blocker_conditions[1].minimum_ratio == Decimal("0.01")
+    assert blocker_conditions[2].max_hits == 2
+    assert blocker_conditions[2].window_bars == 4
     assert validation.can_save is True
     assert validation.can_activate is True
     assert load_plan_json(dump_plan_json(plan)) == plan
     assert load_plan_yaml(dump_plan_yaml(plan)) == plan
-    assert plan_sha256(plan) == "8d057c6d437f0fa059b00ca7538893c4bfa6cbf1c7a1acbbdf4f5a02efde5ea6"
+    assert plan_sha256(plan) == "6075014c3d78719ae220a61c371ed77151a4ef132f64356f8c7527b235e2dec4"

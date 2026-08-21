@@ -10,7 +10,7 @@ The runtime must remain useful when the browser is closed. AI extraction runs in
 
 ## Tech Stack
 
-- Python 3.11+
+- Python 3.14.x (`>=3.14,<3.15`)
 - `asyncio` application lifecycle
 - Dedicated `ThreadPoolExecutor(max_workers=2)` for synchronous Tushare SDK calls
 - Separate bounded async semaphore for AI HTTP calls
@@ -73,7 +73,7 @@ tests/integration/
 - Startup recovery calls `rt_min_daily` once per active symbol, with at most one recovery call active at a time.
 - Later recovery targets only detected gaps and yields to the next scheduled realtime batch.
 - Upserts make duplicate/reordered recovery data harmless.
-- The final minute creates only a provisional close snapshot.
+- Each complete intraday cutoff may refresh the provisional daily aggregate used for momentum evidence; the aggregate through the final minute is the provisional close. Neither is official.
 - Official `daily` reconciliation attempts are configurable, defaulting to approximately 15:20, 16:00, and 17:00.
 - Close-risk state advances only when the returned official row matches the current trading date.
 - If unavailable, persist `CLOSE_PENDING` and retry on the next startup before evaluating the next trading day's close transition.
@@ -123,6 +123,8 @@ fetch outside transaction
 → publish committed event
 ```
 
+Before intraday evaluation, context assembly range-reads the exact persisted current-day minute sequence through the claimed 5-minute bucket, caps it at 240 rows, verifies completeness, supplies the immutable slice as `current_day_minutes`, derives the provisional daily aggregate and `source_as_of`, and attaches explicit indicator provenance. It does not evaluate zones, reclaim, pressure touch, or risk rules. Pressure-touch derivation and post-touch filtering remain inside pure T023 orchestration.
+
 ## Code Style
 
 ```python
@@ -143,6 +145,7 @@ async def run_minute_cycle(self, deadline: datetime) -> None:
 - Startup recovery and dynamic plan-change tests.
 - Exactly-once evaluation tests across duplicates, restart, and delayed recovery.
 - Provisional/official close reconciliation tests.
+- Cover exact or gapped current-day context assembly, the 240-row bound, provisional source cutoffs, latest-quote insufficiency, and official-source replacement; pressure after-touch outcomes remain T023 decision tests.
 - Graceful shutdown tests that stop scheduling, finish/abort bounded work, commit completed transactions, and checkpoint WAL.
 - Soak test with synthetic full trading days for 10 symbols and bounded memory/database growth.
 

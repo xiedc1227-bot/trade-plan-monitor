@@ -10,7 +10,7 @@
 
 ## 技术栈
 
-- Python 3.11+
+- Python 3.14.x（`>=3.14,<3.15`）
 - Pydantic 2：边界和领域校验
 - `Decimal`：接收用户价格；整数“分”：比较和存储价格
 - YAML/JSON：可移植导入导出格式
@@ -80,6 +80,7 @@ class TradePlan(BaseModel):
 - `NON_DECREASING_CLOSE`
 - `VOLUME_TO_PREVIOUS_LTE`
 - `VOLUME_TO_MEDIAN_LTE`
+- `VOLUME_TO_MEDIAN_GTE`
 - `MACD_HIST_IMPROVEMENT_GTE`
 - `PRICE_RECLAIMS_INDICATOR`
 - `UPPER_WICK_RATIO_GTE`
@@ -95,6 +96,12 @@ class TradePlan(BaseModel):
 - `LOWER_BAND_HITS_LTE`
 
 每种条件都有独立的 Pydantic 模型和参数范围。逻辑组合只允许 `ALL` 与 `ANY`，最大嵌套深度为 4，单份计划最多 50 个叶子条件。
+
+`VOLUME_TO_MEDIAN_LTE` 使用 `max_ratio`；`VOLUME_TO_MEDIAN_GTE` 使用 `minimum_ratio`。两者均将最新完整 K 线成交量与指定数量的此前完整 K 线成交量中位数比较。`SELLABLE_QUANTITY_GTE` 必须同时明确 `bucket`（`CORE` 或 `TACTICAL`）和整手 `quantity`，因此一个仓位桶的可卖数量绝不能满足另一个仓位桶的可卖规则。
+
+`PRICE_IN_ZONE` 使用最新有效规范完整分钟收盘价。`PRICE_RECLAIMS_INDICATOR` 将当前精确 5 分钟周期内的每个相邻分钟对与同一个所选当前日期指标值比较，要求至少一个分钟对满足 `previous_price < indicator <= current_price`，且周期结束价仍位于指标之上或与其相等；进入周期时已经位于指标上方不算重新站上。`LOWER_BAND_HITS_LTE` 将每根所选完整 5 分钟 K 线收盘与相同 identity 的 `ta-v1` 5 分钟下轨点逐一比较，并把相等计为命中。`CONSECUTIVE_CLOSES_BELOW_LEVEL` 本身只要求配置数量的相邻完整 K 线收盘严格低于命名价位。压力专用的触价后资格由后续 T023 编排施加，不是隐藏的叶子参数。
+
+配置中的四种压力拒绝备选共同构成不能站稳的完整定义；Schema v1 不新增第五个压力条件。
 
 未知条件、任意公式、脚本、SQL、字段路径、动态导入或外部接口调用均为非法输入。
 
@@ -162,4 +169,4 @@ Python 使用 `snake_case`、显式枚举以及尽可能不可变的值对象。
 
 ## 待确认事项
 
-无阻断事项。新增条件类型时必须升级 Schema 并重新审核。
+无阻断事项。经 2026-08-21 批准的修正，在尚未发布的 Schema v1 契约中新增 `VOLUME_TO_MEDIAN_GTE`，并将 `SELLABLE_QUANTITY_GTE.bucket` 改为必填。Schema v1 发布后，新增条件类型必须升级 Schema 并重新审核。

@@ -179,6 +179,7 @@ class ZoneEpisode(Base):
     bars_since_low: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(32))
     alerted_signal: Mapped[str | None] = mapped_column(String(64))
+    last_processed_bucket_end: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
 class RiskState(Base):
@@ -316,6 +317,8 @@ class AuditLog(Base):
 
 
 class MinuteBar(Base):
+    """Durable normalized minute history keyed by source bar identity."""
+
     __tablename__ = "minute_bar"
     __table_args__ = (
         CheckConstraint(
@@ -338,6 +341,8 @@ class MinuteBar(Base):
 
 
 class FiveMinuteBar(Base):
+    """Deterministic derived bar keyed by end time and formula version."""
+
     __tablename__ = "five_minute_bar"
     __table_args__ = (
         CheckConstraint(
@@ -360,6 +365,8 @@ class FiveMinuteBar(Base):
 
 
 class DailyBar(Base):
+    """Provisional or official daily history kept as separate identities."""
+
     __tablename__ = "daily_bar"
     __table_args__ = (
         CheckConstraint("is_official IN (0, 1)", name="ck_daily_bar_is_official"),
@@ -384,6 +391,8 @@ class DailyBar(Base):
 
 
 class TradingCalendar(Base):
+    """Provider-supplied exchange calendar fact."""
+
     __tablename__ = "trading_calendar"
     __table_args__ = (CheckConstraint("is_open IN (0, 1)", name="ck_trading_calendar_is_open"),)
 
@@ -394,6 +403,8 @@ class TradingCalendar(Base):
 
 
 class DailyPriceLimit(Base):
+    """Provider-supplied daily price limits in integer fen."""
+
     __tablename__ = "daily_price_limit"
     __table_args__ = (
         CheckConstraint(
@@ -410,6 +421,8 @@ class DailyPriceLimit(Base):
 
 
 class LatestQuote(Base):
+    """Replaceable latest-minute projection; this table is not quote history."""
+
     __tablename__ = "latest_quote"
     __table_args__ = (CheckConstraint("price_fen > 0", name="ck_latest_quote_price_positive"),)
 

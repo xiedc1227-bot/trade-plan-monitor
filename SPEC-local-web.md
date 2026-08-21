@@ -12,7 +12,7 @@ FastAPI owns the REST/WebSocket contract and serves a Vue 3 SPA on `127.0.0.1`. 
 
 Backend version families:
 
-- Python 3.11+, FastAPI, Uvicorn, Pydantic 2
+- Python 3.14.x (`>=3.14,<3.15`), FastAPI, Uvicorn, Pydantic 2
 - OpenAPI-generated frontend types
 - Same-origin static serving in production
 

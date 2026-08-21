@@ -10,7 +10,7 @@
 
 ## 技术栈
 
-- Python 3.11+
+- Python 3.14.x（`>=3.14,<3.15`）
 - 通过 `strategy-state` 使用 SQLite 事务发件箱
 - 使用 Pydantic 2 定义事件载荷
 - 使用无 Jinja 的强类型 Python 渲染器，避免模板注入

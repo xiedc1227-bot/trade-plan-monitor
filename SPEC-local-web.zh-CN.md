@@ -12,7 +12,7 @@ FastAPI 负责 REST 和 WebSocket 契约，并在 `127.0.0.1` 提供 Vue 3 单�
 
 后端版本系列：
 
-- Python 3.11+、FastAPI、Uvicorn、Pydantic 2
+- Python 3.14.x（`>=3.14,<3.15`）、FastAPI、Uvicorn、Pydantic 2
 - 根据 OpenAPI 生成前端类型
 - 生产模式下同源提供静态资源
 

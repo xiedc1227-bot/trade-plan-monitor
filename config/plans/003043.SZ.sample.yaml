@@ -54,6 +54,7 @@ reduction:
       - type: PRICE_IN_ZONE
         zone: PRESSURE
       - type: SELLABLE_QUANTITY_GTE
+        bucket: TACTICAL
         quantity: 100
       - type: ANY
         conditions:
@@ -63,8 +64,8 @@ reduction:
             minimum_ratio: "0.01"
           - type: ALL
             conditions:
-              - type: VOLUME_TO_MEDIAN_LTE
-                max_ratio: "1.50"
+              - type: VOLUME_TO_MEDIAN_GTE
+                minimum_ratio: "1.50"
                 window_bars: 20
               - type: CLOSE_IN_BAR_LOWER_HALF
           - type: CONSECUTIVE_CLOSES_BELOW_LEVEL
@@ -76,7 +77,14 @@ risk:
     level: RISK_LINE
 blockers:
   condition:
-    type: MANUAL_EVENT_RISK_CLEAR
+    type: ALL
+    conditions:
+      - type: MANUAL_EVENT_RISK_CLEAR
+      - type: DISTANCE_FROM_LIMIT_DOWN_GTE
+        minimum_ratio: "0.01"
+      - type: LOWER_BAND_HITS_LTE
+        max_hits: 2
+        window_bars: 4
 monitoring:
   timeframe_minutes: 5
   indicator_formula_version: ta-v1
