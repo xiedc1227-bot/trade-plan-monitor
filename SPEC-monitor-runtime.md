@@ -96,6 +96,8 @@ Default controls:
 requestControl:
   tushareExecutorWorkers: 2
   tushareMaxConcurrency: 2
+  tushareQueueLimit: 32
+  trackedBackoffKeyLimit: 64
   minIntervalMs: 1000
   jitterMs: 250
   timeoutSeconds: 15
@@ -107,11 +109,15 @@ aiControl:
   queueLimit: 5
 ```
 
-- Permission/access denial becomes `BLOCKED_PERMISSION` and is not blindly retried.
-- Provider quota/rate-limit response starts shared cooldown with no immediate retry storm.
-- Ordinary transient failures use bounded retry and later-cycle backoff.
-- Tushare network calls run in the executor; database work remains on the application path outside provider threads.
-- AI work has a separate queue/semaphore and lower operational priority than monitoring.
+- `TushareRequestController` owns its executor but no global provider client. Every admitted unit receives a repeatable synchronous callable, and only that callable runs in a Tushare worker.
+- Physical starts share one global minimum interval plus bounded jitter. Admission and provider waiting each use the configured timeout; a timed-out or cancelled logical request retains its physical slot until the synchronous call actually finishes, and a late worker exception is consumed at the sanitized boundary rather than reaching the event-loop exception handler.
+- Pre-start order is `MARKET_DEADLINE`, `RECOVERY`, then `BACKGROUND`. The queue is bounded at 32 waiters; at capacity, higher-priority work displaces the newest lowest-priority waiter, while equal/lower-priority arrivals fail closed with sanitized `QUEUE_FULL`.
+- Permission/access denial becomes `BLOCKED_PERMISSION` and is not blindly retried. Permission, shared cooldown, and per-key backoff are rechecked atomically immediately before executor submission so already queued work cannot bypass newly learned state; a rejected waiter does not consume a physical-start pacing interval.
+- Provider quota/rate-limit response starts a shared 300-second cooldown with no immediate retry storm. Ordinary transient failures use at most two in-cycle retries, then per-key 30/60/120/300-second backoff.
+- Backoff state is bounded at 64 keys. New keys may reclaim only expired state; when all tracked state is still live, new work fails closed without evicting an active backoff.
+- Tushare network calls run in the executor; database work remains on the application path outside provider threads. Shutdown stops admission and waits for the owned executor rather than abandoning worker threads.
+- AI work uses an independent concurrency-one async queue/semaphore with at most five waiters, never uses a Tushare worker, and adds no retries to the provider adapter's existing bounded retry policy.
+- Pacing waits create no persistent background task: their temporary sleep/change tasks are cancelled and joined before the admission call returns.
 
 ## Health Contract
 

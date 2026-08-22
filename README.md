@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T028` and checkpoints `C00`–`C10` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, and an injected-clock A-share minute/official-close scheduler. Runtime request control continues at `T029`, FastAPI routes start at `T035`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
+> Development status: tasks `T001`–`T029` and checkpoints `C00`–`C11` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, and bounded priority-aware Tushare/AI request isolation. Per-symbol runtime orchestration continues at `T030`, FastAPI routes start at `T035`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
 
 ## Product Goals
 
@@ -31,10 +31,10 @@ Last verified on 2026-08-22 with CPython 3.14.7.
 | Idempotent market history, `ta-v1` indicators, and provisional/official close reconciliation | `T018`–`T020` | Complete |
 | Typed conditions, low-zone episodes, pressure/risk evaluation, priority, hashes, and replay | `T021`–`T024` | Complete |
 | Alert identity, deterministic rendering, transactional outbox, and bounded channel dispatch | `T025`–`T027` | Complete |
-| Injected market clock and session-aware minute/official-close scheduler | `T028` | Complete |
-| Runtime request control, orchestration, API, and production UI | `T029`–`T059` | Pending |
+| Injected market clock, session-aware deadlines, and bounded Tushare/AI request control | `T028`–`T029` | Complete |
+| Per-symbol runtime orchestration, API, and production UI | `T030`–`T059` | Pending |
 
-After `T028`, all 901 backend tests pass. The exact scheduler gate contains 37 tests, the adjacent market-data/runtime gate contains 198 tests, and the unchanged decision/replay gate contains 273 tests. Whole-tree Ruff, scoped formatting, `compileall`, and `pip check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, or Webhook calls. Checkpoint `C10` remains complete; `C11` remains open through T029, which is the next task and has not started.
+After `T029`, all 944 backend tests pass. The exact request-control gate contains 51 tests, the complete modified runtime/AI pair contains 108 tests, the adjacent Tushare/market-data gate contains 193 tests, and the unchanged decision/replay gate contains 273 tests. Whole-tree Ruff, three-file scoped formatting, `compileall`, and `pip check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, or Webhook calls. Checkpoint `C11` is complete; `T030` is next and has not started.
 
 ## Safety Boundaries
 

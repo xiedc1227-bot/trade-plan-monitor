@@ -1,6 +1,7 @@
 import asyncio
 import gzip
 import json
+import threading
 from pathlib import Path
 from uuid import UUID
 
@@ -26,6 +27,10 @@ from trade_plan_monitor.ai.provider import (
 )
 from trade_plan_monitor.ai.secrets import InMemorySecretStore, SecretWrite
 from trade_plan_monitor.domain.plan_codec import load_plan_yaml
+from trade_plan_monitor.runtime.request_control import (
+    AIQueueFullError,
+    AIRequestController,
+)
 
 PROVIDER_ID = UUID("00000000-0000-4000-8000-000000000016")
 REQUEST_ID = UUID("00000000-0000-4000-8000-000000000116")
@@ -839,3 +844,139 @@ def test_extraction_service_maps_adapter_failure_without_leaking_secret() -> Non
     assert result.validation_issues[0].code == "AI_PROVIDER_ERROR"
     assert SECRET_VALUE not in serialized
     assert "Authorization" not in serialized
+
+
+def test_ai_concurrency_one_queue_limit_five_and_tushare_thread_isolation() -> None:
+    async def scenario() -> tuple[list[int], int, set[str], int, int]:
+        controller = AIRequestController()
+        release = asyncio.Event()
+        first_started = asyncio.Event()
+        active = 0
+        maximum_active = 0
+        thread_names: set[str] = set()
+
+        async def work(value: int) -> int:
+            nonlocal active, maximum_active
+            active += 1
+            maximum_active = max(maximum_active, active)
+            thread_names.add(threading.current_thread().name)
+            if value == 0:
+                first_started.set()
+            await release.wait()
+            active -= 1
+            return value
+
+        first = asyncio.create_task(controller.execute(lambda: work(0)))
+        await first_started.wait()
+        queued = [
+            asyncio.create_task(controller.execute(lambda value=value: work(value)))
+            for value in range(1, 6)
+        ]
+        for _ in range(1_000):
+            if controller.queue_depth == 5:
+                break
+            await asyncio.sleep(0)
+        assert controller.queue_depth == 5
+
+        with pytest.raises(AIQueueFullError):
+            await controller.execute(lambda: work(6))
+
+        release.set()
+        results = await asyncio.gather(first, *queued)
+        return (
+            results,
+            maximum_active,
+            thread_names,
+            controller.active_count,
+            controller.queue_depth,
+        )
+
+    results, maximum_active, thread_names, active_count, queue_depth = asyncio.run(scenario())
+
+    assert results == [0, 1, 2, 3, 4, 5]
+    assert maximum_active == 1
+    assert all(not name.startswith("trade-plan-tushare") for name in thread_names)
+    assert active_count == 0
+    assert queue_depth == 0
+
+
+def test_ai_concurrency_waiter_and_active_cancellation_release_owned_capacity() -> None:
+    async def scenario() -> tuple[int, int, str]:
+        controller = AIRequestController()
+        release = asyncio.Event()
+        started = asyncio.Event()
+
+        async def blocked() -> None:
+            started.set()
+            await release.wait()
+
+        active = asyncio.create_task(controller.execute(blocked))
+        await started.wait()
+        waiter = asyncio.create_task(controller.execute(blocked))
+        for _ in range(1_000):
+            if controller.queue_depth == 1:
+                break
+            await asyncio.sleep(0)
+        assert controller.queue_depth == 1
+
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+        assert controller.queue_depth == 0
+
+        active.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await active
+        result = await controller.execute(lambda: asyncio.sleep(0, result="ready"))
+        return controller.active_count, controller.queue_depth, result
+
+    active_count, queue_depth, result = asyncio.run(scenario())
+
+    assert active_count == 0
+    assert queue_depth == 0
+    assert result == "ready"
+
+
+def test_ai_retry_admission_does_not_duplicate_provider_owned_retries() -> None:
+    config = _config(max_retries=2)
+
+    async def scenario() -> tuple[int, AIProviderError]:
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return httpx.Response(500)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = OpenAICompatibleProvider(
+                client=client,
+                secret_store=_secret_store(config),
+                sleep=lambda _: asyncio.sleep(0),
+            )
+            controller = AIRequestController()
+            with pytest.raises(AIProviderError) as captured:
+                await controller.execute(lambda: provider.test_connection(config))
+            return calls, captured.value
+
+    calls, error = asyncio.run(scenario())
+
+    assert calls == 3
+    assert error.code is AIProviderErrorCode.TRANSIENT
+    assert error.attempts == 3
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"max_concurrency": 0},
+        {"max_concurrency": 2},
+        {"queue_limit": 0},
+        {"queue_limit": 6},
+    ],
+)
+def test_ai_concurrency_rejects_values_above_the_approved_bounds(
+    changes: dict[str, int],
+) -> None:
+    with pytest.raises(ValueError):
+        AIRequestController(**changes)
