@@ -68,6 +68,16 @@ tests/integration/
 - Two consecutive incomplete required buckets mark the symbol `DEGRADED`, but the first incomplete bucket is already a buy-alert blocker.
 - Dynamic plan activation/disable changes the next batch without process restart.
 
+### T028 Session Scheduler Contract
+
+- `Clock` exposes only `now()` and cancellable `sleep_until(deadline)`; `SystemClock` uses aware `Asia/Shanghai` wall time, while tests inject a fake clock. The scheduler creates no background task and cancellation propagates to its owner.
+- `MarketSessionScheduler` reuses the canonical `market-data` minute ends: 09:31–11:30 and 13:01–15:00. Each known-open weekday therefore has exactly 240 unique `REALTIME_MINUTE` deadlines, each at `bar_end + grace`; opening auction, lunch, weekends, known closed days, and post-close intervals contain no realtime deadline.
+- Weekends are deterministically closed. Every weekday requires the injected calendar lookup to return exactly `True` or `False`; `None` stops forward scanning and returns no deadline, so unknown calendar state fails closed rather than being skipped.
+- `next_deadline()` returns the first deadline at or after the injected current time. Its optional `after` timestamp is exclusive and advances an already handled deadline exactly once. Forward calendar search is bounded to 366 dates and returns `None` at the bound, including `date.max`.
+- Official-close deadlines use a non-empty tuple of strictly increasing, whole-minute local times after 15:00, defaulting exactly to 15:20, 16:00, and 17:00. They are identified as attempts 1, 2, and 3 and never masquerade as realtime minutes.
+- Grace is a non-negative `timedelta` and must keep the final 15:00 realtime deadline strictly before the first official-close attempt. This preserves one timestamp identity per deadline and rejects collisions, reordered close attempts, cross-date deadlines, and overflow before scheduling starts.
+- T028 performs only deterministic deadline construction and injected waiting. It does not fetch data, create a Tushare executor, apply retry/rate-limit policy, persist `CLOSE_PENDING`, evaluate rules, or publish events; those remain T029 and later tasks.
+
 ## Recovery and Close Reconciliation
 
 - Startup recovery calls `rt_min_daily` once per active symbol, with at most one recovery call active at a time.
