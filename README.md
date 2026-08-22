@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T026` and checkpoints `C00`–`C09` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, and a transactional alert outbox with restart deduplication, acknowledgement, and replay queries. Bounded channel dispatch starts at `T027`, the monitoring runtime at `T028`, FastAPI routes at `T035`, the production Vue application shell at `T042`, and the multi-stock dashboard at `T047`; none of those later slices is implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
+> Development status: tasks `T001`–`T027` and checkpoints `C00`–`C10` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, and bounded per-channel in-app/console/optional-Webhook dispatch with durable claims and retries. The monitoring runtime starts at `T028`, FastAPI routes at `T035`, the production Vue application shell at `T042`, and the multi-stock dashboard at `T047`; none of those later slices is implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
 
 ## Product Goals
 
@@ -30,10 +30,10 @@ Last verified on 2026-08-22 with CPython 3.14.7.
 | AI configuration, write-only secrets, bounded provider adapter, prompts, and extraction | `T015`–`T017` | Complete |
 | Idempotent market history, `ta-v1` indicators, and provisional/official close reconciliation | `T018`–`T020` | Complete |
 | Typed conditions, low-zone episodes, pressure/risk evaluation, priority, hashes, and replay | `T021`–`T024` | Complete |
-| Alert identity, typed payload, deterministic Chinese rendering, and transactional outbox | `T025`–`T026` | Complete |
-| Channel dispatch, monitoring runtime, API, and production UI | `T027`–`T059` | Pending |
+| Alert identity, deterministic rendering, transactional outbox, and bounded channel dispatch | `T025`–`T027` | Complete |
+| Monitoring runtime, API, and production UI | `T028`–`T059` | Pending |
 
-After `T026`, all 837 backend tests pass. The notification gate contains 44 tests, the unchanged decision/replay gate contains 273 tests, and whole-tree Ruff, scoped formatting, `compileall`, and `pip check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare or AI calls. Checkpoint `C10` remains open through `T027`; `T027` is the next task and has not started.
+After `T027`, all 864 backend tests pass. The notification gate contains 71 tests, the unchanged decision/replay gate contains 273 tests, and whole-tree Ruff, scoped formatting, `compileall`, and `pip check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, or Webhook calls. Checkpoint `C10` is complete; `T028` is the next task and has not started.
 
 ## Safety Boundaries
 
@@ -42,6 +42,7 @@ After `T026`, all 837 backend tests pass. The notification gate contains 44 test
 - Actual fills and position lots are entered manually; acknowledging an alert never changes a position.
 - Non-loopback AI endpoints require HTTPS. Redirects, embedded URL credentials, unbounded retries, compressed provider responses, and oversized responses are rejected.
 - Tushare and AI credentials are referenced through protected runtime inputs; raw values must not enter plans, SQLite, logs, audits, exports, fixtures, or ordinary DTOs.
+- The generic Webhook is disabled by default, accepts only an exact HTTPS host allowlist, rejects redirects and embedded credentials, and never retains response bodies.
 - The target Web service listens only on `127.0.0.1`. Remote access, authentication, multiple users, clustering, primary/replica, and high availability are out of scope.
 
 Every actionable reminder will include the equivalent of:
@@ -171,7 +172,7 @@ trade-plan-monitor/
 │   ├── decision/       # Pure conditions, episodes, pressure/risk, priority, hashes
 │   ├── domain/         # Plan models, validation, codecs, and stable hashing
 │   ├── market_data/    # Normalization, history, aggregation, indicators, reconciliation
-│   ├── notifications/  # Deterministic alert values, rendering, and transactional outbox
+│   ├── notifications/  # Deterministic alerts, transactional outbox, channels, and dispatch
 │   ├── state/          # SQLite models, migrations, repositories, UoW, backup
 │   ├── cli.py          # Reserved command declarations
 │   └── config.py       # Strict non-secret application configuration

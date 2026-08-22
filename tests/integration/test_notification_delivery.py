@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Lock
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
 from sqlalchemy import Engine, delete, func, select
+from sqlalchemy import event as sqlalchemy_event
 
 from trade_plan_monitor.decision.models import (
     ActionableSignalType,
@@ -25,6 +29,20 @@ from trade_plan_monitor.decision.models import (
     SignalIntent,
 )
 from trade_plan_monitor.domain.plan_models import OfficialCloseBelowLevelCondition
+from trade_plan_monitor.notifications.channels import (
+    ChannelDeliveryResult,
+    ChannelErrorCode,
+    ConsoleChannel,
+    DeliveryChannel,
+    WebhookChannel,
+    WebhookConfig,
+)
+from trade_plan_monitor.notifications.dispatcher import (
+    DEFAULT_RETRY_BACKOFF,
+    DeliveryAttemptStatus,
+    DeliveryStorageError,
+    NotificationDispatcher,
+)
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertPayload, AlertSeverity
 from trade_plan_monitor.notifications.outbox import (
@@ -530,3 +548,493 @@ def test_acknowledge_integrity_failure_is_sanitized_and_atomic(
             )
             == 0
         )
+
+
+def _attempt_ids() -> object:
+    for identity in range(1, 100):
+        yield f"delivery-{identity:03d}"
+
+
+def test_dispatcher_recovers_a_committed_event_after_restart_and_skips_disabled_webhook(
+    database_engine: Engine,
+) -> None:
+    with _unit_of_work(database_engine) as work:
+        committed = work.alerts.enqueue(_payload(80))
+        work.commit()
+
+    console_lines: list[str] = []
+    identities = _attempt_ids()
+    dispatcher = NotificationDispatcher(
+        create_session_factory(database_engine),
+        channels=(
+            ConsoleChannel(write_line=console_lines.append),
+            WebhookChannel(client=httpx.AsyncClient(), config=WebhookConfig()),
+        ),
+        clock=lambda: NOW,
+        id_factory=lambda: next(identities),
+    )
+    try:
+        attempts = asyncio.run(dispatcher.dispatch_pending())
+    finally:
+        asyncio.run(dispatcher.aclose())
+
+    assert tuple(attempt.channel for attempt in attempts) == (
+        DeliveryChannel.IN_APP,
+        DeliveryChannel.CONSOLE,
+    )
+    assert all(attempt.status is DeliveryAttemptStatus.DELIVERED for attempt in attempts)
+    assert str(committed.event_id) in console_lines[0]
+    with _unit_of_work(database_engine) as work:
+        assert work.alerts.get(committed.event_id) == committed
+    with create_session_factory(database_engine)() as session:
+        assert session.scalars(select(DeliveryAttempt)).all()
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(DeliveryAttempt)
+                .where(DeliveryAttempt.channel == DeliveryChannel.WEBHOOK.value)
+            )
+            == 0
+        )
+
+
+def test_console_and_webhook_failures_remain_isolated_from_mandatory_in_app_delivery(
+    database_engine: Engine,
+) -> None:
+    raw_marker = "raw-channel-failure-must-not-escape"
+
+    def fail_console(_line: str) -> None:
+        raise RuntimeError(raw_marker)
+
+    def fail_webhook(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text=raw_marker, request=request)
+
+    with _unit_of_work(database_engine) as work:
+        committed = work.alerts.enqueue(_payload(81))
+        work.commit()
+
+    async def dispatch() -> tuple[object, ...]:
+        identities = _attempt_ids()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(fail_webhook)) as client:
+            dispatcher = NotificationDispatcher(
+                create_session_factory(database_engine),
+                channels=(
+                    ConsoleChannel(write_line=fail_console),
+                    WebhookChannel(
+                        client=client,
+                        config=WebhookConfig(
+                            enabled=True,
+                            endpoint="https://hooks.example.test/alerts",
+                            allowlisted_hosts=("hooks.example.test",),
+                        ),
+                    ),
+                ),
+                clock=lambda: NOW,
+                id_factory=lambda: next(identities),
+            )
+            return await dispatcher.dispatch_pending()
+
+    attempts = asyncio.run(dispatch())
+    by_channel = {attempt.channel: attempt for attempt in attempts}
+
+    assert by_channel[DeliveryChannel.IN_APP].status is DeliveryAttemptStatus.DELIVERED
+    assert by_channel[DeliveryChannel.CONSOLE].status is DeliveryAttemptStatus.RETRY_PENDING
+    assert by_channel[DeliveryChannel.WEBHOOK].status is DeliveryAttemptStatus.RETRY_PENDING
+    assert by_channel[DeliveryChannel.CONSOLE].error_code is ChannelErrorCode.CONSOLE_WRITE_FAILED
+    assert by_channel[DeliveryChannel.WEBHOOK].error_code is ChannelErrorCode.WEBHOOK_TRANSIENT
+    assert raw_marker not in repr(attempts)
+    with _unit_of_work(database_engine) as work:
+        assert work.alerts.get(committed.event_id) == committed
+
+
+def test_webhook_retry_schedule_is_persistent_bounded_and_uses_the_same_event_id(
+    database_engine: Engine,
+) -> None:
+    requested_event_ids: list[str] = []
+
+    def fail_webhook(request: httpx.Request) -> httpx.Response:
+        requested_event_ids.append(json.loads(request.content)["eventId"])
+        return httpx.Response(503, request=request)
+
+    with _unit_of_work(database_engine) as work:
+        committed = work.alerts.enqueue(_payload(82))
+        work.commit()
+
+    current_time = [NOW]
+    identities = _attempt_ids()
+
+    async def run_attempt() -> tuple[object, ...]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(fail_webhook)) as client:
+            dispatcher = NotificationDispatcher(
+                create_session_factory(database_engine),
+                channels=(
+                    WebhookChannel(
+                        client=client,
+                        config=WebhookConfig(
+                            enabled=True,
+                            endpoint="https://hooks.example.test/alerts",
+                            allowlisted_hosts=("hooks.example.test",),
+                        ),
+                    ),
+                ),
+                clock=lambda: current_time[0],
+                id_factory=lambda: next(identities),
+            )
+            return await dispatcher.dispatch_pending()
+
+    first = asyncio.run(run_attempt())
+    assert tuple(attempt.channel for attempt in first) == (
+        DeliveryChannel.IN_APP,
+        DeliveryChannel.WEBHOOK,
+    )
+    assert asyncio.run(run_attempt()) == ()
+
+    for delay in DEFAULT_RETRY_BACKOFF:
+        current_time[0] += delay
+        asyncio.run(run_attempt())
+
+    current_time[0] += timedelta(days=1)
+    assert asyncio.run(run_attempt()) == ()
+    assert requested_event_ids == [str(committed.event_id)] * 4
+
+    with create_session_factory(database_engine)() as session:
+        rows = session.scalars(
+            select(DeliveryAttempt)
+            .where(DeliveryAttempt.channel == DeliveryChannel.WEBHOOK.value)
+            .order_by(DeliveryAttempt.attempt)
+        ).all()
+    assert [row.attempt for row in rows] == [1, 2, 3, 4]
+    assert [row.status for row in rows] == [
+        DeliveryAttemptStatus.RETRY_PENDING.value,
+        DeliveryAttemptStatus.RETRY_PENDING.value,
+        DeliveryAttemptStatus.RETRY_PENDING.value,
+        DeliveryAttemptStatus.FAILED.value,
+    ]
+    assert [row.next_retry_at for row in rows] == [
+        (NOW + timedelta(seconds=30)).isoformat(),
+        (NOW + timedelta(seconds=90)).isoformat(),
+        (NOW + timedelta(seconds=390)).isoformat(),
+        None,
+    ]
+
+
+def test_non_retryable_webhook_failure_is_not_attempted_again(
+    database_engine: Engine,
+) -> None:
+    request_count = 0
+
+    def reject_webhook(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx.Response(422, text="private response", request=request)
+
+    with _unit_of_work(database_engine) as work:
+        work.alerts.enqueue(_payload(83))
+        work.commit()
+
+    async def dispatch_twice() -> tuple[tuple[object, ...], tuple[object, ...]]:
+        identities = _attempt_ids()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(reject_webhook)) as client:
+            dispatcher = NotificationDispatcher(
+                create_session_factory(database_engine),
+                channels=(
+                    WebhookChannel(
+                        client=client,
+                        config=WebhookConfig(
+                            enabled=True,
+                            endpoint="https://hooks.example.test/alerts",
+                            allowlisted_hosts=("hooks.example.test",),
+                        ),
+                    ),
+                ),
+                clock=lambda: NOW,
+                id_factory=lambda: next(identities),
+            )
+            return await dispatcher.dispatch_pending(), await dispatcher.dispatch_pending()
+
+    first, second = asyncio.run(dispatch_twice())
+
+    assert first[-1].status is DeliveryAttemptStatus.FAILED
+    assert first[-1].response_code == 422
+    assert second == ()
+    assert request_count == 1
+
+
+def test_dispatch_limit_bounds_channel_work_and_uncommitted_events_are_invisible(
+    database_engine: Engine,
+) -> None:
+    with _unit_of_work(database_engine) as work:
+        work.alerts.enqueue(_payload(84))
+    with _unit_of_work(database_engine) as work:
+        work.alerts.enqueue(_payload(85))
+        work.alerts.enqueue(_payload(86))
+        work.commit()
+
+    identities = _attempt_ids()
+    dispatcher = NotificationDispatcher(
+        create_session_factory(database_engine),
+        channels=(),
+        clock=lambda: NOW,
+        id_factory=lambda: next(identities),
+    )
+
+    first = asyncio.run(dispatcher.dispatch_pending(limit=1))
+    second = asyncio.run(dispatcher.dispatch_pending(limit=1))
+
+    assert len(first) == 1
+    assert len(second) == 1
+    assert {first[0].event_id, second[0].event_id} == {UUID(int=85), UUID(int=86)}
+
+
+def test_webhook_network_call_occurs_with_no_database_transaction_open(
+    database_engine: Engine,
+) -> None:
+    active_transactions = 0
+
+    @sqlalchemy_event.listens_for(database_engine, "begin")
+    def track_begin(_connection: object) -> None:
+        nonlocal active_transactions
+        active_transactions += 1
+
+    @sqlalchemy_event.listens_for(database_engine, "commit")
+    @sqlalchemy_event.listens_for(database_engine, "rollback")
+    def track_end(_connection: object) -> None:
+        nonlocal active_transactions
+        active_transactions -= 1
+
+    def webhook(request: httpx.Request) -> httpx.Response:
+        assert active_transactions == 0
+        return httpx.Response(204, request=request)
+
+    with _unit_of_work(database_engine) as work:
+        work.alerts.enqueue(_payload(87))
+        work.commit()
+
+    async def dispatch() -> tuple[object, ...]:
+        identities = _attempt_ids()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(webhook)) as client:
+            dispatcher = NotificationDispatcher(
+                create_session_factory(database_engine),
+                channels=(
+                    WebhookChannel(
+                        client=client,
+                        config=WebhookConfig(
+                            enabled=True,
+                            endpoint="https://hooks.example.test/alerts",
+                            allowlisted_hosts=("hooks.example.test",),
+                        ),
+                    ),
+                ),
+                clock=lambda: NOW,
+                id_factory=lambda: next(identities),
+            )
+            return await dispatcher.dispatch_pending()
+
+    attempts = asyncio.run(dispatch())
+
+    assert attempts[-1].status is DeliveryAttemptStatus.DELIVERED
+    assert active_transactions == 0
+
+
+def test_delivery_storage_failure_drops_sql_parameters_context_and_cause(
+    database_engine: Engine,
+) -> None:
+    raw_marker = "secret-delivery-collision"
+    with _unit_of_work(database_engine) as work:
+        work.alerts.enqueue(_payload(88))
+        work.alerts.enqueue(_payload(89))
+        work.commit()
+
+    dispatcher = NotificationDispatcher(
+        create_session_factory(database_engine),
+        channels=(),
+        clock=lambda: NOW,
+        id_factory=lambda: raw_marker,
+    )
+
+    with pytest.raises(DeliveryStorageError) as error_info:
+        asyncio.run(dispatcher.dispatch_pending())
+
+    public_error = error_info.value
+    assert raw_marker not in str(public_error)
+    assert raw_marker not in repr(public_error)
+    assert public_error.__context__ is None
+    assert public_error.__cause__ is None
+
+
+@pytest.mark.parametrize("entrypoint", ("dispatch_pending", "dispatch_event"))
+def test_concurrent_dispatchers_atomically_claim_one_external_delivery(
+    database_engine: Engine,
+    entrypoint: str,
+) -> None:
+    with _unit_of_work(database_engine) as work:
+        committed = work.alerts.enqueue(_payload(90))
+        work.commit()
+
+    in_app = NotificationDispatcher(
+        create_session_factory(database_engine),
+        channels=(),
+        clock=lambda: NOW,
+        id_factory=lambda: "delivery-in-app",
+    )
+    assert asyncio.run(in_app.dispatch_pending())[0].channel is DeliveryChannel.IN_APP
+
+    external_deliveries: list[UUID] = []
+    delivery_lock = Lock()
+
+    class RecordingChannel:
+        channel = DeliveryChannel.CONSOLE
+        enabled = True
+
+        async def deliver(self, event: object) -> ChannelDeliveryResult:
+            with delivery_lock:
+                external_deliveries.append(event.event_id)
+            return ChannelDeliveryResult(
+                channel=self.channel,
+                delivered=True,
+                retryable=False,
+            )
+
+    claim_barrier = Barrier(2)
+    identity_lock = Lock()
+    next_identity = 0
+
+    def synchronized_id() -> str:
+        nonlocal next_identity
+        claim_barrier.wait(timeout=5)
+        with identity_lock:
+            next_identity += 1
+            return f"concurrent-delivery-{next_identity}"
+
+    dispatchers = tuple(
+        NotificationDispatcher(
+            create_session_factory(database_engine),
+            channels=(RecordingChannel(),),
+            clock=lambda: NOW,
+            id_factory=synchronized_id,
+        )
+        for _index in range(2)
+    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+
+        def dispatch(dispatcher: NotificationDispatcher) -> tuple[object, ...]:
+            operation = (
+                dispatcher.dispatch_pending()
+                if entrypoint == "dispatch_pending"
+                else dispatcher.dispatch_event(committed.event_id)
+            )
+            return asyncio.run(operation)
+
+        futures = tuple(executor.submit(dispatch, dispatcher) for dispatcher in dispatchers)
+        results = tuple(future.result(timeout=10) for future in futures)
+
+    assert external_deliveries == [committed.event_id]
+    assert sum(len(result) for result in results) == 1
+    with create_session_factory(database_engine)() as session:
+        rows = session.scalars(
+            select(DeliveryAttempt).where(
+                DeliveryAttempt.event_id == str(committed.event_id),
+                DeliveryAttempt.channel == DeliveryChannel.CONSOLE.value,
+            )
+        ).all()
+    assert len(rows) == 1
+    assert rows[0].attempt == 1
+    assert rows[0].status == DeliveryAttemptStatus.DELIVERED.value
+
+
+def test_restart_reclaims_an_expired_attempt_without_allocating_a_new_attempt(
+    database_engine: Engine,
+) -> None:
+    with _unit_of_work(database_engine) as work:
+        committed = work.alerts.enqueue(_payload(91))
+        work.commit()
+
+    in_app = NotificationDispatcher(
+        create_session_factory(database_engine),
+        channels=(),
+        clock=lambda: NOW,
+        id_factory=lambda: "recovery-in-app",
+    )
+    asyncio.run(in_app.dispatch_pending())
+    current_time = [NOW]
+    delivered_ids: list[UUID] = []
+
+    async def exercise_crash_and_recovery() -> tuple[object, ...]:
+        started = asyncio.Event()
+        never_finish = asyncio.Event()
+
+        class BlockingChannel:
+            channel = DeliveryChannel.CONSOLE
+            enabled = True
+
+            async def deliver(self, _event: object) -> ChannelDeliveryResult:
+                started.set()
+                await never_finish.wait()
+                raise AssertionError("unreachable")
+
+        crashing = NotificationDispatcher(
+            create_session_factory(database_engine),
+            channels=(BlockingChannel(),),
+            clock=lambda: current_time[0],
+            id_factory=lambda: "recoverable-claim",
+        )
+        task = asyncio.create_task(crashing.dispatch_pending())
+        await asyncio.wait_for(started.wait(), timeout=5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        class RecordingChannel:
+            channel = DeliveryChannel.CONSOLE
+            enabled = True
+
+            async def deliver(self, event: object) -> ChannelDeliveryResult:
+                delivered_ids.append(event.event_id)
+                return ChannelDeliveryResult(
+                    channel=self.channel,
+                    delivered=True,
+                    retryable=False,
+                )
+
+        restarted = NotificationDispatcher(
+            create_session_factory(database_engine),
+            channels=(RecordingChannel(),),
+            clock=lambda: current_time[0],
+            id_factory=lambda: (_ for _ in ()).throw(AssertionError("must reuse claim")),
+        )
+        assert await restarted.dispatch_pending() == ()
+        current_time[0] += timedelta(seconds=60)
+        return await restarted.dispatch_pending()
+
+    recovered = asyncio.run(exercise_crash_and_recovery())
+
+    assert delivered_ids == [committed.event_id]
+    assert len(recovered) == 1
+    assert recovered[0].attempt == 1
+    assert recovered[0].status is DeliveryAttemptStatus.DELIVERED
+    with create_session_factory(database_engine)() as session:
+        rows = session.scalars(
+            select(DeliveryAttempt).where(
+                DeliveryAttempt.event_id == str(committed.event_id),
+                DeliveryAttempt.channel == DeliveryChannel.CONSOLE.value,
+            )
+        ).all()
+    assert len(rows) == 1
+    assert rows[0].attempt == 1
+    assert rows[0].status == DeliveryAttemptStatus.DELIVERED.value
+
+
+def test_dispatcher_rejects_a_channel_iterable_after_the_fourth_item() -> None:
+    yielded = 0
+
+    def overlong_channels() -> object:
+        nonlocal yielded
+        for _index in range(4):
+            yielded += 1
+            yield ConsoleChannel(write_line=lambda _line: None)
+        raise AssertionError("dispatcher consumed beyond the closed channel vocabulary")
+
+    with pytest.raises(ValueError, match="at most three"):
+        NotificationDispatcher(lambda: None, channels=overlong_channels())
+
+    assert yielded == 4

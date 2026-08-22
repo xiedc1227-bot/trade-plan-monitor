@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import json
 from datetime import date, datetime
 from decimal import Decimal, localcontext
 from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -43,6 +46,13 @@ from trade_plan_monitor.domain.plan_models import (
     PriceInZoneCondition,
     RetreatFromSessionHighGteCondition,
     UpperWickRatioGteCondition,
+)
+from trade_plan_monitor.notifications.channels import (
+    ChannelErrorCode,
+    ConsoleChannel,
+    DeliveryChannel,
+    WebhookChannel,
+    WebhookConfig,
 )
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import (
@@ -889,3 +899,263 @@ def test_payload_rejects_an_unbounded_numeric_display_before_rendering() -> None
     )
     with pytest.raises(ValidationError, match="numeric display"):
         _payload(matched_conditions=(evidence,))
+
+
+def _delivery_event() -> AlertEvent:
+    payload = _payload()
+    return AlertEvent(
+        **payload.model_dump(mode="python", round_trip=True),
+        sequence=1,
+        message_text=render_alert(payload),
+        created_at=EVALUATED_AT,
+        acknowledged_at=None,
+    )
+
+
+def test_console_channel_emits_the_stable_event_id_and_rendered_message() -> None:
+    lines: list[str] = []
+
+    result = asyncio.run(ConsoleChannel(write_line=lines.append).deliver(_delivery_event()))
+
+    assert result.channel is DeliveryChannel.CONSOLE
+    assert result.delivered is True
+    assert result.retryable is False
+    assert str(EVENT_ID) in lines[0]
+    assert _delivery_event().message_text in lines[0]
+
+
+def test_webhook_is_disabled_by_default_and_requires_an_https_allowlisted_host() -> None:
+    assert WebhookConfig().enabled is False
+
+    with pytest.raises(ValidationError, match="endpoint"):
+        WebhookConfig(enabled=True, allowlisted_hosts=("hooks.example.test",))
+    with pytest.raises(ValidationError, match="HTTPS"):
+        WebhookConfig(
+            enabled=True,
+            endpoint="http://hooks.example.test/alerts",
+            allowlisted_hosts=("hooks.example.test",),
+        )
+    with pytest.raises(ValidationError, match="allowlisted"):
+        WebhookConfig(
+            enabled=True,
+            endpoint="https://other.example.test/alerts",
+            allowlisted_hosts=("hooks.example.test",),
+        )
+    with pytest.raises(ValidationError):
+        WebhookConfig(
+            enabled=True,
+            endpoint="https://hooks.example.test/alerts",
+            allowlisted_hosts=("*.example.test",),
+            allow_redirects=True,
+        )
+
+
+def test_webhook_configuration_validation_redacts_credential_and_query_inputs() -> None:
+    marker = "webhook-secret-must-not-escape"
+    candidates = (
+        lambda: WebhookConfig(
+            enabled=True,
+            endpoint=f"https://user:{marker}@hooks.example.test/alerts",
+            allowlisted_hosts=("hooks.example.test",),
+        ),
+        lambda: WebhookConfig.model_validate_json(
+            json.dumps(
+                {
+                    "enabled": True,
+                    "endpoint": f"https://hooks.example.test/alerts?token={marker}",
+                    "allowlisted_hosts": ["hooks.example.test"],
+                }
+            )
+        ),
+    )
+
+    for construct in candidates:
+        with pytest.raises(ValidationError) as error_info:
+            construct()
+        public_error = error_info.value
+        assert marker not in str(public_error)
+        assert marker not in repr(public_error)
+        assert marker not in repr(public_error.errors())
+        assert public_error.__context__ is None
+        assert public_error.__cause__ is None
+
+
+def test_webhook_configuration_strict_json_preserves_array_to_tuple_conversion() -> None:
+    config = WebhookConfig.model_validate_json(
+        json.dumps(
+            {
+                "enabled": True,
+                "endpoint": "https://hooks.example.test/alerts",
+                "allowlisted_hosts": ["hooks.example.test"],
+            }
+        )
+    )
+
+    assert config.allowlisted_hosts == ("hooks.example.test",)
+
+
+def test_webhook_configuration_copy_revalidates_the_security_boundary() -> None:
+    disabled = WebhookConfig(
+        enabled=False,
+        endpoint="https://not-allowlisted.example.test/private",
+        allowlisted_hosts=("hooks.example.test",),
+    )
+
+    with pytest.raises(ValidationError):
+        disabled.model_copy(update={"enabled": True})
+    with pytest.raises(ValidationError):
+        WebhookConfig().model_copy(
+            update={
+                "enabled": True,
+                "endpoint": "http://127.0.0.1/private",
+                "allowlisted_hosts": ("127.0.0.1",),
+            }
+        )
+
+
+def test_webhook_channel_cannot_enable_a_disabled_non_allowlisted_endpoint() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(204, request=request)
+
+    async def deliver() -> object:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            channel = WebhookChannel(
+                client=client,
+                config=WebhookConfig(
+                    enabled=False,
+                    endpoint="https://not-allowlisted.example.test/private",
+                    allowlisted_hosts=("hooks.example.test",),
+                ),
+            )
+            with pytest.raises(AttributeError):
+                channel.enabled = True
+            return await channel.deliver(_delivery_event())
+
+    result = asyncio.run(deliver())
+
+    assert result.error_code is ChannelErrorCode.WEBHOOK_DISABLED
+    assert requests == []
+
+
+def test_webhook_channel_revalidates_an_exact_but_untrusted_config_instance() -> None:
+    forged = WebhookConfig.model_construct(
+        enabled=True,
+        endpoint="http://127.0.0.1/private",
+        allowlisted_hosts=("127.0.0.1",),
+        timeout_seconds=5,
+        allow_redirects=False,
+    )
+
+    async def construct() -> None:
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(ValidationError):
+                WebhookChannel(client=client, config=forged)
+
+    asyncio.run(construct())
+
+
+def _webhook_result(status_code: int, *, response_body: str = "") -> tuple[object, bytes]:
+    request_body = b""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_body
+        request_body = request.content
+        return httpx.Response(status_code, text=response_body, request=request)
+
+    async def deliver() -> object:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            channel = WebhookChannel(
+                client=client,
+                config=WebhookConfig(
+                    enabled=True,
+                    endpoint="https://hooks.example.test/alerts",
+                    allowlisted_hosts=("hooks.example.test",),
+                ),
+            )
+            return await channel.deliver(_delivery_event())
+
+    return asyncio.run(deliver()), request_body
+
+
+@pytest.mark.parametrize(
+    ("status_code", "delivered", "retryable", "error_code"),
+    (
+        (200, True, False, None),
+        (204, True, False, None),
+        (400, False, False, ChannelErrorCode.WEBHOOK_REJECTED),
+        (408, False, True, ChannelErrorCode.WEBHOOK_TRANSIENT),
+        (429, False, True, ChannelErrorCode.WEBHOOK_TRANSIENT),
+        (500, False, True, ChannelErrorCode.WEBHOOK_TRANSIENT),
+    ),
+)
+def test_webhook_classifies_bounded_http_outcomes(
+    status_code: int,
+    delivered: bool,
+    retryable: bool,
+    error_code: ChannelErrorCode | None,
+) -> None:
+    result, _request_body = _webhook_result(status_code)
+
+    assert result.channel is DeliveryChannel.WEBHOOK
+    assert result.delivered is delivered
+    assert result.retryable is retryable
+    assert result.response_code == status_code
+    assert result.error_code is error_code
+
+
+def test_webhook_sends_only_the_bounded_public_alert_envelope() -> None:
+    response_marker = "raw-provider-body-must-not-escape"
+
+    result, request_body = _webhook_result(400, response_body=response_marker)
+    payload = json.loads(request_body)
+
+    assert payload == {
+        "createdAt": EVALUATED_AT.isoformat(),
+        "eventId": str(EVENT_ID),
+        "messageText": _delivery_event().message_text,
+        "sequence": 1,
+        "severity": "ACTION",
+        "signalType": "BUY_CORE_READY",
+        "symbol": SYMBOL,
+    }
+    assert response_marker not in str(result)
+    assert response_marker not in repr(result)
+
+
+def test_webhook_rejects_redirects_without_following_them() -> None:
+    result, _request_body = _webhook_result(302, response_body="redirect-secret")
+
+    assert result.delivered is False
+    assert result.retryable is False
+    assert result.error_code is ChannelErrorCode.UNSAFE_REDIRECT
+    assert "redirect-secret" not in repr(result)
+
+
+def test_webhook_timeout_is_retryable_and_redacted() -> None:
+    marker = "transport-secret-must-not-escape"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout(marker, request=request)
+
+    async def deliver() -> object:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            channel = WebhookChannel(
+                client=client,
+                config=WebhookConfig(
+                    enabled=True,
+                    endpoint="https://hooks.example.test/alerts",
+                    allowlisted_hosts=("hooks.example.test",),
+                ),
+            )
+            return await channel.deliver(_delivery_event())
+
+    result = asyncio.run(deliver())
+
+    assert result.delivered is False
+    assert result.retryable is True
+    assert result.error_code is ChannelErrorCode.WEBHOOK_TIMEOUT
+    assert marker not in str(result)
+    assert marker not in repr(result)

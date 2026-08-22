@@ -161,6 +161,55 @@ not from a potentially newer health-summary fact.
 - Failures remain pending with bounded retry/backoff. One failed channel does not hide the in-app event.
 - Acknowledgement means “the user has seen this event”; it is not delivery success, a fill, or a position update.
 
+For T027, `IN_APP` delivery success means that the dispatcher recovered a
+committed outbox row and the alert remains queryable in the local alert center;
+it does not claim that a browser received a WebSocket frame. T039 owns actual
+WebSocket publication and replay. The dispatcher always adds `IN_APP`, defaults
+to `CONSOLE`, skips a disabled `WEBHOOK` without creating an attempt, and orders
+due work by event sequence and then `IN_APP`, `CONSOLE`, `WEBHOOK`.
+
+`dispatch_pending(limit=100)` accepts a bound from 1 through 100 and attempts at
+most that many due event/channel pairs. It reconstructs only committed events in
+a short read transaction, closes that transaction before channel I/O, and saves
+the result in a new short transaction. A restart can therefore scan a committed
+event that has no delivery attempt. If a process stops after an external send
+but before saving the result, the later attempt may send the same stable event
+ID again, which is the intentional at-least-once boundary.
+
+Each logical attempt first enters `CLAIMED` in a short transaction with a fixed
+60-second lease. Only the successful claimant performs channel I/O; competing
+dispatchers skip that event/channel pair. A restart reclaims an expired lease
+with the same attempt row and number, so a stop before send does not consume a
+retry. A stop after send but before finalization may repeat the same stable event
+ID, as required by at-least-once delivery. Final statuses are `DELIVERED`,
+`RETRY_PENDING`, or `FAILED`. The first attempt is immediate. The default
+persistent retry delays are exactly 30, 60, and 300 seconds, for at most four
+logical attempts; an attempt is eligible at its exact `next_retry_at`. Retry
+tuples are injectable for tests or later runtime configuration but contain at
+most 10 positive delays, each no longer than one day. A terminal delivery or
+failure is never selected again.
+
+`WebhookConfig` is strict, frozen, and disabled by default. An enabled endpoint
+uses HTTPS, is at most 2,048 characters, contains no embedded credentials,
+query, or fragment, and its exact case-insensitive host appears in a unique
+allowlist of at most 64 entries; wildcard hosts and redirects are forbidden.
+Timeout is 5 seconds by default and bounded from 1 through 30 seconds. The JSON
+body contains only `createdAt`, `eventId`, `messageText`, `sequence`, `severity`,
+`signalType`, and `symbol`.
+
+Configuration copies revalidate all fields, exact configuration instances are
+revalidated again when a channel is constructed, and channel enablement is a
+read-only view of the validated frozen configuration. These boundaries prevent
+copy/update or post-construction toggles from bypassing HTTPS and the allowlist.
+
+Any 2xx Webhook result is `DELIVERED`. HTTP 408, 429, 5xx, timeouts, and transport
+failures are retryable; other 4xx responses and every 3xx redirect are terminal.
+The adapter never reads or retains a response body. Public configuration and
+storage errors remove validation input, SQL parameters, exception context, and
+exception cause; channel results retain only a stable error code and optional
+HTTP status. Console, Webhook, or unexpected adapter failure is isolated from
+the other channels.
+
 Logical tables:
 
 ```text
