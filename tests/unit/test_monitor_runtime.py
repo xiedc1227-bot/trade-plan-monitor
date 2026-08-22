@@ -1,4 +1,4 @@
-"""T028-T030 contracts for deadlines, request control, and symbol health."""
+"""T028-T031 contracts for deadlines, request control, health, and recovery."""
 
 from __future__ import annotations
 
@@ -19,6 +19,11 @@ from trade_plan_monitor.runtime.health import (
     SymbolHealthErrorCode,
     SymbolHealthTracker,
     summarize_system_health,
+)
+from trade_plan_monitor.runtime.recovery import (
+    RecoveryErrorCode,
+    RecoveryService,
+    RecoverySymbolResult,
 )
 from trade_plan_monitor.runtime.request_control import (
     DEFAULT_AI_MAX_CONCURRENCY,
@@ -1950,3 +1955,157 @@ def test_symbol_health_failed_observation_cannot_mutate_incomplete_streak() -> N
 
     assert second.data_health.status.value == "DEGRADED"
     assert second.consecutive_incomplete_buckets == 2
+
+
+def test_recovery_cancellation_joins_physical_call_before_next_recovery_starts() -> None:
+    symbol = "003043.SZ"
+    bar = _health_minutes(symbol, _shanghai(9, 35))[0]
+
+    class BlockingProvider:
+        def __init__(self) -> None:
+            self.started = threading.Event()
+            self.release = threading.Event()
+            self.calls: list[str] = []
+            self.active = 0
+            self.maximum_active = 0
+            self.guard = threading.Lock()
+
+        def current_day_minutes(self, requested_symbol: str) -> list[MinuteBar]:
+            with self.guard:
+                self.calls.append(requested_symbol)
+                self.active += 1
+                self.maximum_active = max(self.maximum_active, self.active)
+            self.started.set()
+            try:
+                if not self.release.wait(timeout=2):
+                    raise TimeoutError("test release was not signalled")
+                return [bar]
+            finally:
+                with self.guard:
+                    self.active -= 1
+
+    provider = BlockingProvider()
+    persisted: list[tuple[MinuteBar, ...]] = []
+    controller = _request_controller(
+        _FakeClock(_shanghai(9, 31, 12)),
+        in_cycle_retries=0,
+        timeout_seconds=3,
+    )
+    service = RecoveryService(
+        provider=provider,
+        request_controller=controller,
+        active_symbols=lambda: (symbol,),
+        persist_minutes=persisted.append,
+        is_open_on=lambda _trade_date: True,
+        realtime_pending=lambda: False,
+    )
+
+    async def scenario() -> tuple[bool, int]:
+        startup = asyncio.create_task(service.recover_startup(trade_date=OPEN_MONDAY))
+        await _wait_until(provider.started.is_set)
+        targeted = asyncio.create_task(
+            service.repair_detected_gaps(
+                trade_date=OPEN_MONDAY,
+                gaps={symbol: (_shanghai(9, 31),)},
+            )
+        )
+        await asyncio.sleep(0)
+        assert provider.calls == [symbol]
+
+        startup.cancel()
+        await asyncio.sleep(0)
+        cancellation_waited = not startup.done()
+        provider.release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await startup
+        targeted_result = await targeted
+        return cancellation_waited, targeted_result.persisted_bar_count
+
+    try:
+        cancellation_waited, persisted_count = asyncio.run(scenario())
+    finally:
+        provider.release.set()
+        controller.close()
+
+    assert cancellation_waited is True
+    assert provider.calls == [symbol, symbol]
+    assert provider.maximum_active == 1
+    assert persisted_count == 1
+    assert persisted == [(bar,)]
+
+
+def test_recovery_timeout_keeps_late_physical_call_serial_before_next_symbol() -> None:
+    symbols = ("003043.SZ", "600000.SH")
+
+    class TimeoutProvider:
+        def __init__(self) -> None:
+            self.first_started = threading.Event()
+            self.release_first = threading.Event()
+            self.calls: list[str] = []
+            self.active = 0
+            self.maximum_active = 0
+            self.guard = threading.Lock()
+
+        def current_day_minutes(self, symbol: str) -> list[MinuteBar]:
+            with self.guard:
+                self.calls.append(symbol)
+                self.active += 1
+                self.maximum_active = max(self.maximum_active, self.active)
+            try:
+                if symbol == symbols[0]:
+                    self.first_started.set()
+                    if not self.release_first.wait(timeout=2):
+                        raise TimeoutError("test release was not signalled")
+                return []
+            finally:
+                with self.guard:
+                    self.active -= 1
+
+    provider = TimeoutProvider()
+    controller = _request_controller(
+        _FakeClock(_shanghai(9, 31, 12)),
+        in_cycle_retries=2,
+        timeout_seconds=1,
+    )
+    service = RecoveryService(
+        provider=provider,
+        request_controller=controller,
+        active_symbols=lambda: symbols,
+        persist_minutes=lambda _bars: None,
+        is_open_on=lambda _trade_date: True,
+        realtime_pending=lambda: False,
+    )
+
+    async def scenario() -> tuple[list[str], object]:
+        task = asyncio.create_task(service.recover_startup(trade_date=OPEN_MONDAY))
+        await _wait_until(provider.first_started.is_set)
+        await asyncio.sleep(1.1)
+        calls_before_release = list(provider.calls)
+        provider.release_first.set()
+        return calls_before_release, await task
+
+    try:
+        calls_before_release, result = asyncio.run(scenario())
+    finally:
+        provider.release_first.set()
+        controller.close()
+
+    assert calls_before_release == [symbols[0]]
+    assert provider.calls == list(symbols)
+    assert provider.maximum_active == 1
+    assert result.results[0].error_code is RecoveryErrorCode.TRANSIENT
+    assert result.results[0].next_retry_at == _shanghai(9, 31, 42)
+    assert result.results[1].error_code is None
+
+
+def test_recovery_symbol_result_requires_a_complete_gap_partition() -> None:
+    first = _shanghai(9, 31)
+    second = _shanghai(9, 32)
+
+    with pytest.raises(ValueError, match="partition"):
+        RecoverySymbolResult(
+            symbol="003043.SZ",
+            requested_gaps=(first, second),
+            recovered_ends=(first,),
+            remaining_gaps=(),
+        )

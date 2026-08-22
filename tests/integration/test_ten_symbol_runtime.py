@@ -1,4 +1,4 @@
-"""T030 ten-symbol batch, persistence, and health-isolation contracts."""
+"""T030-T031 ten-symbol runtime, health-isolation, and recovery contracts."""
 
 from __future__ import annotations
 
@@ -15,6 +15,11 @@ from trade_plan_monitor.market_data.aggregation import FiveMinuteBar, expected_f
 from trade_plan_monitor.market_data.models import MinuteBar, ProviderCapabilities
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.health import SymbolHealthErrorCode, SymbolHealthTracker
+from trade_plan_monitor.runtime.recovery import (
+    RecoveryErrorCode,
+    RecoveryMode,
+    RecoveryService,
+)
 from trade_plan_monitor.runtime.request_control import TushareRequestController
 from trade_plan_monitor.runtime.symbol_service import SymbolService
 
@@ -22,8 +27,8 @@ SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
 SYMBOLS: Final = tuple(f"{index:06d}.SZ" for index in range(1, 11))
 
 
-def _at(hour: int, minute: int, second: int = 0) -> datetime:
-    return datetime(2026, 8, 24, hour, minute, second, tzinfo=SHANGHAI)
+def _at(hour: int, minute: int, second: int = 0, *, day: int = 24) -> datetime:
+    return datetime(2026, 8, day, hour, minute, second, tzinfo=SHANGHAI)
 
 
 def _bar(symbol: str, bar_end: datetime) -> MinuteBar:
@@ -65,6 +70,11 @@ class _FakeProvider:
         self.rows = rows
         self.calls: list[tuple[str, ...]] = []
         self.error: BaseException | None = None
+        self.recovery_rows: dict[str, list[object]] = {}
+        self.recovery_errors: dict[str, BaseException] = {}
+        self.recovery_calls: list[str] = []
+        self.recovery_active = 0
+        self.maximum_recovery_active = 0
 
     def probe_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities()
@@ -76,7 +86,19 @@ class _FakeProvider:
         return list(self.rows)  # type: ignore[return-value]
 
     def current_day_minutes(self, symbol: str) -> list[MinuteBar]:
-        raise AssertionError("T031 recovery must not start in T030")
+        self.recovery_calls.append(symbol)
+        self.recovery_active += 1
+        self.maximum_recovery_active = max(
+            self.maximum_recovery_active,
+            self.recovery_active,
+        )
+        try:
+            error = self.recovery_errors.get(symbol)
+            if error is not None:
+                raise error
+            return list(self.recovery_rows.get(symbol, []))  # type: ignore[return-value]
+        finally:
+            self.recovery_active -= 1
 
     def trading_calendar(self, start: date, end: date) -> list[object]:
         raise AssertionError("calendar fetching is outside this T030 batch")
@@ -93,6 +115,7 @@ class _FakeHistory:
         self.minutes: dict[tuple[str, datetime], MinuteBar] = {}
         self.five_minute: dict[tuple[str, datetime], FiveMinuteBar] = {}
         self.persisted_symbols: list[str] = []
+        self.persisted_batches: list[tuple[datetime, ...]] = []
         self.fail_symbol: str | None = None
         self.malformed_load_symbol: str | None = None
 
@@ -103,12 +126,12 @@ class _FakeHistory:
                 self.minutes[(symbol, minute_end)] = bar
 
     def persist_minutes(self, bars: tuple[MinuteBar, ...]) -> None:
-        assert len(bars) == 1
-        bar = bars[0]
-        if bar.symbol == self.fail_symbol:
+        if any(bar.symbol == self.fail_symbol for bar in bars):
             raise RuntimeError("sensitive-storage-detail")
-        self.persisted_symbols.append(bar.symbol)
-        self.minutes[(bar.symbol, bar.bar_end)] = bar
+        self.persisted_batches.append(tuple(bar.bar_end for bar in bars))
+        for bar in bars:
+            self.persisted_symbols.append(bar.symbol)
+            self.minutes[(bar.symbol, bar.bar_end)] = bar
 
     def load_minutes(
         self,
@@ -504,3 +527,272 @@ def test_runtime_rejects_more_than_ten_active_symbols_before_provider_call() -> 
         controller.close()
 
     assert provider.calls == []
+
+
+def _recovery_service(
+    *,
+    provider: _FakeProvider,
+    active: _ActiveSymbols,
+    history: _FakeHistory,
+    controller: TushareRequestController,
+    realtime_pending: Callable[[], bool] | None = None,
+) -> RecoveryService:
+    return RecoveryService(
+        provider=provider,
+        request_controller=controller,
+        active_symbols=active,
+        persist_minutes=history.persist_minutes,
+        is_open_on=lambda _trade_date: True,
+        realtime_pending=realtime_pending or (lambda: False),
+    )
+
+
+def test_startup_recovery_is_serial_sorted_and_idempotent_for_active_symbols() -> None:
+    symbols = SYMBOLS[:3]
+    minute_ends = (_at(9, 31), _at(9, 32), _at(9, 33))
+    provider = _FakeProvider([])
+    for symbol in symbols:
+        second = _bar(symbol, minute_ends[1])
+        provider.recovery_rows[symbol] = [
+            _bar(symbol, minute_ends[2]),
+            second,
+            _bar(symbol, minute_ends[0]),
+            second,
+        ]
+    history = _FakeHistory()
+    controller = _controller(_at(9, 33, 12))
+    service = _recovery_service(
+        provider=provider,
+        active=_ActiveSymbols(symbols),
+        history=history,
+        controller=controller,
+    )
+
+    try:
+        first = asyncio.run(service.recover_startup(trade_date=minute_ends[0].date()))
+        second = asyncio.run(service.recover_startup(trade_date=minute_ends[0].date()))
+    finally:
+        controller.close()
+
+    assert first.mode is RecoveryMode.STARTUP
+    assert first.attempted_symbols == symbols
+    assert first.persisted_bar_count == 9
+    assert second.persisted_bar_count == 9
+    assert provider.recovery_calls == list(symbols + symbols)
+    assert provider.maximum_recovery_active == 1
+    assert len(history.minutes) == 9
+    assert all(batch == minute_ends for batch in history.persisted_batches)
+    assert all(result.error_code is None for result in first.results)
+
+
+def test_targeted_recovery_persists_only_explicit_detected_gaps() -> None:
+    symbol = SYMBOLS[0]
+    all_ends = tuple(_at(9, minute) for minute in range(31, 36))
+    requested_gaps = (all_ends[1], all_ends[3])
+    provider = _FakeProvider([])
+    provider.recovery_rows[symbol] = [_bar(symbol, end) for end in reversed(all_ends)]
+    history = _FakeHistory()
+    controller = _controller(_at(9, 35, 12))
+    service = _recovery_service(
+        provider=provider,
+        active=_ActiveSymbols(SYMBOLS[:2]),
+        history=history,
+        controller=controller,
+    )
+
+    try:
+        result = asyncio.run(
+            service.repair_detected_gaps(
+                trade_date=all_ends[0].date(),
+                gaps={symbol: requested_gaps},
+            )
+        )
+    finally:
+        controller.close()
+
+    assert result.mode is RecoveryMode.GAP_REPAIR
+    assert result.attempted_symbols == (symbol,)
+    assert result.persisted_bar_count == 2
+    assert provider.recovery_calls == [symbol]
+    assert history.persisted_batches == [requested_gaps]
+    assert set(history.minutes) == {(symbol, end) for end in requested_gaps}
+    assert result.results[0].requested_gaps == requested_gaps
+    assert result.results[0].recovered_ends == requested_gaps
+    assert result.results[0].remaining_gaps == ()
+
+
+def test_recovery_yields_before_starting_another_symbol_when_realtime_is_pending() -> None:
+    symbols = SYMBOLS[:3]
+    provider = _FakeProvider([])
+    for symbol in symbols:
+        provider.recovery_rows[symbol] = [_bar(symbol, _at(9, 31))]
+    history = _FakeHistory()
+    controller = _controller(_at(9, 31, 12))
+    service = _recovery_service(
+        provider=provider,
+        active=_ActiveSymbols(symbols),
+        history=history,
+        controller=controller,
+        realtime_pending=lambda: len(provider.recovery_calls) >= 1,
+    )
+
+    try:
+        result = asyncio.run(service.recover_startup(trade_date=_at(9, 31).date()))
+    finally:
+        controller.close()
+
+    assert result.yielded_to_realtime is True
+    assert result.attempted_symbols == (symbols[0],)
+    assert provider.recovery_calls == [symbols[0]]
+    assert history.persisted_symbols == [symbols[0]]
+
+
+@pytest.mark.parametrize(
+    ("provider_code", "expected_code"),
+    [
+        (TushareErrorCode.BLOCKED_PERMISSION, RecoveryErrorCode.BLOCKED_PERMISSION),
+        (TushareErrorCode.RATE_LIMITED, RecoveryErrorCode.RATE_LIMITED),
+    ],
+)
+def test_recovery_permission_and_rate_limit_fail_closed_without_detail(
+    provider_code: TushareErrorCode,
+    expected_code: RecoveryErrorCode,
+) -> None:
+    symbols = SYMBOLS[:2]
+    sentinel = "sensitive-recovery-provider-body"
+    provider = _FakeProvider([])
+    try:
+        raise ValueError(sentinel)
+    except ValueError as error:
+        blocked = TushareProviderError(provider_code, "rt_min_daily")
+        blocked.__context__ = error
+        provider.recovery_errors[symbols[0]] = blocked
+    history = _FakeHistory()
+    controller = _controller(_at(9, 31, 12))
+    service = _recovery_service(
+        provider=provider,
+        active=_ActiveSymbols(symbols),
+        history=history,
+        controller=controller,
+    )
+
+    try:
+        result = asyncio.run(service.recover_startup(trade_date=_at(9, 31).date()))
+    finally:
+        controller.close()
+
+    assert result.attempted_symbols == symbols
+    assert provider.recovery_calls == [symbols[0]]
+    assert all(item.error_code is expected_code for item in result.results)
+    assert history.persisted_symbols == []
+    assert sentinel not in repr(result)
+
+
+def test_recovery_transient_backoff_is_shared_by_startup_and_gap_repair() -> None:
+    symbol = SYMBOLS[0]
+    provider = _FakeProvider([])
+    provider.recovery_errors[symbol] = TushareProviderError(
+        TushareErrorCode.TRANSIENT,
+        "rt_min_daily",
+    )
+    history = _FakeHistory()
+    controller = _controller(_at(9, 31, 12))
+    service = _recovery_service(
+        provider=provider,
+        active=_ActiveSymbols((symbol,)),
+        history=history,
+        controller=controller,
+    )
+
+    try:
+        startup = asyncio.run(service.recover_startup(trade_date=_at(9, 31).date()))
+        provider.recovery_errors.clear()
+        targeted = asyncio.run(
+            service.repair_detected_gaps(
+                trade_date=_at(9, 31).date(),
+                gaps={symbol: (_at(9, 31),)},
+            )
+        )
+    finally:
+        controller.close()
+
+    assert startup.results[0].error_code is RecoveryErrorCode.TRANSIENT
+    assert targeted.results[0].error_code is RecoveryErrorCode.TRANSIENT
+    assert targeted.results[0].next_retry_at == _at(9, 31, 42)
+    assert provider.recovery_calls == [symbol]
+    assert history.persisted_symbols == []
+
+
+def test_recovery_rejects_invalid_symbol_or_wrong_date_rows_without_persistence() -> None:
+    symbol = SYMBOLS[0]
+    provider = _FakeProvider([])
+    provider.recovery_rows[symbol] = [
+        _bar(symbol, _at(9, 31, day=25)),
+        _bar(SYMBOLS[1], _at(9, 31)),
+    ]
+    history = _FakeHistory()
+    controller = _controller(_at(9, 31, 12))
+    service = _recovery_service(
+        provider=provider,
+        active=_ActiveSymbols((symbol,)),
+        history=history,
+        controller=controller,
+    )
+
+    try:
+        result = asyncio.run(service.recover_startup(trade_date=_at(9, 31).date()))
+    finally:
+        controller.close()
+
+    assert result.results[0].error_code is RecoveryErrorCode.INVALID_RESPONSE
+    assert result.persisted_bar_count == 0
+    assert history.persisted_symbols == []
+
+
+def test_recovery_persistence_failure_isolated_without_leaking_storage_detail() -> None:
+    failed_symbol, healthy_symbol = SYMBOLS[:2]
+    provider = _FakeProvider([])
+    provider.recovery_rows[failed_symbol] = [_bar(failed_symbol, _at(9, 31))]
+    provider.recovery_rows[healthy_symbol] = [_bar(healthy_symbol, _at(9, 31))]
+    history = _FakeHistory()
+    history.fail_symbol = failed_symbol
+    controller = _controller(_at(9, 31, 12))
+    service = _recovery_service(
+        provider=provider,
+        active=_ActiveSymbols((failed_symbol, healthy_symbol)),
+        history=history,
+        controller=controller,
+    )
+
+    try:
+        result = asyncio.run(service.recover_startup(trade_date=_at(9, 31).date()))
+    finally:
+        controller.close()
+
+    assert result.results[0].error_code is RecoveryErrorCode.PERSISTENCE_FAILED
+    assert result.results[1].error_code is None
+    assert result.persisted_bar_count == 1
+    assert provider.recovery_calls == [failed_symbol, healthy_symbol]
+    assert history.persisted_symbols == [healthy_symbol]
+    assert "sensitive-storage-detail" not in repr(result)
+
+
+def test_recovery_rejects_more_than_ten_active_symbols_before_provider_call() -> None:
+    provider = _FakeProvider([])
+    history = _FakeHistory()
+    controller = _controller(_at(9, 31, 12))
+    service = _recovery_service(
+        provider=provider,
+        active=_ActiveSymbols(SYMBOLS + ("000011.SZ",)),
+        history=history,
+        controller=controller,
+    )
+
+    try:
+        with pytest.raises(ValueError, match="at most 10"):
+            asyncio.run(service.recover_startup(trade_date=_at(9, 31).date()))
+    finally:
+        controller.close()
+
+    assert provider.recovery_calls == []
+    assert history.persisted_symbols == []
