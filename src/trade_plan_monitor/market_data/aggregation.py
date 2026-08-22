@@ -9,12 +9,18 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from trade_plan_monitor.market_data.models import AShareSymbol, MinuteBar, ShanghaiDatetime
+from trade_plan_monitor.market_data.models import (
+    AShareSymbol,
+    DailyBar,
+    MinuteBar,
+    ShanghaiDatetime,
+)
 from trade_plan_monitor.market_data.sessions import (
     SHANGHAI,
     TradingSession,
     _is_open_trading_date,
     _session_start,
+    expected_minute_ends,
     session_for_minute_end,
 )
 
@@ -188,10 +194,57 @@ def aggregate_five_minute_bar(
     )
 
 
+def aggregate_provisional_daily_bar(
+    *,
+    current_day_minutes: tuple[MinuteBar, ...],
+    source_as_of: datetime,
+) -> DailyBar | None:
+    """Aggregate one exact current-day minute prefix into a provisional daily bar."""
+
+    if (
+        type(current_day_minutes) is not tuple
+        or not 1 <= len(current_day_minutes) <= 240
+        or any(not isinstance(minute, MinuteBar) for minute in current_day_minutes)
+    ):
+        return None
+    try:
+        canonical_source_as_of = expected_five_minute_ends(source_as_of)[-1]
+    except TypeError, ValueError:
+        return None
+
+    canonical_day = expected_minute_ends(
+        canonical_source_as_of.date(),
+        is_open=True,
+    )
+    expected_slice = tuple(
+        minute_end for minute_end in canonical_day if minute_end <= canonical_source_as_of
+    )
+    if tuple(minute.bar_end for minute in current_day_minutes) != expected_slice or any(
+        minute.symbol != current_day_minutes[0].symbol for minute in current_day_minutes
+    ):
+        return None
+
+    return DailyBar(
+        symbol=current_day_minutes[0].symbol,
+        trade_date=canonical_source_as_of.date(),
+        open_fen=current_day_minutes[0].open_fen,
+        high_fen=max(minute.high_fen for minute in current_day_minutes),
+        low_fen=min(minute.low_fen for minute in current_day_minutes),
+        close_fen=current_day_minutes[-1].close_fen,
+        volume_shares=sum(minute.volume_shares for minute in current_day_minutes),
+        amount_yuan=_sum_decimal_amounts_exact(
+            tuple(minute.amount_yuan for minute in current_day_minutes)
+        ),
+        is_official=False,
+        received_at=max(minute.received_at for minute in current_day_minutes),
+    )
+
+
 __all__ = [
     "FiveMinuteBar",
     "TA_FORMULA_VERSION",
     "aggregate_five_minute_bar",
+    "aggregate_provisional_daily_bar",
     "expected_five_minute_ends",
     "five_minute_bucket_end",
     "is_complete_five_minute_bucket",

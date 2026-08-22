@@ -45,6 +45,8 @@ from trade_plan_monitor.state.repositories import (
     EpisodeRecord,
     EpisodeTransitionError,
     EvaluationIdentityConflictError,
+    EvaluationKind,
+    EvaluationRecord,
     IdempotencyInProgressError,
     IdempotencyKeyReuseError,
     MaxPositionExceededError,
@@ -140,6 +142,17 @@ def _upgrade_to(engine: Engine, revision: str) -> None:
     with engine.begin() as connection:
         alembic_config.attributes["connection"] = connection
         command.upgrade(alembic_config, revision)
+
+
+def _downgrade_to(engine: Engine, revision: str) -> None:
+    migrations_path = (
+        Path(__file__).resolve().parents[2] / "src" / "trade_plan_monitor" / "state" / "migrations"
+    )
+    alembic_config = Config()
+    alembic_config.set_main_option("script_location", str(migrations_path))
+    with engine.begin() as connection:
+        alembic_config.attributes["connection"] = connection
+        command.downgrade(alembic_config, revision)
 
 
 def test_position_lots_enforce_bucket_board_lot_maximum_and_t_plus_one(
@@ -874,7 +887,9 @@ def test_evaluation_identity_claim_is_idempotent_and_conflict_safe(tmp_path: Pat
             first = work.evaluations.claim(
                 plan_hash="b" * 64,
                 symbol="003043.SZ",
+                evaluation_kind="INTRADAY",
                 bucket_end=bucket_end,
+                official_trade_date=None,
                 formula_version="ta-v1",
                 result_hash="c" * 64,
                 evaluated_at=_FIXED_NOW,
@@ -882,7 +897,9 @@ def test_evaluation_identity_claim_is_idempotent_and_conflict_safe(tmp_path: Pat
             replay = work.evaluations.claim(
                 plan_hash="b" * 64,
                 symbol="003043.SZ",
+                evaluation_kind="INTRADAY",
                 bucket_end=bucket_end.astimezone(UTC),
+                official_trade_date=None,
                 formula_version="ta-v1",
                 result_hash="c" * 64,
                 evaluated_at=_FIXED_NOW.astimezone(UTC),
@@ -897,7 +914,9 @@ def test_evaluation_identity_claim_is_idempotent_and_conflict_safe(tmp_path: Pat
                 work.evaluations.claim(
                     plan_hash="b" * 64,
                     symbol="003043.SZ",
+                    evaluation_kind="INTRADAY",
                     bucket_end=bucket_end,
+                    official_trade_date=None,
                     formula_version="ta-v1",
                     result_hash="d" * 64,
                     evaluated_at=_FIXED_NOW,
@@ -907,7 +926,135 @@ def test_evaluation_identity_claim_is_idempotent_and_conflict_safe(tmp_path: Pat
         with create_session_factory(engine)() as session:
             entries = session.scalars(select(EvaluationLedger)).all()
         assert len(entries) == 1
+        assert entries[0].evaluation_kind == "INTRADAY"
+        assert entries[0].target_value == bucket_end.isoformat()
         assert entries[0].result_hash == "c" * 64
+    finally:
+        engine.dispose()
+
+
+def test_evaluation_record_revalidates_discriminated_target_copies() -> None:
+    bucket_end = datetime(2026, 8, 21, 9, 35, tzinfo=ZoneInfo("Asia/Shanghai"))
+    record = EvaluationRecord(
+        plan_hash="b" * 64,
+        symbol="003043.SZ",
+        evaluation_kind=EvaluationKind.INTRADAY,
+        bucket_end=bucket_end,
+        official_trade_date=None,
+        formula_version="ta-v1",
+        result_hash="c" * 64,
+        evaluated_at=_FIXED_NOW,
+    )
+
+    assert record.evaluation_kind is EvaluationKind.INTRADAY
+    with pytest.raises(ValueError):
+        record.model_copy(update={"official_trade_date": date(2026, 8, 21)})
+
+
+def test_evaluation_identity_keeps_intraday_1500_and_official_close_distinct(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    bucket_end = datetime(2026, 8, 21, 15, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            intraday = work.evaluations.claim(
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                evaluation_kind="INTRADAY",
+                bucket_end=bucket_end,
+                official_trade_date=None,
+                formula_version="ta-v1",
+                result_hash="c" * 64,
+                evaluated_at=_FIXED_NOW.replace(hour=15, minute=1),
+            )
+            official = work.evaluations.claim(
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                evaluation_kind="OFFICIAL_CLOSE",
+                bucket_end=None,
+                official_trade_date=date(2026, 8, 21),
+                formula_version="ta-v1",
+                result_hash="d" * 64,
+                evaluated_at=_FIXED_NOW.replace(hour=15, minute=20),
+            )
+            official_replay = work.evaluations.claim(
+                plan_hash="b" * 64,
+                symbol="003043.SZ",
+                evaluation_kind="OFFICIAL_CLOSE",
+                bucket_end=None,
+                official_trade_date=date(2026, 8, 21),
+                formula_version="ta-v1",
+                result_hash="d" * 64,
+                evaluated_at=_FIXED_NOW.replace(hour=16),
+            )
+            work.commit()
+
+        assert intraday.created is True
+        assert intraday.record.bucket_end == bucket_end
+        assert intraday.record.official_trade_date is None
+        assert official.created is True
+        assert official.record.bucket_end is None
+        assert official.record.official_trade_date == date(2026, 8, 21)
+        assert official_replay.created is False
+        assert official_replay.record == official.record
+        with _unit_of_work(engine) as work:
+            with pytest.raises(EvaluationIdentityConflictError):
+                work.evaluations.claim(
+                    plan_hash="b" * 64,
+                    symbol="003043.SZ",
+                    evaluation_kind="OFFICIAL_CLOSE",
+                    bucket_end=None,
+                    official_trade_date=date(2026, 8, 21),
+                    formula_version="ta-v1",
+                    result_hash="e" * 64,
+                    evaluated_at=_FIXED_NOW.replace(hour=17),
+                )
+        with create_session_factory(engine)() as session:
+            entries = session.scalars(select(EvaluationLedger)).all()
+        assert {(entry.evaluation_kind, entry.target_value) for entry in entries} == {
+            ("INTRADAY", bucket_end.isoformat()),
+            ("OFFICIAL_CLOSE", "2026-08-21"),
+        }
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("evaluation_kind", "bucket_end", "official_trade_date"),
+    [
+        ("INTRADAY", None, None),
+        ("INTRADAY", _FIXED_NOW.replace(minute=35), date(2026, 8, 21)),
+        ("INTRADAY", _FIXED_NOW.replace(minute=36), None),
+        ("OFFICIAL_CLOSE", _FIXED_NOW.replace(minute=35), None),
+        ("OFFICIAL_CLOSE", None, None),
+        ("UNKNOWN", _FIXED_NOW.replace(minute=35), None),
+    ],
+)
+def test_evaluation_identity_rejects_kind_target_mismatch(
+    tmp_path: Path,
+    evaluation_kind: str,
+    bucket_end: datetime | None,
+    official_trade_date: date | None,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            with pytest.raises(ValueError):
+                work.evaluations.claim(
+                    plan_hash="b" * 64,
+                    symbol="003043.SZ",
+                    evaluation_kind=evaluation_kind,
+                    bucket_end=bucket_end,
+                    official_trade_date=official_trade_date,
+                    formula_version="ta-v1",
+                    result_hash="c" * 64,
+                    evaluated_at=_FIXED_NOW,
+                )
     finally:
         engine.dispose()
 
@@ -1548,7 +1695,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0004_alert_sequence"
+        assert first_revision == second_revision == "0005_evaluation_kind"
     finally:
         engine.dispose()
 
@@ -1576,7 +1723,7 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0004_alert_sequence"
+                == "0005_evaluation_kind"
             )
     finally:
         engine.dispose()
@@ -1609,8 +1756,136 @@ def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) 
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0004_alert_sequence"
+                == "0005_evaluation_kind"
             )
+    finally:
+        engine.dispose()
+
+
+def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    bucket_end = "2026-08-21T15:00:00+08:00"
+    evaluated_at = "2026-08-21T15:01:00+08:00"
+
+    try:
+        _upgrade_to(engine, "0004_alert_sequence")
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO evaluation_ledger "
+                "(plan_hash, symbol, bucket_end, formula_version, result_hash, evaluated_at) "
+                "VALUES (:plan_hash, '003043.SZ', :bucket_end, 'ta-v1', :result_hash, "
+                ":evaluated_at)",
+                {
+                    "plan_hash": "b" * 64,
+                    "bucket_end": bucket_end,
+                    "result_hash": "c" * 64,
+                    "evaluated_at": evaluated_at,
+                },
+            )
+
+        upgrade_database(engine)
+
+        columns = {column["name"] for column in inspect(engine).get_columns("evaluation_ledger")}
+        assert "bucket_end" not in columns
+        assert {"evaluation_kind", "target_value"} <= columns
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT plan_hash, symbol, evaluation_kind, target_value, formula_version, "
+                "result_hash, evaluated_at FROM evaluation_ledger"
+            ).one()
+            revision = connection.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).scalar_one()
+
+        assert row == (
+            "b" * 64,
+            "003043.SZ",
+            "INTRADAY",
+            bucket_end,
+            "ta-v1",
+            "c" * 64,
+            evaluated_at,
+        )
+        assert revision == "0005_evaluation_kind"
+    finally:
+        engine.dispose()
+
+
+def test_evaluation_kind_migration_downgrades_intraday_rows_without_loss(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    bucket_end = "2026-08-21T15:00:00+08:00"
+
+    try:
+        upgrade_database(engine)
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO evaluation_ledger "
+                "(plan_hash, symbol, evaluation_kind, target_value, formula_version, "
+                "result_hash, evaluated_at) VALUES (:plan_hash, '003043.SZ', "
+                "'INTRADAY', :target_value, 'ta-v1', :result_hash, :evaluated_at)",
+                {
+                    "plan_hash": "b" * 64,
+                    "target_value": bucket_end,
+                    "result_hash": "c" * 64,
+                    "evaluated_at": "2026-08-21T15:01:00+08:00",
+                },
+            )
+
+        _downgrade_to(engine, "0004_alert_sequence")
+
+        assert {column["name"] for column in inspect(engine).get_columns("evaluation_ledger")} >= {
+            "bucket_end"
+        }
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT bucket_end, result_hash FROM evaluation_ledger"
+            ).one()
+            revision = connection.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).scalar_one()
+        assert row == (bucket_end, "c" * 64)
+        assert revision == "0004_alert_sequence"
+    finally:
+        engine.dispose()
+
+
+def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        upgrade_database(engine)
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO evaluation_ledger "
+                "(plan_hash, symbol, evaluation_kind, target_value, formula_version, "
+                "result_hash, evaluated_at) VALUES (:plan_hash, '003043.SZ', "
+                "'OFFICIAL_CLOSE', '2026-08-21', 'ta-v1', :result_hash, :evaluated_at)",
+                {
+                    "plan_hash": "b" * 64,
+                    "result_hash": "c" * 64,
+                    "evaluated_at": "2026-08-21T15:20:00+08:00",
+                },
+            )
+
+        with pytest.raises(RuntimeError, match="refuses to discard official-close"):
+            _downgrade_to(engine, "0004_alert_sequence")
+
+        columns = {column["name"] for column in inspect(engine).get_columns("evaluation_ledger")}
+        assert {"evaluation_kind", "target_value"} <= columns
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0005_evaluation_kind"
+            )
+            assert connection.exec_driver_sql(
+                "SELECT evaluation_kind, target_value FROM evaluation_ledger"
+            ).one() == ("OFFICIAL_CLOSE", "2026-08-21")
     finally:
         engine.dispose()
 
@@ -1730,7 +2005,13 @@ def test_sqlite_migration_has_required_key_constraints_and_foreign_keys(
             ("plan_id", "version"),
         }
         assert _key_constraints(inspector, "evaluation_ledger") >= {
-            ("plan_hash", "symbol", "bucket_end", "formula_version"),
+            (
+                "plan_hash",
+                "symbol",
+                "evaluation_kind",
+                "target_value",
+                "formula_version",
+            ),
         }
         assert _key_constraints(inspector, "request_idempotency") >= {
             ("idempotency_key",),
@@ -1853,12 +2134,14 @@ def test_sqlite_migration_enforces_app_identity_and_check_constraints(
             )
             connection.exec_driver_sql(
                 "INSERT INTO evaluation_ledger "
-                "(plan_hash, symbol, bucket_end, formula_version, result_hash, evaluated_at) "
-                "VALUES (:plan_hash, '003043.SZ', :bucket_end, 'ta-v1', :result_hash, "
+                "(plan_hash, symbol, evaluation_kind, target_value, formula_version, "
+                "result_hash, evaluated_at) "
+                "VALUES (:plan_hash, '003043.SZ', 'INTRADAY', :target_value, 'ta-v1', "
+                ":result_hash, "
                 ":evaluated_at)",
                 {
                     "plan_hash": "b" * 64,
-                    "bucket_end": timestamp,
+                    "target_value": timestamp,
                     "result_hash": "c" * 64,
                     "evaluated_at": timestamp,
                 },
@@ -1896,16 +2179,37 @@ def test_sqlite_migration_enforces_app_identity_and_check_constraints(
             with engine.begin() as connection:
                 connection.exec_driver_sql(
                     "INSERT INTO evaluation_ledger "
-                    "(plan_hash, symbol, bucket_end, formula_version, result_hash, "
-                    "evaluated_at) VALUES (:plan_hash, '003043.SZ', :bucket_end, 'ta-v1', "
-                    ":result_hash, :evaluated_at)",
+                    "(plan_hash, symbol, evaluation_kind, target_value, formula_version, "
+                    "result_hash, evaluated_at) VALUES (:plan_hash, '003043.SZ', "
+                    "'INTRADAY', :target_value, 'ta-v1', :result_hash, :evaluated_at)",
                     {
                         "plan_hash": "b" * 64,
-                        "bucket_end": timestamp,
+                        "target_value": timestamp,
                         "result_hash": "f" * 64,
                         "evaluated_at": timestamp,
                     },
                 )
+
+        for invalid_kind, invalid_target in (
+            ("UNKNOWN", timestamp),
+            ("OFFICIAL_CLOSE", timestamp),
+        ):
+            with pytest.raises(IntegrityError):
+                with engine.begin() as connection:
+                    connection.exec_driver_sql(
+                        "INSERT INTO evaluation_ledger "
+                        "(plan_hash, symbol, evaluation_kind, target_value, formula_version, "
+                        "result_hash, evaluated_at) VALUES (:plan_hash, '003043.SZ', "
+                        ":evaluation_kind, :target_value, 'ta-v1', :result_hash, "
+                        ":evaluated_at)",
+                        {
+                            "plan_hash": "e" * 64,
+                            "evaluation_kind": invalid_kind,
+                            "target_value": invalid_target,
+                            "result_hash": "f" * 64,
+                            "evaluated_at": timestamp,
+                        },
+                    )
 
         with pytest.raises(IntegrityError):
             with engine.begin() as connection:

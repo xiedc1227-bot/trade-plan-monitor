@@ -55,7 +55,7 @@ active_plan(symbol PRIMARY KEY, plan_version_id UNIQUE, activated_at, revision)
 position_lot(id, symbol, bucket, quantity, remaining_qty, acquired_trade_date, cost_fen, related_alert_id, closed_at)
 zone_episode(id, plan_hash, symbol, zone, started_at, episode_low_fen, bars_since_low, status, alerted_signal, last_processed_bucket_end)
 risk_state(symbol PRIMARY KEY, plan_hash, status, breach_trade_date, prior_close_fen, revision, updated_at)
-evaluation_ledger(plan_hash, symbol, bucket_end, formula_version, result_hash, evaluated_at, UNIQUE(...))
+evaluation_ledger(plan_hash, symbol, evaluation_kind, target_value, formula_version, result_hash, evaluated_at, PRIMARY KEY(plan_hash, symbol, evaluation_kind, target_value, formula_version))
 ai_provider_configuration(id, display_name, provider_type, base_url, model_name, key_ref, environment_variable, timeout_seconds, max_retries, max_input_chars, max_output_tokens, temperature_milli, prompt_version, enabled, revision, created_at, updated_at)
 provider_health(capability PRIMARY KEY, status, checked_at, latency_ms, error_code, next_retry_at)
 symbol_health(symbol PRIMARY KEY, status, latest_bar_end, data_age_seconds, gap_json, error_streak, revision)
@@ -105,7 +105,7 @@ class PositionLot(BaseModel):
 - 修订号冲突返回 `409 CONFLICT` 和当前版本。
 - 计划激活、状态迁移、判断记录、审计和提醒入队在需要时使用同一短事务。
 
-截至 T024，现有 `evaluation_ledger(plan_hash, symbol, bucket_end, formula_version, ...)` 仍是仅限盘中的持久化合同。纯判断结果区分 `INTRADAY` 与 `OFFICIAL_CLOSE`，盘中 15:00 目标绝不能与同日官方收盘标识冲突。在 T032 持久化两类标识之前，必须通过单独审批的迁移和仓储修改增加无损 identity-kind 判别器；T024 不复用 `bucket_end`，也不修改该 schema。
+从 T032 开始，`evaluation_ledger` 使用无损主键 `(plan_hash, symbol, evaluation_kind, target_value, formula_version)`。`INTRADAY` 在 `target_value` 中存储规范上海时区五分钟时间戳；`OFFICIAL_CLOSE` 只存储 ISO 交易日期，因此盘中 15:00 目标不会与同日官方收盘标识冲突。迁移 `0005_evaluation_kind` 将所有早期行回填为 `INTRADAY`，保留结果与判断事实，并在存在任何官方收盘标识时拒绝降级。仓储要求显式 kind 和且仅一个强类型目标，并暴露互斥的 `bucket_end` / `official_trade_date` 字段。
 
 ### 计划仓储与工作单元契约
 

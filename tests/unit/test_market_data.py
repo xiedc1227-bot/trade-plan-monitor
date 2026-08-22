@@ -15,6 +15,7 @@ from trade_plan_monitor.market_data.aggregation import (
     TA_FORMULA_VERSION,
     FiveMinuteBar,
     aggregate_five_minute_bar,
+    aggregate_provisional_daily_bar,
     expected_five_minute_ends,
     five_minute_bucket_end,
     is_complete_five_minute_bucket,
@@ -86,6 +87,20 @@ def _daily_bar_payload(**overrides: object) -> dict[str, object]:
     }
     payload.update(overrides)
     return payload
+
+
+def _provisional_minute(bar_end: datetime, index: int = 0) -> MinuteBar:
+    return MinuteBar(
+        symbol="003043.SZ",
+        bar_end=bar_end,
+        open_fen=6400 + index,
+        high_fen=6450 + index,
+        low_fen=6380 - index,
+        close_fen=6430 + index,
+        volume_shares=100 + index,
+        amount_yuan=Decimal("10.25") + index,
+        received_at=bar_end + timedelta(seconds=12 + index),
+    )
 
 
 def _daily_bar(**overrides: object) -> DailyBar:
@@ -1200,6 +1215,134 @@ def test_market_aggregate_rejects_mixed_symbols_and_remains_immutable() -> None:
         aggregate.model_copy(update={"close_fen": -1})
     with pytest.raises(ValidationError, match="five-minute boundary"):
         aggregate.model_copy(update={"bar_end": _shanghai_time(9, 36)})
+
+
+def test_market_aggregate_provisional_daily_bar_uses_exact_slice_facts() -> None:
+    minute_ends = expected_minute_ends(date(2026, 8, 19), is_open=True)[:5]
+    minutes = tuple(
+        _provisional_minute(bar_end, index) for index, bar_end in enumerate(minute_ends)
+    )
+
+    aggregate = aggregate_provisional_daily_bar(
+        current_day_minutes=minutes,
+        source_as_of=minute_ends[-1],
+    )
+
+    assert aggregate == DailyBar(
+        symbol="003043.SZ",
+        trade_date=date(2026, 8, 19),
+        open_fen=6400,
+        high_fen=6454,
+        low_fen=6376,
+        close_fen=6434,
+        volume_shares=510,
+        amount_yuan=Decimal("61.25"),
+        is_official=False,
+        received_at=max(minute.received_at for minute in minutes),
+    )
+    assert (
+        aggregate_provisional_daily_bar(
+            current_day_minutes=minutes,
+            source_as_of=minute_ends[-1],
+        )
+        == aggregate
+    )
+
+
+def test_market_aggregate_full_trading_day_remains_provisional() -> None:
+    minute_ends = expected_minute_ends(date(2026, 8, 19), is_open=True)
+    minutes = tuple(
+        _provisional_minute(bar_end, index) for index, bar_end in enumerate(minute_ends)
+    )
+
+    aggregate = aggregate_provisional_daily_bar(
+        current_day_minutes=minutes,
+        source_as_of=_shanghai_time(15, 0),
+    )
+
+    assert len(minutes) == 240
+    assert aggregate is not None
+    assert aggregate.trade_date == date(2026, 8, 19)
+    assert aggregate.close_fen == minutes[-1].close_fen
+    assert aggregate.is_official is False
+
+
+@pytest.mark.parametrize(
+    "current_day_minutes",
+    [
+        [],
+        (),
+        (_provisional_minute(_shanghai_time(9, 31)),) * 2,
+        (
+            _provisional_minute(_shanghai_time(9, 31)),
+            _provisional_minute(_shanghai_time(9, 33), 1),
+        ),
+        tuple(
+            reversed(
+                (
+                    _provisional_minute(_shanghai_time(9, 31)),
+                    _provisional_minute(_shanghai_time(9, 32), 1),
+                )
+            )
+        ),
+    ],
+)
+def test_market_aggregate_provisional_daily_bar_rejects_non_exact_slices(
+    current_day_minutes: object,
+) -> None:
+    assert (
+        aggregate_provisional_daily_bar(
+            current_day_minutes=current_day_minutes,  # type: ignore[arg-type]
+            source_as_of=_shanghai_time(9, 35),
+        )
+        is None
+    )
+
+
+def test_market_aggregate_provisional_daily_bar_rejects_wrong_cutoff_and_facts() -> None:
+    minute_ends = expected_minute_ends(date(2026, 8, 19), is_open=True)[:5]
+    minutes = tuple(
+        _provisional_minute(bar_end, index) for index, bar_end in enumerate(minute_ends)
+    )
+
+    for source_as_of in (
+        _shanghai_time(9, 34),
+        _shanghai_time(9, 36),
+        _shanghai_time(13, 0),
+    ):
+        assert (
+            aggregate_provisional_daily_bar(
+                current_day_minutes=minutes,
+                source_as_of=source_as_of,
+            )
+            is None
+        )
+
+    assert (
+        aggregate_provisional_daily_bar(
+            current_day_minutes=(
+                *minutes[:-1],
+                minutes[-1].model_copy(update={"symbol": "600519.SH"}),
+            ),
+            source_as_of=minute_ends[-1],
+        )
+        is None
+    )
+    assert (
+        aggregate_provisional_daily_bar(
+            current_day_minutes=(
+                *minutes[:-1],
+                minutes[-1].model_copy(
+                    update={
+                        "bar_end": _shanghai_time(9, 35, day=20),
+                        "received_at": _shanghai_time(9, 36, day=20),
+                    }
+                ),
+            ),
+            source_as_of=minute_ends[-1],
+        )
+        is None
+    )
 
 
 class _TushareStubClient:

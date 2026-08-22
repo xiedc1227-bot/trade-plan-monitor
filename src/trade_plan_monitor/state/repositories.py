@@ -8,9 +8,10 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from hashlib import sha256
+from typing import Self
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
@@ -43,6 +44,7 @@ from trade_plan_monitor.state.models import (
     ActivePlan,
     AuditLog,
     DailyPriceLimit,
+    EvaluationKind,
     EvaluationLedger,
     IdempotencyStatus,
     LatestQuote,
@@ -292,14 +294,40 @@ class RiskStateRecord(BaseModel):
 class EvaluationRecord(BaseModel):
     """Read-only exactly-once evaluation ledger entry."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     plan_hash: str
     symbol: str
-    bucket_end: datetime
+    evaluation_kind: EvaluationKind
+    bucket_end: datetime | None
+    official_trade_date: date | None
     formula_version: str
     result_hash: str
     evaluated_at: datetime
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, object] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        """Copy while revalidating the discriminated target shape."""
+
+        if not update:
+            return super().model_copy(deep=deep)
+        values = self.model_dump(mode="python", round_trip=True)
+        values.update(update)
+        return type(self).model_validate(values)
+
+    @model_validator(mode="after")
+    def validate_target_shape(self) -> Self:
+        if self.evaluation_kind is EvaluationKind.INTRADAY:
+            if self.bucket_end is None or self.official_trade_date is not None:
+                raise ValueError("INTRADAY record requires only bucket_end")
+            expected_five_minute_ends(self.bucket_end)
+        elif self.bucket_end is not None or self.official_trade_date is None:
+            raise ValueError("OFFICIAL_CLOSE record requires only official_trade_date")
+        return self
 
 
 class EvaluationClaimRecord(BaseModel):
@@ -1049,28 +1077,36 @@ class EvaluationRepository:
         *,
         plan_hash: str,
         symbol: str,
-        bucket_end: datetime,
+        evaluation_kind: str | EvaluationKind,
+        bucket_end: datetime | None,
+        official_trade_date: date | None,
         formula_version: str,
         result_hash: str,
         evaluated_at: datetime,
     ) -> EvaluationClaimRecord:
         normalized_plan_hash = _sha256_hash(plan_hash, "plan_hash")
         normalized_symbol = _symbol(symbol)
-        normalized_bucket_end = _canonical_market_datetime(bucket_end, "bucket_end")
+        normalized_kind, target_value = _evaluation_target(
+            evaluation_kind=evaluation_kind,
+            bucket_end=bucket_end,
+            official_trade_date=official_trade_date,
+        )
         normalized_formula = _token(formula_version, "formula_version", maximum=32)
         normalized_result_hash = _sha256_hash(result_hash, "result_hash")
         normalized_evaluated_at = _canonical_market_datetime(evaluated_at, "evaluated_at")
         identity = (
             normalized_plan_hash,
             normalized_symbol,
-            normalized_bucket_end.isoformat(),
+            normalized_kind.value,
+            target_value,
             normalized_formula,
         )
         statement = sqlite_insert(EvaluationLedger).values(
             plan_hash=identity[0],
             symbol=identity[1],
-            bucket_end=identity[2],
-            formula_version=identity[3],
+            evaluation_kind=identity[2],
+            target_value=identity[3],
+            formula_version=identity[4],
             result_hash=normalized_result_hash,
             evaluated_at=normalized_evaluated_at.isoformat(),
         )
@@ -1079,7 +1115,8 @@ class EvaluationRepository:
                 index_elements=[
                     EvaluationLedger.plan_hash,
                     EvaluationLedger.symbol,
-                    EvaluationLedger.bucket_end,
+                    EvaluationLedger.evaluation_kind,
+                    EvaluationLedger.target_value,
                     EvaluationLedger.formula_version,
                 ]
             )
@@ -1879,10 +1916,26 @@ def _risk_state_hash(record: RiskStateRecord) -> str:
 
 
 def _evaluation_record(model: EvaluationLedger) -> EvaluationRecord:
+    try:
+        evaluation_kind = EvaluationKind(model.evaluation_kind)
+        bucket_end = (
+            datetime.fromisoformat(model.target_value)
+            if evaluation_kind is EvaluationKind.INTRADAY
+            else None
+        )
+        official_trade_date = (
+            date.fromisoformat(model.target_value)
+            if evaluation_kind is EvaluationKind.OFFICIAL_CLOSE
+            else None
+        )
+    except TypeError, ValueError:
+        raise RepositoryError("Stored evaluation identity is invalid") from None
     return EvaluationRecord(
         plan_hash=model.plan_hash,
         symbol=model.symbol,
-        bucket_end=datetime.fromisoformat(model.bucket_end),
+        evaluation_kind=evaluation_kind,
+        bucket_end=bucket_end,
+        official_trade_date=official_trade_date,
         formula_version=model.formula_version,
         result_hash=model.result_hash,
         evaluated_at=datetime.fromisoformat(model.evaluated_at),
@@ -2189,6 +2242,30 @@ def _canonical_market_datetime(value: datetime, name: str) -> datetime:
     return _aware_datetime(value, name).astimezone(ZoneInfo("Asia/Shanghai"))
 
 
+def _evaluation_target(
+    *,
+    evaluation_kind: str | EvaluationKind,
+    bucket_end: datetime | None,
+    official_trade_date: date | None,
+) -> tuple[EvaluationKind, str]:
+    try:
+        normalized_kind = EvaluationKind(evaluation_kind)
+    except TypeError, ValueError:
+        raise ValueError("evaluation_kind must be INTRADAY or OFFICIAL_CLOSE") from None
+
+    if normalized_kind is EvaluationKind.INTRADAY:
+        if bucket_end is None or official_trade_date is not None:
+            raise ValueError("INTRADAY requires only bucket_end")
+        normalized_bucket_end = _canonical_market_datetime(bucket_end, "bucket_end")
+        expected_five_minute_ends(normalized_bucket_end)
+        return normalized_kind, normalized_bucket_end.isoformat()
+
+    if bucket_end is not None or official_trade_date is None:
+        raise ValueError("OFFICIAL_CLOSE requires only official_trade_date")
+    normalized_trade_date = _calendar_date(official_trade_date, "official_trade_date")
+    return normalized_kind, normalized_trade_date.isoformat()
+
+
 def _episode_cursor(value: datetime) -> datetime:
     expected_five_minute_ends(value)
     return value.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
@@ -2274,6 +2351,7 @@ __all__ = [
     "EpisodeTransitionError",
     "EvaluationClaimRecord",
     "EvaluationIdentityConflictError",
+    "EvaluationKind",
     "EvaluationRecord",
     "EvaluationRepository",
     "HealthRepository",

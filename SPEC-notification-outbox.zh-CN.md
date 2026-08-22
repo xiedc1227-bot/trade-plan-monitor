@@ -104,7 +104,10 @@ plan_hash|trading_date.isoformat()|signal_type.value|cause_id|quantity_text
 去重标识且其余语义相同的重试会返回原始事件 ID、序号、文本和创建时间，即使调用方
 重新生成了事件 ID；Decimal scale 与有符号零不会产生伪冲突，其他语义冲突则以
 `ALERT_IDENTITY_CONFLICT` 失败。读取时重新校验
-载荷，并要求其中的事件 ID 和去重键与所属数据库行一致。
+载荷，并要求其中的事件 ID 和去重键与所属数据库行一致。`has_dedup_key` 会先校验
+小写 SHA-256 标识和完整持久事件，再报告其存在。T032 在判断写事务中使用该查询，
+使相同持久信号 cause 的后续周期仍可提交判断/状态，但既不重新入队也不重新发布原
+提醒；直接调用 `enqueue` 发生语义冲突时仍然失败关闭。
 
 ## 文本提醒
 

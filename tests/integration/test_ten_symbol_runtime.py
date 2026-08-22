@@ -6,13 +6,61 @@ import asyncio
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Final
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
+from pydantic import ValidationError
+from sqlalchemy import Engine, func, select
 
-from trade_plan_monitor.market_data.aggregation import FiveMinuteBar, expected_five_minute_ends
-from trade_plan_monitor.market_data.models import MinuteBar, ProviderCapabilities
+from trade_plan_monitor.decision.engine import evaluate
+from trade_plan_monitor.decision.models import (
+    ActionableSignalType,
+    ConditionEvidence,
+    ConditionOutcome,
+    DataHealthSnapshot,
+    DataHealthStatus,
+    DecisionZone,
+    EpisodeStatus,
+    EpisodeTransitionAction,
+    EpisodeTransitionIntent,
+    EvaluationContext,
+    EvaluationResult,
+    EvidenceFact,
+    EvidenceUnit,
+    IntradayEvaluationIdentity,
+    IntradayEvaluationTarget,
+    LowZoneEpisodeSnapshot,
+    NextStep,
+    NextStepCode,
+    PositionSummary,
+    RiskStateSnapshot,
+    RiskStatus,
+    RiskTransitionIntent,
+    SignalIntent,
+    SignalType,
+    SymbolDecisionSnapshot,
+)
+from trade_plan_monitor.domain.plan_codec import load_plan_yaml
+from trade_plan_monitor.domain.plan_hash import plan_sha256
+from trade_plan_monitor.domain.plan_models import (
+    OfficialCloseBelowLevelCondition,
+    PriceInZoneCondition,
+    TradePlan,
+)
+from trade_plan_monitor.market_data.aggregation import (
+    FiveMinuteBar,
+    expected_five_minute_ends,
+)
+from trade_plan_monitor.market_data.models import (
+    MinuteBar,
+    ProviderCapabilities,
+    TradingDay,
+)
+from trade_plan_monitor.market_data.reconciliation import reconcile_daily_close
+from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.health import SymbolHealthErrorCode, SymbolHealthTracker
 from trade_plan_monitor.runtime.recovery import (
@@ -21,10 +69,40 @@ from trade_plan_monitor.runtime.recovery import (
     RecoveryService,
 )
 from trade_plan_monitor.runtime.request_control import TushareRequestController
+from trade_plan_monitor.runtime.service import (
+    IntradayCycleStatus,
+    IntradayMarketFacts,
+    RuntimeEvaluationService,
+)
 from trade_plan_monitor.runtime.symbol_service import SymbolService
+from trade_plan_monitor.state.database import (
+    create_session_factory,
+    create_sqlite_engine,
+    upgrade_database,
+)
+from trade_plan_monitor.state.models import (
+    AlertEvent as AlertEventRow,
+)
+from trade_plan_monitor.state.models import (
+    AuditLog,
+    EvaluationLedger,
+    RiskState,
+    ZoneEpisode,
+)
+from trade_plan_monitor.state.models import (
+    DailyBar as DailyBarRow,
+)
+from trade_plan_monitor.state.models import (
+    FiveMinuteBar as FiveMinuteBarRow,
+)
+from trade_plan_monitor.state.models import (
+    MinuteBar as MinuteBarRow,
+)
+from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 
 SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
 SYMBOLS: Final = tuple(f"{index:06d}.SZ" for index in range(1, 11))
+SAMPLE_PLAN_PATH: Final = Path(__file__).parents[2] / "config" / "plans" / "003043.SZ.sample.yaml"
 
 
 def _at(hour: int, minute: int, second: int = 0, *, day: int = 24) -> datetime:
@@ -796,3 +874,774 @@ def test_recovery_rejects_more_than_ten_active_symbols_before_provider_call() ->
 
     assert provider.recovery_calls == []
     assert history.persisted_symbols == []
+
+
+@pytest.fixture
+def runtime_engine(tmp_path: Path) -> Engine:
+    engine = create_sqlite_engine(tmp_path / "runtime.db")
+    upgrade_database(engine)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+class _FailingAlertOutbox:
+    def has_dedup_key(self, _dedup_key: str) -> bool:
+        return False
+
+    def enqueue(self, _payload: object) -> None:
+        raise RuntimeError("forced outbox failure")
+
+
+class _TrackedUnitOfWork:
+    def __init__(
+        self,
+        inner: SqlAlchemyUnitOfWork,
+        tracker: dict[str, int],
+        *,
+        fail_alert: bool,
+    ) -> None:
+        self._inner = inner
+        self._tracker = tracker
+        self._fail_alert = fail_alert
+
+    def __enter__(self):
+        self._tracker["active"] += 1
+        try:
+            self._inner.__enter__()
+        except BaseException:
+            self._tracker["active"] -= 1
+            raise
+        return self
+
+    def __exit__(self, error_type, error, traceback) -> None:
+        try:
+            self._inner.__exit__(error_type, error, traceback)
+        finally:
+            self._tracker["active"] -= 1
+
+    @property
+    def alerts(self):
+        if self._fail_alert:
+            return _FailingAlertOutbox()
+        return self._inner.alerts
+
+    def __getattr__(self, name: str):
+        return getattr(self._inner, name)
+
+
+def _runtime_uow_factory(
+    engine: Engine,
+    tracker: dict[str, int],
+    *,
+    now: datetime,
+    fail_alert: bool = False,
+):
+    session_factory = create_session_factory(engine)
+
+    def factory() -> _TrackedUnitOfWork:
+        return _TrackedUnitOfWork(
+            SqlAlchemyUnitOfWork(session_factory, clock=lambda: now),
+            tracker,
+            fail_alert=fail_alert,
+        )
+
+    return factory
+
+
+def _runtime_plan() -> TradePlan:
+    return load_plan_yaml(SAMPLE_PLAN_PATH.read_text(encoding="utf-8"))
+
+
+def _runtime_context(
+    plan: TradePlan,
+    facts: IntradayMarketFacts,
+) -> EvaluationContext:
+    plan_hash = plan_sha256(plan)
+    evaluated_at = facts.evaluated_at
+    return EvaluationContext(
+        evaluated_at=evaluated_at,
+        target=IntradayEvaluationTarget(bucket_end=facts.bucket_end),
+        plan=plan,
+        plan_hash=plan_hash,
+        plan_active=True,
+        activated_at=facts.bucket_end.replace(hour=9, minute=0),
+        current_day_minutes=facts.current_day_minutes,
+        complete_5m_bars=facts.complete_five_minute_bars,
+        official_daily_bars=(),
+        five_minute_indicators=None,
+        daily_indicator_snapshot=None,
+        close_reconciliation=reconcile_daily_close(
+            symbol=plan.symbol,
+            current_trade_date=facts.bucket_end.date(),
+            daily_bars=(facts.provisional_daily_bar,),
+        ),
+        trading_calendar=(
+            TradingDay(
+                exchange=plan.market,
+                cal_date=facts.bucket_end.date(),
+                is_open=True,
+                previous_trade_date=date(2026, 8, 21),
+            ),
+        ),
+        daily_limit=None,
+        data_health=DataHealthSnapshot(
+            symbol=plan.symbol,
+            status=DataHealthStatus.LIVE,
+            latest_bar_end=facts.bucket_end,
+            data_age_seconds=int((evaluated_at - facts.bucket_end).total_seconds()),
+            required_data_complete=True,
+            fresh=True,
+        ),
+        positions=(),
+        low_zone_episode=None,
+        risk_state=RiskStateSnapshot(
+            symbol=plan.symbol,
+            plan_hash=plan_hash,
+            status=RiskStatus.CLEAR,
+            breach_trade_date=None,
+            prior_close_fen=6080,
+            revision=0,
+            updated_at=facts.bucket_end,
+        ),
+        manual_event_risk=False,
+    )
+
+
+def _actionable_episode_result(
+    plan: TradePlan,
+    context: EvaluationContext,
+) -> EvaluationResult:
+    plan_hash = plan_sha256(plan)
+    target = context.target
+    assert isinstance(target, IntradayEvaluationTarget)
+    evidence = ConditionEvidence(
+        condition=PriceInZoneCondition(zone="LOW_BUY"),
+        outcome=ConditionOutcome.SATISFIED,
+        facts=(
+            EvidenceFact(
+                key="current_price_fen",
+                value=context.current_day_minutes[-1].close_fen,
+                unit=EvidenceUnit.FEN,
+            ),
+        ),
+    )
+    next_step = NextStep(code=NextStepCode.RECORD_CONFIRMED_FILL)
+    episode = LowZoneEpisodeSnapshot(
+        episode_id="episode-runtime-001",
+        plan_hash=plan_hash,
+        symbol=plan.symbol,
+        started_at=target.bucket_end.replace(hour=9, minute=31),
+        episode_low_fen=min(bar.low_fen for bar in context.current_day_minutes),
+        bars_since_low=1,
+        last_processed_bucket_end=target.bucket_end,
+        status=EpisodeStatus.ALERTED,
+        alerted_signal="BUY_CORE_READY",
+    )
+    signal = SignalIntent(
+        signal_type=ActionableSignalType.BUY_CORE_READY,
+        plan_hash=plan_hash,
+        symbol=plan.symbol,
+        trading_date=target.bucket_end.date(),
+        cause_id=episode.episode_id,
+        quantity=100,
+        bucket="CORE",
+        target_lot_id=None,
+        matched_conditions=(evidence,),
+        blockers=(),
+        next_step=next_step,
+    )
+    snapshot = SymbolDecisionSnapshot(
+        symbol=plan.symbol,
+        plan_id=plan.plan_id,
+        plan_version=plan.version,
+        plan_hash=plan_hash,
+        evaluated_at=context.evaluated_at,
+        market_data_at=target.bucket_end,
+        price_fen=context.current_day_minutes[-1].close_fen,
+        zone=DecisionZone.LOW_BUY,
+        signal_type=SignalType.BUY_CORE_READY,
+        position=PositionSummary(
+            core_quantity=0,
+            tactical_quantity=0,
+            total_quantity=0,
+            sellable_core_quantity=0,
+            sellable_tactical_quantity=0,
+        ),
+        episode=episode,
+        risk=context.risk_state,
+        data_health=context.data_health,
+        condition_evidence=(evidence,),
+        next_step=next_step,
+    )
+    return EvaluationResult.build(
+        snapshot=snapshot,
+        transitions=(
+            EpisodeTransitionIntent(
+                action=EpisodeTransitionAction.UPSERT,
+                episode=episode,
+            ),
+        ),
+        signal_intent=signal,
+        satisfied_conditions=(evidence,),
+        unmet_conditions=(),
+        blockers=(),
+        next_step=next_step,
+        evaluation_identity=IntradayEvaluationIdentity(
+            plan_hash=plan_hash,
+            symbol=plan.symbol,
+            bucket_end=target.bucket_end,
+        ),
+    )
+
+
+def test_intraday_service_fetches_outside_transaction_and_assembles_exact_context(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    bucket_end = _at(9, 35)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    minute_ends = expected_five_minute_ends(bucket_end)
+    fetched = [_bar(plan.symbol, minute_end) for minute_end in minute_ends]
+    tracker = {"active": 0}
+    observed: list[str] = []
+
+    async def fetch_minutes(symbol: str, target: datetime) -> list[MinuteBar]:
+        assert tracker["active"] == 0
+        assert (symbol, target) == (plan.symbol, bucket_end)
+        observed.append("fetch")
+        return fetched
+
+    def build_context(
+        context_plan: TradePlan,
+        facts: IntradayMarketFacts,
+    ) -> EvaluationContext:
+        assert tracker["active"] == 0
+        observed.append("context")
+        assert facts.current_day_minutes == tuple(fetched)
+        assert facts.source_as_of == bucket_end
+        assert facts.provenance.value == "PROVISIONAL"
+        assert facts.provisional_daily_bar.is_official is False
+        with pytest.raises(ValidationError):
+            facts.model_copy(update={"source_as_of": _at(9, 40)})
+        return _runtime_context(context_plan, facts)
+
+    def pure_evaluator(context: EvaluationContext) -> EvaluationResult:
+        assert tracker["active"] == 0
+        observed.append("evaluate")
+        with pytest.raises(ValidationError, match="frozen"):
+            context.plan_active = False
+        return evaluate(context)
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=evaluated_at + timedelta(seconds=1),
+        ),
+        context_builder=build_context,
+        evaluator=pure_evaluator,
+        committed_event_publisher=lambda _event: observed.append("publish"),
+    )
+
+    result = asyncio.run(
+        service.run_intraday(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+
+    assert result.status is IntradayCycleStatus.COMMITTED
+    assert result.claim_created is True
+    assert result.committed_event is None
+    assert observed == ["fetch", "context", "evaluate"]
+    assert tracker["active"] == 0
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(MinuteBarRow)) == 5
+        assert session.scalar(select(func.count()).select_from(FiveMinuteBarRow)) == 1
+        assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+
+
+def test_intraday_service_latest_quote_cannot_hide_gapped_current_day_context(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    bucket_end = _at(9, 35)
+    tracker = {"active": 0}
+
+    async def fetch_minutes(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        return [_bar(plan.symbol, bucket_end)]
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=bucket_end + timedelta(seconds=30),
+        ),
+        context_builder=lambda _plan, _facts: pytest.fail("context must stay blocked"),
+        committed_event_publisher=lambda _event: pytest.fail("nothing may publish"),
+    )
+
+    result = asyncio.run(
+        service.run_intraday(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=bucket_end + timedelta(seconds=20),
+        )
+    )
+
+    assert result.status is IntradayCycleStatus.INCOMPLETE
+    assert result.claim_created is False
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(MinuteBarRow)) == 1
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+
+    expected = expected_five_minute_ends(bucket_end)
+
+    async def recover_minutes(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        return [_bar(plan.symbol, minute_end) for minute_end in expected[:-1]]
+
+    recovered = RuntimeEvaluationService(
+        fetch_minutes=recover_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=bucket_end + timedelta(seconds=30),
+        ),
+        context_builder=_runtime_context,
+        evaluator=evaluate,
+        committed_event_publisher=lambda _event: pytest.fail("blocked result has no alert"),
+    )
+    recovery_result = asyncio.run(
+        recovered.run_intraday(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=bucket_end + timedelta(seconds=20),
+        )
+    )
+
+    assert recovery_result.status is IntradayCycleStatus.COMMITTED
+    assert recovery_result.facts is not None
+    assert recovery_result.facts.current_day_minutes == tuple(
+        _bar(plan.symbol, minute_end) for minute_end in expected
+    )
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(MinuteBarRow)) == 5
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+
+
+def test_intraday_service_assembles_full_240_minute_provisional_close(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    bucket_end = _at(15, 0)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    full_day_ends = expected_minute_ends(bucket_end.date(), is_open=True)
+    fetched = [_bar(plan.symbol, minute_end) for minute_end in full_day_ends]
+    tracker = {"active": 0}
+
+    async def fetch_minutes(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        return fetched
+
+    def build_context(plan_value: TradePlan, facts: IntradayMarketFacts) -> EvaluationContext:
+        assert len(facts.current_day_minutes) == 240
+        assert len(facts.complete_five_minute_bars) == 48
+        assert facts.source_as_of == bucket_end
+        assert facts.provisional_daily_bar.is_official is False
+        return _runtime_context(plan_value, facts)
+
+    result = asyncio.run(
+        RuntimeEvaluationService(
+            fetch_minutes=fetch_minutes,
+            unit_of_work_factory=_runtime_uow_factory(
+                runtime_engine,
+                tracker,
+                now=evaluated_at + timedelta(seconds=1),
+            ),
+            context_builder=build_context,
+            evaluator=evaluate,
+            committed_event_publisher=lambda _event: pytest.fail("blocked result has no alert"),
+        ).run_intraday(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+
+    assert result.status is IntradayCycleStatus.COMMITTED
+    assert result.facts is not None
+    assert len(result.facts.current_day_minutes) == 240
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(MinuteBarRow)) == 240
+        assert session.scalar(select(func.count()).select_from(FiveMinuteBarRow)) == 48
+        assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
+
+
+def test_intraday_service_rolls_back_atomic_application_then_restarts_exactly_once(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    bucket_end = _at(9, 40)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    all_minute_ends = tuple(
+        minute_end for minute_end in (_at(9, minute) for minute in range(31, 41))
+    )
+    fetched = [_bar(plan.symbol, minute_end) for minute_end in all_minute_ends]
+    tracker = {"active": 0}
+    published: list[UUID] = []
+    event_id = UUID("00000000-0000-0000-0000-000000000032")
+
+    async def fetch_minutes(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        assert tracker["active"] == 0
+        return fetched
+
+    def actionable(context: EvaluationContext) -> EvaluationResult:
+        assert tracker["active"] == 0
+        return _actionable_episode_result(plan, context)
+
+    failing = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=evaluated_at + timedelta(seconds=1),
+            fail_alert=True,
+        ),
+        context_builder=_runtime_context,
+        evaluator=actionable,
+        committed_event_publisher=lambda _event: pytest.fail("rollback cannot publish"),
+        event_id_factory=lambda: event_id,
+    )
+
+    with pytest.raises(RuntimeError, match="forced outbox failure"):
+        asyncio.run(
+            failing.run_intraday(
+                plan=plan,
+                bucket_end=bucket_end,
+                evaluated_at=evaluated_at,
+            )
+        )
+
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(RiskState)) == 0
+        assert session.scalar(select(func.count()).select_from(ZoneEpisode)) == 0
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
+        assert session.scalar(select(func.count()).select_from(AuditLog)) == 0
+        assert session.scalar(select(func.count()).select_from(MinuteBarRow)) == 10
+        assert session.scalar(select(func.count()).select_from(FiveMinuteBarRow)) == 2
+
+    def publish_after_commit(event) -> None:
+        assert tracker["active"] == 0
+        with create_session_factory(runtime_engine)() as session:
+            assert session.get(AlertEventRow, str(event.event_id)) is not None
+            assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+        published.append(event.event_id)
+
+    def create_service() -> RuntimeEvaluationService:
+        return RuntimeEvaluationService(
+            fetch_minutes=fetch_minutes,
+            unit_of_work_factory=_runtime_uow_factory(
+                runtime_engine,
+                tracker,
+                now=evaluated_at + timedelta(seconds=1),
+            ),
+            context_builder=_runtime_context,
+            evaluator=actionable,
+            committed_event_publisher=publish_after_commit,
+            event_id_factory=lambda: event_id,
+        )
+
+    first = asyncio.run(
+        create_service().run_intraday(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+    duplicate = asyncio.run(
+        create_service().run_intraday(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+    restarted = asyncio.run(
+        create_service().run_intraday(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+
+    assert first.status is IntradayCycleStatus.COMMITTED
+    assert duplicate.status is IntradayCycleStatus.DUPLICATE
+    assert restarted.status is IntradayCycleStatus.DUPLICATE
+    assert published == [event_id]
+    assert tracker["active"] == 0
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+        assert session.scalar(select(func.count()).select_from(ZoneEpisode)) == 1
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 1
+        assert session.scalar(select(func.count()).select_from(AuditLog)) == 2
+
+
+def test_intraday_service_publisher_failure_cannot_undo_committed_outbox(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    bucket_end = _at(9, 40)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    fetched = [_bar(plan.symbol, _at(9, minute)) for minute in range(31, 41)]
+    tracker = {"active": 0}
+    event_id = UUID("00000000-0000-0000-0000-000000000033")
+
+    async def fetch_minutes(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        return fetched
+
+    def publisher(_event) -> None:
+        assert tracker["active"] == 0
+        raise RuntimeError("publisher unavailable")
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=evaluated_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        evaluator=lambda context: _actionable_episode_result(plan, context),
+        committed_event_publisher=publisher,
+        event_id_factory=lambda: event_id,
+    )
+
+    with pytest.raises(RuntimeError, match="publisher unavailable"):
+        asyncio.run(
+            service.run_intraday(
+                plan=plan,
+                bucket_end=bucket_end,
+                evaluated_at=evaluated_at,
+            )
+        )
+
+    assert tracker["active"] == 0
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+        assert session.scalar(select(func.count()).select_from(ZoneEpisode)) == 1
+        assert session.get(AlertEventRow, str(event_id)) is not None
+
+
+def test_intraday_service_never_applies_official_close_risk_transition(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    bucket_end = _at(15, 0)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    fetched = [
+        _bar(plan.symbol, minute_end)
+        for minute_end in expected_minute_ends(bucket_end.date(), is_open=True)
+    ]
+    tracker = {"active": 0}
+
+    async def fetch_minutes(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        return fetched
+
+    def forged_intraday_risk(context: EvaluationContext) -> EvaluationResult:
+        base = evaluate(context)
+        risk = RiskStateSnapshot(
+            symbol=plan.symbol,
+            plan_hash=plan_sha256(plan),
+            status=RiskStatus.BREACHED_PENDING_CONFIRMATION,
+            breach_trade_date=bucket_end.date(),
+            prior_close_fen=6080,
+            revision=1,
+            updated_at=bucket_end,
+        )
+        snapshot = base.snapshot.model_copy(update={"risk": risk})
+        payload = base.model_dump(
+            mode="python",
+            round_trip=True,
+            exclude={"result_hash", "snapshot", "transitions"},
+        )
+        return EvaluationResult.build(
+            **payload,
+            snapshot=snapshot,
+            transitions=(RiskTransitionIntent(risk=risk, expected_revision=0),),
+        )
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=evaluated_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        evaluator=forged_intraday_risk,
+        committed_event_publisher=lambda _event: pytest.fail("risk forgery cannot publish"),
+    )
+
+    with pytest.raises(ValueError, match="official-close risk"):
+        asyncio.run(
+            service.run_intraday(
+                plan=plan,
+                bucket_end=bucket_end,
+                evaluated_at=evaluated_at,
+            )
+        )
+
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(RiskState)) == 0
+
+
+def test_intraday_service_never_enqueues_official_close_risk_signal(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    bucket_end = _at(9, 35)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    fetched = [
+        _bar(plan.symbol, minute_end) for minute_end in expected_five_minute_ends(bucket_end)
+    ]
+    tracker = {"active": 0}
+
+    async def fetch_minutes(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        return fetched
+
+    def forged_intraday_risk_signal(context: EvaluationContext) -> EvaluationResult:
+        base = evaluate(context)
+        evidence = ConditionEvidence(
+            condition=OfficialCloseBelowLevelCondition(level="RISK_LINE"),
+            outcome=ConditionOutcome.SATISFIED,
+            facts=(
+                EvidenceFact(
+                    key="current_price_fen",
+                    value=context.current_day_minutes[-1].close_fen,
+                    unit=EvidenceUnit.FEN,
+                ),
+            ),
+        )
+        next_step = NextStep(code=NextStepCode.WAIT_FOR_NEXT_TRADING_DAY)
+        signal = SignalIntent(
+            signal_type=ActionableSignalType.RISK_BREACH,
+            plan_hash=plan_sha256(plan),
+            symbol=plan.symbol,
+            trading_date=bucket_end.date(),
+            cause_id="forged-intraday-risk",
+            quantity=None,
+            bucket=None,
+            target_lot_id=None,
+            matched_conditions=(evidence,),
+            blockers=(),
+            next_step=next_step,
+        )
+        snapshot = base.snapshot.model_copy(
+            update={
+                "zone": DecisionZone.BELOW_RISK,
+                "signal_type": SignalType.RISK_BREACH,
+                "condition_evidence": (evidence,),
+                "next_step": next_step,
+            }
+        )
+        return EvaluationResult.build(
+            snapshot=snapshot,
+            transitions=(),
+            signal_intent=signal,
+            satisfied_conditions=(evidence,),
+            unmet_conditions=(),
+            blockers=(),
+            next_step=next_step,
+            evaluation_identity=base.evaluation_identity,
+        )
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=evaluated_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        evaluator=forged_intraday_risk_signal,
+        committed_event_publisher=lambda _event: pytest.fail("risk forgery cannot publish"),
+    )
+
+    with pytest.raises(ValueError, match="official-close risk"):
+        asyncio.run(
+            service.run_intraday(
+                plan=plan,
+                bucket_end=bucket_end,
+                evaluated_at=evaluated_at,
+            )
+        )
+
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
+
+
+def test_intraday_service_same_cause_commits_later_bucket_without_republish(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    first_bucket = _at(9, 40)
+    later_bucket = _at(9, 45)
+    tracker = {"active": 0}
+    published: list[UUID] = []
+    event_ids = iter(
+        (
+            UUID("00000000-0000-0000-0000-000000000034"),
+            UUID("00000000-0000-0000-0000-000000000035"),
+        )
+    )
+
+    async def fetch_minutes(_symbol: str, target: datetime) -> list[MinuteBar]:
+        minute_count = 10 if target == first_bucket else 15
+        return [_bar(plan.symbol, _at(9, minute)) for minute in range(31, 31 + minute_count)]
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=later_bucket + timedelta(seconds=30),
+        ),
+        context_builder=_runtime_context,
+        evaluator=lambda context: _actionable_episode_result(plan, context),
+        committed_event_publisher=lambda event: published.append(event.event_id),
+        event_id_factory=lambda: next(event_ids),
+    )
+
+    first = asyncio.run(
+        service.run_intraday(
+            plan=plan,
+            bucket_end=first_bucket,
+            evaluated_at=first_bucket + timedelta(seconds=20),
+        )
+    )
+    later = asyncio.run(
+        service.run_intraday(
+            plan=plan,
+            bucket_end=later_bucket,
+            evaluated_at=later_bucket + timedelta(seconds=20),
+        )
+    )
+
+    assert first.status is IntradayCycleStatus.COMMITTED
+    assert later.status is IntradayCycleStatus.COMMITTED
+    assert later.committed_event is None
+    assert published == [UUID("00000000-0000-0000-0000-000000000034")]
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 2
+        assert session.scalar(select(func.count()).select_from(ZoneEpisode)) == 1
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 1
+        episode = session.scalar(select(ZoneEpisode))
+        assert episode is not None
+        assert episode.last_processed_bucket_end == later_bucket.isoformat()

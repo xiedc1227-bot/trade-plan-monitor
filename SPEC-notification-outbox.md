@@ -110,7 +110,11 @@ sequence, text, and creation time even if the caller generated a replacement
 event ID; Decimal scale and signed zero do not create false conflicts, while
 other conflicting semantics fail with `ALERT_IDENTITY_CONFLICT`. Reads
 revalidate the payload and require its event ID and deduplication key to match
-the owning row.
+the owning row. `has_dedup_key` validates the lowercase SHA-256 identity and the
+complete stored event before reporting it present. T032 uses that query inside
+the evaluation write transaction so a later bucket with the same durable signal
+cause still commits its evaluation/state but neither reenqueues nor republishes
+the original alert; direct conflicting `enqueue` calls remain fail-closed.
 
 ## Textual Reminder
 

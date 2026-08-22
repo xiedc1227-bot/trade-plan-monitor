@@ -55,7 +55,7 @@ active_plan(symbol PRIMARY KEY, plan_version_id UNIQUE, activated_at, revision)
 position_lot(id, symbol, bucket, quantity, remaining_qty, acquired_trade_date, cost_fen, related_alert_id, closed_at)
 zone_episode(id, plan_hash, symbol, zone, started_at, episode_low_fen, bars_since_low, status, alerted_signal, last_processed_bucket_end)
 risk_state(symbol PRIMARY KEY, plan_hash, status, breach_trade_date, prior_close_fen, revision, updated_at)
-evaluation_ledger(plan_hash, symbol, bucket_end, formula_version, result_hash, evaluated_at, UNIQUE(...))
+evaluation_ledger(plan_hash, symbol, evaluation_kind, target_value, formula_version, result_hash, evaluated_at, PRIMARY KEY(plan_hash, symbol, evaluation_kind, target_value, formula_version))
 ai_provider_configuration(id, display_name, provider_type, base_url, model_name, key_ref, environment_variable, timeout_seconds, max_retries, max_input_chars, max_output_tokens, temperature_milli, prompt_version, enabled, revision, created_at, updated_at)
 provider_health(capability PRIMARY KEY, status, checked_at, latency_ms, error_code, next_retry_at)
 symbol_health(symbol PRIMARY KEY, status, latest_bar_end, data_age_seconds, gap_json, error_streak, revision)
@@ -105,7 +105,7 @@ Sellable quantity derives from the trading calendar and acquisition date. Manual
 - A revision conflict returns `409 CONFLICT` and the current version.
 - Plan activation, state transition, evaluation ledger, audit, and alert enqueue use one short transaction when required.
 
-Through T024, the existing `evaluation_ledger(plan_hash, symbol, bucket_end, formula_version, ...)` remains an intraday-only persistence contract. Pure decision results distinguish `INTRADAY` from `OFFICIAL_CLOSE`, and an intraday 15:00 target must never collide with that date's official-close identity. Before T032 persists both kinds, a separately approved migration and repository change must add a lossless identity-kind discriminator; T024 does not overload `bucket_end` or change this schema.
+From T032, `evaluation_ledger` uses the lossless primary key `(plan_hash, symbol, evaluation_kind, target_value, formula_version)`. `INTRADAY` stores a canonical Shanghai five-minute timestamp in `target_value`; `OFFICIAL_CLOSE` stores only its ISO trade date, so the intraday 15:00 target cannot collide with that date's official-close identity. Migration `0005_evaluation_kind` backfills every earlier row as `INTRADAY`, preserves result/evaluation facts, and refuses downgrade while any official-close identity exists. The repository requires an explicit kind plus exactly one typed target and exposes mutually exclusive `bucket_end` / `official_trade_date` fields.
 
 ### Plan Repository and Unit-of-Work Contract
 

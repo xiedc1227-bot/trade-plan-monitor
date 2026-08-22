@@ -45,6 +45,13 @@ class PositionBucket(StrEnum):
     TACTICAL = "TACTICAL"
 
 
+class EvaluationKind(StrEnum):
+    """Lossless persisted discriminator for decision evaluation identities."""
+
+    INTRADAY = "INTRADAY"
+    OFFICIAL_CLOSE = "OFFICIAL_CLOSE"
+
+
 class SymbolHealthStatus(StrEnum):
     """Runtime-owned per-symbol health vocabulary persisted by strategy state."""
 
@@ -213,10 +220,28 @@ class RiskState(Base):
 
 class EvaluationLedger(Base):
     __tablename__ = "evaluation_ledger"
+    __table_args__ = (
+        CheckConstraint(
+            "evaluation_kind IN ('INTRADAY', 'OFFICIAL_CLOSE')",
+            name="ck_evaluation_ledger_kind",
+        ),
+        CheckConstraint(
+            "(evaluation_kind = 'INTRADAY' "
+            "AND length(target_value) = 25 "
+            "AND substr(target_value, 11, 1) = 'T' "
+            "AND substr(target_value, 20, 6) = '+08:00') "
+            "OR (evaluation_kind = 'OFFICIAL_CLOSE' "
+            "AND length(target_value) = 10 "
+            "AND substr(target_value, 5, 1) = '-' "
+            "AND substr(target_value, 8, 1) = '-')",
+            name="ck_evaluation_ledger_target_shape",
+        ),
+    )
 
     plan_hash: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
     symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
-    bucket_end: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH), primary_key=True)
+    evaluation_kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    target_value: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH), primary_key=True)
     formula_version: Mapped[str] = mapped_column(String(32), primary_key=True)
     result_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
     evaluated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
@@ -467,6 +492,7 @@ __all__ = [
     "DailyBar",
     "DailyPriceLimit",
     "DeliveryAttempt",
+    "EvaluationKind",
     "EvaluationLedger",
     "FiveMinuteBar",
     "LatestQuote",

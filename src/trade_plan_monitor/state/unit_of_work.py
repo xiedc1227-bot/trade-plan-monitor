@@ -18,6 +18,8 @@ from trade_plan_monitor.state.repositories import (
     EvaluationRepository,
     HealthRepository,
     IdempotencyRepository,
+    MarketHistoryRepository,
+    MarketReferenceRepository,
     PlanRepository,
     PositionRepository,
     RiskRepository,
@@ -51,6 +53,21 @@ class UnitOfWork(Protocol):
     @property
     def alerts(self) -> AlertOutbox: ...
 
+    @property
+    def history(self) -> MarketHistoryRepository: ...
+
+    @property
+    def references(self) -> MarketReferenceRepository: ...
+
+    def __enter__(self) -> UnitOfWork: ...
+
+    def __exit__(
+        self,
+        error_type: type[BaseException] | None,
+        error: BaseException | None,
+        traceback: object | None,
+    ) -> None: ...
+
     def commit(self) -> None: ...
 
     def rollback(self) -> None: ...
@@ -82,6 +99,8 @@ class SqlAlchemyUnitOfWork:
         self._evaluations: EvaluationRepository | None = None
         self._health: HealthRepository | None = None
         self._alerts: AlertOutbox | None = None
+        self._history: MarketHistoryRepository | None = None
+        self._references: MarketReferenceRepository | None = None
 
     @property
     def plans(self) -> PlanRepository:
@@ -131,6 +150,18 @@ class SqlAlchemyUnitOfWork:
             raise RuntimeError("Unit of work is not active")
         return self._alerts
 
+    @property
+    def history(self) -> MarketHistoryRepository:
+        if self._history is None:
+            raise RuntimeError("Unit of work is not active")
+        return self._history
+
+    @property
+    def references(self) -> MarketReferenceRepository:
+        if self._references is None:
+            raise RuntimeError("Unit of work is not active")
+        return self._references
+
     def __enter__(self) -> SqlAlchemyUnitOfWork:
         if self._session is not None:
             raise RuntimeError("Unit of work cannot be re-entered")
@@ -165,6 +196,8 @@ class SqlAlchemyUnitOfWork:
             id_factory=self._id_factory,
             replay_retention=self._replay_retention,
         )
+        self._history = MarketHistoryRepository(self._session)
+        self._references = MarketReferenceRepository(self._session)
         return self
 
     def commit(self) -> None:
@@ -194,6 +227,8 @@ class SqlAlchemyUnitOfWork:
             self._evaluations = None
             self._health = None
             self._alerts = None
+            self._history = None
+            self._references = None
 
     def _require_session(self) -> Session:
         if self._session is None:

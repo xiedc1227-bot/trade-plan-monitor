@@ -249,6 +249,22 @@ def test_restart_dedup_preserves_original_event_identity(database_engine: Engine
     assert _row_counts(database_engine)[0] == 1
 
 
+def test_outbox_reports_existing_dedup_identity_without_reenqueuing(
+    database_engine: Engine,
+) -> None:
+    payload = _payload(21)
+    with _unit_of_work(database_engine) as work:
+        assert work.alerts.has_dedup_key(payload.dedup_key) is False
+        work.alerts.enqueue(payload)
+        assert work.alerts.has_dedup_key(payload.dedup_key) is True
+        work.commit()
+
+    with _unit_of_work(database_engine) as work:
+        assert work.alerts.has_dedup_key(payload.dedup_key) is True
+        with pytest.raises(ValueError, match="SHA-256"):
+            work.alerts.has_dedup_key("not-a-digest")
+
+
 def test_restart_dedup_normalizes_decimal_scale_and_signed_zero(
     database_engine: Engine,
 ) -> None:
@@ -429,6 +445,8 @@ def test_replay_rejects_stored_event_identity_mismatch(database_engine: Engine) 
     with _unit_of_work(database_engine) as work:
         with pytest.raises(OutboxStorageError, match="Stored alert event"):
             work.alerts.get(payload.event_id)
+        with pytest.raises(OutboxStorageError, match="Stored alert event"):
+            work.alerts.has_dedup_key(payload.dedup_key)
 
 
 def test_replay_storage_error_has_no_raw_payload_context(database_engine: Engine) -> None:

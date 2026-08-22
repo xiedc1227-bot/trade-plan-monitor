@@ -126,6 +126,18 @@ class AlertOutbox:
             raise OutboxStorageError("Alert event could not be persisted") from None
         return event
 
+    def has_dedup_key(self, dedup_key: str) -> bool:
+        """Return whether one validated durable alert identity already exists."""
+
+        normalized_key = _dedup_key(dedup_key)
+        row = self._session.scalar(
+            select(AlertEventRow).where(AlertEventRow.dedup_key == normalized_key).limit(1)
+        )
+        if row is None:
+            return False
+        _event_from_row(row)
+        return True
+
     def get(self, event_id: UUID) -> AlertEvent:
         """Return one event visible to the current transaction."""
 
@@ -258,6 +270,16 @@ def _event_id(value: UUID) -> str:
     if type(value) is not UUID:
         raise TypeError("event_id must be a UUID")
     return str(value)
+
+
+def _dedup_key(value: str) -> str:
+    if (
+        type(value) is not str
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError("dedup_key must be a lowercase SHA-256 digest")
+    return value
 
 
 def _audit_id(value: str) -> str:
