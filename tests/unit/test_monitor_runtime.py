@@ -1,4 +1,4 @@
-"""T028-T029 contracts for deadlines and bounded runtime request control."""
+"""T028-T030 contracts for deadlines, request control, and symbol health."""
 
 from __future__ import annotations
 
@@ -6,13 +6,20 @@ import asyncio
 import threading
 import time as time_module
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from typing import Final
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from trade_plan_monitor.market_data.models import MinuteBar
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.clock import Clock
+from trade_plan_monitor.runtime.health import (
+    SymbolHealthErrorCode,
+    SymbolHealthTracker,
+    summarize_system_health,
+)
 from trade_plan_monitor.runtime.request_control import (
     DEFAULT_AI_MAX_CONCURRENCY,
     DEFAULT_AI_QUEUE_LIMIT,
@@ -1780,3 +1787,166 @@ def test_request_concurrency_rejects_unbounded_or_invalid_controls(
 ) -> None:
     with pytest.raises((TypeError, ValueError)):
         _request_controller(_FakeClock(_shanghai(9, 0)), **changes)
+
+
+def _health_minutes(
+    symbol: str,
+    bucket_end: datetime,
+    *,
+    count: int = 5,
+) -> tuple[MinuteBar, ...]:
+    starts_at = bucket_end - timedelta(minutes=4)
+    return tuple(
+        MinuteBar(
+            symbol=symbol,
+            bar_end=starts_at + timedelta(minutes=index),
+            open_fen=6400 + index,
+            high_fen=6410 + index,
+            low_fen=6390 + index,
+            close_fen=6405 + index,
+            volume_shares=1_000 + index,
+            amount_yuan=Decimal("64000") + index,
+            received_at=starts_at + timedelta(minutes=index, seconds=12),
+        )
+        for index in range(count)
+    )
+
+
+def test_symbol_health_first_incomplete_bucket_blocks_and_same_bucket_is_idempotent() -> None:
+    tracker = SymbolHealthTracker(stale_after=timedelta(seconds=60))
+    bucket_end = _shanghai(9, 35)
+    incomplete = _health_minutes("003043.SZ", bucket_end)[:-1]
+
+    first = tracker.record_bucket(
+        symbol="003043.SZ",
+        bucket_end=bucket_end,
+        observed_at=_shanghai(9, 35, 12),
+        minutes=incomplete,
+    )
+    duplicate = tracker.record_bucket(
+        symbol="003043.SZ",
+        bucket_end=bucket_end,
+        observed_at=_shanghai(9, 35, 20),
+        minutes=incomplete,
+    )
+
+    assert first.data_health.status.value == "GAPPED"
+    assert first.data_health.required_data_complete is False
+    assert first.actionable is False
+    assert first.consecutive_incomplete_buckets == 1
+    assert first.gaps == (_shanghai(9, 35),)
+    assert first.error_code is SymbolHealthErrorCode.INCOMPLETE_BUCKET
+    assert duplicate.consecutive_incomplete_buckets == 1
+
+
+def test_symbol_health_second_incomplete_bucket_degrades_only_that_symbol() -> None:
+    tracker = SymbolHealthTracker(stale_after=timedelta(seconds=60))
+    first_end = _shanghai(9, 35)
+    second_end = _shanghai(9, 40)
+    tracker.record_bucket(
+        symbol="003043.SZ",
+        bucket_end=first_end,
+        observed_at=_shanghai(9, 35, 12),
+        minutes=_health_minutes("003043.SZ", first_end)[:-1],
+    )
+
+    degraded = tracker.record_bucket(
+        symbol="003043.SZ",
+        bucket_end=second_end,
+        observed_at=_shanghai(9, 40, 12),
+        minutes=_health_minutes("003043.SZ", second_end)[:-1],
+    )
+    healthy = tracker.record_bucket(
+        symbol="600000.SH",
+        bucket_end=second_end,
+        observed_at=_shanghai(9, 40, 12),
+        minutes=_health_minutes("600000.SH", second_end),
+    )
+
+    assert degraded.data_health.status.value == "DEGRADED"
+    assert degraded.consecutive_incomplete_buckets == 2
+    assert degraded.actionable is False
+    assert healthy.data_health.status.value == "LIVE"
+    assert healthy.actionable is True
+
+
+def test_symbol_health_complete_but_old_bucket_is_stale_and_not_actionable() -> None:
+    tracker = SymbolHealthTracker(stale_after=timedelta(seconds=60))
+    bucket_end = _shanghai(9, 35)
+
+    stale = tracker.record_bucket(
+        symbol="003043.SZ",
+        bucket_end=bucket_end,
+        observed_at=_shanghai(9, 36, 1),
+        minutes=_health_minutes("003043.SZ", bucket_end),
+    )
+
+    assert stale.data_health.status.value == "STALE"
+    assert stale.data_health.required_data_complete is True
+    assert stale.data_health.fresh is False
+    assert stale.data_health.data_age_seconds == 61
+    assert stale.actionable is False
+    assert stale.error_code is SymbolHealthErrorCode.STALE_DATA
+
+
+def test_symbol_health_blocked_reason_is_sanitized_and_system_summary_keeps_live_count() -> None:
+    tracker = SymbolHealthTracker(stale_after=timedelta(seconds=60))
+    bucket_end = _shanghai(9, 35)
+    live = tracker.record_bucket(
+        symbol="003043.SZ",
+        bucket_end=bucket_end,
+        observed_at=_shanghai(9, 35, 12),
+        minutes=_health_minutes("003043.SZ", bucket_end),
+    )
+    blocked = tracker.record_bucket(
+        symbol="600000.SH",
+        bucket_end=bucket_end,
+        observed_at=_shanghai(9, 35, 12),
+        minutes=(),
+        blocked_error_code=SymbolHealthErrorCode.PROVIDER_BLOCKED,
+    )
+
+    system = summarize_system_health(
+        observed_at=_shanghai(9, 35, 12),
+        symbols=(live, blocked),
+    )
+
+    assert blocked.data_health.status.value == "BLOCKED"
+    assert blocked.data_health.required_data_complete is False
+    assert blocked.error_code is SymbolHealthErrorCode.PROVIDER_BLOCKED
+    assert system.active_symbol_count == 2
+    assert system.live_symbol_count == 1
+    assert system.blocked_symbol_count == 1
+    assert system.actionable_symbol_count == 1
+    assert system.all_symbols_actionable is False
+    assert system.system_status.value == "DEGRADED"
+
+
+def test_symbol_health_failed_observation_cannot_mutate_incomplete_streak() -> None:
+    tracker = SymbolHealthTracker(stale_after=timedelta(seconds=60))
+    first_end = _shanghai(9, 35)
+    second_end = _shanghai(9, 40)
+    tracker.record_bucket(
+        symbol="003043.SZ",
+        bucket_end=first_end,
+        observed_at=_shanghai(9, 35, 12),
+        minutes=_health_minutes("003043.SZ", first_end)[:-1],
+    )
+
+    with pytest.raises(ValueError, match="precede"):
+        tracker.record_bucket(
+            symbol="003043.SZ",
+            bucket_end=second_end,
+            observed_at=_shanghai(9, 39, 59),
+            minutes=_health_minutes("003043.SZ", second_end),
+        )
+
+    second = tracker.record_bucket(
+        symbol="003043.SZ",
+        bucket_end=second_end,
+        observed_at=_shanghai(9, 40, 12),
+        minutes=_health_minutes("003043.SZ", second_end)[:-1],
+    )
+
+    assert second.data_health.status.value == "DEGRADED"
+    assert second.consecutive_incomplete_buckets == 2
