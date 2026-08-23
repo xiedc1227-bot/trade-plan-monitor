@@ -103,6 +103,16 @@ web/src/
 - K 线响应保留规范化整数分 OHLC、股数、精确元成交额、回执时间和聚合公式 provenance。事件响应保留股票、序号、稳定事件 ID/类型、时间戳、可选信号/结果哈希和有界的服务端纯文本。所有 JSON 字段名均为 camelCase，所有枚举值均为 `UPPER_SNAKE`。
 - 运行时健康只暴露稳定的生命周期/资源/能力状态、重试/冷却/轮询时间、有序缺口、有界执行器计数、数据库/WAL/检查点/备份事实及投递计数。股票健康暴露精确的数据年龄/完整性/新鲜度/缺口事实。`LIVE` 必须具有新鲜、完整且带最新时间戳的数据；断连、陈旧、有缺口、阻断或其他矛盾数据都不能标为实时或可执行。任何响应 Schema 都不包含密钥、授权详情、供应商原始响应体或存储原始错误字段。
 
+### T037 计划与 AI 操作边界
+
+- `create_app(plan_service=..., ai_service=...)` 接收明确注入的 `PlanOperationService` 和 `AIOperationService` 适配器，但不构造服务，也不启动数据库、供应商、任务或网络工作。缺少服务时以 `SERVICE_UNAVAILABLE` 封闭失败。应用服务负责原子完成幂等占用/回放、乐观修订检查、持久化和审计写入；HTTP 层把经过校验的 `Idempotency-Key` 与服务端生成的 `requestId` 组成一个 `MutationContext` 传入。
+- T037 实现 `GET /plan-versions`、`GET /plan-versions/{id}`、`GET /plan-extractions/{id}`、`GET /ai-providers`、`POST /plan-drafts`、`POST /plan-imports`、`POST /plan-extractions`、`POST /plan-activations`、`POST /plan-deactivations`、`POST /ai-providers`、`PATCH /ai-providers/{id}`、`POST /ai-provider-secrets` 和 `POST /ai-provider-tests`。它不实现 T038 持仓/提醒/诊断资源、WebSocket 发布、Origin/安全响应头、静态资源提供、生产服务组合或任何 T024 判断行为。
+- 计划版本暴露一个规范、有界的 `planJson` 文档，以及精确的计划/版本/股票/hash identity、保留的有界 `sourceText`、审核问题、确定性校验问题、`canActivate`、状态、修订和创建时间。服务输出会被重新校验，并且必须匹配请求草稿/导入的 identity 与 provenance。`planJson` 保持为规范 `plan-domain` JSON 文档；外围 API 字段仍使用 camelCase。当 `offset` 超过 `total` 时，空分页仍然合法。
+- 草稿保存接收 `planJson`、`sourceText`、`reviewIssues` 和 `expectedRevision`。导入接收 `format=JSON|YAML`、安全有界的 `document` 和 `expectedRevision`。启用是针对不可变 `planVersionId` 的独立命令；停用是独立的股票命令。任何未解决的假设、警告、缺失证据、重大遗漏或阻断启用的校验问题都会使 `canActivate=false`，应用服务必须以冲突拒绝启用。
+- 计划提取和 AI 供应商测试只接受有界提交命令，并返回带强类型 `QUEUED` 回执的 `202`。路由只等待服务的持久提交边界；既不调用供应商，也不创建或运行提取工作，并且绝不启用计划。提取状态封闭为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`INVALID_OUTPUT`、`PROVIDER_ERROR` 和 `CANCELLED`；成功结果保留恰好一个阻断启用的 `AI_EVIDENCE_REVIEW_REQUIRED`，并且只暴露规范草稿 JSON、有界证据/问题、确定性校验结果、脱敏用量、hash 和时间戳。供应商/模型原始响应体和授权材料没有任何响应字段。
+- AI 供应商创建/更新使用完整的不含密钥配置。`PATCH` 是带修订保护的完整替换，其正文 `providerId` 必须与路径一致。API 通过具体 `AIProviderConfig` 的 class-local 脱敏校验器重新校验配置，包括 HTTPS/回环 URL 策略和资源限制。密钥替换接收现有 class-local `SecretWrite` 值，但响应只包含等价于 `SecretStatus` 的已配置状态、来源、固定掩码和代数元数据。服务返回的配置必须与提交的规范化配置一致；额外密钥或供应商原始字段会封闭失败。
+- 每个 T037 状态变更端点都要求 1～128 个白名单字符组成的 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同意图回放其规范响应。应用服务必须原子完成这些检查与审计写入；路由绝不重建仓储、校验或决策引擎行为。
+
 只读资源：
 
 ```text

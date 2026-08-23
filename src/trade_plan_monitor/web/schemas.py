@@ -1,12 +1,17 @@
-"""Strict shared FastAPI response schemas for the local application boundary."""
+"""Strict shared FastAPI schemas for the local application boundary."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
+from uuid import UUID
 
+from fastapi import Depends, Header, Request
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic_core import to_json
+
+from trade_plan_monitor.market_data.models import ShanghaiDatetime
 
 
 def _to_camel(name: str) -> str:
@@ -14,7 +19,7 @@ def _to_camel(name: str) -> str:
     return head + "".join(part.capitalize() for part in tail)
 
 
-class _ApiValue(BaseModel):
+class ApiValue(BaseModel):
     """Keep public API values closed, immutable, strict, and alias-compatible."""
 
     model_config = ConfigDict(
@@ -72,7 +77,7 @@ RequestId = Annotated[
 ]
 
 
-class ErrorDetail(_ApiValue):
+class ErrorDetail(ApiValue):
     """One bounded validation location with no rejected input or raw exception data."""
 
     location: tuple[ErrorLocationPart, ...] = Field(min_length=1, max_length=16)
@@ -80,7 +85,7 @@ class ErrorDetail(_ApiValue):
     message: PublicMessage
 
 
-class ErrorPayload(_ApiValue):
+class ErrorPayload(ApiValue):
     """The stable inner API error document."""
 
     code: ApiErrorCode
@@ -89,15 +94,88 @@ class ErrorPayload(_ApiValue):
     request_id: RequestId
 
 
-class ErrorResponse(_ApiValue):
+class ErrorResponse(ApiValue):
     """The single public API error envelope."""
 
     error: ErrorPayload
 
 
+class OperationKind(StrEnum):
+    """Bounded asynchronous work accepted by the T037 command boundary."""
+
+    PLAN_EXTRACTION = "PLAN_EXTRACTION"
+    AI_PROVIDER_TEST = "AI_PROVIDER_TEST"
+
+
+class OperationReceipt(ApiValue):
+    """Immediate receipt proving that work was queued outside the request handler."""
+
+    operation_id: UUID
+    kind: OperationKind
+    status: Literal["QUEUED"]
+    submitted_at: ShanghaiDatetime
+
+
+IdempotencyKey = Annotated[
+    str,
+    Field(
+        strict=True,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+    ),
+]
+IdempotencyKeyHeader = Annotated[
+    IdempotencyKey,
+    Header(alias="Idempotency-Key"),
+]
+
+
+class MutationContext(ApiValue):
+    """Stable correlation data required by an audited idempotent application command."""
+
+    idempotency_key: IdempotencyKey
+    request_id: RequestId
+
+
+def get_mutation_context(
+    request: Request,
+    idempotency_key: IdempotencyKeyHeader,
+) -> MutationContext:
+    """Bind a required idempotency key to the server-generated audit correlation ID."""
+
+    return MutationContext(
+        idempotency_key=idempotency_key,
+        request_id=request.state.request_id,
+    )
+
+
+MutationContextDependency = Annotated[
+    MutationContext,
+    Depends(get_mutation_context),
+]
+
+
+def validate_api_response[ApiValueT: ApiValue](
+    value: object,
+    model_type: type[ApiValueT],
+) -> ApiValueT:
+    """Strictly revalidate an application-service value before public serialization."""
+
+    if isinstance(value, model_type):
+        value = value.model_dump(mode="python", round_trip=True)
+    return model_type.model_validate_json(to_json(value))
+
+
 __all__ = [
+    "ApiValue",
     "ApiErrorCode",
     "ErrorDetail",
     "ErrorPayload",
     "ErrorResponse",
+    "MutationContext",
+    "MutationContextDependency",
+    "OperationKind",
+    "OperationReceipt",
+    "validate_api_response",
 ]

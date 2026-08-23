@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T036` and checkpoints `C00`–`C14` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, startup close recovery, an owned lifecycle with sanitized health and bounded retryable shutdown, a side-effect-free FastAPI application/lifespan/error boundary, and strict dashboard/symbol/bar/event/runtime-health read contracts over an injected service. Plan and AI operation routes start at `T037`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Default installed-console composition remains explicitly deferred to `T052`–`T054`.
+> Development status: tasks `T001`–`T037` and checkpoints `C00`–`C14` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, startup close recovery, an owned lifecycle with sanitized health and bounded retryable shutdown, a side-effect-free FastAPI application/lifespan/error boundary, strict dashboard/symbol/bar/event/runtime-health read contracts, and injected plan/AI operation APIs with revision/idempotency/audit context, bounded 202 receipts, and write-only secret responses. Position, alert, and diagnostic routes start at `T038`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Default installed-console composition remains explicitly deferred to `T052`–`T054`.
 
 ## Product Goals
 
@@ -37,9 +37,10 @@ Last verified on 2026-08-24 with CPython 3.14.7.
 | Owned lifecycle, sanitized health, graceful shutdown, and maintenance CLI boundary | `T034` | Complete |
 | Side-effect-free FastAPI app, owned lifespan, shared schemas, and error mapping | `T035` | Complete |
 | Dashboard, symbol, bar, event, and runtime-health read APIs | `T036` | Complete |
-| Command APIs, realtime transport, production UI, and packaging | `T037`–`T059` | Pending |
+| Plan versions, draft/import/extraction/activation, and write-only AI-provider operation APIs | `T037` | Complete |
+| Position/alert/diagnostic APIs, realtime transport, production UI, and packaging | `T038`–`T059` | Pending |
 
-After `T036`, all 1064 backend tests pass. The exact T036 selector contains 14 tests, the complete Web API file contains 33 tests, the combined T034 lifecycle/T035–T036 Web gate contains 54 tests, and the unchanged decision/replay gate contains 273 tests. Whole-tree Ruff, five-file scoped formatting, `compileall`, `pip check`, bilingual parity, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C14` is complete and `T037` is next.
+After `T037`, all 1102 backend tests pass. The exact T037 selector contains 38 tests, the complete Web API file contains 71 tests, the combined T034 lifecycle/T035–T037 Web gate contains 92 tests, and the unchanged decision/replay gate contains 273 tests. Whole-tree Ruff, five-file scoped formatting, `compileall`, `pip check`, bilingual parity, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C15` remains open through `T038`, which is the next task.
 
 ## Safety Boundaries
 
@@ -148,7 +149,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 
 | Command | Purpose | Availability |
 |---|---|---|
-| `python -m pytest -q` | Run the complete 1064-test backend gate | Available |
+| `python -m pytest -q` | Run the complete 1102-test backend gate | Available |
 | `python -m pytest tests/unit/test_package.py -q` | Run the stable package smoke test | Available |
 | `python -m pytest tests/integration/test_ai_provider_contract.py -q` | Verify the AI provider and extraction contract | Available |
 | `python -m pytest tests/unit/test_decision_engine.py tests/replay/test_decision_replay.py -q` | Run the deterministic decision and replay gate | Available |
@@ -180,7 +181,7 @@ trade-plan-monitor/
 │   ├── market_data/    # Normalization, history, aggregation, indicators, reconciliation
 │   ├── notifications/  # Deterministic alerts, transactional outbox, channels, and dispatch
 │   ├── state/          # SQLite models, migrations, repositories, UoW, backup
-│   ├── web/            # FastAPI app/lifespan/errors plus typed monitoring read routers
+│   ├── web/            # FastAPI app/lifespan/errors plus typed read/plan/AI routers
 │   ├── cli.py          # Side-effect-free commands and injected service dispatch
 │   └── config.py       # Strict non-secret application configuration
 ├── tests/

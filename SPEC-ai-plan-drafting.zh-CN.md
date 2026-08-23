@@ -131,6 +131,14 @@ AI 只能创建草稿。激活必须满足：
 - 每个重大 `unmapped_text` 都有明确处理结果；
 - 请求包含乐观锁修订号和幂等键。
 
+### T037 HTTP 适配器边界
+
+本地 API 只通过注入的 `AIOperationService` 以及 `PlanOperationService` 上的计划提取提交方法暴露 AI。配置请求使用 camelCase 携带完整的不含密钥 `AIProviderConfig` 形状和 `expectedRevision`；`PATCH /api/v1/ai-providers/{id}` 是带修订保护的完整替换，而不是局部合并。HTTP Schema 调用具体 `AIProviderConfig` 的 class-local wrap validator，不把脱敏移动到 `_AIValue`。密钥替换嵌入现有 `SecretWrite` 值，使其自身 class-local wrap validator 保持权威；不引入基类校验器。
+
+每个供应商创建/更新、密钥替换、供应商测试和计划提取都要求 `Idempotency-Key` 与 `expectedRevision`。注入的应用服务原子负责请求 hash、重复/回放处理、修订比较、持久化和审计写入。HTTP 响应只暴露不含密钥的供应商配置、固定掩码密钥状态或有界操作回执。额外服务字段、供应商原始响应体、授权数据和密钥材料都会在序列化前封闭失败。
+
+`POST /api/v1/plan-extractions` 和 `POST /api/v1/ai-provider-tests` 只在应用服务持久接受有界工作后返回 `202`。请求处理器不调用供应商、不执行提取，也不启用计划。`GET /api/v1/plan-extractions/{id}` 暴露编排状态、经过校验的证据/问题和规范草稿 JSON；绝不暴露模型原始输出。`CANCELLED` 只由这一编排状态边界表示，仍不会出现在纯 T017 提取函数中。
+
 ## 代码风格
 
 ```python

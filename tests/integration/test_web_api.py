@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import socket
 import subprocess
@@ -8,6 +9,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Annotated
 from zoneinfo import ZoneInfo
@@ -18,6 +20,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, ValidationError
 
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json, load_plan_yaml
+from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
@@ -996,3 +1000,1118 @@ def test_runtime_health_rejects_a_stop_before_startup() -> None:
     response = TestClient(app, raise_server_exceptions=False).get("/api/v1/health")
 
     _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+_PLAN_VERSION_ID = "10000000-0000-4000-8000-000000000001"
+_BLOCKED_PLAN_VERSION_ID = "10000000-0000-4000-8000-000000000002"
+_EXTRACTION_ID = "20000000-0000-4000-8000-000000000001"
+_PROVIDER_ID = "30000000-0000-4000-8000-000000000001"
+_PROVIDER_TEST_ID = "40000000-0000-4000-8000-000000000001"
+_API_NOW = datetime(2026, 8, 24, 11, 0, tzinfo=_SHANGHAI)
+
+
+def _sample_plan_document() -> tuple[str, str]:
+    plan = load_plan_yaml(Path("config/plans/003043.SZ.sample.yaml").read_text(encoding="utf-8"))
+    return dump_plan_json(plan), plan_sha256(plan)
+
+
+def _plan_version_payload(
+    *,
+    version_id: str = _PLAN_VERSION_ID,
+    blocked: bool = False,
+) -> dict[str, object]:
+    plan_json, plan_hash = _sample_plan_document()
+    review_issues = (
+        [
+            {
+                "kind": "WARNING",
+                "path": "levels.pressure",
+                "material": True,
+                "resolved": False,
+            }
+        ]
+        if blocked
+        else []
+    )
+    return {
+        "id": version_id,
+        "planId": "huaya-smart",
+        "version": 1,
+        "symbol": "003043.SZ",
+        "planHash": plan_hash,
+        "status": "DRAFT",
+        "planJson": plan_json,
+        "sourceText": "华亚智能结构化交易计划",
+        "reviewIssues": review_issues,
+        "validationIssues": [],
+        "canActivate": not blocked,
+        "revision": 3,
+        "createdAt": _API_NOW,
+    }
+
+
+def _provider_config_payload() -> dict[str, object]:
+    return {
+        "providerId": _PROVIDER_ID,
+        "displayName": "Local provider",
+        "providerType": "OPENAI_COMPATIBLE",
+        "baseUrl": "https://ai.example.test/v1",
+        "model": "example-model",
+        "secretReference": {
+            "key": "ai/provider/local",
+            "environmentVariable": "LOCAL_AI_KEY",
+        },
+        "timeoutSeconds": 30,
+        "maxRetries": 2,
+        "maxInputChars": 50_000,
+        "maxOutputTokens": 4_096,
+        "temperature": 0,
+        "promptVersion": "plan-extract-v1",
+        "allowRedirects": False,
+        "enabled": True,
+    }
+
+
+def _provider_payload(*, configured: bool = False) -> dict[str, object]:
+    return {
+        "config": _provider_config_payload(),
+        "secretStatus": {
+            "configured": configured,
+            "source": "STORE" if configured else "NONE",
+            "maskedValue": "********" if configured else None,
+            "generation": 1 if configured else 0,
+        },
+        "revision": 4 if configured else 3,
+        "createdAt": _API_NOW,
+        "updatedAt": _API_NOW,
+    }
+
+
+class _FakePlanOperationService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, ...]] = []
+        self.background_runs = 0
+        self.activation_runs = 0
+
+    async def list_plan_versions(self, *, offset: int, limit: int) -> object:
+        self.calls.append(("list_plan_versions", offset, limit))
+        return {
+            "items": [_plan_version_payload()],
+            "offset": offset,
+            "limit": limit,
+            "total": 1,
+        }
+
+    async def get_plan_version(self, *, version_id: str) -> object | None:
+        self.calls.append(("get_plan_version", version_id))
+        if version_id == _BLOCKED_PLAN_VERSION_ID:
+            return _plan_version_payload(version_id=version_id, blocked=True)
+        if version_id != _PLAN_VERSION_ID:
+            return None
+        return _plan_version_payload()
+
+    async def save_plan_draft(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "save_plan_draft",
+                command.expected_revision,
+                context.idempotency_key,
+                context.request_id,
+            )
+        )
+        return _plan_version_payload()
+
+    async def import_plan(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "import_plan",
+                command.format,
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        payload = _plan_version_payload()
+        payload["sourceText"] = command.document
+        return payload
+
+    async def submit_plan_extraction(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "submit_plan_extraction",
+                str(command.provider_id),
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        return {
+            "operationId": _EXTRACTION_ID,
+            "kind": "PLAN_EXTRACTION",
+            "status": "QUEUED",
+            "submittedAt": _API_NOW,
+        }
+
+    async def get_plan_extraction(self, *, operation_id: str) -> object | None:
+        self.calls.append(("get_plan_extraction", operation_id))
+        if operation_id != _EXTRACTION_ID:
+            return None
+        plan_json, _ = _sample_plan_document()
+        return {
+            "id": _EXTRACTION_ID,
+            "providerId": _PROVIDER_ID,
+            "status": "SUCCEEDED",
+            "submittedAt": _API_NOW - timedelta(seconds=2),
+            "startedAt": _API_NOW - timedelta(seconds=1),
+            "completedAt": _API_NOW,
+            "sourceTextSha256": "c" * 64,
+            "model": "example-model",
+            "promptVersion": "plan-extract-v1",
+            "draftPlanJson": plan_json,
+            "evidence": [
+                {
+                    "path": "plan_id",
+                    "excerpt": "华亚智能交易计划",
+                    "start": 0,
+                    "end": 8,
+                }
+            ],
+            "assumptions": [],
+            "warnings": [],
+            "unmappedText": [],
+            "validationIssues": [
+                {
+                    "code": "AI_EVIDENCE_REVIEW_REQUIRED",
+                    "path": "draft",
+                    "severity": "WARNING",
+                    "message": "Review AI field evidence before activation.",
+                    "activationBlocking": True,
+                }
+            ],
+            "usage": {
+                "promptTokens": 100,
+                "completionTokens": 50,
+                "totalTokens": 150,
+            },
+        }
+
+    async def activate_plan(self, *, command: object, context: object) -> object:
+        self.activation_runs += 1
+        self.calls.append(
+            (
+                "activate_plan",
+                str(command.plan_version_id),
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        if str(command.plan_version_id) == _BLOCKED_PLAN_VERSION_ID:
+            raise ApiError(ApiErrorCode.CONFLICT)
+        return {
+            "symbol": "003043.SZ",
+            "planVersionId": _PLAN_VERSION_ID,
+            "active": True,
+            "revision": 4,
+            "changedAt": _API_NOW,
+        }
+
+    async def deactivate_plan(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "deactivate_plan",
+                command.symbol,
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        return {
+            "symbol": command.symbol,
+            "planVersionId": None,
+            "active": False,
+            "revision": command.expected_revision + 1,
+            "changedAt": _API_NOW,
+        }
+
+
+class _FakeAIOperationService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, ...]] = []
+        self.provider_test_runs = 0
+
+    async def list_ai_providers(self, *, offset: int, limit: int) -> object:
+        self.calls.append(("list_ai_providers", offset, limit))
+        return {
+            "items": [_provider_payload()],
+            "offset": offset,
+            "limit": limit,
+            "total": 1,
+        }
+
+    async def create_ai_provider(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "create_ai_provider",
+                str(command.config.provider_id),
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        payload = _provider_payload()
+        payload["revision"] = 0
+        return payload
+
+    async def update_ai_provider(
+        self,
+        *,
+        provider_id: str,
+        command: object,
+        context: object,
+    ) -> object | None:
+        self.calls.append(
+            (
+                "update_ai_provider",
+                provider_id,
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        payload = _provider_payload()
+        payload["revision"] = command.expected_revision + 1
+        return payload
+
+    async def replace_ai_provider_secret(
+        self,
+        *,
+        command: object,
+        context: object,
+    ) -> object:
+        self.calls.append(
+            (
+                "replace_ai_provider_secret",
+                str(command.provider_id),
+                command.expected_revision,
+                context.idempotency_key,
+                repr(command.secret),
+            )
+        )
+        return _provider_payload(configured=True)
+
+    async def submit_ai_provider_test(
+        self,
+        *,
+        command: object,
+        context: object,
+    ) -> object:
+        self.calls.append(
+            (
+                "submit_ai_provider_test",
+                str(command.provider_id),
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        return {
+            "operationId": _PROVIDER_TEST_ID,
+            "kind": "AI_PROVIDER_TEST",
+            "status": "QUEUED",
+            "submittedAt": _API_NOW,
+        }
+
+
+def test_plan_versions_are_paginated_and_details_revalidate_canonical_identity() -> None:
+    service = _FakePlanOperationService()
+    app = create_app(plan_service=service)
+    client = TestClient(app)
+
+    page = client.get("/api/v1/plan-versions", params={"offset": 0, "limit": 20})
+    detail = client.get(f"/api/v1/plan-versions/{_PLAN_VERSION_ID}")
+    missing_id = "90000000-0000-4000-8000-000000000009"
+    missing = client.get(f"/api/v1/plan-versions/{missing_id}")
+
+    assert page.status_code == 200
+    assert page.json()["items"][0]["planId"] == "huaya-smart"
+    assert page.json()["limit"] == 20
+    assert detail.status_code == 200
+    assert detail.json()["planJson"].startswith('{"activation"')
+    _assert_error_envelope(missing, status=404, code="NOT_FOUND")
+    assert service.calls == [
+        ("list_plan_versions", 0, 20),
+        ("get_plan_version", _PLAN_VERSION_ID),
+        ("get_plan_version", missing_id),
+    ]
+
+
+def test_plan_draft_and_import_require_current_revision_and_idempotency_context() -> None:
+    service = _FakePlanOperationService()
+    app = create_app(plan_service=service)
+    client = TestClient(app)
+    plan_json, _ = _sample_plan_document()
+
+    draft = client.post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "plan-write-1"},
+        json={
+            "planJson": plan_json,
+            "sourceText": "华亚智能结构化交易计划",
+            "reviewIssues": [],
+            "expectedRevision": 0,
+        },
+    )
+    imported = client.post(
+        "/api/v1/plan-imports",
+        headers={"Idempotency-Key": "plan-import-1"},
+        json={"format": "JSON", "document": plan_json, "expectedRevision": 2},
+    )
+
+    assert draft.status_code == 200
+    assert imported.status_code == 200
+    assert service.calls[0][:3] == ("save_plan_draft", 0, "plan-write-1")
+    assert re.fullmatch(r"[0-9a-f]{32}", service.calls[0][3])
+    assert service.calls[1] == ("import_plan", "JSON", 2, "plan-import-1")
+
+
+def test_plan_draft_rejects_a_service_response_for_another_plan_identity() -> None:
+    class _MismatchedPlanService(_FakePlanOperationService):
+        async def save_plan_draft(self, *, command: object, context: object) -> object:
+            return _plan_version_payload()
+
+    service = _MismatchedPlanService()
+    app = create_app(plan_service=service)
+    plan = load_plan_json(_sample_plan_document()[0]).model_copy(update={"version": 2})
+
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "mismatched-plan"},
+        json={
+            "planJson": dump_plan_json(plan),
+            "sourceText": "华亚智能结构化交易计划第二版",
+            "reviewIssues": [],
+            "expectedRevision": 1,
+        },
+    )
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_plan_draft_and_import_cannot_return_an_active_version() -> None:
+    class _ActiveDraftService(_FakePlanOperationService):
+        async def save_plan_draft(self, *, command: object, context: object) -> object:
+            payload = _plan_version_payload()
+            payload["status"] = "ACTIVE"
+            return payload
+
+        async def import_plan(self, *, command: object, context: object) -> object:
+            payload = await super().import_plan(command=command, context=context)
+            assert isinstance(payload, dict)
+            payload["status"] = "ACTIVE"
+            return payload
+
+    app = create_app(plan_service=_ActiveDraftService())
+    client = TestClient(app, raise_server_exceptions=False)
+    plan_json, _ = _sample_plan_document()
+
+    draft = client.post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "active-draft"},
+        json={
+            "planJson": plan_json,
+            "sourceText": "华亚智能结构化交易计划",
+            "reviewIssues": [],
+            "expectedRevision": 0,
+        },
+    )
+    imported = client.post(
+        "/api/v1/plan-imports",
+        headers={"Idempotency-Key": "active-import"},
+        json={"format": "JSON", "document": plan_json, "expectedRevision": 0},
+    )
+
+    _assert_error_envelope(draft, status=500, code="INTERNAL_ERROR")
+    _assert_error_envelope(imported, status=500, code="INTERNAL_ERROR")
+
+
+def test_plan_draft_service_cannot_drop_an_unresolved_review_issue() -> None:
+    service = _FakePlanOperationService()
+    app = create_app(plan_service=service)
+    plan_json, _ = _sample_plan_document()
+
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "preserve-review-issue"},
+        json={
+            "planJson": plan_json,
+            "sourceText": "华亚智能结构化交易计划",
+            "reviewIssues": [
+                {
+                    "kind": "WARNING",
+                    "path": "levels.pressure",
+                    "material": True,
+                    "resolved": False,
+                }
+            ],
+            "expectedRevision": 0,
+        },
+    )
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_plan_extraction_returns_bounded_202_without_running_or_activating_in_handler() -> None:
+    service = _FakePlanOperationService()
+    app = create_app(plan_service=service)
+
+    response = TestClient(app).post(
+        "/api/v1/plan-extractions",
+        headers={"Idempotency-Key": "extract-1"},
+        json={
+            "providerId": _PROVIDER_ID,
+            "sourceText": "请将这份中文计划整理为待审核草稿",
+            "expectedRevision": 3,
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "operationId": _EXTRACTION_ID,
+        "kind": "PLAN_EXTRACTION",
+        "status": "QUEUED",
+        "submittedAt": "2026-08-24T11:00:00+08:00",
+    }
+    assert service.background_runs == 0
+    assert service.activation_runs == 0
+    assert service.calls == [("submit_plan_extraction", _PROVIDER_ID, 3, "extract-1")]
+
+
+def test_plan_extraction_status_exposes_review_data_but_no_raw_model_output() -> None:
+    service = _FakePlanOperationService()
+    app = create_app(plan_service=service)
+
+    response = TestClient(app).get(f"/api/v1/plan-extractions/{_EXTRACTION_ID}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SUCCEEDED"
+    assert payload["evidence"][0]["path"] == "plan_id"
+    assert payload["usage"] == {
+        "promptTokens": 100,
+        "completionTokens": 50,
+        "totalTokens": 150,
+    }
+    assert "raw" not in response.text.casefold()
+    assert "authorization" not in response.text.casefold()
+
+
+def test_plan_extraction_status_preserves_mandatory_review_blockers() -> None:
+    class _UnsafeExtractionService(_FakePlanOperationService):
+        def __init__(self, *, discard_warning: bool) -> None:
+            super().__init__()
+            self.discard_warning = discard_warning
+
+        async def get_plan_extraction(self, *, operation_id: str) -> object:
+            payload = await super().get_plan_extraction(operation_id=operation_id)
+            assert isinstance(payload, dict)
+            if self.discard_warning:
+                payload["validationIssues"] = []
+            else:
+                payload["unmappedText"] = [
+                    {
+                        "path": "entry.condition",
+                        "excerpt": "不支持的动态公式",
+                        "reason": "Unsupported executable formula.",
+                        "material": False,
+                        "start": 9,
+                        "end": 17,
+                    }
+                ]
+            return payload
+
+    missing_warning = TestClient(
+        create_app(plan_service=_UnsafeExtractionService(discard_warning=True)),
+        raise_server_exceptions=False,
+    ).get(f"/api/v1/plan-extractions/{_EXTRACTION_ID}")
+    downgraded_unmapped = TestClient(
+        create_app(plan_service=_UnsafeExtractionService(discard_warning=False)),
+        raise_server_exceptions=False,
+    ).get(f"/api/v1/plan-extractions/{_EXTRACTION_ID}")
+
+    _assert_error_envelope(missing_warning, status=500, code="INTERNAL_ERROR")
+    _assert_error_envelope(downgraded_unmapped, status=500, code="INTERNAL_ERROR")
+
+
+def test_plan_activation_is_separate_and_unresolved_material_warning_is_blocked() -> None:
+    service = _FakePlanOperationService()
+    app = create_app(plan_service=service)
+    client = TestClient(app)
+
+    blocked_detail = client.get(f"/api/v1/plan-versions/{_BLOCKED_PLAN_VERSION_ID}")
+    blocked = client.post(
+        "/api/v1/plan-activations",
+        headers={"Idempotency-Key": "activate-blocked"},
+        json={"planVersionId": _BLOCKED_PLAN_VERSION_ID, "expectedRevision": 3},
+    )
+    activated = client.post(
+        "/api/v1/plan-activations",
+        headers={"Idempotency-Key": "activate-ready"},
+        json={"planVersionId": _PLAN_VERSION_ID, "expectedRevision": 3},
+    )
+    deactivated = client.post(
+        "/api/v1/plan-deactivations",
+        headers={"Idempotency-Key": "deactivate-1"},
+        json={"symbol": "003043.SZ", "expectedRevision": 4},
+    )
+
+    assert blocked_detail.json()["canActivate"] is False
+    assert blocked_detail.json()["reviewIssues"][0]["resolved"] is False
+    _assert_error_envelope(blocked, status=409, code="CONFLICT")
+    assert activated.status_code == 200
+    assert activated.json()["active"] is True
+    assert deactivated.status_code == 200
+    assert deactivated.json()["active"] is False
+
+
+def test_plan_activation_and_deactivation_require_an_advanced_revision_receipt() -> None:
+    class _StaleActivationService(_FakePlanOperationService):
+        async def activate_plan(self, *, command: object, context: object) -> object:
+            payload = await super().activate_plan(command=command, context=context)
+            assert isinstance(payload, dict)
+            payload["revision"] = command.expected_revision
+            return payload
+
+        async def deactivate_plan(self, *, command: object, context: object) -> object:
+            payload = await super().deactivate_plan(command=command, context=context)
+            assert isinstance(payload, dict)
+            payload["revision"] = command.expected_revision
+            return payload
+
+    app = create_app(plan_service=_StaleActivationService())
+    client = TestClient(app, raise_server_exceptions=False)
+
+    activated = client.post(
+        "/api/v1/plan-activations",
+        headers={"Idempotency-Key": "stale-activation"},
+        json={"planVersionId": _PLAN_VERSION_ID, "expectedRevision": 3},
+    )
+    deactivated = client.post(
+        "/api/v1/plan-deactivations",
+        headers={"Idempotency-Key": "stale-deactivation"},
+        json={"symbol": "003043.SZ", "expectedRevision": 4},
+    )
+
+    _assert_error_envelope(activated, status=500, code="INTERNAL_ERROR")
+    _assert_error_envelope(deactivated, status=500, code="INTERNAL_ERROR")
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (
+            "/api/v1/plan-drafts",
+            {
+                "planJson": _sample_plan_document()[0],
+                "sourceText": "华亚智能结构化交易计划",
+                "reviewIssues": [],
+                "expectedRevision": 0,
+            },
+        ),
+        (
+            "/api/v1/plan-imports",
+            {
+                "format": "JSON",
+                "document": _sample_plan_document()[0],
+                "expectedRevision": 0,
+            },
+        ),
+        (
+            "/api/v1/plan-extractions",
+            {
+                "providerId": _PROVIDER_ID,
+                "sourceText": "中文计划",
+                "expectedRevision": 0,
+            },
+        ),
+        (
+            "/api/v1/plan-activations",
+            {"planVersionId": _PLAN_VERSION_ID, "expectedRevision": 0},
+        ),
+        (
+            "/api/v1/plan-deactivations",
+            {"symbol": "003043.SZ", "expectedRevision": 0},
+        ),
+    ],
+)
+def test_plan_mutations_require_idempotency_key(path: str, body: dict[str, object]) -> None:
+    app = create_app(plan_service=_FakePlanOperationService())
+
+    response = TestClient(app).post(path, json=body)
+
+    error = _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert any(detail["location"][-1] == "Idempotency-Key" for detail in error["details"])
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (
+            "/api/v1/plan-drafts",
+            {
+                "planJson": _sample_plan_document()[0],
+                "sourceText": "华亚智能结构化交易计划",
+                "reviewIssues": [],
+            },
+        ),
+        (
+            "/api/v1/plan-imports",
+            {"format": "JSON", "document": _sample_plan_document()[0]},
+        ),
+        (
+            "/api/v1/plan-extractions",
+            {"providerId": _PROVIDER_ID, "sourceText": "中文计划"},
+        ),
+        (
+            "/api/v1/plan-activations",
+            {"planVersionId": _PLAN_VERSION_ID},
+        ),
+        (
+            "/api/v1/plan-deactivations",
+            {"symbol": "003043.SZ"},
+        ),
+    ],
+)
+def test_plan_mutations_require_expected_revision(
+    path: str,
+    body: dict[str, object],
+) -> None:
+    app = create_app(plan_service=_FakePlanOperationService())
+
+    response = TestClient(app).post(
+        path,
+        headers={"Idempotency-Key": "revision-required"},
+        json=body,
+    )
+
+    error = _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert any(detail["location"][-1] == "expectedRevision" for detail in error["details"])
+
+
+def test_plan_idempotency_conflict_mismatch_and_completed_replay_are_stable() -> None:
+    class _IdempotentService(_FakePlanOperationService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.claims: dict[str, str] = {}
+
+        async def save_plan_draft(self, *, command: object, context: object) -> object:
+            key = context.idempotency_key
+            fingerprint = command.model_dump_json()
+            if key == "pending-intent":
+                raise ApiError(ApiErrorCode.CONFLICT)
+            existing = self.claims.get(key)
+            if existing is not None and existing != fingerprint:
+                raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+            self.claims[key] = fingerprint
+            return _plan_version_payload()
+
+    service = _IdempotentService()
+    app = create_app(plan_service=service)
+    client = TestClient(app)
+    plan_json, _ = _sample_plan_document()
+    body = {
+        "planJson": plan_json,
+        "sourceText": "华亚智能结构化交易计划",
+        "reviewIssues": [],
+        "expectedRevision": 0,
+    }
+
+    conflict = client.post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "pending-intent"},
+        json=body,
+    )
+    first = client.post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "completed-intent"},
+        json=body,
+    )
+    replay = client.post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "completed-intent"},
+        json=body,
+    )
+    mismatch = client.post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "completed-intent"},
+        json={**body, "sourceText": "changed source"},
+    )
+
+    _assert_error_envelope(conflict, status=409, code="CONFLICT")
+    assert first.status_code == 200
+    assert replay.status_code == 200
+    assert first.content == replay.content
+    _assert_error_envelope(mismatch, status=422, code="VALIDATION_ERROR")
+
+
+def test_plan_extraction_input_and_idempotency_key_are_bounded_before_service_call() -> None:
+    service = _FakePlanOperationService()
+    app = create_app(plan_service=service)
+    client = TestClient(app)
+    body = {
+        "providerId": _PROVIDER_ID,
+        "sourceText": "x" * 200_001,
+        "expectedRevision": 3,
+    }
+
+    oversized_source = client.post(
+        "/api/v1/plan-extractions",
+        headers={"Idempotency-Key": "bounded-source"},
+        json=body,
+    )
+    oversized_key = client.post(
+        "/api/v1/plan-extractions",
+        headers={"Idempotency-Key": "k" * 129},
+        json={**body, "sourceText": "bounded source"},
+    )
+
+    _assert_error_envelope(oversized_source, status=422, code="VALIDATION_ERROR")
+    _assert_error_envelope(oversized_key, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+
+
+def test_plan_extraction_rejects_a_wrong_operation_receipt_kind() -> None:
+    class _WrongReceiptService(_FakePlanOperationService):
+        async def submit_plan_extraction(self, *, command: object, context: object) -> object:
+            receipt = await super().submit_plan_extraction(command=command, context=context)
+            assert isinstance(receipt, dict)
+            receipt["kind"] = "AI_PROVIDER_TEST"
+            return receipt
+
+    app = create_app(plan_service=_WrongReceiptService())
+
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/api/v1/plan-extractions",
+        headers={"Idempotency-Key": "wrong-operation-kind"},
+        json={
+            "providerId": _PROVIDER_ID,
+            "sourceText": "中文计划",
+            "expectedRevision": 3,
+        },
+    )
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_ai_provider_configuration_is_paginated_created_and_replaced_by_revision() -> None:
+    service = _FakeAIOperationService()
+    app = create_app(ai_service=service)
+    client = TestClient(app)
+    config = _provider_config_payload()
+
+    page = client.get("/api/v1/ai-providers", params={"offset": 0, "limit": 20})
+    created = client.post(
+        "/api/v1/ai-providers",
+        headers={"Idempotency-Key": "provider-create"},
+        json={"config": config, "expectedRevision": 0},
+    )
+    updated = client.patch(
+        f"/api/v1/ai-providers/{_PROVIDER_ID}",
+        headers={"Idempotency-Key": "provider-update"},
+        json={"config": config, "expectedRevision": 3},
+    )
+
+    assert page.status_code == 200
+    assert page.json()["items"][0]["config"]["providerId"] == _PROVIDER_ID
+    assert created.status_code == 200
+    assert updated.status_code == 200
+    assert service.calls == [
+        ("list_ai_providers", 0, 20),
+        ("create_ai_provider", _PROVIDER_ID, 0, "provider-create"),
+        ("update_ai_provider", _PROVIDER_ID, 3, "provider-update"),
+    ]
+
+
+def test_ai_provider_create_and_update_reject_mismatched_service_configuration() -> None:
+    class _MismatchedProviderService(_FakeAIOperationService):
+        async def create_ai_provider(self, *, command: object, context: object) -> object:
+            payload = _provider_payload()
+            config = payload["config"]
+            assert isinstance(config, dict)
+            config["model"] = "other-model"
+            return payload
+
+        async def update_ai_provider(
+            self,
+            *,
+            provider_id: str,
+            command: object,
+            context: object,
+        ) -> object:
+            return await self.create_ai_provider(command=command, context=context)
+
+    app = create_app(ai_service=_MismatchedProviderService())
+    client = TestClient(app, raise_server_exceptions=False)
+    body = {"config": _provider_config_payload(), "expectedRevision": 3}
+
+    created = client.post(
+        "/api/v1/ai-providers",
+        headers={"Idempotency-Key": "mismatched-create"},
+        json={**body, "expectedRevision": 0},
+    )
+    updated = client.patch(
+        f"/api/v1/ai-providers/{_PROVIDER_ID}",
+        headers={"Idempotency-Key": "mismatched-update"},
+        json=body,
+    )
+
+    _assert_error_envelope(created, status=500, code="INTERNAL_ERROR")
+    _assert_error_envelope(updated, status=500, code="INTERNAL_ERROR")
+
+
+def test_plan_and_ai_provider_empty_pages_allow_offset_after_total() -> None:
+    class _EmptyPlanPageService(_FakePlanOperationService):
+        async def list_plan_versions(self, *, offset: int, limit: int) -> object:
+            return {"items": [], "offset": offset, "limit": limit, "total": 1}
+
+    class _EmptyProviderPageService(_FakeAIOperationService):
+        async def list_ai_providers(self, *, offset: int, limit: int) -> object:
+            return {"items": [], "offset": offset, "limit": limit, "total": 1}
+
+    plan_response = TestClient(
+        create_app(plan_service=_EmptyPlanPageService()),
+        raise_server_exceptions=False,
+    ).get("/api/v1/plan-versions", params={"offset": 20, "limit": 20})
+    provider_response = TestClient(
+        create_app(ai_service=_EmptyProviderPageService()),
+        raise_server_exceptions=False,
+    ).get("/api/v1/ai-providers", params={"offset": 20, "limit": 20})
+
+    assert plan_response.status_code == 200
+    assert plan_response.json()["items"] == []
+    assert provider_response.status_code == 200
+    assert provider_response.json()["items"] == []
+
+
+def test_ai_provider_secret_is_write_only_masked_and_never_reaches_response() -> None:
+    secret = "api-key-that-must-never-leak"
+    service = _FakeAIOperationService()
+    app = create_app(ai_service=service)
+
+    response = TestClient(app).post(
+        "/api/v1/ai-provider-secrets",
+        headers={"Idempotency-Key": "provider-secret"},
+        json={
+            "providerId": _PROVIDER_ID,
+            "secret": {"value": secret},
+            "expectedRevision": 3,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["secretStatus"] == {
+        "configured": True,
+        "source": "STORE",
+        "maskedValue": "********",
+        "generation": 1,
+    }
+    assert secret not in response.text
+    assert secret not in repr(service.calls)
+    assert "********" in service.calls[0][-1]
+
+
+def test_ai_provider_update_and_secret_replace_require_advanced_revision_receipts() -> None:
+    class _StaleProviderService(_FakeAIOperationService):
+        async def update_ai_provider(
+            self,
+            *,
+            provider_id: str,
+            command: object,
+            context: object,
+        ) -> object:
+            return _provider_payload()
+
+        async def replace_ai_provider_secret(
+            self,
+            *,
+            command: object,
+            context: object,
+        ) -> object:
+            return _provider_payload()
+
+    app = create_app(ai_service=_StaleProviderService())
+    client = TestClient(app, raise_server_exceptions=False)
+
+    updated = client.patch(
+        f"/api/v1/ai-providers/{_PROVIDER_ID}",
+        headers={"Idempotency-Key": "stale-provider-update"},
+        json={"config": _provider_config_payload(), "expectedRevision": 3},
+    )
+    secret = client.post(
+        "/api/v1/ai-provider-secrets",
+        headers={"Idempotency-Key": "stale-provider-secret"},
+        json={
+            "providerId": _PROVIDER_ID,
+            "secret": {"value": "replacement-secret"},
+            "expectedRevision": 3,
+        },
+    )
+
+    _assert_error_envelope(updated, status=500, code="INTERNAL_ERROR")
+    _assert_error_envelope(secret, status=500, code="INTERNAL_ERROR")
+
+
+def test_ai_provider_test_returns_202_and_never_runs_provider_in_request_handler() -> None:
+    service = _FakeAIOperationService()
+    app = create_app(ai_service=service)
+
+    response = TestClient(app).post(
+        "/api/v1/ai-provider-tests",
+        headers={"Idempotency-Key": "provider-test"},
+        json={"providerId": _PROVIDER_ID, "expectedRevision": 3},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["operationId"] == _PROVIDER_TEST_ID
+    assert response.json()["status"] == "QUEUED"
+    assert service.provider_test_runs == 0
+    assert service.calls == [("submit_ai_provider_test", _PROVIDER_ID, 3, "provider-test")]
+
+
+def test_ai_provider_test_rejects_a_wrong_operation_receipt_kind() -> None:
+    class _WrongReceiptService(_FakeAIOperationService):
+        async def submit_ai_provider_test(
+            self,
+            *,
+            command: object,
+            context: object,
+        ) -> object:
+            receipt = await super().submit_ai_provider_test(command=command, context=context)
+            assert isinstance(receipt, dict)
+            receipt["kind"] = "PLAN_EXTRACTION"
+            return receipt
+
+    app = create_app(ai_service=_WrongReceiptService())
+
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/api/v1/ai-provider-tests",
+        headers={"Idempotency-Key": "wrong-operation-kind"},
+        json={"providerId": _PROVIDER_ID, "expectedRevision": 3},
+    )
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_ai_provider_response_cannot_expose_secret_material_or_raw_provider_body() -> None:
+    secret = "server-side-secret-material"
+
+    class _UnsafeProviderService(_FakeAIOperationService):
+        async def list_ai_providers(self, *, offset: int, limit: int) -> object:
+            payload = await super().list_ai_providers(offset=offset, limit=limit)
+            assert isinstance(payload, dict)
+            item = payload["items"][0]
+            assert isinstance(item, dict)
+            item["secretValue"] = secret
+            item["rawProviderBody"] = "raw upstream body"
+            return payload
+
+    app = create_app(ai_service=_UnsafeProviderService())
+
+    response = TestClient(app, raise_server_exceptions=False).get("/api/v1/ai-providers")
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+    assert secret not in response.text
+    assert "raw upstream body" not in response.text
+
+
+def test_ai_provider_configuration_rejects_unsafe_remote_http_before_service_call() -> None:
+    service = _FakeAIOperationService()
+    app = create_app(ai_service=service)
+    config = _provider_config_payload()
+    config["baseUrl"] = "http://remote.example.test/v1"
+
+    response = TestClient(app).post(
+        "/api/v1/ai-providers",
+        headers={"Idempotency-Key": "unsafe-provider-url"},
+        json={"config": config, "expectedRevision": 0},
+    )
+
+    _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        (
+            "post",
+            "/api/v1/ai-providers",
+            {"config": _provider_config_payload()},
+        ),
+        (
+            "patch",
+            f"/api/v1/ai-providers/{_PROVIDER_ID}",
+            {"config": _provider_config_payload()},
+        ),
+        (
+            "post",
+            "/api/v1/ai-provider-secrets",
+            {"providerId": _PROVIDER_ID, "secret": {"value": "secret"}},
+        ),
+        (
+            "post",
+            "/api/v1/ai-provider-tests",
+            {"providerId": _PROVIDER_ID},
+        ),
+    ],
+)
+def test_ai_provider_mutations_require_expected_revision(
+    method: str,
+    path: str,
+    body: dict[str, object],
+) -> None:
+    app = create_app(ai_service=_FakeAIOperationService())
+
+    response = getattr(TestClient(app), method)(
+        path,
+        headers={"Idempotency-Key": "revision-required"},
+        json=body,
+    )
+
+    error = _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert any(detail["location"][-1] == "expectedRevision" for detail in error["details"])
+
+
+def test_ai_provider_invalid_secret_error_never_echoes_input() -> None:
+    app = create_app(ai_service=_FakeAIOperationService())
+    secret = "s" * 8_193
+
+    response = TestClient(app).post(
+        "/api/v1/ai-provider-secrets",
+        headers={"Idempotency-Key": "invalid-secret"},
+        json={
+            "providerId": _PROVIDER_ID,
+            "secret": {"value": secret},
+            "expectedRevision": 3,
+        },
+    )
+
+    error = _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert secret not in response.text
+    assert all("input" not in detail for detail in error["details"])
+
+
+def test_plan_extraction_rejects_lone_surrogate_before_service_call_without_leak() -> None:
+    service = _FakePlanOperationService()
+    app = create_app(plan_service=service)
+    source = "sensitive-source-\ud800"
+
+    response = TestClient(app).post(
+        "/api/v1/plan-extractions",
+        headers={"Idempotency-Key": "surrogate-source"},
+        content=json.dumps(
+            {
+                "providerId": _PROVIDER_ID,
+                "sourceText": source,
+                "expectedRevision": 3,
+            },
+            ensure_ascii=True,
+        ),
+    )
+
+    _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+    assert "sensitive-source" not in response.text

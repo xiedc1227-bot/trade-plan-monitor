@@ -131,6 +131,14 @@ AI can create drafts only. Activation requires:
 - every material `unmapped_text` item has an explicit resolution;
 - the request carries an optimistic revision and idempotency key.
 
+### T037 HTTP Adapter Boundary
+
+The local API exposes AI only through an injected `AIOperationService` and the plan extraction submission method on `PlanOperationService`. Configuration requests contain the complete non-secret `AIProviderConfig` shape in camelCase plus `expectedRevision`; `PATCH /api/v1/ai-providers/{id}` is a full revision-guarded replacement, not a partial merge. The HTTP schema calls the concrete `AIProviderConfig` class-local wrap validator and does not move sanitization to `_AIValue`. Secret replacement embeds the existing `SecretWrite` value so its own class-local wrap validator remains authoritative; no base-class validator is introduced.
+
+Every provider create/update, secret replacement, provider test, and plan extraction requires `Idempotency-Key` and `expectedRevision`. The injected application service atomically owns request hashing, duplicate/replay handling, revision comparison, persistence, and audit insertion. HTTP responses expose only non-secret provider configuration, fixed masked secret status, or bounded operation receipts. Extra service fields, raw provider bodies, authorization data, and secret material fail closed before serialization.
+
+`POST /api/v1/plan-extractions` and `POST /api/v1/ai-provider-tests` return `202` only after the application service durably accepts bounded work. The request handler does not call the provider, execute extraction, or activate a plan. `GET /api/v1/plan-extractions/{id}` exposes orchestration states plus validated evidence/issues and canonical draft JSON; it never exposes raw model output. `CANCELLED` is represented only by this orchestration status boundary and remains absent from the pure T017 extraction function.
+
 ## Code Style
 
 ```python
