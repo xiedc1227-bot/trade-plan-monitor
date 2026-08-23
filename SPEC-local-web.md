@@ -86,6 +86,14 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 }
 ```
 
+### T035 Application and Error Boundary
+
+- `create_app(...)` constructs only the FastAPI adapter. Import and construction do not load configuration, open SQLite, call providers, create tasks, or bind a network socket; no module-level application instance starts hidden work.
+- One explicitly injected runtime factory is invoked only when the FastAPI lifespan starts. The lifespan owns exactly one runtime instance, awaits `start()`, accepts a valid `DEGRADED` read-only startup, makes the active instance available through dependency injection, and always awaits `stop()` before clearing it. Starting without a factory fails closed.
+- Every request receives a newly generated 32-character lowercase-hex request ID. Caller-supplied IDs are ignored; the same validated value appears in the `X-Request-ID` header and the error body's `requestId`.
+- `ApiError`, request-validation errors, HTTP errors, and unexpected exceptions map to the single envelope above. Public outer messages are selected from fixed error codes. Validation details are capped at 100 entries; each location is capped at 16 bounded parts, and only a sanitized code plus `Field required` or `Invalid value` is exposed. Rejected input, Pydantic context, exception cause, secret values, and raw provider/storage bodies are never serialized.
+- Shared error schemas are strict, frozen, camelCase-compatible, and revalidate `model_copy(update=...)`. T035 adds no dashboard, symbol, health, plan, position, alert, WebSocket, Origin/security-header, static-file, or network-listener behavior; those remain T036 and later tasks.
+
 Read resources:
 
 ```text

@@ -86,6 +86,14 @@ web/src/
 }
 ```
 
+### T035 应用与错误边界
+
+- `create_app(...)` 只构造 FastAPI 适配器。导入和构造不会加载配置、打开 SQLite、调用供应商、创建任务或绑定网络套接字；不存在通过模块级应用实例启动的隐藏工作。
+- 明确注入的运行时工厂只在 FastAPI lifespan 启动时调用。lifespan 恰好持有一个运行时实例，等待 `start()`，接受有效的 `DEGRADED` 只读启动，通过依赖注入提供当前活跃实例，并在清除实例前始终等待 `stop()`。缺少工厂时启动会封闭失败。
+- 每个请求都会生成新的 32 字符小写十六进制 request ID。忽略调用方提供的 ID；经过校验的同一值同时出现在 `X-Request-ID` 响应头和错误正文的 `requestId` 中。
+- `ApiError`、请求校验错误、HTTP 错误和未预期异常都映射到上述唯一 envelope。对外顶层消息从固定错误码中选择。校验详情最多 100 项；每个 location 最多包含 16 个有界部分，只暴露脱敏 code 以及 `Field required` 或 `Invalid value`。拒绝的输入、Pydantic context、异常 cause、密钥值和供应商/存储原始响应体绝不序列化。
+- 共享错误 Schema 严格、冻结、兼容 camelCase，并对 `model_copy(update=...)` 重新校验。T035 不增加监控总览、股票、健康、计划、持仓、提醒、WebSocket、Origin/安全响应头、静态文件或网络监听行为；这些仍属于 T036 及后续任务。
+
 只读资源：
 
 ```text
