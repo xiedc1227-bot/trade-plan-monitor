@@ -12,6 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Annotated
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -20,8 +21,37 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, ValidationError
 
+from trade_plan_monitor.decision.models import (
+    ActionableSignalType,
+    ConditionEvidence,
+    ConditionOutcome,
+    DataHealthSnapshot,
+    DataHealthStatus,
+    DecisionZone,
+    EvaluationResult,
+    EvidenceFact,
+    EvidenceUnit,
+    IntradayEvaluationIdentity,
+    NextStep,
+    NextStepCode,
+    PositionSummary,
+    RiskStateSnapshot,
+    RiskStatus,
+    SignalIntent,
+    SignalType,
+    SymbolDecisionSnapshot,
+)
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json, load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
+from trade_plan_monitor.domain.plan_models import PriceInZoneCondition
+from trade_plan_monitor.notifications.identity import alert_dedup_key
+from trade_plan_monitor.notifications.models import (
+    AlertEvent,
+    AlertPayload,
+    AlertPriceZone,
+    AlertSeverity,
+)
+from trade_plan_monitor.notifications.render import render_alert
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
@@ -2115,3 +2145,1046 @@ def test_plan_extraction_rejects_lone_surrogate_before_service_call_without_leak
     _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
     assert service.calls == []
     assert "sensitive-source" not in response.text
+
+
+_POSITION_LOT_ID = "50000000-0000-4000-8000-000000000001"
+_ALERT_ID = "60000000-0000-4000-8000-000000000001"
+
+
+def _position_lot_payload(
+    *,
+    remaining_quantity: int = 100,
+    sellable_quantity: int = 100,
+    closed_at: datetime | None = None,
+    revision: int | None = None,
+) -> dict[str, object]:
+    if revision is None:
+        revision = (100 - remaining_quantity) // 100
+    return {
+        "lotId": _POSITION_LOT_ID,
+        "symbol": "003043.SZ",
+        "bucket": "CORE",
+        "quantity": 100,
+        "remainingQuantity": remaining_quantity,
+        "sellableQuantity": sellable_quantity,
+        "acquiredTradeDate": date(2026, 8, 21),
+        "costFen": 6_400,
+        "relatedAlertId": _ALERT_ID,
+        "closedAt": closed_at,
+        "revision": revision,
+    }
+
+
+def _alert_event(
+    *,
+    event_id: str = _ALERT_ID,
+    sequence: int = 23,
+    acknowledged_at: datetime | None = None,
+) -> AlertEvent:
+    evaluated_at = datetime(2026, 8, 24, 10, 5, tzinfo=_SHANGHAI)
+    evidence = ConditionEvidence(
+        condition=PriceInZoneCondition(zone="LOW_BUY"),
+        outcome=ConditionOutcome.SATISFIED,
+        facts=(
+            EvidenceFact(
+                key="current_price_fen",
+                value=6_420,
+                unit=EvidenceUnit.FEN,
+            ),
+        ),
+    )
+    next_step = NextStep(code=NextStepCode.RECORD_CONFIRMED_FILL)
+    signal = SignalIntent(
+        signal_type=ActionableSignalType.BUY_CORE_READY,
+        plan_hash="b" * 64,
+        symbol="003043.SZ",
+        trading_date=date(2026, 8, 24),
+        cause_id="episode-001",
+        quantity=100,
+        bucket="CORE",
+        target_lot_id=None,
+        matched_conditions=(evidence,),
+        blockers=(),
+        next_step=next_step,
+    )
+    payload = AlertPayload(
+        event_id=UUID(event_id),
+        dedup_key=alert_dedup_key(signal),
+        plan_id="huaya-smart",
+        plan_version=1,
+        plan_hash="b" * 64,
+        symbol="003043.SZ",
+        name="华亚智能",
+        signal_type=signal.signal_type,
+        severity=AlertSeverity.ACTION,
+        trading_date=date(2026, 8, 24),
+        cause_id=signal.cause_id,
+        evaluated_at=evaluated_at,
+        market_data_at=evaluated_at - timedelta(seconds=60),
+        data_age_seconds=60,
+        price_fen=6_420,
+        quantity=signal.quantity,
+        bucket=signal.bucket,
+        target_lot_id=signal.target_lot_id,
+        matched_conditions=signal.matched_conditions,
+        satisfied_conditions=signal.matched_conditions,
+        unmet_conditions=(),
+        blockers=(),
+        zone=DecisionZone.LOW_BUY,
+        relevant_zone=AlertPriceZone(
+            zone=DecisionZone.LOW_BUY,
+            low_fen=6_300,
+            high_fen=6_450,
+            include_low=True,
+            include_high=True,
+        ),
+        risk_line_fen=6_080,
+        next_step=next_step,
+    )
+    return AlertEvent(
+        **payload.model_dump(mode="python", round_trip=True),
+        sequence=sequence,
+        message_text=render_alert(payload),
+        created_at=evaluated_at,
+        acknowledged_at=acknowledged_at,
+    )
+
+
+def _alert_record_payload(
+    *,
+    event_id: str = _ALERT_ID,
+    sequence: int = 23,
+    acknowledged_at: datetime | None = None,
+) -> dict[str, object]:
+    return {
+        "event": _alert_event(
+            event_id=event_id,
+            sequence=sequence,
+            acknowledged_at=acknowledged_at,
+        ),
+        "revision": 1 if acknowledged_at is not None else 0,
+        "positionPrefill": {
+            "action": "BUY",
+            "symbol": "003043.SZ",
+            "bucket": "CORE",
+            "quantity": 100,
+            "targetLotId": None,
+            "relatedAlertId": event_id,
+        },
+    }
+
+
+def _diagnostic_result(bucket_end: datetime) -> EvaluationResult:
+    evidence = ConditionEvidence(
+        condition=PriceInZoneCondition(zone="LOW_BUY"),
+        outcome=ConditionOutcome.SATISFIED,
+        facts=(EvidenceFact(key="current_price_fen", value=1_234, unit=EvidenceUnit.FEN),),
+    )
+    next_step = NextStep(code=NextStepCode.RECORD_CONFIRMED_FILL)
+    signal = SignalIntent(
+        signal_type=ActionableSignalType.BUY_CORE_READY,
+        plan_hash="b" * 64,
+        symbol="003043.SZ",
+        trading_date=bucket_end.date(),
+        cause_id="episode-001",
+        quantity=100,
+        bucket="CORE",
+        target_lot_id=None,
+        matched_conditions=(evidence,),
+        blockers=(),
+        next_step=next_step,
+    )
+    snapshot = SymbolDecisionSnapshot(
+        symbol="003043.SZ",
+        plan_id="sample-plan",
+        plan_version=3,
+        plan_hash="b" * 64,
+        evaluated_at=bucket_end,
+        market_data_at=bucket_end,
+        price_fen=1_234,
+        zone=DecisionZone.LOW_BUY,
+        signal_type=SignalType.BUY_CORE_READY,
+        position=PositionSummary(
+            core_quantity=1_000,
+            tactical_quantity=0,
+            total_quantity=1_000,
+            sellable_core_quantity=1_000,
+            sellable_tactical_quantity=0,
+        ),
+        episode=None,
+        risk=RiskStateSnapshot(
+            symbol="003043.SZ",
+            plan_hash="b" * 64,
+            status=RiskStatus.CLEAR,
+            breach_trade_date=None,
+            prior_close_fen=1_200,
+            revision=0,
+            updated_at=bucket_end,
+        ),
+        data_health=DataHealthSnapshot(
+            symbol="003043.SZ",
+            status=DataHealthStatus.LIVE,
+            latest_bar_end=bucket_end,
+            data_age_seconds=0,
+            required_data_complete=True,
+            fresh=True,
+        ),
+        condition_evidence=(evidence,),
+        next_step=next_step,
+    )
+    return EvaluationResult.build(
+        snapshot=snapshot,
+        transitions=(),
+        signal_intent=signal,
+        satisfied_conditions=(evidence,),
+        unmet_conditions=(),
+        blockers=(),
+        next_step=next_step,
+        evaluation_identity=IntradayEvaluationIdentity(
+            plan_hash="b" * 64,
+            symbol="003043.SZ",
+            bucket_end=bucket_end,
+        ),
+    )
+
+
+class _FakePositionOperationService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, ...]] = []
+
+    async def list_position_lots(
+        self,
+        *,
+        symbol: str,
+        as_of_trade_date: date,
+        offset: int,
+        limit: int,
+    ) -> object:
+        self.calls.append(("list_position_lots", symbol, as_of_trade_date, offset, limit))
+        return {
+            "items": [_position_lot_payload()],
+            "symbol": symbol,
+            "asOfTradeDate": as_of_trade_date,
+            "offset": offset,
+            "limit": limit,
+            "total": max(1, offset + 1),
+        }
+
+    async def record_position_lot(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "record_position_lot",
+                command.symbol,
+                command.bucket,
+                command.quantity,
+                command.acquired_trade_date,
+                command.cost_fen,
+                str(command.related_alert_id),
+                command.expected_revision,
+                context.idempotency_key,
+                context.request_id,
+            )
+        )
+        return _position_lot_payload()
+
+    async def close_position_lot(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "close_position_lot",
+                str(command.lot_id),
+                command.quantity,
+                command.trade_date,
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        return {
+            "lot": _position_lot_payload(
+                remaining_quantity=0,
+                sellable_quantity=0,
+                closed_at=_API_NOW,
+            ),
+            "appliedQuantity": command.quantity,
+            "tradeDate": command.trade_date,
+            "beforeRemainingQuantity": 100,
+            "afterRemainingQuantity": 0,
+        }
+
+
+class _FakeAlertOperationService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, ...]] = []
+
+    async def list_alerts(
+        self,
+        *,
+        symbol: str | None,
+        signal_type: str | None,
+        acknowledged: bool | None,
+        start_at: datetime | None,
+        end_at: datetime | None,
+        offset: int,
+        limit: int,
+    ) -> object:
+        self.calls.append(
+            (
+                "list_alerts",
+                symbol,
+                signal_type,
+                acknowledged,
+                start_at,
+                end_at,
+                offset,
+                limit,
+            )
+        )
+        return {
+            "items": [_alert_record_payload()],
+            "symbol": symbol,
+            "signalType": signal_type,
+            "acknowledged": acknowledged,
+            "startAt": start_at,
+            "endAt": end_at,
+            "offset": offset,
+            "limit": limit,
+            "total": 1,
+        }
+
+    async def acknowledge_alert(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "acknowledge_alert",
+                str(command.alert_id),
+                command.expected_revision,
+                context.idempotency_key,
+                context.request_id,
+            )
+        )
+        return _alert_record_payload(
+            acknowledged_at=_API_NOW + timedelta(minutes=1),
+        )
+
+    async def evaluate_diagnostic(self, *, command: object, context: object) -> object:
+        self.calls.append(
+            (
+                "evaluate_diagnostic",
+                command.symbol,
+                command.evaluation_kind,
+                command.bucket_end,
+                command.official_trade_date,
+                command.expected_revision,
+                context.idempotency_key,
+            )
+        )
+        return {
+            "result": _diagnostic_result(command.bucket_end),
+            "sourceRevision": command.expected_revision,
+            "stateMutationApplied": False,
+            "alertEnqueued": False,
+            "positionChanged": False,
+            "audited": False,
+        }
+
+
+def test_position_lots_are_paginated_and_manual_create_close_are_explicit() -> None:
+    service = _FakePositionOperationService()
+    app = create_app(position_service=service)
+    client = TestClient(app)
+
+    page = client.get(
+        "/api/v1/position-lots",
+        params={
+            "symbol": "003043.SZ",
+            "asOfTradeDate": "2026-08-24",
+            "offset": 2,
+            "limit": 5,
+        },
+    )
+    created = client.post(
+        "/api/v1/position-lots",
+        headers={"Idempotency-Key": "position-buy-1"},
+        json={
+            "symbol": "003043.SZ",
+            "bucket": "CORE",
+            "quantity": 100,
+            "acquiredTradeDate": "2026-08-21",
+            "costFen": 6_400,
+            "relatedAlertId": _ALERT_ID,
+            "expectedRevision": 0,
+        },
+    )
+    closed = client.post(
+        "/api/v1/position-lot-closures",
+        headers={"Idempotency-Key": "position-close-1"},
+        json={
+            "lotId": _POSITION_LOT_ID,
+            "quantity": 100,
+            "tradeDate": "2026-08-24",
+            "expectedRevision": 0,
+        },
+    )
+
+    assert page.status_code == 200
+    assert page.json()["symbol"] == "003043.SZ"
+    assert page.json()["asOfTradeDate"] == "2026-08-24"
+    assert page.json()["offset"] == 2
+    assert page.json()["limit"] == 5
+    assert page.json()["items"][0]["sellableQuantity"] == 100
+    assert created.status_code == 200
+    assert created.json()["revision"] == 0
+    assert created.json()["relatedAlertId"] == _ALERT_ID
+    assert closed.status_code == 200
+    assert closed.json()["lot"]["remainingQuantity"] == 0
+    assert closed.json()["lot"]["closedAt"] is not None
+    assert closed.json()["appliedQuantity"] == 100
+    assert closed.json()["beforeRemainingQuantity"] == 100
+    assert closed.json()["afterRemainingQuantity"] == 0
+    assert service.calls[0] == (
+        "list_position_lots",
+        "003043.SZ",
+        date(2026, 8, 24),
+        2,
+        5,
+    )
+    assert _REQUEST_ID_PATTERN.fullmatch(service.calls[1][-1])
+
+
+def test_position_commands_enforce_board_lot_maximum_and_t_plus_one() -> None:
+    class _PolicyService(_FakePositionOperationService):
+        async def record_position_lot(self, *, command: object, context: object) -> object:
+            self.calls.append(("record_position_lot", command.quantity))
+            raise ApiError(ApiErrorCode.CONFLICT)
+
+        async def close_position_lot(self, *, command: object, context: object) -> object:
+            self.calls.append(("close_position_lot", command.trade_date))
+            raise ApiError(ApiErrorCode.CONFLICT)
+
+    service = _PolicyService()
+    app = create_app(position_service=service)
+    client = TestClient(app)
+    base = {
+        "symbol": "003043.SZ",
+        "bucket": "CORE",
+        "acquiredTradeDate": "2026-08-24",
+        "costFen": 6_400,
+        "expectedRevision": 0,
+    }
+
+    board_lot = client.post(
+        "/api/v1/position-lots",
+        headers={"Idempotency-Key": "bad-board-lot"},
+        json={**base, "quantity": 50},
+    )
+    maximum = client.post(
+        "/api/v1/position-lots",
+        headers={"Idempotency-Key": "maximum-position"},
+        json={**base, "quantity": 100},
+    )
+    t_plus_one = client.post(
+        "/api/v1/position-lot-closures",
+        headers={"Idempotency-Key": "same-day-close"},
+        json={
+            "lotId": _POSITION_LOT_ID,
+            "quantity": 100,
+            "tradeDate": "2026-08-24",
+            "expectedRevision": 0,
+        },
+    )
+
+    _assert_error_envelope(board_lot, status=422, code="VALIDATION_ERROR")
+    _assert_error_envelope(maximum, status=409, code="CONFLICT")
+    _assert_error_envelope(t_plus_one, status=409, code="CONFLICT")
+    assert service.calls == [
+        ("record_position_lot", 100),
+        ("close_position_lot", date(2026, 8, 24)),
+    ]
+
+
+def test_alerts_filter_and_paginate_with_non_submitting_position_prefill() -> None:
+    alert_service = _FakeAlertOperationService()
+    position_service = _FakePositionOperationService()
+    app = create_app(
+        alert_service=alert_service,
+        position_service=position_service,
+    )
+    start_at = datetime(2026, 8, 24, 9, 30, tzinfo=_SHANGHAI)
+    end_at = datetime(2026, 8, 24, 15, 0, tzinfo=_SHANGHAI)
+
+    response = TestClient(app).get(
+        "/api/v1/alerts",
+        params={
+            "symbol": "003043.SZ",
+            "signalType": "BUY_CORE_READY",
+            "acknowledged": "false",
+            "startAt": start_at.isoformat(),
+            "endAt": end_at.isoformat(),
+            "offset": 0,
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["offset"] == 0
+    assert body["limit"] == 10
+    assert body["symbol"] == "003043.SZ"
+    assert body["signalType"] == "BUY_CORE_READY"
+    assert body["acknowledged"] is False
+    assert body["startAt"] == start_at.isoformat()
+    assert body["endAt"] == end_at.isoformat()
+    assert body["items"][0]["acknowledgedAt"] is None
+    assert body["items"][0]["revision"] == 0
+    assert body["items"][0]["dedupKey"] == _alert_event().dedup_key
+    assert body["items"][0]["relevantZone"]["zone"] == "LOW_BUY"
+    assert body["items"][0]["positionPrefill"] == {
+        "action": "BUY",
+        "symbol": "003043.SZ",
+        "bucket": "CORE",
+        "quantity": 100,
+        "targetLotId": None,
+        "relatedAlertId": _ALERT_ID,
+    }
+    assert alert_service.calls == [
+        (
+            "list_alerts",
+            "003043.SZ",
+            "BUY_CORE_READY",
+            False,
+            start_at,
+            end_at,
+            0,
+            10,
+        )
+    ]
+    assert position_service.calls == []
+
+
+def test_alert_acknowledgement_is_idempotent_and_never_records_a_fill() -> None:
+    alert_service = _FakeAlertOperationService()
+    position_service = _FakePositionOperationService()
+    app = create_app(
+        alert_service=alert_service,
+        position_service=position_service,
+    )
+
+    response = TestClient(app).post(
+        "/api/v1/alert-acknowledgements",
+        headers={"Idempotency-Key": "alert-ack-1"},
+        json={"alertId": _ALERT_ID, "expectedRevision": 0},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["eventId"] == _ALERT_ID
+    assert response.json()["acknowledgedAt"] is not None
+    assert response.json()["revision"] == 1
+    assert alert_service.calls[0][0:4] == (
+        "acknowledge_alert",
+        _ALERT_ID,
+        0,
+        "alert-ack-1",
+    )
+    assert position_service.calls == []
+
+
+def test_diagnostic_evaluation_returns_authoritative_result_without_mutation() -> None:
+    service = _FakeAlertOperationService()
+    app = create_app(alert_service=service)
+    bucket_end = datetime(2026, 8, 24, 10, 5, tzinfo=_SHANGHAI)
+
+    response = TestClient(app).post(
+        "/api/v1/diagnostic-evaluations",
+        headers={"Idempotency-Key": "diagnostic-1"},
+        json={
+            "symbol": "003043.SZ",
+            "evaluationKind": "INTRADAY",
+            "bucketEnd": bucket_end.isoformat(),
+            "officialTradeDate": None,
+            "expectedRevision": 11,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"]["resultHash"] == _diagnostic_result(bucket_end).result_hash
+    assert body["decision"]["symbol"] == "003043.SZ"
+    assert body["evaluationIdentity"] == {
+        "kind": "INTRADAY",
+        "planHash": "b" * 64,
+        "symbol": "003043.SZ",
+        "bucketEnd": bucket_end.isoformat(),
+        "formulaVersion": "ta-v1",
+    }
+    assert body["sourceRevision"] == 11
+    assert body["stateMutationApplied"] is False
+    assert body["alertEnqueued"] is False
+    assert body["positionChanged"] is False
+    assert body["audited"] is False
+    assert service.calls == [
+        (
+            "evaluate_diagnostic",
+            "003043.SZ",
+            "INTRADAY",
+            bucket_end,
+            None,
+            11,
+            "diagnostic-1",
+        )
+    ]
+
+
+def test_diagnostic_rejects_a_non_session_or_noncanonical_intraday_target() -> None:
+    service = _FakeAlertOperationService()
+    client = TestClient(create_app(alert_service=service))
+
+    lunch = client.post(
+        "/api/v1/diagnostic-evaluations",
+        headers={"Idempotency-Key": "diagnostic-lunch"},
+        json={
+            "symbol": "003043.SZ",
+            "evaluationKind": "INTRADAY",
+            "bucketEnd": "2026-08-24T12:00:00+08:00",
+            "officialTradeDate": None,
+            "expectedRevision": 11,
+        },
+    )
+    fractional = client.post(
+        "/api/v1/diagnostic-evaluations",
+        headers={"Idempotency-Key": "diagnostic-fractional"},
+        json={
+            "symbol": "003043.SZ",
+            "evaluationKind": "INTRADAY",
+            "bucketEnd": "2026-08-24T10:05:00.500000+08:00",
+            "officialTradeDate": None,
+            "expectedRevision": 11,
+        },
+    )
+
+    _assert_error_envelope(lunch, status=422, code="VALIDATION_ERROR")
+    _assert_error_envelope(fractional, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+
+
+def test_alert_response_rejects_signal_severity_drift() -> None:
+    class _UnsafeAlertService(_FakeAlertOperationService):
+        async def list_alerts(self, **kwargs: object) -> object:
+            payload = await super().list_alerts(**kwargs)
+            event = payload["items"][0]["event"].model_dump(
+                mode="python",
+                round_trip=True,
+            )
+            event["severity"] = "CRITICAL"
+            payload["items"][0]["event"] = event
+            return payload
+
+    response = TestClient(
+        create_app(alert_service=_UnsafeAlertService()),
+        raise_server_exceptions=False,
+    ).get("/api/v1/alerts")
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_alert_response_rejects_multiline_name_injection() -> None:
+    class _UnsafeAlertService(_FakeAlertOperationService):
+        async def list_alerts(self, **kwargs: object) -> object:
+            payload = await super().list_alerts(**kwargs)
+            event = payload["items"][0]["event"].model_dump(
+                mode="python",
+                round_trip=True,
+            )
+            event["name"] = "华亚\n智能"
+            payload["items"][0]["event"] = event
+            return payload
+
+    response = TestClient(
+        create_app(alert_service=_UnsafeAlertService()),
+        raise_server_exceptions=False,
+    ).get("/api/v1/alerts")
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_alert_response_rejects_noncanonical_rendered_message() -> None:
+    class _UnsafeAlertService(_FakeAlertOperationService):
+        async def list_alerts(self, **kwargs: object) -> object:
+            payload = await super().list_alerts(**kwargs)
+            event = payload["items"][0]["event"].model_dump(
+                mode="python",
+                round_trip=True,
+            )
+            event["message_text"] = "已自动下单。仅提醒，不会自动下单。"
+            payload["items"][0]["event"] = event
+            return payload
+
+    response = TestClient(
+        create_app(alert_service=_UnsafeAlertService()),
+        raise_server_exceptions=False,
+    ).get("/api/v1/alerts")
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_alert_page_rejects_duplicate_sequence_with_distinct_event_ids() -> None:
+    class _DuplicateSequenceService(_FakeAlertOperationService):
+        async def list_alerts(self, **kwargs: object) -> object:
+            payload = await super().list_alerts(**kwargs)
+            payload["items"].append(
+                _alert_record_payload(
+                    event_id="60000000-0000-4000-8000-000000000002",
+                    sequence=23,
+                )
+            )
+            payload["total"] = 2
+            return payload
+
+    response = TestClient(
+        create_app(alert_service=_DuplicateSequenceService()),
+        raise_server_exceptions=False,
+    ).get("/api/v1/alerts")
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_unacknowledged_alert_cannot_claim_acknowledged_revision() -> None:
+    class _RevisionDriftService(_FakeAlertOperationService):
+        async def list_alerts(self, **kwargs: object) -> object:
+            payload = await super().list_alerts(**kwargs)
+            payload["items"][0]["revision"] = 1
+            return payload
+
+    response = TestClient(
+        create_app(alert_service=_RevisionDriftService()),
+        raise_server_exceptions=False,
+    ).get("/api/v1/alerts")
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_acknowledging_an_already_acknowledged_alert_is_a_revision_noop() -> None:
+    service = _FakeAlertOperationService()
+    response = TestClient(create_app(alert_service=service)).post(
+        "/api/v1/alert-acknowledgements",
+        headers={"Idempotency-Key": "alert-ack-noop"},
+        json={"alertId": _ALERT_ID, "expectedRevision": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["revision"] == 1
+
+
+def test_position_response_rejects_non_durable_revision_and_closure_drift() -> None:
+    class _UnsafePositionService(_FakePositionOperationService):
+        async def list_position_lots(self, **kwargs: object) -> object:
+            payload = await super().list_position_lots(**kwargs)
+            payload["items"][0]["revision"] = 7
+            return payload
+
+        async def close_position_lot(self, **kwargs: object) -> object:
+            payload = await super().close_position_lot(**kwargs)
+            payload["appliedQuantity"] = 200
+            return payload
+
+    client = TestClient(
+        create_app(position_service=_UnsafePositionService()),
+        raise_server_exceptions=False,
+    )
+    listed = client.get(
+        "/api/v1/position-lots",
+        params={"symbol": "003043.SZ", "asOfTradeDate": "2026-08-24"},
+    )
+    closed = client.post(
+        "/api/v1/position-lot-closures",
+        headers={"Idempotency-Key": "closure-drift"},
+        json={
+            "lotId": _POSITION_LOT_ID,
+            "quantity": 100,
+            "tradeDate": "2026-08-24",
+            "expectedRevision": 0,
+        },
+    )
+
+    _assert_error_envelope(listed, status=500, code="INTERNAL_ERROR")
+    _assert_error_envelope(closed, status=500, code="INTERNAL_ERROR")
+
+
+def test_position_closure_response_rejects_same_day_acquisition() -> None:
+    class _SameDayClosureService(_FakePositionOperationService):
+        async def close_position_lot(self, **kwargs: object) -> object:
+            payload = await super().close_position_lot(**kwargs)
+            payload["lot"]["acquiredTradeDate"] = date(2026, 8, 24)
+            return payload
+
+    response = TestClient(
+        create_app(position_service=_SameDayClosureService()),
+        raise_server_exceptions=False,
+    ).post(
+        "/api/v1/position-lot-closures",
+        headers={"Idempotency-Key": "same-day-receipt-drift"},
+        json={
+            "lotId": _POSITION_LOT_ID,
+            "quantity": 100,
+            "tradeDate": "2026-08-24",
+            "expectedRevision": 0,
+        },
+    )
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_diagnostic_response_rejects_evaluation_identity_drift() -> None:
+    class _IdentityDriftService(_FakeAlertOperationService):
+        async def evaluate_diagnostic(self, **kwargs: object) -> object:
+            payload = await super().evaluate_diagnostic(**kwargs)
+            result = payload["result"].model_dump(mode="python", round_trip=True)
+            result["evaluation_identity"]["bucket_end"] = datetime(
+                2026,
+                8,
+                24,
+                10,
+                10,
+                tzinfo=_SHANGHAI,
+            )
+            payload["result"] = result
+            return payload
+
+    response = TestClient(
+        create_app(alert_service=_IdentityDriftService()),
+        raise_server_exceptions=False,
+    ).post(
+        "/api/v1/diagnostic-evaluations",
+        headers={"Idempotency-Key": "diagnostic-identity-drift"},
+        json={
+            "symbol": "003043.SZ",
+            "evaluationKind": "INTRADAY",
+            "bucketEnd": "2026-08-24T10:05:00+08:00",
+            "officialTradeDate": None,
+            "expectedRevision": 11,
+        },
+    )
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_diagnostic_response_rejects_a_decision_from_another_target() -> None:
+    class _WrongTargetDecisionService(_FakeAlertOperationService):
+        async def evaluate_diagnostic(self, **kwargs: object) -> object:
+            payload = await super().evaluate_diagnostic(**kwargs)
+            payload["result"] = _diagnostic_result(datetime(2026, 8, 24, 10, 5, tzinfo=_SHANGHAI))
+            return payload
+
+    response = TestClient(
+        create_app(alert_service=_WrongTargetDecisionService()),
+        raise_server_exceptions=False,
+    ).post(
+        "/api/v1/diagnostic-evaluations",
+        headers={"Idempotency-Key": "diagnostic-decision-drift"},
+        json={
+            "symbol": "003043.SZ",
+            "evaluationKind": "INTRADAY",
+            "bucketEnd": "2026-08-24T10:10:00+08:00",
+            "officialTradeDate": None,
+            "expectedRevision": 11,
+        },
+    )
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_t038_idempotency_conflict_mismatch_and_completed_replay_are_stable() -> None:
+    class _IdempotentAlertService(_FakeAlertOperationService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.responses: dict[str, object] = {}
+
+        async def acknowledge_alert(self, *, command: object, context: object) -> object:
+            key = context.idempotency_key
+            self.calls.append((key, command.expected_revision))
+            if key == "pending":
+                raise ApiError(ApiErrorCode.CONFLICT)
+            if key == "reused":
+                raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+            response = self.responses.setdefault(
+                key,
+                _alert_record_payload(
+                    acknowledged_at=_API_NOW + timedelta(minutes=1),
+                ),
+            )
+            return deepcopy(response)
+
+    service = _IdempotentAlertService()
+    client = TestClient(create_app(alert_service=service))
+    body = {"alertId": _ALERT_ID, "expectedRevision": 0}
+
+    pending = client.post(
+        "/api/v1/alert-acknowledgements",
+        headers={"Idempotency-Key": "pending"},
+        json=body,
+    )
+    reused = client.post(
+        "/api/v1/alert-acknowledgements",
+        headers={"Idempotency-Key": "reused"},
+        json=body,
+    )
+    first = client.post(
+        "/api/v1/alert-acknowledgements",
+        headers={"Idempotency-Key": "completed"},
+        json=body,
+    )
+    replay = client.post(
+        "/api/v1/alert-acknowledgements",
+        headers={"Idempotency-Key": "completed"},
+        json=body,
+    )
+
+    _assert_error_envelope(pending, status=409, code="CONFLICT")
+    _assert_error_envelope(reused, status=422, code="VALIDATION_ERROR")
+    assert first.status_code == 200
+    assert replay.status_code == 200
+    assert replay.json() == first.json()
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (
+            "/api/v1/position-lots",
+            {
+                "symbol": "003043.SZ",
+                "bucket": "CORE",
+                "quantity": 100,
+                "acquiredTradeDate": "2026-08-21",
+                "costFen": 6_400,
+                "expectedRevision": 0,
+            },
+        ),
+        (
+            "/api/v1/position-lot-closures",
+            {
+                "lotId": _POSITION_LOT_ID,
+                "quantity": 100,
+                "tradeDate": "2026-08-24",
+                "expectedRevision": 0,
+            },
+        ),
+        (
+            "/api/v1/alert-acknowledgements",
+            {"alertId": _ALERT_ID, "expectedRevision": 0},
+        ),
+        (
+            "/api/v1/diagnostic-evaluations",
+            {
+                "symbol": "003043.SZ",
+                "evaluationKind": "INTRADAY",
+                "bucketEnd": "2026-08-24T10:05:00+08:00",
+                "officialTradeDate": None,
+                "expectedRevision": 11,
+            },
+        ),
+    ],
+)
+def test_t038_mutations_require_idempotency_key(
+    path: str,
+    body: dict[str, object],
+) -> None:
+    app = create_app(
+        position_service=_FakePositionOperationService(),
+        alert_service=_FakeAlertOperationService(),
+    )
+
+    response = TestClient(app).post(path, json=body)
+
+    _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (
+            "/api/v1/position-lots",
+            {
+                "symbol": "003043.SZ",
+                "bucket": "CORE",
+                "quantity": 100,
+                "acquiredTradeDate": "2026-08-21",
+                "costFen": 6_400,
+            },
+        ),
+        (
+            "/api/v1/position-lot-closures",
+            {
+                "lotId": _POSITION_LOT_ID,
+                "quantity": 100,
+                "tradeDate": "2026-08-24",
+            },
+        ),
+        (
+            "/api/v1/alert-acknowledgements",
+            {"alertId": _ALERT_ID},
+        ),
+        (
+            "/api/v1/diagnostic-evaluations",
+            {
+                "symbol": "003043.SZ",
+                "evaluationKind": "INTRADAY",
+                "bucketEnd": "2026-08-24T10:05:00+08:00",
+                "officialTradeDate": None,
+            },
+        ),
+    ],
+)
+def test_t038_mutations_require_expected_revision(
+    path: str,
+    body: dict[str, object],
+) -> None:
+    position_service = _FakePositionOperationService()
+    alert_service = _FakeAlertOperationService()
+    app = create_app(
+        position_service=position_service,
+        alert_service=alert_service,
+    )
+
+    response = TestClient(app).post(
+        path,
+        headers={"Idempotency-Key": "revision-required"},
+        json=body,
+    )
+
+    error = _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert any(detail["location"][-1] == "expectedRevision" for detail in error["details"])
+    assert position_service.calls == []
+    assert alert_service.calls == []
+
+
+def test_t038_routes_fail_closed_without_their_injected_services() -> None:
+    app = create_app()
+    client = TestClient(app)
+
+    positions = client.get(
+        "/api/v1/position-lots",
+        params={"symbol": "003043.SZ", "asOfTradeDate": "2026-08-24"},
+    )
+    alerts = client.get("/api/v1/alerts")
+
+    _assert_error_envelope(positions, status=503, code="SERVICE_UNAVAILABLE")
+    _assert_error_envelope(alerts, status=503, code="SERVICE_UNAVAILABLE")
+
+
+def test_alert_time_filters_require_one_ordered_pair_before_service_call() -> None:
+    service = _FakeAlertOperationService()
+    client = TestClient(create_app(alert_service=service))
+
+    partial = client.get(
+        "/api/v1/alerts",
+        params={"startAt": "2026-08-24T09:30:00+08:00"},
+    )
+    reversed_range = client.get(
+        "/api/v1/alerts",
+        params={
+            "startAt": "2026-08-24T15:00:00+08:00",
+            "endAt": "2026-08-24T09:30:00+08:00",
+        },
+    )
+
+    _assert_error_envelope(partial, status=400, code="BAD_REQUEST")
+    _assert_error_envelope(reversed_range, status=400, code="BAD_REQUEST")
+    assert service.calls == []

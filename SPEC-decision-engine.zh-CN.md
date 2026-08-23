@@ -68,6 +68,8 @@ def evaluate(context: EvaluationContext) -> EvaluationResult:
 
 运行时在一个事务中应用迁移意图并写入提醒意图。
 
+T038 诊断判断是该同一公共 `evaluate(context)` 契约的只读应用服务用法。请求必须指定恰好一个规范盘中五分钟目标或一个官方收盘交易日，以及预期来源修订。应用服务响应保留未经改变的规范 `EvaluationResult`；HTTP 适配器在投影权威判断前重新校验其自认证 `resultHash` 和内嵌 evaluation identity。内嵌的 `planHash`、股票、kind、强类型目标和 `formulaVersion` 必须同时匹配该结果与请求，且不应用迁移意图、不认领判断账本、不入队提醒、不修改持仓、不读取时钟，也不调用供应商。适配器不能改变优先级、重算结果 hash 或构造第二个判断。唯一可选写入是明确报告的诊断审计。
+
 ## 判断优先级
 
 1. 目标全局数据不可用时返回 `BLOCKED_DATA`。

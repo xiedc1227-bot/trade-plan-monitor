@@ -239,6 +239,8 @@ owned by T027 and T039 respectively. Stored-data and acknowledgement-integrity
 failures expose sanitized outbox errors without retaining raw SQL, parameters,
 payloads, context, or cause.
 
+T038 exposes the committed alert center through a separately injected application service. Bounded pages may filter by symbol, actionable signal type, acknowledgement state, and a paired inclusive Shanghai-time range; the returned page echoes the exact filters, rejects duplicate event IDs or sequences, and revalidates the complete canonical `AlertEvent`, including dedup identity, relevant zone, next step, deterministic reminder text, and all evidence/display budgets. A buy/reduction alert may supply an identity-matched form prefill, but the alert query and acknowledgement routes never invoke the position service. Every acknowledgement requires idempotency and an expected revision. Unacknowledged and acknowledged rows have revisions `0` and `1`; the first acknowledgement advances `0` to `1`, while an already acknowledged command at revision `1` is a no-op that remains `1`. Acknowledgement still cannot represent a fill. T039 remains the sole owner of WebSocket publication and replay.
+
 ## Code Style
 
 ```python

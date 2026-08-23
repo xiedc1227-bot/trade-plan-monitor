@@ -113,6 +113,16 @@ web/src/
 - AI 供应商创建/更新使用完整的不含密钥配置。`PATCH` 是带修订保护的完整替换，其正文 `providerId` 必须与路径一致。API 通过具体 `AIProviderConfig` 的 class-local 脱敏校验器重新校验配置，包括 HTTPS/回环 URL 策略和资源限制。密钥替换接收现有 class-local `SecretWrite` 值，但响应只包含等价于 `SecretStatus` 的已配置状态、来源、固定掩码和代数元数据。服务返回的配置必须与提交的规范化配置一致；额外密钥或供应商原始字段会封闭失败。
 - 每个 T037 状态变更端点都要求 1～128 个白名单字符组成的 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同意图回放其规范响应。应用服务必须原子完成这些检查与审计写入；路由绝不重建仓储、校验或决策引擎行为。
 
+### T038 持仓、提醒与诊断边界
+
+- `create_app(position_service=..., alert_service=...)` 接收明确注入的 `PositionOperationService` 和 `AlertOperationService` 适配器，但不构造仓储、不打开 SQLite、不判断计划，也不启动工作。缺少服务时以 `SERVICE_UNAVAILABLE` 封闭失败。应用服务负责原子幂等、乐观修订检查、计划所属最大仓位策略、T+1/日历策略、持久化和审计写入。
+- T038 实现 `GET /position-lots`、`POST /position-lots`、`POST /position-lot-closures`、`GET /alerts`、`POST /alert-acknowledgements` 和 `POST /diagnostic-evaluations`。它不实现 T039 WebSocket 发布/回放、T040 Origin/安全/静态资源提供、生产服务组合，也不修改任何 T024 判断优先级、hash 或回放行为。
+- 持仓分页要求一个精确股票和显式 `asOfTradeDate`，回显请求的分页/筛选 identity，并且只暴露有界的人工批次事实与 T+1 可卖投影。人工建仓要求显式的 100 股整手数量、仓位桶、买入交易日、整数分成本、可选关联提醒和 `expectedRevision=0`；新批次从修订 `0` 开始。减仓是针对一个批次、数量、交易日和预期修订的独立明确命令。批次的持久修订为 `(quantity - remainingQuantity) / 100`，因此每减少一手就前进一步，且无需新增存储列。减仓响应将精确应用数量和交易日绑定到操作前/后的剩余数量及结果批次，且不能报告买入当日或更早日期的成功减仓。应用服务必须在提交持仓审计前拒绝最大仓位、剩余数量、交易日历 T+1 和过期修订冲突。
+- 提醒分页使用有界 `offset`/`limit`，并可按股票、可操作信号类型、确认状态和成对的上海时区闭区间时间筛选。分页回显这些筛选条件，拒绝重复事件 ID 或序号，并重新校验每个完整规范 `AlertEvent`，包括去重 identity、严重级别、相关区间、下一步、证据/节点/事实/数值预算、确定性渲染结果和确认时间戳。持仓预填是不提交的值，其股票、数量、仓位桶、目标批次和事件 identity 必须与提醒精确一致；它绝不调用持仓服务。
+- 提醒确认是独立的幂等审计命令。提醒修订就是持久确认状态：未确认时为 `0`，确认后为 `1`。首次确认要求修订 `0` 并返回 `1`；对已确认修订 `1` 再次确认是仍保持 `1` 的 no-op；其他过期修订均冲突。响应必须标识请求事件并包含确认时间。该路由不能创建、关闭或以其他方式修改持仓；提醒确认继续与投递成功和成交相互独立。
+- 诊断命令必须且只能指定一个规范 `INTRADAY` 五分钟交易时段边界，或一个 `OFFICIAL_CLOSE` 交易日期。服务返回一个规范且自校验的 `EvaluationResult`；适配器在投影权威判断前重新校验其 `resultHash`、内嵌 evaluation identity 和完整结果。该内嵌 identity 的 `planHash`、股票、kind、强类型目标和 `formulaVersion` 必须同时匹配结果与请求，并携带精确来源修订。严格响应要求 `stateMutationApplied=false`、`alertEnqueued=false` 和 `positionChanged=false`；唯一允许的写入是可选诊断审计。路由既不调用也不重新实现决策引擎。
+- 每个 T038 POST 都要求有界 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同命令回放其规范响应。服务响应的分页、筛选、identity、目标、修订、严重级别、证据分区和持仓形态会在序列化前重新校验；额外供应商/存储/密钥字段在通用错误边界后封闭失败。
+
 只读资源：
 
 ```text

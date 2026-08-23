@@ -68,6 +68,8 @@ Every current-date daily indicator input carries explicit `PROVISIONAL` or `OFFI
 
 The runtime applies transition intents and enqueues the alert intent in one transaction.
 
+T038 diagnostic evaluation is a read-only application-service use of this same public `evaluate(context)` contract. Its request names exactly one canonical intraday five-minute target or one official-close trade date and an expected source revision. The application-service response retains the unchanged canonical `EvaluationResult`; the HTTP adapter revalidates its self-authenticating `resultHash` and embedded evaluation identity before projecting the authoritative decision. The embedded `planHash`, symbol, kind, typed target, and `formulaVersion` must match both that result and the request, with no transition-intent application, evaluation-ledger claim, alert enqueue, position change, clock read, or provider call. The adapter cannot alter priority, recompute a result hash, or construct a second decision. An explicitly reported diagnostic audit is the sole optional write.
+
 ## Evaluation Priority
 
 1. Return `BLOCKED_DATA` for target-global unusable data.

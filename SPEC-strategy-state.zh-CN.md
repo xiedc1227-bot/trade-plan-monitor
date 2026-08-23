@@ -105,6 +105,8 @@ class PositionLot(BaseModel):
 - 修订号冲突返回 `409 CONFLICT` 和当前版本。
 - 计划激活、状态迁移、判断记录、审计和提醒入队在需要时使用同一短事务。
 
+在 T038 Web 边界中，建仓和减仓继续作为该仓储之上的明确应用服务命令。HTTP 适配器要求一个有界幂等键和预期持仓修订；应用服务解析活动计划的 100 股手数与最大数量，串行化写入，应用 T+1/剩余数量检查，并原子插入持仓审计。新批次修订为 `0`；后续持久修订按 `(quantity - remaining_qty) / 100` 推导。减仓回执把应用数量和交易日绑定到精确的操作前/后剩余数量，因此修订检查无需推测或虚构存储字段。可选 `related_alert_id` 仅用于 provenance：它可以预填明确命令，但不能提交该命令。提醒确认使用独立 Outbox 事务，将未确认/已确认状态映射为修订 `0`/`1`，并让已确认修订 `1` 保持为 no-op；它不能调用任何持仓操作。诊断判断不应用仓储迁移、不认领判断账本、不入队提醒，也不修改持仓；只允许写入明确报告的可选诊断审计。
+
 从 T032 开始，`evaluation_ledger` 使用无损主键 `(plan_hash, symbol, evaluation_kind, target_value, formula_version)`。`INTRADAY` 在 `target_value` 中存储规范上海时区五分钟时间戳；`OFFICIAL_CLOSE` 只存储 ISO 交易日期，因此盘中 15:00 目标不会与同日官方收盘标识冲突。迁移 `0005_evaluation_kind` 将所有早期行回填为 `INTRADAY`，保留结果与判断事实，并在存在任何官方收盘标识时拒绝降级。仓储要求显式 kind 和且仅一个强类型目标，并暴露互斥的 `bucket_end` / `official_trade_date` 字段。
 
 `EvaluationRepository.has_claim(...)` 针对相同五个主键字段执行精确 identity 只读查询。T033 只用它在已提交官方收盘日期上短路供应商和判断工作；它既不比较结果哈希，也不把 `EvaluationIdentityConflictError` 转换为重复结果。
