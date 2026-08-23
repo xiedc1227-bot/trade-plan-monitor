@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable, Mapping
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from inspect import isawaitable
 from typing import Self
@@ -40,6 +40,8 @@ from trade_plan_monitor.market_data.indicators import calculate_ta_v1
 from trade_plan_monitor.market_data.models import (
     DailyBar,
     MinuteBar,
+    ProviderCapabilities,
+    ProviderCapabilityStatus,
     ShanghaiDatetime,
 )
 from trade_plan_monitor.market_data.reconciliation import (
@@ -50,7 +52,13 @@ from trade_plan_monitor.market_data.reconciliation import (
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
-from trade_plan_monitor.runtime.clock import SystemClock
+from trade_plan_monitor.runtime.clock import Clock, SystemClock, _canonical_shanghai
+from trade_plan_monitor.runtime.health import (
+    RuntimeHealthDetails,
+    RuntimeHealthSnapshot,
+    RuntimeServiceStatus,
+)
+from trade_plan_monitor.runtime.scheduler import MarketDeadline
 from trade_plan_monitor.state.models import EvaluationKind, SymbolHealthStatus
 from trade_plan_monitor.state.repositories import (
     EpisodeIdentityConflictError,
@@ -1131,6 +1139,489 @@ class RuntimeEvaluationService:
         )
 
 
+class ActiveSymbolLimitError(RuntimeError):
+    """The persisted active set exceeds the approved single-process bound."""
+
+    def __init__(self, count: int) -> None:
+        self.count = count
+        super().__init__("runtime supports at most 10 active symbols")
+
+
+class RuntimeShutdownError(RuntimeError):
+    """Owned work did not honor the bounded shutdown cancellation contract."""
+
+    def __init__(self, pending_count: int) -> None:
+        self.pending_count = pending_count
+        super().__init__("runtime shutdown has an owned task that did not stop")
+
+
+class RuntimeStartupResult(_RuntimeValue):
+    """Sanitized result of one owned startup sequence."""
+
+    status: RuntimeServiceStatus
+    read_only: bool = Field(strict=True)
+    active_symbols: tuple[str, ...] = Field(default=(), max_length=10)
+    capabilities: ProviderCapabilities
+    next_poll_at: ShanghaiDatetime | None = None
+
+    @model_validator(mode="after")
+    def validate_startup_state(self) -> Self:
+        if len(self.active_symbols) != len(set(self.active_symbols)):
+            raise ValueError("active symbols must be unique")
+        if any(not symbol for symbol in self.active_symbols):
+            raise ValueError("active symbols cannot be empty")
+        if self.read_only != (self.status is RuntimeServiceStatus.DEGRADED):
+            raise ValueError("read-only startup must be degraded")
+        return self
+
+
+class RuntimeLifecycleService:
+    """Own startup, scheduling tasks, resource shutdown, and WAL checkpointing."""
+
+    def __init__(
+        self,
+        *,
+        clock: Clock,
+        validate_configuration: Callable[[], object],
+        open_database: Callable[[], object],
+        load_active_symbols: Callable[[], object],
+        probe_capabilities: Callable[[], object],
+        refresh_references: Callable[[date], object],
+        recover_startup: Callable[[date], object],
+        scheduler: object,
+        run_deadline: Callable[[MarketDeadline], object],
+        dispatcher: object,
+        request_controller: object,
+        checkpoint_wal: Callable[[], object],
+        close_database: Callable[[], object],
+        health_details: Callable[[], RuntimeHealthDetails],
+        shutdown_timeout_seconds: float = 5.0,
+    ) -> None:
+        if not isinstance(clock, Clock):
+            raise TypeError("clock must implement Clock")
+        dependencies = (
+            validate_configuration,
+            open_database,
+            load_active_symbols,
+            probe_capabilities,
+            refresh_references,
+            recover_startup,
+            run_deadline,
+            checkpoint_wal,
+            close_database,
+            health_details,
+        )
+        if any(not callable(dependency) for dependency in dependencies):
+            raise TypeError("runtime lifecycle dependencies must be callable")
+        if not callable(getattr(scheduler, "next_deadline", None)) or not callable(
+            getattr(scheduler, "wait_for_next", None)
+        ):
+            raise TypeError("scheduler must expose next_deadline and wait_for_next")
+        if not callable(getattr(dispatcher, "aclose", None)):
+            raise TypeError("dispatcher must expose aclose")
+        if not callable(getattr(request_controller, "close", None)):
+            raise TypeError("request_controller must expose close")
+        if (
+            isinstance(shutdown_timeout_seconds, bool)
+            or not isinstance(shutdown_timeout_seconds, int | float)
+            or not 0 < shutdown_timeout_seconds <= 60
+        ):
+            raise ValueError("shutdown_timeout_seconds must be between 0 and 60")
+
+        self._clock = clock
+        self._validate_configuration = validate_configuration
+        self._open_database = open_database
+        self._load_active_symbols = load_active_symbols
+        self._probe_capabilities = probe_capabilities
+        self._refresh_references = refresh_references
+        self._recover_startup = recover_startup
+        self._scheduler = scheduler
+        self._run_deadline = run_deadline
+        self._dispatcher = dispatcher
+        self._request_controller = request_controller
+        self._checkpoint_wal = checkpoint_wal
+        self._close_database = close_database
+        self._health_details = health_details
+        self._shutdown_timeout_seconds = float(shutdown_timeout_seconds)
+        self._status = RuntimeServiceStatus.STOPPED
+        self._read_only = True
+        self._started_at: datetime | None = None
+        self._stopped_at: datetime | None = None
+        self._next_poll_at: datetime | None = None
+        self._startup_result: RuntimeStartupResult | None = None
+        self._start_task: asyncio.Task[RuntimeStartupResult] | None = None
+        self._accepting_work = False
+        self._database_opened = False
+        self._dispatcher_closed = False
+        self._request_controller_closed = False
+        self._wal_checkpointed = False
+        self._schedule_wait_task: asyncio.Task[MarketDeadline | None] | None = None
+        self._work_tasks: set[asyncio.Task[object]] = set()
+        self._last_deadline_at: datetime | None = None
+        self._stopping = False
+        self._cleanup_complete = False
+        self._stop_task: asyncio.Task[None] | None = None
+        self._shutdown_requested_event: asyncio.Event | None = None
+
+    @property
+    def status(self) -> RuntimeServiceStatus:
+        return self._status
+
+    @property
+    def owned_task_count(self) -> int:
+        waiting = self._schedule_wait_task
+        starting = self._start_task
+        stopping = self._stop_task
+        return (
+            len(self._work_tasks)
+            + int(waiting is not None and not waiting.done())
+            + int(starting is not None and not starting.done())
+            + int(stopping is not None and not stopping.done())
+        )
+
+    def health(self) -> RuntimeHealthSnapshot:
+        """Build one current snapshot from owned lifecycle and injected dynamic facts."""
+
+        if self._started_at is None:
+            raise RuntimeError("runtime health is unavailable before startup")
+        details = self._health_details()
+        if not isinstance(details, RuntimeHealthDetails):
+            raise TypeError("health_details must return RuntimeHealthDetails")
+        observed_at = _canonical_shanghai(self._clock.now())
+        return RuntimeHealthSnapshot(
+            **details.model_dump(mode="python", round_trip=True),
+            status=self._status,
+            read_only=self._read_only,
+            observed_at=observed_at,
+            started_at=self._started_at,
+            stopped_at=self._stopped_at,
+            last_completed_minute_age_seconds=self._age_seconds(
+                details.last_completed_minute,
+                observed_at,
+            ),
+            latest_evaluation_age_seconds=self._age_seconds(
+                details.latest_evaluation_at,
+                observed_at,
+            ),
+            next_poll_at=self._next_poll_at,
+        )
+
+    async def start(self) -> RuntimeStartupResult:
+        """Run the fixed startup sequence once and return honest readiness."""
+
+        if self._cleanup_complete or self._stopping:
+            raise RuntimeError("stopped runtime lifecycle cannot be restarted")
+        if self._startup_result is not None:
+            return self._startup_result
+        if self._start_task is None:
+            self._status = RuntimeServiceStatus.STARTING
+            self._read_only = True
+            self._started_at = _canonical_shanghai(self._clock.now())
+            self._start_task = asyncio.create_task(self._start_sequence())
+        start_task = self._start_task
+        try:
+            return await asyncio.shield(start_task)
+        except BaseException:
+            if not self._stopping:
+                try:
+                    await self.stop()
+                except BaseException:
+                    pass
+            raise
+
+    async def _start_sequence(self) -> RuntimeStartupResult:
+        await self._invoke(self._validate_configuration)
+        await self._invoke(self._open_database)
+        self._database_opened = True
+        raw_symbols = await self._invoke(self._load_active_symbols)
+        active_symbols = self._active_symbols(raw_symbols)
+        raw_capabilities = await self._invoke(self._probe_capabilities)
+        if not isinstance(raw_capabilities, ProviderCapabilities):
+            raise TypeError("provider probe must return ProviderCapabilities")
+
+        read_only = not self._all_capabilities_ready(raw_capabilities)
+        trade_date = _canonical_shanghai(self._clock.now()).date()
+        for startup_operation in (
+            self._refresh_references,
+            self._recover_startup,
+        ):
+            try:
+                await self._invoke(startup_operation, trade_date)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                read_only = True
+
+        next_deadline = self._scheduler.next_deadline()
+        if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):
+            raise TypeError("scheduler must return MarketDeadline or None")
+        if next_deadline is None:
+            read_only = True
+        status = RuntimeServiceStatus.DEGRADED if read_only else RuntimeServiceStatus.RUNNING
+        self._status = status
+        self._read_only = read_only
+        self._accepting_work = not read_only
+        self._next_poll_at = None if read_only or next_deadline is None else next_deadline.due_at
+        self._startup_result = RuntimeStartupResult(
+            status=status,
+            read_only=read_only,
+            active_symbols=active_symbols,
+            capabilities=raw_capabilities,
+            next_poll_at=self._next_poll_at,
+        )
+        return self._startup_result
+
+    async def run_once(self) -> object | None:
+        """Run at most one eligible deadline and clean up if this call started runtime."""
+
+        owns_startup = self._startup_result is None
+        try:
+            startup = await self.start()
+            if startup.read_only or not self._accepting_work:
+                return None
+            deadline = await self._wait_for_next(after=None)
+            if deadline is None or not self._accepting_work:
+                return None
+            return await self._execute_deadline(deadline)
+        finally:
+            if owns_startup:
+                await self.stop()
+
+    async def run(self) -> None:
+        """Run scheduled deadlines until stopped, then close every owned resource."""
+
+        try:
+            startup = await self.start()
+            if startup.read_only:
+                shutdown_event = asyncio.Event()
+                self._shutdown_requested_event = shutdown_event
+                if self._stopping or self._cleanup_complete:
+                    shutdown_event.set()
+                await shutdown_event.wait()
+                return
+            while self._accepting_work:
+                try:
+                    deadline = await self._wait_for_next(after=self._last_deadline_at)
+                except asyncio.CancelledError:
+                    if not self._accepting_work:
+                        break
+                    raise
+                if deadline is None or not self._accepting_work:
+                    break
+                try:
+                    await self._execute_deadline(deadline)
+                except asyncio.CancelledError:
+                    if not self._accepting_work:
+                        break
+                    raise
+                self._last_deadline_at = deadline.due_at
+                next_deadline = self._scheduler.next_deadline(after=self._last_deadline_at)
+                self._next_poll_at = None if next_deadline is None else next_deadline.due_at
+        finally:
+            await self.stop()
+
+    async def stop(self) -> None:
+        """Stop admission, bound task completion, close resources, and checkpoint WAL."""
+
+        if self._cleanup_complete:
+            return
+        stop_task = self._stop_task
+        if stop_task is None or stop_task.done():
+            caller = asyncio.current_task()
+            initiator = caller if caller in self._work_tasks else None
+            stop_task = asyncio.create_task(self._stop_sequence(initiator=initiator))
+            stop_task.add_done_callback(self._observe_stop_result)
+            self._stop_task = stop_task
+        await asyncio.shield(stop_task)
+
+    async def _stop_sequence(self, *, initiator: asyncio.Task[object] | None) -> None:
+        """Run cleanup independently from any one public stop waiter."""
+
+        self._stopping = True
+        self._status = RuntimeServiceStatus.STOPPING
+        self._accepting_work = False
+        if self._shutdown_requested_event is not None:
+            self._shutdown_requested_event.set()
+        first_error: BaseException | None = None
+        current_task = asyncio.current_task()
+        start_task = self._start_task
+        if start_task is not None and start_task is not current_task and not start_task.done():
+            start_task.cancel()
+            await asyncio.gather(start_task, return_exceptions=True)
+
+        wait_task = self._schedule_wait_task
+        if wait_task is not None and not wait_task.done():
+            wait_task.cancel()
+            await asyncio.gather(wait_task, return_exceptions=True)
+        self._schedule_wait_task = None
+
+        active = tuple(
+            task for task in self._work_tasks if task is not initiator and not task.done()
+        )
+        pending = await self._finish_owned_tasks(active) if active else set()
+        self._work_tasks = {task for task in self._work_tasks if not task.done()}
+        if pending:
+            raise RuntimeShutdownError(len(pending))
+
+        resources = (
+            ("_dispatcher_closed", self._dispatcher.aclose),
+            ("_request_controller_closed", self._request_controller.close),
+        )
+        for state_name, operation in resources:
+            if getattr(self, state_name):
+                continue
+            try:
+                await self._invoke(operation)
+            except BaseException as error:
+                if first_error is None:
+                    first_error = error
+            else:
+                setattr(self, state_name, True)
+        if self._database_opened:
+            if not self._wal_checkpointed:
+                try:
+                    await self._invoke(self._checkpoint_wal)
+                except BaseException as error:
+                    if first_error is None:
+                        first_error = error
+                else:
+                    self._wal_checkpointed = True
+            if self._wal_checkpointed:
+                try:
+                    await self._invoke(self._close_database)
+                except BaseException as error:
+                    if first_error is None:
+                        first_error = error
+                else:
+                    self._database_opened = False
+        if first_error is not None:
+            raise first_error
+        self._status = RuntimeServiceStatus.STOPPED
+        self._stopped_at = _canonical_shanghai(self._clock.now())
+        self._cleanup_complete = True
+
+    async def _wait_for_next(self, *, after: datetime | None) -> MarketDeadline | None:
+        wait_task = asyncio.create_task(self._scheduler.wait_for_next(after=after))
+        self._schedule_wait_task = wait_task
+        try:
+            deadline = await wait_task
+        finally:
+            if self._schedule_wait_task is wait_task:
+                self._schedule_wait_task = None
+        if deadline is not None and not isinstance(deadline, MarketDeadline):
+            raise TypeError("scheduler must return MarketDeadline or None")
+        return deadline
+
+    async def _execute_deadline(self, deadline: MarketDeadline) -> object:
+        work_task = asyncio.create_task(self._invoke(self._run_deadline, deadline))
+        self._work_tasks.add(work_task)
+        try:
+            return await work_task
+        finally:
+            self._work_tasks.discard(work_task)
+
+    async def _finish_owned_tasks(
+        self,
+        tasks: tuple[asyncio.Task[object], ...],
+    ) -> set[asyncio.Task[object]]:
+        _, pending = await asyncio.wait(
+            tasks,
+            timeout=self._shutdown_timeout_seconds,
+        )
+        for _ in range(2):
+            if not pending:
+                return set()
+            for task in pending:
+                task.cancel()
+            _, pending = await asyncio.wait(
+                pending,
+                timeout=self._shutdown_timeout_seconds,
+            )
+        return set(pending)
+
+    @staticmethod
+    def _observe_stop_result(task: asyncio.Task[None]) -> None:
+        if not task.cancelled():
+            task.exception()
+
+    @staticmethod
+    async def _invoke(operation: Callable[..., object], *args: object) -> object:
+        result = operation(*args)
+        return await result if isawaitable(result) else result
+
+    @staticmethod
+    def _active_symbols(raw_symbols: object) -> tuple[str, ...]:
+        if type(raw_symbols) is not tuple or any(
+            type(symbol) is not str or not symbol for symbol in raw_symbols
+        ):
+            raise TypeError("active symbols must be a tuple of non-empty strings")
+        if len(raw_symbols) > 10:
+            raise ActiveSymbolLimitError(len(raw_symbols))
+        if len(raw_symbols) != len(set(raw_symbols)):
+            raise ValueError("active symbols must be unique")
+        return raw_symbols
+
+    @staticmethod
+    def _all_capabilities_ready(capabilities: ProviderCapabilities) -> bool:
+        return all(
+            status is ProviderCapabilityStatus.READY
+            for status in (
+                capabilities.realtime_minutes,
+                capabilities.current_day_minutes,
+                capabilities.trading_calendar,
+                capabilities.daily_limits,
+                capabilities.daily_bars,
+            )
+        )
+
+    @staticmethod
+    def _age_seconds(value: datetime | None, observed_at: datetime) -> int | None:
+        if value is None:
+            return None
+        age = observed_at - value
+        if age < timedelta(0):
+            raise ValueError("health timestamps cannot be in the future")
+        return int(age.total_seconds())
+
+
+class MaintenanceCommandService:
+    """Thin asynchronous command surface over runtime and maintenance operations."""
+
+    def __init__(
+        self,
+        *,
+        lifecycle: object,
+        validate: Callable[[], object],
+        replay: Callable[[], object],
+        backup: Callable[[], object],
+    ) -> None:
+        if not callable(getattr(lifecycle, "run_once", None)) or not callable(
+            getattr(lifecycle, "run", None)
+        ):
+            raise TypeError("lifecycle must expose run_once and run")
+        if any(not callable(operation) for operation in (validate, replay, backup)):
+            raise TypeError("maintenance operations must be callable")
+        self._lifecycle = lifecycle
+        self._validate = validate
+        self._replay = replay
+        self._backup = backup
+
+    async def validate(self) -> object:
+        return await RuntimeLifecycleService._invoke(self._validate)
+
+    async def once(self) -> object:
+        return await self._lifecycle.run_once()
+
+    async def run(self) -> object:
+        return await self._lifecycle.run()
+
+    async def replay(self) -> object:
+        return await RuntimeLifecycleService._invoke(self._replay)
+
+    async def backup(self) -> object:
+        return await RuntimeLifecycleService._invoke(self._backup)
+
+
 def _five_minute_value(record: FiveMinuteBarRecord) -> FiveMinuteBar:
     return FiveMinuteBar.model_validate(record.model_dump(mode="python", round_trip=True))
 
@@ -1190,12 +1681,17 @@ def _close_pending_payload(value: str) -> tuple[date, dict[str, object]]:
 
 
 __all__ = [
+    "ActiveSymbolLimitError",
     "IntradayCycleResult",
     "IntradayCycleStatus",
     "IntradayMarketFacts",
+    "MaintenanceCommandService",
     "OfficialCloseCycleResult",
     "OfficialCloseCycleStatus",
     "OfficialCloseErrorCode",
     "OfficialCloseMarketFacts",
     "RuntimeEvaluationService",
+    "RuntimeLifecycleService",
+    "RuntimeShutdownError",
+    "RuntimeStartupResult",
 ]

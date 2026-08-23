@@ -7,17 +7,37 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ModelWrapValidatorHandler,
+    ValidationError,
+    model_validator,
+)
 
 from trade_plan_monitor.decision.models import DataHealthSnapshot, DataHealthStatus
 from trade_plan_monitor.market_data.aggregation import expected_five_minute_ends
-from trade_plan_monitor.market_data.models import AShareSymbol, MinuteBar, ShanghaiDatetime
+from trade_plan_monitor.market_data.models import (
+    AShareSymbol,
+    MinuteBar,
+    ProviderCapabilityStatus,
+    ShanghaiDatetime,
+)
 from trade_plan_monitor.market_data.sessions import session_for_minute_end
 
 _MAX_ACTIVE_SYMBOLS = 10
 _MAX_GAPS = 240
 
 NonNegativeInteger = Annotated[int, Field(strict=True, ge=0)]
+HealthName = Annotated[
+    str,
+    Field(strict=True, min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$"),
+]
+HealthErrorCode = Annotated[
+    str,
+    Field(strict=True, min_length=1, max_length=64, pattern=r"^[A-Z][A-Z0-9_]*$"),
+]
 
 
 class _RuntimeHealthValue(BaseModel):
@@ -48,6 +68,246 @@ class SymbolHealthErrorCode(StrEnum):
     PERSISTENCE_FAILED = "PERSISTENCE_FAILED"
     INVALID_CONTEXT = "INVALID_CONTEXT"
     CALENDAR_BLOCKED = "CALENDAR_BLOCKED"
+
+
+class RuntimeServiceStatus(StrEnum):
+    """Stable lifecycle states exposed to later transport adapters."""
+
+    STARTING = "STARTING"
+    RUNNING = "RUNNING"
+    DEGRADED = "DEGRADED"
+    STOPPING = "STOPPING"
+    STOPPED = "STOPPED"
+
+
+class RuntimeResourceStatus(StrEnum):
+    """Sanitized readiness states for local runtime resources."""
+
+    UNVERIFIED = "UNVERIFIED"
+    READY = "READY"
+    DEGRADED = "DEGRADED"
+    ERROR = "ERROR"
+    STOPPED = "STOPPED"
+
+
+class RuntimeGapSnapshot(_RuntimeHealthValue):
+    """One explicit missing completed minute without provider response data."""
+
+    symbol: AShareSymbol
+    bar_end: ShanghaiDatetime
+
+
+class ProviderHealthSnapshot(_RuntimeHealthValue):
+    """One independently probed provider capability observation."""
+
+    capability: HealthName
+    status: ProviderCapabilityStatus
+    checked_at: ShanghaiDatetime
+    latency_ms: NonNegativeInteger
+    error_code: HealthErrorCode | None = None
+    next_retry_at: ShanghaiDatetime | None = None
+
+    @model_validator(mode="after")
+    def validate_provider_state(self) -> Self:
+        if self.status is ProviderCapabilityStatus.READY and (
+            self.error_code is not None or self.next_retry_at is not None
+        ):
+            raise ValueError("ready provider health cannot retain an error or retry")
+        if self.status is ProviderCapabilityStatus.UNVERIFIED and (
+            self.error_code is not None or self.next_retry_at is not None
+        ):
+            raise ValueError("unverified provider health cannot retain an error or retry")
+        if (
+            self.status
+            not in {
+                ProviderCapabilityStatus.READY,
+                ProviderCapabilityStatus.UNVERIFIED,
+            }
+            and self.error_code is None
+        ):
+            raise ValueError("non-ready provider health requires a stable error code")
+        if self.next_retry_at is not None and self.next_retry_at < self.checked_at:
+            raise ValueError("provider retry cannot precede its observation")
+        return self
+
+
+class ExecutorHealthSnapshot(_RuntimeHealthValue):
+    """Bounded executor utilization without thread or request details."""
+
+    max_workers: Annotated[int, Field(strict=True, ge=1, le=2)]
+    active_count: Annotated[int, Field(strict=True, ge=0, le=2)]
+    waiting_count: Annotated[int, Field(strict=True, ge=0, le=32)]
+
+    @model_validator(mode="after")
+    def validate_utilization(self) -> Self:
+        if self.active_count > self.max_workers:
+            raise ValueError("active executor work cannot exceed max_workers")
+        return self
+
+
+class DatabaseHealthSnapshot(_RuntimeHealthValue):
+    """Sanitized SQLite, WAL, checkpoint, and backup health."""
+
+    status: RuntimeResourceStatus
+    wal_status: RuntimeResourceStatus
+    last_checkpoint_at: ShanghaiDatetime | None = None
+    last_backup_at: ShanghaiDatetime | None = None
+    error_code: HealthErrorCode | None = None
+
+    @model_validator(mode="after")
+    def validate_database_state(self) -> Self:
+        ready = (
+            self.status is RuntimeResourceStatus.READY
+            and self.wal_status is RuntimeResourceStatus.READY
+        )
+        neutral = self.status in {
+            RuntimeResourceStatus.UNVERIFIED,
+            RuntimeResourceStatus.STOPPED,
+        } and self.wal_status in {
+            RuntimeResourceStatus.UNVERIFIED,
+            RuntimeResourceStatus.STOPPED,
+        }
+        if (ready or neutral) and self.error_code is not None:
+            raise ValueError("ready database health cannot retain an error")
+        if not ready and not neutral and self.error_code is None:
+            raise ValueError("non-ready database health requires a stable error code")
+        return self
+
+
+class DeliveryHealthSnapshot(_RuntimeHealthValue):
+    """Bounded alert-delivery counters and retry state."""
+
+    status: RuntimeResourceStatus
+    pending_count: NonNegativeInteger
+    failed_count: NonNegativeInteger
+    last_delivered_at: ShanghaiDatetime | None = None
+    next_retry_at: ShanghaiDatetime | None = None
+    error_code: HealthErrorCode | None = None
+
+    @model_validator(mode="after")
+    def validate_delivery_state(self) -> Self:
+        neutral = self.status in {
+            RuntimeResourceStatus.UNVERIFIED,
+            RuntimeResourceStatus.STOPPED,
+        }
+        if (self.status is RuntimeResourceStatus.READY or neutral) and (
+            self.failed_count != 0 or self.next_retry_at is not None or self.error_code is not None
+        ):
+            raise ValueError("ready delivery health cannot retain a failure")
+        if (
+            self.status
+            not in {
+                RuntimeResourceStatus.READY,
+                RuntimeResourceStatus.UNVERIFIED,
+                RuntimeResourceStatus.STOPPED,
+            }
+            and self.error_code is None
+        ):
+            raise ValueError("non-ready delivery health requires a stable error code")
+        return self
+
+
+class RuntimeHealthDetails(_RuntimeHealthValue):
+    """Injected dynamic facts used by the lifecycle-owned health builder."""
+
+    last_completed_minute: ShanghaiDatetime | None = None
+    latest_evaluation_at: ShanghaiDatetime | None = None
+    gaps: tuple[RuntimeGapSnapshot, ...] = Field(default=(), max_length=2_400)
+    next_retry_at: ShanghaiDatetime | None = None
+    cooldown_until: ShanghaiDatetime | None = None
+    providers: tuple[ProviderHealthSnapshot, ...] = Field(default=(), max_length=5)
+    executor: ExecutorHealthSnapshot
+    database: DatabaseHealthSnapshot
+    delivery: DeliveryHealthSnapshot
+
+
+class RuntimeHealthSnapshot(RuntimeHealthDetails):
+    """One secret-free operational snapshot for the owned runtime process."""
+
+    status: RuntimeServiceStatus
+    read_only: bool = Field(strict=True)
+    observed_at: ShanghaiDatetime
+    started_at: ShanghaiDatetime
+    stopped_at: ShanghaiDatetime | None = None
+    last_completed_minute_age_seconds: NonNegativeInteger | None = None
+    latest_evaluation_age_seconds: NonNegativeInteger | None = None
+    next_poll_at: ShanghaiDatetime | None = None
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def remove_validation_inputs(
+        cls,
+        value: object,
+        handler: ModelWrapValidatorHandler[Self],
+    ) -> Self:
+        safe_error: ValidationError | None = None
+        try:
+            return handler(value)
+        except ValidationError as error:
+            safe_error = _validation_error_without_inputs(error)
+        if safe_error is not None:
+            raise safe_error
+        raise AssertionError("validation boundary completed without a result")
+
+    @model_validator(mode="after")
+    def validate_runtime_health(self) -> Self:
+        if self.status is RuntimeServiceStatus.RUNNING and self.read_only:
+            raise ValueError("RUNNING health requires read_only=false")
+        if self.status is RuntimeServiceStatus.DEGRADED and not self.read_only:
+            raise ValueError("DEGRADED health requires read_only=true")
+        if self.started_at > self.observed_at:
+            raise ValueError("runtime observation cannot precede startup")
+        if (self.status is RuntimeServiceStatus.STOPPED) != (self.stopped_at is not None):
+            raise ValueError("only stopped runtime health requires stopped_at")
+        stopped_in_range = self.stopped_at is None or (
+            self.started_at <= self.stopped_at <= self.observed_at
+        )
+        if not stopped_in_range:
+            raise ValueError("stopped_at must belong to the observed lifecycle")
+        self._validate_age(
+            self.last_completed_minute,
+            self.last_completed_minute_age_seconds,
+            "last completed minute",
+        )
+        self._validate_age(
+            self.latest_evaluation_at,
+            self.latest_evaluation_age_seconds,
+            "latest evaluation",
+        )
+        gaps = tuple((gap.symbol, gap.bar_end) for gap in self.gaps)
+        if gaps != tuple(sorted(set(gaps))):
+            raise ValueError("runtime gaps must be unique and strictly ordered")
+        capabilities = tuple(provider.capability for provider in self.providers)
+        if len(capabilities) != len(set(capabilities)):
+            raise ValueError("provider health capabilities must be unique")
+        if any(provider.checked_at > self.observed_at for provider in self.providers):
+            raise ValueError("provider health cannot be observed in the future")
+        return self
+
+    def _validate_age(
+        self,
+        timestamp: datetime | None,
+        age_seconds: int | None,
+        label: str,
+    ) -> None:
+        if (timestamp is None) != (age_seconds is None):
+            raise ValueError(f"{label} timestamp and age must be present together")
+        if timestamp is None:
+            return
+        age = self.observed_at - timestamp
+        if age < timedelta(0) or int(age.total_seconds()) != age_seconds:
+            raise ValueError(f"{label} age must match the observation")
+
+
+def _validation_error_without_inputs(error: ValidationError) -> ValidationError:
+    line_errors = error.errors(include_url=False)
+    for line_error in line_errors:
+        line_error.pop("input", None)
+    return ValidationError.from_exception_data(
+        error.title,
+        line_errors,
+        hide_input=True,
+    )
 
 
 class SymbolHealthSnapshot(_RuntimeHealthValue):
@@ -358,6 +618,15 @@ def summarize_system_health(
 
 
 __all__ = [
+    "DatabaseHealthSnapshot",
+    "DeliveryHealthSnapshot",
+    "ExecutorHealthSnapshot",
+    "ProviderHealthSnapshot",
+    "RuntimeGapSnapshot",
+    "RuntimeHealthDetails",
+    "RuntimeHealthSnapshot",
+    "RuntimeResourceStatus",
+    "RuntimeServiceStatus",
     "SymbolHealthErrorCode",
     "SymbolHealthSnapshot",
     "SymbolHealthTracker",

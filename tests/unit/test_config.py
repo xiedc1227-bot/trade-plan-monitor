@@ -91,14 +91,74 @@ def test_yaml_safe_loader_rejects_python_object_construction(tmp_path: Path) -> 
         load_application_config(config_path)
 
 
-def test_cli_declares_inert_commands_and_loopback_web_defaults() -> None:
+def test_cli_wires_maintenance_commands_and_keeps_loopback_web_defaults() -> None:
     parser = build_parser()
     web_args = parser.parse_args(["web"])
 
+    calls: list[tuple[str, Path]] = []
+
+    class CommandService:
+        def __init__(self, config_path: Path) -> None:
+            self.config_path = config_path
+
+        async def validate(self) -> None:
+            calls.append(("validate", self.config_path))
+
+        async def once(self) -> None:
+            calls.append(("once", self.config_path))
+
+        async def run(self) -> None:
+            calls.append(("run", self.config_path))
+
+        async def replay(self) -> None:
+            calls.append(("replay", self.config_path))
+
+        async def backup(self) -> None:
+            calls.append(("backup", self.config_path))
+
+    def service_factory(config_path: Path) -> CommandService:
+        return CommandService(config_path)
+
     assert web_args.host == "127.0.0.1"
     assert web_args.port == 8765
-    for command in ("validate", "monitor", "web", "replay", "backup"):
-        assert run_cli([command]) == 0
+    assert run_cli(["validate"], service_factory=service_factory) == 0
+    assert run_cli(["monitor", "--once"], service_factory=service_factory) == 0
+    assert run_cli(["monitor"], service_factory=service_factory) == 0
+    assert run_cli(["replay"], service_factory=service_factory) == 0
+    assert run_cli(["backup"], service_factory=service_factory) == 0
+    assert calls == [
+        ("validate", Path("config/app.yaml")),
+        ("once", Path("config/app.yaml")),
+        ("run", Path("config/app.yaml")),
+        ("replay", Path("config/app.yaml")),
+        ("backup", Path("config/app.yaml")),
+    ]
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["web", "--host", "0.0.0.0"])
+
+
+def test_cli_requires_explicit_runtime_composition_for_service_commands() -> None:
+    with pytest.raises(RuntimeError, match="service factory"):
+        run_cli(["monitor", "--once"])
+
+
+def test_cli_import_does_not_start_runtime_work() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import trade_plan_monitor.cli; print('imported')",
+        ],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert completed.returncode == 0
+    assert completed.stdout.strip() == "imported"
 
 
 def test_module_help_lists_every_declared_command() -> None:

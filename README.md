@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T033` and checkpoints `C00`–`C12` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, and startup close recovery. Owned lifecycle/health/CLI wiring continues at `T034`, FastAPI routes start at `T035`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
+> Development status: tasks `T001`–`T034` and checkpoints `C00`–`C13` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, startup close recovery, and an owned lifecycle with sanitized health, bounded retryable shutdown, and injected maintenance-command dispatch. FastAPI routes start at `T035`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Import and parser construction remain side-effect free, and default installed-console composition is explicitly deferred to `T052`–`T054`.
 
 ## Product Goals
 
@@ -19,7 +19,7 @@ A standalone, local-only Web application for turning reviewed A-share trade plan
 
 ## Current Implementation Status
 
-Last verified on 2026-08-22 with CPython 3.14.7.
+Last verified on 2026-08-23 with CPython 3.14.7.
 
 | Area | Tasks | Status |
 |---|---:|---|
@@ -34,9 +34,10 @@ Last verified on 2026-08-22 with CPython 3.14.7.
 | Injected market clock, session-aware deadlines, and bounded Tushare/AI request control | `T028`–`T029` | Complete |
 | Per-symbol orchestration, recovery, atomic evaluation, and committed publication | `T030`–`T032` | Complete |
 | Official-close reconciliation, durable pending state, and startup retry | `T033` | Complete |
-| Owned lifecycle, API, and production UI | `T034`–`T059` | Pending |
+| Owned lifecycle, sanitized health, graceful shutdown, and maintenance CLI boundary | `T034` | Complete |
+| FastAPI, realtime transport, production UI, and packaging | `T035`–`T059` | Pending |
 
-After `T033`, all 1008 backend tests pass. The exact T033 selector contains 16 tests, the complete affected market/runtime/notification/repository gate contains 386 tests, the SQLite repository gate contains 59 tests, and the unchanged decision/replay gate contains 273 tests. Whole-tree Ruff, four-file scoped formatting, `compileall`, `pip check`, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, or Webhook calls. Checkpoint `C12` remains complete; `T034` is next and checkpoint `C13` remains open through it.
+After `T034`, all 1031 backend tests pass. The exact lifecycle file contains 21 tests, the T034 runtime/config gate contains 114 tests, and the unchanged decision/replay gate contains 273 tests. Whole-tree Ruff, five-file scoped formatting, `compileall`, `pip check`, bilingual parity, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, Webhook, browser, or network listener. Checkpoint `C13` is complete and `T035` is next.
 
 ## Safety Boundaries
 
@@ -145,7 +146,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 
 | Command | Purpose | Availability |
 |---|---|---|
-| `python -m pytest -q` | Run the complete 1008-test backend gate | Available |
+| `python -m pytest -q` | Run the complete 1031-test backend gate | Available |
 | `python -m pytest tests/unit/test_package.py -q` | Run the stable package smoke test | Available |
 | `python -m pytest tests/integration/test_ai_provider_contract.py -q` | Verify the AI provider and extraction contract | Available |
 | `python -m pytest tests/unit/test_decision_engine.py tests/replay/test_decision_replay.py -q` | Run the deterministic decision and replay gate | Available |
@@ -155,11 +156,11 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 | `npm test -- --run` | Run frontend unit tests | Available in `web/` |
 | `npm run type-check` | Run Vue and TypeScript checks | Available in `web/` |
 | `npm run build` | Build frontend static assets | Available in `web/` |
-| `python -m trade_plan_monitor validate` | Reserved configuration/plan validation command | Inert scaffold |
-| `python -m trade_plan_monitor monitor --once` | Reserved headless monitoring command | Inert scaffold |
+| `python -m trade_plan_monitor validate` | Dispatch configuration/plan validation through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
+| `python -m trade_plan_monitor monitor --once` | Dispatch one headless monitoring cycle through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
 | `python -m trade_plan_monitor web --host 127.0.0.1 --port 8765` | Reserved local Web command | Inert scaffold |
-| `python -m trade_plan_monitor replay` | Reserved deterministic replay command | Inert scaffold |
-| `python -m trade_plan_monitor backup` | Reserved backup command | Inert scaffold |
+| `python -m trade_plan_monitor replay` | Dispatch deterministic replay through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
+| `python -m trade_plan_monitor backup` | Dispatch a verified backup through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
 
 Live-provider tests or calls require an explicit authorization step and must never use production credentials in fixtures or command output.
 
@@ -177,7 +178,7 @@ trade-plan-monitor/
 │   ├── market_data/    # Normalization, history, aggregation, indicators, reconciliation
 │   ├── notifications/  # Deterministic alerts, transactional outbox, channels, and dispatch
 │   ├── state/          # SQLite models, migrations, repositories, UoW, backup
-│   ├── cli.py          # Reserved command declarations
+│   ├── cli.py          # Side-effect-free commands and injected service dispatch
 │   └── config.py       # Strict non-secret application configuration
 ├── tests/
 │   ├── fixtures/

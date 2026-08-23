@@ -130,6 +130,20 @@ Per-symbol health: `STARTING`, `LIVE`, `STALE`, `GAPPED`, `DEGRADED`, `BLOCKED`,
 
 Health exposes timestamps/ages, last completed minute, latest evaluation, gaps, next poll, next retry, cooldown, latency, error code, executor utilization, database/WAL status, and alert-delivery status. Secrets and raw provider bodies are excluded.
 
+### T034 Owned Lifecycle and Health Contract
+
+- One lifecycle-owned startup task is shared by concurrent callers. It follows the fixed startup sequence above, rejects more than 10 active symbols before any provider work, and closes every resource already opened when startup fails.
+- Capability probes are independent. Blocked required capabilities, failed recovery, or an unavailable next deadline start the process as `DEGRADED` and read-only; the process remains alive until explicitly stopped, schedules no actionable deadline, and exposes `next_poll_at=null`. Reference-data refresh failure does not skip recovery.
+- Health combines lifecycle-owned timestamps and state with injected bounded operational facts. It reports exact non-negative ages, ordered gaps, provider retry/cooldown and latency, executor utilization, database/WAL/checkpoint/backup status, and delivery status. The outer health DTO uses its own sanitizing validation boundary so constructor, `model_validate`, and `model_validate_json` errors exclude input, context, cause, secrets, and raw provider bodies without changing strict JSON tuple conversion in nested models.
+- Shutdown is represented by one lifecycle-owned task shielded from cancellation of any individual waiter. It stops new scheduling, cancels the owned deadline task, gives work a bounded completion window, then a bounded cancellation window. Work that still refuses cancellation raises a stable `RuntimeShutdownError`, leaves the lifecycle `STOPPING`, and prevents WAL checkpoint or database close until a later retry can finish safely.
+- Dispatcher, request-controller, WAL-checkpoint, and database-close completion are recorded independently. A failed cleanup step remains retryable; database close occurs only after a successful WAL checkpoint, and `STOPPED` is published only after every owned resource reports successful cleanup. No owned task may be orphaned.
+
+### T034 Maintenance CLI Boundary
+
+- `validate`, `monitor --once`, `monitor`, `replay`, and `backup` dispatch to an explicitly injected asynchronous command service. Parser construction and module import perform no configuration loading, database access, provider call, task creation, or network binding.
+- A missing service factory fails closed. Default installed-console composition, production configuration, and full-system replay fixtures remain the explicit scope of T052–T054 rather than being guessed in T034.
+- The reserved `web` command remains inert until T035 and accepts only `127.0.0.1`; `0.0.0.0` is not a normal CLI path.
+
 ## Runtime Transaction Flow
 
 ```text

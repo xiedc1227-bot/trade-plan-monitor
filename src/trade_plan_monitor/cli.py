@@ -1,14 +1,33 @@
-"""No-op command-line declarations for the staged application scaffold."""
+"""Side-effect-free command-line parsing and injected runtime service dispatch."""
 
 import argparse
-from collections.abc import Sequence
+import asyncio
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Protocol
 
 DEFAULT_CONFIG_PATH = Path("config/app.yaml")
 
 
+class RuntimeCommandService(Protocol):
+    """Asynchronous operations supplied by the application composition root."""
+
+    async def validate(self) -> object: ...
+
+    async def once(self) -> object: ...
+
+    async def run(self) -> object: ...
+
+    async def replay(self) -> object: ...
+
+    async def backup(self) -> object: ...
+
+
+RuntimeServiceFactory = Callable[[Path], RuntimeCommandService]
+
+
 def _return_success(_arguments: argparse.Namespace) -> int:
-    """Return successfully without starting any application service."""
+    """Keep the reserved Web declaration inert until its owned T035 lifespan."""
 
     return 0
 
@@ -36,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="validate configuration and plans",
     )
     _add_config_argument(validate_parser)
+    validate_parser.set_defaults(service_operation="validate")
 
     monitor_parser = commands.add_parser(
         "monitor",
@@ -43,6 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_config_argument(monitor_parser)
     monitor_parser.add_argument("--once", action="store_true", help="run one monitor cycle")
+    monitor_parser.set_defaults(service_operation="monitor")
 
     web_parser = commands.add_parser(
         "web",
@@ -67,30 +88,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="replay deterministic market fixtures",
     )
     _add_config_argument(replay_parser)
+    replay_parser.set_defaults(service_operation="replay")
 
     backup_parser = commands.add_parser(
         "backup",
         help="create or inspect local backups",
     )
     _add_config_argument(backup_parser)
-
-    for command_parser in (
-        validate_parser,
-        monitor_parser,
-        web_parser,
-        replay_parser,
-        backup_parser,
-    ):
-        command_parser.set_defaults(handler=_return_success)
+    backup_parser.set_defaults(service_operation="backup")
+    web_parser.set_defaults(handler=_return_success)
 
     return parser
 
 
-def main(argv: Sequence[str] = ()) -> int:
-    """Parse a command and invoke its currently inert declaration."""
+def main(
+    argv: Sequence[str] = (),
+    *,
+    service_factory: RuntimeServiceFactory | None = None,
+) -> int:
+    """Parse a command and dispatch only after an explicit service composition."""
 
     parser = build_parser()
     arguments = parser.parse_args(list(argv))
+    operation = getattr(arguments, "service_operation", None)
+    if operation is not None:
+        if service_factory is None:
+            raise RuntimeError("runtime service factory is not configured")
+        service = service_factory(arguments.config)
+        if operation == "monitor":
+            operation = "once" if arguments.once else "run"
+        handler = getattr(service, operation, None)
+        if not callable(handler):
+            raise TypeError(f"runtime service does not expose {operation}")
+        asyncio.run(handler())
+        return 0
     handler = getattr(arguments, "handler", None)
     if handler is None:
         parser.print_help()
@@ -98,4 +129,10 @@ def main(argv: Sequence[str] = ()) -> int:
     return handler(arguments)
 
 
-__all__ = ["DEFAULT_CONFIG_PATH", "build_parser", "main"]
+__all__ = [
+    "DEFAULT_CONFIG_PATH",
+    "RuntimeCommandService",
+    "RuntimeServiceFactory",
+    "build_parser",
+    "main",
+]
