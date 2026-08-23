@@ -6,9 +6,17 @@ from fastapi import FastAPI
 
 from trade_plan_monitor.web.errors import install_error_boundary
 from trade_plan_monitor.web.lifespan import RuntimeLifecycleFactory, create_runtime_lifespan
+from trade_plan_monitor.web.routers.dashboard import MonitorReadService
+from trade_plan_monitor.web.routers.dashboard import router as dashboard_router
+from trade_plan_monitor.web.routers.health import router as health_router
+from trade_plan_monitor.web.routers.symbols import router as symbols_router
 
 
-def create_app(*, runtime_factory: RuntimeLifecycleFactory | None = None) -> FastAPI:
+def create_app(
+    *,
+    runtime_factory: RuntimeLifecycleFactory | None = None,
+    read_service: MonitorReadService | None = None,
+) -> FastAPI:
     """Build the local API adapter without starting runtime or network work."""
 
     app = FastAPI(
@@ -17,6 +25,11 @@ def create_app(*, runtime_factory: RuntimeLifecycleFactory | None = None) -> Fas
         lifespan=create_runtime_lifespan(runtime_factory),
     )
     install_error_boundary(app)
+    if read_service is not None:
+        app.state.monitor_read_service = read_service
+    app.include_router(dashboard_router)
+    app.include_router(symbols_router)
+    app.include_router(health_router)
     return app
 
 

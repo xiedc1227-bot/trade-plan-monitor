@@ -94,6 +94,15 @@ web/src/
 - `ApiError`、请求校验错误、HTTP 错误和未预期异常都映射到上述唯一 envelope。对外顶层消息从固定错误码中选择。校验详情最多 100 项；每个 location 最多包含 16 个有界部分，只暴露脱敏 code 以及 `Field required` 或 `Invalid value`。拒绝的输入、Pydantic context、异常 cause、密钥值和供应商/存储原始响应体绝不序列化。
 - 共享错误 Schema 严格、冻结、兼容 camelCase，并对 `model_copy(update=...)` 重新校验。T035 不增加监控总览、股票、健康、计划、持仓、提醒、WebSocket、Origin/安全响应头、静态文件或网络监听行为；这些仍属于 T036 及后续任务。
 
+### T036 监控只读边界
+
+- `create_app(read_service=...)` 接收一个明确注入的 `MonitorReadService`，但不构造该服务或启动 I/O。T036 的七个路由都是该服务之上的异步传输适配器；缺少服务时返回 `SERVICE_UNAVAILABLE`。每个服务结果都必须在序列化前通过封闭、不可变的响应模型重新校验；非法内部结果只进入通用错误边界，且不暴露被拒绝的值。
+- T036 在 `/api/v1` 下实现 `GET /dashboard`、`GET /symbols`、`GET /symbols/{symbol}`、`GET /symbols/{symbol}/bars`、`GET /symbols/{symbol}/events`、`GET /health` 和 `GET /health/symbols/{symbol}`。它不实现 T037+ 命令、提醒中心查询、计划/AI 资源、WebSocket 传输、Origin/安全响应头、静态资源提供或生产组合。
+- 列表分页使用 `offset`（默认 `0`，范围 `0..10000`）和 `limit`（默认 `20`，范围 `1..100`），并返回精确的 `items`、`offset`、`limit` 和 `total`。股票总数最多 10，K 线/事件总数最多 10,000。K 线与事件读取必须显式提供 `Asia/Shanghai` 闭区间时间戳 `startAt` 和 `endAt`；范围反转时返回 `BAD_REQUEST`。K 线读取还接受 `interval=ONE_MINUTE|FIVE_MINUTES`。响应中的分页、范围、周期和股票 identity 必须与请求一致。股票格式非法时返回请求校验失败；格式合法但不存在时返回 `NOT_FOUND`。
+- 监控总览返回已提交的 `sequence`、观测/连接/数据年龄状态条、六项已批准统计和最多 10 个相互隔离的股票摘要。每个摘要包含一个权威确定性判断投影，其中保留 `symbol`、`resultHash`、精确计划 identity、判断/行情时间、数据年龄、价格、区间、信号、仓位、阶段/风险状态、强类型证据和下一步。适配器绝不判断条件、修改优先级、重算判断哈希或读取第二套报价流。跨股票 identity、矛盾风险状态、与仓位批次/T+1 可用量不一致以及不一致年龄都封闭失败。
+- K 线响应保留规范化整数分 OHLC、股数、精确元成交额、回执时间和聚合公式 provenance。事件响应保留股票、序号、稳定事件 ID/类型、时间戳、可选信号/结果哈希和有界的服务端纯文本。所有 JSON 字段名均为 camelCase，所有枚举值均为 `UPPER_SNAKE`。
+- 运行时健康只暴露稳定的生命周期/资源/能力状态、重试/冷却/轮询时间、有序缺口、有界执行器计数、数据库/WAL/检查点/备份事实及投递计数。股票健康暴露精确的数据年龄/完整性/新鲜度/缺口事实。`LIVE` 必须具有新鲜、完整且带最新时间戳的数据；断连、陈旧、有缺口、阻断或其他矛盾数据都不能标为实时或可执行。任何响应 Schema 都不包含密钥、授权详情、供应商原始响应体或存储原始错误字段。
+
 只读资源：
 
 ```text
