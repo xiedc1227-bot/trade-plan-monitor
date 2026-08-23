@@ -1,10 +1,10 @@
-"""T030-T031 ten-symbol runtime, health-isolation, and recovery contracts."""
+"""T030-T033 ten-symbol orchestration, recovery, and evaluation contracts."""
 
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Final
@@ -20,6 +20,7 @@ from trade_plan_monitor.decision.models import (
     ActionableSignalType,
     ConditionEvidence,
     ConditionOutcome,
+    DailyIndicatorProvenance,
     DataHealthSnapshot,
     DataHealthStatus,
     DecisionZone,
@@ -35,6 +36,7 @@ from trade_plan_monitor.decision.models import (
     LowZoneEpisodeSnapshot,
     NextStep,
     NextStepCode,
+    OfficialCloseEvaluationTarget,
     PositionSummary,
     RiskStateSnapshot,
     RiskStatus,
@@ -54,12 +56,17 @@ from trade_plan_monitor.market_data.aggregation import (
     FiveMinuteBar,
     expected_five_minute_ends,
 )
+from trade_plan_monitor.market_data.indicators import calculate_ta_v1
 from trade_plan_monitor.market_data.models import (
+    DailyBar,
     MinuteBar,
     ProviderCapabilities,
     TradingDay,
 )
-from trade_plan_monitor.market_data.reconciliation import reconcile_daily_close
+from trade_plan_monitor.market_data.reconciliation import (
+    CloseReconciliationStatus,
+    reconcile_daily_close,
+)
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.health import SymbolHealthErrorCode, SymbolHealthTracker
@@ -72,6 +79,8 @@ from trade_plan_monitor.runtime.request_control import TushareRequestController
 from trade_plan_monitor.runtime.service import (
     IntradayCycleStatus,
     IntradayMarketFacts,
+    OfficialCloseCycleStatus,
+    OfficialCloseMarketFacts,
     RuntimeEvaluationService,
 )
 from trade_plan_monitor.runtime.symbol_service import SymbolService
@@ -87,6 +96,7 @@ from trade_plan_monitor.state.models import (
     AuditLog,
     EvaluationLedger,
     RiskState,
+    SymbolHealth,
     ZoneEpisode,
 )
 from trade_plan_monitor.state.models import (
@@ -1009,6 +1019,82 @@ def _runtime_context(
     )
 
 
+def _daily_bar(
+    *,
+    trade_date: date,
+    close_fen: int,
+    is_official: bool,
+    received_at: datetime | None = None,
+) -> DailyBar:
+    return DailyBar(
+        symbol="003043.SZ",
+        trade_date=trade_date,
+        open_fen=6100,
+        high_fen=max(6150, close_fen),
+        low_fen=min(6000, close_fen),
+        close_fen=close_fen,
+        volume_shares=1_000_000,
+        amount_yuan=Decimal("61000000"),
+        is_official=is_official,
+        received_at=received_at
+        or datetime.combine(
+            trade_date,
+            time(15, 20) if is_official else time(15, 0),
+            SHANGHAI,
+        ),
+    )
+
+
+def _official_context(
+    plan: TradePlan,
+    facts: OfficialCloseMarketFacts,
+) -> EvaluationContext:
+    plan_hash = plan_sha256(plan)
+    return EvaluationContext(
+        evaluated_at=facts.evaluated_at,
+        target=OfficialCloseEvaluationTarget(trade_date=facts.trade_date),
+        plan=plan,
+        plan_hash=plan_hash,
+        plan_active=True,
+        activated_at=datetime.combine(facts.trade_date, time(9, 0), SHANGHAI),
+        current_day_minutes=(),
+        complete_5m_bars=(),
+        official_daily_bars=facts.official_daily_bars,
+        five_minute_indicators=None,
+        daily_indicator_snapshot=facts.daily_indicator_snapshot,
+        close_reconciliation=facts.close_reconciliation,
+        trading_calendar=(
+            TradingDay(
+                exchange=plan.market,
+                cal_date=facts.trade_date,
+                is_open=True,
+                previous_trade_date=facts.trade_date - timedelta(days=3),
+            ),
+        ),
+        daily_limit=None,
+        data_health=DataHealthSnapshot(
+            symbol=plan.symbol,
+            status=DataHealthStatus.STARTING,
+            latest_bar_end=None,
+            data_age_seconds=None,
+            required_data_complete=False,
+            fresh=False,
+        ),
+        positions=(),
+        low_zone_episode=None,
+        risk_state=RiskStateSnapshot(
+            symbol=plan.symbol,
+            plan_hash=plan_hash,
+            status=RiskStatus.CLEAR,
+            breach_trade_date=None,
+            prior_close_fen=plan.levels.risk_line_fen,
+            revision=0,
+            updated_at=facts.source_as_of,
+        ),
+        manual_event_risk=False,
+    )
+
+
 def _actionable_episode_result(
     plan: TradePlan,
     context: EvaluationContext,
@@ -1645,3 +1731,771 @@ def test_intraday_service_same_cause_commits_later_bucket_without_republish(
         episode = session.scalar(select(ZoneEpisode))
         assert episode is not None
         assert episode.last_processed_bucket_end == later_bucket.isoformat()
+
+
+def test_official_close_uses_trusted_post_fetch_observation_time(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    trade_date = date(2026, 8, 24)
+    requested_at = datetime.combine(trade_date, time(15, 20), SHANGHAI)
+    received_at = requested_at + timedelta(seconds=1)
+    observed_at = requested_at + timedelta(seconds=2)
+    official = _daily_bar(
+        trade_date=trade_date,
+        close_fen=6200,
+        is_official=True,
+        received_at=received_at,
+    )
+    tracker = {"active": 0}
+
+    async def fetch_official_daily(
+        _symbol: str,
+        _trade_date: date,
+        _close_attempt: int,
+    ) -> list[DailyBar]:
+        return [official]
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=fetch_official_daily,
+        official_observed_at=lambda _requested_at: observed_at,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=observed_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=_official_context,
+        evaluator=evaluate,
+        committed_event_publisher=lambda _event: pytest.fail("wait result cannot publish"),
+    )
+
+    result = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=requested_at,
+            close_attempt=1,
+        )
+    )
+
+    assert result.status is OfficialCloseCycleStatus.COMMITTED
+    assert result.facts is not None
+    assert result.facts.evaluated_at == observed_at
+    assert result.facts.close_reconciliation.official_bar == official
+
+
+def test_completed_official_close_short_circuits_later_attempt_after_restart(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    trade_date = date(2026, 8, 24)
+    first_requested_at = datetime.combine(trade_date, time(15, 20), SHANGHAI)
+    official = _daily_bar(
+        trade_date=trade_date,
+        close_fen=6200,
+        is_official=True,
+        received_at=first_requested_at + timedelta(seconds=1),
+    )
+    tracker = {"active": 0}
+    fetch_calls: list[int] = []
+    evaluation_calls: list[datetime] = []
+
+    async def fetch_first(
+        _symbol: str,
+        _trade_date: date,
+        close_attempt: int,
+    ) -> list[DailyBar]:
+        fetch_calls.append(close_attempt)
+        return [official]
+
+    def evaluate_first(context: EvaluationContext) -> EvaluationResult:
+        evaluation_calls.append(context.evaluated_at)
+        return evaluate(context)
+
+    first_service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=fetch_first,
+        official_observed_at=lambda requested_at: requested_at + timedelta(seconds=2),
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=first_requested_at + timedelta(minutes=1),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=_official_context,
+        evaluator=evaluate_first,
+        committed_event_publisher=lambda _event: pytest.fail("wait result cannot publish"),
+    )
+    first = asyncio.run(
+        first_service.run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=first_requested_at,
+            close_attempt=1,
+        )
+    )
+    assert first.status is OfficialCloseCycleStatus.COMMITTED
+
+    restarted = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=lambda _symbol, _trade_date, _attempt: pytest.fail(
+            "completed close cannot fetch again"
+        ),
+        official_observed_at=lambda requested_at: requested_at + timedelta(seconds=2),
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=datetime.combine(trade_date, time(16, 1), SHANGHAI),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=lambda _plan, _facts: pytest.fail(
+            "completed close cannot rebuild context"
+        ),
+        evaluator=lambda _context: pytest.fail("completed close cannot evaluate again"),
+        committed_event_publisher=lambda _event: pytest.fail("duplicate cannot publish"),
+    )
+    duplicate = asyncio.run(
+        restarted.run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=datetime.combine(trade_date, time(16, 0), SHANGHAI),
+            close_attempt=2,
+        )
+    )
+
+    assert duplicate.status is OfficialCloseCycleStatus.DUPLICATE
+    assert duplicate.claim_created is False
+    assert duplicate.close_reconciliation is None
+    assert duplicate.facts is None
+    assert duplicate.evaluation_result is None
+    assert fetch_calls == [1]
+    assert evaluation_calls == [first_requested_at + timedelta(seconds=2)]
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+        assert session.scalar(select(func.count()).select_from(RiskState)) == 0
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
+
+
+def test_official_close_accepts_scheduler_attempt_beyond_ten(runtime_engine: Engine) -> None:
+    plan = _runtime_plan()
+    trade_date = date(2026, 8, 24)
+    evaluated_at = datetime.combine(trade_date, time(17, 1), SHANGHAI)
+    tracker = {"active": 0}
+
+    async def fetch_official_daily(
+        _symbol: str,
+        _trade_date: date,
+        close_attempt: int,
+    ) -> list[DailyBar]:
+        assert close_attempt == 11
+        return []
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=fetch_official_daily,
+        official_observed_at=lambda requested_at: requested_at,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=evaluated_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=_official_context,
+        evaluator=evaluate,
+        committed_event_publisher=lambda _event: pytest.fail("pending cannot publish"),
+    )
+
+    result = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=evaluated_at,
+            close_attempt=11,
+        )
+    )
+
+    assert result.status is OfficialCloseCycleStatus.CLOSE_PENDING
+    assert result.close_attempt == 11
+
+
+def test_official_close_attempts_persist_pending_then_commit_matching_official_risk(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    trade_date = date(2026, 8, 24)
+    provisional = _daily_bar(
+        trade_date=trade_date,
+        close_fen=6070,
+        is_official=False,
+    )
+    official = _daily_bar(
+        trade_date=trade_date,
+        close_fen=6000,
+        is_official=True,
+        received_at=datetime.combine(trade_date, time(17, 0), SHANGHAI),
+    )
+    wrong_date = _daily_bar(
+        trade_date=trade_date - timedelta(days=3),
+        close_fen=5990,
+        is_official=True,
+    )
+    tracker = {"active": 0}
+    calls: list[tuple[str, date, int]] = []
+    published: list[UUID] = []
+    event_id = UUID("00000000-0000-0000-0000-000000000036")
+
+    with _runtime_uow_factory(
+        runtime_engine,
+        tracker,
+        now=datetime.combine(trade_date, time(15, 1), SHANGHAI),
+    )() as unit_of_work:
+        unit_of_work.history.upsert_daily_bars((provisional,))
+        unit_of_work.commit()
+
+    async def fetch_official_daily(
+        symbol: str,
+        requested_date: date,
+        close_attempt: int,
+    ) -> list[DailyBar]:
+        assert tracker["active"] == 0
+        calls.append((symbol, requested_date, close_attempt))
+        if close_attempt == 1:
+            return []
+        if close_attempt == 2:
+            return [wrong_date]
+        return [official]
+
+    def build_context(plan_value: TradePlan, facts: OfficialCloseMarketFacts):
+        assert tracker["active"] == 0
+        assert facts.provenance is DailyIndicatorProvenance.OFFICIAL
+        assert facts.source_as_of == datetime.combine(trade_date, time(15, 0), SHANGHAI)
+        assert facts.daily_indicator_snapshot.series == calculate_ta_v1((official,))
+        return _official_context(plan_value, facts)
+
+    def publish_after_commit(event) -> None:
+        assert tracker["active"] == 0
+        with create_session_factory(runtime_engine)() as session:
+            assert session.get(AlertEventRow, str(event.event_id)) is not None
+            assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+            assert session.scalar(select(func.count()).select_from(RiskState)) == 1
+        published.append(event.event_id)
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=fetch_official_daily,
+        official_observed_at=lambda requested_at: requested_at,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=datetime.combine(trade_date, time(17, 1), SHANGHAI),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=build_context,
+        evaluator=evaluate,
+        committed_event_publisher=publish_after_commit,
+        event_id_factory=lambda: event_id,
+    )
+
+    first = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=datetime.combine(trade_date, time(15, 20), SHANGHAI),
+            close_attempt=1,
+        )
+    )
+    second = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=datetime.combine(trade_date, time(16, 0), SHANGHAI),
+            close_attempt=2,
+        )
+    )
+
+    assert first.status is OfficialCloseCycleStatus.CLOSE_PENDING
+    assert second.status is OfficialCloseCycleStatus.CLOSE_PENDING
+    assert first.close_reconciliation.status is CloseReconciliationStatus.CLOSE_PENDING
+    assert first.evaluation_result is None
+    assert service.pending_close_date(plan.symbol) == trade_date
+    with create_session_factory(runtime_engine)() as session:
+        health = session.get(SymbolHealth, plan.symbol)
+        assert health is not None
+        assert health.status == "CLOSE_PENDING"
+        assert health.latest_bar_end is None
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
+
+    third = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=datetime.combine(trade_date, time(17, 0), SHANGHAI),
+            close_attempt=3,
+        )
+    )
+
+    assert calls == [
+        (plan.symbol, trade_date, 1),
+        (plan.symbol, trade_date, 2),
+        (plan.symbol, trade_date, 3),
+    ]
+    assert third.status is OfficialCloseCycleStatus.COMMITTED
+    assert third.claim_created is True
+    assert third.facts is not None
+    assert third.facts.close_reconciliation.official_bar == official
+    assert third.facts.close_reconciliation.close_delta_fen == -70
+    assert third.evaluation_result is not None
+    assert third.evaluation_result.snapshot.signal_type is SignalType.RISK_BREACH
+    assert published == [event_id]
+    assert service.pending_close_date(plan.symbol) is None
+    with create_session_factory(runtime_engine)() as session:
+        ledger = session.scalar(select(EvaluationLedger))
+        assert ledger is not None
+        assert ledger.evaluation_kind == "OFFICIAL_CLOSE"
+        assert ledger.target_value == trade_date.isoformat()
+        assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 2
+        risk = session.get(RiskState, plan.symbol)
+        assert risk is not None
+        assert risk.status == "BREACHED_PENDING_CONFIRMATION"
+
+
+def test_official_close_rejects_provisional_fetch_and_mixed_context(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    trade_date = date(2026, 8, 24)
+    provisional = _daily_bar(
+        trade_date=trade_date,
+        close_fen=6000,
+        is_official=False,
+    )
+    official = _daily_bar(
+        trade_date=trade_date,
+        close_fen=6000,
+        is_official=True,
+    )
+    unrelated_history = _daily_bar(
+        trade_date=trade_date - timedelta(days=3),
+        close_fen=6200,
+        is_official=True,
+    )
+    tracker = {"active": 0}
+    fetched: list[DailyBar] = [provisional]
+
+    async def fetch_official_daily(
+        _symbol: str,
+        _trade_date: date,
+        _close_attempt: int,
+    ) -> list[DailyBar]:
+        return list(fetched)
+
+    def mixed_context(plan_value: TradePlan, facts: OfficialCloseMarketFacts):
+        context = _official_context(plan_value, facts)
+        return context.model_copy(update={"official_daily_bars": (unrelated_history,)})
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=fetch_official_daily,
+        official_observed_at=lambda requested_at: requested_at,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=datetime.combine(trade_date, time(17, 1), SHANGHAI),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=mixed_context,
+        evaluator=evaluate,
+        committed_event_publisher=lambda _event: pytest.fail("invalid evidence cannot publish"),
+    )
+
+    pending = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=datetime.combine(trade_date, time(15, 20), SHANGHAI),
+            close_attempt=1,
+        )
+    )
+    assert pending.status is OfficialCloseCycleStatus.CLOSE_PENDING
+    assert service.pending_close_date(plan.symbol) == trade_date
+
+    fetched[:] = [official]
+    with pytest.raises(ValueError, match="daily indicator identities|exact official market facts"):
+        asyncio.run(
+            service.run_official_close(
+                plan=plan,
+                trade_date=trade_date,
+                evaluated_at=datetime.combine(trade_date, time(16, 0), SHANGHAI),
+                close_attempt=2,
+            )
+        )
+
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(RiskState)) == 0
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
+
+
+def test_official_evaluation_failure_retains_pending_and_blocks_later_close(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    first_date = date(2026, 8, 24)
+    next_date = date(2026, 8, 25)
+    tracker = {"active": 0}
+    calls: list[date] = []
+
+    async def fetch_official_daily(
+        _symbol: str,
+        requested_date: date,
+        _close_attempt: int,
+    ) -> list[DailyBar]:
+        calls.append(requested_date)
+        return [
+            _daily_bar(
+                trade_date=requested_date,
+                close_fen=6200,
+                is_official=True,
+            )
+        ]
+
+    def fail_evaluation(_context: EvaluationContext) -> EvaluationResult:
+        raise RuntimeError("evaluation failed")
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=fetch_official_daily,
+        official_observed_at=lambda requested_at: requested_at,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=datetime.combine(next_date, time(17, 1), SHANGHAI),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=_official_context,
+        evaluator=fail_evaluation,
+        committed_event_publisher=lambda _event: pytest.fail("failed evaluation cannot publish"),
+    )
+
+    with pytest.raises(RuntimeError, match="evaluation failed"):
+        asyncio.run(
+            service.run_official_close(
+                plan=plan,
+                trade_date=first_date,
+                evaluated_at=datetime.combine(first_date, time(17, 0), SHANGHAI),
+                close_attempt=3,
+            )
+        )
+
+    assert service.pending_close_date(plan.symbol) == first_date
+    blocked = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=next_date,
+            evaluated_at=datetime.combine(next_date, time(15, 20), SHANGHAI),
+            close_attempt=1,
+        )
+    )
+    assert blocked.status is OfficialCloseCycleStatus.BLOCKED_PENDING
+    assert blocked.pending_trade_date == first_date
+    assert calls == [first_date]
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(RiskState)) == 0
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
+
+
+def test_official_close_rolls_back_application_then_restarts_exactly_once(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    trade_date = date(2026, 8, 24)
+    evaluated_at = datetime.combine(trade_date, time(17, 0), SHANGHAI)
+    official = _daily_bar(
+        trade_date=trade_date,
+        close_fen=6000,
+        is_official=True,
+        received_at=evaluated_at,
+    )
+    tracker = {"active": 0}
+    published: list[UUID] = []
+    event_id = UUID("00000000-0000-0000-0000-000000000037")
+
+    async def fetch_official_daily(
+        _symbol: str,
+        _trade_date: date,
+        _close_attempt: int,
+    ) -> list[DailyBar]:
+        return [official]
+
+    def create_service(*, fail_alert: bool = False) -> RuntimeEvaluationService:
+        return RuntimeEvaluationService(
+            fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+            fetch_official_daily=fetch_official_daily,
+            official_observed_at=lambda requested_at: requested_at,
+            unit_of_work_factory=_runtime_uow_factory(
+                runtime_engine,
+                tracker,
+                now=evaluated_at + timedelta(minutes=1),
+                fail_alert=fail_alert,
+            ),
+            context_builder=_runtime_context,
+            official_context_builder=_official_context,
+            evaluator=evaluate,
+            committed_event_publisher=lambda event: published.append(event.event_id),
+            event_id_factory=lambda: event_id,
+        )
+
+    failing = create_service(fail_alert=True)
+    with pytest.raises(RuntimeError, match="forced outbox failure"):
+        asyncio.run(
+            failing.run_official_close(
+                plan=plan,
+                trade_date=trade_date,
+                evaluated_at=evaluated_at,
+                close_attempt=3,
+            )
+        )
+
+    assert failing.pending_close_date(plan.symbol) == trade_date
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(RiskState)) == 0
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
+        assert session.scalar(select(func.count()).select_from(AuditLog)) == 0
+
+    first = asyncio.run(
+        create_service().run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=evaluated_at,
+            close_attempt=3,
+        )
+    )
+    restarted = asyncio.run(
+        create_service().run_official_close(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=evaluated_at,
+            close_attempt=3,
+        )
+    )
+
+    assert first.status is OfficialCloseCycleStatus.COMMITTED
+    assert restarted.status is OfficialCloseCycleStatus.DUPLICATE
+    assert published == [event_id]
+    assert create_service().pending_close_date(plan.symbol) is None
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
+        assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+        assert session.scalar(select(func.count()).select_from(RiskState)) == 1
+        assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 1
+
+
+def test_unresolved_close_pending_blocks_next_day_until_original_date_resolves(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    first_date = date(2026, 8, 24)
+    next_date = date(2026, 8, 25)
+    tracker = {"active": 0}
+    ready: set[date] = set()
+    calls: list[date] = []
+
+    async def fetch_official_daily(
+        _symbol: str,
+        requested_date: date,
+        _close_attempt: int,
+    ) -> list[DailyBar]:
+        calls.append(requested_date)
+        if requested_date not in ready:
+            return []
+        return [
+            _daily_bar(
+                trade_date=requested_date,
+                close_fen=6200,
+                is_official=True,
+            )
+        ]
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=fetch_official_daily,
+        official_observed_at=lambda requested_at: requested_at,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=datetime.combine(next_date, time(17, 1), SHANGHAI),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=_official_context,
+        evaluator=evaluate,
+        committed_event_publisher=lambda _event: pytest.fail("recovery creates no alert"),
+    )
+
+    pending = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=first_date,
+            evaluated_at=datetime.combine(first_date, time(17, 0), SHANGHAI),
+            close_attempt=3,
+        )
+    )
+    blocked = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=next_date,
+            evaluated_at=datetime.combine(next_date, time(15, 20), SHANGHAI),
+            close_attempt=1,
+        )
+    )
+
+    assert pending.status is OfficialCloseCycleStatus.CLOSE_PENDING
+    assert blocked.status is OfficialCloseCycleStatus.BLOCKED_PENDING
+    assert blocked.pending_trade_date == first_date
+    assert calls == [first_date]
+
+    ready.add(first_date)
+    resolved = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=first_date,
+            evaluated_at=datetime.combine(next_date, time(9, 0), SHANGHAI),
+            close_attempt=4,
+        )
+    )
+    ready.add(next_date)
+    next_close = asyncio.run(
+        service.run_official_close(
+            plan=plan,
+            trade_date=next_date,
+            evaluated_at=datetime.combine(next_date, time(17, 0), SHANGHAI),
+            close_attempt=3,
+        )
+    )
+
+    assert resolved.status is OfficialCloseCycleStatus.COMMITTED
+    assert next_close.status is OfficialCloseCycleStatus.COMMITTED
+    assert calls == [first_date, first_date, next_date]
+    with create_session_factory(runtime_engine)() as session:
+        identities = session.scalars(
+            select(EvaluationLedger).order_by(EvaluationLedger.target_value)
+        ).all()
+        assert [row.target_value for row in identities] == [
+            first_date.isoformat(),
+            next_date.isoformat(),
+        ]
+        assert all(row.evaluation_kind == "OFFICIAL_CLOSE" for row in identities)
+
+
+def test_concurrent_official_close_attempts_serialize_before_next_day_transition(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    first_date = date(2026, 8, 24)
+    next_date = date(2026, 8, 25)
+    tracker = {"active": 0}
+    first_fetch_started = asyncio.Event()
+    release_first_fetch = asyncio.Event()
+    calls: list[date] = []
+
+    async def fetch_official_daily(
+        _symbol: str,
+        requested_date: date,
+        _close_attempt: int,
+    ) -> list[DailyBar]:
+        calls.append(requested_date)
+        if requested_date == first_date:
+            first_fetch_started.set()
+            await release_first_fetch.wait()
+        return []
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
+        fetch_official_daily=fetch_official_daily,
+        official_observed_at=lambda requested_at: requested_at,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=datetime.combine(next_date, time(17, 1), SHANGHAI),
+        ),
+        context_builder=_runtime_context,
+        official_context_builder=_official_context,
+        evaluator=evaluate,
+        committed_event_publisher=lambda _event: pytest.fail("pending cannot publish"),
+    )
+
+    async def run_both():
+        first = asyncio.create_task(
+            service.run_official_close(
+                plan=plan,
+                trade_date=first_date,
+                evaluated_at=datetime.combine(first_date, time(17, 0), SHANGHAI),
+                close_attempt=3,
+            )
+        )
+        await first_fetch_started.wait()
+        later = asyncio.create_task(
+            service.run_official_close(
+                plan=plan,
+                trade_date=next_date,
+                evaluated_at=datetime.combine(next_date, time(15, 20), SHANGHAI),
+                close_attempt=1,
+            )
+        )
+        await asyncio.sleep(0)
+        release_first_fetch.set()
+        return await asyncio.gather(first, later)
+
+    first, later = asyncio.run(run_both())
+
+    assert first.status is OfficialCloseCycleStatus.CLOSE_PENDING
+    assert later.status is OfficialCloseCycleStatus.BLOCKED_PENDING
+    assert later.pending_trade_date == first_date
+    assert calls == [first_date]
+
+
+def test_startup_recovery_resolves_close_pending_before_current_day_minutes() -> None:
+    symbol = SYMBOLS[0]
+    startup_date = date(2026, 8, 24)
+    pending_date = startup_date - timedelta(days=3)
+    provider = _FakeProvider([])
+    provider.recovery_rows[symbol] = [_bar(symbol, _at(9, 31))]
+    history = _FakeHistory()
+    controller = _controller(_at(9, 31, 12))
+    pending_by_symbol: dict[str, date] = {symbol: pending_date}
+    close_calls: list[tuple[str, date]] = []
+
+    async def recover_pending_close(requested_symbol: str, requested_date: date) -> bool:
+        assert provider.recovery_calls == []
+        close_calls.append((requested_symbol, requested_date))
+        pending_by_symbol.pop(requested_symbol)
+        return True
+
+    service = RecoveryService(
+        provider=provider,
+        request_controller=controller,
+        active_symbols=_ActiveSymbols((symbol,)),
+        persist_minutes=history.persist_minutes,
+        is_open_on=lambda _trade_date: True,
+        realtime_pending=lambda: False,
+        pending_close_date=lambda requested_symbol: pending_by_symbol.get(requested_symbol),
+        recover_pending_close=recover_pending_close,
+    )
+
+    try:
+        result = asyncio.run(service.recover_startup(trade_date=startup_date))
+    finally:
+        controller.close()
+
+    assert close_calls == [(symbol, pending_date)]
+    assert provider.recovery_calls == [symbol]
+    assert len(result.pending_close_results) == 1
+    assert result.pending_close_results[0].resolved is True
+    assert result.pending_close_results[0].trade_date == pending_date
+    assert result.persisted_bar_count == 1

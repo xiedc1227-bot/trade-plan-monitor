@@ -1072,6 +1072,32 @@ class EvaluationRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def has_claim(
+        self,
+        *,
+        plan_hash: str,
+        symbol: str,
+        evaluation_kind: str | EvaluationKind,
+        bucket_end: datetime | None,
+        official_trade_date: date | None,
+        formula_version: str,
+    ) -> bool:
+        """Return whether one exact evaluation identity is durably claimed."""
+
+        normalized_kind, target_value = _evaluation_target(
+            evaluation_kind=evaluation_kind,
+            bucket_end=bucket_end,
+            official_trade_date=official_trade_date,
+        )
+        identity = (
+            _sha256_hash(plan_hash, "plan_hash"),
+            _symbol(symbol),
+            normalized_kind.value,
+            target_value,
+            _token(formula_version, "formula_version", maximum=32),
+        )
+        return self._session.get(EvaluationLedger, identity) is not None
+
     def claim(
         self,
         *,

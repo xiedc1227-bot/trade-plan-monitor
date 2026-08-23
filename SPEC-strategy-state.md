@@ -107,6 +107,8 @@ Sellable quantity derives from the trading calendar and acquisition date. Manual
 
 From T032, `evaluation_ledger` uses the lossless primary key `(plan_hash, symbol, evaluation_kind, target_value, formula_version)`. `INTRADAY` stores a canonical Shanghai five-minute timestamp in `target_value`; `OFFICIAL_CLOSE` stores only its ISO trade date, so the intraday 15:00 target cannot collide with that date's official-close identity. Migration `0005_evaluation_kind` backfills every earlier row as `INTRADAY`, preserves result/evaluation facts, and refuses downgrade while any official-close identity exists. The repository requires an explicit kind plus exactly one typed target and exposes mutually exclusive `bucket_end` / `official_trade_date` fields.
 
+`EvaluationRepository.has_claim(...)` is a read-only exact-identity lookup over the same five key fields. T033 uses it only to short-circuit provider and decision work for an already committed official-close date; it neither compares result hashes nor converts an `EvaluationIdentityConflictError` into a duplicate.
+
 ### Plan Repository and Unit-of-Work Contract
 
 - `save_draft` accepts a typed `TradePlan`, reruns cross-field save validation, and stores the source, canonical JSON, content hash, immutable version, and `PLAN_DRAFT_SAVED` audit in one transaction. An existing `(plan_id, version)` is never overwritten.

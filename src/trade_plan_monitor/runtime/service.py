@@ -1,9 +1,11 @@
-"""Deterministic intraday evaluation and atomic committed-event publication."""
+"""Deterministic intraday/official evaluation and committed-event publication."""
 
 from __future__ import annotations
 
+import asyncio
+import json
 from collections.abc import Awaitable, Callable, Mapping
-from datetime import datetime
+from datetime import date, datetime, time
 from enum import StrEnum
 from inspect import isawaitable
 from typing import Self
@@ -14,11 +16,14 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from trade_plan_monitor.decision.engine import evaluate
 from trade_plan_monitor.decision.models import (
     DailyIndicatorProvenance,
+    DailyIndicatorSnapshot,
     EpisodeTransitionIntent,
     EvaluationContext,
     EvaluationResult,
     IntradayEvaluationIdentity,
     IntradayEvaluationTarget,
+    OfficialCloseEvaluationIdentity,
+    OfficialCloseEvaluationTarget,
     RiskTransitionIntent,
     SignalType,
 )
@@ -31,15 +36,22 @@ from trade_plan_monitor.market_data.aggregation import (
     expected_five_minute_ends,
     five_minute_bucket_end,
 )
+from trade_plan_monitor.market_data.indicators import calculate_ta_v1
 from trade_plan_monitor.market_data.models import (
     DailyBar,
     MinuteBar,
     ShanghaiDatetime,
 )
+from trade_plan_monitor.market_data.reconciliation import (
+    CloseReconciliationIntent,
+    CloseReconciliationStatus,
+    reconcile_daily_close,
+)
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
-from trade_plan_monitor.state.models import EvaluationKind
+from trade_plan_monitor.runtime.clock import SystemClock
+from trade_plan_monitor.state.models import EvaluationKind, SymbolHealthStatus
 from trade_plan_monitor.state.repositories import (
     EpisodeIdentityConflictError,
     EpisodeNotFoundError,
@@ -50,6 +62,10 @@ from trade_plan_monitor.state.unit_of_work import UnitOfWork
 _MAX_FETCHED_MINUTES = 1_000
 _MAX_CURRENT_DAY_MINUTES = 240
 _MAX_CURRENT_DAY_BUCKETS = _MAX_CURRENT_DAY_MINUTES // 5
+_MAX_OFFICIAL_DAILY_BARS = 10_000
+_CLOSE_PENDING_DATE_KEY = "closePendingTradeDate"
+_CLOSE_PENDING_RESUME_KEY = "resume"
+_INVALID_JSON = object()
 _SHANGHAI_DATETIME = TypeAdapter(ShanghaiDatetime)
 _OFFICIAL_RISK_SIGNAL_TYPES = frozenset(
     {
@@ -61,8 +77,14 @@ _OFFICIAL_RISK_SIGNAL_TYPES = frozenset(
 )
 
 FetchMinutes = Callable[[str, datetime], Awaitable[list[MinuteBar] | tuple[MinuteBar, ...]]]
+FetchOfficialDaily = Callable[
+    [str, date, int],
+    Awaitable[list[DailyBar] | tuple[DailyBar, ...]],
+]
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 ContextBuilder = Callable[[TradePlan, "IntradayMarketFacts"], EvaluationContext]
+OfficialContextBuilder = Callable[[TradePlan, "OfficialCloseMarketFacts"], EvaluationContext]
+OfficialObservedAt = Callable[[datetime], datetime]
 Evaluator = Callable[[EvaluationContext], EvaluationResult]
 CommittedEventPublisher = Callable[[AlertEvent], object]
 EventIdFactory = Callable[[], UUID]
@@ -180,6 +202,156 @@ class IntradayCycleResult(_RuntimeValue):
         return self
 
 
+class OfficialCloseErrorCode(StrEnum):
+    """Sanitized reason why an official-close target did not evaluate."""
+
+    NOT_AVAILABLE = "NOT_AVAILABLE"
+    INVALID_RESPONSE = "INVALID_RESPONSE"
+    FETCH_FAILED = "FETCH_FAILED"
+    EARLIER_CLOSE_PENDING = "EARLIER_CLOSE_PENDING"
+
+
+class OfficialCloseMarketFacts(_RuntimeValue):
+    """Exact reconciled official facts supplied to one immutable close context."""
+
+    symbol: str
+    trade_date: date
+    evaluated_at: ShanghaiDatetime
+    close_attempt: int = Field(strict=True, ge=1)
+    formula_version: str
+    official_daily_bars: tuple[DailyBar, ...] = Field(
+        default=(),
+        max_length=_MAX_OFFICIAL_DAILY_BARS,
+    )
+    close_reconciliation: CloseReconciliationIntent
+    daily_indicator_snapshot: DailyIndicatorSnapshot
+    source_as_of: ShanghaiDatetime
+    provenance: DailyIndicatorProvenance = DailyIndicatorProvenance.OFFICIAL
+
+    @model_validator(mode="after")
+    def validate_official_source(self) -> Self:
+        if isinstance(self.trade_date, datetime):
+            raise ValueError("official trade_date must be a calendar date")
+        expected_source = datetime.combine(self.trade_date, time(15, 0), self.evaluated_at.tzinfo)
+        if self.source_as_of != expected_source or self.source_as_of > self.evaluated_at:
+            raise ValueError("official source_as_of must be the elapsed 15:00 cutoff")
+        if self.provenance is not DailyIndicatorProvenance.OFFICIAL:
+            raise ValueError("official-close facts require OFFICIAL provenance")
+        reconciliation = self.close_reconciliation
+        if (
+            reconciliation.symbol != self.symbol
+            or reconciliation.trade_date != self.trade_date
+            or reconciliation.status is not CloseReconciliationStatus.OFFICIAL_READY
+            or not reconciliation.advance_close_risk
+            or reconciliation.official_bar is None
+        ):
+            raise ValueError("official-close facts require matching ready reconciliation")
+        official_bar = reconciliation.official_bar
+        if official_bar.received_at > self.evaluated_at:
+            raise ValueError("official daily bar cannot be received after evaluation")
+        if any(
+            not bar.is_official
+            or bar.symbol != self.symbol
+            or bar.trade_date >= self.trade_date
+            or bar.received_at > self.evaluated_at
+            for bar in self.official_daily_bars
+        ):
+            raise ValueError("official daily history must strictly precede the target")
+        history_dates = tuple(bar.trade_date for bar in self.official_daily_bars)
+        if history_dates != tuple(sorted(set(history_dates))):
+            raise ValueError("official daily history must be unique and strictly ordered")
+        snapshot = self.daily_indicator_snapshot
+        if (
+            snapshot.provenance is not self.provenance
+            or snapshot.source_as_of != self.source_as_of
+            or snapshot.source_bar != official_bar
+            or snapshot.series != calculate_ta_v1((*self.official_daily_bars, official_bar))
+        ):
+            raise ValueError("official indicators must be recomputed from exact official history")
+        return self
+
+
+class OfficialCloseCycleStatus(StrEnum):
+    """Stable outcome of one requested official-close attempt."""
+
+    CLOSE_PENDING = "CLOSE_PENDING"
+    BLOCKED_PENDING = "BLOCKED_PENDING"
+    DUPLICATE = "DUPLICATE"
+    COMMITTED = "COMMITTED"
+
+
+class OfficialCloseCycleResult(_RuntimeValue):
+    """Immutable reconciliation, evaluation, and publication outcome."""
+
+    status: OfficialCloseCycleStatus
+    trade_date: date
+    close_attempt: int = Field(strict=True, ge=1)
+    pending_trade_date: date | None
+    close_reconciliation: CloseReconciliationIntent | None
+    facts: OfficialCloseMarketFacts | None
+    evaluation_result: EvaluationResult | None
+    claim_created: bool = Field(strict=True)
+    committed_event: AlertEvent | None
+    error_code: OfficialCloseErrorCode | None = None
+
+    @model_validator(mode="after")
+    def validate_status_shape(self) -> Self:
+        if isinstance(self.trade_date, datetime) or isinstance(self.pending_trade_date, datetime):
+            raise ValueError("close result dates must be calendar dates")
+        reconciliation = self.close_reconciliation
+        pending_status = self.status in {
+            OfficialCloseCycleStatus.CLOSE_PENDING,
+            OfficialCloseCycleStatus.BLOCKED_PENDING,
+        }
+        if pending_status:
+            if (
+                reconciliation is None
+                or reconciliation.trade_date != self.trade_date
+                or any(
+                    value is not None
+                    for value in (self.facts, self.evaluation_result, self.committed_event)
+                )
+                or self.claim_created
+            ):
+                raise ValueError("pending close results cannot contain evaluated facts")
+            if self.error_code is None or self.pending_trade_date is None:
+                raise ValueError("pending close results require a sanitized reason and date")
+            if self.status is OfficialCloseCycleStatus.CLOSE_PENDING:
+                if self.pending_trade_date != self.trade_date:
+                    raise ValueError("CLOSE_PENDING must identify its requested date")
+            elif self.pending_trade_date >= self.trade_date:
+                raise ValueError("blocked close requires an earlier unresolved date")
+            return self
+        if (
+            self.status is OfficialCloseCycleStatus.DUPLICATE
+            and reconciliation is None
+            and self.facts is None
+            and self.evaluation_result is None
+        ):
+            if (
+                self.pending_trade_date is not None
+                or self.error_code is not None
+                or self.claim_created
+                or self.committed_event is not None
+            ):
+                raise ValueError("completed duplicate results contain only their identity")
+            return self
+        if reconciliation is None or reconciliation.trade_date != self.trade_date:
+            raise ValueError("evaluated close result reconciliation must match its target")
+        if self.pending_trade_date is not None or self.error_code is not None:
+            raise ValueError("evaluated close results cannot retain a pending reason")
+        if self.facts is None or self.evaluation_result is None:
+            raise ValueError("evaluated close results require official facts and a decision")
+        if self.close_reconciliation != self.facts.close_reconciliation:
+            raise ValueError("evaluated close result must retain exact reconciliation")
+        if self.status is OfficialCloseCycleStatus.DUPLICATE:
+            if self.claim_created or self.committed_event is not None:
+                raise ValueError("duplicate close results cannot create or publish an event")
+        elif not self.claim_created:
+            raise ValueError("committed close results require a new evaluation claim")
+        return self
+
+
 class RuntimeEvaluationService:
     """Persist exact market facts, evaluate purely, then apply results atomically."""
 
@@ -187,8 +359,11 @@ class RuntimeEvaluationService:
         self,
         *,
         fetch_minutes: FetchMinutes,
+        fetch_official_daily: FetchOfficialDaily | None = None,
+        official_observed_at: OfficialObservedAt | None = None,
         unit_of_work_factory: UnitOfWorkFactory,
         context_builder: ContextBuilder,
+        official_context_builder: OfficialContextBuilder | None = None,
         committed_event_publisher: CommittedEventPublisher,
         evaluator: Evaluator = evaluate,
         event_id_factory: EventIdFactory = uuid4,
@@ -203,12 +378,23 @@ class RuntimeEvaluationService:
         )
         if any(not callable(dependency) for dependency in dependencies):
             raise TypeError("runtime evaluation dependencies must be callable")
+        if (fetch_official_daily is None) != (official_context_builder is None):
+            raise TypeError("official fetch and context builder must be configured together")
+        if official_observed_at is not None and not callable(official_observed_at):
+            raise TypeError("official_observed_at must be callable")
+        system_clock = SystemClock()
         self._fetch_minutes = fetch_minutes
+        self._fetch_official_daily = fetch_official_daily
+        self._official_observed_at = official_observed_at or (
+            lambda requested_at: max(requested_at, system_clock.now())
+        )
         self._unit_of_work_factory = unit_of_work_factory
         self._context_builder = context_builder
+        self._official_context_builder = official_context_builder
         self._publisher = committed_event_publisher
         self._evaluator = evaluator
         self._event_id_factory = event_id_factory
+        self._official_serial = asyncio.Lock()
 
     async def run_intraday(
         self,
@@ -314,6 +500,338 @@ class RuntimeEvaluationService:
             claim_created=True,
             committed_event=committed_event,
         )
+
+    def pending_close_date(self, symbol: str) -> date | None:
+        """Return one validated durable close-pending date for startup recovery."""
+
+        with self._unit_of_work_factory() as unit_of_work:
+            health = unit_of_work.health.get_symbol(symbol)
+        if health is None or health.status is not SymbolHealthStatus.CLOSE_PENDING:
+            return None
+        pending_date, _resume = _close_pending_payload(health.gap_json)
+        return pending_date
+
+    async def run_official_close(
+        self,
+        *,
+        plan: TradePlan,
+        trade_date: date,
+        evaluated_at: datetime,
+        close_attempt: int,
+    ) -> OfficialCloseCycleResult:
+        """Reconcile one official date without provider or publisher I/O in a transaction."""
+
+        async with self._official_serial:
+            return await self._run_official_close_unlocked(
+                plan=plan,
+                trade_date=trade_date,
+                evaluated_at=evaluated_at,
+                close_attempt=close_attempt,
+            )
+
+    async def _run_official_close_unlocked(
+        self,
+        *,
+        plan: TradePlan,
+        trade_date: date,
+        evaluated_at: datetime,
+        close_attempt: int,
+    ) -> OfficialCloseCycleResult:
+        """Own the serialized official-close workflow for one runtime instance."""
+
+        if self._fetch_official_daily is None or self._official_context_builder is None:
+            raise RuntimeError("official-close evaluation is not configured")
+        if not isinstance(plan, TradePlan):
+            raise TypeError("plan must be a TradePlan")
+        if isinstance(trade_date, datetime) or not isinstance(trade_date, date):
+            raise TypeError("trade_date must be a date")
+        if type(close_attempt) is not int or close_attempt < 1:
+            raise ValueError("close_attempt must be a positive integer")
+        canonical_evaluated_at = _SHANGHAI_DATETIME.validate_python(
+            evaluated_at,
+            strict=True,
+        )
+        source_as_of = datetime.combine(
+            trade_date,
+            time(15, 0),
+            canonical_evaluated_at.tzinfo,
+        )
+        if canonical_evaluated_at < source_as_of:
+            raise ValueError("official close cannot be evaluated before the 15:00 cutoff")
+
+        pending_date = self.pending_close_date(plan.symbol)
+        if pending_date is not None and pending_date > trade_date:
+            raise ValueError("persisted CLOSE_PENDING date cannot follow the requested target")
+        if pending_date is not None and pending_date < trade_date:
+            reconciliation = reconcile_daily_close(
+                symbol=plan.symbol,
+                current_trade_date=trade_date,
+                daily_bars=(),
+            )
+            return OfficialCloseCycleResult(
+                status=OfficialCloseCycleStatus.BLOCKED_PENDING,
+                trade_date=trade_date,
+                close_attempt=close_attempt,
+                pending_trade_date=pending_date,
+                close_reconciliation=reconciliation,
+                facts=None,
+                evaluation_result=None,
+                claim_created=False,
+                committed_event=None,
+                error_code=OfficialCloseErrorCode.EARLIER_CLOSE_PENDING,
+            )
+        if self._official_close_completed(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=canonical_evaluated_at,
+        ):
+            return OfficialCloseCycleResult(
+                status=OfficialCloseCycleStatus.DUPLICATE,
+                trade_date=trade_date,
+                close_attempt=close_attempt,
+                pending_trade_date=None,
+                close_reconciliation=None,
+                facts=None,
+                evaluation_result=None,
+                claim_created=False,
+                committed_event=None,
+                error_code=None,
+            )
+
+        fetch_error: OfficialCloseErrorCode | None = None
+        try:
+            fetched = await self._fetch_official_daily(
+                plan.symbol,
+                trade_date,
+                close_attempt,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            fetched = ()
+            fetch_error = OfficialCloseErrorCode.FETCH_FAILED
+        observed_at = _SHANGHAI_DATETIME.validate_python(
+            self._official_observed_at(canonical_evaluated_at),
+            strict=True,
+        )
+        if observed_at < canonical_evaluated_at:
+            raise ValueError("official observation cannot precede its requested evaluation time")
+        canonical_evaluated_at = observed_at
+        incoming, validation_error = self._validated_official_fetch(
+            fetched,
+            symbol=plan.symbol,
+            trade_date=trade_date,
+            evaluated_at=canonical_evaluated_at,
+        )
+        if fetch_error is None:
+            fetch_error = validation_error
+
+        persisted = self._persist_official_market_context(
+            plan=plan,
+            trade_date=trade_date,
+            evaluated_at=canonical_evaluated_at,
+            source_as_of=source_as_of,
+            incoming=incoming,
+        )
+        reconciliation, official_history = persisted
+        if not reconciliation.advance_close_risk or reconciliation.official_bar is None:
+            return OfficialCloseCycleResult(
+                status=OfficialCloseCycleStatus.CLOSE_PENDING,
+                trade_date=trade_date,
+                close_attempt=close_attempt,
+                pending_trade_date=trade_date,
+                close_reconciliation=reconciliation,
+                facts=None,
+                evaluation_result=None,
+                claim_created=False,
+                committed_event=None,
+                error_code=fetch_error or OfficialCloseErrorCode.NOT_AVAILABLE,
+            )
+
+        official_bar = reconciliation.official_bar
+        indicator_snapshot = DailyIndicatorSnapshot(
+            series=calculate_ta_v1((*official_history, official_bar)),
+            provenance=DailyIndicatorProvenance.OFFICIAL,
+            source_as_of=source_as_of,
+            source_bar=official_bar,
+        )
+        facts = OfficialCloseMarketFacts(
+            symbol=plan.symbol,
+            trade_date=trade_date,
+            evaluated_at=canonical_evaluated_at,
+            close_attempt=close_attempt,
+            formula_version=plan.monitoring.indicator_formula_version,
+            official_daily_bars=official_history,
+            close_reconciliation=reconciliation,
+            daily_indicator_snapshot=indicator_snapshot,
+            source_as_of=source_as_of,
+            provenance=DailyIndicatorProvenance.OFFICIAL,
+        )
+        context = self._official_context_builder(plan, facts)
+        self._validate_official_context(plan=plan, facts=facts, context=context)
+        result = self._evaluator(context)
+        self._validate_official_result(plan=plan, facts=facts, result=result)
+
+        committed_event: AlertEvent | None = None
+        with self._unit_of_work_factory() as unit_of_work:
+            identity = result.evaluation_identity
+            claim = unit_of_work.evaluations.claim(
+                plan_hash=identity.plan_hash,
+                symbol=identity.symbol,
+                evaluation_kind=EvaluationKind.OFFICIAL_CLOSE,
+                bucket_end=None,
+                official_trade_date=identity.official_trade_date,
+                formula_version=identity.formula_version,
+                result_hash=result.result_hash,
+                evaluated_at=result.snapshot.evaluated_at,
+            )
+            if claim.created:
+                self._apply_transitions(unit_of_work, result)
+                if result.signal_intent is not None:
+                    dedup_key = alert_dedup_key(result.signal_intent)
+                    if not unit_of_work.alerts.has_dedup_key(dedup_key):
+                        event_id = self._event_id_factory()
+                        if type(event_id) is not UUID:
+                            raise TypeError("event_id_factory must return a UUID")
+                        committed_event = unit_of_work.alerts.enqueue(
+                            build_alert_payload(
+                                event_id=event_id,
+                                plan=plan,
+                                result=result,
+                            )
+                        )
+            self._clear_close_pending(
+                unit_of_work,
+                symbol=plan.symbol,
+                trade_date=trade_date,
+                evaluated_at=canonical_evaluated_at,
+            )
+            unit_of_work.commit()
+
+        if not claim.created:
+            return OfficialCloseCycleResult(
+                status=OfficialCloseCycleStatus.DUPLICATE,
+                trade_date=trade_date,
+                close_attempt=close_attempt,
+                pending_trade_date=None,
+                close_reconciliation=reconciliation,
+                facts=facts,
+                evaluation_result=result,
+                claim_created=False,
+                committed_event=None,
+                error_code=None,
+            )
+        if committed_event is not None:
+            publication = self._publisher(committed_event)
+            if isawaitable(publication):
+                await publication
+        return OfficialCloseCycleResult(
+            status=OfficialCloseCycleStatus.COMMITTED,
+            trade_date=trade_date,
+            close_attempt=close_attempt,
+            pending_trade_date=None,
+            close_reconciliation=reconciliation,
+            facts=facts,
+            evaluation_result=result,
+            claim_created=True,
+            committed_event=committed_event,
+            error_code=None,
+        )
+
+    def _official_close_completed(
+        self,
+        *,
+        plan: TradePlan,
+        trade_date: date,
+        evaluated_at: datetime,
+    ) -> bool:
+        with self._unit_of_work_factory() as unit_of_work:
+            completed = unit_of_work.evaluations.has_claim(
+                plan_hash=plan_sha256(plan),
+                symbol=plan.symbol,
+                evaluation_kind=EvaluationKind.OFFICIAL_CLOSE,
+                bucket_end=None,
+                official_trade_date=trade_date,
+                formula_version=plan.monitoring.indicator_formula_version,
+            )
+            if completed:
+                self._clear_close_pending(
+                    unit_of_work,
+                    symbol=plan.symbol,
+                    trade_date=trade_date,
+                    evaluated_at=evaluated_at,
+                )
+                unit_of_work.commit()
+        return completed
+
+    def _persist_official_market_context(
+        self,
+        *,
+        plan: TradePlan,
+        trade_date: date,
+        evaluated_at: datetime,
+        source_as_of: datetime,
+        incoming: tuple[DailyBar, ...],
+    ) -> tuple[CloseReconciliationIntent, tuple[DailyBar, ...]]:
+        with self._unit_of_work_factory() as unit_of_work:
+            if incoming:
+                unit_of_work.history.upsert_daily_bars(incoming)
+            rows = unit_of_work.history.list_daily_bars(
+                plan.symbol,
+                start=date.min,
+                end=trade_date,
+            )
+            current_rows = tuple(row for row in rows if row.trade_date == trade_date)
+            reconciliation = reconcile_daily_close(
+                symbol=plan.symbol,
+                current_trade_date=trade_date,
+                daily_bars=current_rows,
+            )
+            official_history = tuple(
+                row for row in rows if row.is_official and row.trade_date < trade_date
+            )
+            if any(row.received_at > evaluated_at for row in (*official_history, *current_rows)):
+                raise ValueError("persisted official market facts cannot be from the future")
+            self._mark_close_pending(
+                unit_of_work,
+                symbol=plan.symbol,
+                trade_date=trade_date,
+                evaluated_at=evaluated_at,
+            )
+            unit_of_work.commit()
+        if source_as_of > evaluated_at:  # pragma: no cover - validated by caller
+            raise ValueError("official source cutoff cannot follow evaluation")
+        return reconciliation, official_history
+
+    @staticmethod
+    def _validated_official_fetch(
+        value: object,
+        *,
+        symbol: str,
+        trade_date: date,
+        evaluated_at: datetime,
+    ) -> tuple[tuple[DailyBar, ...], OfficialCloseErrorCode | None]:
+        if type(value) not in {list, tuple} or len(value) > _MAX_FETCHED_MINUTES:
+            return (), OfficialCloseErrorCode.INVALID_RESPONSE
+        if not value:
+            return (), OfficialCloseErrorCode.NOT_AVAILABLE
+        unique: DailyBar | None = None
+        for item in value:
+            if (
+                not isinstance(item, DailyBar)
+                or item.symbol != symbol
+                or item.trade_date != trade_date
+                or not item.is_official
+                or item.received_at > evaluated_at
+            ):
+                return (), OfficialCloseErrorCode.INVALID_RESPONSE
+            if unique is None:
+                unique = item
+            elif item != unique:
+                return (), OfficialCloseErrorCode.INVALID_RESPONSE
+        if unique is None:  # pragma: no cover - empty input returned above
+            return (), OfficialCloseErrorCode.NOT_AVAILABLE
+        return (unique,), None
 
     def _persist_market_context(
         self,
@@ -437,6 +955,129 @@ class RuntimeEvaluationService:
             raise ValueError("intraday evaluation cannot emit an official-close risk signal")
 
     @staticmethod
+    def _validate_official_context(
+        *,
+        plan: TradePlan,
+        facts: OfficialCloseMarketFacts,
+        context: object,
+    ) -> None:
+        if not isinstance(context, EvaluationContext):
+            raise TypeError("official_context_builder must return an EvaluationContext")
+        if context.plan != plan or context.plan_hash != plan_sha256(plan):
+            raise ValueError("official evaluation context must match the requested plan")
+        if not isinstance(context.target, OfficialCloseEvaluationTarget):
+            raise ValueError("official runtime requires an official-close target")
+        if (
+            context.target.trade_date != facts.trade_date
+            or context.evaluated_at != facts.evaluated_at
+            or context.current_day_minutes
+            or context.complete_5m_bars
+            or context.official_daily_bars != facts.official_daily_bars
+            or context.close_reconciliation != facts.close_reconciliation
+            or context.daily_indicator_snapshot != facts.daily_indicator_snapshot
+        ):
+            raise ValueError("evaluation context must retain the exact official market facts")
+
+    @staticmethod
+    def _validate_official_result(
+        *,
+        plan: TradePlan,
+        facts: OfficialCloseMarketFacts,
+        result: object,
+    ) -> None:
+        if not isinstance(result, EvaluationResult):
+            raise TypeError("evaluator must return an EvaluationResult")
+        identity = result.evaluation_identity
+        if not isinstance(identity, OfficialCloseEvaluationIdentity):
+            raise ValueError("official runtime cannot apply an intraday result")
+        if (
+            identity.plan_hash != plan_sha256(plan)
+            or identity.symbol != plan.symbol
+            or identity.official_trade_date != facts.trade_date
+            or identity.formula_version != facts.formula_version
+            or result.snapshot.evaluated_at != facts.evaluated_at
+        ):
+            raise ValueError("evaluation result must match the exact official runtime identity")
+        if any(not isinstance(item, RiskTransitionIntent) for item in result.transitions):
+            raise ValueError("official-close evaluation can apply only risk transitions")
+        if result.snapshot.signal_type not in {
+            SignalType.WAIT,
+            SignalType.BLOCKED_DATA,
+            *_OFFICIAL_RISK_SIGNAL_TYPES,
+        }:
+            raise ValueError("official-close evaluation emitted an intraday signal")
+
+    @staticmethod
+    def _mark_close_pending(
+        unit_of_work: UnitOfWork,
+        *,
+        symbol: str,
+        trade_date: date,
+        evaluated_at: datetime,
+    ) -> None:
+        current = unit_of_work.health.get_symbol(symbol)
+        if current is not None and current.status is SymbolHealthStatus.CLOSE_PENDING:
+            persisted_date, resume = _close_pending_payload(current.gap_json)
+            if persisted_date != trade_date:
+                raise ValueError("one symbol cannot retain two CLOSE_PENDING dates")
+        else:
+            resume = {
+                "status": (
+                    SymbolHealthStatus.LIVE.value if current is None else current.status.value
+                ),
+                "gaps": [] if current is None else _json_value(current.gap_json),
+                "errorStreak": 0 if current is None else current.error_streak,
+            }
+        latest_bar_end = None if current is None else current.latest_bar_end
+        data_age_seconds = (
+            0
+            if latest_bar_end is None
+            else max(0, int((evaluated_at - latest_bar_end).total_seconds()))
+        )
+        unit_of_work.health.upsert_symbol(
+            symbol=symbol,
+            status=SymbolHealthStatus.CLOSE_PENDING,
+            latest_bar_end=latest_bar_end,
+            data_age_seconds=data_age_seconds,
+            gaps={
+                _CLOSE_PENDING_DATE_KEY: trade_date.isoformat(),
+                _CLOSE_PENDING_RESUME_KEY: resume,
+            },
+            error_streak=1 if current is None else current.error_streak + 1,
+            expected_revision=0 if current is None else current.revision,
+        )
+
+    @staticmethod
+    def _clear_close_pending(
+        unit_of_work: UnitOfWork,
+        *,
+        symbol: str,
+        trade_date: date,
+        evaluated_at: datetime,
+    ) -> None:
+        current = unit_of_work.health.get_symbol(symbol)
+        if current is None or current.status is not SymbolHealthStatus.CLOSE_PENDING:
+            return
+        persisted_date, resume = _close_pending_payload(current.gap_json)
+        if persisted_date != trade_date:
+            raise ValueError("cannot clear another official close pending date")
+        latest_bar_end = current.latest_bar_end
+        data_age_seconds = (
+            0
+            if latest_bar_end is None
+            else max(0, int((evaluated_at - latest_bar_end).total_seconds()))
+        )
+        unit_of_work.health.upsert_symbol(
+            symbol=symbol,
+            status=resume["status"],
+            latest_bar_end=latest_bar_end,
+            data_age_seconds=data_age_seconds,
+            gaps=resume["gaps"],
+            error_streak=resume["errorStreak"],
+            expected_revision=current.revision,
+        )
+
+    @staticmethod
     def _apply_transitions(unit_of_work: UnitOfWork, result: EvaluationResult) -> None:
         for transition in result.transitions:
             if isinstance(transition, EpisodeTransitionIntent):
@@ -494,9 +1135,67 @@ def _five_minute_value(record: FiveMinuteBarRecord) -> FiveMinuteBar:
     return FiveMinuteBar.model_validate(record.model_dump(mode="python", round_trip=True))
 
 
+def _json_value(value: str) -> object:
+    try:
+        parsed = json.loads(value)
+    except TypeError, ValueError, RecursionError:
+        parsed = _INVALID_JSON
+    if parsed is _INVALID_JSON:
+        raise ValueError("persisted symbol health gaps are invalid") from None
+    return parsed
+
+
+def _close_pending_payload(value: str) -> tuple[date, dict[str, object]]:
+    parsed = _json_value(value)
+    if not isinstance(parsed, dict) or set(parsed) != {
+        _CLOSE_PENDING_DATE_KEY,
+        _CLOSE_PENDING_RESUME_KEY,
+    }:
+        raise ValueError("persisted CLOSE_PENDING health is invalid") from None
+    date_text = parsed.get(_CLOSE_PENDING_DATE_KEY)
+    resume = parsed.get(_CLOSE_PENDING_RESUME_KEY)
+    if (
+        type(date_text) is not str
+        or not isinstance(resume, dict)
+        or set(resume)
+        != {
+            "status",
+            "gaps",
+            "errorStreak",
+        }
+    ):
+        raise ValueError("persisted CLOSE_PENDING health is invalid") from None
+    try:
+        pending_date = date.fromisoformat(date_text)
+        resume_status = SymbolHealthStatus(resume.get("status"))
+    except TypeError, ValueError:
+        pending_date = None
+        resume_status = None
+    error_streak = resume.get("errorStreak")
+    if (
+        pending_date is None
+        or pending_date.isoformat() != date_text
+        or resume_status is None
+        or resume_status is SymbolHealthStatus.CLOSE_PENDING
+        or type(error_streak) is not int
+        or error_streak < 0
+        or "gaps" not in resume
+    ):
+        raise ValueError("persisted CLOSE_PENDING health is invalid") from None
+    return pending_date, {
+        "status": resume_status,
+        "gaps": resume["gaps"],
+        "errorStreak": error_streak,
+    }
+
+
 __all__ = [
     "IntradayCycleResult",
     "IntradayCycleStatus",
     "IntradayMarketFacts",
+    "OfficialCloseCycleResult",
+    "OfficialCloseCycleStatus",
+    "OfficialCloseErrorCode",
+    "OfficialCloseMarketFacts",
     "RuntimeEvaluationService",
 ]

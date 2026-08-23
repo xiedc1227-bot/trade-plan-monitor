@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T032` and checkpoints `C00`–`C12` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, and post-commit publication. Official-close reconciliation scheduling continues at `T033`, FastAPI routes start at `T035`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
+> Development status: tasks `T001`–`T033` and checkpoints `C00`–`C12` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, and startup close recovery. Owned lifecycle/health/CLI wiring continues at `T034`, FastAPI routes start at `T035`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Reserved CLI commands still parse arguments and return successfully without starting a service.
 
 ## Product Goals
 
@@ -33,9 +33,10 @@ Last verified on 2026-08-22 with CPython 3.14.7.
 | Alert identity, deterministic rendering, transactional outbox, and bounded channel dispatch | `T025`–`T027` | Complete |
 | Injected market clock, session-aware deadlines, and bounded Tushare/AI request control | `T028`–`T029` | Complete |
 | Per-symbol orchestration, recovery, atomic evaluation, and committed publication | `T030`–`T032` | Complete |
-| Official-close lifecycle, API, and production UI | `T033`–`T059` | Pending |
+| Official-close reconciliation, durable pending state, and startup retry | `T033` | Complete |
+| Owned lifecycle, API, and production UI | `T034`–`T059` | Pending |
 
-After `T032`, all 998 backend tests pass. The exact T032 selector contains 23 tests, the complete affected market/runtime/notification gate contains 221 tests, the SQLite repository gate contains 59 tests, and the unchanged decision/replay gate contains 273 tests. Whole-tree Ruff, 13-file scoped formatting, `compileall`, `pip check`, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, or Webhook calls. Checkpoint `C12` is complete; `T033` is next and has not started.
+After `T033`, all 1008 backend tests pass. The exact T033 selector contains 16 tests, the complete affected market/runtime/notification/repository gate contains 386 tests, the SQLite repository gate contains 59 tests, and the unchanged decision/replay gate contains 273 tests. Whole-tree Ruff, four-file scoped formatting, `compileall`, `pip check`, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, or Webhook calls. Checkpoint `C12` remains complete; `T034` is next and checkpoint `C13` remains open through it.
 
 ## Safety Boundaries
 
@@ -144,7 +145,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 
 | Command | Purpose | Availability |
 |---|---|---|
-| `python -m pytest -q` | Run the complete 837-test backend gate | Available |
+| `python -m pytest -q` | Run the complete 1008-test backend gate | Available |
 | `python -m pytest tests/unit/test_package.py -q` | Run the stable package smoke test | Available |
 | `python -m pytest tests/integration/test_ai_provider_contract.py -q` | Verify the AI provider and extraction contract | Available |
 | `python -m pytest tests/unit/test_decision_engine.py tests/replay/test_decision_replay.py -q` | Run the deterministic decision and replay gate | Available |

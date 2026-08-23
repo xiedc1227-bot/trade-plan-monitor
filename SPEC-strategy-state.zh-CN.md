@@ -107,6 +107,8 @@ class PositionLot(BaseModel):
 
 从 T032 开始，`evaluation_ledger` 使用无损主键 `(plan_hash, symbol, evaluation_kind, target_value, formula_version)`。`INTRADAY` 在 `target_value` 中存储规范上海时区五分钟时间戳；`OFFICIAL_CLOSE` 只存储 ISO 交易日期，因此盘中 15:00 目标不会与同日官方收盘标识冲突。迁移 `0005_evaluation_kind` 将所有早期行回填为 `INTRADAY`，保留结果与判断事实，并在存在任何官方收盘标识时拒绝降级。仓储要求显式 kind 和且仅一个强类型目标，并暴露互斥的 `bucket_end` / `official_trade_date` 字段。
 
+`EvaluationRepository.has_claim(...)` 针对相同五个主键字段执行精确 identity 只读查询。T033 只用它在已提交官方收盘日期上短路供应商和判断工作；它既不比较结果哈希，也不把 `EvaluationIdentityConflictError` 转换为重复结果。
+
 ### 计划仓储与工作单元契约
 
 - `save_draft` 接受类型化 `TradePlan`，重新执行跨字段保存校验，并在同一事务中保存源文本、规范 JSON、内容哈希、不可变版本和 `PLAN_DRAFT_SAVED` 审计。已有 `(plan_id, version)` 绝不覆盖。

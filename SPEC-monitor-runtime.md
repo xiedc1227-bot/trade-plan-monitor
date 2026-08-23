@@ -85,8 +85,11 @@ tests/integration/
 - Upserts make duplicate/reordered recovery data harmless.
 - Each complete intraday cutoff may refresh the provisional daily aggregate used for momentum evidence; the aggregate through the final minute is the provisional close. Neither is official.
 - Official `daily` reconciliation attempts are configurable, defaulting to approximately 15:20, 16:00, and 17:00.
-- Close-risk state advances only when the returned official row matches the current trading date.
-- If unavailable, persist `CLOSE_PENDING` and retry on the next startup before evaluating the next trading day's close transition.
+- T033 accepts every positive official-close attempt ordinal emitted by the configurable T028 scheduler and adds no independent attempt-count cap. Each attempt fetches outside a database transaction and then captures an injected trustworthy observation time; a returned or persisted row whose `received_at` is later than that post-fetch observation still fails closed.
+- Close-risk state advances only when the returned or already persisted official row matches the exact requested trading date. The runtime rebuilds `ta-v1` from strictly ordered earlier official rows plus that exact official row, with `OFFICIAL` provenance and a 15:00 `source_as_of`; provisional or mixed evidence is rejected.
+- Persist the exact official row, when present, and the durable unresolved-close marker in the same short market transaction before context construction. Clear `CLOSE_PENDING` only in the later atomic evaluation/state/audit/outbox commit, so unavailable data, invalid context, evaluation failure, or application rollback remains restart-recoverable without inventing a latest completed minute.
+- Startup recovery retries each active symbol's durable pending close serially before current-day minute recovery. An unresolved earlier date blocks every later official-close transition until the original date resolves.
+- Before provider or decision work, an exact read-only lookup of `(plan_hash, symbol, OFFICIAL_CLOSE, trade_date, formula_version)` short-circuits an already committed date as `DUPLICATE`. This prevents later configured attempts or restart from re-evaluating a completed identity without weakening result-hash conflict detection.
 
 ## Request Control
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Self
@@ -32,6 +32,8 @@ ActiveSymbols = Callable[[], tuple[str, ...]]
 PersistMinutes = Callable[[tuple[MinuteBar, ...]], None]
 IsOpenOn = Callable[[date], bool | None]
 RealtimePending = Callable[[], bool]
+PendingCloseDate = Callable[[str], date | None]
+RecoverPendingClose = Callable[[str, date], Awaitable[bool]]
 
 
 class RecoveryMode(StrEnum):
@@ -120,12 +122,33 @@ class RecoverySymbolResult(_RecoveryValue):
         return self
 
 
+class PendingCloseRecoveryResult(_RecoveryValue):
+    """Sanitized startup retry outcome for one durable CLOSE_PENDING target."""
+
+    symbol: AShareSymbol
+    trade_date: date
+    resolved: bool = Field(strict=True)
+    error_code: RecoveryErrorCode | None = None
+
+    @model_validator(mode="after")
+    def validate_pending_result(self) -> Self:
+        if isinstance(self.trade_date, datetime):
+            raise ValueError("pending close trade_date must be a calendar date")
+        if self.resolved and self.error_code is not None:
+            raise ValueError("resolved pending close cannot retain an error")
+        return self
+
+
 class RecoveryBatchResult(_RecoveryValue):
     """One bounded serial recovery pass with no hidden background ownership."""
 
     mode: RecoveryMode
     trade_date: date
     results: tuple[RecoverySymbolResult, ...] = Field(
+        default=(),
+        max_length=_MAX_ACTIVE_SYMBOLS,
+    )
+    pending_close_results: tuple[PendingCloseRecoveryResult, ...] = Field(
         default=(),
         max_length=_MAX_ACTIVE_SYMBOLS,
     )
@@ -146,6 +169,11 @@ class RecoveryBatchResult(_RecoveryValue):
         symbols = self.attempted_symbols
         if len(set(symbols)) != len(symbols):
             raise ValueError("a recovery pass cannot attempt one symbol twice")
+        pending_symbols = tuple(result.symbol for result in self.pending_close_results)
+        if len(set(pending_symbols)) != len(pending_symbols):
+            raise ValueError("startup recovery cannot retry one pending close twice")
+        if any(result.trade_date > self.trade_date for result in self.pending_close_results):
+            raise ValueError("pending close cannot follow the startup date")
         observed_dates = {
             value.date()
             for result in self.results
@@ -168,6 +196,8 @@ class RecoveryService:
         persist_minutes: PersistMinutes,
         is_open_on: IsOpenOn,
         realtime_pending: RealtimePending,
+        pending_close_date: PendingCloseDate | None = None,
+        recover_pending_close: RecoverPendingClose | None = None,
     ) -> None:
         dependencies = (active_symbols, persist_minutes, is_open_on, realtime_pending)
         if any(not callable(dependency) for dependency in dependencies):
@@ -176,12 +206,20 @@ class RecoveryService:
             raise TypeError("provider must expose current_day_minutes")
         if not isinstance(request_controller, TushareRequestController):
             raise TypeError("request_controller must be a TushareRequestController")
+        if (pending_close_date is None) != (recover_pending_close is None):
+            raise TypeError("pending close lookup and recovery must be configured together")
+        if pending_close_date is not None and not callable(pending_close_date):
+            raise TypeError("pending_close_date must be callable")
+        if recover_pending_close is not None and not callable(recover_pending_close):
+            raise TypeError("recover_pending_close must be callable")
         self._provider = provider
         self._request_controller = request_controller
         self._active_symbols = active_symbols
         self._persist_minutes = persist_minutes
         self._is_open_on = is_open_on
         self._realtime_pending = realtime_pending
+        self._pending_close_date = pending_close_date
+        self._recover_pending_close = recover_pending_close
         self._serial = asyncio.Lock()
         self._physical_condition = threading.Condition()
         self._physical_active = False
@@ -191,13 +229,14 @@ class RecoveryService:
 
         normalized_date = self._trade_date(trade_date)
         symbols = self._validated_active_symbols(self._active_symbols())
-        if not self._known_open(normalized_date):
-            return RecoveryBatchResult(mode=RecoveryMode.STARTUP, trade_date=normalized_date)
-        targets = tuple((symbol, ()) for symbol in symbols)
+        targets = (
+            tuple((symbol, ()) for symbol in symbols) if self._known_open(normalized_date) else ()
+        )
         return await self._run(
             mode=RecoveryMode.STARTUP,
             trade_date=normalized_date,
             targets=targets,
+            pending_symbols=symbols,
         )
 
     async def repair_detected_gaps(
@@ -220,6 +259,7 @@ class RecoveryService:
             mode=RecoveryMode.GAP_REPAIR,
             trade_date=normalized_date,
             targets=targets,
+            pending_symbols=(),
         )
 
     async def _run(
@@ -228,11 +268,25 @@ class RecoveryService:
         mode: RecoveryMode,
         trade_date: date,
         targets: tuple[tuple[str, tuple[datetime, ...]], ...],
+        pending_symbols: tuple[str, ...],
     ) -> RecoveryBatchResult:
         results: list[RecoverySymbolResult] = []
+        pending_results: list[PendingCloseRecoveryResult] = []
         yielded = False
         async with self._serial:
+            for symbol in pending_symbols:
+                if self._should_yield():
+                    yielded = True
+                    break
+                pending_result = await self._recover_pending_symbol(
+                    symbol=symbol,
+                    startup_date=trade_date,
+                )
+                if pending_result is not None:
+                    pending_results.append(pending_result)
             for symbol, requested_gaps in targets:
+                if yielded:
+                    break
                 if self._should_yield():
                     yielded = True
                     break
@@ -247,7 +301,62 @@ class RecoveryService:
             mode=mode,
             trade_date=trade_date,
             results=tuple(results),
+            pending_close_results=tuple(pending_results),
             yielded_to_realtime=yielded,
+        )
+
+    async def _recover_pending_symbol(
+        self,
+        *,
+        symbol: str,
+        startup_date: date,
+    ) -> PendingCloseRecoveryResult | None:
+        if self._pending_close_date is None or self._recover_pending_close is None:
+            return None
+        try:
+            pending_date = self._pending_close_date(symbol)
+        except Exception:
+            return PendingCloseRecoveryResult(
+                symbol=symbol,
+                trade_date=startup_date,
+                resolved=False,
+                error_code=RecoveryErrorCode.INVALID_RESPONSE,
+            )
+        if pending_date is None:
+            return None
+        if (
+            isinstance(pending_date, datetime)
+            or not isinstance(pending_date, date)
+            or pending_date > startup_date
+        ):
+            return PendingCloseRecoveryResult(
+                symbol=symbol,
+                trade_date=startup_date,
+                resolved=False,
+                error_code=RecoveryErrorCode.INVALID_RESPONSE,
+            )
+        try:
+            resolved = await self._recover_pending_close(symbol, pending_date)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return PendingCloseRecoveryResult(
+                symbol=symbol,
+                trade_date=pending_date,
+                resolved=False,
+                error_code=RecoveryErrorCode.ERROR,
+            )
+        if type(resolved) is not bool:
+            return PendingCloseRecoveryResult(
+                symbol=symbol,
+                trade_date=pending_date,
+                resolved=False,
+                error_code=RecoveryErrorCode.INVALID_RESPONSE,
+            )
+        return PendingCloseRecoveryResult(
+            symbol=symbol,
+            trade_date=pending_date,
+            resolved=resolved,
         )
 
     async def _recover_symbol(
@@ -446,6 +555,7 @@ class RecoveryService:
 
 
 __all__ = [
+    "PendingCloseRecoveryResult",
     "RecoveryBatchResult",
     "RecoveryErrorCode",
     "RecoveryMode",
