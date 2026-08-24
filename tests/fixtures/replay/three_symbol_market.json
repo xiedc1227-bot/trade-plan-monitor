@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "tradeDate": "2026-08-24",
+  "previousTradeDate": "2026-08-21",
+  "bucketEnd": "2026-08-24T11:15:00+08:00",
+  "evaluatedAt": "2026-08-24T11:15:20+08:00",
+  "barCount": 21,
+  "symbols": [
+    {
+      "scenario": "VALID_ENTRY",
+      "symbol": "003043.SZ",
+      "healthStatus": "LIVE",
+      "dataAgeSeconds": 20,
+      "initialFetch": "LATEST_ONLY",
+      "closeFen": 6400,
+      "highFen": 6420,
+      "baselineLowFen": 6380,
+      "latestLowFen": 6380,
+      "episodeId": "episode-replay-valid-entry",
+      "initialEpisodeLowFen": 6380,
+      "initialBarsSinceLow": 2
+    },
+    {
+      "scenario": "CONTINUOUS_FALL",
+      "symbol": "000001.SZ",
+      "healthStatus": "LIVE",
+      "dataAgeSeconds": 20,
+      "initialFetch": "FULL",
+      "closeFen": 6400,
+      "highFen": 6420,
+      "baselineLowFen": 6400,
+      "latestLowFen": 6380,
+      "episodeId": "episode-replay-continuous-fall",
+      "initialEpisodeLowFen": 6400,
+      "initialBarsSinceLow": 1
+    },
+    {
+      "scenario": "STALE_DATA",
+      "symbol": "000002.SZ",
+      "healthStatus": "STALE",
+      "dataAgeSeconds": 20,
+      "initialFetch": "FULL",
+      "closeFen": 6400,
+      "highFen": 6420,
+      "baselineLowFen": 6380,
+      "latestLowFen": 6380,
+      "episodeId": "episode-replay-stale-data",
+      "initialEpisodeLowFen": 6380,
+      "initialBarsSinceLow": 2
+    }
+  ]
+}

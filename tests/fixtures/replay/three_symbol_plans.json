@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "basePlan": "config/plans/003043.SZ.sample.yaml",
+  "plans": [
+    {
+      "scenario": "VALID_ENTRY",
+      "planId": "replay-valid-entry",
+      "symbol": "003043.SZ",
+      "name": "回放-有效入场"
+    },
+    {
+      "scenario": "CONTINUOUS_FALL",
+      "planId": "replay-continuous-fall",
+      "symbol": "000001.SZ",
+      "name": "回放-持续下跌"
+    },
+    {
+      "scenario": "STALE_DATA",
+      "planId": "replay-stale-data",
+      "symbol": "000002.SZ",
+      "name": "回放-陈旧数据"
+    }
+  ]
+}
