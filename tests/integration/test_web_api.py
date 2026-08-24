@@ -20,6 +20,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, ValidationError
+from starlette.websockets import WebSocketDisconnect
 
 from trade_plan_monitor.decision.models import (
     ActionableSignalType,
@@ -108,6 +109,22 @@ def _assert_error_envelope(response, *, status: int, code: str) -> dict[str, obj
     assert _REQUEST_ID_PATTERN.fullmatch(error["requestId"])
     assert response.headers["x-request-id"] == error["requestId"]
     return error
+
+
+def _assert_security_headers(response) -> None:
+    assert response.headers["content-security-policy"] == (
+        "default-src 'self'; base-uri 'self'; object-src 'none'; "
+        "frame-ancestors 'none'; form-action 'self'; "
+        "script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "font-src 'self'; connect-src 'self'; manifest-src 'self'"
+    )
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["permissions-policy"] == (
+        "camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+    )
+    assert not any(name.startswith("access-control-") for name in response.headers)
 
 
 def _decision_payload(
@@ -3188,3 +3205,302 @@ def test_alert_time_filters_require_one_ordered_pair_before_service_call() -> No
     _assert_error_envelope(partial, status=400, code="BAD_REQUEST")
     _assert_error_envelope(reversed_range, status=400, code="BAD_REQUEST")
     assert service.calls == []
+
+
+def test_t040_http_origin_allows_only_the_configured_loopback_origin() -> None:
+    client = TestClient(create_app(bind_port=9123), base_url="http://127.0.0.1:9123")
+
+    same_origin = client.get(
+        "/api/v1/missing",
+        headers={"Origin": "http://127.0.0.1:9123"},
+    )
+    unexpected_origin = client.get(
+        "/api/v1/missing",
+        headers={"Origin": "https://attacker.example"},
+    )
+
+    _assert_error_envelope(same_origin, status=404, code="NOT_FOUND")
+    _assert_error_envelope(unexpected_origin, status=403, code="FORBIDDEN")
+
+
+def test_t040_duplicate_http_origin_headers_fail_closed() -> None:
+    client = TestClient(create_app(), base_url="http://127.0.0.1:8765")
+
+    response = client.get(
+        "/api/v1/missing",
+        headers=[
+            ("Origin", "http://127.0.0.1:8765"),
+            ("Origin", "http://127.0.0.1:8765"),
+        ],
+    )
+
+    _assert_error_envelope(response, status=403, code="FORBIDDEN")
+
+
+def test_t040_websocket_rejects_an_unexpected_origin_before_acceptance() -> None:
+    client = TestClient(create_app(websocket_service=object()))
+
+    with pytest.raises(WebSocketDisconnect) as captured:
+        with client.websocket_connect(
+            "/ws/v1/monitor?after=0",
+            headers={"Origin": "https://attacker.example"},
+        ):
+            pass
+
+    assert captured.value.code == 1008
+
+
+def test_t040_websocket_accepts_the_exact_configured_origin() -> None:
+    class WebSocketService:
+        async def serve(self, websocket, *, after: int) -> None:
+            assert after == 0
+            await websocket.accept()
+            await websocket.close(code=1000)
+
+    client = TestClient(create_app(websocket_service=WebSocketService()))
+
+    with client.websocket_connect(
+        "/ws/v1/monitor?after=0",
+        headers={"Origin": "http://127.0.0.1:8765"},
+    ) as websocket:
+        with pytest.raises(WebSocketDisconnect) as captured:
+            websocket.receive_json()
+
+    assert captured.value.code == 1000
+
+
+def test_t040_responses_have_security_headers_and_no_cors() -> None:
+    response = TestClient(create_app()).get("/api/v1/missing")
+
+    _assert_error_envelope(response, status=404, code="NOT_FOUND")
+    _assert_security_headers(response)
+
+
+def test_t040_security_headers_cover_unexpected_failures() -> None:
+    app = create_app()
+
+    @app.get("/api/v1/t040-failure", include_in_schema=False)
+    async def fail() -> None:
+        raise RuntimeError("private failure detail")
+
+    response = TestClient(app, raise_server_exceptions=False).get("/api/v1/t040-failure")
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+    _assert_security_headers(response)
+    assert "private failure detail" not in response.text
+
+
+def test_t040_security_request_body_limit_accepts_boundary_and_rejects_excess() -> None:
+    app = create_app()
+
+    @app.post("/api/v1/t040-body", include_in_schema=False)
+    async def receive_body(request: Request) -> dict[str, int]:
+        return {"size": len(await request.body())}
+
+    client = TestClient(app)
+    maximum = 4 * 1024 * 1024
+
+    boundary = client.post(
+        "/api/v1/t040-body",
+        content=b"x" * maximum,
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    excessive = client.post(
+        "/api/v1/t040-body",
+        content=b"x" * (maximum + 1),
+        headers={"Content-Type": "application/octet-stream"},
+    )
+
+    assert boundary.status_code == 200
+    assert boundary.json() == {"size": maximum}
+    _assert_error_envelope(excessive, status=413, code="PAYLOAD_TOO_LARGE")
+
+
+def test_t040_security_streamed_body_is_bounded_without_content_length() -> None:
+    app = create_app()
+
+    @app.post("/api/v1/t040-stream", include_in_schema=False)
+    async def receive_stream(request: Request) -> dict[str, int]:
+        return {"size": len(await request.body())}
+
+    maximum = 4 * 1024 * 1024
+
+    def chunks():
+        yield b"x" * maximum
+        yield b"y"
+
+    response = TestClient(app).post(
+        "/api/v1/t040-stream",
+        content=chunks(),
+        headers={"Content-Type": "application/octet-stream"},
+    )
+
+    _assert_error_envelope(response, status=413, code="PAYLOAD_TOO_LARGE")
+
+
+def test_t040_security_streamed_body_bounds_an_unread_endpoint() -> None:
+    app = create_app()
+
+    @app.post("/api/v1/t040-unread", include_in_schema=False)
+    async def ignore_body() -> dict[str, bool]:
+        return {"accepted": True}
+
+    maximum = 4 * 1024 * 1024
+
+    def chunks():
+        yield b"x" * maximum
+        yield b"y"
+
+    response = TestClient(app).post(
+        "/api/v1/t040-unread",
+        content=chunks(),
+        headers={"Content-Type": "application/octet-stream"},
+    )
+
+    _assert_error_envelope(response, status=413, code="PAYLOAD_TOO_LARGE")
+
+
+def test_t040_serves_explicit_static_build_and_spa_fallback(tmp_path: Path) -> None:
+    static_directory = tmp_path / "dist"
+    assets_directory = static_directory / "assets"
+    assets_directory.mkdir(parents=True)
+    index = "<!doctype html><script src='/assets/app.js'></script>"
+    (static_directory / "index.html").write_text(index, encoding="utf-8")
+    (assets_directory / "app.js").write_text("export {};", encoding="utf-8")
+    client = TestClient(create_app(static_directory=static_directory))
+
+    root = client.get("/")
+    deep_link = client.get("/plans/active")
+    asset = client.get("/assets/app.js")
+    missing_asset = client.get("/assets/missing.js")
+
+    assert root.status_code == 200
+    assert root.text == index
+    assert deep_link.status_code == 200
+    assert deep_link.text == index
+    assert asset.status_code == 200
+    assert asset.text == "export {};"
+    _assert_error_envelope(missing_asset, status=404, code="NOT_FOUND")
+
+
+def test_t040_static_spa_fallback_accepts_a_dotted_route_segment(tmp_path: Path) -> None:
+    static_directory = tmp_path / "dist"
+    static_directory.mkdir()
+    (static_directory / "index.html").write_text("spa-index", encoding="utf-8")
+
+    response = TestClient(create_app(static_directory=static_directory)).get(
+        "/stocks/003043.SZ",
+        headers={"Accept": "text/html"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == "spa-index"
+
+
+def test_t040_static_fallback_never_shadows_api_or_websocket_routes(tmp_path: Path) -> None:
+    static_directory = tmp_path / "dist"
+    static_directory.mkdir()
+    (static_directory / "index.html").write_text("spa-index", encoding="utf-8")
+    client = TestClient(create_app(static_directory=static_directory, websocket_service=object()))
+
+    api_response = client.get("/api/v1/missing")
+    reserved_websocket_response = client.get("/ws/v1/missing")
+    with client.websocket_connect("/ws/v1/monitor?after=0") as websocket:
+        with pytest.raises(WebSocketDisconnect) as captured:
+            websocket.receive_json()
+
+    _assert_error_envelope(api_response, status=404, code="NOT_FOUND")
+    _assert_error_envelope(reserved_websocket_response, status=404, code="NOT_FOUND")
+    assert captured.value.code == 1013
+
+
+def test_t040_static_route_preserves_unknown_api_method_semantics(tmp_path: Path) -> None:
+    static_directory = tmp_path / "dist"
+    static_directory.mkdir()
+    (static_directory / "index.html").write_text("spa-index", encoding="utf-8")
+    client = TestClient(create_app(static_directory=static_directory))
+
+    for method in ("POST", "PUT", "PATCH", "DELETE"):
+        response = client.request(method, "/api/v1/missing")
+        _assert_error_envelope(response, status=404, code="NOT_FOUND")
+
+
+def test_t040_static_distribution_404_never_replaces_fallback_or_envelope(
+    tmp_path: Path,
+) -> None:
+    static_directory = tmp_path / "dist"
+    static_directory.mkdir()
+    (static_directory / "index.html").write_text("spa-index", encoding="utf-8")
+    (static_directory / "404.html").write_text("distribution-404", encoding="utf-8")
+    client = TestClient(create_app(static_directory=static_directory))
+
+    deep_link = client.get("/plans/active")
+    missing_asset = client.get("/assets/missing.js")
+
+    assert deep_link.status_code == 200
+    assert deep_link.text == "spa-index"
+    _assert_error_envelope(missing_asset, status=404, code="NOT_FOUND")
+    assert "distribution-404" not in missing_asset.text
+
+
+def test_t040_static_asset_paths_never_use_the_spa_navigation_fallback(
+    tmp_path: Path,
+) -> None:
+    static_directory = tmp_path / "dist"
+    static_directory.mkdir()
+    (static_directory / "index.html").write_text("spa-index", encoding="utf-8")
+    client = TestClient(create_app(static_directory=static_directory))
+
+    for path in (
+        "/assets/missing.js",
+        "/assets/missing",
+        "/missing.css",
+        "/robots.txt",
+    ):
+        response = client.get(path, headers={"Accept": "text/html"})
+        _assert_error_envelope(response, status=404, code="NOT_FOUND")
+
+
+def test_t040_static_serving_cannot_escape_the_explicit_build(tmp_path: Path) -> None:
+    static_directory = tmp_path / "dist"
+    static_directory.mkdir()
+    (static_directory / "index.html").write_text("spa-index", encoding="utf-8")
+    outside = tmp_path / "private.txt"
+    outside.write_text("must-not-be-served", encoding="utf-8")
+
+    response = TestClient(create_app(static_directory=static_directory)).get(
+        "/assets/%2e%2e/%2e%2e/private.txt"
+    )
+
+    _assert_error_envelope(response, status=404, code="NOT_FOUND")
+    assert outside.read_text(encoding="utf-8") not in response.text
+
+
+@pytest.mark.parametrize(
+    "static_directory",
+    ["missing", "without-index"],
+)
+def test_t040_static_build_must_exist_and_contain_index(
+    tmp_path: Path,
+    static_directory: str,
+) -> None:
+    candidate = tmp_path / static_directory
+    if static_directory == "without-index":
+        candidate.mkdir()
+
+    with pytest.raises(RuntimeError, match="static build"):
+        create_app(static_directory=candidate)
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "localhost", "::1"])
+def test_t040_application_factory_rejects_noncanonical_bind_hosts(host: str) -> None:
+    with pytest.raises(ValueError, match="127.0.0.1"):
+        create_app(bind_host=host)
+
+
+@pytest.mark.parametrize("port", [0, 65_536])
+def test_t040_cli_bind_rejects_ports_outside_the_tcp_range(port: int) -> None:
+    from trade_plan_monitor.cli import build_parser
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["web", "--port", str(port)])

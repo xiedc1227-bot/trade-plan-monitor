@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from trade_plan_monitor.web.origin_guard import SECURITY_HEADERS
 from trade_plan_monitor.web.schemas import (
     ApiErrorCode,
     ErrorDetail,
@@ -191,7 +192,7 @@ def _error_response(
     return JSONResponse(
         status_code=status_code or _ERROR_STATUS[code],
         content=body.model_dump(mode="json", by_alias=True),
-        headers={_REQUEST_ID_HEADER: request_id},
+        headers={_REQUEST_ID_HEADER: request_id, **SECURITY_HEADERS},
     )
 
 

@@ -123,6 +123,14 @@ web/src/
 - 诊断命令必须且只能指定一个规范 `INTRADAY` 五分钟交易时段边界，或一个 `OFFICIAL_CLOSE` 交易日期。服务返回一个规范且自校验的 `EvaluationResult`；适配器在投影权威判断前重新校验其 `resultHash`、内嵌 evaluation identity 和完整结果。该内嵌 identity 的 `planHash`、股票、kind、强类型目标和 `formulaVersion` 必须同时匹配结果与请求，并携带精确来源修订。严格响应要求 `stateMutationApplied=false`、`alertEnqueued=false` 和 `positionChanged=false`；唯一允许的写入是可选诊断审计。路由既不调用也不重新实现决策引擎。
 - 每个 T038 POST 都要求有界 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同命令回放其规范响应。服务响应的分页、筛选、identity、目标、修订、严重级别、证据分区和持仓形态会在序列化前重新校验；额外供应商/存储/密钥字段在通用错误边界后封闭失败。
 
+### T040 本地 Origin 与静态构建边界
+
+- `create_app(bind_host="127.0.0.1", bind_port=8765, static_directory=...)` 在不绑定套接字的情况下校验监听 identity。唯一允许的主机字面量是 `127.0.0.1`，端口范围限制为 `1..65535`；预留的 `web` CLI 会拒绝通配、局域网、别名和越界值，并给出明确的禁止公开暴露警告。该命令保持无动作，直到 T052 负责生产组合。
+- HTTP 或 WebSocket 存在 `Origin` 请求头时，它必须是唯一且精确配置的 `http://127.0.0.1:<port>` Origin；重复、非法、外部、HTTPS、别名或错误端口值均封闭失败。HTTP 以固定 `FORBIDDEN` envelope 和 403 状态拒绝；WebSocket 则在接受前以关闭码 1008 拒绝。缺少 `Origin` 时仍允许非浏览器回环客户端；生产环境不存在 CORS，并移除下游任何 `Access-Control-*` 响应头。
+- 每个 HTTP 响应都带固定 CSP、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`，以及关闭摄像头/地理位置/麦克风/支付/USB 的 `Permissions-Policy`。共享错误构造器也会为用户中间件之外生成的未预期 500 响应增加这些响应头。被拒绝的 Origin、正文和异常详情绝不回显。
+- 原始 HTTP 请求体按 `Content-Length` 和实际流式分块同时限制为精确 4 MiB（`4194304` 字节）；第一个越界字节返回固定的 413 `PAYLOAD_TOO_LARGE` envelope。该传输预算可容纳既有 200,000 字符 AI 来源文本在最坏 JSON 转义下的大小。既有计划 JSON/YAML 导入和字段级文本上限仍更严格且为权威限制；安全 YAML 加载保持不变。
+- 静态服务只接受一个明确注入且已存在的目录，其解析后的本地 `index.html` 必须是普通文件。提供既有文件时不会跟随逃逸 symlink。不存在且无扩展名的 GET/HEAD 路径，以及明确接受 `text/html` 的不存在导航路径会回退到 `index.html`，包括 `/stocks/003043.SZ` 等股票路由；即使构建目录包含 `404.html`，缺失的类资源路径仍使用固定 404 envelope。`/api/v1` 和 `/ws/v1` 在静态路由匹配阶段被排除，因此静态内容不能覆盖 API/WebSocket 路径或改变其方法语义。T040 不执行默认构建发现，也不创建 SPA 入口；T041 负责 `web/index.html`，T052 负责已安装生产资源的发现与组合。
+
 只读资源：
 
 ```text
@@ -287,11 +295,11 @@ Schema 版本 1 封闭每种事件的非空载荷字段集合及 identity 规则
 
 ## 本地安全边界
 
-- 生产命令只绑定 `127.0.0.1`；远程或局域网模式不在范围内。
+- 生产命令只绑定 `127.0.0.1`；远程/局域网模式、主机别名、端口转发和公开暴露均不在范围内。
 - 单页应用、API 和 WebSocket 同源；生产环境关闭 CORS，并拒绝异常 HTTP 或 WebSocket Origin。
 - MVP 不实现登录或身份认证。文档必须明确禁止端口转发或公开暴露。
 - 设置 CSP、禁止嵌入、内容类型、Referrer 和 Permissions 等安全响应头。
-- 限制请求体、文本和导入文件大小；YAML 必须安全加载。
+- 原始请求体限制为 4 MiB，既有字段/导入限制保持更严格，YAML 必须安全加载。
 - AI 基础 URL 只允许 HTTPS，但允许用户自建本地模型使用明确的回环地址例外；拒绝重定向和内嵌凭证。
 - 密钥只写，并从响应、前端状态、导出、日志和错误中脱敏。
 - 所有计划、供应商、持仓、提醒确认和启用变更都必须写入审计记录。

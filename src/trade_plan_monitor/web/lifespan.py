@@ -9,6 +9,11 @@ from typing import Protocol
 from fastapi import FastAPI, Request
 
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+from trade_plan_monitor.web.origin_guard import (
+    DEFAULT_WEB_PORT,
+    LOOPBACK_HOST,
+    local_http_origin,
+)
 
 
 class RuntimeLifecycle(Protocol):
@@ -24,8 +29,13 @@ RuntimeLifecycleFactory = Callable[[], RuntimeLifecycle]
 
 def create_runtime_lifespan(
     runtime_factory: RuntimeLifecycleFactory | None,
+    *,
+    bind_host: str = LOOPBACK_HOST,
+    bind_port: int = DEFAULT_WEB_PORT,
 ) -> Callable[[FastAPI], AsyncIterator[None]]:
     """Create an inert lifespan closure that owns one injected runtime instance."""
+
+    local_http_origin(bind_host, bind_port)
 
     @asynccontextmanager
     async def runtime_lifespan(app: FastAPI) -> AsyncIterator[None]:

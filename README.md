@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T039` and checkpoints `C00`–`C15` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, startup close recovery, an owned lifecycle with sanitized health and bounded retryable shutdown, a side-effect-free FastAPI application/lifespan/error boundary, strict dashboard/symbol/bar/event/runtime-health read contracts, injected plan/AI operation APIs with revision/idempotency/audit context, bounded 202 receipts, and write-only secret responses, explicit manual-position, canonical alert-center, acknowledgement, and non-mutating diagnostic APIs, plus one append-only global monitor-event ledger and sequenced WebSocket replay with committed-event verification, 20-second heartbeats, gap/expiry snapshot recovery, and restart-safe seven-day retention. Local-origin/static security starts at `T040`, the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`; those later slices are not implemented yet. Default installed-console composition remains explicitly deferred to `T052`–`T054`.
+> Development status: tasks `T001`–`T040` and checkpoints `C00`–`C15` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, startup close recovery, an owned lifecycle with sanitized health and bounded retryable shutdown, a side-effect-free FastAPI application/lifespan/error boundary, strict dashboard/symbol/bar/event/runtime-health read contracts, injected plan/AI operation APIs with revision/idempotency/audit context, bounded 202 receipts, and write-only secret responses, explicit manual-position, canonical alert-center, acknowledgement, and non-mutating diagnostic APIs, one append-only global monitor-event ledger and sequenced WebSocket replay with committed-event verification, 20-second heartbeats, gap/expiry snapshot recovery, and restart-safe seven-day retention, plus an exact loopback-Origin boundary, uniform security headers, a 4 MiB raw-request cap, and explicit safe Vue-build SPA serving. The OpenAPI snapshot and generated frontend types are next at `T041`; the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`. Default installed-console composition remains explicitly deferred to `T052`–`T054`.
 
 ## Product Goals
 
@@ -40,9 +40,10 @@ Last verified on 2026-08-24 with CPython 3.14.7.
 | Plan versions, draft/import/extraction/activation, and write-only AI-provider operation APIs | `T037` | Complete |
 | Manual-position, canonical alert-center, acknowledgement, and diagnostic APIs | `T038` | Complete |
 | Global durable monitor-event ledger and sequenced WebSocket replay | `T039` | Complete |
-| Local-origin security, production UI, and packaging | `T040`–`T059` | Pending |
+| Local-origin security and explicit Vue-build SPA serving | `T040` | Complete |
+| OpenAPI snapshot, production UI, and packaging | `T041`–`T059` | Pending |
 
-After `T039`, all 1209 backend tests pass. The exact WebSocket gate contains 22 tests, the global monitor-event/persistence gate contains 114 tests, the affected notification/persistence/runtime/WebSocket gate contains 247 tests, and the unchanged decision/replay gate remains 273 tests. Whole-tree Ruff, scoped formatting, `compileall`, `pip check`, bilingual parity, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C16` remains open through `T041`, and `T040` is next.
+After `T040`, all 1232 backend tests pass. The exact local-origin/security/static/bind gate contains 23 tests, the combined Web API/WebSocket gate contains 143 tests, and the unchanged decision/replay gate remains 273 tests. Whole-tree Ruff, scoped formatting, `compileall`, `pip check`, bilingual parity, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C16` remains open through `T041`, which is next.
 
 ## Safety Boundaries
 
@@ -52,7 +53,9 @@ After `T039`, all 1209 backend tests pass. The exact WebSocket gate contains 22 
 - Non-loopback AI endpoints require HTTPS. Redirects, embedded URL credentials, unbounded retries, compressed provider responses, and oversized responses are rejected.
 - Tushare and AI credentials are referenced through protected runtime inputs; raw values must not enter plans, SQLite, logs, audits, exports, fixtures, or ordinary DTOs.
 - The generic Webhook is disabled by default, accepts only an exact HTTPS host allowlist, rejects redirects and embedded credentials, and never retains response bodies.
-- The target Web service listens only on `127.0.0.1`. Remote access, authentication, multiple users, clustering, primary/replica, and high availability are out of scope.
+- The target Web service accepts only the exact `127.0.0.1` listener literal and exact configured HTTP Origin. Do not use port forwarding, a reverse proxy, a host alias, or public/LAN exposure; authentication is not implemented.
+- HTTP responses carry CSP, frame, content-type, referrer, and permissions protections; production CORS is disabled, and raw request bodies are capped at 4 MiB before stricter field/import limits apply.
+- Static SPA serving requires an explicitly supplied build directory with a local `index.html`; it cannot shadow `/api/v1` or `/ws/v1`. Automatic installed-asset discovery remains deferred to `T052`.
 
 Every actionable reminder will include the equivalent of:
 
@@ -135,7 +138,7 @@ npm run build
 Set-Location ..
 ```
 
-The current frontend contains the verified toolchain scaffold only. The production Vue application shell starts at `T042`, and the multi-stock monitoring dashboard at `T047`; do not treat the generated placeholder build as the finished application.
+The current frontend contains the verified toolchain scaffold only. T040 can safely serve an explicitly supplied complete build, but the stable `web/index.html` entry is intentionally owned by T041. The production Vue application shell starts at `T042`, and the multi-stock monitoring dashboard at `T047`; do not treat the generated placeholder build as the finished application.
 
 ### Local configuration
 
@@ -151,7 +154,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 
 | Command | Purpose | Availability |
 |---|---|---|
-| `python -m pytest -q` | Run the complete 1209-test backend gate | Available |
+| `python -m pytest -q` | Run the complete 1232-test backend gate | Available |
 | `python -m pytest tests/unit/test_package.py -q` | Run the stable package smoke test | Available |
 | `python -m pytest tests/integration/test_ai_provider_contract.py -q` | Verify the AI provider and extraction contract | Available |
 | `python -m pytest tests/unit/test_decision_engine.py tests/replay/test_decision_replay.py -q` | Run the deterministic decision and replay gate | Available |
@@ -163,7 +166,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 | `npm run build` | Build frontend static assets | Available in `web/` |
 | `python -m trade_plan_monitor validate` | Dispatch configuration/plan validation through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
 | `python -m trade_plan_monitor monitor --once` | Dispatch one headless monitoring cycle through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
-| `python -m trade_plan_monitor web --host 127.0.0.1 --port 8765` | Reserved local Web command | Inert scaffold |
+| `python -m trade_plan_monitor web --host 127.0.0.1 --port 8765` | Reserved loopback-only Web command with strict host/port validation | Inert scaffold until T052 |
 | `python -m trade_plan_monitor replay` | Dispatch deterministic replay through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
 | `python -m trade_plan_monitor backup` | Dispatch a verified backup through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
 
@@ -183,7 +186,7 @@ trade-plan-monitor/
 │   ├── market_data/    # Normalization, history, aggregation, indicators, reconciliation
 │   ├── notifications/  # Deterministic alerts, transactional outbox, channels, and dispatch
 │   ├── state/          # SQLite models, migrations, repositories, UoW, backup
-│   ├── web/            # FastAPI app/lifespan/errors plus typed read/plan/AI routers
+│   ├── web/            # FastAPI routes plus local-origin, request-size, and SPA security
 │   ├── cli.py          # Side-effect-free commands and injected service dispatch
 │   └── config.py       # Strict non-secret application configuration
 ├── tests/

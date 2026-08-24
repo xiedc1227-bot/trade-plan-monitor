@@ -123,6 +123,14 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 - A diagnostic command names exactly one canonical `INTRADAY` five-minute session boundary or one `OFFICIAL_CLOSE` trade date. The service returns one canonical self-validating `EvaluationResult`; the adapter revalidates its `resultHash`, embedded evaluation identity, and complete result before projecting the authoritative decision. That embedded identity must contain the same `planHash`, symbol, kind, typed target, and `formulaVersion` as both the result and request, together with the exact source revision. The strict response requires `stateMutationApplied=false`, `alertEnqueued=false`, and `positionChanged=false`; an optional diagnostic audit is the only permitted write. The router does not call or reimplement the decision engine.
 - Every T038 POST requires the bounded `Idempotency-Key` and `expectedRevision`. Duplicate in-flight intent maps to 409, key reuse with a different request hash maps to 422, and an identical completed command replays its canonical response. Service response pagination, filters, identities, target, revisions, severity, evidence partitions, and position shapes are revalidated before serialization; extra provider/storage/secret fields fail closed behind the generic error boundary.
 
+### T040 Local-Origin and Static-Build Boundary
+
+- `create_app(bind_host="127.0.0.1", bind_port=8765, static_directory=...)` validates the listener identity without binding a socket. The only accepted host literal is `127.0.0.1`, ports are limited to `1..65535`, and the reserved `web` CLI rejects wildcard, LAN, alias, and out-of-range values with an explicit public-exposure warning. The command remains inert until T052 owns production composition.
+- When an HTTP or WebSocket `Origin` header is present, it must be the single exact configured `http://127.0.0.1:<port>` origin; duplicate, malformed, foreign, HTTPS, alias, or wrong-port values fail closed. HTTP rejection uses the fixed `FORBIDDEN` envelope and status 403, while WebSocket rejection occurs before acceptance with close code 1008. A missing `Origin` remains valid for non-browser loopback clients; production CORS is absent and any downstream `Access-Control-*` response header is removed.
+- Every HTTP response receives the fixed CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and closed camera/geolocation/microphone/payment/USB `Permissions-Policy`. The shared error constructor also adds them to unexpected 500 responses that are created outside user middleware. Rejected origins, bodies, and exception details are never reflected.
+- Raw HTTP request bodies are capped at exactly 4 MiB (`4194304` bytes) from both `Content-Length` and actual streamed chunks; the first excess byte returns the fixed 413 `PAYLOAD_TOO_LARGE` envelope. This transport budget accommodates the existing 200,000-character AI source limit even under worst-case JSON escaping. Existing plan JSON/YAML import and field-level text limits remain stricter and authoritative; safe YAML loading is unchanged.
+- Static serving accepts only one explicitly injected, existing directory whose resolved local `index.html` is a regular file. Existing files are served without following escaping symlinks. Missing extensionless GET/HEAD paths and missing navigation paths that explicitly accept `text/html` fall back to `index.html`, including symbol routes such as `/stocks/003043.SZ`; missing asset-like paths use the fixed 404 envelope even when the distribution contains `404.html`. `/api/v1` and `/ws/v1` are excluded at static-route matching time, so static content cannot shadow or change the method semantics of API or WebSocket paths. T040 performs no default build discovery and creates no SPA entry; T041 owns `web/index.html`, and T052 owns installed production asset discovery/composition.
+
 Read resources:
 
 ```text
@@ -287,11 +295,11 @@ Use an industrial signal-console aesthetic: graphite/ink surfaces, fine technica
 
 ## Local Security Boundary
 
-- The production command binds exactly to `127.0.0.1`; remote/LAN mode is out of scope.
+- The production command binds exactly to `127.0.0.1`; remote/LAN mode, host aliases, port forwarding, and public exposure are out of scope.
 - SPA/API/WebSocket share one origin; production CORS is disabled and unexpected HTTP/WebSocket origins are rejected.
 - No login or authentication is implemented for MVP. Documentation forbids port forwarding or public exposure.
 - CSP, frame denial, content-type, referrer, and permissions headers are set.
-- Request body/text/import sizes are bounded; YAML uses safe loading.
+- Raw request bodies are bounded at 4 MiB, existing field/import limits remain stricter, and YAML uses safe loading.
 - AI base URLs accept HTTPS, with an explicit loopback exception for a user-run local model; redirects and embedded credentials are rejected.
 - Secrets are write-only and redacted from responses, frontend state, exports, logs, and errors.
 - All plan, provider, position, acknowledgement, and activation changes create audit entries.

@@ -6,6 +6,13 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
+from trade_plan_monitor.web.origin_guard import (
+    DEFAULT_WEB_PORT,
+    LOOPBACK_HOST,
+    validate_loopback_host,
+    validate_web_port,
+)
+
 DEFAULT_CONFIG_PATH = Path("config/app.yaml")
 
 
@@ -26,10 +33,27 @@ class RuntimeCommandService(Protocol):
 RuntimeServiceFactory = Callable[[Path], RuntimeCommandService]
 
 
-def _return_success(_arguments: argparse.Namespace) -> int:
-    """Keep the reserved Web declaration inert until its owned T035 lifespan."""
+def _return_success(arguments: argparse.Namespace) -> int:
+    """Validate the reserved local-only Web declaration before T052 composition."""
 
+    validate_loopback_host(arguments.host)
+    validate_web_port(arguments.port)
     return 0
+
+
+def _loopback_host(value: str) -> str:
+    try:
+        return validate_loopback_host(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+
+
+def _web_port(value: str) -> int:
+    try:
+        port = int(value)
+        return validate_web_port(port)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
 
 
 def _add_config_argument(parser: argparse.ArgumentParser) -> None:
@@ -72,14 +96,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_argument(web_parser)
     web_parser.add_argument(
         "--host",
-        choices=("127.0.0.1",),
-        default="127.0.0.1",
-        help="local listener address (default: 127.0.0.1)",
+        type=_loopback_host,
+        default=LOOPBACK_HOST,
+        help="loopback-only listener; public/LAN exposure is unsupported",
     )
     web_parser.add_argument(
         "--port",
-        type=int,
-        default=8765,
+        type=_web_port,
+        default=DEFAULT_WEB_PORT,
         help="local listener port (default: 8765)",
     )
 

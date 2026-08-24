@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, Request, Response
 
 from trade_plan_monitor.web.errors import install_error_boundary
 from trade_plan_monitor.web.lifespan import RuntimeLifecycleFactory, create_runtime_lifespan
+from trade_plan_monitor.web.origin_guard import (
+    DEFAULT_WEB_PORT,
+    LOOPBACK_HOST,
+    LocalSpaRoute,
+    LocalSpaStaticFiles,
+    LocalWebSecurityMiddleware,
+    local_http_origin,
+)
 from trade_plan_monitor.web.routers.ai import AIOperationService
 from trade_plan_monitor.web.routers.ai import router as ai_router
 from trade_plan_monitor.web.routers.alerts import AlertOperationService
@@ -31,14 +41,24 @@ def create_app(
     position_service: PositionOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
+    bind_host: str = LOOPBACK_HOST,
+    bind_port: int = DEFAULT_WEB_PORT,
+    static_directory: Path | None = None,
 ) -> FastAPI:
     """Build the local API adapter without starting runtime or network work."""
 
+    allowed_origin = local_http_origin(bind_host, bind_port)
+    static_files = LocalSpaStaticFiles(static_directory) if static_directory is not None else None
     app = FastAPI(
         title="Trade Plan Monitor API",
         version="0.1.0",
-        lifespan=create_runtime_lifespan(runtime_factory),
+        lifespan=create_runtime_lifespan(
+            runtime_factory,
+            bind_host=bind_host,
+            bind_port=bind_port,
+        ),
     )
+    app.add_middleware(LocalWebSecurityMiddleware, allowed_origin=allowed_origin)
     install_error_boundary(app)
     if read_service is not None:
         app.state.monitor_read_service = read_service
@@ -60,6 +80,20 @@ def create_app(
     app.include_router(positions_router)
     app.include_router(alerts_router)
     app.include_router(websocket_router)
+    if static_files is not None:
+
+        async def serve_static(request: Request) -> Response:
+            asset_path = request.path_params["asset_path"]
+            return await static_files.get_response(asset_path, request.scope)
+
+        app.router.routes.append(
+            LocalSpaRoute(
+                "/{asset_path:path}",
+                serve_static,
+                methods=("GET", "HEAD"),
+                name="local-spa",
+            )
+        )
     return app
 
 
