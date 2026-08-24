@@ -18,6 +18,8 @@ from trade_plan_monitor.web.routers.plans import router as plans_router
 from trade_plan_monitor.web.routers.positions import PositionOperationService
 from trade_plan_monitor.web.routers.positions import router as positions_router
 from trade_plan_monitor.web.routers.symbols import router as symbols_router
+from trade_plan_monitor.web.websocket import MonitorWebSocketService
+from trade_plan_monitor.web.websocket import router as websocket_router
 
 
 def create_app(
@@ -28,6 +30,7 @@ def create_app(
     ai_service: AIOperationService | None = None,
     position_service: PositionOperationService | None = None,
     alert_service: AlertOperationService | None = None,
+    websocket_service: MonitorWebSocketService | None = None,
 ) -> FastAPI:
     """Build the local API adapter without starting runtime or network work."""
 
@@ -47,6 +50,8 @@ def create_app(
         app.state.position_operation_service = position_service
     if alert_service is not None:
         app.state.alert_operation_service = alert_service
+    if websocket_service is not None:
+        app.state.monitor_websocket_service = websocket_service
     app.include_router(dashboard_router)
     app.include_router(symbols_router)
     app.include_router(health_router)
@@ -54,6 +59,7 @@ def create_app(
     app.include_router(ai_router)
     app.include_router(positions_router)
     app.include_router(alerts_router)
+    app.include_router(websocket_router)
     return app
 
 

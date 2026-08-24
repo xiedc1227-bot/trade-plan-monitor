@@ -32,6 +32,7 @@ python -m ruff check src/trade_plan_monitor/state tests/unit/test_strategy_state
 ```text
 src/trade_plan_monitor/state/
 ├── database.py       # Engine、Session 与 WAL 配置
+├── events.py         # 强类型全局监控事件账本
 ├── models.py         # SQLAlchemy 持久化模型
 ├── repositories.py   # 窄接口仓储和查询
 ├── unit_of_work.py   # 短事务边界
@@ -73,7 +74,8 @@ daily_price_limit(symbol, trade_date, up_limit_fen, down_limit_fen, received_at,
 request_idempotency(idempotency_key PRIMARY KEY, request_hash, status, response_code, response_json, created_at, updated_at)
 latest_quote(symbol PRIMARY KEY, price_fen, bar_end, received_at)
 alert_event(id PRIMARY KEY, sequence UNIQUE, dedup_key UNIQUE, payload_json, message_text, created_at, acknowledged_at)
-alert_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
+monitor_event(id PRIMARY KEY, sequence UNIQUE, event_type, schema_version, aggregate_id, payload_json, occurred_at)
+monitor_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
 delivery_attempt(id PRIMARY KEY, event_id, channel, attempt, status, response_code, next_retry_at, delivered_at, error_code, UNIQUE(event_id, channel, attempt))
 ```
 
@@ -118,7 +120,9 @@ class PositionLot(BaseModel):
 - 新幂等键创建 `PENDING`。相同键和哈希在待处理时产生 `IDEMPOTENCY_IN_PROGRESS`；进入 `COMPLETED` 后重放已保存的规范响应。相同键对应不同 SHA-256 请求哈希时始终产生 `IDEMPOTENCY_KEY_REUSED`。
 - 仓储失败暴露稳定错误码，例如 `PLAN_VERSION_EXISTS`、`PLAN_SAVE_BLOCKED`、`PLAN_ACTIVATION_BLOCKED`、`PLAN_VERSION_NOT_FOUND`、`CONFLICT`、`IDEMPOTENCY_KEY_REUSED`、`IDEMPOTENCY_IN_PROGRESS` 和 `IDEMPOTENCY_CLAIM_NOT_FOUND`；后续传输适配器将其映射为 HTTP，但不暴露 SQL 或原始 Session 细节。
 - `UnitOfWork` 拥有一个显式短事务。调用方必须调用 `commit()` 才能持久化；退出上下文时未提交则回滚。其公共协议只暴露仓储及 `commit()`/`rollback()`，绝不暴露 SQLAlchemy Session。
-- `UnitOfWork.alerts` 暴露绑定 Session 的 `AlertOutbox`，因此提醒入队可以与状态及审计写入一起提交或回滚。追加迁移 `0004_alert_sequence` 回填并持久保存单例单调序号高水位，使其不受提醒历史删除影响。提醒确认追加一条 `ALERT_ACKNOWLEDGED` 审计，并且只修改 `alert_event.acknowledged_at`；绝不改变持仓，也不记录投递成功。
+- `UnitOfWork.events` 暴露绑定 Session 的 `MonitorEventLog`，`UnitOfWork.alerts` 则在相同日志与 Session 上暴露 `AlertOutbox`。计划激活、持仓变更、股票/供应商健康变更、判断快照、提醒创建、确认审计及其对应事件因此共同提交或回滚。封闭业务词表为 `symbol.snapshot.updated`、`symbol.health.updated`、`alert.created`、`alert.acknowledged`、`plan.extraction.updated`、`plan.activated`、`plan.deactivated`、`position.updated`、`ai.provider.updated` 和 `system.health.updated`。负责提取、停用或 AI 供应商持久化的注入式应用服务必须在所属变更事务中追加对应事件；持久化边界不虚构这些服务。
+- 追加迁移 `0006_monitor_event` 紧随 `0005_evaluation_kind`，用唯一的 `monitor_sequence` 替换 `alert_sequence`，并以相同 UUID 和序号把每条历史 `alert_event` 回填为 `alert.created`。既有提醒序号因此保持稳定，后续提醒行在全局序号域中可以稀疏。在任何 DDL 前，由 revision 本地拥有的冻结 v1 校验器会拒绝不符合迁移原始契约、因而无法安全规范转换的任何历史提醒行：它校验精确载荷/对象形状、UUID/dedup/symbol/信号动作 identity、封闭条件/证据/事实类型、三值证据分区、节点/事实/数值预算、动作/区间/next-step 语义、精确上海时区时间差、有界且无控制字符的文本、确定性中文渲染及旧序号高水位。该 revision 完全自包含，绝不导入持续演进的应用 `AlertPayload`、`AlertEvent` 或 renderer；正常 `AlertOutbox` 读取会独立重校验当前完整规范事件。只有全部监控行都是与提醒 identity 匹配的 `alert.created` 时才允许降级；存在其他或不匹配事件时会在数据丢失前封闭失败。
+- `MonitorEventLog` 在 identity 读取前串行化 SQLite 写者，分配正数全局序号，保存规范、有界载荷 JSON，并只 flush 而不提交。相同 UUID 的精确重放幂等，语义冲突则拒绝。高水位不受事件保留删除影响；回放会按 7 天截止时间校验完整请求范围，再返回最多 1,000 个连续事件。提醒确认仍只修改 `alert_event.acknowledged_at`，追加一条 `ALERT_ACKNOWLEDGED` 审计和一条 `alert.acknowledged` 监控事件，绝不改变持仓，也不记录投递成功。
 
 ### 低吸事件游标与仓储契约
 
@@ -151,6 +155,7 @@ class UnitOfWork(Protocol):
     risk: RiskRepository
     evaluations: EvaluationRepository
     health: HealthRepository
+    events: MonitorEventLog
     alerts: AlertOutbox
 
     def commit(self) -> None: ...

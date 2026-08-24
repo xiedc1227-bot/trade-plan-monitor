@@ -179,9 +179,33 @@ OpenAPI 快照纳入版本控制并用于生成 TypeScript 类型；不得在前
 - `position.updated`
 - `ai.provider.updated`
 - `system.health.updated`
-- `snapshot.required`
 
-心跳间隔为 20 秒。客户端使用带上限的指数退避和抖动重连。序号缺口或回放窗口过期时，必须重新获取 REST 快照。断连或陈旧数据必须明确标注，绝不能展示为实时数据。
+每个已提交事件使用一个严格、带版本、camelCase 的 envelope：
+
+```json
+{
+  "type": "symbol.health.updated",
+  "sequence": 42,
+  "eventId": "00000000-0000-0000-0000-000000000001",
+  "aggregateId": "003043.SZ",
+  "payload": {
+    "entityId": "003043.SZ",
+    "symbol": "003043.SZ",
+    "revision": 4,
+    "status": "STALE"
+  },
+  "occurredAt": "2026-08-24T10:30:00+08:00",
+  "schemaVersion": 1
+}
+```
+
+载荷是有界失效提示，包含 `entityId`，以及仅在适用时出现的 `symbol`、位于 `0..2^63-1` 的 `revision`、大写 `status` 或小写 SHA-256 `resultHash`；客户端重新读取权威 REST 状态，不能把事件当成状态替代。负责组装总览快照的注入式 `MonitorReadService` 必须在同一个工作单元内读取状态和 `monitor_sequence`，因此返回的 `sequence` 是该快照的准确高水位。T039 强制该传输契约和带序号事件流；默认生产读取服务组合仍明确延后到 T052，且不得用独立采样的序号代替。
+
+Schema 版本 1 封闭每种事件的非空载荷字段集合及 identity 规则：快照使用 `entityId`、`symbol` 和 `resultHash`；股票健康使用 `entityId`、`symbol`、`revision` 和 `status`；两者都要求 `aggregateId == entityId == symbol`。提醒创建/确认使用 `entityId`、`symbol` 和 `revision`；两者都要求规范 UUID `aggregateId == entityId`，创建还要求 `eventId == aggregateId` 且 revision 为 `0`，确认要求 revision 为 `1`。提取使用 `entityId`、`revision` 和 `status`；激活使用计划版本 `entityId`、`symbol` 和正数 `revision`，且 `aggregateId == symbol`；停用使用 `entityId`、`symbol` 和正数 `revision`，且三个 identity 相等。持仓使用 `entityId`、`symbol` 和 `OPEN`/`CLOSED` `status`；AI 供应商使用 `entityId` 和 `revision`；系统健康使用 `entityId` 和 `status`；这些实体自有类型要求 `aggregateId == entityId`。持久化前会拒绝缺少必需字段或包含任何不适用非空字段的事件。
+
+`monitor_event` 是唯一追加式回放来源，`monitor_sequence` 是唯一全局高水位域。状态变更和对应事件追加共享一个事务。事件 UUID 是幂等 identity：相同 ID 及语义返回原序号，语义不同则封闭失败。删除保留期内的行绝不重置序号。默认回放窗口为 7 天，每页最多 1,000 个事件；服务端在发送任何分页前校验完整 `(after, high_water]` 范围，因此页外缺口不能先泄漏部分旧页。
+
+`heartbeat` 和 `snapshot.required` 是传输控制帧，不是已提交业务事件，也不占用持久序号。心跳间隔为 20 秒。缺失、重复、非规范、负数或大于 `2^63-1` 的 `after` 游标均被拒绝。未来游标、序号缺口、高水位损坏或回放窗口过期时，服务端发送携带持久高水位的 `snapshot.required` 并正常关闭。内存发布只在精确校验已提交事件后用于唤醒；重连和进程重启始终从 SQLite 回放。客户端使用带上限的指数退避和抖动重连。断连或陈旧数据必须明确标注，绝不能展示为实时数据。
 
 ## 信息架构
 

@@ -1,9 +1,11 @@
+import ast
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from threading import Barrier
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -16,27 +18,42 @@ from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from trade_plan_monitor.decision.models import (
+    ActionableSignalType,
+    ConditionEvidence,
+    ConditionOutcome,
+    DecisionZone,
+    EvidenceFact,
+    EvidenceUnit,
+    NextStep,
+    NextStepCode,
+    SignalIntent,
+)
 from trade_plan_monitor.domain.plan_codec import load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import TradePlan
+from trade_plan_monitor.domain.plan_models import OfficialCloseBelowLevelCondition, TradePlan
 from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
     PlanValidationResult,
     validate_trade_plan,
 )
+from trade_plan_monitor.notifications.identity import alert_dedup_key
+from trade_plan_monitor.notifications.models import AlertPayload, AlertSeverity
+from trade_plan_monitor.notifications.render import render_alert
 from trade_plan_monitor.state.database import (
     DEFAULT_BUSY_TIMEOUT_MS,
     create_session_factory,
     create_sqlite_engine,
     upgrade_database,
 )
+from trade_plan_monitor.state.events import MonitorEventType
 from trade_plan_monitor.state.models import (
     ActivePlan,
     AlertEvent,
-    AlertSequence,
     AuditLog,
     Base,
     EvaluationLedger,
+    MonitorSequence,
 )
 from trade_plan_monitor.state.repositories import (
     BoardLotViolationError,
@@ -65,7 +82,6 @@ EXPECTED_APP_TABLES = frozenset(
         "active_plan",
         "ai_provider_configuration",
         "alert_event",
-        "alert_sequence",
         "audit_log",
         "daily_bar",
         "daily_price_limit",
@@ -74,6 +90,8 @@ EXPECTED_APP_TABLES = frozenset(
         "five_minute_bar",
         "latest_quote",
         "minute_bar",
+        "monitor_event",
+        "monitor_sequence",
         "plan_source",
         "plan_version",
         "position_lot",
@@ -103,6 +121,72 @@ def _unit_of_work(engine: Engine) -> SqlAlchemyUnitOfWork:
         create_session_factory(engine),
         clock=lambda: _FIXED_NOW,
     )
+
+
+def _historical_alert_values(identity: int, sequence: int) -> dict[str, object]:
+    event_id = UUID(int=identity)
+    evaluated_at = _FIXED_NOW - timedelta(minutes=1)
+    evidence = ConditionEvidence(
+        condition=OfficialCloseBelowLevelCondition(level="RISK_LINE"),
+        outcome=ConditionOutcome.SATISFIED,
+        facts=(
+            EvidenceFact(
+                key="current_price_fen",
+                value=6070,
+                unit=EvidenceUnit.FEN,
+            ),
+        ),
+    )
+    signal = SignalIntent(
+        signal_type=ActionableSignalType.RISK_BREACH,
+        plan_hash="a" * 64,
+        symbol="003043.SZ",
+        trading_date=evaluated_at.date(),
+        cause_id=f"historical-risk-{identity}",
+        quantity=None,
+        bucket=None,
+        target_lot_id=None,
+        matched_conditions=(evidence,),
+        blockers=(),
+        next_step=NextStep(code=NextStepCode.WAIT_FOR_NEXT_TRADING_DAY),
+    )
+    payload = AlertPayload(
+        event_id=event_id,
+        dedup_key=alert_dedup_key(signal),
+        plan_id="huaya-smart",
+        plan_version=1,
+        plan_hash=signal.plan_hash,
+        symbol=signal.symbol,
+        name="华亚智能",
+        signal_type=signal.signal_type,
+        severity=AlertSeverity.RISK,
+        trading_date=signal.trading_date,
+        cause_id=signal.cause_id,
+        evaluated_at=evaluated_at,
+        market_data_at=evaluated_at,
+        data_age_seconds=0,
+        price_fen=6070,
+        quantity=None,
+        bucket=None,
+        target_lot_id=None,
+        matched_conditions=(evidence,),
+        satisfied_conditions=(evidence,),
+        unmet_conditions=(),
+        blockers=(),
+        zone=DecisionZone.BELOW_RISK,
+        relevant_zone=None,
+        risk_line_fen=6080,
+        next_step=signal.next_step,
+    )
+    return {
+        "id": str(event_id),
+        "sequence": sequence,
+        "dedup_key": payload.dedup_key,
+        "payload_json": payload.model_dump_json(),
+        "message_text": render_alert(payload),
+        "created_at": _FIXED_NOW.isoformat(),
+        "acknowledged_at": None,
+    }
 
 
 def _episode_audit_hash(record: EpisodeRecord) -> str:
@@ -1695,7 +1779,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0005_evaluation_kind"
+        assert first_revision == second_revision == "0006_monitor_event"
     finally:
         engine.dispose()
 
@@ -1723,7 +1807,7 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0005_evaluation_kind"
+                == "0006_monitor_event"
             )
     finally:
         engine.dispose()
@@ -1735,28 +1819,290 @@ def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) 
     try:
         _upgrade_to(engine, "0003_episode_cursor")
         with create_session_factory(engine).begin() as session:
-            session.add(
-                AlertEvent(
-                    id="00000000-0000-0000-0000-000000000041",
-                    sequence=41,
-                    dedup_key="4" * 64,
-                    payload_json="{}",
-                    message_text="historical alert",
-                    created_at=_FIXED_NOW.isoformat(),
-                    acknowledged_at=None,
-                )
-            )
+            session.add(AlertEvent(**_historical_alert_values(41, 41)))
 
         upgrade_database(engine)
 
         with create_session_factory(engine)() as session:
-            sequence = session.get(AlertSequence, 1)
+            sequence = session.get(MonitorSequence, 1)
             assert sequence is not None
             assert sequence.last_sequence == 41
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0006_monitor_event"
+            )
+    finally:
+        engine.dispose()
+
+
+def test_monitor_event_migration_renames_high_water_and_backfills_alerts(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        _upgrade_to(engine, "0005_evaluation_kind")
+        alert_values = _historical_alert_values(42, 42)
+        alert_id = str(alert_values["id"])
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO alert_event "
+                "(id, sequence, dedup_key, payload_json, message_text, created_at, "
+                "acknowledged_at) VALUES (:id, :sequence, :dedup_key, :payload_json, "
+                ":message_text, :created_at, :acknowledged_at)",
+                alert_values,
+            )
+            connection.exec_driver_sql(
+                "UPDATE alert_sequence SET last_sequence = 42 WHERE singleton_id = 1"
+            )
+
+        upgrade_database(engine)
+
+        tables = frozenset(inspect(engine).get_table_names())
+        assert "monitor_event" in tables
+        assert "monitor_sequence" in tables
+        assert "alert_sequence" not in tables
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT id, sequence, event_type, aggregate_id, payload_json, occurred_at "
+                "FROM monitor_event"
+            ).one()
+            high_water = connection.exec_driver_sql(
+                "SELECT last_sequence FROM monitor_sequence WHERE singleton_id = 1"
+            ).scalar_one()
+            revision = connection.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).scalar_one()
+
+        assert row[:4] == (alert_id, 42, "alert.created", alert_id)
+        assert json.loads(row.payload_json) == {
+            "entityId": alert_id,
+            "revision": 0,
+            "symbol": "003043.SZ",
+        }
+        assert row.occurred_at == _FIXED_NOW.isoformat()
+        assert high_water == 42
+        assert revision == "0006_monitor_event"
+    finally:
+        engine.dispose()
+
+
+def test_monitor_event_migration_contract_is_frozen_inside_its_revision() -> None:
+    revision_path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "trade_plan_monitor"
+        / "state"
+        / "migrations"
+        / "versions"
+        / "0006_monitor_event.py"
+    )
+    tree = ast.parse(revision_path.read_text(encoding="utf-8"))
+    application_imports = tuple(
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module is not None
+        and node.module.startswith("trade_plan_monitor")
+    )
+
+    assert application_imports == ()
+
+
+@pytest.mark.parametrize(
+    "invalid_field",
+    (
+        "payload_event_id",
+        "missing_payload_field",
+        "dedup_key",
+        "matched_evidence_shape",
+        "unmet_evidence_shape",
+        "partition_outcome",
+        "condition_shape",
+        "fact_type",
+        "evidence_budget",
+        "numeric_budget",
+        "next_step",
+        "market_age",
+        "market_age_overflow",
+        "message_text",
+        "message_control",
+        "created_at",
+        "high_water",
+    ),
+)
+def test_monitor_event_migration_rejects_invalid_historical_alert_atomically(
+    tmp_path: Path,
+    invalid_field: str,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / f"monitor-{invalid_field}.db")
+    values = _historical_alert_values(45, 45)
+    if invalid_field == "payload_event_id":
+        payload = json.loads(str(values["payload_json"]))
+        payload["event_id"] = str(UUID(int=46))
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "missing_payload_field":
+        payload = json.loads(str(values["payload_json"]))
+        del payload["plan_id"]
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "dedup_key":
+        values["dedup_key"] = "f" * 64
+    elif invalid_field == "matched_evidence_shape":
+        payload = json.loads(str(values["payload_json"]))
+        payload["matched_conditions"] = [{}]
+        payload["satisfied_conditions"] = [{}]
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "unmet_evidence_shape":
+        payload = json.loads(str(values["payload_json"]))
+        payload["unmet_conditions"] = [{}]
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "partition_outcome":
+        payload = json.loads(str(values["payload_json"]))
+        payload["matched_conditions"][0]["outcome"] = "UNSATISFIED"
+        payload["satisfied_conditions"][0]["outcome"] = "UNSATISFIED"
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "condition_shape":
+        payload = json.loads(str(values["payload_json"]))
+        payload["matched_conditions"][0]["condition"]["unexpected"] = True
+        payload["satisfied_conditions"][0]["condition"]["unexpected"] = True
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "fact_type":
+        payload = json.loads(str(values["payload_json"]))
+        payload["matched_conditions"][0]["facts"][0]["value"] = True
+        payload["satisfied_conditions"][0]["facts"][0]["value"] = True
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "evidence_budget":
+        payload = json.loads(str(values["payload_json"]))
+        oversized = payload["satisfied_conditions"][0]
+        oversized["facts"] = [
+            {"key": f"fact_{index:03d}", "value": index, "unit": "COUNT"} for index in range(300)
+        ]
+        second = json.loads(json.dumps(oversized))
+        second["facts"] = [
+            {"key": f"other_{index:03d}", "value": index, "unit": "COUNT"} for index in range(300)
+        ]
+        payload["satisfied_conditions"] = [
+            payload["matched_conditions"][0],
+            oversized,
+            second,
+        ]
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "numeric_budget":
+        payload = json.loads(str(values["payload_json"]))
+        payload["plan_version"] = 10**256
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "next_step":
+        payload = json.loads(str(values["payload_json"]))
+        payload["next_step"]["required_inputs"] = ["NOT_A_REAL_INPUT"]
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "market_age":
+        payload = json.loads(str(values["payload_json"]))
+        payload["evaluated_at"] = "2026-08-21T09:29:00.500000+08:00"
+        payload["market_data_at"] = "2026-08-21T09:29:00+08:00"
+        payload["data_age_seconds"] = 0
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "market_age_overflow":
+        payload = json.loads(str(values["payload_json"]))
+        payload["data_age_seconds"] = 10**256
+        values["payload_json"] = json.dumps(payload, separators=(",", ":"))
+    elif invalid_field == "message_text":
+        values["message_text"] = "clean but non-deterministic historical message"
+    elif invalid_field == "message_control":
+        values["message_text"] = "invalid\x00historical message"
+    elif invalid_field == "created_at":
+        values["created_at"] = "not-a-timestamp"
+
+    try:
+        _upgrade_to(engine, "0005_evaluation_kind")
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO alert_event "
+                "(id, sequence, dedup_key, payload_json, message_text, created_at, "
+                "acknowledged_at) VALUES (:id, :sequence, :dedup_key, :payload_json, "
+                ":message_text, :created_at, :acknowledged_at)",
+                values,
+            )
+            connection.exec_driver_sql(
+                "UPDATE alert_sequence SET last_sequence = 45 WHERE singleton_id = 1"
+            )
+            if invalid_field == "high_water":
+                connection.exec_driver_sql(
+                    "UPDATE alert_sequence SET last_sequence = 44 WHERE singleton_id = 1"
+                )
+
+        with pytest.raises(RuntimeError, match="invalid historical alert") as error_info:
+            upgrade_database(engine)
+
+        assert error_info.value.__context__ is None
+        assert error_info.value.__cause__ is None
+        tables = frozenset(inspect(engine).get_table_names())
+        assert "alert_sequence" in tables
+        assert "monitor_sequence" not in tables
+        assert "monitor_event" not in tables
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
                 == "0005_evaluation_kind"
+            )
+            assert connection.exec_driver_sql("SELECT COUNT(*) FROM alert_event").scalar_one() == 1
+    finally:
+        engine.dispose()
+
+
+def test_monitor_event_migration_downgrades_without_new_event_identities(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        upgrade_database(engine)
+        _downgrade_to(engine, "0005_evaluation_kind")
+
+        tables = frozenset(inspect(engine).get_table_names())
+        assert "alert_sequence" in tables
+        assert "monitor_sequence" not in tables
+        assert "monitor_event" not in tables
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0005_evaluation_kind"
+            )
+    finally:
+        engine.dispose()
+
+
+def test_monitor_event_migration_refuses_lossy_non_alert_downgrade(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+
+    try:
+        upgrade_database(engine)
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO monitor_event "
+                "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                "occurred_at) VALUES (:id, 1, 'system.health.updated', 1, "
+                "'TUSHARE_RT_MIN', :payload, :occurred_at)",
+                {
+                    "id": "00000000-0000-0000-0000-000000000043",
+                    "payload": '{"entityId":"TUSHARE_RT_MIN","status":"READY"}',
+                    "occurred_at": _FIXED_NOW.isoformat(),
+                },
+            )
+            connection.exec_driver_sql(
+                "UPDATE monitor_sequence SET last_sequence = 1 WHERE singleton_id = 1"
+            )
+
+        with pytest.raises(RuntimeError, match="refuses to discard monitor event"):
+            _downgrade_to(engine, "0005_evaluation_kind")
+
+        assert "monitor_event" in inspect(engine).get_table_names()
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0006_monitor_event"
             )
     finally:
         engine.dispose()
@@ -1808,7 +2154,7 @@ def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
             "c" * 64,
             evaluated_at,
         )
-        assert revision == "0005_evaluation_kind"
+        assert revision == "0006_monitor_event"
     finally:
         engine.dispose()
 
@@ -1881,7 +2227,7 @@ def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0005_evaluation_kind"
+                == "0006_monitor_event"
             )
             assert connection.exec_driver_sql(
                 "SELECT evaluation_kind, target_value FROM evaluation_ledger"
@@ -1984,6 +2330,97 @@ def test_sqlite_migration_has_no_metadata_drift(tmp_path: Path) -> None:
                 opts={"render_as_batch": True},
             )
             assert compare_metadata(migration_context, Base.metadata) == []
+    finally:
+        engine.dispose()
+
+
+def test_state_mutations_append_one_global_event_in_the_same_unit_of_work(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+    ready = validate_trade_plan(plan, available_market_evidence=ALL_MARKET_EVIDENCE)
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+
+        with _unit_of_work(engine) as work:
+            active = work.plans.activate(plan, expected_revision=0, validation=ready)
+            bought = work.positions.record_buy(
+                symbol=plan.symbol,
+                bucket="CORE",
+                quantity=200,
+                acquired_trade_date=date(2026, 8, 20),
+                cost_fen=6400,
+                board_lot=100,
+                max_position_qty=200,
+            )
+            reduced = work.positions.reduce_lot(
+                bought.id,
+                quantity=100,
+                trade_date=date(2026, 8, 21),
+            )
+            provider = work.health.upsert_provider(
+                capability="realtime_minutes",
+                status="READY",
+                checked_at=_FIXED_NOW,
+                latency_ms=18,
+                error_code=None,
+                next_retry_at=None,
+            )
+            assert (
+                work.health.upsert_provider(
+                    capability="realtime_minutes",
+                    status="READY",
+                    checked_at=_FIXED_NOW,
+                    latency_ms=18,
+                    error_code=None,
+                    next_retry_at=None,
+                )
+                == provider
+            )
+            health = work.health.upsert_symbol(
+                symbol=plan.symbol,
+                status="LIVE",
+                latest_bar_end=_FIXED_NOW,
+                data_age_seconds=0,
+                gaps={"missingBucketEnds": []},
+                error_streak=0,
+                expected_revision=0,
+            )
+            work.commit()
+
+        with _unit_of_work(engine) as work:
+            events = work.events.replay_page_after(0).events
+
+        assert tuple(event.sequence for event in events) == (1, 2, 3, 4, 5)
+        assert tuple(event.event_type for event in events) == (
+            MonitorEventType.PLAN_ACTIVATED,
+            MonitorEventType.POSITION_UPDATED,
+            MonitorEventType.POSITION_UPDATED,
+            MonitorEventType.SYSTEM_HEALTH_UPDATED,
+            MonitorEventType.SYMBOL_HEALTH_UPDATED,
+        )
+        assert events[0].payload.model_dump(exclude_none=True) == {
+            "entity_id": active.plan_version_id,
+            "symbol": plan.symbol,
+            "revision": active.revision,
+        }
+        assert events[1].payload.entity_id == bought.id
+        assert events[2].payload.entity_id == reduced.id
+        assert events[3].payload.model_dump(exclude_none=True) == {
+            "entity_id": provider.capability,
+            "status": provider.status.value,
+        }
+        assert events[4].payload.model_dump(exclude_none=True) == {
+            "entity_id": health.symbol,
+            "symbol": health.symbol,
+            "revision": health.revision,
+            "status": health.status.value,
+        }
     finally:
         engine.dispose()
 

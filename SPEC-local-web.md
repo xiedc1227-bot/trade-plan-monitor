@@ -179,9 +179,33 @@ The browser loads an authoritative REST dashboard snapshot and its sequence befo
 - `position.updated`
 - `ai.provider.updated`
 - `system.health.updated`
-- `snapshot.required`
 
-Heartbeat is 20 seconds. The client reconnects with capped exponential backoff and jitter. Sequence gaps or expired replay windows force a new REST snapshot. Disconnected or stale data is visibly labelled and never presented as live.
+Every committed event uses one strict versioned camelCase envelope:
+
+```json
+{
+  "type": "symbol.health.updated",
+  "sequence": 42,
+  "eventId": "00000000-0000-0000-0000-000000000001",
+  "aggregateId": "003043.SZ",
+  "payload": {
+    "entityId": "003043.SZ",
+    "symbol": "003043.SZ",
+    "revision": 4,
+    "status": "STALE"
+  },
+  "occurredAt": "2026-08-24T10:30:00+08:00",
+  "schemaVersion": 1
+}
+```
+
+The payload is a bounded invalidation hint containing `entityId` plus only the applicable `symbol`, `revision` in `0..2^63-1`, uppercase `status`, or lowercase SHA-256 `resultHash`; clients refetch authoritative REST state instead of treating the event as a state replacement. The injected `MonitorReadService` that owns dashboard snapshot assembly must read its state and `monitor_sequence` in the same Unit of Work so its returned `sequence` is the exact high-water mark for that snapshot. T039 enforces that transport contract and the sequenced stream; constructing the default production read-service composition remains explicitly deferred to T052 and cannot be replaced by an independently sampled sequence.
+
+Schema version 1 closes each non-null payload field set and its identity rules: snapshot uses `entityId`, `symbol`, and `resultHash`; symbol health uses `entityId`, `symbol`, `revision`, and `status`; both require `aggregateId == entityId == symbol`. Alert creation/acknowledgement use `entityId`, `symbol`, and `revision`; both require canonical UUID `aggregateId == entityId`, creation additionally requires `eventId == aggregateId` and revision `0`, and acknowledgement requires revision `1`. Extraction uses `entityId`, `revision`, and `status`; activation uses plan-version `entityId`, `symbol`, and positive `revision` with `aggregateId == symbol`; deactivation uses `entityId`, `symbol`, and positive `revision` with all three identities equal. Position uses `entityId`, `symbol`, and `OPEN`/`CLOSED` `status`; AI-provider uses `entityId` and `revision`; system health uses `entityId` and `status`; these entity-owned types require `aggregateId == entityId`. Missing required fields and any non-applicable non-null field are rejected before persistence.
+
+`monitor_event` is the sole append-only replay source and `monitor_sequence` is the sole global high-water domain. State mutation and its event append share one transaction. Event UUID is the idempotency identity: the same ID and semantics returns the original sequence, while different semantics fail closed. The sequence never resets when retained rows are removed. The default replay window is seven days, each page is at most 1,000 events, and the server validates the complete `(after, high_water]` range before sending any page so a later gap cannot leak an earlier partial page.
+
+`heartbeat` and `snapshot.required` are transport control frames, not committed business events and never occupy a durable sequence. Heartbeat is 20 seconds. A missing, duplicate, non-canonical, negative, or greater-than-`2^63-1` `after` cursor is rejected. A future cursor, sequence gap, corrupt high-water mark, or expired replay window sends `snapshot.required` with the durable high-water sequence and closes normally. Publication is an in-memory wake-up only after exact committed-event verification; reconnect and process restart always replay from SQLite. The client reconnects with capped exponential backoff and jitter. Disconnected or stale data is visibly labelled and never presented as live.
 
 ## Information Architecture
 

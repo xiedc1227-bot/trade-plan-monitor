@@ -55,6 +55,12 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
+from trade_plan_monitor.state.events import (
+    MonitorEventDraft,
+    MonitorEventPayload,
+    MonitorEventType,
+    monitor_event_id,
+)
 from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
 from trade_plan_monitor.state.models import (
     AuditLog,
@@ -357,6 +363,89 @@ def test_dedup_identity_rejects_conflicting_semantic_payload(database_engine: En
             work.alerts.enqueue(conflicting)
 
     assert _row_counts(database_engine)[0] == 1
+
+
+def test_enqueue_maps_global_event_identity_conflict_to_sanitized_outbox_error(
+    database_engine: Engine,
+) -> None:
+    payload = _payload(32)
+    with _unit_of_work(database_engine) as work:
+        work.events.append(
+            MonitorEventDraft(
+                event_id=payload.event_id,
+                event_type=MonitorEventType.SYSTEM_HEALTH_UPDATED,
+                aggregate_id="TUSHARE_RT_MIN",
+                payload=MonitorEventPayload(
+                    entity_id="TUSHARE_RT_MIN",
+                    status="READY",
+                ),
+                occurred_at=NOW,
+            )
+        )
+        work.commit()
+
+    with _unit_of_work(database_engine) as work:
+        with pytest.raises(AlertIdentityConflictError) as error_info:
+            work.alerts.enqueue(payload)
+
+    public_error = error_info.value
+    assert public_error.__context__ is None
+    assert public_error.__cause__ is None
+    assert _row_counts(database_engine)[0] == 0
+
+
+def test_enqueue_maps_monitor_storage_failure_to_sanitized_outbox_error(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "missing-monitor-ledger.db")
+    try:
+        with _unit_of_work(engine) as work:
+            with pytest.raises(OutboxStorageError) as error_info:
+                work.alerts.enqueue(_payload(34))
+
+        public_error = error_info.value
+        assert "monitor_sequence" not in str(public_error)
+        assert "UPDATE" not in repr(public_error)
+        assert public_error.__context__ is None
+        assert public_error.__cause__ is None
+    finally:
+        engine.dispose()
+
+
+def test_acknowledge_maps_global_event_conflict_to_sanitized_atomic_outbox_error(
+    database_engine: Engine,
+) -> None:
+    payload = _payload(33)
+    acknowledgement_id = monitor_event_id(
+        MonitorEventType.ALERT_ACKNOWLEDGED,
+        str(payload.event_id),
+        "acknowledged",
+    )
+    with _unit_of_work(database_engine) as work:
+        alert = work.alerts.enqueue(payload)
+        work.events.append(
+            MonitorEventDraft(
+                event_id=acknowledgement_id,
+                event_type=MonitorEventType.SYSTEM_HEALTH_UPDATED,
+                aggregate_id="TUSHARE_RT_MIN",
+                payload=MonitorEventPayload(
+                    entity_id="TUSHARE_RT_MIN",
+                    status="READY",
+                ),
+                occurred_at=NOW,
+            )
+        )
+        work.commit()
+
+    with _unit_of_work(database_engine, now=NOW + timedelta(minutes=1)) as work:
+        with pytest.raises(OutboxStorageError) as error_info:
+            work.alerts.acknowledge(alert.event_id)
+
+    public_error = error_info.value
+    assert public_error.__context__ is None
+    assert public_error.__cause__ is None
+    with _unit_of_work(database_engine) as work:
+        assert work.alerts.get(alert.event_id).acknowledged_at is None
 
 
 def test_outbox_assigns_ordered_sequences_and_replays_after_cursor(

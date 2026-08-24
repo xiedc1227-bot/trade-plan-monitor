@@ -124,13 +124,46 @@ class AlertEvent(Base):
     acknowledged_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
-class AlertSequence(Base):
-    """Singleton high-water mark that survives alert-history retention."""
+class MonitorEvent(Base):
+    """Append-only business event used for durable monitor invalidation."""
 
-    __tablename__ = "alert_sequence"
+    __tablename__ = "monitor_event"
     __table_args__ = (
-        CheckConstraint("singleton_id = 1", name="ck_alert_sequence_singleton"),
-        CheckConstraint("last_sequence >= 0", name="ck_alert_sequence_nonnegative"),
+        UniqueConstraint("sequence", name="uq_monitor_event_sequence"),
+        CheckConstraint("sequence >= 1", name="ck_monitor_event_sequence_positive"),
+        CheckConstraint(
+            "event_type IN ("
+            "'symbol.snapshot.updated', "
+            "'symbol.health.updated', "
+            "'alert.created', "
+            "'alert.acknowledged', "
+            "'plan.extraction.updated', "
+            "'plan.activated', "
+            "'plan.deactivated', "
+            "'position.updated', "
+            "'ai.provider.updated', "
+            "'system.health.updated')",
+            name="ck_monitor_event_type",
+        ),
+        CheckConstraint("schema_version = 1", name="ck_monitor_event_schema_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    event_type: Mapped[str] = mapped_column(String(64))
+    schema_version: Mapped[int] = mapped_column(Integer)
+    aggregate_id: Mapped[str] = mapped_column(String(128))
+    payload_json: Mapped[str] = mapped_column(Text)
+    occurred_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
+class MonitorSequence(Base):
+    """Singleton high-water mark that survives monitor-event retention."""
+
+    __tablename__ = "monitor_sequence"
+    __table_args__ = (
+        CheckConstraint("singleton_id = 1", name="ck_monitor_sequence_singleton"),
+        CheckConstraint("last_sequence >= 0", name="ck_monitor_sequence_nonnegative"),
     )
 
     singleton_id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -486,7 +519,6 @@ __all__ = [
     "ActivePlan",
     "AIProviderConfiguration",
     "AlertEvent",
-    "AlertSequence",
     "AuditLog",
     "Base",
     "DailyBar",
@@ -497,6 +529,8 @@ __all__ = [
     "FiveMinuteBar",
     "LatestQuote",
     "MinuteBar",
+    "MonitorEvent",
+    "MonitorSequence",
     "PlanSource",
     "PlanVersion",
     "PlanVersionStatus",

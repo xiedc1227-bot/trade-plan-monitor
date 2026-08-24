@@ -17,8 +17,17 @@ from sqlalchemy.orm import Session
 
 from trade_plan_monitor.notifications.models import AlertEvent, AlertPayload
 from trade_plan_monitor.notifications.render import render_alert
+from trade_plan_monitor.state.events import (
+    MonitorEventDraft,
+    MonitorEventError,
+    MonitorEventIdentityConflictError,
+    MonitorEventLog,
+    MonitorEventPayload,
+    MonitorEventType,
+    monitor_event_id,
+)
 from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
-from trade_plan_monitor.state.models import AlertSequence, AuditLog
+from trade_plan_monitor.state.models import AuditLog
 
 Clock = Callable[[], datetime]
 IdFactory = Callable[[], str]
@@ -62,6 +71,7 @@ class AlertOutbox:
         clock: Clock,
         id_factory: IdFactory,
         replay_retention: timedelta = DEFAULT_REPLAY_RETENTION,
+        events: MonitorEventLog | None = None,
     ) -> None:
         if not isinstance(replay_retention, timedelta) or replay_retention <= timedelta(0):
             raise ValueError("replay_retention must be a positive timedelta")
@@ -69,6 +79,11 @@ class AlertOutbox:
         self._clock = clock
         self._id_factory = id_factory
         self._replay_retention = replay_retention
+        self._events = events or MonitorEventLog(
+            session,
+            clock=clock,
+            replay_retention=replay_retention,
+        )
 
     def enqueue(self, payload: AlertPayload) -> AlertEvent:
         """Atomically claim one dedup key and return its stable event."""
@@ -76,7 +91,13 @@ class AlertOutbox:
         if type(payload) is not AlertPayload:
             raise TypeError("payload must be an AlertPayload")
 
-        self._serialize_writers()
+        lock_failure = False
+        try:
+            self._events.lock_for_append()
+        except MonitorEventError:
+            lock_failure = True
+        if lock_failure:
+            raise OutboxStorageError("Alert event could not be persisted")
         existing = self._session.scalar(
             select(AlertEventRow).where(AlertEventRow.dedup_key == payload.dedup_key)
         )
@@ -87,36 +108,53 @@ class AlertOutbox:
         if self._session.get(AlertEventRow, event_id) is not None:
             raise AlertIdentityConflictError("Alert event identity is already in use")
 
-        sequence = self._next_sequence()
-
         created_at = self._now()
         if created_at < payload.evaluated_at:
             raise ValueError("clock cannot precede alert evaluation")
-        event = AlertEvent(
-            **payload.model_dump(mode="python", round_trip=True),
-            sequence=sequence,
-            message_text=render_alert(payload),
-            created_at=created_at,
-            acknowledged_at=None,
+        monitor_draft = MonitorEventDraft(
+            event_id=payload.event_id,
+            event_type=MonitorEventType.ALERT_CREATED,
+            aggregate_id=event_id,
+            payload=MonitorEventPayload(
+                entity_id=event_id,
+                symbol=payload.symbol,
+                revision=0,
+            ),
+            occurred_at=created_at,
         )
-        row = AlertEventRow(
-            id=event_id,
-            sequence=sequence,
-            dedup_key=payload.dedup_key,
-            payload_json=_payload_json(payload),
-            message_text=event.message_text,
-            created_at=event.created_at.isoformat(),
-            acknowledged_at=None,
-        )
+        monitor_event = None
+        message_text = render_alert(payload)
         integrity_failure = False
+        monitor_identity_failure = False
+        monitor_storage_failure = False
         try:
             with self._session.begin_nested():
+                monitor_event = self._events.append(monitor_draft)
+                row = AlertEventRow(
+                    id=event_id,
+                    sequence=monitor_event.sequence,
+                    dedup_key=payload.dedup_key,
+                    payload_json=_payload_json(payload),
+                    message_text=message_text,
+                    created_at=created_at.isoformat(),
+                    acknowledged_at=None,
+                )
                 self._session.add(row)
                 self._session.flush()
+        except MonitorEventIdentityConflictError:
+            self._session.expire_all()
+            monitor_identity_failure = True
+        except MonitorEventError:
+            self._session.expire_all()
+            monitor_storage_failure = True
         except IntegrityError:
             self._session.expire_all()
             integrity_failure = True
 
+        if monitor_identity_failure:
+            raise AlertIdentityConflictError("Alert event identity is already in use")
+        if monitor_storage_failure:
+            raise OutboxStorageError("Alert event could not be persisted")
         if integrity_failure:
             existing = self._session.scalar(
                 select(AlertEventRow).where(AlertEventRow.dedup_key == payload.dedup_key)
@@ -124,6 +162,15 @@ class AlertOutbox:
             if existing is not None:
                 return self._deduplicated_event(existing, payload)
             raise OutboxStorageError("Alert event could not be persisted") from None
+        if monitor_event is None:  # pragma: no cover - assigned before the alert insert
+            raise OutboxStorageError("Alert event could not be persisted")
+        event = AlertEvent(
+            **payload.model_dump(mode="python", round_trip=True),
+            sequence=monitor_event.sequence,
+            message_text=message_text,
+            created_at=created_at,
+            acknowledged_at=None,
+        )
         return event
 
     def has_dedup_key(self, dedup_key: str) -> bool:
@@ -192,6 +239,7 @@ class AlertOutbox:
         if acknowledged_at < before.created_at:
             raise ValueError("clock cannot precede alert creation")
         integrity_failure = False
+        monitor_failure = False
         try:
             with self._session.begin_nested():
                 row.acknowledged_at = acknowledged_at.isoformat()
@@ -214,12 +262,32 @@ class AlertOutbox:
                         created_at=acknowledged_at.isoformat(),
                     )
                 )
+                self._events.append(
+                    MonitorEventDraft(
+                        event_id=monitor_event_id(
+                            MonitorEventType.ALERT_ACKNOWLEDGED,
+                            normalized_id,
+                            "acknowledged",
+                        ),
+                        event_type=MonitorEventType.ALERT_ACKNOWLEDGED,
+                        aggregate_id=normalized_id,
+                        payload=MonitorEventPayload(
+                            entity_id=normalized_id,
+                            symbol=after.symbol,
+                            revision=1,
+                        ),
+                        occurred_at=acknowledged_at,
+                    )
+                )
                 self._session.flush()
+        except MonitorEventError:
+            self._session.expire_all()
+            monitor_failure = True
         except IntegrityError:
             self._session.expire_all()
             integrity_failure = True
 
-        if integrity_failure:
+        if monitor_failure or integrity_failure:
             raise OutboxStorageError("Alert acknowledgement could not be persisted") from None
         return after
 
@@ -239,25 +307,6 @@ class AlertOutbox:
         if _semantic_payload(stored_semantics) != _semantic_payload(payload):
             raise AlertIdentityConflictError("Alert dedup identity has conflicting semantics")
         return event
-
-    def _serialize_writers(self) -> None:
-        # The singleton row takes SQLite's writer turn even when no alerts remain.
-        result = self._session.execute(
-            update(AlertSequence)
-            .where(AlertSequence.singleton_id == 1)
-            .values(last_sequence=AlertSequence.last_sequence)
-            .execution_options(synchronize_session=False)
-        )
-        if result.rowcount != 1:
-            raise OutboxStorageError("Alert sequence state is unavailable")
-
-    def _next_sequence(self) -> int:
-        state = self._session.get(AlertSequence, 1)
-        if state is None or type(state.last_sequence) is not int or state.last_sequence < 0:
-            raise OutboxStorageError("Alert sequence state is invalid")
-        state.last_sequence += 1
-        self._session.flush()
-        return state.last_sequence
 
     def _now(self) -> datetime:
         value = self._clock()

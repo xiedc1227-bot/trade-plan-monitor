@@ -40,6 +40,13 @@ from trade_plan_monitor.market_data.models import (
 from trade_plan_monitor.market_data.models import (
     TradingDay as NormalizedTradingDay,
 )
+from trade_plan_monitor.state.events import (
+    MonitorEventDraft,
+    MonitorEventLog,
+    MonitorEventPayload,
+    MonitorEventType,
+    monitor_event_id,
+)
 from trade_plan_monitor.state.models import (
     ActivePlan,
     AuditLog,
@@ -396,10 +403,18 @@ class LatestQuoteRecord(BaseModel):
 class PlanRepository:
     """Persist immutable plan versions without exposing a raw Session."""
 
-    def __init__(self, session: Session, *, clock: Clock, id_factory: IdFactory) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        clock: Clock,
+        id_factory: IdFactory,
+        events: MonitorEventLog,
+    ) -> None:
         self._session = session
         self._clock = clock
         self._id_factory = id_factory
+        self._events = events
 
     def save_draft(self, plan: TradePlan, *, source_text: str) -> PlanVersionRecord:
         if not isinstance(plan, TradePlan):
@@ -527,6 +542,23 @@ class PlanRepository:
         if after is None:  # pragma: no cover - protected by the successful upsert
             raise RepositoryError("Activated plan could not be reloaded")
         self._append_activation_audit(before=before, after=after)
+        self._events.append(
+            MonitorEventDraft(
+                event_id=monitor_event_id(
+                    MonitorEventType.PLAN_ACTIVATED,
+                    after.symbol,
+                    str(after.revision),
+                ),
+                event_type=MonitorEventType.PLAN_ACTIVATED,
+                aggregate_id=after.symbol,
+                payload=MonitorEventPayload(
+                    entity_id=after.plan_version_id,
+                    symbol=after.symbol,
+                    revision=after.revision,
+                ),
+                occurred_at=after.activated_at,
+            )
+        )
         return after
 
     def _append_activation_audit(
@@ -579,10 +611,18 @@ class PlanRepository:
 class PositionRepository:
     """Persist explicit manual buys and T+1-safe lot reductions."""
 
-    def __init__(self, session: Session, *, clock: Clock, id_factory: IdFactory) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        clock: Clock,
+        id_factory: IdFactory,
+        events: MonitorEventLog,
+    ) -> None:
         self._session = session
         self._clock = clock
         self._id_factory = id_factory
+        self._events = events
 
     def record_buy(
         self,
@@ -647,12 +687,13 @@ class PositionRepository:
         except IntegrityError:
             raise RepositoryError("Position lot could not be persisted") from None
         record = _position_lot_record(model)
-        self._append_audit(
+        occurred_at = self._append_audit(
             action="POSITION_BUY_RECORDED",
             before=None,
             after=record,
             quantity=normalized_quantity,
         )
+        self._append_position_event(record, occurred_at=occurred_at)
         return record
 
     def get_lot(self, lot_id: str) -> PositionLotRecord:
@@ -719,12 +760,13 @@ class PositionRepository:
             model.closed_at = _aware_now(self._clock).isoformat()
         self._session.flush()
         after = _position_lot_record(model)
-        self._append_audit(
+        occurred_at = self._append_audit(
             action="POSITION_REDUCTION_RECORDED",
             before=before,
             after=after,
             quantity=normalized_quantity,
         )
+        self._append_position_event(after, occurred_at=occurred_at)
         return after
 
     def _append_audit(
@@ -734,7 +776,8 @@ class PositionRepository:
         before: PositionLotRecord | None,
         after: PositionLotRecord,
         quantity: int,
-    ) -> None:
+    ) -> datetime:
+        occurred_at = _aware_now(self._clock)
         self._session.add(
             AuditLog(
                 id=self._id_factory(),
@@ -750,10 +793,36 @@ class PositionRepository:
                         "symbol": after.symbol,
                     }
                 ),
-                created_at=_aware_now(self._clock).isoformat(),
+                created_at=occurred_at.isoformat(),
             )
         )
         self._session.flush()
+        return occurred_at
+
+    def _append_position_event(
+        self,
+        position: PositionLotRecord,
+        *,
+        occurred_at: datetime,
+    ) -> None:
+        status = "CLOSED" if position.remaining_qty == 0 else "OPEN"
+        self._events.append(
+            MonitorEventDraft(
+                event_id=monitor_event_id(
+                    MonitorEventType.POSITION_UPDATED,
+                    position.id,
+                    str(position.remaining_qty),
+                ),
+                event_type=MonitorEventType.POSITION_UPDATED,
+                aggregate_id=position.id,
+                payload=MonitorEventPayload(
+                    entity_id=position.id,
+                    symbol=position.symbol,
+                    status=status,
+                ),
+                occurred_at=occurred_at,
+            )
+        )
 
 
 class EpisodeRepository:
@@ -1165,8 +1234,10 @@ class HealthRepository:
 
     _MAX_GAP_JSON_BYTES = 64 * 1024
 
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, *, clock: Clock, events: MonitorEventLog) -> None:
         self._session = session
+        self._clock = clock
+        self._events = events
 
     def get_provider(self, capability: str) -> ProviderHealthRecord | None:
         model = self._session.get(
@@ -1245,6 +1316,22 @@ class HealthRepository:
             model.error_code = normalized_error
             model.next_retry_at = None if normalized_retry is None else normalized_retry.isoformat()
         self._session.flush()
+        self._events.append(
+            MonitorEventDraft(
+                event_id=monitor_event_id(
+                    MonitorEventType.SYSTEM_HEALTH_UPDATED,
+                    incoming.capability,
+                    incoming.checked_at.isoformat(),
+                ),
+                event_type=MonitorEventType.SYSTEM_HEALTH_UPDATED,
+                aggregate_id=incoming.capability,
+                payload=MonitorEventPayload(
+                    entity_id=incoming.capability,
+                    status=incoming.status.value,
+                ),
+                occurred_at=incoming.checked_at,
+            )
+        )
         return incoming
 
     def get_symbol(self, symbol: str) -> SymbolHealthRecord | None:
@@ -1321,6 +1408,24 @@ class HealthRepository:
         after = self.get_symbol(normalized_symbol)
         if after is None:  # pragma: no cover - protected by successful upsert
             raise RepositoryError("Symbol health could not be reloaded")
+        self._events.append(
+            MonitorEventDraft(
+                event_id=monitor_event_id(
+                    MonitorEventType.SYMBOL_HEALTH_UPDATED,
+                    after.symbol,
+                    str(after.revision),
+                ),
+                event_type=MonitorEventType.SYMBOL_HEALTH_UPDATED,
+                aggregate_id=after.symbol,
+                payload=MonitorEventPayload(
+                    entity_id=after.symbol,
+                    symbol=after.symbol,
+                    revision=after.revision,
+                    status=after.status.value,
+                ),
+                occurred_at=_aware_now(self._clock),
+            )
+        )
         return after
 
 

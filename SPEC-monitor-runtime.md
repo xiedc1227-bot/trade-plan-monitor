@@ -152,9 +152,12 @@ fetch outside transaction
 → short transaction: upsert bars and reference data
 → build immutable context
 → pure evaluate outside transaction
-→ short transaction: claim evaluation + apply state intents + enqueue alert/outbox + audit
-→ publish committed event
+→ short transaction: claim evaluation + append `symbol.snapshot.updated` + apply state intents + enqueue alert/outbox + audit
+→ commit all global monitor events
+→ publish one exact committed event as an in-memory wake-up
 ```
+
+Every newly claimed intraday or official-close evaluation appends one deterministic `symbol.snapshot.updated` event carrying the symbol and authoritative `resultHash` in the same transaction as the evaluation claim. An alert-producing transaction also appends `alert.created`; the runtime may publish that exact committed alert event as the single wake-up because WebSocket consumers replay every intervening global sequence from SQLite. A no-alert evaluation publishes the committed snapshot event. Duplicate identities append and publish nothing; rollback publishes nothing; publisher failure cannot undo committed state. The publisher is never the replay source and does not alter T024 priority, hashing, or decision semantics.
 
 Before intraday evaluation, context assembly range-reads the exact persisted current-day minute sequence through the claimed 5-minute bucket, caps it at 240 rows, verifies completeness, supplies the immutable slice as `current_day_minutes`, derives the provisional daily aggregate and `source_as_of`, and attaches explicit indicator provenance. It does not evaluate zones, reclaim, pressure touch, or risk rules. Pressure-touch derivation and post-touch filtering remain inside pure T023 orchestration.
 

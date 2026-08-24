@@ -98,9 +98,10 @@ plan_hash|trading_date.isoformat()|signal_type.value|cause_id|quantity_text
 
 数据库唯一约束以原子方式认领事件。信号状态转换、审计记录和事件入队必须使用同一个事务。
 
-`AlertOutbox` 绑定 Session，并通过 `UnitOfWork.alerts` 暴露。`enqueue` 在分配下一个
-序号前通过持久化单例高水位行串行化 SQLite 写者，保存规范严格 JSON，并只 flush 而
-不自行提交。删除保留期内的提醒历史不能使该高水位倒退。使用相同
+`AlertOutbox` 绑定 Session，并通过 `UnitOfWork.alerts` 暴露。`enqueue` 在去重读取前
+锁定共享 `MonitorEventLog`，追加一条 UUID 和全局序号也由提醒行复用的
+`alert.created` 事件，保存规范严格 JSON，并只 flush 而不自行提交。删除保留期内的
+提醒历史或监控事件行都不能使唯一 `monitor_sequence` 高水位倒退。使用相同
 去重标识且其余语义相同的重试会返回原始事件 ID、序号、文本和创建时间，即使调用方
 重新生成了事件 ID；Decimal scale 与有符号零不会产生伪冲突，其他语义冲突则以
 `ALERT_IDENTITY_CONFLICT` 失败。读取时重新校验
@@ -195,23 +196,31 @@ Webhook 任意 2xx 结果为 `DELIVERED`。HTTP 408、429、5xx、超时和传�
 
 ```text
 alert_event(id, sequence UNIQUE, dedup_key UNIQUE, payload_json, message_text, created_at, acknowledged_at)
-alert_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
+monitor_event(id, sequence UNIQUE, event_type, schema_version, aggregate_id, payload_json, occurred_at)
+monitor_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
 delivery_attempt(id, event_id, channel, attempt, status, response_code, next_retry_at, delivered_at, error_code)
 ```
 
-追加迁移 `0004_alert_sequence` 创建该单例，并从既有事件最大序号回填
-`last_sequence`；空 Outbox 则回填为零。
+历史迁移 `0004_alert_sequence` 最初创建提醒单例。追加迁移 `0006_monitor_event`
+用唯一全局 `monitor_sequence` 替换它，并以相同 UUID 和序号把每条历史提醒回填为
+`alert.created`。后续非提醒事件会使提醒行在全局序号中稀疏，但不改变提醒投递顺序。
+在 DDL 前，其自包含冻结 v1 校验器会重新校验完整历史提醒契约，包括封闭证据、分区与
+预算、精确时间差、next-step 语义和确定性渲染。它不导入持续演进的应用模型或 renderer；
+正常 Outbox 读取会独立重校验当前规范 `AlertEvent`。
 
-WebSocket 回放默认保留 7 天；提醒历史默认保留 1 年，且可配置。
+全局 `monitor_event` WebSocket 回放默认保留 7 天；提醒历史默认保留 1 年，且可配置。
 
 `replay_after(sequence, limit=1000)` 使用排他性的非负序号游标，按升序返回事件，
 并包含恰好创建于配置保留截止时刻的事件。`acknowledge(event_id)` 只记录第一次确认
-时间，并在同一事务中追加一条 `ALERT_ACKNOWLEDGED` 审计；重复确认是幂等的。两项
-操作都不会创建投递尝试，也不会修改策略状态或持仓批次。T026 仅提供这些持久化查询；
-渠道投递和 WebSocket 发布分别由 T027 与 T039 负责。存储数据或确认完整性失败只暴露
-脱敏 Outbox 错误，不保留原始 SQL、参数、载荷、context 或 cause。
+时间，并在同一事务中追加一条 `ALERT_ACKNOWLEDGED` 审计和一条使用确定性 UUID 的
+`alert.acknowledged` 监控事件；重复确认是幂等的，且两者都不会重复。两项
+操作都不会创建投递尝试，也不会修改策略状态或持仓批次。T026 仅提供这些提醒持久化
+查询；渠道投递由 T027 负责。T039 负责全局业务事件账本、回放和 WebSocket 唤醒传输。
+`MonitorEventLog` 的每个公共数据库操作都会把 SQLAlchemy/DBAPI 故障映射为脱敏的
+监控事件错误，`AlertOutbox` 再把这些故障映射回自己的稳定错误域。因此存储数据或
+确认完整性失败不会暴露原始 SQL、参数、载荷、context 或 cause。
 
-T038 通过单独注入的应用服务暴露已提交提醒中心。有界分页可以按股票、可操作信号类型、确认状态和成对的上海时区闭区间筛选；返回分页回显精确筛选条件，拒绝重复事件 ID 或序号，并重新校验完整规范 `AlertEvent`，包括去重 identity、相关区间、下一步、确定性提醒文本及全部证据/展示预算。买入/减仓提醒可以提供 identity 匹配的表单预填，但提醒查询和确认路由绝不调用持仓服务。每次确认都要求幂等键和预期修订。未确认和已确认行的修订分别为 `0` 和 `1`；首次确认把 `0` 推进到 `1`，而已确认修订 `1` 上的再次确认是仍保持 `1` 的 no-op。确认仍然不能表示成交。T039 继续作为 WebSocket 发布与回放的唯一所有者。
+T038 通过单独注入的应用服务暴露已提交提醒中心。有界分页可以按股票、可操作信号类型、确认状态和成对的上海时区闭区间筛选；返回分页回显精确筛选条件，拒绝重复事件 ID 或序号，并重新校验完整规范 `AlertEvent`，包括去重 identity、相关区间、下一步、确定性提醒文本及全部证据/展示预算。买入/减仓提醒可以提供 identity 匹配的表单预填，但提醒查询和确认路由绝不调用持仓服务。每次确认都要求幂等键和预期修订。未确认和已确认行的修订分别为 `0` 和 `1`；首次确认把 `0` 推进到 `1`，而已确认修订 `1` 上的再次确认是仍保持 `1` 的 no-op。确认仍然不能表示成交。T039 通过共享监控事件回放流发布由此产生的已提交 `alert.created` 和 `alert.acknowledged`，不建立并行的提醒专用序号。
 
 ## 代码风格
 

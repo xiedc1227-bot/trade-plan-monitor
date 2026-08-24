@@ -59,6 +59,13 @@ from trade_plan_monitor.runtime.health import (
     RuntimeServiceStatus,
 )
 from trade_plan_monitor.runtime.scheduler import MarketDeadline
+from trade_plan_monitor.state.events import (
+    MonitorEvent,
+    MonitorEventDraft,
+    MonitorEventPayload,
+    MonitorEventType,
+    monitor_event_id,
+)
 from trade_plan_monitor.state.models import EvaluationKind, SymbolHealthStatus
 from trade_plan_monitor.state.repositories import (
     EpisodeIdentityConflictError,
@@ -94,7 +101,7 @@ ContextBuilder = Callable[[TradePlan, "IntradayMarketFacts"], EvaluationContext]
 OfficialContextBuilder = Callable[[TradePlan, "OfficialCloseMarketFacts"], EvaluationContext]
 OfficialObservedAt = Callable[[datetime], datetime]
 Evaluator = Callable[[EvaluationContext], EvaluationResult]
-CommittedEventPublisher = Callable[[AlertEvent], object]
+CommittedEventPublisher = Callable[[MonitorEvent], object]
 EventIdFactory = Callable[[], UUID]
 
 
@@ -461,6 +468,7 @@ class RuntimeEvaluationService:
         self._validate_result(plan=plan, facts=facts, result=result)
 
         committed_event: AlertEvent | None = None
+        publication_event: MonitorEvent | None = None
         with self._unit_of_work_factory() as unit_of_work:
             identity = result.evaluation_identity
             claim = unit_of_work.evaluations.claim(
@@ -474,6 +482,7 @@ class RuntimeEvaluationService:
                 evaluated_at=result.snapshot.evaluated_at,
             )
             if claim.created:
+                publication_event = self._append_snapshot_event(unit_of_work, result)
                 self._apply_transitions(unit_of_work, result)
                 if result.signal_intent is not None:
                     dedup_key = alert_dedup_key(result.signal_intent)
@@ -487,6 +496,7 @@ class RuntimeEvaluationService:
                             result=result,
                         )
                         committed_event = unit_of_work.alerts.enqueue(payload)
+                        publication_event = unit_of_work.events.get(payload.event_id)
             unit_of_work.commit()
 
         if not claim.created:
@@ -497,8 +507,8 @@ class RuntimeEvaluationService:
                 claim_created=False,
                 committed_event=None,
             )
-        if committed_event is not None:
-            publication = self._publisher(committed_event)
+        if publication_event is not None:
+            publication = self._publisher(publication_event)
             if isawaitable(publication):
                 await publication
         return IntradayCycleResult(
@@ -681,6 +691,7 @@ class RuntimeEvaluationService:
         self._validate_official_result(plan=plan, facts=facts, result=result)
 
         committed_event: AlertEvent | None = None
+        publication_event: MonitorEvent | None = None
         with self._unit_of_work_factory() as unit_of_work:
             identity = result.evaluation_identity
             claim = unit_of_work.evaluations.claim(
@@ -694,6 +705,7 @@ class RuntimeEvaluationService:
                 evaluated_at=result.snapshot.evaluated_at,
             )
             if claim.created:
+                publication_event = self._append_snapshot_event(unit_of_work, result)
                 self._apply_transitions(unit_of_work, result)
                 if result.signal_intent is not None:
                     dedup_key = alert_dedup_key(result.signal_intent)
@@ -701,13 +713,13 @@ class RuntimeEvaluationService:
                         event_id = self._event_id_factory()
                         if type(event_id) is not UUID:
                             raise TypeError("event_id_factory must return a UUID")
-                        committed_event = unit_of_work.alerts.enqueue(
-                            build_alert_payload(
-                                event_id=event_id,
-                                plan=plan,
-                                result=result,
-                            )
+                        payload = build_alert_payload(
+                            event_id=event_id,
+                            plan=plan,
+                            result=result,
                         )
+                        committed_event = unit_of_work.alerts.enqueue(payload)
+                        publication_event = unit_of_work.events.get(payload.event_id)
             self._clear_close_pending(
                 unit_of_work,
                 symbol=plan.symbol,
@@ -729,8 +741,8 @@ class RuntimeEvaluationService:
                 committed_event=None,
                 error_code=None,
             )
-        if committed_event is not None:
-            publication = self._publisher(committed_event)
+        if publication_event is not None:
+            publication = self._publisher(publication_event)
             if isawaitable(publication):
                 await publication
         return OfficialCloseCycleResult(
@@ -744,6 +756,31 @@ class RuntimeEvaluationService:
             claim_created=True,
             committed_event=committed_event,
             error_code=None,
+        )
+
+    @staticmethod
+    def _append_snapshot_event(
+        unit_of_work: UnitOfWork,
+        result: EvaluationResult,
+    ) -> MonitorEvent:
+        identity = result.evaluation_identity
+        return unit_of_work.events.append(
+            MonitorEventDraft(
+                event_id=monitor_event_id(
+                    MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+                    identity.symbol,
+                    identity.model_dump_json(),
+                    result.result_hash,
+                ),
+                event_type=MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+                aggregate_id=identity.symbol,
+                payload=MonitorEventPayload(
+                    entity_id=identity.symbol,
+                    symbol=identity.symbol,
+                    result_hash=result.result_hash,
+                ),
+                occurred_at=result.snapshot.evaluated_at,
+            )
         )
 
     def _official_close_completed(

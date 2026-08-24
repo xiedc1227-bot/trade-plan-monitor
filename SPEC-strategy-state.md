@@ -32,6 +32,7 @@ python -m ruff check src/trade_plan_monitor/state tests/unit/test_strategy_state
 ```text
 src/trade_plan_monitor/state/
 ├── database.py       # Engine, Session, and WAL configuration
+├── events.py         # Typed global monitor-event ledger
 ├── models.py         # SQLAlchemy persistence models
 ├── repositories.py   # Narrow repository interfaces and queries
 ├── unit_of_work.py   # Short transaction boundaries
@@ -73,7 +74,8 @@ The baseline migration also creates the approved cross-module support tables:
 request_idempotency(idempotency_key PRIMARY KEY, request_hash, status, response_code, response_json, created_at, updated_at)
 latest_quote(symbol PRIMARY KEY, price_fen, bar_end, received_at)
 alert_event(id PRIMARY KEY, sequence UNIQUE, dedup_key UNIQUE, payload_json, message_text, created_at, acknowledged_at)
-alert_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
+monitor_event(id PRIMARY KEY, sequence UNIQUE, event_type, schema_version, aggregate_id, payload_json, occurred_at)
+monitor_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
 delivery_attempt(id PRIMARY KEY, event_id, channel, attempt, status, response_code, next_retry_at, delivered_at, error_code, UNIQUE(event_id, channel, attempt))
 ```
 
@@ -118,7 +120,9 @@ From T032, `evaluation_ledger` uses the lossless primary key `(plan_hash, symbol
 - A new idempotency key creates `PENDING`. The same key and hash while pending produces `IDEMPOTENCY_IN_PROGRESS`; after `COMPLETED`, it replays the canonical stored response. The same key with a different SHA-256 request hash always produces `IDEMPOTENCY_KEY_REUSED`.
 - Repository failures expose stable codes such as `PLAN_VERSION_EXISTS`, `PLAN_SAVE_BLOCKED`, `PLAN_ACTIVATION_BLOCKED`, `PLAN_VERSION_NOT_FOUND`, `CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_IN_PROGRESS`, and `IDEMPOTENCY_CLAIM_NOT_FOUND`; later transport adapters map them to HTTP without exposing SQL or raw Session details.
 - `UnitOfWork` owns one explicit short transaction. Callers must invoke `commit()` for durability; leaving the context without a commit rolls back. Its public protocol exposes repositories plus `commit()`/`rollback()`, never the SQLAlchemy Session.
-- `UnitOfWork.alerts` exposes the session-bound `AlertOutbox`. Alert enqueue may therefore commit or roll back with state and audit writes. Append-only migration `0004_alert_sequence` backfills and preserves a singleton monotonic sequence high-water mark independently of alert-history deletion. Acknowledgement appends one `ALERT_ACKNOWLEDGED` audit and changes only `alert_event.acknowledged_at`; it never changes a position or records delivery success.
+- `UnitOfWork.events` exposes the session-bound `MonitorEventLog`, while `UnitOfWork.alerts` exposes `AlertOutbox` over that same log and Session. Plan activation, position mutation, symbol/provider health mutation, evaluation snapshot, alert creation, acknowledgement audit, and their corresponding events therefore commit or roll back together. The closed business vocabulary is `symbol.snapshot.updated`, `symbol.health.updated`, `alert.created`, `alert.acknowledged`, `plan.extraction.updated`, `plan.activated`, `plan.deactivated`, `position.updated`, `ai.provider.updated`, and `system.health.updated`. Injected application services that own extraction, deactivation, or AI-provider persistence must append their listed event in the owning mutation transaction; the persistence boundary does not invent those services.
+- Append-only migration `0006_monitor_event` follows `0005_evaluation_kind`, replaces `alert_sequence` with the sole `monitor_sequence`, and backfills every historical `alert_event` as `alert.created` with the same UUID and sequence. Existing alert sequences therefore remain stable while later alert rows may be sparse within the global domain. Before any DDL, one revision-local frozen v1 validator rejects any historical alert row that is not safe and canonical under the migration's original contract: it verifies exact payload/object shapes, UUID/dedup/symbol/signal-action identity, closed condition/evidence/fact types, three-valued evidence partitions, node/fact/numeric budgets, action/zone/next-step semantics, exact Shanghai timestamp arithmetic, bounded control-safe text, deterministic Chinese rendering, and the old sequence high-water. The revision is self-contained and never imports the evolving application `AlertPayload`, `AlertEvent`, or renderer; normal `AlertOutbox` reads independently revalidate the current complete canonical event. Downgrade is allowed only when every monitor row is an identity-matched `alert.created`; any other or unmatched event fails closed before data loss.
+- `MonitorEventLog` serializes SQLite writers before identity reads, allocates positive global sequences, stores canonical bounded payload JSON, and flushes without committing. Exact UUID replay is idempotent; conflicting semantics are rejected. The high-water mark survives event retention, and replay validates the entire requested range against its seven-day cutoff before returning an at-most-1,000-event contiguous page. Alert acknowledgement still changes only `alert_event.acknowledged_at`, appends one `ALERT_ACKNOWLEDGED` audit plus one `alert.acknowledged` monitor event, and never changes a position or records delivery success.
 
 ### Low-Zone Episode Cursor and Repository Contract
 
@@ -151,6 +155,7 @@ class UnitOfWork(Protocol):
     risk: RiskRepository
     evaluations: EvaluationRepository
     health: HealthRepository
+    events: MonitorEventLog
     alerts: AlertOutbox
 
     def commit(self) -> None: ...

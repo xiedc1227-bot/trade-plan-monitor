@@ -101,9 +101,11 @@ is unambiguous.
 The unique database constraint atomically claims the event. The signal's state transitions, audit entry, and event enqueue use the same transaction.
 
 `AlertOutbox` is session-bound and exposed as `UnitOfWork.alerts`. `enqueue`
-serializes SQLite writers on a singleton durable high-water row before allocating
-the next sequence, stores canonical strict JSON, and flushes without committing.
-Deleting retained alert history cannot move that high-water mark backwards. A
+locks the shared `MonitorEventLog` before its deduplication read, appends an
+`alert.created` event whose UUID and global sequence are also used by the alert
+row, stores canonical strict JSON, and flushes without committing. Deleting
+retained alert history or monitor-event rows cannot move the sole
+`monitor_sequence` high-water mark backwards. A
 retry with the same deduplication
 identity and otherwise identical semantics returns the original event ID,
 sequence, text, and creation time even if the caller generated a replacement
@@ -218,28 +220,40 @@ Logical tables:
 
 ```text
 alert_event(id, sequence UNIQUE, dedup_key UNIQUE, payload_json, message_text, created_at, acknowledged_at)
-alert_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
+monitor_event(id, sequence UNIQUE, event_type, schema_version, aggregate_id, payload_json, occurred_at)
+monitor_sequence(singleton_id PRIMARY KEY CHECK(singleton_id = 1), last_sequence CHECK(last_sequence >= 0))
 delivery_attempt(id, event_id, channel, attempt, status, response_code, next_retry_at, delivered_at, error_code)
 ```
 
-Append-only migration `0004_alert_sequence` creates the singleton and backfills
-`last_sequence` from the existing maximum event sequence, or zero for an empty
-outbox.
+Historical migration `0004_alert_sequence` first created the alert singleton.
+Append-only `0006_monitor_event` replaces it with the only global
+`monitor_sequence` and backfills every historical alert as `alert.created` with
+the same UUID and sequence. Later non-alert events make alert rows sparse in the
+global sequence without changing alert delivery order. Before DDL, its
+self-contained frozen v1 validator rechecks the complete historical alert
+contract, including closed evidence, partitions and budgets, exact timestamp
+arithmetic, next-step semantics, and deterministic rendering. It imports no
+evolving application model or renderer; normal outbox reads independently
+revalidate the current canonical `AlertEvent`.
 
-WebSocket replay retention is seven days; alert history retention defaults to one year and is configurable.
+Global `monitor_event` WebSocket replay retention is seven days; alert history retention defaults to one year and is configurable.
 
 `replay_after(sequence, limit=1000)` uses an exclusive non-negative sequence
 cursor, returns ascending events, and includes an event created exactly at the
 configured retention cutoff. `acknowledge(event_id)` records only the first
 acknowledgement time and appends one `ALERT_ACKNOWLEDGED` audit in the same
-transaction; repeated acknowledgement is idempotent. Neither operation creates
+transaction plus one `alert.acknowledged` monitor event with a deterministic
+UUID; repeated acknowledgement is idempotent and creates neither duplicate.
+Neither operation creates
 a delivery attempt or modifies strategy state or position lots. T026 supplies
-these persistence queries only; channel dispatch and WebSocket publication are
-owned by T027 and T039 respectively. Stored-data and acknowledgement-integrity
-failures expose sanitized outbox errors without retaining raw SQL, parameters,
-payloads, context, or cause.
+these alert persistence queries only; channel dispatch is owned by T027. T039
+owns the global business-event ledger, replay, and WebSocket wake-up transport.
+Every public `MonitorEventLog` database operation maps SQLAlchemy/DBAPI failure
+to a sanitized monitor-event error. `AlertOutbox` maps those failures back into
+its own stable error domain. Stored-data and acknowledgement-integrity failures
+therefore expose neither raw SQL, parameters, payloads, context, nor cause.
 
-T038 exposes the committed alert center through a separately injected application service. Bounded pages may filter by symbol, actionable signal type, acknowledgement state, and a paired inclusive Shanghai-time range; the returned page echoes the exact filters, rejects duplicate event IDs or sequences, and revalidates the complete canonical `AlertEvent`, including dedup identity, relevant zone, next step, deterministic reminder text, and all evidence/display budgets. A buy/reduction alert may supply an identity-matched form prefill, but the alert query and acknowledgement routes never invoke the position service. Every acknowledgement requires idempotency and an expected revision. Unacknowledged and acknowledged rows have revisions `0` and `1`; the first acknowledgement advances `0` to `1`, while an already acknowledged command at revision `1` is a no-op that remains `1`. Acknowledgement still cannot represent a fill. T039 remains the sole owner of WebSocket publication and replay.
+T038 exposes the committed alert center through a separately injected application service. Bounded pages may filter by symbol, actionable signal type, acknowledgement state, and a paired inclusive Shanghai-time range; the returned page echoes the exact filters, rejects duplicate event IDs or sequences, and revalidates the complete canonical `AlertEvent`, including dedup identity, relevant zone, next step, deterministic reminder text, and all evidence/display budgets. A buy/reduction alert may supply an identity-matched form prefill, but the alert query and acknowledgement routes never invoke the position service. Every acknowledgement requires idempotency and an expected revision. Unacknowledged and acknowledged rows have revisions `0` and `1`; the first acknowledgement advances `0` to `1`, while an already acknowledged command at revision `1` is a no-op that remains `1`. Acknowledgement still cannot represent a fill. T039 publishes the resulting committed `alert.created` and `alert.acknowledged` types through the shared monitor-event replay stream rather than a parallel alert-only sequence.
 
 ## Code Style
 
