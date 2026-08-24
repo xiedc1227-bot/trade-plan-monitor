@@ -329,7 +329,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 | `AlertRail` / `AlertTable` | 最近及历史提醒 | 提醒摘要或分页数据 | 选择或确认 |
 | `PriceChart` | ECharts K 线、区间和标记 | 不可变图表序列 | 区间变更 |
 | `EpisodeTimeline` | 阶段与风险状态转换 | 时间线事件 | 选择时间 |
-| `PositionLots` | 持仓批次和 T+1 状态 | 持仓摘要 | 增加或关闭请求 |
+| `PositionLots` | 局部批次表单、T+1 展示和显式确认 | 权威分页/预填/操作网关 | 已确认的增加或关闭命令 |
 | `PlanWorkbench` | 编排提取、审核、编辑和启用 | 草稿与提取结果 | 保存或启用 |
 | `SourceTextEditor` | 纯文本计划输入 | 原文 | 更新文本 |
 | `AIProviderSelector` | 选择或测试已配置供应商 | 供应商与状态 | 选择或测试 |
@@ -338,7 +338,9 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 | `ActivationDiffDialog` | 确认不可变版本切换 | 变更前后内容与问题 | 确认或取消 |
 | `HealthMatrix` | 供应商及股票健康矩阵 | 健康数据行 | 选择股票 |
 
-`monitor` Pinia store 管理规范化快照和事件状态，通过只读视图及明确的 `applySnapshot`、`applyEvent` 和恢复操作修改。路由内计划表单保持局部状态。`useMonitorStream`、`useSymbolFilters` 和 `useChartSeries` 封装生命周期与派生逻辑。ECharts 实例和大型不可变序列使用 shallow ref。组件使用强类型 props 和 emits，绝不直接修改共享记录。
+`monitor` Pinia store 管理规范化快照和事件状态，通过只读视图及明确的 `applySnapshot`、`applyEvent` 和恢复操作修改。路由内计划与持仓表单保持局部状态。`useMonitorStream`、`useSymbolFilters`、`useChartSeries` 和 `usePositions` 封装生命周期或派生逻辑。ECharts 实例和大型不可变序列使用 shallow ref。组件使用强类型 props 和 emits，绝不直接修改共享记录。
+
+`SymbolDetailView` 只是 T049 的组合表面。`PositionLots` 管理带标签的原生控件、由提醒拥有的预填字段、确认对话框状态和焦点恢复。`usePositions` 接受 maybe-reactive 股票/日期/分页/上限/预填输入和注入的普通函数操作网关；它暴露 shallow-readonly 权威状态及显式变更方法。提醒可以预填表单但不能提交，提醒确认不能创建或减少批次，每条命令都绑定已复核批次 revision 和新的幂等键。只有建仓/减仓回执与随后刷新的权威分页一致时才报告成功。冲突刷新使用原始变更上下文，generation 闸门阻止较旧响应覆盖较新分页，不完整分页不能用于推断最大持仓总量。浏览器可以实施输入形状、整手展示保护及不超过后端 `sellableQuantity` 的数量保护，但绝不计算交易日历或 T+1 资格。T050 提醒视图、生产 API/store/router 组合、安装后资源发现和 T024 判断行为均不属于该边界。
 
 ## 视觉与无障碍方向
 

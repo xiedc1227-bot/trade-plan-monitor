@@ -5,13 +5,17 @@ import type {
   BarView,
   DataHealthStatus,
   EvidenceFactView,
+  PositionLotPage,
+  PositionPrefillView,
   SymbolDetailResponse,
   SymbolEventView,
 } from "../api/generated";
 import EpisodeTimeline from "../components/symbol/EpisodeTimeline.vue";
+import PositionLots from "../components/symbol/PositionLots.vue";
 import PriceChart from "../components/symbol/PriceChart.vue";
 import type { ChartRange } from "../components/symbol/PriceChart.vue";
 import { useChartSeries } from "../composables/useChartSeries";
+import type { PositionOperations } from "../composables/usePositions";
 
 interface Props {
   bars: readonly BarView[];
@@ -19,6 +23,11 @@ interface Props {
   error?: string | null;
   events: readonly SymbolEventView[];
   loading?: boolean;
+  positionAsOfTradeDate?: string | null;
+  positionMaximumQuantity?: number | null;
+  positionOperations?: PositionOperations | null;
+  positionPage?: PositionLotPage | null;
+  positionPrefill?: PositionPrefillView | null;
   stale?: boolean;
 }
 
@@ -30,6 +39,11 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
+  positionAsOfTradeDate: null,
+  positionMaximumQuantity: null,
+  positionOperations: null,
+  positionPage: null,
+  positionPrefill: null,
   stale: false,
 });
 const emit = defineEmits<Emits>();
@@ -297,6 +311,16 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
           </table>
         </div>
       </section>
+
+      <PositionLots
+        :symbol="detail.summary.symbol"
+        :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
+        :initial-page="positionPage"
+        :maximum-quantity="positionMaximumQuantity"
+        :operations="positionOperations"
+        :prefill="positionPrefill"
+        :summary-lots="detail.positionLots ?? []"
+      />
 
       <EpisodeTimeline
         :events="events"

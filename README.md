@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T048` and checkpoints `C00`–`C19` are complete. The repository now includes the reviewed deterministic backend, local REST/WebSocket/OpenAPI boundary, accessible Vue shell, normalized readonly monitor state, resilient snapshot-first stream lifecycle, a thin source-to-activation plan workbench, an accessible ten-symbol dashboard, and readonly stock-detail charts, evidence, and timeline views over authoritative facts. `T049` is next for explicit manual position-lot operations. Default installed-console composition remains deferred to `T052`–`T054`.
+> Development status: tasks `T001`–`T049` and checkpoints `C00`–`C19` are complete. The repository now includes the reviewed deterministic backend, local REST/WebSocket/OpenAPI boundary, accessible Vue shell, normalized readonly monitor state, resilient snapshot-first stream lifecycle, a thin source-to-activation plan workbench, an accessible ten-symbol dashboard, readonly stock-detail charts/evidence/timeline views, and explicit confirmed manual position-lot operations over authoritative facts. `T050` is next for the textual alert center. Default installed-console composition remains deferred to `T052`–`T054`.
 
 ## Product Goals
 
@@ -49,9 +49,10 @@ Last verified on 2026-08-24 with CPython 3.14.7.
 | Structured plan editing, immutable diff, and activation UI | `T046` | Complete |
 | Accessible multi-stock dashboard and authoritative watchlist | `T047` | Complete |
 | Stock-detail chart, evidence, and episode/risk timeline views | `T048` | Complete |
-| Position operations, alerts, system view, packaging, and external acceptance | `T049`–`T059` | Pending |
+| Explicit confirmed manual position-lot operations | `T049` | Complete |
+| Alerts, system view, packaging, and external acceptance | `T050`–`T059` | Pending |
 
-After `T048`, all 1245 backend tests pass. The exact stock-detail gate contains 13 tests, the full frontend gate contains 121 tests, the combined REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Ruff, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, `git diff --check`, frontend type-check, and the document-based production build pass. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C19` is complete, and `T049` is next.
+After `T049`, all 1245 backend tests pass. The exact position/detail gate contains 37 tests, the full frontend gate contains 145 tests, the combined REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Ruff, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, `git diff --check`, frontend type-check, and the document-based production build pass. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C20` remains open through `T050`, which is next.
 
 ## Safety Boundaries
 
@@ -147,7 +148,7 @@ npm run build
 Set-Location ..
 ```
 
-The frontend now contains the complete T045–T046 source-to-activation workbench, the T047 multi-stock dashboard, and the T048 stock-detail presentation slice. The detail view maps immutable backend OHLC, price levels, timed indicator evidence, episode-low value, and alerts into one shallow readonly series; `PriceChart` alone owns ECharts lifecycle, while accessible tables retain exact evidence text and unknown-time facts without fabrication. It owns no API calls, store/router composition, indicator or trading-rule calculation, or shared quote state. `T049` next adds explicit manual position-lot operations.
+The frontend now contains the complete T045–T046 source-to-activation workbench, the T047 multi-stock dashboard, the T048 stock-detail presentation slice, and the T049 explicit manual position-lot slice. `PositionLots` owns only local form/dialog state; `usePositions` accepts maybe-reactive authoritative pages plus an injected operation gateway, freezes readonly lots, binds reviewed revisions, validates receipts, refreshes after success or conflict, and prevents stale responses from replacing newer state. Reminder prefill never submits a command, acknowledgement remains independent from fills, and T+1 authority stays in backend `sellableQuantity`. The slice owns no API calls, store/router composition, trading-calendar calculation, or shared quote state. `T050` next adds the textual alert center.
 
 ### Local configuration
 

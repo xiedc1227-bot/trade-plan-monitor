@@ -329,7 +329,7 @@ Route views are composition surfaces only.
 | `AlertRail` / `AlertTable` | Recent and historical reminders | alert summaries/page | select/acknowledge |
 | `PriceChart` | ECharts bars/zones/markers | immutable chart series | range change |
 | `EpisodeTimeline` | Episode/risk transitions | timeline events | select time |
-| `PositionLots` | Lots and T+1 status | position summary | add/close request |
+| `PositionLots` | Local lot forms, T+1 display, and explicit confirmation | authoritative page/prefill/operation gateway | confirmed add/close command |
 | `PlanWorkbench` | Orchestrate extraction/review/edit/activation | draft/extraction | save/activate |
 | `SourceTextEditor` | Plain-text plan input | source text | update text |
 | `AIProviderSelector` | Choose/test configured provider | providers/status | select/test |
@@ -338,7 +338,9 @@ Route views are composition surfaces only.
 | `ActivationDiffDialog` | Confirm immutable version switch | before/after/issues | confirm/cancel |
 | `HealthMatrix` | Provider/symbol health | health rows | select symbol |
 
-The `monitor` Pinia store owns normalized snapshot/event state with readonly views and explicit `applySnapshot`, `applyEvent`, and recovery actions. Route-local plan forms remain local. `useMonitorStream`, `useSymbolFilters`, and `useChartSeries` contain lifecycle and derived logic. ECharts instances and large immutable series use shallow refs. Components use typed props/emits and never mutate shared records directly.
+The `monitor` Pinia store owns normalized snapshot/event state with readonly views and explicit `applySnapshot`, `applyEvent`, and recovery actions. Route-local plan and position forms remain local. `useMonitorStream`, `useSymbolFilters`, `useChartSeries`, and `usePositions` contain lifecycle or derived logic. ECharts instances and large immutable series use shallow refs. Components use typed props/emits and never mutate shared records directly.
+
+`SymbolDetailView` is only the composition surface for T049. `PositionLots` owns native labelled controls, reminder-owned prefill fields, confirmation-dialog state, and focus restoration. `usePositions` accepts maybe-reactive symbol/date/page/limit/prefill inputs plus an injected plain-function operation gateway; it exposes shallow-readonly authoritative state and explicit mutation methods. A reminder may prefill a form but cannot submit, acknowledgement cannot create or reduce a lot, and every command is bound to the reviewed lot revision and a fresh idempotency key. Creation/closure receipts and the subsequent authoritative page must agree before success is reported. Conflict refreshes use the original mutation context, generation guards prevent older responses from replacing newer pages, and incomplete pagination cannot be used to infer the maximum-position total. The browser may enforce input shape, board-lot display guards, and quantities no greater than backend `sellableQuantity`, but it never computes the trading calendar or T+1 eligibility. T050 alert views, production API/store/router composition, installed-asset discovery, and T024 decision behavior remain outside this boundary.
 
 ## Visual and Accessibility Direction
 
