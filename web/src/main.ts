@@ -1,5 +1,6 @@
 import { createApp } from "vue";
 import type { App, Component } from "vue";
+import { createPinia } from "pinia";
 
 import RootApp from "./App.vue";
 import { router } from "./router";
@@ -11,6 +12,7 @@ export function createMonitorApp(
   const app = createApp(rootComponent, rootProps);
 
   if (rootComponent === RootApp) {
+    app.use(createPinia());
     app.use(router);
   }
 

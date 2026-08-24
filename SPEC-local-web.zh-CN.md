@@ -150,6 +150,14 @@ OpenAPI 快照 SHA-256：`e0b5435bedf6a98657bb95616bebf8e05589c387049a07eb752d4b
 - 跳转链接把焦点移到持久的 `#main-content` landmark。导航使用原生链接和原生菜单按钮，具备清晰焦点、`aria-controls` 与 `aria-expanded`；Escape 把焦点恢复到菜单按钮，而移动端链接导航会关闭隐藏菜单并把焦点移到主内容。
 - 桌面导航在 `48rem` 替代移动端 disclosure。外壳动态效果仅限展示 CSS，`prefers-reduced-motion: reduce` 分支把动画/过渡时长缩短到 `0.01ms`。T043 设计变量、API 客户端、Pinia/store 与恢复行为，T044 流生命周期，后续业务视图、T052 已安装组合、T041 生成契约和 T024 判断语义均保持不变。
 
+### T043 前端状态基础边界
+
+- `App.vue` 加载一份全局变量表。石墨/墨色表面、矿物色文字、琥珀观察、海玻璃绿实时、朱红风险、青色信息、清晰焦点、间距和数字字体变量是语义输入，而非业务判断；`AppShell` 使用这些变量，但不增加领域视图或只依赖颜色的状态。
+- 同源 API 客户端当前只负责 `GET /api/v1/dashboard`。它使用生成的 `DashboardResponse` 和 `ErrorResponse` 契约，在 JSON 解析前最多读取 4 MiB 原始响应字节，拒绝未声明字段或敏感字段，校验封闭 camelCase 领域值及精确的上海时区/Gregorian 微秒关系，并且只抛出固定、不会泄密的客户端错误。它不持有响应式或共享状态。
+- setup 风格 Pinia store 把冻结的股票快照规范化为有序 ID 和 ID 映射。组件只取得只读状态与 computed 选择器；只有 `applySnapshot`、`applyEvent` 和 `requestSnapshotRecovery` 可以修改 store。语义连接对象始终同时提供代码、中文标签和文本标记，因此状态不只依赖颜色。
+- 快照不能让当前序号倒退。精确的下一事件会推进游标并记录冻结的失效提示；重复和更旧事件会被拒绝，而格式错误事件、序号缺口、服务端恢复请求以及 JavaScript 安全整数序号耗尽会在不消费游标的情况下创建明确快照恢复意图。
+- T043 只校验封闭的已提交事件信封并记录恢复意图。它不会创建 `WebSocket`、心跳、重连定时器、退避策略、回放请求或快照获取协调器；全部流生命周期行为仍属于 T044。生成的 OpenAPI/TypeScript 工件、后续业务视图、T052 已安装组合及 T024 判断语义保持不变。
+
 只读资源：
 
 ```text

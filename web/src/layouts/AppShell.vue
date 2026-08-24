@@ -113,7 +113,7 @@ async function handleMobileNavigation() {
 
 <style scoped>
 :global(html) {
-  color-scheme: dark light;
+  color-scheme: dark;
 }
 
 :global(body) {
@@ -122,9 +122,9 @@ async function handleMobileNavigation() {
 
 .app-shell {
   min-height: 100vh;
-  color: CanvasText;
-  background: Canvas;
-  font-family: system-ui, sans-serif;
+  color: var(--color-text-mineral);
+  background: var(--color-surface-ink);
+  font-family: var(--font-interface);
 }
 
 .app-shell__skip-link {
@@ -133,9 +133,9 @@ async function handleMobileNavigation() {
   inset-block-start: 0.5rem;
   inset-inline-start: 0.5rem;
   padding: 0.75rem 1rem;
-  color: CanvasText;
-  background: Canvas;
-  border: 0.125rem solid Highlight;
+  color: var(--color-text-mineral);
+  background: var(--color-surface-raised);
+  border: 0.125rem solid var(--color-focus-ring);
   transform: translateY(-200%);
   transition: transform 150ms ease;
 }
@@ -151,12 +151,13 @@ async function handleMobileNavigation() {
   justify-content: space-between;
   min-height: 3.5rem;
   padding-inline: 1rem;
-  border-block-end: 0.0625rem solid GrayText;
+  background: var(--color-surface-graphite);
+  border-block-end: var(--border-technical);
 }
 
 .app-shell__brand,
 .app-shell__navigation-link {
-  color: LinkText;
+  color: var(--color-signal-info-cyan);
   text-decoration-thickness: 0.1em;
   text-underline-offset: 0.2em;
 }
@@ -194,9 +195,9 @@ async function handleMobileNavigation() {
   align-items: center;
   min-width: 2.75rem;
   min-height: 2.75rem;
-  color: ButtonText;
-  background: ButtonFace;
-  border: 0.0625rem solid ButtonBorder;
+  color: var(--color-text-mineral);
+  background: var(--color-surface-raised);
+  border: var(--border-technical);
 }
 
 .app-shell__mobile-navigation {
@@ -205,8 +206,8 @@ async function handleMobileNavigation() {
   inset-inline: 0;
   z-index: 5;
   padding: 0.5rem 1rem 1rem;
-  background: Canvas;
-  border-block-end: 0.0625rem solid GrayText;
+  background: var(--color-surface-graphite);
+  border-block-end: var(--border-technical);
   transition: opacity 150ms ease;
 }
 
@@ -217,7 +218,9 @@ async function handleMobileNavigation() {
 
 .app-shell__connection-banner {
   padding: 0.75rem 1rem;
-  border-block-end: 0.0625rem solid GrayText;
+  color: var(--color-text-mineral);
+  background: var(--color-surface-raised);
+  border-block-end: var(--border-technical);
 }
 
 .app-shell__main {
@@ -230,7 +233,7 @@ async function handleMobileNavigation() {
 .app-shell__brand:focus-visible,
 .app-shell__navigation-link:focus-visible,
 .app-shell__mobile-toggle:focus-visible {
-  outline: 0.1875rem solid Highlight;
+  outline: 0.1875rem solid var(--color-focus-ring);
   outline-offset: 0.1875rem;
 }
 

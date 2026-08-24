@@ -150,6 +150,14 @@ OpenAPI snapshot SHA-256: `e0b5435bedf6a98657bb95616bebf8e05589c387049a07eb752d4
 - The skip link moves focus to the persistent `#main-content` landmark. Navigation uses native links and a native menu button with visible focus, `aria-controls`, and `aria-expanded`; Escape restores focus to the menu button, while mobile-link navigation closes the hidden menu and moves focus to main content.
 - The desktop navigation replaces the mobile disclosure at `48rem`. Shell motion is bounded to presentation-only CSS and the `prefers-reduced-motion: reduce` branch reduces animation/transition duration to `0.01ms`. T043 design tokens, API client, Pinia/store and recovery behavior, T044 stream lifecycle, later business views, T052 installed composition, T041 generated contracts, and T024 decision semantics remain unchanged.
 
+### T043 Frontend State Foundation Boundary
+
+- `App.vue` loads one global token sheet. Its graphite/ink surfaces, mineral text, amber watch, sea-glass live, vermilion risk, cyan information, visible focus, spacing, and numeric-font tokens are semantic inputs rather than business decisions; `AppShell` consumes those tokens without adding a domain view or color-only status.
+- The same-origin API client currently owns only `GET /api/v1/dashboard`. It uses the generated `DashboardResponse` and `ErrorResponse` contracts, reads at most 4 MiB of raw response bytes before JSON parsing, rejects undeclared or sensitive fields, validates the closed camelCase domain and exact Shanghai/Gregorian microsecond relationships, and emits only fixed secret-safe client errors. It owns no reactive or shared state.
+- The setup-style Pinia store normalizes frozen symbol snapshots into ordered IDs and an ID map. Components receive readonly state and computed selectors; only `applySnapshot`, `applyEvent`, and `requestSnapshotRecovery` can mutate the store. A semantic connection object always exposes a code, Chinese label, and text marker so status never depends on color alone.
+- Snapshots cannot regress the active sequence. An exact next event advances the cursor and records a frozen invalidation; duplicates and older events are rejected, while malformed events, sequence gaps, server recovery requests, and exhaustion of JavaScript's safe-integer sequence space create an explicit snapshot-recovery intent without consuming the cursor.
+- T043 validates the closed committed event envelope and records recovery intent only. It creates no `WebSocket`, heartbeat, reconnect timer, backoff policy, replay request, or snapshot-fetch coordinator; all stream lifecycle behavior remains T044. Generated OpenAPI/TypeScript artifacts, later business views, T052 installed composition, and T024 decision semantics remain unchanged.
+
 Read resources:
 
 ```text

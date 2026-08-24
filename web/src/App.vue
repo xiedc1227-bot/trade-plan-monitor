@@ -5,3 +5,5 @@ import AppShell from "./layouts/AppShell.vue";
 <template>
   <AppShell />
 </template>
+
+<style src="./assets/tokens.css"></style>

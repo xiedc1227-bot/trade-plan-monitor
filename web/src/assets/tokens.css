@@ -1,0 +1,50 @@
+:root {
+  color-scheme: dark;
+
+  --color-surface-ink: #0b1114;
+  --color-surface-graphite: #141d21;
+  --color-surface-raised: #1c282d;
+  --color-grid-technical: rgb(151 171 176 / 12%);
+  --color-border-quiet: #405158;
+  --color-text-mineral: #eef1e8;
+  --color-text-muted: #a8b4b3;
+  --color-signal-watch-amber: #d6a84b;
+  --color-signal-live-sea-glass: #67b7a5;
+  --color-signal-risk-vermilion: #e45d43;
+  --color-signal-info-cyan: #62b7d1;
+  --color-focus-ring: #f2c45f;
+
+  --font-interface: Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-numeric: "Roboto Mono", "Cascadia Mono", Consolas, monospace;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --radius-control: 0.25rem;
+  --border-technical: 0.0625rem solid var(--color-border-quiet);
+}
+
+body {
+  color: var(--color-text-mineral);
+  background-color: var(--color-surface-ink);
+  font-family: var(--font-interface);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 0.1875rem solid var(--color-focus-ring);
+  outline-offset: 0.1875rem;
+}
+
+.numeric-data {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
