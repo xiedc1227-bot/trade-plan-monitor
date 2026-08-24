@@ -1,11 +1,18 @@
+# Copy this file to config/app.yaml for local use. Keep secret values out of YAML.
 web:
+  # Security boundary: the only supported listener is exact IPv4 loopback.
   host: 127.0.0.1
   port: 8765
 
 tushare:
+  # The runtime resolves this name from the process environment when authorized.
   token_ref:
     environment_variable: TUSHARE_TOKEN
 
 ai:
+  # Optional until AI-assisted drafting is explicitly enabled.
   api_key_ref:
     environment_variable: AI_API_KEY
+
+# Database, backup, and webhook settings are runtime-composition inputs and are not
+# accepted by the current strict ApplicationConfiguration schema.
