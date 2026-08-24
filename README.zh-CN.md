@@ -4,7 +4,7 @@
 
 一个独立、仅本机使用的 Web 应用，用于把经过审核的 A 股交易计划转换为确定性监控规则，并生成文字和可视化提醒。系统面向一名用户，最多启用 10 只股票，使用 Tushare 行情、用户可配置的 AI 计划草稿能力和单个 SQLite WAL 数据库。
 
-> 开发状态：任务 `T001`～`T051` 和检查点 `C00`～`C21` 已完成。仓库现已包含经过审核的确定性后端、本地 REST/WebSocket/OpenAPI 边界、无障碍 Vue 外壳、规范化只读监控状态、快照优先的可恢复流生命周期、薄原文到激活计划工作台、无障碍十股票总览、只读个股图表/证据/时间线视图、经显式确认的人工持仓批次操作、带权威核对的文字提醒中心，以及具备真实浏览器无障碍证据的密钥安全系统健康表面。下一项 `T052` 负责安装式生产启动和静态资源。
+> 开发状态：任务 `T001`～`T052` 和检查点 `C00`～`C21` 已完成。仓库现已包含经过审核的确定性后端、本地 REST/WebSocket/OpenAPI 边界、完整无障碍 Vue 展示，以及无需 cwd/源码 fallback 即可发现已打包 Vite distribution 的安装式仅回环生产命令。下一项 `T053` 负责编写双语安装与运维指南。
 
 ## 产品目标
 
@@ -52,9 +52,10 @@
 | 经显式确认的人工持仓批次操作 | `T049` | 已完成 |
 | 文字提醒中心与确认核对 | `T050` | 已完成 |
 | 系统健康与完整无障碍检查 | `T051` | 已完成 |
-| 打包与外部验收 | `T052`～`T059` | 待实施 |
+| 安装式生产启动和已打包 Vue 资源 | `T052` | 已完成 |
+| 运维、回放、浏览器、安全、稳定性与外部验收 | `T053`～`T059` | 待实施 |
 
-完成 `T051` 后，全部 1245 项后端测试通过；精确系统视图门禁包含 12 项，完整前端门禁包含 179 项，真实 Chromium/axe 无障碍门禁包含 3 项，REST/WebSocket/OpenAPI 传输组合门禁包含 156 项，未改动的判断/回放门禁仍为 273 项。Ruff、`compileall`、`pip check`、双语对齐、生成契约漂移检查、`git diff --check`、前端类型检查和基于文档入口的生产构建均通过。这些测试均为确定性测试，不需要真实调用 Tushare、AI、Webhook、数据库或外部网络监听。固定的 FastAPI/Starlette TestClient 当前会产生一条建议改用 `httpx2` 的上游弃用警告；它不影响生产行为。检查点 `C21` 已完成，下一项为 `T052`。
+完成 `T052` 后，全部 1256 项后端测试通过；精确打包门禁包含 11 项，完整前端门禁包含 179 项，真实 Chromium/axe 无障碍门禁包含 3 项，未改动的 REST/WebSocket/OpenAPI 传输门禁包含 156 项，未改动的判断/回放门禁仍为 273 项。Ruff、`compileall`、`pip check`、双语对齐、生成契约漂移检查、`git diff --check`、前端类型检查、基于文档入口的生产构建和本地 wheel 内容检查均通过。这些测试均为确定性测试，不需要真实调用 Tushare、AI、Webhook、数据库或外部网络监听。固定的 FastAPI/Starlette TestClient 当前会产生一条建议改用 `httpx2` 的上游弃用警告；它不影响生产行为。检查点 `C21` 保持完成，下一项为 `T053`。
 
 ## 安全边界
 
@@ -66,7 +67,7 @@
 - 通用 Webhook 默认关闭，只接受精确 HTTPS 主机白名单，拒绝重定向和内嵌账号密码，并且从不保留响应体。
 - 目标 Web 服务只接受精确的 `127.0.0.1` 监听字面量和精确配置的 HTTP Origin。禁止端口转发、反向代理、主机别名以及公开/局域网暴露；系统未实现登录鉴权。
 - HTTP 响应携带 CSP、frame、内容类型、referrer 和 permissions 防护；生产环境关闭 CORS，原始请求体先受 4 MiB 上限限制，再应用更严格的字段/导入限制。
-- 静态 SPA 服务要求明确提供一个含本地 `index.html` 的构建目录，且不能覆盖 `/api/v1` 或 `/ws/v1`。自动发现已安装资源仍延后至 `T052`。
+- 静态 SPA 服务不能覆盖 `/api/v1` 或 `/ws/v1`。生产环境只发现打包在 `trade_plan_monitor.web` 下的完整 Vite distribution；资源缺失或不完整时使用固定且不含路径的诊断失败，不存在 cwd 或源码树 fallback。
 
 每条可操作提醒都将包含等效免责声明：
 
@@ -150,7 +151,7 @@ npm run build
 Set-Location ..
 ```
 
-前端现在包含完整的 T045～T046 原文到激活工作台、T047 多股票总览、T048 个股详情展示切片、T049 明确人工持仓批次切片、T050 文字提醒中心和 T051 系统健康表面。`SystemView` 只基于生成健康契约区分加载/不可用/错误/缓存事实；`MarketStatusStrip` 展示成对的生命周期、轮询、重试、冷却、分钟和判断事实；`HealthMatrix` 通过独立语义标记展示能力、缺口、执行器、数据库/WAL/备份和投递诊断。意外诊断文本会被掩码，切片不包含 API/store/router 或领域规则，并由真实 Chromium/axe 验证 WCAG 2.1 A/AA、键盘顺序、减少动态和 320/768/1024/1440 布局。下一项 `T052` 打包安装式生产启动和静态资源。
+前端现已包含完整的 T045～T051 展示。T052 保留 `web/dist/index.html` 作为正常 Vite 输出，并把同一份完整构建复制到被忽略的 Python 包暂存目录供 wheel 纳入。生产资源发现会在整个服务生命周期内使用 `importlib.resources`，要求同时存在 `index.html` 和实际本地资源，绝不从 cwd 或开发源码目录猜测。打包命令继续只允许精确回环；未明确组合业务服务时会诚实保持 `DEGRADED`/只读，既有 API 依赖返回 `SERVICE_UNAVAILABLE`，不会伪造状态。
 
 ### 本地配置
 
@@ -166,7 +167,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 
 | 命令 | 用途 | 可用性 |
 |---|---|---|
-| `python -m pytest -q` | 运行完整的 1245 项后端门禁 | 可用 |
+| `python -m pytest -q` | 运行完整的 1256 项后端门禁 | 可用 |
 | `python -m pytest tests/unit/test_package.py -q` | 运行稳定的包级冒烟测试 | 可用 |
 | `python -m pytest tests/integration/test_ai_provider_contract.py -q` | 验证 AI 供应商和提取契约 | 可用 |
 | `python -m pytest tests/unit/test_decision_engine.py tests/replay/test_decision_replay.py -q` | 运行确定性判断与回放门禁 | 可用 |
@@ -178,7 +179,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 | `npm run build` | 构建前端静态资源 | 在 `web/` 中可用 |
 | `python -m trade_plan_monitor validate` | 通过注入的运行时服务分派配置/计划校验 | 服务边界；生产组合在 `T052`～`T054` |
 | `python -m trade_plan_monitor monitor --once` | 通过注入的运行时服务分派一次无界面监控周期 | 服务边界；生产组合在 `T052`～`T054` |
-| `python -m trade_plan_monitor web --host 127.0.0.1 --port 8765` | 带严格主机/端口校验的预留回环 Web 命令 | T052 前保持空实现脚手架 |
+| `python -m trade_plan_monitor web --host 127.0.0.1 --port 8765` | 在精确回环地址提供已打包 SPA 和既有 API/WebSocket 路由 | 可用；未注入业务服务时以只读/不可用封闭失败 |
 | `python -m trade_plan_monitor replay` | 通过注入的运行时服务分派确定性回放 | 服务边界；生产组合在 `T052`～`T054` |
 | `python -m trade_plan_monitor backup` | 通过注入的运行时服务分派已验证备份 | 服务边界；生产组合在 `T052`～`T054` |
 

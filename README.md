@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T051` and checkpoints `C00`–`C21` are complete. The repository now includes the reviewed deterministic backend, local REST/WebSocket/OpenAPI boundary, accessible Vue shell, normalized readonly monitor state, resilient snapshot-first stream lifecycle, a thin source-to-activation plan workbench, an accessible ten-symbol dashboard, readonly stock-detail charts/evidence/timeline views, explicit confirmed manual position-lot operations, a textual alert center with authoritative reconciliation, and a secret-safe system-health surface with real-browser accessibility evidence. `T052` is next for installed production startup and static assets.
+> Development status: tasks `T001`–`T052` and checkpoints `C00`–`C21` are complete. The repository now includes the reviewed deterministic backend, local REST/WebSocket/OpenAPI boundary, complete accessible Vue presentation, and an installed loopback-only production command that discovers the packaged Vite distribution without cwd/source fallbacks. `T053` is next for the bilingual setup and operations guide.
 
 ## Product Goals
 
@@ -52,9 +52,10 @@ Last verified on 2026-08-24 with CPython 3.14.7.
 | Explicit confirmed manual position-lot operations | `T049` | Complete |
 | Textual alert center and acknowledgement reconciliation | `T050` | Complete |
 | System health and complete accessibility checks | `T051` | Complete |
-| Packaging and external acceptance | `T052`–`T059` | Pending |
+| Installed production startup and packaged Vue assets | `T052` | Complete |
+| Operations, replay, browser, security, soak, and external acceptance | `T053`–`T059` | Pending |
 
-After `T051`, all 1245 backend tests pass. The exact system-view gate contains 12 tests, the full frontend gate contains 179 tests, the real Chromium/axe accessibility gate contains 3 tests, the combined REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Ruff, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, `git diff --check`, frontend type-check, and the document-based production build pass. These tests are deterministic and require no live Tushare, AI, Webhook, database, or external network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C21` is complete and `T052` is next.
+After `T052`, all 1256 backend tests pass. The exact packaging gate contains 11 tests, the full frontend gate contains 179 tests, the real Chromium/axe accessibility gate contains 3 tests, the unchanged REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Ruff, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, `git diff --check`, frontend type-check, the document-based production build, and a local wheel-content inspection pass. These tests are deterministic and require no live Tushare, AI, Webhook, database, or external network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C21` remains complete and `T053` is next.
 
 ## Safety Boundaries
 
@@ -66,7 +67,7 @@ After `T051`, all 1245 backend tests pass. The exact system-view gate contains 1
 - The generic Webhook is disabled by default, accepts only an exact HTTPS host allowlist, rejects redirects and embedded credentials, and never retains response bodies.
 - The target Web service accepts only the exact `127.0.0.1` listener literal and exact configured HTTP Origin. Do not use port forwarding, a reverse proxy, a host alias, or public/LAN exposure; authentication is not implemented.
 - HTTP responses carry CSP, frame, content-type, referrer, and permissions protections; production CORS is disabled, and raw request bodies are capped at 4 MiB before stricter field/import limits apply.
-- Static SPA serving requires an explicitly supplied build directory with a local `index.html`; it cannot shadow `/api/v1` or `/ws/v1`. Automatic installed-asset discovery remains deferred to `T052`.
+- Static SPA serving cannot shadow `/api/v1` or `/ws/v1`. Production discovers only the complete Vite distribution packaged under `trade_plan_monitor.web`; missing/incomplete assets fail with a fixed path-free diagnostic, with no cwd or source-tree fallback.
 
 Every actionable reminder will include the equivalent of:
 
@@ -150,7 +151,7 @@ npm run build
 Set-Location ..
 ```
 
-The frontend now contains the complete T045–T046 source-to-activation workbench, the T047 multi-stock dashboard, the T048 stock-detail presentation slice, the T049 explicit manual position-lot slice, the T050 textual alert center, and the T051 system-health surface. `SystemView` distinguishes loading/unavailable/error/cached facts over generated health contracts only; `MarketStatusStrip` renders paired lifecycle, polling, retry, cooldown, minute, and evaluation facts; `HealthMatrix` renders capabilities, gaps, executor, database/WAL/backup, and delivery diagnostics with independently owned semantic markers. Unexpected diagnostic text is masked, no API/store/router or domain rule enters the slice, and real Chromium/axe verifies WCAG 2.1 A/AA, keyboard order, reduced motion, and 320/768/1024/1440 layouts. `T052` next packages installed production startup and static assets.
+The frontend contains the complete T045–T051 presentation. T052 keeps `web/dist/index.html` as the normal Vite output and copies that completed build into an ignored Python-package staging directory for wheel inclusion. Production asset discovery uses `importlib.resources` for the server lifetime, requires `index.html` plus concrete local assets, and never guesses from cwd or a development source directory. The packaged command stays on exact loopback; without explicitly composed business services it remains honestly `DEGRADED`/read-only and existing API dependencies return `SERVICE_UNAVAILABLE` rather than fabricating state.
 
 ### Local configuration
 
@@ -166,7 +167,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 
 | Command | Purpose | Availability |
 |---|---|---|
-| `python -m pytest -q` | Run the complete 1245-test backend gate | Available |
+| `python -m pytest -q` | Run the complete 1256-test backend gate | Available |
 | `python -m pytest tests/unit/test_package.py -q` | Run the stable package smoke test | Available |
 | `python -m pytest tests/integration/test_ai_provider_contract.py -q` | Verify the AI provider and extraction contract | Available |
 | `python -m pytest tests/unit/test_decision_engine.py tests/replay/test_decision_replay.py -q` | Run the deterministic decision and replay gate | Available |
@@ -178,7 +179,7 @@ $env:AI_API_KEY = "replace-with-your-api-key"
 | `npm run build` | Build frontend static assets | Available in `web/` |
 | `python -m trade_plan_monitor validate` | Dispatch configuration/plan validation through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
 | `python -m trade_plan_monitor monitor --once` | Dispatch one headless monitoring cycle through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
-| `python -m trade_plan_monitor web --host 127.0.0.1 --port 8765` | Reserved loopback-only Web command with strict host/port validation | Inert scaffold until T052 |
+| `python -m trade_plan_monitor web --host 127.0.0.1 --port 8765` | Serve the packaged SPA and existing API/WebSocket routes on exact loopback | Available; uninjected business services fail closed as read-only/unavailable |
 | `python -m trade_plan_monitor replay` | Dispatch deterministic replay through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
 | `python -m trade_plan_monitor backup` | Dispatch a verified backup through an injected runtime service | Service boundary; production composition at `T052`–`T054` |
 

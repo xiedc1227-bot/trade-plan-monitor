@@ -288,6 +288,14 @@ Acknowledgement reserves bounded capacity before transport, sends exactly one re
 
 The slice performs no API call, Pinia write, router composition, provider/rule evaluation, freshness calculation, or secret handling. Native controls, labelled tables and scroll regions, persistent visible focus, polite status, reduced motion, and layouts at 320/768/1024/1440 pixels are verified in unit tests plus a real Chromium/axe WCAG 2.1 A/AA gate. Installed asset discovery and production composition remain T052; the full browser journey remains T055; generated contracts and T024 decision semantics remain unchanged.
 
+### T052 Installed Production Startup and Asset Boundary
+
+- The installed `trade-plan-monitor` console entry resolves to `trade_plan_monitor.cli:console_main`. CLI import and parser construction remain side-effect-free; the `web` branch lazily creates one production application context and imports/runs Uvicorn only after exact loopback host and bounded port parsing succeeds.
+- Vite keeps `web/index.html` as its document input and continues to emit `web/dist/index.html`. A build-only plugin replaces the ignored `src/trade_plan_monitor/web/dist` staging directory with that same completed distribution; setuptools packages only its `index.html` and local `assets/*`. Neither generated directory is tracked.
+- Production discovery uses `importlib.resources` against `trade_plan_monitor.web/dist` for the whole server lifetime. It never searches the current working directory, a repository root, `web/dist`, or another source-tree fallback. A missing directory, `index.html`, `assets/`, or concrete asset fails before Uvicorn with only `WEB_ASSETS_UNAVAILABLE` and the fixed text `Installed Web assets are unavailable.`; paths, resource exceptions, context, and causes are not exposed.
+- `create_production_app(...)` composes the discovered distribution through the existing `create_app(...)`, so the frozen 24 REST paths, `/ws/v1/monitor`, Origin/body/security-header policy, and SPA exclusion/fallback semantics do not change. The asset context remains open until the server runner exits, then FastAPI lifespan performs its owned shutdown and extracted resources are released.
+- T052 does not invent database, provider, read-model, or mutation services. An explicitly injected lifecycle and application services remain authoritative; without them the packaged command uses an I/O-free `DEGRADED` read-only lifecycle and existing endpoints fail closed with `SERVICE_UNAVAILABLE`. It adds no CDN, remote runtime asset, alternate listener, development-directory fallback, T053 operations rewrite, T054 replay fixture, T055 browser journey, T056 security matrix, generated-contract change, or T024 behavior.
+
 ## Information Architecture
 
 ### `/` — Monitoring Overview

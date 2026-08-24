@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from http import HTTPStatus
+from importlib import resources
 from pathlib import Path
 from typing import Final
 
@@ -51,6 +54,99 @@ _PUBLIC_ERROR_RESPONSES: Final = {
     int(status): {"model": ErrorResponse, "description": status.phrase}
     for status in _PUBLIC_ERROR_STATUSES
 }
+_WEB_ASSET_DIRECTORY: Final = "dist"
+_WEB_ASSET_ERROR: Final = "Installed Web assets are unavailable."
+
+
+class ProductionAssetError(RuntimeError):
+    """The installed distribution does not contain a complete Vue build."""
+
+    code = "WEB_ASSETS_UNAVAILABLE"
+
+
+class _ReadOnlyPackagedLifecycle:
+    """Keep the packaged transport available without inventing runtime readiness."""
+
+    async def start(self) -> dict[str, object]:
+        return {
+            "status": "DEGRADED",
+            "readOnly": True,
+            "reason": "APPLICATION_SERVICES_UNAVAILABLE",
+        }
+
+    async def stop(self) -> None:
+        return None
+
+
+@contextmanager
+def installed_web_assets() -> Iterator[Path]:
+    """Yield only the Vue build shipped inside the installed Python package."""
+
+    stack = ExitStack()
+    resource_failed = False
+    directory: Path | None = None
+    try:
+        build_resource = resources.files("trade_plan_monitor.web").joinpath(_WEB_ASSET_DIRECTORY)
+        directory = Path(stack.enter_context(resources.as_file(build_resource)))
+    except FileNotFoundError, ModuleNotFoundError, OSError, TypeError, ValueError:
+        resource_failed = True
+
+    if resource_failed or directory is None:
+        stack.close()
+        raise ProductionAssetError(_WEB_ASSET_ERROR)
+    assets_directory = directory / "assets"
+    distribution_complete = False
+    try:
+        distribution_complete = (
+            directory.is_dir()
+            and (directory / "index.html").is_file()
+            and assets_directory.is_dir()
+            and any(candidate.is_file() for candidate in assets_directory.iterdir())
+        )
+    except OSError:
+        pass
+    if not distribution_complete:
+        stack.close()
+        raise ProductionAssetError(_WEB_ASSET_ERROR)
+
+    try:
+        yield directory
+    finally:
+        stack.close()
+
+
+@contextmanager
+def create_production_app(
+    *,
+    config_path: Path = Path("config/app.yaml"),
+    runtime_factory: RuntimeLifecycleFactory | None = None,
+    read_service: MonitorReadService | None = None,
+    plan_service: PlanOperationService | None = None,
+    ai_service: AIOperationService | None = None,
+    position_service: PositionOperationService | None = None,
+    alert_service: AlertOperationService | None = None,
+    websocket_service: MonitorWebSocketService | None = None,
+    bind_host: str = LOOPBACK_HOST,
+    bind_port: int = DEFAULT_WEB_PORT,
+) -> Iterator[FastAPI]:
+    """Compose the installed SPA and local transport for one server lifetime."""
+
+    if not isinstance(config_path, Path):
+        raise TypeError("config_path must be a Path")
+    lifecycle_factory = runtime_factory or _ReadOnlyPackagedLifecycle
+    with installed_web_assets() as static_directory:
+        yield create_app(
+            runtime_factory=lifecycle_factory,
+            read_service=read_service,
+            plan_service=plan_service,
+            ai_service=ai_service,
+            position_service=position_service,
+            alert_service=alert_service,
+            websocket_service=websocket_service,
+            bind_host=bind_host,
+            bind_port=bind_port,
+            static_directory=static_directory,
+        )
 
 
 def create_app(
@@ -119,4 +215,9 @@ def create_app(
     return app
 
 
-__all__ = ["create_app"]
+__all__ = [
+    "ProductionAssetError",
+    "create_app",
+    "create_production_app",
+    "installed_web_assets",
+]

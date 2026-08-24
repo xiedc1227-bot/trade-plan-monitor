@@ -146,6 +146,13 @@ T051 projects this secret-free contract without reinterpretation. The Vue health
 - A missing service factory fails closed. Default installed-console composition, production configuration, and full-system replay fixtures remain the explicit scope of T052–T054 rather than being guessed in T034.
 - The reserved `web` command remains inert until T035 and accepts only `127.0.0.1`; `0.0.0.0` is not a normal CLI path.
 
+### T052 Packaged Web Startup Boundary
+
+- The installed console entry consumes the real process argument vector. Maintenance commands retain their explicitly injected asynchronous service factory; only `web` creates the packaged FastAPI context and calls Uvicorn, after loopback validation and without import-time configuration, database, provider, task, asset, or socket work.
+- The packaged application holds its `importlib.resources` Vue distribution context for exactly the Uvicorn call. Normal return or server failure exits that context only after FastAPI lifespan has been given ownership of the injected runtime startup/shutdown sequence.
+- When T052 is used without a configured runtime/application-service composition, a no-I/O read-only lifecycle reports only `DEGRADED`; API dependencies remain unavailable and fail closed. This packaging fallback does not schedule, open SQLite, probe providers, publish health, or replace T034 lifecycle state. T053–T054 retain operator configuration/full-system fixture work.
+- The normal bind host remains the exact `127.0.0.1` literal. T052 adds no alias, wildcard, LAN/public mode, daemon, second process, CDN, or remote asset fetch.
+
 ## Runtime Transaction Flow
 
 ```text

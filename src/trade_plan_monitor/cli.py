@@ -1,10 +1,16 @@
 """Side-effect-free command-line parsing and injected runtime service dispatch."""
 
+from __future__ import annotations
+
 import argparse
 import asyncio
+import sys
 from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Protocol
+
+from fastapi import FastAPI
 
 from trade_plan_monitor.web.origin_guard import (
     DEFAULT_WEB_PORT,
@@ -31,14 +37,33 @@ class RuntimeCommandService(Protocol):
 
 
 RuntimeServiceFactory = Callable[[Path], RuntimeCommandService]
+WebAppFactory = Callable[..., AbstractContextManager[FastAPI]]
+WebServerRunner = Callable[..., object]
 
 
-def _return_success(arguments: argparse.Namespace) -> int:
-    """Validate the reserved local-only Web declaration before T052 composition."""
+def _default_web_app_factory(
+    *,
+    config_path: Path,
+    bind_host: str,
+    bind_port: int,
+) -> AbstractContextManager[FastAPI]:
+    """Load the installed production application only after Web dispatch."""
 
-    validate_loopback_host(arguments.host)
-    validate_web_port(arguments.port)
-    return 0
+    from trade_plan_monitor.web.app import create_production_app
+
+    return create_production_app(
+        config_path=config_path,
+        bind_host=bind_host,
+        bind_port=bind_port,
+    )
+
+
+def _default_web_server_runner(application: FastAPI, *, host: str, port: int) -> object:
+    """Run Uvicorn without importing it during CLI parsing or module import."""
+
+    import uvicorn
+
+    return uvicorn.run(application, host=host, port=port)
 
 
 def _loopback_host(value: str) -> str:
@@ -120,7 +145,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_config_argument(backup_parser)
     backup_parser.set_defaults(service_operation="backup")
-    web_parser.set_defaults(handler=_return_success)
 
     return parser
 
@@ -129,11 +153,23 @@ def main(
     argv: Sequence[str] = (),
     *,
     service_factory: RuntimeServiceFactory | None = None,
+    web_app_factory: WebAppFactory | None = None,
+    web_server_runner: WebServerRunner | None = None,
 ) -> int:
     """Parse a command and dispatch only after an explicit service composition."""
 
     parser = build_parser()
     arguments = parser.parse_args(list(argv))
+    if arguments.command == "web":
+        app_factory = web_app_factory or _default_web_app_factory
+        server_runner = web_server_runner or _default_web_server_runner
+        with app_factory(
+            config_path=arguments.config,
+            bind_host=arguments.host,
+            bind_port=arguments.port,
+        ) as application:
+            server_runner(application, host=arguments.host, port=arguments.port)
+        return 0
     operation = getattr(arguments, "service_operation", None)
     if operation is not None:
         if service_factory is None:
@@ -146,17 +182,23 @@ def main(
             raise TypeError(f"runtime service does not expose {operation}")
         asyncio.run(handler())
         return 0
-    handler = getattr(arguments, "handler", None)
-    if handler is None:
-        parser.print_help()
-        return 0
-    return handler(arguments)
+    parser.print_help()
+    return 0
+
+
+def console_main() -> int:
+    """Run the installed console entry with the process argument vector."""
+
+    return main(sys.argv[1:])
 
 
 __all__ = [
     "DEFAULT_CONFIG_PATH",
     "RuntimeCommandService",
     "RuntimeServiceFactory",
+    "WebAppFactory",
+    "WebServerRunner",
     "build_parser",
+    "console_main",
     "main",
 ]

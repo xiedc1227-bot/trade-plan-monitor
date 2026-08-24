@@ -288,6 +288,14 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 该切片不调用 API、不写 Pinia、不组合 router、不计算供应商/规则或新鲜度，也不处理密钥。原生控件、带标签表格和滚动区域、持久清晰焦点、礼貌级状态、减少动态效果，以及 320/768/1024/1440 像素布局，均由单元测试和真实 Chromium/axe WCAG 2.1 A/AA 门禁验证。已安装资源发现和生产组合仍属于 T052；完整浏览器流程仍属于 T055；生成契约和 T024 判断语义保持不变。
 
+### T052 安装式生产启动与资源边界
+
+- 安装后的 `trade-plan-monitor` 控制台入口解析到 `trade_plan_monitor.cli:console_main`。CLI 导入和解析器构造继续保持无副作用；`web` 分支只有在精确回环主机和有界端口解析成功后，才惰性创建一个生产应用上下文并导入/运行 Uvicorn。
+- Vite 继续以 `web/index.html` 为文档输入，并继续生成 `web/dist/index.html`。仅构建时启用的插件会用同一份完整 distribution 替换被忽略的 `src/trade_plan_monitor/web/dist` 暂存目录；setuptools 只打包其中的 `index.html` 和本地 `assets/*`。两个生成目录都不纳入版本控制。
+- 生产资源发现通过 `importlib.resources` 在整个服务生命周期内访问 `trade_plan_monitor.web/dist`。它绝不搜索当前工作目录、仓库根目录、`web/dist` 或其他源码树 fallback。缺少目录、`index.html`、`assets/` 或实际资源时，会在 Uvicorn 启动前只以 `WEB_ASSETS_UNAVAILABLE` 和固定文案 `Installed Web assets are unavailable.` 失败；绝不暴露路径、资源异常、context 或 cause。
+- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 24 个 REST 路径、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
+- T052 不虚构数据库、供应商、只读模型或变更服务。明确注入的生命周期和应用服务继续保持权威；未注入时，打包命令使用无 I/O 的 `DEGRADED` 只读生命周期，既有端点以 `SERVICE_UNAVAILABLE` 封闭失败。该任务不增加 CDN、运行时远程资源、备用监听器、开发目录 fallback、T053 运维重写、T054 回放夹具、T055 浏览器流程、T056 安全矩阵、生成契约变更或 T024 行为。
+
 ## 信息架构
 
 ### `/` — 监控总览

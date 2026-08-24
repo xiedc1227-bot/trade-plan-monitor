@@ -26,10 +26,16 @@ dev = [
 ]
 
 [project.scripts]
-trade-plan-monitor = "trade_plan_monitor.__main__:main"
+trade-plan-monitor = "trade_plan_monitor.cli:console_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"trade_plan_monitor.web" = [
+    "dist/index.html",
+    "dist/assets/*",
+]
 
 [tool.pytest.ini_options]
 minversion = "9.1"
