@@ -262,6 +262,12 @@ Import documents and final compact draft/export documents are capped at 256 KiB 
 
 Activation is fail-closed on unresolved material review items, activation-blocking validation items, dirty edits, busy state, missing plan state, cross-symbol identity, missing active-version content, or revision drift. The before/after dialog uses a real modal boundary with initial focus, native focus containment, Escape/cancel handling, and focus restoration. Every candidate/current hash, document, status, symbol, revision, and expected active-state revision change invalidates confirmation; a parent authoritative-state mismatch closes the dialog and cannot silently reopen it. Activation and deactivation remain separate explicit commands. T047+ business views, API/store composition, T052 installed composition, the T041 generated contract, and T024 decision semantics remain unchanged.
 
+### T047 Multi-Stock Dashboard Boundary
+
+The T047 `DashboardView` composes a labelled toolbar, an accessible native watchlist table, condition-count presentation, and a typed actionable-rail slot from readonly normalized `SymbolSummaryView` snapshots. It displays at most the store-enforced ten symbols with authoritative price, zone, satisfied/total condition counts, signal, position quantities, risk distance, exact market timestamp, data health, connection, and age. Search is bounded to 128 Unicode code points before display matching; filtering and sorting operate only on copied display arrays, keep nullable values last, and never mutate input snapshots.
+
+Vue does not evaluate the condition DSL, indicators, zones, signal precedence, risk state, freshness, or server counts. A row is display-live only when it is connected, has `LIVE` health, and is fresh; every other valid health combination remains explicitly visible under the stale/degraded filter and cannot alter or hide a healthy peer. Loading and bounded escaped errors may coexist with cached rows, while an unavailable zero-row snapshot is not misreported as an empty business watchlist. Native links and labelled controls remain keyboard-accessible, and semantic text accompanies all color states. API/WebSocket/Pinia route composition, charts and evidence (`T048`), installed composition (`T052`), the T041 generated contract, and T024 decision semantics remain unchanged.
+
 ## Information Architecture
 
 ### `/` — Monitoring Overview
