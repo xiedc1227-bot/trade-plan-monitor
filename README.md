@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T045` and checkpoints `C00`–`C17` are complete. The repository now includes the reviewed deterministic backend, local REST/WebSocket/OpenAPI boundary, accessible Vue shell, normalized readonly monitor state, resilient snapshot-first stream lifecycle, and a thin AI provider/source extraction workbench with write-only transient secrets, bounded plain-text intake, explicit asynchronous pending state, source-bound evidence review, and fail-closed issue identity handling. `T046` is next for structured editing, diff, validation orchestration, and activation; the multi-stock dashboard starts at `T047`. Checkpoint `C18` remains open through `T046`, and default installed-console composition remains deferred to `T052`–`T054`.
+> Development status: tasks `T001`–`T046` and checkpoints `C00`–`C18` are complete. The repository now includes the reviewed deterministic backend, local REST/WebSocket/OpenAPI boundary, accessible Vue shell, normalized readonly monitor state, resilient snapshot-first stream lifecycle, and a thin source-to-activation plan workbench with bounded local editing, immutable version diff, authoritative blockers, and explicit modal confirmation. `T047` is next for the multi-stock dashboard. Default installed-console composition remains deferred to `T052`–`T054`.
 
 ## Product Goals
 
@@ -46,9 +46,10 @@ Last verified on 2026-08-24 with CPython 3.14.7.
 | Design tokens, bounded API client, and normalized readonly Pinia state | `T043` | Complete |
 | Resilient monitor WebSocket lifecycle and shell connection state | `T044` | Complete |
 | AI provider settings and source extraction review workbench | `T045` | Complete |
-| Structured plan views, packaging, and external acceptance | `T046`–`T059` | Pending |
+| Structured plan editing, immutable diff, and activation UI | `T046` | Complete |
+| Dashboard, detail views, packaging, and external acceptance | `T047`–`T059` | Pending |
 
-After `T045`, all 1245 backend tests pass. The exact plan-workbench gate contains 30 tests, the full frontend gate contains 75 tests, the combined REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Ruff, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, `git diff --check`, frontend type-check, and the document-based production build pass. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C17` is complete, checkpoint `C18` remains open through `T046`, and `T046` is next.
+After `T046`, all 1245 backend tests pass. The exact source-to-activation workbench gate contains 50 tests, the full frontend gate contains 95 tests, the combined REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Ruff, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, `git diff --check`, frontend type-check, and the document-based production build pass. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C18` is complete, and `T047` is next.
 
 ## Safety Boundaries
 
@@ -144,7 +145,7 @@ npm run build
 Set-Location ..
 ```
 
-The frontend now also contains the T045 AI provider/source extraction workbench. It emits typed intents without owning transport or domain rules, keeps secrets transient and write-only, atomically rejects over-limit Unicode input, prevents duplicate asynchronous submissions, binds escaped evidence to the submitted source snapshot, and fails closed on duplicate issue identity. T046 owns structured editing, diff, validation orchestration, and activation; the multi-stock monitoring dashboard starts at `T047`, and current route placeholders intentionally remain unchanged.
+The frontend now contains the complete T045–T046 source-to-activation workbench. It emits typed intents without owning transport or domain rules, keeps secrets transient and write-only, preserves bounded dirty drafts across conflicts and pagination, delegates import/validation to the backend, shows immutable before/after differences, and requires an authoritative same-symbol state plus explicit modal confirmation for activation or deactivation. The multi-stock monitoring dashboard starts at `T047`, and current route placeholders intentionally remain unchanged until later composition.
 
 ### Local configuration
 

@@ -254,6 +254,14 @@ The T045 `PlanWorkbench` composes four setup-style Vue components through typed 
 
 `ExtractionEvidence` renders decoded evidence, assumptions, warnings, unmapped text, validation issues, usage, and bounded errors only through escaped Vue text interpolation. Evidence is tied to the submitted source snapshot and hidden when stale. Material items remain unresolved until an explicit local review action; duplicate backend review identities fail closed, deterministic `AI_EVIDENCE_REVIEW_REQUIRED` is represented as a material missing-evidence item, and long unbroken copy wraps on narrow screens. T046 retains structured editing, diff, validation orchestration, and activation; T047+ business views, T052 installed composition, the T041 generated contract, and T024 decision semantics remain unchanged.
 
+### T046 Structured Plan Editing and Activation Boundary
+
+The T046 `PlansView` composes route-local version selection, `StructuredPlanEditor`, and `ActivationDiffDialog` through generated command/view contracts only. Nine section editors preserve unknown top-level plan content, produce a human-readable preview without evaluating conditions, and emit revision-guarded draft/import/export intents. JSON/YAML parsing, canonicalization, deterministic validation, trading rules, persistence, and transport remain backend or later-composition responsibilities. Active versions are never mutated through props; an edit emits a new-draft command, and dirty local content survives revision conflicts, repeated selection, and paginated version removal until the user explicitly reloads or discards it.
+
+Import documents and final compact draft/export documents are capped at 256 KiB UTF-8 with bounded single-pass checks and atomic rejection. The pretty-printed local editing buffer has an independent 4 MiB safety cap so valid compact plans are not rejected only because indentation expands them. Server and imported text is rendered only as escaped content; no raw text enters `v-html`, logging, URLs, persistent browser state, or mutable shared state.
+
+Activation is fail-closed on unresolved material review items, activation-blocking validation items, dirty edits, busy state, missing plan state, cross-symbol identity, missing active-version content, or revision drift. The before/after dialog uses a real modal boundary with initial focus, native focus containment, Escape/cancel handling, and focus restoration. Every candidate/current hash, document, status, symbol, revision, and expected active-state revision change invalidates confirmation; a parent authoritative-state mismatch closes the dialog and cannot silently reopen it. Activation and deactivation remain separate explicit commands. T047+ business views, API/store composition, T052 installed composition, the T041 generated contract, and T024 decision semantics remain unchanged.
+
 ## Information Architecture
 
 ### `/` — Monitoring Overview

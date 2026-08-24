@@ -46,6 +46,13 @@ const props = withDefaults(defineProps<Props>(), {
   submitting: false,
 });
 const emit = defineEmits<Emits>();
+defineSlots<{
+  extractedDraft?(props: {
+    extraction: PlanExtractionView;
+    resolvedIssueKeys: readonly string[];
+    sourceText: string;
+  }): unknown;
+}>();
 
 const selectedProviderId = shallowRef<string | null>(
   initialProviderId(props.providers, props.initialProviderId),
@@ -238,6 +245,14 @@ function resolveIssue(issue: DraftReviewIssue): void {
       :resolved-issue-keys="resolvedIssueKeys"
       @resolve-issue="resolveIssue"
       @retry="submitExtraction"
+    />
+
+    <slot
+      v-if="extraction?.status === 'SUCCEEDED' && !reviewStale"
+      name="extractedDraft"
+      :extraction="extraction"
+      :resolved-issue-keys="resolvedIssueKeys"
+      :source-text="sourceText"
     />
 
     <p
