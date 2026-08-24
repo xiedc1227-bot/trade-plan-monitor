@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T050` and checkpoints `C00`–`C20` are complete. The repository now includes the reviewed deterministic backend, local REST/WebSocket/OpenAPI boundary, accessible Vue shell, normalized readonly monitor state, resilient snapshot-first stream lifecycle, a thin source-to-activation plan workbench, an accessible ten-symbol dashboard, readonly stock-detail charts/evidence/timeline views, explicit confirmed manual position-lot operations, and a textual alert center with authoritative reconciliation. `T051` is next for system health and complete accessibility checks. Default installed-console composition remains deferred to `T052`–`T054`.
+> Development status: tasks `T001`–`T051` and checkpoints `C00`–`C21` are complete. The repository now includes the reviewed deterministic backend, local REST/WebSocket/OpenAPI boundary, accessible Vue shell, normalized readonly monitor state, resilient snapshot-first stream lifecycle, a thin source-to-activation plan workbench, an accessible ten-symbol dashboard, readonly stock-detail charts/evidence/timeline views, explicit confirmed manual position-lot operations, a textual alert center with authoritative reconciliation, and a secret-safe system-health surface with real-browser accessibility evidence. `T052` is next for installed production startup and static assets.
 
 ## Product Goals
 
@@ -51,9 +51,10 @@ Last verified on 2026-08-24 with CPython 3.14.7.
 | Stock-detail chart, evidence, and episode/risk timeline views | `T048` | Complete |
 | Explicit confirmed manual position-lot operations | `T049` | Complete |
 | Textual alert center and acknowledgement reconciliation | `T050` | Complete |
-| System view, packaging, and external acceptance | `T051`–`T059` | Pending |
+| System health and complete accessibility checks | `T051` | Complete |
+| Packaging and external acceptance | `T052`–`T059` | Pending |
 
-After `T050`, all 1245 backend tests pass. The exact alert/store gate contains 45 tests, the full frontend gate contains 167 tests, the combined REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Ruff, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, `git diff --check`, frontend type-check, and the document-based production build pass. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C20` is complete and `T051` is next.
+After `T051`, all 1245 backend tests pass. The exact system-view gate contains 12 tests, the full frontend gate contains 179 tests, the real Chromium/axe accessibility gate contains 3 tests, the combined REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Ruff, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, `git diff --check`, frontend type-check, and the document-based production build pass. These tests are deterministic and require no live Tushare, AI, Webhook, database, or external network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C21` is complete and `T052` is next.
 
 ## Safety Boundaries
 
@@ -149,7 +150,7 @@ npm run build
 Set-Location ..
 ```
 
-The frontend now contains the complete T045–T046 source-to-activation workbench, the T047 multi-stock dashboard, the T048 stock-detail presentation slice, the T049 explicit manual position-lot slice, and the T050 textual alert center. `AlertsView` keeps query and acknowledgement orchestration route-local over injected operations; `AlertTable` renders complete server-authored evidence and native controls; `AlertRail` reports synchronization without duplicating alert entities. Live invalidations commit only after an authoritative page, acknowledgement receipts never replace page rows, bounded contexts survive conflicts/retries, and persistent status/focus handling preserves “reminder ≠ acknowledgement ≠ fill”. The slice owns no production API/store/router composition or position mutation. `T051` next adds system health and complete accessibility checks.
+The frontend now contains the complete T045–T046 source-to-activation workbench, the T047 multi-stock dashboard, the T048 stock-detail presentation slice, the T049 explicit manual position-lot slice, the T050 textual alert center, and the T051 system-health surface. `SystemView` distinguishes loading/unavailable/error/cached facts over generated health contracts only; `MarketStatusStrip` renders paired lifecycle, polling, retry, cooldown, minute, and evaluation facts; `HealthMatrix` renders capabilities, gaps, executor, database/WAL/backup, and delivery diagnostics with independently owned semantic markers. Unexpected diagnostic text is masked, no API/store/router or domain rule enters the slice, and real Chromium/axe verifies WCAG 2.1 A/AA, keyboard order, reduced motion, and 320/768/1024/1440 layouts. `T052` next packages installed production startup and static assets.
 
 ### Local configuration
 

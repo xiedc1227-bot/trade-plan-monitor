@@ -282,6 +282,12 @@ Every successful list result must echo the requested pagination and filters, con
 
 Acknowledgement reserves bounded capacity before transport, sends exactly one revision-bound idempotent command, never inserts its receipt into the displayed page, and always reconciles through an authoritative read. Valid, invalid, conflict, and uncertain outcomes retain fixed secret-safe messages until any later authoritative page proves acknowledged, unacknowledged, or still unknown. A persistent polite status and focus fallback survive filtered-row removal. No acknowledgement invokes a position operation or changes displayed position facts. API-client/store/router production composition, system health (`T051`), installed assets (`T052`), generated contracts, and T024 decision semantics remain unchanged.
 
+### T051 System Health and Accessibility Boundary
+
+`SystemView` is a thin readonly composition surface over an optional generated `RuntimeHealthResponse`. It distinguishes loading, unavailable, failed, and cached-safe states without rendering raw transport/provider errors, and emits only explicit refresh or symbol-selection intent. `MarketStatusStrip` presents backend-authored lifecycle, observation, completed-minute/evaluation timestamps with paired ages, polling, retry, and cooldown facts. `HealthMatrix` presents provider capabilities/latency, bounded gaps, executor utilization, database/WAL/checkpoint/backup, and delivery state. Every provider/resource state has its own text, shape, and `data-status`; stable diagnostic codes are allowlisted for display and every other value is masked.
+
+The slice performs no API call, Pinia write, router composition, provider/rule evaluation, freshness calculation, or secret handling. Native controls, labelled tables and scroll regions, persistent visible focus, polite status, reduced motion, and layouts at 320/768/1024/1440 pixels are verified in unit tests plus a real Chromium/axe WCAG 2.1 A/AA gate. Installed asset discovery and production composition remain T052; the full browser journey remains T055; generated contracts and T024 decision semantics remain unchanged.
+
 ## Information Architecture
 
 ### `/` — Monitoring Overview

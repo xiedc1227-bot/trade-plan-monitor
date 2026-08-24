@@ -138,6 +138,8 @@ Health exposes timestamps/ages, last completed minute, latest evaluation, gaps, 
 - Shutdown is represented by one lifecycle-owned task shielded from cancellation of any individual waiter. It stops new scheduling, cancels the owned deadline task, gives work a bounded completion window, then a bounded cancellation window. Work that still refuses cancellation raises a stable `RuntimeShutdownError`, leaves the lifecycle `STOPPING`, and prevents WAL checkpoint or database close until a later retry can finish safely.
 - Dispatcher, request-controller, WAL-checkpoint, and database-close completion are recorded independently. A failed cleanup step remains retryable; database close occurs only after a successful WAL checkpoint, and `STOPPED` is published only after every owned resource reports successful cleanup. No owned task may be orphaned.
 
+T051 projects this secret-free contract without reinterpretation. The Vue health surface displays lifecycle/observation timestamps, completed-minute and evaluation timestamps with their backend ages, poll/retry/cooldown, provider capability/latency, ordered gaps, executor utilization, database/WAL/checkpoint/backup, and delivery facts. It never renders unexpected raw provider/transport errors, derives health or freshness, or changes runtime state. Text/shape markers accompany color, and real-browser WCAG 2.1 A/AA, keyboard, responsive, and reduced-motion checks cover the projection.
+
 ### T034 Maintenance CLI Boundary
 
 - `validate`, `monitor --once`, `monitor`, `replay`, and `backup` dispatch to an explicitly injected asynchronous command service. Parser construction and module import perform no configuration loading, database access, provider call, task creation, or network binding.
