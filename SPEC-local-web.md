@@ -268,6 +268,12 @@ The T047 `DashboardView` composes a labelled toolbar, an accessible native watch
 
 Vue does not evaluate the condition DSL, indicators, zones, signal precedence, risk state, freshness, or server counts. A row is display-live only when it is connected, has `LIVE` health, and is fresh; every other valid health combination remains explicitly visible under the stale/degraded filter and cannot alter or hide a healthy peer. Loading and bounded escaped errors may coexist with cached rows, while an unavailable zero-row snapshot is not misreported as an empty business watchlist. Native links and labelled controls remain keyboard-accessible, and semantic text accompanies all color states. API/WebSocket/Pinia route composition, charts and evidence (`T048`), installed composition (`T052`), the T041 generated contract, and T024 decision semantics remain unchanged.
 
+### T048 Stock-Detail Chart and Evidence Boundary
+
+T048 composes `SymbolDetailView`, `PriceChart`, `EpisodeTimeline`, and `useChartSeries` strictly from readonly `SymbolDetailResponse`, `BarView`, and `SymbolEventView` inputs. The composable copies and orders backend OHLC, flattens the authoritative evidence hierarchy, maps only allowlisted server-authored price/indicator facts, retains alerts even when no chart coordinate exists, and publishes one shallow immutable series. It does not evaluate indicators, conditions, zones, signal precedence, risk, freshness, or any trading rule.
+
+Indicator points use only sibling `DATE` or `DATETIME` evidence facts in the same evidence node. A `DATE` may anchor only to the last bar on that exact date; a missing date, source timestamp, or same-day bar leaves `time` and/or `plotTime` unavailable, while a non-finite or underflowing chart number prevents drawing without dropping the table fact. Exact backend Decimal text remains unchanged in the accessible alternative and is never replaced by rounded ECharts display data. `episodeLowFen` remains a horizontal value with unknown occurrence time because the public contract supplies no low timestamp. Vue text interpolation keeps event/error/evidence text inert, stale or degraded state retains visible facts with an explicit warning, and `PriceChart` alone owns ECharts initialization, resize handling, zoom emits, disposal, and non-HTML tooltips. API/store/router composition, manual position commands (`T049`), later business views, installed composition (`T052`), generated contracts, and T024 decision semantics remain unchanged.
+
 ## Information Architecture
 
 ### `/` — Monitoring Overview

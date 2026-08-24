@@ -268,6 +268,12 @@ T047 `DashboardView` 从只读规范化 `SymbolSummaryView` 快照组合带标�
 
 Vue 不计算条件 DSL、指标、区间、信号优先级、风险状态、新鲜度或服务端计数。只有已连接、健康为 `LIVE` 且新鲜的行才在展示层视为实时；其他每种合法健康组合都在陈旧/降级筛选中明确可见，且不能改变或隐藏健康同伴。加载和有界转义错误可以与缓存行并存，而零行快照不可用时不会误报成业务监控列表为空。原生链接和带标签控件均可通过键盘访问，所有颜色状态都带语义文字。API/WebSocket/Pinia 路由组合、图表与证据（`T048`）、已安装组合（`T052`）、T041 生成契约和 T024 判断语义保持不变。
 
+### T048 个股图表与证据边界
+
+T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` 输入组合 `SymbolDetailView`、`PriceChart`、`EpisodeTimeline` 与 `useChartSeries`。composable 复制并排序后端 OHLC、展平权威证据层级、只映射白名单内的服务端价格/指标事实、在缺少图表坐标时仍保留提醒，并发布一个 shallow 不可变序列。它不计算指标、条件、区间、信号优先级、风险、新鲜度或任何交易规则。
+
+指标点只使用同一证据节点中的 sibling `DATE` 或 `DATETIME` 证据事实。`DATE` 只能锚定该日期的最后一根 K 线；缺少日期、来源时间戳或同日 K 线时，`time` 和/或 `plotTime` 保持不可用；图表数值非有限或发生 underflow 时则不绘制，但不会丢弃表格事实。无障碍替代内容逐字保留后端精确 Decimal 文本，绝不以 ECharts 舍入后的显示数据替换。由于公共契约没有提供低点时间戳，`episodeLowFen` 保持为发生时间未知的水平数值。Vue 文本插值使事件/错误/证据文本保持惰性，陈旧或降级状态在明确警告下仍保留可见事实，并且只有 `PriceChart` 管理 ECharts 初始化、缩放处理、区间 emits、释放和非 HTML tooltip。API/store/router 组合、人工持仓命令（`T049`）、后续业务视图、已安装组合（`T052`）、生成契约和 T024 判断语义保持不变。
+
 ## 信息架构
 
 ### `/` — 监控总览
