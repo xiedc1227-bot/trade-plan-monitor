@@ -142,6 +142,14 @@ OpenAPI snapshot SHA-256: `e0b5435bedf6a98657bb95616bebf8e05589c387049a07eb752d4
 - `python scripts/generate_frontend_types.py --check` is read-only and fails when either committed generated file differs byte-for-byte. Generation fails closed on unsupported or dangling schema references, parameter locations, schema types, or invalid TypeScript identifiers rather than silently weakening a contract.
 - `web/index.html` is the stable Vite application document with one `#app` root and one external module entry. It contains no inline script or style that would violate the T040 CSP. Vite now performs a document-based application build that emits `dist/index.html`; T042 still owns the first application shell, router, and component mount, while T052 still owns installed asset discovery and production composition.
 
+### T042 Accessible Vue Application Shell Boundary
+
+- `main.ts` mounts the root `App.vue` only when `#app` exists, installs the one application router for that production root, and preserves the typed unmounted-component factory used by tooling tests. Importing the module creates no API client, store, socket, timer, or domain state.
+- The router declares exactly `/`, `/stocks/:symbol`, `/plans`, `/plans/:id`, `/alerts`, and `/system`. Until their approved later tasks create real views, small local placeholder components expose only labelled route headings; they contain no domain rules, API calls, or mutable shared quote state.
+- `AppShell` owns only landmarks, desktop and mobile navigation, the route outlet, a typed optional `connectionBanner` slot, and one local mobile-menu boolean. The banner wrapper is rendered only when supplied and uses polite status semantics; connection/health ownership remains outside the shell.
+- The skip link moves focus to the persistent `#main-content` landmark. Navigation uses native links and a native menu button with visible focus, `aria-controls`, and `aria-expanded`; Escape restores focus to the menu button, while mobile-link navigation closes the hidden menu and moves focus to main content.
+- The desktop navigation replaces the mobile disclosure at `48rem`. Shell motion is bounded to presentation-only CSS and the `prefers-reduced-motion: reduce` branch reduces animation/transition duration to `0.01ms`. T043 design tokens, API client, Pinia/store and recovery behavior, T044 stream lifecycle, later business views, T052 installed composition, T041 generated contracts, and T024 decision semantics remain unchanged.
+
 Read resources:
 
 ```text

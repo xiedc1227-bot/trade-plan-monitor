@@ -142,6 +142,14 @@ OpenAPI 快照 SHA-256：`e0b5435bedf6a98657bb95616bebf8e05589c387049a07eb752d4b
 - `python scripts/generate_frontend_types.py --check` 是只读检查，只要任一已提交生成文件存在逐字节差异就失败。生成过程遇到不支持或悬空的 Schema 引用、参数位置、Schema 类型或非法 TypeScript 标识符时会封闭失败，而不是静默弱化契约。
 - `web/index.html` 是稳定的 Vite 应用文档，包含一个 `#app` 根节点和一个外部模块入口，不含违反 T040 CSP 的内联脚本或样式。Vite 现在执行会生成 `dist/index.html` 的文档式应用构建；T042 仍负责首个应用外壳、路由和组件挂载，T052 仍负责已安装资源发现及生产组合。
 
+### T042 无障碍 Vue 应用外壳边界
+
+- `main.ts` 只在 `#app` 存在时挂载根 `App.vue`，为该生产根安装唯一应用路由，并保留工具链测试使用的强类型未挂载组件工厂。导入模块不会创建 API 客户端、store、Socket、定时器或领域状态。
+- 路由精确声明 `/`、`/stocks/:symbol`、`/plans`、`/plans/:id`、`/alerts` 和 `/system`。在已批准的后续任务创建真实视图前，小型局部占位组件只暴露带标签的路由标题；其中不含领域规则、API 调用或可变共享行情状态。
+- `AppShell` 只负责 landmark、桌面端与移动端导航、路由出口、一个强类型可选 `connectionBanner` 插槽，以及一个局部移动菜单布尔值。只有提供插槽时才渲染横幅包装器，并使用礼貌级状态语义；连接与健康状态所有权仍位于外壳之外。
+- 跳转链接把焦点移到持久的 `#main-content` landmark。导航使用原生链接和原生菜单按钮，具备清晰焦点、`aria-controls` 与 `aria-expanded`；Escape 把焦点恢复到菜单按钮，而移动端链接导航会关闭隐藏菜单并把焦点移到主内容。
+- 桌面导航在 `48rem` 替代移动端 disclosure。外壳动态效果仅限展示 CSS，`prefers-reduced-motion: reduce` 分支把动画/过渡时长缩短到 `0.01ms`。T043 设计变量、API 客户端、Pinia/store 与恢复行为，T044 流生命周期，后续业务视图、T052 已安装组合、T041 生成契约和 T024 判断语义均保持不变。
+
 只读资源：
 
 ```text

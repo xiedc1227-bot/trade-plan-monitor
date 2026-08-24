@@ -1,0 +1,61 @@
+import { defineComponent, h } from "vue";
+import { createRouter, createWebHistory } from "vue-router";
+import type { RouteRecordRaw } from "vue-router";
+
+function createRoutePlaceholder(name: string, title: string, description: string) {
+  return defineComponent({
+    name,
+    setup() {
+      return () =>
+        h("section", { "aria-labelledby": `${name}-title` }, [
+          h("h1", { id: `${name}-title` }, title),
+          h("p", description),
+        ]);
+    },
+  });
+}
+
+const DashboardRoute = createRoutePlaceholder(
+  "DashboardRoute",
+  "监控总览",
+  "监控视图将在后续任务中提供。",
+);
+const StockDetailRoute = createRoutePlaceholder(
+  "StockDetailRoute",
+  "个股详情",
+  "个股视图将在后续任务中提供。",
+);
+const PlansRoute = createRoutePlaceholder(
+  "PlansRoute",
+  "计划工作台",
+  "计划视图将在后续任务中提供。",
+);
+const PlanDetailRoute = createRoutePlaceholder(
+  "PlanDetailRoute",
+  "计划详情",
+  "计划详情将在后续任务中提供。",
+);
+const AlertsRoute = createRoutePlaceholder(
+  "AlertsRoute",
+  "提醒中心",
+  "提醒视图将在后续任务中提供。",
+);
+const SystemRoute = createRoutePlaceholder(
+  "SystemRoute",
+  "系统设置",
+  "系统视图将在后续任务中提供。",
+);
+
+export const routes: RouteRecordRaw[] = [
+  { path: "/", name: "dashboard", component: DashboardRoute },
+  { path: "/stocks/:symbol", name: "stock-detail", component: StockDetailRoute },
+  { path: "/plans", name: "plans", component: PlansRoute },
+  { path: "/plans/:id", name: "plan-detail", component: PlanDetailRoute },
+  { path: "/alerts", name: "alerts", component: AlertsRoute },
+  { path: "/system", name: "system", component: SystemRoute },
+];
+
+export const router = createRouter({
+  history: createWebHistory(),
+  routes,
+});
