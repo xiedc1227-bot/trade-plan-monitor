@@ -110,7 +110,7 @@ class SQLiteBackupService:
         except BackupError:
             _remove_temporary(temporary_path, self._backup_directory)
             raise
-        except (OSError, sqlite3.Error):
+        except OSError, sqlite3.Error:
             _remove_temporary(temporary_path, self._backup_directory)
             raise BackupError("SQLite online backup could not be completed") from None
 
@@ -143,7 +143,7 @@ def verify_sqlite_backup(backup_path: str | Path) -> BackupVerification:
             schema_object_count = int(
                 connection.execute("SELECT count(*) FROM sqlite_schema").fetchone()[0]
             )
-    except (OSError, sqlite3.Error, TypeError, ValueError, IndexError):
+    except OSError, sqlite3.Error, TypeError, ValueError, IndexError:
         raise BackupVerificationError("SQLite backup verification failed") from None
     if integrity_rows != [("ok",)]:
         raise BackupVerificationError("SQLite backup integrity check failed")

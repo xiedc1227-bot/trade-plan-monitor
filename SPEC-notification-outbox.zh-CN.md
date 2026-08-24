@@ -72,6 +72,7 @@ class AlertPayload(BaseModel):
     risk_line_fen: int | None
     next_step: NextStep
 
+
 class AlertEvent(AlertPayload):
     sequence: int
     message_text: str

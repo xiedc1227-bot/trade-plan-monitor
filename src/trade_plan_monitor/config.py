@@ -40,9 +40,7 @@ class TushareConfiguration(_ConfigurationModel):
     """Tushare configuration containing only a token reference."""
 
     token_ref: EnvironmentSecretReference = Field(
-        default_factory=lambda: EnvironmentSecretReference(
-            environment_variable="TUSHARE_TOKEN"
-        )
+        default_factory=lambda: EnvironmentSecretReference(environment_variable="TUSHARE_TOKEN")
     )
 
 
