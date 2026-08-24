@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from pathlib import Path
+from typing import Final
 
 from fastapi import FastAPI, Request, Response
 
@@ -28,8 +30,27 @@ from trade_plan_monitor.web.routers.plans import router as plans_router
 from trade_plan_monitor.web.routers.positions import PositionOperationService
 from trade_plan_monitor.web.routers.positions import router as positions_router
 from trade_plan_monitor.web.routers.symbols import router as symbols_router
+from trade_plan_monitor.web.schemas import ErrorResponse
 from trade_plan_monitor.web.websocket import MonitorWebSocketService
 from trade_plan_monitor.web.websocket import router as websocket_router
+
+_PUBLIC_ERROR_STATUSES: Final = (
+    HTTPStatus.BAD_REQUEST,
+    HTTPStatus.UNAUTHORIZED,
+    HTTPStatus.FORBIDDEN,
+    HTTPStatus.NOT_FOUND,
+    HTTPStatus.METHOD_NOT_ALLOWED,
+    HTTPStatus.CONFLICT,
+    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+    HTTPStatus.UNPROCESSABLE_CONTENT,
+    HTTPStatus.TOO_MANY_REQUESTS,
+    HTTPStatus.INTERNAL_SERVER_ERROR,
+    HTTPStatus.SERVICE_UNAVAILABLE,
+)
+_PUBLIC_ERROR_RESPONSES: Final = {
+    int(status): {"model": ErrorResponse, "description": status.phrase}
+    for status in _PUBLIC_ERROR_STATUSES
+}
 
 
 def create_app(
@@ -52,6 +73,7 @@ def create_app(
     app = FastAPI(
         title="Trade Plan Monitor API",
         version="0.1.0",
+        responses=_PUBLIC_ERROR_RESPONSES,
         lifespan=create_runtime_lifespan(
             runtime_factory,
             bind_host=bind_host,

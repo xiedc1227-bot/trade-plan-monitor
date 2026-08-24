@@ -30,6 +30,8 @@ FastAPI 负责 REST 和 WebSocket 契约，并在 `127.0.0.1` 提供 Vue 3 单�
 ```powershell
 # 后端 API 契约
 python -m pytest tests/integration/test_web_api.py -q
+python -m pytest tests/integration/test_openapi_snapshot.py -q
+python scripts/generate_frontend_types.py --check
 python -m trade_plan_monitor web --host 127.0.0.1 --port 8765
 
 # 前端
@@ -129,7 +131,16 @@ web/src/
 - HTTP 或 WebSocket 存在 `Origin` 请求头时，它必须是唯一且精确配置的 `http://127.0.0.1:<port>` Origin；重复、非法、外部、HTTPS、别名或错误端口值均封闭失败。HTTP 以固定 `FORBIDDEN` envelope 和 403 状态拒绝；WebSocket 则在接受前以关闭码 1008 拒绝。缺少 `Origin` 时仍允许非浏览器回环客户端；生产环境不存在 CORS，并移除下游任何 `Access-Control-*` 响应头。
 - 每个 HTTP 响应都带固定 CSP、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`，以及关闭摄像头/地理位置/麦克风/支付/USB 的 `Permissions-Policy`。共享错误构造器也会为用户中间件之外生成的未预期 500 响应增加这些响应头。被拒绝的 Origin、正文和异常详情绝不回显。
 - 原始 HTTP 请求体按 `Content-Length` 和实际流式分块同时限制为精确 4 MiB（`4194304` 字节）；第一个越界字节返回固定的 413 `PAYLOAD_TOO_LARGE` envelope。该传输预算可容纳既有 200,000 字符 AI 来源文本在最坏 JSON 转义下的大小。既有计划 JSON/YAML 导入和字段级文本上限仍更严格且为权威限制；安全 YAML 加载保持不变。
-- 静态服务只接受一个明确注入且已存在的目录，其解析后的本地 `index.html` 必须是普通文件。提供既有文件时不会跟随逃逸 symlink。不存在且无扩展名的 GET/HEAD 路径，以及明确接受 `text/html` 的不存在导航路径会回退到 `index.html`，包括 `/stocks/003043.SZ` 等股票路由；即使构建目录包含 `404.html`，缺失的类资源路径仍使用固定 404 envelope。`/api/v1` 和 `/ws/v1` 在静态路由匹配阶段被排除，因此静态内容不能覆盖 API/WebSocket 路径或改变其方法语义。T040 不执行默认构建发现，也不创建 SPA 入口；T041 负责 `web/index.html`，T052 负责已安装生产资源的发现与组合。
+- 静态服务只接受一个明确注入且已存在的目录，其解析后的本地 `index.html` 必须是普通文件。提供既有文件时不会跟随逃逸 symlink。不存在且无扩展名的 GET/HEAD 路径，以及明确接受 `text/html` 的不存在导航路径会回退到 `index.html`，包括 `/stocks/003043.SZ` 等股票路由；即使构建目录包含 `404.html`，缺失的类资源路径仍使用固定 404 envelope。`/api/v1` 和 `/ws/v1` 在静态路由匹配阶段被排除，因此静态内容不能覆盖 API/WebSocket 路径或改变其方法语义。T040 不执行默认构建发现，也不创建 SPA 入口；T041 提供 `web/index.html`，T052 负责已安装生产资源的发现与组合。
+
+### T041 冻结 OpenAPI 与前端类型边界
+
+OpenAPI 快照 SHA-256：`e0b5435bedf6a98657bb95616bebf8e05589c387049a07eb752d4b8ea48c5102`
+
+- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 24 个已批准 REST 路径，并用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
+- `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
+- `python scripts/generate_frontend_types.py --check` 是只读检查，只要任一已提交生成文件存在逐字节差异就失败。生成过程遇到不支持或悬空的 Schema 引用、参数位置、Schema 类型或非法 TypeScript 标识符时会封闭失败，而不是静默弱化契约。
+- `web/index.html` 是稳定的 Vite 应用文档，包含一个 `#app` 根节点和一个外部模块入口，不含违反 T040 CSP 的内联脚本或样式。Vite 现在执行会生成 `dist/index.html` 的文档式应用构建；T042 仍负责首个应用外壳、路由和组件挂载，T052 仍负责已安装资源发现及生产组合。
 
 只读资源：
 
@@ -169,7 +180,7 @@ POST  /diagnostic-evaluations      请求不改变状态的人工诊断评估
 
 所有改变状态的请求都必须包含 `Idempotency-Key`；可变资源必须包含 `expectedRevision`。重复的执行中意图返回 409；使用相同幂等键但请求哈希不同则返回 422。计划提取和供应商测试均为有界异步任务，返回 202 后不得继续占用请求处理器执行。
 
-OpenAPI 快照纳入版本控制并用于生成 TypeScript 类型；不得在前端手工复制契约。
+OpenAPI 作为规范快照纳入版本控制并用于生成 TypeScript 组件与路径类型；`--check` 会拒绝 API 或生成文件漂移，且不得在前端手工复制契约。
 
 ## WebSocket 契约
 

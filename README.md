@@ -4,7 +4,7 @@
 
 A standalone, local-only Web application for turning reviewed A-share trade plans into deterministic monitoring rules and producing textual and visual reminders. It is designed for one user, at most 10 enabled stocks, Tushare market data, configurable AI-assisted plan drafting, and a single SQLite WAL database.
 
-> Development status: tasks `T001`–`T040` and checkpoints `C00`–`C15` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, startup close recovery, an owned lifecycle with sanitized health and bounded retryable shutdown, a side-effect-free FastAPI application/lifespan/error boundary, strict dashboard/symbol/bar/event/runtime-health read contracts, injected plan/AI operation APIs with revision/idempotency/audit context, bounded 202 receipts, and write-only secret responses, explicit manual-position, canonical alert-center, acknowledgement, and non-mutating diagnostic APIs, one append-only global monitor-event ledger and sequenced WebSocket replay with committed-event verification, 20-second heartbeats, gap/expiry snapshot recovery, and restart-safe seven-day retention, plus an exact loopback-Origin boundary, uniform security headers, a 4 MiB raw-request cap, and explicit safe Vue-build SPA serving. The OpenAPI snapshot and generated frontend types are next at `T041`; the production Vue application shell starts at `T042`, and the multi-stock dashboard starts at `T047`. Default installed-console composition remains explicitly deferred to `T052`–`T054`.
+> Development status: tasks `T001`–`T041` and checkpoints `C00`–`C16` are complete. The repository now includes the reviewed AI drafting boundary, normalized market history and indicators, durable strategy state, the pure deterministic decision engine, deterministic typed Chinese alert rendering, a transactional alert outbox, bounded per-channel in-app/console/optional-Webhook dispatch, an injected-clock A-share minute/official-close scheduler, bounded priority-aware Tushare/AI request isolation, per-symbol canonical-minute orchestration with fail-closed health isolation, serial startup/current-day targeted gap recovery, lossless intraday/official evaluation identities, exact provisional-daily context assembly, atomic evaluation/state/outbox application, post-commit publication, exact official-close reconciliation, durable cross-day `CLOSE_PENDING`, startup close recovery, an owned lifecycle with sanitized health and bounded retryable shutdown, a side-effect-free FastAPI application/lifespan/error boundary, strict dashboard/symbol/bar/event/runtime-health read contracts, injected plan/AI operation APIs with revision/idempotency/audit context, bounded 202 receipts, and write-only secret responses, explicit manual-position, canonical alert-center, acknowledgement, and non-mutating diagnostic APIs, one append-only global monitor-event ledger and sequenced WebSocket replay with committed-event verification, 20-second heartbeats, gap/expiry snapshot recovery, and restart-safe seven-day retention, an exact loopback-Origin boundary, uniform security headers, a 4 MiB raw-request cap, explicit safe Vue-build SPA serving, plus a canonical committed OpenAPI snapshot, generated TypeScript payload/path contracts, and a CSP-compatible Vite document entry. The accessible Vue application shell is next at `T042`, and the multi-stock dashboard starts at `T047`. Default installed-console composition remains explicitly deferred to `T052`–`T054`.
 
 ## Product Goals
 
@@ -41,9 +41,10 @@ Last verified on 2026-08-24 with CPython 3.14.7.
 | Manual-position, canonical alert-center, acknowledgement, and diagnostic APIs | `T038` | Complete |
 | Global durable monitor-event ledger and sequenced WebSocket replay | `T039` | Complete |
 | Local-origin security and explicit Vue-build SPA serving | `T040` | Complete |
-| OpenAPI snapshot, production UI, and packaging | `T041`–`T059` | Pending |
+| Frozen OpenAPI, generated TypeScript contracts, and Vite document entry | `T041` | Complete |
+| Production UI, packaging, and external acceptance | `T042`–`T059` | Pending |
 
-After `T040`, all 1232 backend tests pass. The exact local-origin/security/static/bind gate contains 23 tests, the combined Web API/WebSocket gate contains 143 tests, and the unchanged decision/replay gate remains 273 tests. Whole-tree Ruff, scoped formatting, `compileall`, `pip check`, bilingual parity, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and production build passing. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C16` remains open through `T041`, which is next.
+After `T041`, all 1245 backend tests pass. The exact OpenAPI/type/SPA gate contains 13 tests, the combined REST/WebSocket/OpenAPI transport gate contains 156 tests, and the unchanged decision/replay gate remains 273 tests. Whole-tree Ruff, scoped formatting, `compileall`, `pip check`, bilingual parity, generated-contract drift checks, and `git diff --check` pass. The frontend remains at 2 passing tests with type-check and a document-based production build passing. These tests are deterministic and require no live Tushare, AI, Webhook, browser, database, or network listener. The pinned FastAPI/Starlette TestClient currently emits one upstream deprecation warning recommending `httpx2`; it does not affect production behavior. Checkpoint `C16` is complete, and `T042` is next.
 
 ## Safety Boundaries
 
@@ -124,6 +125,7 @@ py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 python -m pytest -q
+python scripts/generate_frontend_types.py --check
 python -m trade_plan_monitor --help
 ```
 
@@ -138,7 +140,7 @@ npm run build
 Set-Location ..
 ```
 
-The current frontend contains the verified toolchain scaffold only. T040 can safely serve an explicitly supplied complete build, but the stable `web/index.html` entry is intentionally owned by T041. The production Vue application shell starts at `T042`, and the multi-stock monitoring dashboard at `T047`; do not treat the generated placeholder build as the finished application.
+The frontend now has a stable CSP-compatible `web/index.html` document entry and generated OpenAPI contracts, while `main.ts` remains the verified toolchain boundary. The production Vue application shell starts at `T042`, and the multi-stock monitoring dashboard at `T047`; do not treat the current minimal document build as the finished application.
 
 ### Local configuration
 
@@ -148,7 +150,7 @@ $env:TUSHARE_TOKEN = "replace-with-your-token"
 $env:AI_API_KEY = "replace-with-your-api-key"
 ```
 
-[config/app.example.yaml](config/app.example.yaml) stores environment-variable references, never secret values. `AI_API_KEY` is optional until AI drafting is configured. Never put secret values in `config/app.yaml`, and do not commit `.env` files, databases, backups, keys, or generated frontend output.
+[config/app.example.yaml](config/app.example.yaml) stores environment-variable references, never secret values. `AI_API_KEY` is optional until AI drafting is configured. Never put secret values in `config/app.yaml`, and do not commit `.env` files, databases, backups, keys, or `web/dist` build output. The generated `openapi.json` and `web/src/api/generated.ts` contracts are intentionally versioned.
 
 ## Commands
 

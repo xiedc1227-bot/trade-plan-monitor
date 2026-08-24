@@ -30,6 +30,8 @@ Exact patch versions will be selected from official releases and frozen in lock 
 ```powershell
 # Backend API contract
 python -m pytest tests/integration/test_web_api.py -q
+python -m pytest tests/integration/test_openapi_snapshot.py -q
+python scripts/generate_frontend_types.py --check
 python -m trade_plan_monitor web --host 127.0.0.1 --port 8765
 
 # Frontend
@@ -129,7 +131,16 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 - When an HTTP or WebSocket `Origin` header is present, it must be the single exact configured `http://127.0.0.1:<port>` origin; duplicate, malformed, foreign, HTTPS, alias, or wrong-port values fail closed. HTTP rejection uses the fixed `FORBIDDEN` envelope and status 403, while WebSocket rejection occurs before acceptance with close code 1008. A missing `Origin` remains valid for non-browser loopback clients; production CORS is absent and any downstream `Access-Control-*` response header is removed.
 - Every HTTP response receives the fixed CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and closed camera/geolocation/microphone/payment/USB `Permissions-Policy`. The shared error constructor also adds them to unexpected 500 responses that are created outside user middleware. Rejected origins, bodies, and exception details are never reflected.
 - Raw HTTP request bodies are capped at exactly 4 MiB (`4194304` bytes) from both `Content-Length` and actual streamed chunks; the first excess byte returns the fixed 413 `PAYLOAD_TOO_LARGE` envelope. This transport budget accommodates the existing 200,000-character AI source limit even under worst-case JSON escaping. Existing plan JSON/YAML import and field-level text limits remain stricter and authoritative; safe YAML loading is unchanged.
-- Static serving accepts only one explicitly injected, existing directory whose resolved local `index.html` is a regular file. Existing files are served without following escaping symlinks. Missing extensionless GET/HEAD paths and missing navigation paths that explicitly accept `text/html` fall back to `index.html`, including symbol routes such as `/stocks/003043.SZ`; missing asset-like paths use the fixed 404 envelope even when the distribution contains `404.html`. `/api/v1` and `/ws/v1` are excluded at static-route matching time, so static content cannot shadow or change the method semantics of API or WebSocket paths. T040 performs no default build discovery and creates no SPA entry; T041 owns `web/index.html`, and T052 owns installed production asset discovery/composition.
+- Static serving accepts only one explicitly injected, existing directory whose resolved local `index.html` is a regular file. Existing files are served without following escaping symlinks. Missing extensionless GET/HEAD paths and missing navigation paths that explicitly accept `text/html` fall back to `index.html`, including symbol routes such as `/stocks/003043.SZ`; missing asset-like paths use the fixed 404 envelope even when the distribution contains `404.html`. `/api/v1` and `/ws/v1` are excluded at static-route matching time, so static content cannot shadow or change the method semantics of API or WebSocket paths. T040 performs no default build discovery and creates no SPA entry; T041 supplies `web/index.html`, and T052 owns installed production asset discovery/composition.
+
+### T041 Frozen OpenAPI and Frontend-Type Boundary
+
+OpenAPI snapshot SHA-256: `e0b5435bedf6a98657bb95616bebf8e05589c387049a07eb752d4b8ea48c5102`
+
+- The side-effect-free `create_app()` is the sole OpenAPI source. Its document contains exactly the 24 approved REST paths and documents every stable public error status with `ErrorResponse`; FastAPI's default `HTTPValidationError`/`ValidationError` schemas are excluded because runtime validation already uses the bounded secret-free envelope.
+- `scripts/generate_frontend_types.py` serializes `openapi.json` as sorted, indented UTF-8 with LF line endings and one final newline. It derives TypeScript component schemas, path methods, grouped parameters, request bodies, response statuses, media types, references, unions, intersections, arrays, objects, enums, and literals from that same document; API fields are never copied by hand.
+- `python scripts/generate_frontend_types.py --check` is read-only and fails when either committed generated file differs byte-for-byte. Generation fails closed on unsupported or dangling schema references, parameter locations, schema types, or invalid TypeScript identifiers rather than silently weakening a contract.
+- `web/index.html` is the stable Vite application document with one `#app` root and one external module entry. It contains no inline script or style that would violate the T040 CSP. Vite now performs a document-based application build that emits `dist/index.html`; T042 still owns the first application shell, router, and component mount, while T052 still owns installed asset discovery and production composition.
 
 Read resources:
 
@@ -169,7 +180,7 @@ POST  /diagnostic-evaluations      non-mutating manual evaluation request
 
 All state-changing requests require `Idempotency-Key`; mutable resources require `expectedRevision`. Duplicate in-flight intent returns 409; key reuse with a different request hash returns 422. Plan extraction and provider tests are bounded asynchronous operations and never run in request handlers after returning 202.
 
-OpenAPI is committed as a snapshot and used to generate TypeScript types; frontend contracts are not hand-copied.
+OpenAPI is committed as a canonical snapshot and used to generate TypeScript component and path types; `--check` rejects API or generated-file drift, and frontend contracts are not hand-copied.
 
 ## WebSocket Contract
 
