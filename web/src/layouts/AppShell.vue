@@ -2,8 +2,11 @@
 import { nextTick, shallowRef, useTemplateRef } from "vue";
 import { RouterLink, RouterView } from "vue-router";
 
+import { useMonitorStream } from "../composables/useMonitorStream";
+import type { MonitorStreamConnectionState } from "../composables/useMonitorStream";
+
 defineSlots<{
-  connectionBanner?(): unknown;
+  connectionBanner?(props: { state: MonitorStreamConnectionState }): unknown;
 }>();
 
 const navigationItems = [
@@ -16,6 +19,7 @@ const navigationItems = [
 const isMobileNavigationOpen = shallowRef(false);
 const mainContent = useTemplateRef<HTMLElement>("mainContent");
 const mobileNavigationToggle = useTemplateRef<HTMLButtonElement>("mobileNavigationToggle");
+const { connectionState } = useMonitorStream();
 
 function focusMainContent() {
   mainContent.value?.focus();
@@ -96,13 +100,18 @@ async function handleMobileNavigation() {
     </header>
 
     <section
-      v-if="$slots.connectionBanner"
       class="app-shell__connection-banner"
       role="status"
       aria-live="polite"
       aria-atomic="true"
+      :data-connection-state="connectionState.code"
     >
-      <slot name="connectionBanner" />
+      <slot name="connectionBanner" :state="connectionState">
+        <span class="app-shell__connection-marker" aria-hidden="true">
+          {{ connectionState.marker }}
+        </span>
+        <span>{{ connectionState.label }}</span>
+      </slot>
     </section>
 
     <main id="main-content" ref="mainContent" class="app-shell__main" tabindex="-1">
@@ -217,10 +226,33 @@ async function handleMobileNavigation() {
 }
 
 .app-shell__connection-banner {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
   padding: 0.75rem 1rem;
   color: var(--color-text-mineral);
   background: var(--color-surface-raised);
   border-block-end: var(--border-technical);
+  border-inline-start: 0.25rem solid var(--color-signal-info-cyan);
+}
+
+.app-shell__connection-banner[data-connection-state="LIVE"] {
+  border-inline-start-color: var(--color-signal-live-sea-glass);
+}
+
+.app-shell__connection-banner[data-connection-state="STALE"] {
+  border-inline-start-color: var(--color-signal-watch-amber);
+}
+
+.app-shell__connection-banner[data-connection-state="DISCONNECTED"] {
+  border-inline-start-color: var(--color-signal-risk-vermilion);
+}
+
+.app-shell__connection-marker {
+  min-width: 1em;
+  font-family: var(--font-numeric);
+  font-weight: 700;
+  text-align: center;
 }
 
 .app-shell__main {

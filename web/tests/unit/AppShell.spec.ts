@@ -3,7 +3,23 @@ import { resolve } from "node:path";
 
 import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../src/composables/useMonitorStream", async () => {
+  const { computed } = await import("vue");
+  return {
+    useMonitorStream: () => ({
+      connectionState: computed(() => ({
+        code: "DISCONNECTED",
+        label: "连接中断，正在重试",
+        marker: "×",
+      })),
+      recoverSnapshot: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    }),
+  };
+});
 
 import AppShell from "../../src/layouts/AppShell.vue";
 import { routes } from "../../src/router";
@@ -24,7 +40,7 @@ function createTestRouter() {
   });
 }
 
-async function mountShell(path = "/") {
+async function mountShell(path = "/", withConnectionSlot = true) {
   const router = createTestRouter();
   await router.push(path);
   await router.isReady();
@@ -32,9 +48,9 @@ async function mountShell(path = "/") {
   const wrapper = mount(AppShell, {
     attachTo: document.body,
     global: { plugins: [router] },
-    slots: {
-      connectionBanner: '<p data-testid="connection-message">连接已恢复</p>',
-    },
+    slots: withConnectionSlot
+      ? { connectionBanner: '<p data-testid="connection-message">连接已恢复</p>' }
+      : {},
   });
 
   return { router, wrapper };
@@ -61,6 +77,15 @@ describe("AppShell", () => {
     await flushPromises();
 
     expect(wrapper.get("#main-content").text()).toContain("计划工作台");
+  });
+
+  it("renders a semantic non-color-only stream status when no banner slot is supplied", async () => {
+    const { wrapper } = await mountShell("/", false);
+    const banner = wrapper.get('[role="status"][aria-live="polite"]');
+
+    expect(banner.attributes("data-connection-state")).toBe("DISCONNECTED");
+    expect(banner.text()).toContain("×");
+    expect(banner.text()).toContain("连接中断，正在重试");
   });
 
   it("moves keyboard focus to the main landmark through the skip link", async () => {
