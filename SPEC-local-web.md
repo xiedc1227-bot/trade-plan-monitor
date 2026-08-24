@@ -246,6 +246,14 @@ The T044 browser lifecycle is owned by the `AppShell` mount through one `useMoni
 
 Reconnect uses an exponential base of 1, 2, 4, 8, 16, then at most 30 seconds, caps that base before applying `0.8..1.2` jitter, and never schedules a delay above 30 seconds. Explicit recovery aborts the current snapshot, closes the active socket, clears all liveness/retry deadlines, and restarts from REST. Unmount performs the same cleanup without reconnecting. The shell exposes the readonly semantic state to its typed connection-banner slot and provides a default polite status containing both a text marker and label, so color is never the sole cue. This lifecycle contains no domain rule, API-field duplication, business view, persistent browser state, T052 resource discovery, or T024 decision behavior.
 
+### T045 AI Plan Workbench Boundary
+
+The T045 `PlanWorkbench` composes four setup-style Vue components through typed props and emits only. `AIProviderSelector` presents non-secret provider configuration and masked secret status, associates asynchronous test receipts with an explicit provider identity, rejects disabled-provider work, and keeps provider-test and secret-replacement pending state local and bounded. Transient secret input is cleared on provider change and before emission; it is never persisted, logged, placed in a URL, or rendered after submission.
+
+`SourceTextEditor` owns one local plain-text model and emits submission or cancellation intent only. Secret and source limits follow Python Unicode code-point semantics, stop scanning at the first rejected code point, and atomically reject an over-limit edit with an accessible error instead of silently truncating it. Submission locks immediately before a `202` identity arrives, releases on an explicit failed submission transition, and exposes cancellation only for a real `QUEUED` or `RUNNING` operation.
+
+`ExtractionEvidence` renders decoded evidence, assumptions, warnings, unmapped text, validation issues, usage, and bounded errors only through escaped Vue text interpolation. Evidence is tied to the submitted source snapshot and hidden when stale. Material items remain unresolved until an explicit local review action; duplicate backend review identities fail closed, deterministic `AI_EVIDENCE_REVIEW_REQUIRED` is represented as a material missing-evidence item, and long unbroken copy wraps on narrow screens. T046 retains structured editing, diff, validation orchestration, and activation; T047+ business views, T052 installed composition, the T041 generated contract, and T024 decision semantics remain unchanged.
+
 ## Information Architecture
 
 ### `/` — Monitoring Overview

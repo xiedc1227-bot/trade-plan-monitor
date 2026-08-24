@@ -139,6 +139,14 @@ Every provider create/update, secret replacement, provider test, and plan extrac
 
 `POST /api/v1/plan-extractions` and `POST /api/v1/ai-provider-tests` return `202` only after the application service durably accepts bounded work. The request handler does not call the provider, execute extraction, or activate a plan. `GET /api/v1/plan-extractions/{id}` exposes orchestration states plus validated evidence/issues and canonical draft JSON; it never exposes raw model output. `CANCELLED` is represented only by this orchestration status boundary and remains absent from the pure T017 extraction function.
 
+### T045 Frontend Intake and Review Boundary
+
+The Vue `PlanWorkbench` is a thin local composition boundary with typed props and emits. It selects only enabled providers for extraction, submits revision-guarded provider-test, secret-replacement, extraction, cancellation, and issue-resolution intents, and owns no API client, Pinia state, domain rule, activation action, or persistent browser state. Provider-test receipts require an explicit provider identity and pending/settlement state so an old receipt cannot be attributed to the current provider and rapid retries cannot create duplicate durable work.
+
+Secret input is transient, write-only, cleared when provider identity changes and before replacement is emitted, and never rendered after submission. Secret and source limits use Python-compatible Unicode code-point counting. An over-limit edit is rejected atomically, restores the previous complete valid value, exposes an accessible error, and cannot emit a silently truncated secret or plan. Whitespace-only secrets, disabled providers, oversized final commands, duplicate pending submissions, and retry-before-receipt paths fail closed.
+
+The source editor treats pasted plans as untrusted plain text. It locks immediately around submission, binds evidence to the exact submitted source snapshot, releases local pending state when submission fails before a new operation identity, and exposes cancellation only for a real `QUEUED` or `RUNNING` operation. Extracted evidence, assumptions, warnings, unmapped text, validation issues, usage, and bounded errors render through Vue text interpolation only. Duplicate review identities cannot be resolved, long unbroken text wraps, and stale evidence is hidden after source changes. Structured editing, diff, validation orchestration, and activation remain T046 responsibilities.
+
 ## Code Style
 
 ```python
