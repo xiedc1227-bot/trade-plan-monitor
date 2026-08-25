@@ -125,6 +125,25 @@ def test_verified_backup_restores_to_a_readable_database(tmp_path: Path) -> None
         ).fetchone() == ("wal-sentinel",)
 
 
+def test_verification_rejects_a_wal_header_without_creating_sidecars(tmp_path: Path) -> None:
+    database_path = tmp_path / "checkpointed-wal.db"
+    connection = sqlite3.connect(database_path, isolation_level=None)
+    try:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+        connection.execute("CREATE TABLE verification_probe (value TEXT NOT NULL)")
+        connection.execute("INSERT INTO verification_probe(value) VALUES ('checkpointed')")
+        assert connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone() == (0, 0, 0)
+    finally:
+        connection.close()
+    sidecars = (Path(f"{database_path}-wal"), Path(f"{database_path}-shm"))
+    assert all(not sidecar.exists() for sidecar in sidecars)
+
+    with pytest.raises(BackupVerificationError, match="standalone"):
+        verify_sqlite_backup(database_path)
+
+    assert all(not sidecar.exists() for sidecar in sidecars)
+
+
 def test_failed_verification_preserves_existing_successful_backup(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -141,6 +160,9 @@ def test_failed_verification_preserves_existing_successful_backup(
     preserved_bytes = preserved.path.read_bytes()
 
     def reject_candidate(_path: str | Path) -> backup_module.BackupVerification:
+        candidate = Path(_path)
+        Path(f"{candidate}-wal").write_bytes(b"temporary wal")
+        Path(f"{candidate}-shm").write_bytes(b"temporary shm")
         raise backup_module.BackupVerificationError("injected verification failure")
 
     monkeypatch.setattr(backup_module, "verify_sqlite_backup", reject_candidate)
@@ -153,8 +175,7 @@ def test_failed_verification_preserves_existing_successful_backup(
         ).create()
 
     assert preserved.path.read_bytes() == preserved_bytes
-    assert sorted(backup_directory.glob("monitor-backup-*.sqlite3")) == [preserved.path]
-    assert list(backup_directory.glob(".*.tmp")) == []
+    assert tuple(backup_directory.iterdir()) == (preserved.path,)
 
 
 def test_retention_keeps_latest_thirty_verified_owned_backups_only(tmp_path: Path) -> None:
@@ -166,6 +187,16 @@ def test_retention_keeps_latest_thirty_verified_owned_backups_only(tmp_path: Pat
     unrelated.write_text("not owned", encoding="utf-8")
     invalid_owned = backup_directory / "monitor-backup-20200101T000000000000Z-invalid.sqlite3"
     invalid_owned.write_bytes(b"not a sqlite database")
+    legacy_owned = backup_directory / "monitor-backup-20200101T000001000000Z-legacy.sqlite3"
+    legacy_connection = sqlite3.connect(legacy_owned, isolation_level=None)
+    assert legacy_connection.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+    legacy_connection.execute("CREATE TABLE legacy_probe (value TEXT NOT NULL)")
+    legacy_connection.execute("PRAGMA wal_autocheckpoint=0")
+    assert legacy_connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone() == (0, 0, 0)
+    legacy_connection.execute("INSERT INTO legacy_probe(value) VALUES ('wal-only')")
+    legacy_wal = Path(f"{legacy_owned}-wal")
+    legacy_shm = Path(f"{legacy_owned}-shm")
+    assert legacy_wal.stat().st_size > 0
     times = iter(_FIXED_NOW + timedelta(seconds=index) for index in range(31))
     identifiers = iter(f"backup-{index:02d}" for index in range(31))
     service = SQLiteBackupService(
@@ -175,7 +206,14 @@ def test_retention_keeps_latest_thirty_verified_owned_backups_only(tmp_path: Pat
         id_factory=lambda: next(identifiers),
     )
 
-    results = [service.create() for _ in range(31)]
+    try:
+        results = [service.create() for _ in range(31)]
+
+        assert legacy_owned.is_file()
+        assert legacy_wal.is_file()
+        assert legacy_shm.is_file()
+    finally:
+        legacy_connection.close()
 
     assert results[0].path.exists() is False
     assert all(result.path.exists() for result in results[1:])
@@ -203,6 +241,31 @@ def test_destination_collision_never_overwrites_verified_backup(tmp_path: Path) 
 
     assert existing.path.read_bytes() == existing_bytes
     assert list(backup_directory.glob(".*.tmp")) == []
+
+
+def test_dangling_temporary_symlink_cannot_escape_backup_directory(tmp_path: Path) -> None:
+    database_path = tmp_path / "monitor.db"
+    backup_directory = tmp_path / "backups"
+    escaped_path = tmp_path / "outside" / "escaped.sqlite3"
+    _create_live_database(database_path)
+    backup_directory.mkdir()
+    temporary_path = backup_directory / (
+        ".monitor-backup-20260821T173000000000Z-dangling-link.sqlite3.tmp"
+    )
+    temporary_path.symlink_to(escaped_path)
+    assert temporary_path.is_symlink()
+    assert temporary_path.exists() is False
+
+    with pytest.raises(BackupPathError, match="destination already exists"):
+        SQLiteBackupService(
+            database_path,
+            backup_directory,
+            clock=lambda: _FIXED_NOW,
+            id_factory=lambda: "dangling-link",
+        ).create()
+
+    assert escaped_path.exists() is False
+    assert temporary_path.is_symlink()
 
 
 def test_corrupt_backup_is_rejected_with_sanitized_error(tmp_path: Path) -> None:

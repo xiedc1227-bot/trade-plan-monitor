@@ -720,6 +720,93 @@ def test_concurrent_start_is_shared_and_stop_cancels_incomplete_startup() -> Non
     assert cancelled is True
 
 
+def test_cancelling_one_start_waiter_does_not_cancel_shared_startup() -> None:
+    async def scenario() -> tuple[RuntimeServiceStatus, list[str]]:
+        events: list[str] = []
+        open_started = asyncio.Event()
+        release_open = asyncio.Event()
+
+        async def open_database() -> None:
+            open_started.set()
+            await release_open.wait()
+            events.append("database-opened")
+
+        service = _service(events=events, open_database=open_database)
+        first_waiter = asyncio.create_task(service.start())
+        await open_started.wait()
+        cancelled_waiter = asyncio.create_task(service.start())
+        await asyncio.sleep(0)
+        cancelled_waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await cancelled_waiter
+
+        assert first_waiter.done() is False
+        release_open.set()
+        startup = await asyncio.wait_for(first_waiter, timeout=0.1)
+        await service.stop()
+        return startup.status, events
+
+    status, events = asyncio.run(scenario())
+
+    assert status is RuntimeServiceStatus.RUNNING
+    assert events.count("database-opened") == 1
+
+
+def test_run_once_joining_an_inflight_start_does_not_own_lifecycle_shutdown() -> None:
+    async def scenario() -> tuple[RuntimeServiceStatus, bool, list[str]]:
+        events: list[str] = []
+        open_started = asyncio.Event()
+        release_open = asyncio.Event()
+
+        async def open_database() -> None:
+            open_started.set()
+            await release_open.wait()
+
+        service = _service(events=events, open_database=open_database)
+        startup_task = asyncio.create_task(service.start())
+        await open_started.wait()
+        run_once_task = asyncio.create_task(service.run_once())
+        await asyncio.sleep(0)
+        release_open.set()
+
+        await asyncio.wait_for(startup_task, timeout=0.1)
+        await asyncio.wait_for(run_once_task, timeout=0.1)
+        status_before_explicit_stop = service.status
+        checkpoint_before_explicit_stop = "wal-checkpoint" in events
+        await service.stop()
+        return status_before_explicit_stop, checkpoint_before_explicit_stop, events
+
+    status, checkpointed_early, events = asyncio.run(scenario())
+
+    assert status is RuntimeServiceStatus.RUNNING
+    assert checkpointed_early is False
+    assert events.count("deadline") == 1
+    assert events.count("wal-checkpoint") == 1
+
+
+def test_concurrent_scheduling_entrypoints_reject_a_second_owner() -> None:
+    async def scenario() -> tuple[bool, int, int]:
+        scheduler = _Scheduler(wait_started=asyncio.Event(), calls=1)
+        service = _service(scheduler=scheduler)
+        run_task = asyncio.create_task(service.run())
+        await scheduler.wait_started.wait()
+
+        with pytest.raises(RuntimeError, match="scheduling loop is already active"):
+            await asyncio.wait_for(service.run(), timeout=0.05)
+        with pytest.raises(RuntimeError, match="scheduling loop is already active"):
+            await asyncio.wait_for(service.run_once(), timeout=0.05)
+
+        await service.stop()
+        await asyncio.wait_for(run_task, timeout=0.1)
+        return scheduler.wait_cancelled, scheduler.calls, service.owned_task_count
+
+    wait_cancelled, scheduler_calls, owned_task_count = asyncio.run(scenario())
+
+    assert wait_cancelled is True
+    assert scheduler_calls == 2
+    assert owned_task_count == 0
+
+
 def test_stopped_lifecycle_rejects_restart_instead_of_returning_stale_result() -> None:
     service = _service()
     asyncio.run(service.start())

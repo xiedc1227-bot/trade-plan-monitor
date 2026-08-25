@@ -1292,6 +1292,7 @@ class RuntimeLifecycleService:
         self._dispatcher_closed = False
         self._request_controller_closed = False
         self._wal_checkpointed = False
+        self._schedule_owner: asyncio.Task[object] | None = None
         self._schedule_wait_task: asyncio.Task[MarketDeadline | None] | None = None
         self._work_tasks: set[asyncio.Task[object]] = set()
         self._last_deadline_at: datetime | None = None
@@ -1358,6 +1359,16 @@ class RuntimeLifecycleService:
         start_task = self._start_task
         try:
             return await asyncio.shield(start_task)
+        except asyncio.CancelledError:
+            current_task = asyncio.current_task()
+            if current_task is not None and current_task.cancelling():
+                raise
+            if not self._stopping:
+                try:
+                    await self.stop()
+                except BaseException:
+                    pass
+            raise
         except BaseException:
             if not self._stopping:
                 try:
@@ -1411,7 +1422,8 @@ class RuntimeLifecycleService:
     async def run_once(self) -> object | None:
         """Run at most one eligible deadline and clean up if this call started runtime."""
 
-        owns_startup = self._startup_result is None
+        schedule_owner = self._claim_schedule_owner()
+        owns_startup = self._start_task is None and self._startup_result is None
         try:
             startup = await self.start()
             if startup.read_only or not self._accepting_work:
@@ -1421,12 +1433,16 @@ class RuntimeLifecycleService:
                 return None
             return await self._execute_deadline(deadline)
         finally:
-            if owns_startup:
-                await self.stop()
+            try:
+                if owns_startup:
+                    await self.stop()
+            finally:
+                self._release_schedule_owner(schedule_owner)
 
     async def run(self) -> None:
         """Run scheduled deadlines until stopped, then close every owned resource."""
 
+        schedule_owner = self._claim_schedule_owner()
         try:
             startup = await self.start()
             if startup.read_only:
@@ -1455,7 +1471,10 @@ class RuntimeLifecycleService:
                 next_deadline = self._scheduler.next_deadline(after=self._last_deadline_at)
                 self._next_poll_at = None if next_deadline is None else next_deadline.due_at
         finally:
-            await self.stop()
+            try:
+                await self.stop()
+            finally:
+                self._release_schedule_owner(schedule_owner)
 
     async def stop(self) -> None:
         """Stop admission, bound task completion, close resources, and checkpoint WAL."""
@@ -1548,6 +1567,20 @@ class RuntimeLifecycleService:
         if deadline is not None and not isinstance(deadline, MarketDeadline):
             raise TypeError("scheduler must return MarketDeadline or None")
         return deadline
+
+    def _claim_schedule_owner(self) -> asyncio.Task[object]:
+        owner = asyncio.current_task()
+        if owner is None:  # pragma: no cover - public async methods always run in a task
+            raise RuntimeError("runtime scheduling requires an asyncio task")
+        existing = self._schedule_owner
+        if existing is not None and not existing.done():
+            raise RuntimeError("runtime scheduling loop is already active")
+        self._schedule_owner = owner
+        return owner
+
+    def _release_schedule_owner(self, owner: asyncio.Task[object]) -> None:
+        if self._schedule_owner is owner:
+            self._schedule_owner = None
 
     async def _execute_deadline(self, deadline: MarketDeadline) -> object:
         work_task = asyncio.create_task(self._invoke(self._run_deadline, deadline))

@@ -105,6 +105,8 @@ class SQLiteBackupService:
         try:
             _copy_online(self._database_path, temporary_path)
             verification = verify_sqlite_backup(temporary_path)
+            if _destination_entries_exist(final_path):
+                raise BackupPathError("Backup destination already exists")
             os.replace(temporary_path, final_path)
             removed_paths = _apply_retention(self._backup_directory)
         except BackupError:
@@ -129,22 +131,33 @@ class SQLiteBackupService:
             raise BackupPathError("Backup directory could not be created") from None
         if not self._backup_directory.is_dir():
             raise BackupPathError("backup_directory must point to a directory")
-        if final_path.exists() or temporary_path.exists():
+        if _destination_entries_exist(final_path) or _destination_entries_exist(temporary_path):
             raise BackupPathError("Backup destination already exists")
+        try:
+            temporary_path.touch(exist_ok=False)
+        except OSError:
+            raise BackupPathError("Backup destination could not be reserved") from None
 
 
 def verify_sqlite_backup(backup_path: str | Path) -> BackupVerification:
     """Verify integrity and basic schema readability without modifying the file."""
 
     path = _existing_file(backup_path, "backup_path")
+    _require_standalone_header(path)
+    if _sidecars_exist(path):
+        raise BackupVerificationError("SQLite backup must be one standalone file")
     try:
-        with closing(sqlite3.connect(_read_only_uri(path), uri=True, timeout=5)) as connection:
+        with closing(
+            sqlite3.connect(_immutable_read_only_uri(path), uri=True, timeout=5)
+        ) as connection:
             integrity_rows = connection.execute("PRAGMA integrity_check").fetchall()
             schema_object_count = int(
                 connection.execute("SELECT count(*) FROM sqlite_schema").fetchone()[0]
             )
     except OSError, sqlite3.Error, TypeError, ValueError, IndexError:
         raise BackupVerificationError("SQLite backup verification failed") from None
+    if _sidecars_exist(path):
+        raise BackupVerificationError("SQLite backup must be one standalone file")
     if integrity_rows != [("ok",)]:
         raise BackupVerificationError("SQLite backup integrity check failed")
     return BackupVerification(
@@ -161,6 +174,9 @@ def _copy_online(source_path: Path, destination_path: Path) -> None:
         closing(sqlite3.connect(destination_path, timeout=5)) as destination,
     ):
         source.backup(destination, pages=128, sleep=0.01)
+        journal_mode = destination.execute("PRAGMA journal_mode=DELETE").fetchone()
+        if journal_mode != ("delete",):
+            raise BackupVerificationError("SQLite backup could not be made standalone")
 
 
 def _existing_file(value: str | Path, name: str) -> Path:
@@ -203,13 +219,40 @@ def _read_only_uri(path: Path) -> str:
     return f"{path.as_uri()}?mode=ro"
 
 
+def _immutable_read_only_uri(path: Path) -> str:
+    return f"{path.as_uri()}?mode=ro&immutable=1"
+
+
+def _sidecar_paths(path: Path) -> tuple[Path, Path]:
+    return Path(f"{path}-wal"), Path(f"{path}-shm")
+
+
+def _require_standalone_header(path: Path) -> None:
+    try:
+        with path.open("rb") as backup_file:
+            header = backup_file.read(20)
+    except OSError:
+        raise BackupVerificationError("SQLite backup verification failed") from None
+    if header[:16] != b"SQLite format 3\x00" or header[18:20] != b"\x01\x01":
+        raise BackupVerificationError("SQLite backup must be one standalone file")
+
+
+def _sidecars_exist(path: Path) -> bool:
+    return any(os.path.lexists(sidecar) for sidecar in _sidecar_paths(path))
+
+
+def _destination_entries_exist(path: Path) -> bool:
+    return os.path.lexists(path) or _sidecars_exist(path)
+
+
 def _remove_temporary(path: Path, backup_directory: Path) -> None:
     if path.parent.resolve() != backup_directory.resolve() or not path.name.startswith("."):
         return
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        pass
+    for candidate in (path, *_sidecar_paths(path)):
+        try:
+            candidate.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _apply_retention(backup_directory: Path) -> tuple[Path, ...]:
