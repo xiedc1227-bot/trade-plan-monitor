@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 EnvironmentVariableName = Annotated[
     str,
@@ -18,6 +18,7 @@ class _ConfigurationModel(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         frozen=True,
+        hide_input_in_errors=True,
         strict=True,
         str_strip_whitespace=True,
     )
@@ -37,11 +38,29 @@ class WebConfiguration(_ConfigurationModel):
 
 
 class TushareConfiguration(_ConfigurationModel):
-    """Tushare configuration containing only a token reference."""
+    """Non-secret Tushare transport settings and one token reference."""
+
+    api_url: AnyHttpUrl | None = None
+    timeout_seconds: int = Field(default=30, ge=1, le=120)
 
     token_ref: EnvironmentSecretReference = Field(
         default_factory=lambda: EnvironmentSecretReference(environment_variable="TUSHARE_TOKEN")
     )
+
+    @field_validator("api_url")
+    @classmethod
+    def require_safe_api_url(cls, value: AnyHttpUrl | None) -> AnyHttpUrl | None:
+        if value is None:
+            return None
+        if len(str(value)) > 2_048:
+            raise ValueError("api_url must not exceed 2048 characters")
+        if value.username is not None or value.password is not None:
+            raise ValueError("api_url must not contain embedded credentials")
+        if value.query is not None or value.fragment is not None:
+            raise ValueError("api_url must not contain a query or fragment")
+        if value.scheme != "https":
+            raise ValueError("api_url must use HTTPS")
+        return value
 
 
 class AIConfiguration(_ConfigurationModel):

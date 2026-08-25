@@ -5,6 +5,9 @@ web:
   port: 8765
 
 tushare:
+  # Verified Tushare-compatible HTTPS endpoint. Never downgrade this to plain HTTP.
+  api_url: https://api.quicksync.cn
+  timeout_seconds: 30
   # The runtime resolves this name from the process environment when authorized.
   token_ref:
     environment_variable: TUSHARE_TOKEN

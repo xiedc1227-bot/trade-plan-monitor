@@ -18,6 +18,7 @@ coverage.xml
 htmlcov/
 
 # Local configuration and secrets
+config/app.yaml
 .env
 .env.*
 !.env.example
@@ -44,4 +45,3 @@ web/coverage/
 .vscode/
 .DS_Store
 Thumbs.db
-

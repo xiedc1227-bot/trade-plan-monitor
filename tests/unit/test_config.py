@@ -21,6 +21,8 @@ def test_empty_yaml_uses_loopback_web_and_secret_reference_defaults(tmp_path: Pa
 
     assert config.web.host == "127.0.0.1"
     assert config.web.port == 8765
+    assert config.tushare.api_url is None
+    assert config.tushare.timeout_seconds == 30
     assert config.tushare.token_ref.environment_variable == "TUSHARE_TOKEN"
     assert config.ai.api_key_ref is None
 
@@ -30,6 +32,8 @@ def test_yaml_accepts_environment_references_without_secret_values(tmp_path: Pat
     config_path.write_text(
         """\
 tushare:
+  api_url: https://api.quicksync.cn
+  timeout_seconds: 20
   token_ref:
     environment_variable: MONITOR_TUSHARE_TOKEN
 ai:
@@ -41,6 +45,8 @@ ai:
 
     config = load_application_config(config_path)
 
+    assert str(config.tushare.api_url) == "https://api.quicksync.cn/"
+    assert config.tushare.timeout_seconds == 20
     assert config.tushare.token_ref.environment_variable == "MONITOR_TUSHARE_TOKEN"
     assert config.ai.api_key_ref is not None
     assert config.ai.api_key_ref.environment_variable == "MONITOR_AI_API_KEY"
@@ -51,6 +57,8 @@ def test_example_configuration_is_valid_and_contains_references_only() -> None:
 
     assert config.web.host == "127.0.0.1"
     assert config.web.port == 8765
+    assert str(config.tushare.api_url) == "https://api.quicksync.cn/"
+    assert config.tushare.timeout_seconds == 30
     assert config.tushare.token_ref.environment_variable == "TUSHARE_TOKEN"
     assert config.ai.api_key_ref is not None
     assert config.ai.api_key_ref.environment_variable == "AI_API_KEY"
@@ -62,6 +70,10 @@ def test_example_configuration_is_valid_and_contains_references_only() -> None:
         ("unexpected: true\n", "unexpected"),
         ("web:\n  host: 0.0.0.0\n", "web.host"),
         ("tushare:\n  token: literal-value\n", "tushare.token"),
+        ("tushare:\n  api_url: http://api.quicksync.cn\n", "tushare.api_url"),
+        ("tushare:\n  api_url: https://user:pass@api.quicksync.cn\n", "tushare.api_url"),
+        ("tushare:\n  api_url: https://api.quicksync.cn?token=value\n", "tushare.api_url"),
+        ("tushare:\n  api_url: https://api.quicksync.cn#fragment\n", "tushare.api_url"),
         ("ai:\n  api_key: literal-value\n", "ai.api_key"),
     ],
 )

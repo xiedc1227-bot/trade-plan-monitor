@@ -64,8 +64,10 @@ back to the current working directory or the frontend source tree when those ass
 Copy-Item config\app.example.yaml config\app.yaml
 ```
 
-The YAML file contains environment-variable names only. For UI-only offline startup, leave the
-two variables unset. Before an explicitly authorized live provider run, set placeholders in the
+The YAML file contains only non-secret provider settings and environment-variable names. The
+versioned example selects the verified `https://api.quicksync.cn` Tushare-compatible endpoint;
+the local `config/app.yaml` copy is ignored by Git. For UI-only offline startup, leave the two
+variables unset. Before an explicitly authorized live provider run, set placeholders in the
 current process or your OS secret manager:
 
 ```powershell
@@ -166,6 +168,19 @@ The adapter exposes one independent capability probe and five normalized operati
 | `trading_calendar` | `trade_cal` | Trading-day/session decisions |
 | `daily_limits` | `stk_limit` | Official daily up/down limits |
 | `daily_bars` | `daily` | Official unadjusted daily bars |
+
+The non-secret example configuration selects `https://api.quicksync.cn`. The
+`create_tushare_client` factory resolves `TUSHARE_TOKEN` only at runtime and sets the endpoint on
+one official `tushare==1.4.29` `DataApi` instance instead of mutating the SDK's process-global
+endpoint. Plain HTTP, embedded credentials, query strings, and fragments are rejected.
+
+An explicitly authorized check on 2026-08-25 verified `stk_mins` through both HTTPS and the
+official SDK: one `600000.SH` trading day returned 241 one-minute rows for 2026-08-24, covering
+09:30:00 through 15:00:00 with the expected eight fields and no duplicate, null-required,
+invalid-OHLC, negative-flow, or wrong-symbol row. This makes the endpoint suitable as a future
+historical-minute backtest source; it does not replace the separately required live `rt_min` and
+`rt_min_daily` capabilities, and the current packaged read-only fallback still does not compose a
+backtest runtime.
 
 Set `TUSHARE_TOKEN` only for a separately authorized live capability probe. Capability, account
 permission, rate limit, and minute-label semantics are discovered independently; configuration

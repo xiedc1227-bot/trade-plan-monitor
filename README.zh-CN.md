@@ -49,7 +49,7 @@ Pop-Location
 Copy-Item config\app.example.yaml config\app.yaml
 ```
 
-YAML 只保存环境变量名称。仅离线启动界面时，可以不设置这两个变量。在另行授权的真实供应商运行之前，在当前进程或操作系统密钥管理器中设置占位值：
+YAML 只保存非密钥供应商设置和环境变量名称。纳入版本控制的示例选择已验证的 Tushare 兼容端点 `https://api.quicksync.cn`；本地副本 `config/app.yaml` 会被 Git 忽略。仅离线启动界面时，可以不设置这两个变量。在另行授权的真实供应商运行之前，在当前进程或操作系统密钥管理器中设置占位值：
 
 ```powershell
 $env:TUSHARE_TOKEN = "replace-with-your-tushare-token"
@@ -137,6 +137,10 @@ Tushare ─→ 规范化完整 K 线 ─────┴──→ 确定性决策
 | `trading_calendar` | `trade_cal` | 交易日/交易时段判断 |
 | `daily_limits` | `stk_limit` | 官方每日涨跌停价格 |
 | `daily_bars` | `daily` | 官方不复权日 K 线 |
+
+非密钥示例配置选择 `https://api.quicksync.cn`。`create_tushare_client` 工厂仅在运行时解析 `TUSHARE_TOKEN`，并把端点设置到单个官方 `tushare==1.4.29` `DataApi` 实例，不修改 SDK 的进程级全局端点。系统拒绝明文 HTTP、内嵌账号密码、查询字符串和片段。
+
+2026-08-25 经明确授权的检查已通过 HTTPS 和官方 SDK 验证 `stk_mins`：`600000.SH` 在 2026-08-24 的一个完整交易日返回 241 条一分钟记录，覆盖 09:30:00 至 15:00:00，包含预期的 8 个字段，且不存在重复行、必要字段空值、非法 OHLC、负成交量或错误股票代码行。该端点因此可以作为未来历史分钟回测数据源；它不能替代另行要求的实时 `rt_min` 和 `rt_min_daily` 能力，当前打包只读 fallback 也仍未组合回测运行时。
 
 只在另行授权的真实能力探测中设置 `TUSHARE_TOKEN`。能力、账号权限、限流和分钟标签语义均独立发现；配置不代表能力可用。必要能力被拒绝或未验证时会阻断可操作输出。默认契约测试使用确定性假 DataFrame：
 
