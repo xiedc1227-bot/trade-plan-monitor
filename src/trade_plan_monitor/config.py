@@ -1,10 +1,21 @@
 """Typed, non-secret application configuration."""
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 import yaml
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ModelWrapValidatorHandler,
+    StringConstraints,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 EnvironmentVariableName = Annotated[
     str,
@@ -22,6 +33,20 @@ class _ConfigurationModel(BaseModel):
         strict=True,
         str_strip_whitespace=True,
     )
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, object] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        """Copy public configuration without bypassing field invariants."""
+
+        if not update:
+            return super().model_copy(deep=deep)
+        values = self.model_dump(mode="python", round_trip=True)
+        values.update(update)
+        return type(self).model_validate(values)
 
 
 class EnvironmentSecretReference(_ConfigurationModel):
@@ -47,6 +72,15 @@ class TushareConfiguration(_ConfigurationModel):
         default_factory=lambda: EnvironmentSecretReference(environment_variable="TUSHARE_TOKEN")
     )
 
+    @model_validator(mode="wrap")
+    @classmethod
+    def remove_validation_inputs(
+        cls,
+        value: object,
+        handler: ModelWrapValidatorHandler[Self],
+    ) -> Self:
+        return _validate_without_inputs(value, handler)
+
     @field_validator("api_url")
     @classmethod
     def require_safe_api_url(cls, value: AnyHttpUrl | None) -> AnyHttpUrl | None:
@@ -68,6 +102,15 @@ class AIConfiguration(_ConfigurationModel):
 
     api_key_ref: EnvironmentSecretReference | None = None
 
+    @model_validator(mode="wrap")
+    @classmethod
+    def remove_validation_inputs(
+        cls,
+        value: object,
+        handler: ModelWrapValidatorHandler[Self],
+    ) -> Self:
+        return _validate_without_inputs(value, handler)
+
 
 class ApplicationConfiguration(_ConfigurationModel):
     """Top-level configuration accepted by the local application."""
@@ -75,6 +118,40 @@ class ApplicationConfiguration(_ConfigurationModel):
     web: WebConfiguration = Field(default_factory=WebConfiguration)
     tushare: TushareConfiguration = Field(default_factory=TushareConfiguration)
     ai: AIConfiguration = Field(default_factory=AIConfiguration)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def remove_validation_inputs(
+        cls,
+        value: object,
+        handler: ModelWrapValidatorHandler[Self],
+    ) -> Self:
+        return _validate_without_inputs(value, handler)
+
+
+def _validate_without_inputs[Model](
+    value: object,
+    handler: ModelWrapValidatorHandler[Model],
+) -> Model:
+    safe_error: ValidationError | None = None
+    try:
+        return handler(value)
+    except ValidationError as error:
+        safe_error = _validation_error_without_inputs(error)
+    if safe_error is not None:
+        raise safe_error
+    raise AssertionError("validation boundary completed without a result")
+
+
+def _validation_error_without_inputs(error: ValidationError) -> ValidationError:
+    line_errors = error.errors(include_url=False)
+    for line_error in line_errors:
+        line_error.pop("input", None)
+    return ValidationError.from_exception_data(
+        error.title,
+        line_errors,
+        hide_input=True,
+    )
 
 
 def load_application_config(path: str | Path) -> ApplicationConfiguration:

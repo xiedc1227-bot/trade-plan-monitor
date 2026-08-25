@@ -9,6 +9,7 @@ https://docs.python.org/3/library/ipaddress.html#ipaddress.IPv4Address.is_loopba
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
 from ipaddress import ip_address
 from typing import Annotated, Literal, Self
@@ -109,6 +110,20 @@ class AIProviderConfig(_AIValue):
     prompt_version: PromptVersion = "plan-extract-v1"
     allow_redirects: Literal[False] = False
     enabled: bool = True
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, object] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        """Copy provider configuration without bypassing URL and resource limits."""
+
+        if not update:
+            return super().model_copy(deep=deep)
+        values = self.model_dump(mode="python", round_trip=True)
+        values.update(update)
+        return type(self).model_validate(values)
 
     @model_validator(mode="wrap")
     @classmethod
