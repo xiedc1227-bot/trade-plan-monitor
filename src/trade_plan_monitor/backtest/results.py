@@ -26,6 +26,11 @@ from pydantic import (
 )
 
 from trade_plan_monitor.backtest.canonical import canonical_decimal
+from trade_plan_monitor.backtest.migration import (
+    MigrationInventory,
+    inspect_result_database,
+    require_safe_store_initialization,
+)
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
 
 Sha256Hex = Annotated[
@@ -347,6 +352,8 @@ class BacktestResultStore:
         self._path = Path(database_path).expanduser().resolve()
         if self._path.exists() and not self._path.is_file():
             raise ValueError("database_path must point to a file")
+        self._migration_inventory = inspect_result_database(self._path)
+        require_safe_store_initialization(self._migration_inventory)
         reject_incompatible_database(
             self._path,
             store_name="backtest result",
@@ -359,6 +366,12 @@ class BacktestResultStore:
     @property
     def database_path(self) -> Path:
         return self._path
+
+    @property
+    def migration_inventory(self) -> MigrationInventory:
+        """Return the immutable inventory captured before initialization."""
+
+        return self._migration_inventory
 
     def record_run(
         self,

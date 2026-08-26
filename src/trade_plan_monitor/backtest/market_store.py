@@ -24,6 +24,11 @@ from trade_plan_monitor.backtest.dataset import (
     MarketStoreStatistics,
     exchange_for_symbol,
 )
+from trade_plan_monitor.backtest.migration import (
+    MigrationInventory,
+    inspect_market_database,
+    require_safe_store_initialization,
+)
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteBatch
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
@@ -113,6 +118,8 @@ class BacktestMarketStore:
         self._path = Path(database_path).expanduser().resolve()
         if self._path.exists() and not self._path.is_file():
             raise ValueError("database_path must point to a file")
+        self._migration_inventory = inspect_market_database(self._path)
+        require_safe_store_initialization(self._migration_inventory)
         reject_incompatible_database(
             self._path,
             store_name="backtest market",
@@ -127,6 +134,12 @@ class BacktestMarketStore:
     @property
     def database_path(self) -> Path:
         return self._path
+
+    @property
+    def migration_inventory(self) -> MigrationInventory:
+        """Return the immutable inventory captured before initialization."""
+
+        return self._migration_inventory
 
     def record_minute_batch(self, batch: HistoricalMinuteBatch) -> str:
         """Record one fully validated historical trading day."""
