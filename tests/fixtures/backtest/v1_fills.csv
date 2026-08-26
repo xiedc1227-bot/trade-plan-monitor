@@ -1,0 +1,2 @@
+run_id,fill_id,filled_at,side,symbol,bucket,quantity,price_fen,notional_fen,fees_fen,cash_delta_fen,realized_pnl_fen
+c6c454f6cc15a294fbf23d042543b17a5c15800646782c4499936333f23f207b,legacy-fill-001,2026-08-24T01:36:00.000000+00:00,BUY,003043.SZ,TACTICAL,100,6401,640100,507,-640607,

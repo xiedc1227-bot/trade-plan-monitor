@@ -46,6 +46,7 @@ class TushareOperation(StrEnum):
     PROBE_CAPABILITIES = "probe_capabilities"
     REALTIME_MINUTES = "realtime_minutes"
     CURRENT_DAY_MINUTES = "current_day_minutes"
+    HISTORICAL_MINUTES = "historical_minutes"
     TRADING_CALENDAR = "trading_calendar"
     DAILY_LIMITS = "daily_limits"
     DAILY_BARS = "daily_bars"

@@ -1,0 +1,30 @@
+{
+  "columns": [
+    "ts_code",
+    "trade_time",
+    "open",
+    "close",
+    "high",
+    "low",
+    "vol",
+    "amount"
+  ],
+  "symbol": "600000.SH",
+  "tradeDate": "2026-08-24",
+  "contractVersion": "TUSHARE_STK_MINS_241_END_V1",
+  "openingSpecialTime": "09:30:00",
+  "sessionMinuteRanges": [
+    ["09:31:00", "11:30:00"],
+    ["13:01:00", "15:00:00"]
+  ],
+  "facts": {
+    "open": "10.01",
+    "close": "10.03",
+    "high": "10.05",
+    "low": "9.99",
+    "vol": 100,
+    "amount": "1003.00"
+  },
+  "expectedRawRows": 241,
+  "expectedSessionRows": 240
+}

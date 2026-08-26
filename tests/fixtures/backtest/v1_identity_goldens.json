@@ -1,0 +1,65 @@
+{
+  "cases": [
+    {
+      "dataset_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "end": "2026-08-24",
+      "execution_config": {
+        "buy_slippage_bps": "2",
+        "commission_rate": "0.0003",
+        "formula_version": "execution-model-v1",
+        "lot_size": 100,
+        "minimum_commission_fen": 500,
+        "sell_slippage_bps": "2",
+        "stamp_duty_rate": "0.0005",
+        "transfer_fee_rate": "0.00001"
+      },
+      "initial_cash_fen": 10000000,
+      "label": "baseline",
+      "manual_event_risk": false,
+      "report_hash": "4cfce51aad2ef79793531cdd39a53eb0453f177857bde89c679aa914e1e43ce9",
+      "run_id": "c6c454f6cc15a294fbf23d042543b17a5c15800646782c4499936333f23f207b",
+      "start": "2026-08-20"
+    },
+    {
+      "dataset_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "end": "2026-07-31",
+      "execution_config": {
+        "buy_slippage_bps": "3",
+        "commission_rate": "0.0004",
+        "formula_version": "execution-model-v1",
+        "lot_size": 100,
+        "minimum_commission_fen": 600,
+        "sell_slippage_bps": "4",
+        "stamp_duty_rate": "0.0005",
+        "transfer_fee_rate": "0.00002"
+      },
+      "initial_cash_fen": 12345678,
+      "label": "manual-risk",
+      "manual_event_risk": true,
+      "report_hash": "5ee39ff8e55719f737ae29230d1d22217614b14df7249b9baeb859bbaa64ad9e",
+      "run_id": "bffbb2761526bf4cb33069114f9ab294edd0432b9f5582f1149d9901102cbdf3",
+      "start": "2026-07-01"
+    },
+    {
+      "dataset_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "end": "2025-01-03",
+      "execution_config": {
+        "buy_slippage_bps": "0",
+        "commission_rate": "0",
+        "formula_version": "execution-model-v1",
+        "lot_size": 100,
+        "minimum_commission_fen": 0,
+        "sell_slippage_bps": "0",
+        "stamp_duty_rate": "0",
+        "transfer_fee_rate": "0"
+      },
+      "initial_cash_fen": 900000,
+      "label": "zero-cost",
+      "manual_event_risk": false,
+      "report_hash": "52098a7b1fd0d9f739344237cde2ba0ec843051a62578062a9b66b9907aa81ec",
+      "run_id": "dab4193caa77c79e7338a2db2bc4c0774017ab8e8f7ef06e8c8b57376580c480",
+      "start": "2025-01-02"
+    }
+  ],
+  "plan_sha256": "6075014c3d78719ae220a61c371ed77151a4ef132f64356f8c7527b235e2dec4"
+}

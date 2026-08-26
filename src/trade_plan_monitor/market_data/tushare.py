@@ -249,14 +249,60 @@ class TushareMarketDataProvider:
             require_current_day_frequency=True,
         )
 
-    def trading_calendar(self, start: date, end: date) -> list[TradingDay]:
+    def trading_calendar(
+        self,
+        start: date,
+        end: date,
+    ) -> list[TradingDay]:
         """Return normalized A-share calendar rows in the requested date range."""
 
+        return self._trading_calendar("", start, end)
+
+    def trading_calendar_for_exchange(
+        self,
+        exchange: str,
+        start: date,
+        end: date,
+    ) -> list[TradingDay]:
+        """Return calendar rows for one explicit historical exchange."""
+
+        if type(exchange) is not str:
+            raise TypeError("exchange must be a string")
+        return self._trading_calendar(self._validated_exchange(exchange), start, end)
+
+    def historical_trading_calendar_for_exchange(
+        self,
+        exchange: str,
+        start: date,
+        end: date,
+    ) -> list[TradingDay]:
+        """Return a fail-closed calendar response for historical synchronization."""
+
+        if type(exchange) is not str:
+            raise TypeError("exchange must be a string")
+        return self._trading_calendar(
+            self._validated_exchange(exchange),
+            start,
+            end,
+            strict_response=True,
+        )
+
+    def _trading_calendar(
+        self,
+        exchange: str,
+        start: date,
+        end: date,
+        *,
+        strict_response: bool = False,
+    ) -> list[TradingDay]:
+        """Fetch and normalize calendar rows for the selected exchange."""
+
         self._validated_date_range(start, end)
+        requested_exchange = self._validated_exchange(exchange) if exchange else None
         frame = self._fetch_frame(
             "trade_cal",
             fields=_TRADING_CALENDAR_FIELDS,
-            exchange="",
+            exchange=exchange,
             start_date=self._date_argument(start),
             end_date=self._date_argument(end),
         )
@@ -271,21 +317,37 @@ class TushareMarketDataProvider:
         for row in frame.to_dict(orient="records"):
             identity: Hashable | None = None
             try:
-                exchange = self._validated_exchange(row["exchange"])
+                row_exchange = self._validated_exchange(row["exchange"])
                 cal_date = self._source_date(row["cal_date"])
-                if not start <= cal_date <= end:
+                if requested_exchange is not None and row_exchange != requested_exchange:
+                    if strict_response:
+                        raise ValueError("calendar response contains another exchange")
                     continue
-                identity = (exchange, cal_date)
+                if not start <= cal_date <= end:
+                    if strict_response:
+                        raise ValueError("calendar response contains an out-of-range date")
+                    continue
+                identity = (row_exchange, cal_date)
                 value = TradingDay(
-                    exchange=exchange,
+                    exchange=row_exchange,
                     cal_date=cal_date,
                     is_open=self._open_flag(row["is_open"]),
                     previous_trade_date=self._source_date(row["pretrade_date"]),
                 )
             except _ROW_ERRORS:
+                if strict_response:
+                    raise TushareProviderError(
+                        TushareErrorCode.INVALID_RESPONSE,
+                        "trade_cal",
+                    ) from None
                 if identity is not None:
                     self._reject_identity(candidates, rejected, identity)
                 continue
+            if strict_response and identity in candidates:
+                raise TushareProviderError(
+                    TushareErrorCode.INVALID_RESPONSE,
+                    "trade_cal",
+                ) from None
             self._record_candidate(candidates, rejected, identity, value)
 
         return sorted(
@@ -295,6 +357,21 @@ class TushareMarketDataProvider:
 
     def daily_limits(self, trade_date: date) -> list[DailyLimit]:
         """Return actual provider-supplied price limits for one trade date."""
+
+        return self._daily_limits(trade_date, strict_response=False)
+
+    def historical_daily_limits(self, trade_date: date) -> list[DailyLimit]:
+        """Return fail-closed daily limits for historical synchronization."""
+
+        return self._daily_limits(trade_date, strict_response=True)
+
+    def _daily_limits(
+        self,
+        trade_date: date,
+        *,
+        strict_response: bool,
+    ) -> list[DailyLimit]:
+        """Fetch and normalize one daily-limit response."""
 
         self._validated_date(trade_date, name="trade_date")
         frame = self._fetch_frame(
@@ -316,6 +393,8 @@ class TushareMarketDataProvider:
                 row_symbol = self._validated_symbol(row["ts_code"])
                 row_date = self._source_date(row["trade_date"])
                 if row_date != trade_date:
+                    if strict_response:
+                        raise ValueError("daily-limit response contains another date")
                     continue
                 identity = (row_symbol, row_date)
                 value = DailyLimit(
@@ -326,9 +405,19 @@ class TushareMarketDataProvider:
                     received_at=received_at,
                 )
             except _ROW_ERRORS:
+                if strict_response:
+                    raise TushareProviderError(
+                        TushareErrorCode.INVALID_RESPONSE,
+                        "stk_limit",
+                    ) from None
                 if identity is not None:
                     self._reject_identity(candidates, rejected, identity)
                 continue
+            if strict_response and identity in candidates:
+                raise TushareProviderError(
+                    TushareErrorCode.INVALID_RESPONSE,
+                    "stk_limit",
+                ) from None
             self._record_candidate(candidates, rejected, identity, value)
 
         return sorted(
@@ -338,6 +427,28 @@ class TushareMarketDataProvider:
 
     def daily_bars(self, symbol: str, start: date, end: date) -> list[DailyBar]:
         """Return official unadjusted daily bars converted to shares and yuan."""
+
+        return self._daily_bars(symbol, start, end, strict_response=False)
+
+    def historical_daily_bars(
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+    ) -> list[DailyBar]:
+        """Return fail-closed daily bars for historical synchronization."""
+
+        return self._daily_bars(symbol, start, end, strict_response=True)
+
+    def _daily_bars(
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+        *,
+        strict_response: bool,
+    ) -> list[DailyBar]:
+        """Fetch and normalize one daily-bar response."""
 
         requested_symbol = self._validated_symbol(symbol)
         self._validated_date_range(start, end)
@@ -362,6 +473,8 @@ class TushareMarketDataProvider:
                 row_symbol = self._validated_symbol(row["ts_code"])
                 row_date = self._source_date(row["trade_date"])
                 if row_symbol != requested_symbol or not start <= row_date <= end:
+                    if strict_response:
+                        raise ValueError("daily response contains another requested identity")
                     continue
                 identity = (row_symbol, row_date)
                 value = DailyBar(
@@ -377,9 +490,19 @@ class TushareMarketDataProvider:
                     received_at=received_at,
                 )
             except _ROW_ERRORS:
+                if strict_response:
+                    raise TushareProviderError(
+                        TushareErrorCode.INVALID_RESPONSE,
+                        "daily",
+                    ) from None
                 if identity is not None:
                     self._reject_identity(candidates, rejected, identity)
                 continue
+            if strict_response and identity in candidates:
+                raise TushareProviderError(
+                    TushareErrorCode.INVALID_RESPONSE,
+                    "daily",
+                ) from None
             self._record_candidate(candidates, rejected, identity, value)
 
         return sorted(

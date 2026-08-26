@@ -28,6 +28,7 @@ config/app.yaml
 # Runtime data and SQLite files
 data/
 backups/
+/backtest-reports/
 *.db
 *.db-*
 *.sqlite

@@ -1,0 +1,373 @@
+"""Stable JSON/CSV emission and isolated persistence for completed backtests."""
+
+from __future__ import annotations
+
+import csv
+import json
+import os
+import tempfile
+from datetime import UTC, date, datetime
+from hashlib import sha256
+from io import StringIO
+from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from trade_plan_monitor.backtest.results import (
+    BacktestDetailKind,
+    BacktestDetailRecord,
+    BacktestFillRecord,
+    BacktestResultStore,
+    BacktestRunStatus,
+    BacktestRunSummary,
+    backtest_detail_set_hash,
+    backtest_fill_set_hash,
+)
+from trade_plan_monitor.backtest.runner import RUN_FORMULA_VERSION, BacktestRunReport
+
+_MAX_RESULT_BATCH = 1_000
+
+
+class ReportPersistenceResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    summary_created: bool
+    fills_created: int = Field(ge=0)
+    details_created: int = Field(ge=0)
+
+
+def persist_report(
+    store: BacktestResultStore,
+    report: BacktestRunReport,
+) -> ReportPersistenceResult:
+    """Persist one immutable report without copying its historical market bars."""
+
+    if not isinstance(store, BacktestResultStore):
+        raise TypeError("store must be a BacktestResultStore")
+    if not isinstance(report, BacktestRunReport):
+        raise TypeError("report must be a BacktestRunReport")
+    fills = tuple(BacktestFillRecord.from_value(fill) for fill in report.fills)
+    details = _detail_records(report)
+    completed_at = report.daily_equity[-1].marked_at.astimezone(UTC)
+    summary = _summary_for_report(report, completed_at=completed_at)
+    summary_created = store.record_run(
+        summary,
+        materialized=False,
+        retention_at=datetime.now(UTC),
+    )
+    if not summary_created and store.get_run(report.run_id) is not None:
+        return ReportPersistenceResult(
+            summary_created=False,
+            fills_created=0,
+            details_created=0,
+        )
+    fills_created = sum(
+        store.record_fills(report.run_id, batch) for batch in _chunks(fills, _MAX_RESULT_BATCH)
+    )
+    details_created = sum(
+        store.record_details(report.run_id, batch) for batch in _chunks(details, _MAX_RESULT_BATCH)
+    )
+    store.mark_run_materialized(
+        report.run_id,
+        expected_fill_count=len(report.fills),
+        expected_detail_count=len(details),
+        expected_report_hash=report.report_hash,
+        expected_fill_set_hash=backtest_fill_set_hash(fills),
+        expected_detail_set_hash=backtest_detail_set_hash(details),
+    )
+    return ReportPersistenceResult(
+        summary_created=summary_created,
+        fills_created=fills_created,
+        details_created=details_created,
+    )
+
+
+def _summary_for_report(
+    report: BacktestRunReport,
+    *,
+    completed_at: datetime,
+) -> BacktestRunSummary:
+    detail_count = (
+        len(report.decisions)
+        + len(report.signals)
+        + len(report.outcomes)
+        + len(report.daily_equity)
+    )
+    return BacktestRunSummary(
+        run_id=report.run_id,
+        plan_sha256=report.plan_hash,
+        dataset_hash=report.dataset_hash,
+        status=BacktestRunStatus.COMPLETED,
+        completed_at=completed_at,
+        event_start=report.start,
+        event_end=report.end,
+        symbols=(report.symbol,),
+        coverage={
+            "dailyEquityCount": len(report.daily_equity),
+            "decisionCount": len(report.decisions),
+            "detailCount": detail_count,
+            "end": report.end,
+            "fillCount": len(report.fills),
+            "orderCount": len(report.orders),
+            "outcomeCount": len(report.outcomes),
+            "signalCount": len(report.signals),
+            "start": report.start,
+        },
+        assumptions={
+            "adjustmentPolicy": "NONE",
+            "executionConfig": report.execution_config.model_dump(
+                mode="python",
+                round_trip=True,
+            ),
+            "executionConfigHash": report.execution_config.config_hash,
+            "limitations": report.limitations,
+            "manualEventRisk": report.manual_event_risk,
+            "reportHash": report.report_hash,
+        },
+        formula_versions={
+            "execution": report.execution_config.formula_version,
+            "indicator": "ta-v1",
+            "runner": RUN_FORMULA_VERSION,
+        },
+        final_metrics=report.metrics.model_dump(mode="python", round_trip=True),
+    )
+
+
+def write_report_files(
+    report: BacktestRunReport,
+    *,
+    json_path: str | Path,
+    csv_path: str | Path,
+) -> tuple[Path, Path]:
+    """Atomically emit byte-stable JSON and a stable simulated-fill CSV ledger."""
+
+    if not isinstance(report, BacktestRunReport):
+        raise TypeError("report must be a BacktestRunReport")
+    resolved_json = Path(json_path).expanduser().resolve()
+    resolved_csv = Path(csv_path).expanduser().resolve()
+    if resolved_json == resolved_csv:
+        raise ValueError("json_path and csv_path must be different")
+    summary = _summary_for_report(report, completed_at=datetime(1970, 1, 1, tzinfo=UTC))
+    fills = tuple(BacktestFillRecord.from_value(fill) for fill in report.fills)
+    return write_persisted_report_files(
+        summary,
+        fills,
+        json_path=resolved_json,
+        csv_path=resolved_csv,
+    )
+
+
+def write_persisted_report_files(
+    summary: BacktestRunSummary,
+    fills: tuple[BacktestFillRecord, ...],
+    *,
+    json_path: str | Path,
+    csv_path: str | Path,
+) -> tuple[Path, Path]:
+    """Rebuild durable summary/ledger files without retaining prunable details."""
+
+    if not isinstance(summary, BacktestRunSummary):
+        raise TypeError("summary must be a BacktestRunSummary")
+    if type(fills) is not tuple or any(not isinstance(fill, BacktestFillRecord) for fill in fills):
+        raise TypeError("fills must be a tuple of BacktestFillRecord values")
+    if any(fill.run_id != summary.run_id for fill in fills):
+        raise ValueError("every fill must belong to summary.run_id")
+    expected_fill_count = summary.coverage.get("fillCount")
+    if type(expected_fill_count) is not int or expected_fill_count < 0:
+        raise ValueError("summary coverage must include a non-negative fillCount")
+    if len(fills) != expected_fill_count:
+        raise RuntimeError("stored fill ledger is incomplete")
+    resolved_json = Path(json_path).expanduser().resolve()
+    resolved_csv = Path(csv_path).expanduser().resolve()
+    if resolved_json == resolved_csv:
+        raise ValueError("json_path and csv_path must be different")
+    csv_buffer = StringIO(newline="")
+    fieldnames = (
+        "run_id",
+        "fill_id",
+        "filled_at",
+        "side",
+        "symbol",
+        "bucket",
+        "quantity",
+        "price_fen",
+        "notional_fen",
+        "fees_fen",
+        "cash_delta_fen",
+        "realized_pnl_fen",
+    )
+    writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    for fill in sorted(fills, key=lambda item: (item.filled_at, item.fill_id)):
+        payload = fill.payload
+        fees = payload.get("fees")
+        if not isinstance(fees, dict):
+            raise ValueError("stored fill fees must be an object")
+        writer.writerow(
+            {
+                "run_id": summary.run_id,
+                "fill_id": fill.fill_id,
+                "filled_at": fill.filled_at.isoformat(timespec="microseconds"),
+                "side": payload["side"],
+                "symbol": payload["symbol"],
+                "bucket": payload["bucket"],
+                "quantity": payload["quantity"],
+                "price_fen": payload["price_fen"],
+                "notional_fen": payload["notional_fen"],
+                "fees_fen": fees["total_fen"],
+                "cash_delta_fen": payload["cash_delta_fen"],
+                "realized_pnl_fen": (
+                    "" if payload.get("realized_pnl_fen") is None else payload["realized_pnl_fen"]
+                ),
+            }
+        )
+    report_hash = summary.assumptions.get("reportHash")
+    if not isinstance(report_hash, str):
+        raise ValueError("summary assumptions must include reportHash")
+    json_payload = {
+        "schemaVersion": "backtest-report-summary-v1",
+        "runId": summary.run_id,
+        "reportHash": report_hash,
+        "status": summary.status.value,
+        "planHash": summary.plan_sha256,
+        "datasetHash": summary.dataset_hash,
+        "eventStart": summary.event_start,
+        "eventEnd": summary.event_end,
+        "symbols": summary.symbols,
+        "coverage": summary.coverage,
+        "assumptions": summary.assumptions,
+        "formulaVersions": summary.formula_versions,
+        "finalMetrics": summary.final_metrics,
+        "blockers": summary.blockers,
+    }
+    _atomic_write_if_changed(resolved_json, _stable_json(json_payload) + "\n")
+    _atomic_write_if_changed(resolved_csv, csv_buffer.getvalue())
+    return resolved_json, resolved_csv
+
+
+def _detail_records(report: BacktestRunReport) -> tuple[BacktestDetailRecord, ...]:
+    values: list[BacktestDetailRecord] = []
+    for decision in report.decisions:
+        values.append(
+            BacktestDetailRecord.from_value(
+                BacktestDetailKind.DECISION,
+                decision,
+                run_id=report.run_id,
+                event_at=decision.snapshot.evaluated_at,
+                detail_id=_scoped_detail_id(
+                    report.run_id,
+                    BacktestDetailKind.DECISION,
+                    f"{decision.result_hash}:{decision.snapshot.evaluated_at.isoformat()}",
+                ),
+            )
+        )
+    for signal in report.signals:
+        values.append(
+            BacktestDetailRecord.from_value(
+                BacktestDetailKind.SIGNAL,
+                signal,
+                detail_id=_scoped_detail_id(
+                    report.run_id,
+                    BacktestDetailKind.SIGNAL,
+                    signal.signal_id,
+                ),
+            )
+        )
+    for outcome in report.outcomes:
+        values.append(
+            BacktestDetailRecord.from_value(
+                BacktestDetailKind.EXECUTION_OUTCOME,
+                outcome,
+                run_id=report.run_id,
+                event_at=outcome.resolved_at,
+                detail_id=_scoped_detail_id(
+                    report.run_id,
+                    BacktestDetailKind.EXECUTION_OUTCOME,
+                    outcome.outcome_id,
+                ),
+            )
+        )
+    for snapshot in report.daily_equity:
+        values.append(
+            BacktestDetailRecord.from_value(
+                BacktestDetailKind.DAILY_EQUITY,
+                snapshot,
+                detail_id=_scoped_detail_id(
+                    report.run_id,
+                    BacktestDetailKind.DAILY_EQUITY,
+                    snapshot.snapshot_id,
+                ),
+            )
+        )
+    return tuple(values)
+
+
+def _scoped_detail_id(run_id: str, kind: BacktestDetailKind, source_id: str) -> str:
+    payload = f"{run_id}\0{kind.value}\0{source_id}".encode()
+    return sha256(b"backtest-detail-identity-v1\0" + payload).hexdigest()
+
+
+def _chunks[T](values: tuple[T, ...], size: int) -> tuple[tuple[T, ...], ...]:
+    return tuple(values[index : index + size] for index in range(0, len(values), size))
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+            delete=False,
+        ) as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+            temporary_path = Path(stream.name)
+        os.replace(temporary_path, path)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
+def _atomic_write_if_changed(path: Path, content: str) -> None:
+    encoded = content.encode("utf-8")
+    try:
+        if path.read_bytes() == encoded:
+            return
+    except FileNotFoundError:
+        pass
+    _atomic_write(path, content)
+
+
+def _stable_json(value: object) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=_json_default,
+    )
+
+
+def _json_default(value: object) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat(timespec="microseconds")
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    raise TypeError(f"unsupported stable JSON value: {type(value).__name__}")
+
+
+__all__ = [
+    "ReportPersistenceResult",
+    "persist_report",
+    "write_persisted_report_files",
+    "write_report_files",
+]

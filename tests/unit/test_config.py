@@ -183,5 +183,5 @@ def test_module_help_lists_every_declared_command() -> None:
     )
 
     assert completed.returncode == 0
-    for command in ("validate", "monitor", "web", "replay", "backup"):
+    for command in ("validate", "monitor", "web", "replay", "backup", "backtest"):
         assert command in completed.stdout
