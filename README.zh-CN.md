@@ -6,13 +6,15 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 ## 产品状态
 
-`T001`～`T053` 已完成。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。在应用服务组合接通之前，该安装入口会有意以只读 `DEGRADED` 模式启动：界面可以访问，但业务 API 依赖会返回 `SERVICE_UNAVAILABLE`，不会虚构实时状态。
+`T001`～`T057` 已完成。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。在应用服务组合接通之前，该安装入口会有意以只读 `DEGRADED` 模式启动：界面可以访问，但业务 API 依赖会返回 `SERVICE_UNAVAILABLE`，不会虚构实时状态。
 
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 
+本地回测 MVP 现已提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，聚焦套件及审查驱动的完整性回归通过；更广的多股票、多年数据、资源与端到端验收闸门仍未完成。历史同步可用不代表实时 Tushare 契约闸门已经通过。
+
 ## 安全边界
 
-- 本系统是监控和提醒软件，不是券商、订单路由或投资顾问。每条可操作提醒都包含“仅提醒，不会自动下单”。
+- 实时系统是监控和提醒软件，不是券商、订单路由或投资顾问。每条可操作提醒都包含“仅提醒，不会自动下单”；只有隔离的离线 `BACKTEST` 模式可以生成明确标注的模拟研究成交。
 - 计划必须类型化、经审核、版本化，并在激活后保持不可变。AI 输出在确定性校验和用户审核通过前始终是不可信草稿。
 - 价格按整数“分”保存，数量按整数“股”保存，A 股时间戳必须是带 `Asia/Shanghai` 时区的值。
 - 行情缺失、过期、无权限或来源语义未验证时安全阻断。
@@ -140,13 +142,71 @@ Tushare ─→ 规范化完整 K 线 ─────┴──→ 确定性决策
 
 非密钥示例配置选择 `https://api.quicksync.cn`。`create_tushare_client` 工厂仅在运行时解析 `TUSHARE_TOKEN`，并把端点设置到单个官方 `tushare==1.4.29` `DataApi` 实例，不修改 SDK 的进程级全局端点。系统拒绝明文 HTTP、内嵌账号密码、查询字符串和片段。
 
-2026-08-25 经明确授权的检查已通过 HTTPS 和官方 SDK 验证 `stk_mins`：`600000.SH` 在 2026-08-24 的一个完整交易日返回 241 条一分钟记录，覆盖 09:30:00 至 15:00:00，包含预期的 8 个字段，且不存在重复行、必要字段空值、非法 OHLC、负成交量或错误股票代码行。该端点因此可以作为未来历史分钟回测数据源；它不能替代另行要求的实时 `rt_min` 和 `rt_min_daily` 能力，当前打包只读 fallback 也仍未组合回测运行时。
+2026-08-25 经明确授权的检查已通过 HTTPS 和官方 SDK 验证 `stk_mins`：`600000.SH` 在 2026-08-24 的一个完整交易日返回 241 条一分钟记录，覆盖 09:30:00 至 15:00:00，包含预期的 8 个字段，且不存在重复行、必要字段空值、非法 OHLC、负成交量或错误股票代码行。该观察本身不能证明上游标签语义，因此适配器仍默认使用 `UNVERIFIED`；经审核的回测组合必须显式选择下文所述项目策略 `TUSHARE_STK_MINS_241_END_V1`。该观察和历史策略都不能替代另行要求的实时 `rt_min` 和 `rt_min_daily` 能力。
 
 只在另行授权的真实能力探测中设置 `TUSHARE_TOKEN`。能力、账号权限、限流和分钟标签语义均独立发现；配置不代表能力可用。必要能力被拒绝或未验证时会阻断可操作输出。默认契约测试使用确定性假 DataFrame：
 
 ```powershell
 python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 ```
+
+## 历史回测
+
+已批准的回测设计采用混合流程：经明确授权的 `backtest sync` 把 `stk_mins`、`trade_cal`、`stk_limit` 和不复权 `daily` 事实增量下载到 `backtest-market.sqlite3`；本地校验冻结精确 `dataset_hash`；每次正式运行随后完全离线读取该冻结数据集，并且只把结果资产写入 `backtest-results.sqlite3`。
+
+行情库和结果库路径必须解析为不同文件。创建数据表前，每个存储都会拒绝既有实时监控数据库或另一个回测存储域，防止错误路径配置修改无关状态。
+
+历史行按内容去重并由多次运行复用。供应商修订生成不可变修订和新数据集哈希，不能改变旧结果。历史适配器默认使用 `UNVERIFIED`；CLI 组合显式选择版本化配置 `TUSHARE_STK_MINS_241_END_V1`，把 09:30 来源行保留为不参与策略的 `opening_special`，并把其余结束标签行映射为恰好 240 个规范交易分钟。该证据绝不能完成实时任务 `T058`。
+
+一个数据集接受 1–10 只不重复股票、最多 5 个日历年的回测日期和最多 2 个日历年的预热。历史日历同步必须对每个所需 `SSE`/`SZSE` 交易所分别显式调用一次 `trade_cal`。Tushare 官方日历契约未列出 BSE，因此 `.BJ` 历史范围当前会在联网前以 `UNSUPPORTED_HISTORICAL_CALENDAR:BSE` 被拒绝；实时 `.BJ` 计划支持不受影响。真实历史适配器会拒绝无法解析/重复原始行，以及错误日历交易所/范围、日线股票/范围或涨跌停日期。由于 `stk_limit(trade_date)` 是市场全量响应，该日期的其他有效股票仍合法；同步层选择请求股票后，要求每个规范参考集合即使在 `--refresh` 时也必须精确匹配，否则会在持久化前以 `INVALID_RESPONSE:<surface>` 失败。每次读取冻结 artifact 都会重新计算内容哈希，因此本地 payload 被修改后不能继续冒用旧 `artifact_hash` 回放。
+
+冻结校验还会报告稳定阻断原因 `INVALID_<KIND>:<identity>:<date>`、`INVALID_CALENDAR_CHAIN:<exchange>:<date>` 和 `PRICE_OUTSIDE_DAILY_LIMIT:<symbol>:<date>`，绝不会猜测或修复损坏事实。它在一个 WAL 读取快照下逐日校验分钟批次，然后仅用短 `BEGIN IMMEDIATE` 重新检查每个已选 head 并发布；并发修订会中止冻结。通过校验的 manifest 使用 O(1) 缓存 `natural_key` 索引执行后续成员查询，之后仍正常重算 artifact 哈希。
+
+所有回测哈希共享精确 Decimal 规范化：`0.0003` 与 `0.00030` 这类数值相等的 scale 变体具有相同规范文本和 identity，二进制浮点及定点展开超过 10,000 个字符的值则失败关闭。CLI 元转分同样不依赖全局 context：最多接受两位小数及其后的尾零，超大指数会在展开前失败，结果不能超过 signed 64-bit 分上限 `9,223,372,036,854,775,807`。回测复用经审核的计划哈希、规范 K 线、指标、收盘核对和纯决策引擎。`execution-model-v1` 仅用于回测：`signalAt` 等于产生该信号的判断 `snapshot.evaluatedAt` 以及来源事实的 `receivedAt`；只有后续满足 `openAt >= signalAt` 的候选 K 线才能成交。离散回放可以先完成产生事件，再处理同一边界的下一分钟 K 线，因此允许相等并不意味着能在产生信号的 K 线/桶内成交；生产历史分钟事实通常使用 `receivedAt == barEnd + 12s`，所以常规路径仍在之后的分钟成交，不会前视。成交把 `filledAt` 记录为执行分钟的 `openAt`。零成交量分钟会让订单沿连续规范候选继续等待之后第一根正成交量分钟；只有回放结束仍未出现时才变为 `SUSPENDED`。若缺少必需交易时段分钟，之后 K 线暴露缺口时会以 `MISSING_NEXT_MINUTE` 失败。每个 `ExecutionOutcome` 都包含不可变 `resolvedAt`，存在解决 K 线时还包含其 `sourceBarId`；只有 `NO_NEXT_MINUTE` 在结束时解决且没有来源 K 线。费用、滑点和部分持仓成本分摊使用带显式分取整的精确整数有理数算法，不依赖进程全局 Decimal context。系统确定性应用实际每日涨跌停、T+1、100 股整手、现金/仓位限制、费用和滑点。它绝不调用实时调度器、通知 Outbox、Webhook、WebSocket 或券商。
+
+每次判断最多使用 512 根完整五分钟 K 线、当前日前 499 根官方日线和 512 个日历日事实。这些边界进入 `run_id`，并以 `BOUNDED_ROLLING_CONTEXT_512_5M_499_DAILY_512_CALENDAR` 展示；它们属于公开研究限制，不能证明仍开放的多年资源闸门已经通过。
+
+报告还会公开以下限制：零成交量分钟作为不可交易代理（`ZERO_VOLUME_MINUTE_USED_AS_NON_TRADABLE_PROXY`）、成交数量不受分钟成交量上限约束（`FILL_QUANTITY_NOT_CAPPED_BY_MINUTE_VOLUME`）、涨跌停锁定保守使用开盘价或滑点后价格（`CONSERVATIVE_LIMIT_LOCK_FROM_OPEN_OR_SLIPPAGE`）、回撤按每日权益采样（`DAILY_EQUITY_DRAWDOWN_SAMPLING`）、胜率按卖出成交而非往返交易统计（`WIN_RATE_PER_SELL_FILL_NOT_ROUND_TRIP`），以及指标除法固定使用 Decimal precision 28 和 `ROUND_HALF_EVEN`（`METRIC_DECIMAL_PRECISION_28_HALF_EVEN`）。
+
+下面的完整示例使用默认隔离路径 `data/backtest-market.sqlite3`、`data/backtest-results.sqlite3` 和 `backtest-reports/`。`sync` 是唯一允许联网的命令；缺少 `--allow-network` 时会拒绝运行。默认预热边界是 `--start` 之前 400 个日历日；如需覆盖，必须对 `sync` 和 `verify` 传入相同的 `--warmup-start`。
+
+以下费用/滑点数值只是显式示例假设，不是产品默认值，使用时应按研究口径填写。`--no-event-risk` 会记录一项明确假设；存在重大事件风险阻断时，应改用与其互斥的 `--manual-event-risk`。
+
+```powershell
+# 1. 经明确授权，增量同步缺失历史事实。
+$env:TUSHARE_TOKEN = "<set-in-this-shell-only>"
+python -m trade_plan_monitor backtest sync `
+  --symbols 003043.SZ `
+  --start 2025-01-02 `
+  --end 2025-12-31 `
+  --allow-network
+Remove-Item Env:TUSHARE_TOKEN
+
+# 2. 在本地冻结相同范围，并从 JSON 结果复制 dataset_hash。
+python -m trade_plan_monitor backtest verify `
+  --symbols 003043.SZ `
+  --start 2025-01-02 `
+  --end 2025-12-31
+
+# 3. 完全离线运行，并显式填写全部成交与事件风险假设。
+python -m trade_plan_monitor backtest run `
+  --dataset <dataset_hash_from_verify> `
+  --plan config/plans/003043.SZ.sample.yaml `
+  --initial-cash-yuan 100000 `
+  --commission-rate 0.0003 `
+  --minimum-commission-yuan 5 `
+  --stamp-duty-rate 0.0005 `
+  --transfer-fee-rate 0.00001 `
+  --buy-slippage-bps 2 `
+  --sell-slippage-bps 2 `
+  --no-event-risk
+
+# 4. 查看摘要，并且最多清理一个有界批次的过期详情。
+python -m trade_plan_monitor backtest list --limit 20 --offset 0
+python -m trade_plan_monitor backtest prune --batch-size 1000
+```
+
+运行摘要、假设、最终指标和成交账本长期保留。成功运行的判断/信号/每日权益详情只保留最新 100 次且最多 90 天；失败、取消及按需调试详情保留 14 天；置顶运行豁免。结果发布先把规范行 staged 到 `backtest-results.sqlite3`；普通读取和统计看不到任何 staged 行。只有完整 `reportHash`、预期成交/详情数量和规范 identity/内容集合哈希都匹配时，一个事务才会设置内部 `materialized` 可见性标记。首次发布会持久化这些数量和集合哈希，已发布运行的每次重试都必须精确匹配；普通摘要/成交/详情读取还会在应用任何 detail-kind 过滤前，根据已哈希 payload 校验每个 SQL identity。随后 CLI 原子写入 `backtest-report-summary-v1` JSON 和成交 CSV。`materialized` 是唯一发布闸门，但不是公开运行状态；公开状态仍为 `COMPLETED`、`FAILED` 或 `CANCELLED`。有界 `prune` 维护会在 14 天后移除未置顶的废弃 staged 摘要/成交/详情，近期 stage 仍可恢复。文件缺失或损坏时，可以根据长期摘要/成交行重建，不联网、不重放、也不重复成交；已清理的判断/信号/结果/权益详情按设计不可重建。`reportHash` 继续作为原始完整运行的审计 identity，并不是文件字节哈希。底层回测契约支持置顶元数据和初始持仓批次，但当前 CLI 尚未暴露置顶/取消置顶或初始持仓输入，因此每次 CLI 运行都只从现金开始。不保存完整逐分钟账户快照，也不重复保存行情行。隔离、禁止未来数据、报告及保留契约详见 [SPEC-backtest.zh-CN.md](SPEC-backtest.zh-CN.md)。
 
 ## AI 密钥
 
@@ -264,6 +324,7 @@ trade-plan-monitor/
 | 计划领域 | [SPEC-plan-domain.md](SPEC-plan-domain.md) | [SPEC-plan-domain.zh-CN.md](SPEC-plan-domain.zh-CN.md) |
 | AI 草稿 | [SPEC-ai-plan-drafting.md](SPEC-ai-plan-drafting.md) | [SPEC-ai-plan-drafting.zh-CN.md](SPEC-ai-plan-drafting.zh-CN.md) |
 | 行情数据 | [SPEC-market-data.md](SPEC-market-data.md) | [SPEC-market-data.zh-CN.md](SPEC-market-data.zh-CN.md) |
+| 历史回测 | [SPEC-backtest.md](SPEC-backtest.md) | [SPEC-backtest.zh-CN.md](SPEC-backtest.zh-CN.md) |
 | 策略状态 | [SPEC-strategy-state.md](SPEC-strategy-state.md) | [SPEC-strategy-state.zh-CN.md](SPEC-strategy-state.zh-CN.md) |
 | 决策引擎 | [SPEC-decision-engine.md](SPEC-decision-engine.md) | [SPEC-decision-engine.zh-CN.md](SPEC-decision-engine.zh-CN.md) |
 | 通知 Outbox | [SPEC-notification-outbox.md](SPEC-notification-outbox.md) | [SPEC-notification-outbox.zh-CN.md](SPEC-notification-outbox.zh-CN.md) |

@@ -8,8 +8,9 @@
 - Enable and monitor at most 10 A-share stocks at the same time.
 - Accept pasted natural-language trade plans and use a user-configured AI service to create structured drafts.
 - An AI draft must pass deterministic validation and explicit user activation before entering monitoring.
-- Provide textual and visual reminders only; do not submit, cancel, or simulate broker orders.
-- Use one SQLite WAL database with local online backups; do not build a cluster, primary/replica topology, or high-availability system.
+- The live path provides textual and visual reminders only and never submits, cancels, or infers broker fills. The isolated offline `BACKTEST` mode may create versioned simulated fills for research.
+- The approved backtest redesign adds a local Vue workbench and additive REST resources through a persistent bounded job layer; the Web surface remains unimplemented until its module specifications, plan, and tasks pass their own review gates.
+- Use one SQLite WAL database for live state plus isolated market/result SQLite databases for backtesting; do not build a cluster, primary/replica topology, or high-availability system.
 
 ## Capability Modules
 
@@ -22,7 +23,14 @@
 | `decision-engine` | Pure deterministic evaluation from an active plan, complete market data, indicators, blockers, and strategy state | `plan-domain`, `market-data`, `strategy-state` |
 | `notification-outbox` | Signal deduplication, textual alert rendering, acknowledgement, retries, in-app alerts, console, and generic webhook | `decision-engine` |
 | `monitor-runtime` | Trading-session scheduling for at most 10 stocks, bounded concurrency, recovery, health, replay, and graceful shutdown | `market-data`, `strategy-state`, `decision-engine`, `notification-outbox` |
-| `local-web` | Local REST/WebSocket API and Vue UI for overview, plan/AI review, stock detail, alerts, positions, settings, and health | All modules |
+| `backtest-data` | Historical capability mapping, authorized incremental synchronization, coverage inspection, immutable revisions, dataset verification, and frozen `dataset_hash` identities | `market-data` |
+| `backtest-engine` | Pure offline event-time replay, no-lookahead enforcement, versioned simulated execution, deterministic metrics, and `run_id` identity | `backtest-data`, `plan-domain`, `market-data`, `strategy-state`, `decision-engine` |
+| `backtest-results` | Materialized run summaries, fills, bounded details, pagination, exports, pinning, retention, and integrity-checked reconstruction | `backtest-engine` |
+| `backtest-jobs` | Persistent bounded sync/verify/run job lifecycle, dedicated single-thread execution slot, atomic idempotency claims and job/result Unit of Work, progress, cooperative cancellation, restart recovery, and single-host resource admission | `backtest-data`, `backtest-engine`, `backtest-results` |
+| `backtest` | Stable initiative-wide invariant and target CLI-compatibility index for research-only offline backtesting; detailed contracts live in the six child specifications | `backtest-data`, `backtest-engine`, `backtest-results`, `backtest-jobs` |
+| `local-web` | Shared loopback-only FastAPI/Vue platform for live views, same-origin security, OpenAPI generation, application shell, and design tokens | All live modules |
+| `backtest-api` | Additive typed REST resources for datasets, jobs, runs, results, plan snapshots, idempotency, pagination, and generated frontend contracts | `backtest-data`, `backtest-jobs`, `backtest-results`, `plan-domain`, `local-web` |
+| `backtest-web` | Vue backtest workbench for historical-data coverage, run submission, progress/cancellation, paginated history, and result inspection | `backtest-api`, `local-web` |
 
 ## Build Order
 
@@ -33,17 +41,25 @@ plan-domain ──→ ai-plan-drafting
                                         ▼
 market-data ───────────────────→ decision-engine
                                         │
-                                        ▼
-                              notification-outbox
-                                        │
-                                        ▼
-                                 monitor-runtime
-                                        │
-                                        ▼
-                                    local-web
+                   ▼
+        notification-outbox
+                   │
+                   ▼
+            monitor-runtime ─────────────────────────→ local-web
+
+market-data ──→ backtest-data ──→ backtest-engine ──→ backtest-results
+                      │                  │                    │
+                      └──────────────────┴────────────────────┘
+                                         │
+                                         └──→ backtest-jobs ──┬──→ backtest (CLI compatibility/index)
+                                                              └──→ backtest-api ──→ backtest-web
+                                                                       ▲                 ▲
+                                                                       └──── local-web ──┘
 ```
 
-After `plan-domain` is approved, `ai-plan-drafting`, `market-data`, and `strategy-state` can be specified and implemented independently. The live decision path never calls AI.
+After `plan-domain` is approved, `ai-plan-drafting`, `market-data`, and `strategy-state` can be specified and implemented independently. The live decision path never calls AI. `backtest` reuses the pure decision contracts but remains storage-, scheduler-, notification-, and network-isolated during execution.
+
+The approved backtest-module build order is `backtest-data` → `backtest-engine` → `backtest-results` → `backtest-jobs` → `backtest-api` → `backtest-web`. The stable `backtest` id is retained as the documentation umbrella and target CLI compatibility contract rather than being renamed or reused. The current direct CLI MVP remains a baseline until an approved task migrates its adapters to `backtest-jobs`; it is not a second orchestration path. Existing verified code is mapped into the first three modules; this decomposition does not authorize a rewrite of working deterministic logic. `backtest-jobs` owns the atomic job/result Unit of Work and calls result transaction participants; `backtest-results` never imports the job coordinator.
 
 ## AI Trust Boundary
 
@@ -81,6 +97,9 @@ The Chinese renderer uses the equivalent disclaimer `仅提醒，不会自动下
 4. Tushare is the only first-release market-data source. Token reference, symbol batching, pacing, capability probes, and limits for 1–10 symbols are configurable.
 5. The service listens only on the local loopback interface, so the first release has no login system. Origin/CORS restrictions, CSP, input validation, and secret protection still apply.
 6. The user records actual fills manually. Neither an alert nor its acknowledgement represents a fill.
+7. Backtest fills are simulated research records only. Historical `stk_mins` capability is independent of live `rt_min`/`rt_min_daily`, and cannot complete `T058`.
+8. Historical backtest calendars explicitly support only SSE/SZSE; `.BJ` is blocked until a verified BSE calendar exists. Frozen artifacts are hash-verified on read, signal/fill times preserve `receivedAt`/`openAt` identities, and materialized long-lived summary/fill rows can rebuild missing summary JSON/fill CSV without restoring expired detail.
+9. Every active backtest timestamp—market, replay, job lifecycle, audit, result publication, persistence, API, and Web display—uses the aware `Asia/Shanghai` business timezone. Canonical RFC 3339 wire/storage text carries explicit `+08:00`; `Z`, offsetless values, and other offsets are rejected. Date-only values use the China-market calendar. Existing UTC-normalized local-MVP result/export bytes remain isolated immutable compatibility artifacts and are not an active/public result until a versioned adoption migration.
 
 ## Documentation Language and Parity
 
@@ -93,4 +112,4 @@ The Chinese renderer uses the equivalent disclaimer `仅提醒，不会自动下
 
 ## Review Status
 
-The capability map was approved by the user on 2026-08-18. Module specifications are now at the human review gate. Create `tasks/plan.md` and `tasks/todo.md` only after the specifications are approved; begin application implementation only after the task plan is approved.
+The original capability map was approved by the user on 2026-08-18. The isolated hybrid-sync/offline-backtest scope, `SPEC-backtest.md`, and bounded retention policy were approved on 2026-08-25. On 2026-08-26, the user approved the six-module backtest decomposition, English-canonical/Chinese-review documentation rule, and recommended single-plan/single-symbol Web scope, then confirmed the detailed specification set and the `local-web` Backtest Extension Boundary. A bilingual cross-module consistency pass corrected UUID/CLI lookup identity, exact `FenText` output, the single `Asia/Shanghai`/`+08:00` time contract, legacy-result reuse, incremental export, item-size publication, and cancellation/pin idempotency clauses without changing the approved module boundaries. On 2026-08-26, the user explicitly confirmed both the China-time choice and the remaining corrected contracts; the aggregate detailed-specification set is approved as corrected. Section 15 of the bilingual implementation plan was approved on 2026-08-26. That approval authorizes only generating the bilingual `BT009`–`BT050` task list. The generated task list still requires separate explicit approval; implementation, commit, push, dependency installation, and any network access remain unauthorized. The local CLI MVP and integrity regressions remain the implementation baseline, while open `BC01` acceptance work remains visible. No backtest task renumbers or satisfies `T058` or `T059`.

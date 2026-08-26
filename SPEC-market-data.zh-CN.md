@@ -4,9 +4,11 @@
 
 ## 目标
 
-通过 Tushare 为最多 10 只活动股票提供规范化、新鲜且完整的 A 股行情与参考数据。本模块负责能力探测、时间与单位转换、交易时段、1 分钟采集、完整 5 分钟聚合、日线核对、实际涨跌停价和版本化技术指标。
+通过 Tushare 为最多 10 只活动股票提供规范化、新鲜且完整的 A 股行情与参考数据。本模块负责能力探测、时间与单位转换、交易时段、实时及历史 1 分钟规范化、完整 5 分钟聚合、日线核对、实际涨跌停价和版本化技术指标。
 
 Tushare 是首版唯一行情源。内部适配器协议只用于确定性测试和未来替换，不在首版实现第二数据源。
+
+历史获取是供 `backtest` 使用的独立能力。它共享规范化值对象，但绝不伪装成实时数据、不改变实时能力状态，也不进入实时调度器。数据集存储、冻结、回放、模拟成交和结果保留由 `SPEC-backtest.md` 负责。
 
 ## 技术栈
 
@@ -29,6 +31,7 @@ Tushare 是首版唯一行情源。内部适配器协议只用于确定性测试
 
 ```powershell
 python -m pytest tests/unit/test_market_data.py -q
+python -m pytest tests/unit/test_tushare_historical.py -q
 python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 python -m ruff check src/trade_plan_monitor/market_data tests/unit/test_market_data.py
 ```
@@ -41,17 +44,21 @@ python -m ruff check src/trade_plan_monitor/market_data tests/unit/test_market_d
 src/trade_plan_monitor/market_data/
 ├── models.py          # 规范化 K 线、涨跌停、日历和能力状态
 ├── provider.py        # MarketDataProvider 协议
+├── historical_provider.py  # HistoricalMinuteProvider 与版本化标签配置
+├── tushare_historical.py   # 严格 stk_mins 规范化
 ├── tushare.py         # Tushare 适配器和错误分类
 ├── sessions.py        # A 股分钟与交易时段语义
 ├── aggregation.py     # 完整 5 分钟与临时日线聚合
 ├── indicators.py      # 版本化 ta-v1 指标
 └── reconciliation.py  # 临时收盘与官方收盘核对
 tests/unit/
-└── test_market_data.py
+├── test_market_data.py
+└── test_tushare_historical.py
 tests/integration/
 └── test_tushare_contract.py
 tests/fixtures/market_data/
-└── tushare_frames.json
+├── tushare_frames.json
+└── tushare_stk_mins_241.json
 ```
 
 ## 行情接口契约
@@ -78,17 +85,42 @@ Tushare 映射关系：
 
 供应商失败只公开操作名和一个稳定的 `TushareErrorCode`：`BLOCKED_PERMISSION`、`RATE_LIMITED`、`TRANSIENT`、`INVALID_RESPONSE` 或 `ERROR`。结构化 HTTP 响应状态优先于消息文本；文本回退只识别明确的 HTTP/status/error-code 语境或稳定短语，绝不把股票代码或 Token 中嵌入的数字子串当作状态码。公开错误和能力值绝不包含 SDK 原始消息、授权详情、异常上下文或 Token。
 
+## 历史接口契约
+
+```python
+class HistoricalMinuteProvider(Protocol):
+    def historical_minutes(self, symbol: str, trade_date: date) -> tuple[MinuteBar, ...]: ...
+    def trading_calendar(self, exchange: str, start: date, end: date) -> tuple[TradingDay, ...]: ...
+    def daily_limits(self, trade_date: date) -> tuple[DailyLimit, ...]: ...
+    def daily_bars(self, symbol: str, start: date, end: date) -> tuple[DailyBar, ...]: ...
+```
+
+Tushare/QuickSync 历史映射为 `stk_mins`、`trade_cal`、`stk_limit` 和不复权 `daily`。历史探测、权限状态、限流和源标签映射与五项实时操作分开保存。`stk_mins=READY` 不代表 `rt_min=READY` 或 `rt_min_daily=READY`，历史权限失败也不阻断实时监控。
+
+真实历史参考路径会选择严格的 `historical_trading_calendar_for_exchange`、`historical_daily_bars` 和 `historical_daily_limits` 适配器方法。与实时部分健康规范化不同，任意无法解析行或重复 identity（即使内容相同）都会把整个原始来源作为脱敏 `INVALID_RESPONSE` 失败。`trade_cal` 还拒绝其他交易所或超范围日期；`daily` 拒绝其他股票或超范围日期；市场全量 `stk_limit(trade_date)` 拒绝其他日期，但允许该日期的其他有效股票。回测同步层从该市场全量涨跌停响应中选择本次请求的 `missing_symbols`，并另外要求每个选中/参考 identity 集等于完整请求，因此缺失行也会在持久化前失败。该严格行为仅用于历史数据，不会静默改变已批准的实时部分股票行为。
+
+历史日历获取必须根据所请求股票始终向 `trade_cal` 显式传入 `exchange="SSE"` 或 `exchange="SZSE"`。Tushare 官方 `trade_cal` 文档未列出 BSE，因此 `.BJ` 历史范围必须在调用供应商前以稳定阻断原因 `UNSUPPORTED_HISTORICAL_CALENDAR:BSE` 失败。BSE 历史数据需要另行验证并批准的日历来源；实时行情/领域对 `.BJ` 的支持不变。
+
+2026-08-25 经授权观察到 `600000.SH` 在 2026-08-24 返回 241 条 `stk_mins` 行，标签覆盖 09:30 至 15:00。`TushareHistoricalMinuteProvider` 默认使用 `UNVERIFIED`，并在调用 SDK 前失败。显式实现的配置 `TUSHARE_STK_MINS_241_END_V1` 把 09:30 来源行保留为不参与策略的 `opening_special`，要求其他每个来源标签都是精确规范分钟结束时间，并返回 240 条可执行 K 线。任何实现都不能静默删除、平移或全部接受这 241 行。
+
+历史联网获取只能发生在经明确授权的 `backtest sync` 中，必须位于数据库事务外，每个持久化批次最多校验 1,000 行，并且不输出原始响应或凭据材料。离线 `backtest verify` 和 `backtest run` 的供应商调用次数必须为零。
+
+冻结历史 artifact 在落盘后仍属于不可信输入：每次数据集读取都必须在解析前重新计算规范 artifact 内容哈希，并与所引用的 `artifact_hash` 比较。不一致属于损坏/篡改并阻断回放；仅有语法合法的哈希字符串不够。
+
+离线冻结/读取只公开稳定完整性阻断原因：被引用内容非法时使用 `INVALID_<KIND>:<identity>:<date>`，前序日历事实断裂时使用 `INVALID_CALENDAR_CHAIN:<exchange>:<date>`，OHLC 违反当日实际涨跌停时使用 `PRICE_OUTSIDE_DAILY_LIMIT:<symbol>:<date>`。
+
 ## 数据语义
 
 - 系统内部使用带 `Asia/Shanghai` 时区的规范化 K 线结束时间。
 - 源分钟时间戳必须精确落在整分钟，包括 pandas 纳秒余量也必须为零；任何分钟内偏移都失败关闭。
 - Tushare 时间标签可能表示分钟开始或结束，必须通过实盘契约测试确定映射；调度器和缺口检测不得直接假设原始标签语义。
+- 实时和历史源标签配置必须独立版本化、独立验证；任一配置的证据不能授权另一配置。
 - 监控时段覆盖 09:30～11:30 和 13:00～15:00。首版规则流不使用开盘集合竞价数据；14:57～15:00 的收盘集合竞价仍属于下午监控窗口。
 - 数据只有在分钟结束、经过默认 12 秒宽限，并通过代码、OHLC、非负成交量/额和交易时段校验后才可用。
 - 1 分钟数据幂等键为 `(symbol, bar_end)`。
 - 每个必需供应商字段必须恰好出现一次。列重排或额外列无害；缺失或歧义必需列以及无 Schema 空帧属于 `INVALID_RESPONSE`，带完整类型列的空帧则是有效的无数据。
 - 逐行先解析 identity。任一非法或冲突 payload 都会永久使该响应中的 identity 失效，且不受行顺序影响；无法识别、未请求或缺失的行绝不使健康 identity 失效。
-- 十进制十次幂通过精确移位完成，不读取外部 decimal 精度。价格必须精确成为正整数分，股数必须精确成为非负整数；整数结果超过 640 个十进制位时，在分配前拒绝。
+- `Decimal` 十次幂通过精确移位完成，不读取外部 decimal 精度。价格必须精确成为正整数分，股数必须精确成为非负整数；整数结果超过 640 个十进制位时，在分配前拒绝。
 - 只有一个交易时段内的全部预期分钟都存在时，才能生成完整 5 分钟 K 线；禁止跨午休聚合。
 - `aggregate_five_minute_bar` 只接受同一股票恰好五个规范化 `MinuteBar` 值组成的精确、可重复 tuple。分钟缺失、重复、股票混合、跨时段、休市日或未知交易日输入都不能生成 K 线；完整输入乱序后仍产生相同的不可变 `(symbol, bar_end, formula_version)` 值。
 - 5 分钟 `amount_yuan` 必须根据 decimal tuple 精确求和，且不读取外部 decimal context。零值不扩大指数跨度；非零对齐系数或最终求和超过 640 位安全跨度时，必须在大内存分配前失败关闭。
@@ -152,17 +184,20 @@ class MinuteBar(BaseModel):
 - 使用固定 OHLCV 文件验证指标黄金值。
 - 覆盖临时/官方收盘一致、差异、延迟到达和下次启动恢复。
 - 覆盖精确/有缺口的判断当日切片、240 行上限、临时来源截止时间，以及拒绝同时或隐式选择当前日期指标来源。
+- 覆盖已观察的历史 241 行、所有显式 09:30 解释、独立历史能力状态、不可变修订 identity、严格拒绝原始参考数据重复/错误 identity/无法解析额外行，以及在历史标签配置验证前拒绝数据。
 - 实盘测试确认 10 只股票批量结果、时间标签、成交量/额单位、延迟、能力状态和最后一分钟行为。
 
 ## 边界
 
 - 始终：所有第三方响应必须校验后才能持久化。
 - 始终：脱敏 `TUSHARE_TOKEN` 和权限相关错误内容。
+- 始终：历史与实时能力/时间戳证据互相独立；只有 `backtest sync` 可以经授权获取历史数据。
 - 始终：交易日未知、实际涨跌停缺失、分钟过期或日线不足时失败关闭。
 - 先确认：修改公式版本、复权策略、默认宽限时间或增加第二数据源。
 - 禁止：用写死的 10% 涨跌幅替代实际涨跌停价作出买入判断。
 - 禁止：把缓存价格当作官方收盘价。
 - 禁止：在 Tushare 执行线程中进行数据库操作。
+- 禁止：让 `stk_mins` 证据完成 `T058`，或在离线数据集校验/回放期间调用供应商。
 
 ## 验收标准
 
@@ -173,7 +208,8 @@ class MinuteBar(BaseModel):
 - 能力、日历或涨跌停数据未知时产生明确健康阻断。
 - 指标黄金值跨运行保持稳定。
 - 官方收盘核对可审计且幂等。
+- 只有具备显式历史标签配置时，历史事实才能规范化为不可变修订；241 行语义未知时阻断数据集冻结。
 
 ## 待确认事项
 
-账号实际权限和限流必须由启动探测及实盘契约测试确认，规格不写死账号级阈值。
+账号实际权限和限流必须由各能力对应的探测确认，规格不写死账号级阈值。实时时间戳/最后一分钟行为继续由 `T058` 负责，历史 `stk_mins` 标签则由 `BT001` 下独立的非开市时段验证闸门负责。

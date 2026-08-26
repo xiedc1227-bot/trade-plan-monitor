@@ -4,9 +4,11 @@
 
 ## Objective
 
-Provide normalized, fresh, and complete A-share market and reference data through Tushare for at most 10 active symbols. This module owns capability probes, time and unit conversion, trading sessions, 1-minute collection, complete 5-minute aggregation, daily reconciliation, actual daily price limits, and versioned technical indicators.
+Provide normalized, fresh, and complete A-share market and reference data through Tushare for at most 10 active symbols. This module owns capability probes, time and unit conversion, trading sessions, realtime and historical 1-minute normalization, complete 5-minute aggregation, daily reconciliation, actual daily price limits, and versioned technical indicators.
 
 Tushare is the only first-release market-data source. The internal adapter protocol exists for deterministic tests and future replacement; no second provider is implemented in the first release.
+
+Historical acquisition is a distinct capability used by `backtest`. It shares normalized value objects but never masquerades as realtime data, never changes realtime capability state, and never runs inside the live scheduler. Dataset storage, freezing, replay, simulated execution, and result retention are owned by `SPEC-backtest.md`.
 
 ## Tech Stack
 
@@ -29,6 +31,7 @@ Official interface references:
 
 ```powershell
 python -m pytest tests/unit/test_market_data.py -q
+python -m pytest tests/unit/test_tushare_historical.py -q
 python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 python -m ruff check src/trade_plan_monitor/market_data tests/unit/test_market_data.py
 ```
@@ -41,17 +44,21 @@ The live market-hours contract test requires a real `TUSHARE_TOKEN` and explicit
 src/trade_plan_monitor/market_data/
 ├── models.py          # Normalized bars, limits, calendar, and capability states
 ├── provider.py        # MarketDataProvider protocol
+├── historical_provider.py  # HistoricalMinuteProvider and versioned label profiles
+├── tushare_historical.py   # Strict stk_mins normalization
 ├── tushare.py         # Tushare adapter and error classification
 ├── sessions.py        # A-share minute and session semantics
 ├── aggregation.py     # Complete 5-minute and provisional-daily aggregation
 ├── indicators.py      # Versioned ta-v1 indicators
 └── reconciliation.py  # Provisional versus official close reconciliation
 tests/unit/
-└── test_market_data.py
+├── test_market_data.py
+└── test_tushare_historical.py
 tests/integration/
 └── test_tushare_contract.py
 tests/fixtures/market_data/
-└── tushare_frames.json
+├── tushare_frames.json
+└── tushare_stk_mins_241.json
 ```
 
 ## Market Interface Contract
@@ -78,11 +85,36 @@ Capabilities and rate limits are runtime facts. Probe the five interfaces indepe
 
 Provider failures expose only the operation and one stable `TushareErrorCode`: `BLOCKED_PERMISSION`, `RATE_LIMITED`, `TRANSIENT`, `INVALID_RESPONSE`, or `ERROR`. A structured HTTP response status takes precedence over message text; text fallback recognizes only explicit HTTP/status/error-code contexts or stable phrases, never numeric substrings embedded in symbols or tokens. Raw SDK messages, authorization details, exception context, and tokens are never part of the public error or capability value.
 
+## Historical Interface Contract
+
+```python
+class HistoricalMinuteProvider(Protocol):
+    def historical_minutes(self, symbol: str, trade_date: date) -> tuple[MinuteBar, ...]: ...
+    def trading_calendar(self, exchange: str, start: date, end: date) -> tuple[TradingDay, ...]: ...
+    def daily_limits(self, trade_date: date) -> tuple[DailyLimit, ...]: ...
+    def daily_bars(self, symbol: str, start: date, end: date) -> tuple[DailyBar, ...]: ...
+```
+
+The Tushare/QuickSync historical mapping is `stk_mins`, `trade_cal`, `stk_limit`, and unadjusted `daily`. Historical probes, permission state, rate limits, and source-label mapping are stored separately from the five realtime operations. `stk_mins=READY` does not imply `rt_min=READY` or `rt_min_daily=READY`, and a historical permission failure does not block the live monitor.
+
+The real historical-reference path selects strict `historical_trading_calendar_for_exchange`, `historical_daily_bars`, and `historical_daily_limits` adapter methods. Unlike realtime partial-health normalization, any unparsable row or duplicate identity, even with equal content, fails the entire raw surface as sanitized `INVALID_RESPONSE`. `trade_cal` also rejects another exchange or an out-of-range date; `daily` rejects another symbol or an out-of-range date; market-wide `stk_limit(trade_date)` rejects another date but permits other valid symbols on that date. The backtest sync layer selects its requested `missing_symbols` from that market-wide limit response and separately requires each selected/reference identity set to equal its complete request, so missing rows also fail before persistence. This strictness is historical-only and does not silently change the approved realtime partial-symbol behavior.
+
+Historical calendar acquisition always passes an explicit `exchange="SSE"` or `exchange="SZSE"` to `trade_cal` for the requested symbols. Official Tushare `trade_cal` documentation does not list BSE, so `.BJ` historical scopes fail before a provider call with stable blocker `UNSUPPORTED_HISTORICAL_CALENDAR:BSE`. BSE history requires a separately verified and approved calendar source; the live market/domain support for `.BJ` is unchanged.
+
+An authorized observation on 2026-08-25 returned 241 `stk_mins` rows for `600000.SH` on 2026-08-24, labeled 09:30 through 15:00. `TushareHistoricalMinuteProvider` defaults to `UNVERIFIED` and fails before the SDK call. The explicit implemented profile `TUSHARE_STK_MINS_241_END_V1` preserves the 09:30 source row as non-strategy `opening_special`, requires every other source label to be an exact canonical minute end, and returns 240 executable bars. No implementation may silently discard, shift, or accept all 241 rows.
+
+Historical network retrieval is allowed only in an explicitly authorized `backtest sync`. It occurs outside database transactions, validates at most 1,000 rows per persistence batch, and emits no raw response or credential material. Offline `backtest verify` and `backtest run` make zero provider calls.
+
+Frozen historical artifacts remain untrusted at rest: every dataset read recomputes the canonical artifact content hash and compares it with the referenced `artifact_hash` before parsing. A mismatch is corruption/tampering and blocks replay; a valid-looking hash string is insufficient.
+
+Offline freeze/reads expose only stable integrity blockers: `INVALID_<KIND>:<identity>:<date>` for malformed referenced content, `INVALID_CALENDAR_CHAIN:<exchange>:<date>` for broken predecessor facts, and `PRICE_OUTSIDE_DAILY_LIMIT:<symbol>:<date>` when OHLC violates the day's actual limit.
+
 ## Data Semantics
 
 - Internally use normalized bar-end timestamps with the `Asia/Shanghai` timezone.
 - Source minute timestamps must identify exact whole minutes, including zero pandas nanosecond residue; sub-minute identities fail closed.
 - A Tushare source label may denote minute start or end. A live contract test must freeze the mapping; the scheduler and gap detector never assume raw-label semantics.
+- Realtime and historical source-label profiles are independently versioned and verified. Evidence for one profile cannot authorize the other.
 - Monitoring sessions cover 09:30–11:30 and 13:00–15:00. Opening call-auction data is outside the first-release rule stream; the 14:57–15:00 closing call auction remains inside the afternoon monitoring window.
 - Data becomes usable only after the minute ends, the default 12-second grace passes, and symbol, OHLC, non-negative volume/amount, and session validation succeed.
 - The 1-minute idempotency key is `(symbol, bar_end)`.
@@ -152,17 +184,20 @@ Adapters normalize data and classify errors only; they contain no trading rules.
 - Validate indicator golden values from fixed OHLCV fixtures.
 - Cover provisional/official close agreement, disagreement, delayed arrival, and next-startup recovery.
 - Cover exact/gapped current-day decision slices, the 240-row bound, provisional source cutoffs, and rejection of simultaneous or implicit current-date indicator sources.
+- Cover the historical 241-row observation, all explicit 09:30 interpretations, independent historical capability state, immutable revision identity, strict raw reference duplicate/wrong-identity/unparsable-extra rejection, and rejection before a historical-label profile is verified.
 - Live tests confirm 10-symbol batches, label semantics, volume/amount units, latency, capabilities, and final-minute behavior.
 
 ## Boundaries
 
 - Always: validate every third-party response before persistence.
 - Always: redact `TUSHARE_TOKEN` and permission-related error details.
+- Always: keep historical and realtime capability/timestamp evidence independent; historical retrieval is authorized only for `backtest sync`.
 - Always: fail closed when the trading day is unknown, actual price limits are missing, minutes are stale, or daily history is insufficient.
 - Ask first: change formula version, adjustment policy, default grace, or add a second provider.
 - Never: substitute a hard-coded 10% limit for actual daily limit prices in a buy decision.
 - Never: treat a cached price as an official close.
 - Never: perform database work in a Tushare executor thread.
+- Never: let `stk_mins` evidence complete `T058`, or call a provider during offline dataset verification or replay.
 
 ## Success Criteria
 
@@ -173,7 +208,8 @@ Adapters normalize data and classify errors only; they contain no trading rules.
 - Unknown capability, calendar, or price-limit data produces explicit health blockers.
 - Indicator golden values are stable across runs.
 - Official-close reconciliation is auditable and idempotent.
+- Historical facts can be normalized into immutable revisions only under an explicit historical-label profile, while unknown 241-row semantics block dataset freezing.
 
 ## Open Questions
 
-Actual account entitlements and rate limits are confirmed by startup probes and live contract tests; this specification does not hard-code account-specific thresholds.
+Actual account entitlements and rate limits are confirmed by capability-specific probes; this specification does not hard-code account-specific thresholds. Realtime timestamp/final-minute behavior remains gated by `T058`, while historical `stk_mins` labeling has its own non-market-hours verification gate under `BT001`.

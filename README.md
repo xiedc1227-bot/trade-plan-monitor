@@ -8,7 +8,7 @@ not place orders.
 
 ## Product Status
 
-Tasks `T001` through `T053` are implemented. The packaged command can serve the built Vue SPA,
+Tasks `T001` through `T057` are implemented. The packaged command can serve the built Vue SPA,
 REST API, and WebSocket routes on exact loopback. Until the application service composition is
 wired, that installed entry intentionally starts in read-only `DEGRADED` mode: the UI is
 available, but business API dependencies return `SERVICE_UNAVAILABLE` instead of inventing live
@@ -17,10 +17,12 @@ state.
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.
 
+The local backtest MVP now provides isolated `sync`, `verify`, `run`, `list`, and `prune` commands. Its focused suite and review-driven integrity regressions pass; the broader multi-symbol/multi-year resource and end-to-end acceptance gate remains open. Historical sync availability does not imply that the live Tushare contract gate has passed.
+
 ## Safety Boundaries
 
-- The system is monitoring and reminder software, not a broker, order router, or investment
-  adviser. Every actionable reminder carries the literal `仅提醒，不会自动下单。`
+- The live system is monitoring and reminder software, not a broker, order router, or investment
+  adviser. Every actionable reminder carries the literal `仅提醒，不会自动下单。`; only the isolated offline `BACKTEST` mode may create clearly labeled simulated research fills.
 - Plans are typed, reviewed, versioned, and immutable after activation. AI output remains an
   untrusted draft until deterministic validation and user review succeed.
 - Prices are stored as integer fen, quantities as integer shares, and A-share timestamps as
@@ -177,10 +179,11 @@ endpoint. Plain HTTP, embedded credentials, query strings, and fragments are rej
 An explicitly authorized check on 2026-08-25 verified `stk_mins` through both HTTPS and the
 official SDK: one `600000.SH` trading day returned 241 one-minute rows for 2026-08-24, covering
 09:30:00 through 15:00:00 with the expected eight fields and no duplicate, null-required,
-invalid-OHLC, negative-flow, or wrong-symbol row. This makes the endpoint suitable as a future
-historical-minute backtest source; it does not replace the separately required live `rt_min` and
-`rt_min_daily` capabilities, and the current packaged read-only fallback still does not compose a
-backtest runtime.
+invalid-OHLC, negative-flow, or wrong-symbol row. That observation alone does not prove upstream
+label semantics, so the adapter still defaults to `UNVERIFIED`. The reviewed backtest composition
+must explicitly opt into the project policy `TUSHARE_STK_MINS_241_END_V1`, described below. Neither
+the observation nor that historical policy replaces the separately required live `rt_min` and
+`rt_min_daily` capabilities.
 
 Set `TUSHARE_TOKEN` only for a separately authorized live capability probe. Capability, account
 permission, rate limit, and minute-label semantics are discovered independently; configuration
@@ -190,6 +193,64 @@ The default contract suite uses deterministic fake DataFrames:
 ```powershell
 python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 ```
+
+## Historical Backtesting
+
+The approved backtest design uses a hybrid workflow: an explicitly authorized `backtest sync` incrementally downloads `stk_mins`, `trade_cal`, `stk_limit`, and unadjusted `daily` facts into `backtest-market.sqlite3`; local verification freezes an exact `dataset_hash`; every formal run then reads that frozen dataset fully offline and writes only result artifacts to `backtest-results.sqlite3`.
+
+Market and result paths must resolve to different files. Before creating tables, each store rejects an existing live-monitor database or the other backtest storage domain, preventing a misconfigured path from mutating unrelated state.
+
+Historical rows are content-deduplicated and reused across runs. Provider corrections create immutable revisions and a new dataset hash instead of changing an old result. The historical adapter defaults to `UNVERIFIED`; the CLI composition explicitly selects versioned profile `TUSHARE_STK_MINS_241_END_V1`, preserves the 09:30 source row as non-strategy `opening_special`, and maps the remaining end-labeled rows to exactly 240 canonical trading minutes. This evidence never completes live task `T058`.
+
+One dataset accepts 1–10 unique symbols, at most 5 calendar years of backtest dates, and at most 2 calendar years of warm-up. Historical calendar sync explicitly calls `trade_cal` once per needed `SSE`/`SZSE` exchange. Tushare's official calendar contract does not list BSE, so `.BJ` historical scopes are currently rejected before network access with `UNSUPPORTED_HISTORICAL_CALENDAR:BSE`; live `.BJ` plan support is unaffected. The real historical adapter rejects unparsable/duplicate raw rows plus wrong calendar exchange/range, daily symbol/range, or limit date. Because `stk_limit(trade_date)` is market-wide, other valid symbols on that date remain legal; sync selects the requested symbols and then requires every normalized reference set—even during `--refresh`—to match exactly or fail before persistence as `INVALID_RESPONSE:<surface>`. Every frozen artifact is content-hashed again when read, so a modified local payload cannot be replayed under an old `artifact_hash`.
+
+Frozen verification also reports stable `INVALID_<KIND>:<identity>:<date>`, `INVALID_CALENDAR_CHAIN:<exchange>:<date>`, and `PRICE_OUTSIDE_DAILY_LIMIT:<symbol>:<date>` blockers instead of guessing or repairing corrupt facts. It validates daily minute batches under one WAL read snapshot, then holds a short `BEGIN IMMEDIATE` only to recheck every selected head and publish; a concurrent correction aborts the freeze. Validated manifests use an O(1) cached `natural_key` index for later membership lookup, followed by the normal artifact re-hash.
+
+All backtest hashes share exact Decimal canonicalization: numerically equal scale variants such as `0.0003` and `0.00030` have the same canonical text and identity, while binary floats and fixed-point expansions over 10,000 characters fail closed. CLI yuan-to-fen parsing is also context-independent: at most two fractional digits plus trailing zeroes are accepted, oversized exponents fail before expansion, and the result cannot exceed signed 64-bit `9,223,372,036,854,775,807` fen. The backtest reuses reviewed plan hashes, normalized bars, indicators, close reconciliation, and the pure decision engine. `execution-model-v1` is backtest-only: `signalAt` equals the producing decision's `snapshot.evaluatedAt` and the source fact's `receivedAt`; only a subsequent candidate bar with `openAt >= signalAt` may fill. Discrete replay may complete the producing event before processing a next-minute bar at the same boundary, so equality is valid without filling the producing bar/bucket; production historical minute facts normally use `receivedAt == barEnd + 12s`, which keeps the ordinary path in a later minute without lookahead. A fill records `filledAt` as that execution minute's `openAt`. A zero-volume minute leaves the order pending through contiguous canonical candidates until the first later positive-volume minute; it becomes `SUSPENDED` only if replay ends without one. A missing required session minute fails as `MISSING_NEXT_MINUTE` when a later bar exposes the gap. Every `ExecutionOutcome` includes immutable `resolvedAt` plus the resolving `sourceBarId` when a bar exists; `NO_NEXT_MINUTE` alone resolves at finalization without a source bar. Fees, slippage, and partial-lot cost allocation use exact integer-rational arithmetic with explicit fen rounding, independent of the process-global Decimal context. Actual daily limits, T+1, 100-share lots, cash/position bounds, fees, and slippage are applied deterministically. It never invokes the live scheduler, notification outbox, Webhook, WebSocket, or a broker.
+
+Each evaluation uses at most 512 complete five-minute bars, 499 official daily bars before the current day, and 512 calendar-day facts. These bounds enter `run_id` and appear as `BOUNDED_ROLLING_CONTEXT_512_5M_499_DAILY_512_CALENDAR`; they are a disclosed research limitation, not proof that the still-open multi-year resource gate has passed.
+
+Reports also disclose that zero-volume minutes are treated as a non-tradable proxy (`ZERO_VOLUME_MINUTE_USED_AS_NON_TRADABLE_PROXY`), fill quantity is not capped by minute volume (`FILL_QUANTITY_NOT_CAPPED_BY_MINUTE_VOLUME`), limit locks conservatively use the open or slipped price (`CONSERVATIVE_LIMIT_LOCK_FROM_OPEN_OR_SLIPPAGE`), drawdown samples daily equity (`DAILY_EQUITY_DRAWDOWN_SAMPLING`), win rate is per sell fill rather than round trip (`WIN_RATE_PER_SELL_FILL_NOT_ROUND_TRIP`), and metric division is fixed to Decimal precision 28 with `ROUND_HALF_EVEN` (`METRIC_DECIMAL_PRECISION_28_HALF_EVEN`).
+
+The following complete example uses the default isolated paths `data/backtest-market.sqlite3`, `data/backtest-results.sqlite3`, and `backtest-reports/`. `sync` is the only network-capable command and refuses to run without `--allow-network`. Its default warm-up boundary is 400 calendar days before `--start`; when overriding it, pass the same `--warmup-start` to both `sync` and `verify`.
+
+The fee/slippage numbers below are explicit illustrative assumptions, not product defaults. Choose values appropriate to the intended research. `--no-event-risk` records an explicit assumption; use the mutually exclusive `--manual-event-risk` when a material event-risk blocker applies.
+
+```powershell
+# 1. Incrementally synchronize missing historical facts with explicit authorization.
+$env:TUSHARE_TOKEN = "<set-in-this-shell-only>"
+python -m trade_plan_monitor backtest sync `
+  --symbols 003043.SZ `
+  --start 2025-01-02 `
+  --end 2025-12-31 `
+  --allow-network
+Remove-Item Env:TUSHARE_TOKEN
+
+# 2. Freeze the same scope locally and copy dataset_hash from the JSON result.
+python -m trade_plan_monitor backtest verify `
+  --symbols 003043.SZ `
+  --start 2025-01-02 `
+  --end 2025-12-31
+
+# 3. Run fully offline with every execution and event-risk assumption explicit.
+python -m trade_plan_monitor backtest run `
+  --dataset <dataset_hash_from_verify> `
+  --plan config/plans/003043.SZ.sample.yaml `
+  --initial-cash-yuan 100000 `
+  --commission-rate 0.0003 `
+  --minimum-commission-yuan 5 `
+  --stamp-duty-rate 0.0005 `
+  --transfer-fee-rate 0.00001 `
+  --buy-slippage-bps 2 `
+  --sell-slippage-bps 2 `
+  --no-event-risk
+
+# 4. Inspect summaries and delete at most one bounded batch of expired detail.
+python -m trade_plan_monitor backtest list --limit 20 --offset 0
+python -m trade_plan_monitor backtest prune --batch-size 1000
+```
+
+Run summaries, assumptions, final metrics, and fill ledgers are retained long-term. Successful decision/signal/daily-equity detail is limited to the newest 100 runs and at most 90 days; failed, cancelled, and opt-in debug detail is retained for 14 days; pinned runs are exempt. Result publication first stages canonical rows in `backtest-results.sqlite3`; ordinary reads and statistics hide all staged rows. One transaction sets the internal `materialized` visibility flag only after the complete `reportHash`, expected fill/detail counts, and canonical identity/content set hashes all match. First publication persists those counts and set hashes, and every published retry must match them exactly; ordinary summary/fill/detail reads also validate each SQL identity against its hashed payload before applying any detail-kind filter. The CLI then atomically writes `backtest-report-summary-v1` JSON plus fill CSV. `materialized` is the only publication gate, not a public run status; public statuses remain `COMPLETED`, `FAILED`, or `CANCELLED`. Bounded `prune` maintenance removes unpinned abandoned staged summary/fill/detail after 14 days, while recent stages remain recoverable. Missing or corrupt files can be rebuilt from the long-lived summary/fill rows without network access, replay, or duplicate fills; pruned decision/signal/outcome/equity detail is intentionally not reconstructable. `reportHash` remains the audit identity of the original complete run and is not a file-byte hash. Pin metadata and initial lots are supported by lower-level backtest contracts, but the current CLI exposes neither pin/unpin nor initial-lot input and therefore starts each CLI run with cash only. Full minute-by-minute account snapshots and duplicate market rows are not stored. See [SPEC-backtest.md](SPEC-backtest.md) for the isolation, no-lookahead, report, and retention contracts.
 
 ## AI Secrets
 
@@ -342,6 +403,7 @@ the same change.
 | Plan domain | [SPEC-plan-domain.md](SPEC-plan-domain.md) | [SPEC-plan-domain.zh-CN.md](SPEC-plan-domain.zh-CN.md) |
 | AI drafting | [SPEC-ai-plan-drafting.md](SPEC-ai-plan-drafting.md) | [SPEC-ai-plan-drafting.zh-CN.md](SPEC-ai-plan-drafting.zh-CN.md) |
 | Market data | [SPEC-market-data.md](SPEC-market-data.md) | [SPEC-market-data.zh-CN.md](SPEC-market-data.zh-CN.md) |
+| Historical backtest | [SPEC-backtest.md](SPEC-backtest.md) | [SPEC-backtest.zh-CN.md](SPEC-backtest.zh-CN.md) |
 | Strategy state | [SPEC-strategy-state.md](SPEC-strategy-state.md) | [SPEC-strategy-state.zh-CN.md](SPEC-strategy-state.zh-CN.md) |
 | Decision engine | [SPEC-decision-engine.md](SPEC-decision-engine.md) | [SPEC-decision-engine.zh-CN.md](SPEC-decision-engine.zh-CN.md) |
 | Notification outbox | [SPEC-notification-outbox.md](SPEC-notification-outbox.md) | [SPEC-notification-outbox.zh-CN.md](SPEC-notification-outbox.zh-CN.md) |

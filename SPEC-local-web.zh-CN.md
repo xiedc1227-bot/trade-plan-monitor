@@ -81,7 +81,7 @@ web/src/
 {
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "交易计划无法启用",
+    "message": "Plan cannot be activated",
     "details": [],
     "requestId": "..."
   }
@@ -296,6 +296,17 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 24 个 REST 路径、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
 - T052 不虚构数据库、供应商、只读模型或变更服务。明确注入的生命周期和应用服务继续保持权威；未注入时，打包命令使用无 I/O 的 `DEGRADED` 只读生命周期，既有端点以 `SERVICE_UNAVAILABLE` 封闭失败。该任务不增加 CDN、运行时远程资源、备用监听器、开发目录 fallback、T053 运维重写、T054 回放夹具、T055 浏览器流程、T056 安全矩阵、生成契约变更或 T024 行为。
 
+### 已批准的回测扩展边界
+
+六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值是已批准的边界目标，但不授权实现：
+
+- 当前冻结基线在获批变更同时加入 13 条回测资源路径并更新 OpenAPI 快照、哈希、生成 TypeScript 和运行时保护前，仍是精确 24 条 REST 路径；变更后精确总数为 37 条路径；
+- 当前 Router 基线仍是六条占位路由。扩展会增加真实或 lazy-loaded 的 `/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId` 视图，两个静态子路由必须排在动态路由之前；变更后生产路由集合精确为 10 条路径；
+- 增加四条真实回测路由不能证明六条历史占位路由已经接入其现有业务视图；
+- 新增的 13 条路径、四条路由、生成类型、运行时保护、URL 日期时间筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：输入使用 `+08:00` 和 0～6 位小数秒，输出/存储固定六位，并拒绝 `Z`、无偏移、超精度或其他偏移；
+- 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
+- 未显式注入生产服务时，`create_production_app(...)` 继续处于 `DEGRADED`/`SERVICE_UNAVAILABLE`。仅注册 Router Protocol 不等于产品可用组合。
+
 ## 信息架构
 
 ### `/` — 监控总览
@@ -336,6 +347,14 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - AI 供应商、基础 URL、模型、限制和提示词版本配置。
 - 只写 API 密钥替换、已配置状态掩码和有界连接测试。
 - 不展示密钥值或原始授权错误。
+
+### `/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId` — 回测研究
+
+- 浏览有界的已完成运行摘要并打开一个不可变结果。
+- 提交前选择一个经审核计划版本、一只股票、一个冻结数据集、显式现金/持仓输入和成交假设。
+- 检查历史覆盖、提交经授权同步或离线校验，并跟踪一个持久化任务而不阻塞 HTTP 请求。
+- 审阅精确指标、假设、带完整表格替代的每日权益、分页成交/详情、导出、置顶状态、进度、取消、过期和失败状态。
+- 历史研究继续与实时监控、提醒、通知投递、券商操作和 `T058` 证据隔离。
 
 ## Vue 组件地图
 
@@ -446,3 +465,7 @@ const emit = defineEmits<Emits>()
 ## 待确认问题
 
 - 无阻断问题。操作系统级浏览器通知和指定聊天平台保留为未来可选渠道。
+
+## 审核状态
+
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节已于 2026-08-26 获批。该批准仅授权生成双语 `BT009`～`BT050` 任务清单。生成后的任务清单仍需单独明确批准；重新生成 OpenAPI、集成路由/服务、实现、提交、推送、依赖安装和任何联网访问仍未获授权。在获批的下游任务改变它们之前，精确 24 路径 OpenAPI 和 6 占位路由基线继续作为权威状态。

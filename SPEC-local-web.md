@@ -238,7 +238,7 @@ The payload is a bounded invalidation hint containing `entityId` plus only the a
 
 Schema version 1 closes each non-null payload field set and its identity rules: snapshot uses `entityId`, `symbol`, and `resultHash`; symbol health uses `entityId`, `symbol`, `revision`, and `status`; both require `aggregateId == entityId == symbol`. Alert creation/acknowledgement use `entityId`, `symbol`, and `revision`; both require canonical UUID `aggregateId == entityId`, creation additionally requires `eventId == aggregateId` and revision `0`, and acknowledgement requires revision `1`. Extraction uses `entityId`, `revision`, and `status`; activation uses plan-version `entityId`, `symbol`, and positive `revision` with `aggregateId == symbol`; deactivation uses `entityId`, `symbol`, and positive `revision` with all three identities equal. Position uses `entityId`, `symbol`, and `OPEN`/`CLOSED` `status`; AI-provider uses `entityId` and `revision`; system health uses `entityId` and `status`; these entity-owned types require `aggregateId == entityId`. Missing required fields and any non-applicable non-null field are rejected before persistence.
 
-`monitor_event` is the sole append-only replay source and `monitor_sequence` is the sole global high-water domain. State mutation and its event append share one transaction. Event UUID is the idempotency identity: the same ID and semantics returns the original sequence, while different semantics fail closed. The sequence never resets when retained rows are removed. The default replay window is seven days, each page is at most 1,000 events, and the server validates the complete `(after, high_water]` range before sending any page so a later gap cannot leak an earlier partial page.
+`monitor_event` is the sole append-only replay source and `monitor_sequence` is the sole global high-water domain. State mutation and its event append share one transaction. Event UUID is the idempotency identity: the same ID and semantics returns the original sequence, while different semantics fail closed. The sequence never resets when retained rows are removed. The default replay window is 7 days, each page is at most 1,000 events, and the server validates the complete `(after, high_water]` range before sending any page so a later gap cannot leak an earlier partial page.
 
 `heartbeat` and `snapshot.required` are transport control frames, not committed business events and never occupy a durable sequence. Heartbeat is 20 seconds. A missing, duplicate, non-canonical, negative, or greater-than-`2^63-1` `after` cursor is rejected. A future cursor, sequence gap, corrupt high-water mark, or expired replay window sends `snapshot.required` with the durable high-water sequence and closes normally. Publication is an in-memory wake-up only after exact committed-event verification; reconnect and process restart always replay from SQLite. The client reconnects with capped exponential backoff and jitter. Disconnected or stale data is visibly labelled and never presented as live.
 
@@ -296,6 +296,17 @@ The slice performs no API call, Pinia write, router composition, provider/rule e
 - `create_production_app(...)` composes the discovered distribution through the existing `create_app(...)`, so the frozen 24 REST paths, `/ws/v1/monitor`, Origin/body/security-header policy, and SPA exclusion/fallback semantics do not change. The asset context remains open until the server runner exits, then FastAPI lifespan performs its owned shutdown and extracted resources are released.
 - T052 does not invent database, provider, read-model, or mutation services. An explicitly injected lifecycle and application services remain authoritative; without them the packaged command uses an I/O-free `DEGRADED` read-only lifecycle and existing endpoints fail closed with `SERVICE_UNAVAILABLE`. It adds no CDN, remote runtime asset, alternate listener, development-directory fallback, T053 operations rewrite, T054 replay fixture, T055 browser journey, T056 security matrix, generated-contract change, or T024 behavior.
 
+### Approved Backtest Extension Boundary
+
+The six-module backtest direction and this boundary were approved on 2026-08-26. The user also confirmed [`backtest-api`](SPEC-backtest-api.md) and approved [`backtest-web`](SPEC-backtest-web.md). On 2026-08-26, the user confirmed the corrected `planVersionId`, money projection, result/job consistency, versioned-compatibility, and unified China-time clauses. The following values are approved boundary targets but do not authorize implementation:
+
+- the current frozen baseline remains exactly 24 REST paths until one approved change adds the 13 backtest resource paths and updates the OpenAPI snapshot, hash, generated TypeScript, and runtime guards together; the exact post-change total is 37 paths;
+- the current router baseline remains six placeholder routes. The extension adds real or lazy-loaded `/backtests`, `/backtests/new`, `/backtests/data`, and `/backtests/:runId` views, with the two static child routes before the dynamic route; the exact post-change production route set is 10 paths;
+- adding four real backtest routes does not prove that the six historical placeholder routes have been wired to their existing business views;
+- all 13 added paths, four routes, generated types, runtime guards, URL datetime filters, and machine-readable Web values inherit the accepted canonical `Asia/Shanghai` contract: input `+08:00` with 0–6 fractional-second digits, fixed-six-digit output/storage, and rejection of `Z`, offsetless, overprecision, or other-offset values;
+- the first release uses bounded REST polling for durable jobs and adds no backtest WebSocket event;
+- `create_production_app(...)` remains `DEGRADED`/`SERVICE_UNAVAILABLE` without explicitly injected production services. Registering router protocols alone is not a usable product composition.
+
 ## Information Architecture
 
 ### `/` — Monitoring Overview
@@ -336,6 +347,14 @@ The slice performs no API call, Pinia write, router composition, provider/rule e
 - AI provider/base URL/model/limits/prompt-version configuration.
 - Write-only API-key replacement, masked configured state, and bounded connection test.
 - No secret values or raw authorization errors are displayed.
+
+### `/backtests`, `/backtests/new`, `/backtests/data`, and `/backtests/:runId` — Backtest Research
+
+- Browse bounded completed-run summaries and open one immutable result.
+- Select one reviewed plan version, one symbol, one frozen dataset, explicit cash/lot inputs, and execution assumptions before submission.
+- Inspect historical coverage, submit authorized synchronization or offline verification, and follow one durable job without blocking an HTTP request.
+- Review exact metrics, assumptions, daily equity with a full table alternative, paginated fills/details, exports, pin state, progress, cancellation, expiration, and failure states.
+- Keep historical research separate from live monitoring, alerts, notification delivery, broker operations, and `T058` evidence.
 
 ## Vue Component Map
 
@@ -446,3 +465,7 @@ Use `<script setup lang="ts">`, PascalCase SFCs, script/template/scoped-style or
 ## Open Questions
 
 None blocking. OS-level browser notifications and named chat platforms remain future opt-in channels.
+
+## Review Status
+
+The base `local-web` specification and completed `T035`–`T056` implementation history remain previously approved. On 2026-08-26, the user approved the `Backtest Extension Boundary` and `backtest-web`, confirmed `backtest-api`, and then confirmed the unified `Asia/Shanghai`/`+08:00` time contract plus the remaining API/engine/results/jobs consistency corrections. The aggregate detailed-specification gate is closed. Section 15 of the bilingual implementation plan was approved on 2026-08-26. That approval authorizes only generating the bilingual `BT009`–`BT050` task list. The generated task list still requires separate explicit approval; OpenAPI regeneration, route/service integration, implementation, commit, push, dependency installation, and any network access remain unauthorized. The exact 24-path OpenAPI and 6-placeholder route baselines remain authoritative until an approved downstream task changes them.
