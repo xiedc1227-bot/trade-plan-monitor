@@ -17,16 +17,56 @@ _SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 _MAX_INVENTORIED_IDENTITIES = 10_000
 _UTC_SUFFIXES = ("Z", "+00:00")
 
-_MARKET_TABLES = frozenset(
-    {
-        "market_artifact",
-        "market_head",
-        "market_minute_artifact",
-        "market_minute_head",
-        "market_dataset",
-        "market_dataset_item",
-    }
-)
+_ColumnContract = tuple[str, bool, str | None, int]
+
+_MARKET_COLUMN_CONTRACTS: dict[str, dict[str, _ColumnContract]] = {
+    "market_artifact": {
+        "artifact_hash": ("TEXT", False, None, 1),
+        "kind": ("TEXT", True, None, 0),
+        "provider": ("TEXT", True, None, 0),
+        "contract_version": ("TEXT", True, None, 0),
+        "natural_key": ("TEXT", True, None, 0),
+        "content_json": ("TEXT", True, None, 0),
+        "created_at": ("TEXT", True, None, 0),
+    },
+    "market_head": {
+        "natural_key": ("TEXT", False, None, 1),
+        "artifact_hash": ("TEXT", True, None, 0),
+        "revision": ("INTEGER", True, None, 0),
+        "kind": ("TEXT", True, None, 0),
+        "symbol": ("TEXT", False, None, 0),
+        "trade_date": ("TEXT", True, None, 0),
+        "updated_at": ("TEXT", True, None, 0),
+    },
+    "market_minute_artifact": {
+        "artifact_hash": ("TEXT", False, None, 1),
+        "symbol": ("TEXT", True, None, 0),
+        "bar_end": ("TEXT", True, None, 0),
+        "content_json": ("TEXT", True, None, 0),
+        "created_at": ("TEXT", True, None, 0),
+    },
+    "market_minute_head": {
+        "symbol": ("TEXT", True, None, 1),
+        "bar_end": ("TEXT", True, None, 2),
+        "artifact_hash": ("TEXT", True, None, 0),
+        "revision": ("INTEGER", True, None, 0),
+        "updated_at": ("TEXT", True, None, 0),
+    },
+    "market_dataset": {
+        "dataset_hash": ("TEXT", False, None, 1),
+        "manifest_json": ("TEXT", True, None, 0),
+        "created_at": ("TEXT", True, None, 0),
+    },
+    "market_dataset_item": {
+        "dataset_hash": ("TEXT", True, None, 1),
+        "natural_key": ("TEXT", True, None, 2),
+        "artifact_hash": ("TEXT", True, None, 0),
+        "kind": ("TEXT", True, None, 0),
+        "symbol": ("TEXT", False, None, 0),
+        "trade_date": ("TEXT", True, None, 0),
+    },
+}
+_MARKET_TABLES = frozenset(_MARKET_COLUMN_CONTRACTS)
 _MARKET_METADATA_COLUMNS = (
     ("market_artifact", "created_at"),
     ("market_head", "updated_at"),
@@ -34,25 +74,289 @@ _MARKET_METADATA_COLUMNS = (
     ("market_minute_head", "updated_at"),
     ("market_dataset", "created_at"),
 )
-_RESULT_TABLES = frozenset({"backtest_run", "backtest_fill", "backtest_detail"})
-_CURRENT_RESULT_COLUMNS = frozenset(
-    {
-        "run_id",
-        "plan_sha256",
-        "dataset_hash",
-        "status",
-        "completed_at",
-        "pinned",
-        "materialized",
-        "publication_fill_count",
-        "publication_detail_count",
-        "publication_fill_set_hash",
-        "publication_detail_set_hash",
-        "summary_hash",
-        "summary_json",
-        "created_at",
-    }
-)
+_RESULT_COLUMN_CONTRACTS: dict[str, dict[str, _ColumnContract]] = {
+    "backtest_run": {
+        "run_id": ("TEXT", False, None, 1),
+        "plan_sha256": ("TEXT", True, None, 0),
+        "dataset_hash": ("TEXT", True, None, 0),
+        "status": ("TEXT", True, None, 0),
+        "completed_at": ("TEXT", True, None, 0),
+        "pinned": ("INTEGER", True, "0", 0),
+        "materialized": ("INTEGER", True, "1", 0),
+        "publication_fill_count": ("INTEGER", False, None, 0),
+        "publication_detail_count": ("INTEGER", False, None, 0),
+        "publication_fill_set_hash": ("TEXT", False, None, 0),
+        "publication_detail_set_hash": ("TEXT", False, None, 0),
+        "summary_hash": ("TEXT", True, None, 0),
+        "summary_json": ("TEXT", True, None, 0),
+        "created_at": ("TEXT", True, None, 0),
+    },
+    "backtest_fill": {
+        "fill_id": ("TEXT", False, None, 1),
+        "run_id": ("TEXT", True, None, 0),
+        "filled_at": ("TEXT", True, None, 0),
+        "content_hash": ("TEXT", True, None, 0),
+        "payload_json": ("TEXT", True, None, 0),
+        "created_at": ("TEXT", True, None, 0),
+    },
+    "backtest_detail": {
+        "detail_id": ("TEXT", False, None, 1),
+        "run_id": ("TEXT", True, None, 0),
+        "kind": ("TEXT", True, None, 0),
+        "event_at": ("TEXT", True, None, 0),
+        "content_hash": ("TEXT", True, None, 0),
+        "payload_json": ("TEXT", True, None, 0),
+        "created_at": ("TEXT", True, None, 0),
+    },
+}
+_RESULT_TABLES = frozenset(_RESULT_COLUMN_CONTRACTS)
+
+_ForeignKeyContract = tuple[str, str, str, str, str, str]
+_MARKET_FOREIGN_KEY_CONTRACTS: dict[str, frozenset[_ForeignKeyContract]] = {
+    "market_artifact": frozenset(),
+    "market_head": frozenset(
+        {("artifact_hash", "market_artifact", "artifact_hash", "NO ACTION", "NO ACTION", "NONE")}
+    ),
+    "market_minute_artifact": frozenset(),
+    "market_minute_head": frozenset(
+        {
+            (
+                "artifact_hash",
+                "market_minute_artifact",
+                "artifact_hash",
+                "NO ACTION",
+                "RESTRICT",
+                "NONE",
+            )
+        }
+    ),
+    "market_dataset": frozenset(),
+    "market_dataset_item": frozenset(
+        {
+            (
+                "dataset_hash",
+                "market_dataset",
+                "dataset_hash",
+                "NO ACTION",
+                "RESTRICT",
+                "NONE",
+            ),
+            (
+                "artifact_hash",
+                "market_artifact",
+                "artifact_hash",
+                "NO ACTION",
+                "RESTRICT",
+                "NONE",
+            ),
+        }
+    ),
+}
+_RESULT_FOREIGN_KEY_CONTRACTS: dict[str, frozenset[_ForeignKeyContract]] = {
+    "backtest_run": frozenset(),
+    "backtest_fill": frozenset(
+        {("run_id", "backtest_run", "run_id", "NO ACTION", "RESTRICT", "NONE")}
+    ),
+    "backtest_detail": frozenset(
+        {("run_id", "backtest_run", "run_id", "NO ACTION", "RESTRICT", "NONE")}
+    ),
+}
+
+_MARKET_TABLE_SQL_CONTRACTS = {
+    "market_artifact": """
+        CREATE TABLE market_artifact (
+            artifact_hash TEXT PRIMARY KEY,
+            kind TEXT NOT NULL CHECK (kind IN ('CALENDAR', 'MINUTE', 'LIMIT', 'DAILY')),
+            provider TEXT NOT NULL,
+            contract_version TEXT NOT NULL,
+            natural_key TEXT NOT NULL,
+            content_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """,
+    "market_head": """
+        CREATE TABLE market_head (
+            natural_key TEXT PRIMARY KEY,
+            artifact_hash TEXT NOT NULL REFERENCES market_artifact (artifact_hash),
+            revision INTEGER NOT NULL CHECK (revision >= 1),
+            kind TEXT NOT NULL CHECK (kind IN ('CALENDAR', 'MINUTE', 'LIMIT', 'DAILY')),
+            symbol TEXT,
+            trade_date TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """,
+    "market_minute_artifact": """
+        CREATE TABLE market_minute_artifact (
+            artifact_hash TEXT PRIMARY KEY,
+            symbol TEXT NOT NULL,
+            bar_end TEXT NOT NULL,
+            content_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """,
+    "market_minute_head": """
+        CREATE TABLE market_minute_head (
+            symbol TEXT NOT NULL,
+            bar_end TEXT NOT NULL,
+            artifact_hash TEXT NOT NULL
+                REFERENCES market_minute_artifact (artifact_hash) ON DELETE RESTRICT,
+            revision INTEGER NOT NULL CHECK (revision >= 1),
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (symbol, bar_end)
+        )
+    """,
+    "market_dataset": """
+        CREATE TABLE market_dataset (
+            dataset_hash TEXT PRIMARY KEY,
+            manifest_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """,
+    "market_dataset_item": """
+        CREATE TABLE market_dataset_item (
+            dataset_hash TEXT NOT NULL
+                REFERENCES market_dataset (dataset_hash) ON DELETE RESTRICT,
+            natural_key TEXT NOT NULL,
+            artifact_hash TEXT NOT NULL
+                REFERENCES market_artifact (artifact_hash) ON DELETE RESTRICT,
+            kind TEXT NOT NULL CHECK (kind IN ('CALENDAR', 'MINUTE', 'LIMIT', 'DAILY')),
+            symbol TEXT,
+            trade_date TEXT NOT NULL,
+            PRIMARY KEY (dataset_hash, natural_key)
+        )
+    """,
+}
+_RESULT_TABLE_SQL_CONTRACTS = {
+    "backtest_run": """
+        CREATE TABLE backtest_run (
+            run_id TEXT PRIMARY KEY,
+            plan_sha256 TEXT NOT NULL,
+            dataset_hash TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('COMPLETED', 'FAILED', 'CANCELLED')),
+            completed_at TEXT NOT NULL,
+            pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+            materialized INTEGER NOT NULL DEFAULT 1 CHECK (materialized IN (0, 1)),
+            publication_fill_count INTEGER
+                CHECK (publication_fill_count IS NULL OR publication_fill_count >= 0),
+            publication_detail_count INTEGER
+                CHECK (publication_detail_count IS NULL OR publication_detail_count >= 0),
+            publication_fill_set_hash TEXT,
+            publication_detail_set_hash TEXT,
+            summary_hash TEXT NOT NULL,
+            summary_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """,
+    "backtest_fill": """
+        CREATE TABLE backtest_fill (
+            fill_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL REFERENCES backtest_run (run_id) ON DELETE RESTRICT,
+            filled_at TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """,
+    "backtest_detail": """
+        CREATE TABLE backtest_detail (
+            detail_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL REFERENCES backtest_run (run_id) ON DELETE RESTRICT,
+            kind TEXT NOT NULL CHECK (
+                kind IN (
+                    'DECISION', 'SIGNAL', 'EXECUTION_OUTCOME', 'DAILY_EQUITY',
+                    'DIAGNOSTIC', 'DEBUG_TRACE'
+                )
+            ),
+            event_at TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """,
+}
+
+_IndexColumnContract = tuple[str, bool, str]
+_IndexContract = tuple[str, tuple[_IndexColumnContract, ...]]
+_MARKET_INDEX_CONTRACTS: dict[str, _IndexContract] = {
+    "ix_market_artifact_natural_key": (
+        "market_artifact",
+        (("natural_key", False, "BINARY"), ("created_at", False, "BINARY")),
+    ),
+    "ix_market_head_kind_symbol_date": (
+        "market_head",
+        (
+            ("kind", False, "BINARY"),
+            ("symbol", False, "BINARY"),
+            ("trade_date", False, "BINARY"),
+        ),
+    ),
+    "ix_market_minute_artifact_symbol_end": (
+        "market_minute_artifact",
+        (
+            ("symbol", False, "BINARY"),
+            ("bar_end", False, "BINARY"),
+            ("artifact_hash", False, "BINARY"),
+        ),
+    ),
+    "ix_market_minute_head_end": (
+        "market_minute_head",
+        (("bar_end", False, "BINARY"), ("symbol", False, "BINARY")),
+    ),
+    "ix_market_dataset_item_lookup": (
+        "market_dataset_item",
+        (
+            ("dataset_hash", False, "BINARY"),
+            ("kind", False, "BINARY"),
+            ("symbol", False, "BINARY"),
+            ("trade_date", False, "BINARY"),
+        ),
+    ),
+}
+_RESULT_INDEX_CONTRACTS: dict[str, _IndexContract] = {
+    "ix_backtest_run_retention": (
+        "backtest_run",
+        (
+            ("status", False, "BINARY"),
+            ("pinned", False, "BINARY"),
+            ("completed_at", True, "BINARY"),
+            ("run_id", True, "BINARY"),
+        ),
+    ),
+    "ix_backtest_run_retention_v2": (
+        "backtest_run",
+        (
+            ("status", False, "BINARY"),
+            ("pinned", False, "BINARY"),
+            ("materialized", False, "BINARY"),
+            ("created_at", True, "BINARY"),
+            ("run_id", True, "BINARY"),
+        ),
+    ),
+    "ix_backtest_fill_run": (
+        "backtest_fill",
+        (
+            ("run_id", False, "BINARY"),
+            ("filled_at", False, "BINARY"),
+            ("fill_id", False, "BINARY"),
+        ),
+    ),
+    "ix_backtest_detail_retention": (
+        "backtest_detail",
+        (
+            ("kind", False, "BINARY"),
+            ("run_id", False, "BINARY"),
+            ("detail_id", False, "BINARY"),
+        ),
+    ),
+    "ix_backtest_detail_run_event": (
+        "backtest_detail",
+        (
+            ("run_id", False, "BINARY"),
+            ("event_at", False, "BINARY"),
+            ("detail_id", False, "BINARY"),
+        ),
+    ),
+}
 
 
 class MigrationPreflightError(RuntimeError):
@@ -200,6 +504,8 @@ def authorize_migration(
         raise TypeError("verified_backup must be VerifiedBackupFacts")
     if inventory.terminal_run_count:
         raise MigrationPreflightError("LEGACY_TERMINAL_RUNS_REQUIRE_MIGRATION")
+    if inventory.database_state is DatabaseState.UNKNOWN:
+        raise MigrationPreflightError("UNRECOGNIZED_SCHEMA_CANNOT_BE_MIGRATED")
     if not inventory.migration_reasons:
         raise MigrationPreflightError("MIGRATION_NOT_REQUIRED")
     if not verified_backup.coordinator_stopped:
@@ -281,9 +587,17 @@ def _inspect_market(
     table_names: frozenset[str],
 ) -> dict[str, object]:
     present = table_names & _MARKET_TABLES
+    current = _has_required_schema(
+        connection,
+        table_names,
+        column_contracts=_MARKET_COLUMN_CONTRACTS,
+        foreign_key_contracts=_MARKET_FOREIGN_KEY_CONTRACTS,
+        table_sql_contracts=_MARKET_TABLE_SQL_CONTRACTS,
+        index_contracts=_MARKET_INDEX_CONTRACTS,
+    )
     state = (
         DatabaseState.CURRENT
-        if _MARKET_TABLES <= table_names
+        if current
         else DatabaseState.LEGACY
         if present
         else DatabaseState.UNKNOWN
@@ -291,6 +605,8 @@ def _inspect_market(
     reasons: list[str] = []
     if state == DatabaseState.LEGACY:
         reasons.append("LEGACY_SCHEMA")
+    elif state == DatabaseState.UNKNOWN:
+        reasons.append("UNRECOGNIZED_SCHEMA")
     dataset_hashes: tuple[bytes, ...] = ()
     if "market_dataset" in table_names and "dataset_hash" in _table_columns(
         connection, "market_dataset"
@@ -315,7 +631,7 @@ def _inspect_market(
         "dataset_hash_goldens": dataset_hashes,
         "utc_metadata": metadata,
         "migration_reasons": tuple(reasons),
-        "requires_schema_migration": state == DatabaseState.LEGACY,
+        "requires_schema_migration": state != DatabaseState.CURRENT,
     }
 
 
@@ -327,7 +643,14 @@ def _inspect_results(
     run_columns = (
         _table_columns(connection, "backtest_run") if "backtest_run" in table_names else ()
     )
-    current = _RESULT_TABLES <= table_names and _CURRENT_RESULT_COLUMNS <= set(run_columns)
+    current = _has_required_schema(
+        connection,
+        table_names,
+        column_contracts=_RESULT_COLUMN_CONTRACTS,
+        foreign_key_contracts=_RESULT_FOREIGN_KEY_CONTRACTS,
+        table_sql_contracts=_RESULT_TABLE_SQL_CONTRACTS,
+        index_contracts=_RESULT_INDEX_CONTRACTS,
+    )
     state = (
         DatabaseState.CURRENT
         if current
@@ -355,6 +678,8 @@ def _inspect_results(
         reasons.append("LEGACY_COMPLETED_RESULTS_COMPATIBILITY_ONLY")
     if state == DatabaseState.LEGACY:
         reasons.append("LEGACY_SCHEMA")
+    elif state == DatabaseState.UNKNOWN:
+        reasons.append("UNRECOGNIZED_SCHEMA")
     if terminal_count:
         reasons.insert(0, "LEGACY_TERMINAL_RUNS_REQUIRE_MIGRATION")
     return {
@@ -362,7 +687,7 @@ def _inspect_results(
         "terminal_run_count": terminal_count,
         "compatibility_only_run_ids": compatibility_only,
         "migration_reasons": tuple(reasons),
-        "requires_schema_migration": state == DatabaseState.LEGACY,
+        "requires_schema_migration": state != DatabaseState.CURRENT,
     }
 
 
@@ -396,6 +721,244 @@ def _timestamp_inventory(
 
 def _table_columns(connection: sqlite3.Connection, table: str) -> tuple[str, ...]:
     return tuple(str(row[1]) for row in connection.execute(f'PRAGMA table_info("{table}")'))
+
+
+def _has_required_schema(
+    connection: sqlite3.Connection,
+    table_names: frozenset[str],
+    *,
+    column_contracts: dict[str, dict[str, _ColumnContract]],
+    foreign_key_contracts: dict[str, frozenset[_ForeignKeyContract]],
+    table_sql_contracts: dict[str, str],
+    index_contracts: dict[str, _IndexContract],
+) -> bool:
+    if frozenset(column_contracts) != table_names:
+        return False
+    if not _has_exact_table_sql(connection, table_sql_contracts):
+        return False
+    for table, expected_columns in column_contracts.items():
+        rows = tuple(connection.execute(f'PRAGMA table_xinfo("{table}")'))
+        if any(len(row) <= 6 or int(row[6]) != 0 for row in rows):
+            return False
+        actual_columns = {str(row[1]): row for row in rows}
+        if expected_columns.keys() != actual_columns.keys():
+            return False
+        for name, (declared_type, not_null, default_sql, primary_key) in expected_columns.items():
+            row = actual_columns[name]
+            actual_default = None if row[4] is None else str(row[4]).strip()
+            if str(row[2]).strip().upper() != declared_type:
+                return False
+            if bool(row[3]) is not not_null:
+                return False
+            if actual_default != default_sql:
+                return False
+            if int(row[5]) != primary_key:
+                return False
+        actual_primary_key = tuple(
+            str(row[1])
+            for row in sorted(
+                (row for row in rows if int(row[5]) > 0),
+                key=lambda row: int(row[5]),
+            )
+        )
+        expected_primary_key = tuple(
+            name
+            for name, contract in sorted(
+                expected_columns.items(),
+                key=lambda item: item[1][3],
+            )
+            if contract[3] > 0
+        )
+        if actual_primary_key != expected_primary_key:
+            return False
+        if not _primary_key_uses_binary_collation(
+            connection,
+            table,
+            expected_primary_key,
+        ):
+            return False
+        if _has_unexpected_unique_index(connection, table):
+            return False
+        if _foreign_key_contract(connection, table) != foreign_key_contracts[table]:
+            return False
+    if connection.execute("SELECT 1 FROM sqlite_schema WHERE type = 'trigger' LIMIT 1").fetchone():
+        return False
+    return _has_compatible_named_indexes(connection, index_contracts)
+
+
+def _has_exact_table_sql(
+    connection: sqlite3.Connection,
+    table_sql_contracts: dict[str, str],
+) -> bool:
+    rows = connection.execute("SELECT name, sql FROM sqlite_schema WHERE type = 'table'").fetchall()
+    actual_sql = {str(row[0]): row[1] for row in rows}
+    if table_sql_contracts.keys() != actual_sql.keys():
+        return False
+    return all(
+        actual_sql[table] is not None
+        and _tokenize_schema_sql(str(actual_sql[table])) == _tokenize_schema_sql(expected_sql)
+        for table, expected_sql in table_sql_contracts.items()
+    )
+
+
+def _primary_key_uses_binary_collation(
+    connection: sqlite3.Connection,
+    table: str,
+    expected_primary_key: tuple[str, ...],
+) -> bool:
+    primary_key_indexes = tuple(
+        row
+        for row in connection.execute(f'PRAGMA index_list("{table}")')
+        if len(row) > 3 and str(row[3]).lower() == "pk"
+    )
+    if len(primary_key_indexes) != 1:
+        return False
+    index_name = str(primary_key_indexes[0][1]).replace('"', '""')
+    key_rows = sorted(
+        (
+            row
+            for row in connection.execute(f'PRAGMA index_xinfo("{index_name}")')
+            if len(row) > 5 and int(row[5]) == 1
+        ),
+        key=lambda row: int(row[0]),
+    )
+    return tuple((str(row[2]), bool(row[3]), str(row[4]).upper()) for row in key_rows) == tuple(
+        (name, False, "BINARY") for name in expected_primary_key
+    )
+
+
+def _has_unexpected_unique_index(connection: sqlite3.Connection, table: str) -> bool:
+    return any(
+        bool(row[2]) and (len(row) <= 3 or str(row[3]).lower() != "pk")
+        for row in connection.execute(f'PRAGMA index_list("{table}")')
+    )
+
+
+def _foreign_key_contract(
+    connection: sqlite3.Connection,
+    table: str,
+) -> frozenset[_ForeignKeyContract]:
+    return frozenset(
+        (
+            str(row[3]),
+            str(row[2]),
+            str(row[4]),
+            str(row[5]).upper(),
+            str(row[6]).upper(),
+            str(row[7]).upper(),
+        )
+        for row in connection.execute(f'PRAGMA foreign_key_list("{table}")')
+    )
+
+
+def _has_compatible_named_indexes(
+    connection: sqlite3.Connection,
+    index_contracts: dict[str, _IndexContract],
+) -> bool:
+    for index_name, (expected_table, expected_columns) in index_contracts.items():
+        object_row = connection.execute(
+            "SELECT type, tbl_name FROM sqlite_schema WHERE name = ?",
+            (index_name,),
+        ).fetchone()
+        if object_row is None:
+            return False
+        if str(object_row[0]) != "index" or str(object_row[1]) != expected_table:
+            return False
+        index_list_rows = tuple(connection.execute(f'PRAGMA index_list("{expected_table}")'))
+        matching_rows = tuple(row for row in index_list_rows if str(row[1]) == index_name)
+        if len(matching_rows) != 1 or bool(matching_rows[0][2]) or bool(matching_rows[0][4]):
+            return False
+        escaped_name = index_name.replace('"', '""')
+        index_rows = tuple(connection.execute(f'PRAGMA index_xinfo("{escaped_name}")'))
+        actual_columns = tuple(
+            (str(row[2]), bool(row[3]), str(row[4]).upper())
+            for row in sorted(index_rows, key=lambda row: int(row[0]))
+            if len(row) > 5 and int(row[5]) == 1
+        )
+        if actual_columns != expected_columns:
+            return False
+    return True
+
+
+def _tokenize_schema_sql(value: str) -> tuple[str, ...]:
+    tokens: list[str] = []
+    index = 0
+    while index < len(value):
+        character = value[index]
+        if character.isspace():
+            index += 1
+            continue
+        if value.startswith("--", index):
+            newline = value.find("\n", index + 2)
+            index = len(value) if newline < 0 else newline + 1
+            continue
+        if value.startswith("/*", index):
+            end = value.find("*/", index + 2)
+            index = len(value) if end < 0 else end + 2
+            continue
+        if character == "'":
+            token, index = _consume_quoted_schema_token(value, index, "'", "STRING")
+            tokens.append(token)
+            continue
+        if character in {'"', "`"}:
+            token, index = _consume_quoted_schema_token(
+                value,
+                index,
+                character,
+                "QUOTED_IDENTIFIER",
+            )
+            tokens.append(token)
+            continue
+        if character == "[":
+            end = value.find("]", index + 1)
+            if end < 0:
+                return ("INVALID_SCHEMA_SQL",)
+            tokens.append(f"QUOTED_IDENTIFIER:{value[index + 1 : end]}")
+            index = end + 1
+            continue
+        if character.isalnum() or character in {"_", "$"}:
+            end = index + 1
+            while end < len(value) and (value[end].isalnum() or value[end] in {"_", "$"}):
+                end += 1
+            tokens.append(value[index:end].upper())
+            index = end
+            continue
+        if value[index : index + 3] == "->>":
+            tokens.append("->>")
+            index += 3
+            continue
+        two_character = value[index : index + 2]
+        if two_character in {"<=", ">=", "<>", "!=", "==", "||", "->"}:
+            tokens.append(two_character)
+            index += 2
+            continue
+        tokens.append(character)
+        index += 1
+    return tuple(tokens)
+
+
+def _consume_quoted_schema_token(
+    value: str,
+    start: int,
+    quote: str,
+    token_kind: str,
+) -> tuple[str, int]:
+    content: list[str] = []
+    index = start + 1
+    while index < len(value):
+        character = value[index]
+        if character == quote:
+            if index + 1 < len(value) and value[index + 1] == quote:
+                content.append(quote)
+                index += 2
+                continue
+            normalized = "".join(content)
+            if token_kind == "QUOTED_IDENTIFIER":
+                normalized = normalized.upper()
+            return f"{token_kind}:{normalized}", index + 1
+        content.append(character)
+        index += 1
+    return "INVALID_SCHEMA_SQL", len(value)
 
 
 def _schema_hash(rows: tuple[tuple[object, ...], ...]) -> str:

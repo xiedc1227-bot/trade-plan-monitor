@@ -38,6 +38,136 @@ def _seed_legacy_results(path: Path, *, status: str = "COMPLETED") -> None:
         connection.commit()
 
 
+def _seed_partial_market_schema(path: Path) -> None:
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE market_artifact (artifact_hash TEXT PRIMARY KEY);
+            CREATE TABLE market_head (natural_key TEXT PRIMARY KEY);
+            CREATE TABLE market_minute_artifact (artifact_hash TEXT PRIMARY KEY);
+            CREATE TABLE market_minute_head (
+                symbol TEXT,
+                bar_end TEXT,
+                PRIMARY KEY (symbol, bar_end)
+            );
+            CREATE TABLE market_dataset (dataset_hash TEXT PRIMARY KEY);
+            CREATE TABLE market_dataset_item (
+                dataset_hash TEXT,
+                natural_key TEXT,
+                PRIMARY KEY (dataset_hash, natural_key)
+            );
+            """
+        )
+        connection.commit()
+
+
+def _seed_partial_result_schema(path: Path) -> None:
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE backtest_run (
+                run_id TEXT PRIMARY KEY,
+                plan_sha256 TEXT,
+                dataset_hash TEXT,
+                status TEXT,
+                completed_at TEXT,
+                pinned INTEGER,
+                materialized INTEGER,
+                publication_fill_count INTEGER,
+                publication_detail_count INTEGER,
+                publication_fill_set_hash TEXT,
+                publication_detail_set_hash TEXT,
+                summary_hash TEXT,
+                summary_json TEXT,
+                created_at TEXT
+            );
+            CREATE TABLE backtest_fill (dummy TEXT PRIMARY KEY);
+            CREATE TABLE backtest_detail (dummy TEXT PRIMARY KEY);
+            """
+        )
+        connection.commit()
+
+
+def _seed_structurally_complete_result_schema(
+    path: Path,
+    *,
+    run_id_declaration: str = "TEXT PRIMARY KEY",
+    plan_sha256_declaration: str = "TEXT NOT NULL",
+    status_declaration: str = "TEXT NOT NULL",
+    pinned_declaration: str = "INTEGER NOT NULL DEFAULT 0",
+    extra_run_column: str = "",
+    extra_schema_sql: str = "",
+    include_contract_constraints: bool = False,
+    constraints_as_comments: bool = False,
+    include_foreign_keys: bool = False,
+    deferred_foreign_keys: bool = False,
+) -> None:
+    check_clauses = {
+        "status": "CHECK (status IN ('COMPLETED', 'FAILED', 'CANCELLED'))",
+        "pinned": "CHECK (pinned IN (0, 1))",
+        "materialized": "CHECK (materialized IN (0, 1))",
+        "fill_count": ("CHECK (publication_fill_count IS NULL OR publication_fill_count >= 0)"),
+        "detail_count": (
+            "CHECK (publication_detail_count IS NULL OR publication_detail_count >= 0)"
+        ),
+        "kind": (
+            "CHECK (kind IN ('DECISION', 'SIGNAL', 'EXECUTION_OUTCOME', "
+            "'DAILY_EQUITY', 'DIAGNOSTIC', 'DEBUG_TRACE'))"
+        ),
+    }
+    if constraints_as_comments:
+        check_clauses = {name: f"/* {clause} */" for name, clause in check_clauses.items()}
+    elif not include_contract_constraints:
+        check_clauses = dict.fromkeys(check_clauses, "")
+    check_clauses = {name: f" {clause}" if clause else "" for name, clause in check_clauses.items()}
+    foreign_key_suffix = ""
+    if include_foreign_keys:
+        foreign_key_suffix = " REFERENCES backtest_run (run_id) ON DELETE RESTRICT"
+        if deferred_foreign_keys:
+            foreign_key_suffix += " DEFERRABLE INITIALLY DEFERRED"
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(
+            f"""
+            CREATE TABLE backtest_run (
+                run_id {run_id_declaration},
+                plan_sha256 {plan_sha256_declaration},
+                dataset_hash TEXT NOT NULL,
+                status {status_declaration}{check_clauses["status"]},
+                completed_at TEXT NOT NULL,
+                pinned {pinned_declaration}{check_clauses["pinned"]},
+                materialized INTEGER NOT NULL DEFAULT 1{check_clauses["materialized"]},
+                publication_fill_count INTEGER{check_clauses["fill_count"]},
+                publication_detail_count INTEGER{check_clauses["detail_count"]},
+                publication_fill_set_hash TEXT,
+                publication_detail_set_hash TEXT,
+                summary_hash TEXT NOT NULL,
+                summary_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+                {extra_run_column}
+            );
+            CREATE TABLE backtest_fill (
+                fill_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL{foreign_key_suffix},
+                filled_at TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE backtest_detail (
+                detail_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL{foreign_key_suffix},
+                kind TEXT NOT NULL{check_clauses["kind"]},
+                event_at TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            {extra_schema_sql}
+            """
+        )
+        connection.commit()
+
+
 def _file_hash(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
@@ -76,6 +206,275 @@ def test_legacy_terminal_rows_fail_before_any_sqlite_mutation(tmp_path: Path) ->
 
     after = _database_state(path)
     assert after == before
+
+
+def test_partial_market_schema_fails_before_any_sqlite_mutation(tmp_path: Path) -> None:
+    path = tmp_path / "partial-market.sqlite3"
+    _seed_partial_market_schema(path)
+    before = _database_state(path)
+
+    error: Exception | None = None
+    try:
+        BacktestMarketStore(path)
+    except Exception as caught:  # noqa: BLE001 - preserve state after the failed boundary
+        error = caught
+
+    assert _database_state(path) == before
+    assert isinstance(error, MigrationPreflightError)
+    assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+def test_partial_result_schema_fails_before_any_sqlite_mutation(tmp_path: Path) -> None:
+    path = tmp_path / "partial-results.sqlite3"
+    _seed_partial_result_schema(path)
+    before = _database_state(path)
+
+    error: Exception | None = None
+    try:
+        BacktestResultStore(path)
+    except Exception as caught:  # noqa: BLE001 - preserve state after the failed boundary
+        error = caught
+
+    assert _database_state(path) == before
+    assert isinstance(error, MigrationPreflightError)
+    assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+def test_unknown_sqlite_schema_is_not_claimed_by_a_backtest_store(tmp_path: Path) -> None:
+    path = tmp_path / "unknown.sqlite3"
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("CREATE TABLE unrelated_state (identity TEXT PRIMARY KEY)")
+        connection.commit()
+    before = _database_state(path)
+
+    error: Exception | None = None
+    try:
+        BacktestMarketStore(path)
+    except Exception as caught:  # noqa: BLE001 - preserve state after the failed boundary
+        error = caught
+
+    assert _database_state(path) == before
+    assert isinstance(error, MigrationPreflightError)
+    assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+@pytest.mark.parametrize(
+    (
+        "run_id_declaration",
+        "plan_sha256_declaration",
+        "pinned_declaration",
+        "extra_run_column",
+    ),
+    (
+        ("TEXT PRIMARY KEY", "TEXT NOT NULL", "INTEGER NOT NULL DEFAULT 0", ""),
+        ("INTEGER PRIMARY KEY", "TEXT NOT NULL", "INTEGER NOT NULL DEFAULT 0", ""),
+        (
+            "TEXT PRIMARY KEY COLLATE NOCASE",
+            "TEXT NOT NULL",
+            "INTEGER NOT NULL DEFAULT 0",
+            "",
+        ),
+        ("TEXT PRIMARY KEY", "TEXT NOT NULL", "INTEGER NOT NULL DEFAULT 2", ""),
+        (
+            "TEXT PRIMARY KEY",
+            "TEXT NOT NULL",
+            "INTEGER NOT NULL DEFAULT 0",
+            ", must_supply TEXT NOT NULL",
+        ),
+        ("TEXT PRIMARY KEY", "TEXT NOT NULL UNIQUE", "INTEGER NOT NULL DEFAULT 0", ""),
+    ),
+)
+def test_incompatible_writable_result_schema_fails_before_any_sqlite_mutation(
+    tmp_path: Path,
+    run_id_declaration: str,
+    plan_sha256_declaration: str,
+    pinned_declaration: str,
+    extra_run_column: str,
+) -> None:
+    path = tmp_path / "incompatible-writable-results.sqlite3"
+    _seed_structurally_complete_result_schema(
+        path,
+        run_id_declaration=run_id_declaration,
+        plan_sha256_declaration=plan_sha256_declaration,
+        pinned_declaration=pinned_declaration,
+        extra_run_column=extra_run_column,
+    )
+    before = _database_state(path)
+
+    error: Exception | None = None
+    try:
+        BacktestResultStore(path)
+    except Exception as caught:  # noqa: BLE001 - preserve state after the failed boundary
+        error = caught
+
+    assert _database_state(path) == before
+    assert isinstance(error, MigrationPreflightError)
+    assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+def test_schema_object_name_collision_fails_before_any_sqlite_mutation(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "colliding-schema-object.sqlite3"
+    _seed_structurally_complete_result_schema(
+        path,
+        extra_schema_sql="CREATE TABLE ix_backtest_run_retention (dummy TEXT);",
+    )
+    before = _database_state(path)
+
+    error: Exception | None = None
+    try:
+        BacktestResultStore(path)
+    except Exception as caught:  # noqa: BLE001 - preserve state after the failed boundary
+        error = caught
+
+    assert _database_state(path) == before
+    assert isinstance(error, MigrationPreflightError)
+    assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+@pytest.mark.parametrize(
+    ("schema_variant", "schema_options"),
+    (
+        (
+            "commented-checks",
+            {"constraints_as_comments": True, "include_foreign_keys": True},
+        ),
+        (
+            "missing-index-nocase",
+            {
+                "status_declaration": "TEXT NOT NULL COLLATE NOCASE",
+                "include_contract_constraints": True,
+                "include_foreign_keys": True,
+            },
+        ),
+        (
+            "replace-primary-key",
+            {
+                "run_id_declaration": "TEXT PRIMARY KEY ON CONFLICT REPLACE",
+                "include_contract_constraints": True,
+                "include_foreign_keys": True,
+            },
+        ),
+        (
+            "descending-primary-key",
+            {
+                "run_id_declaration": "TEXT PRIMARY KEY DESC",
+                "include_contract_constraints": True,
+                "include_foreign_keys": True,
+            },
+        ),
+        (
+            "deferred-foreign-key",
+            {
+                "include_contract_constraints": True,
+                "include_foreign_keys": True,
+                "deferred_foreign_keys": True,
+            },
+        ),
+    ),
+)
+def test_deceptive_result_schema_fails_before_any_sqlite_mutation(
+    tmp_path: Path,
+    schema_variant: str,
+    schema_options: dict[str, object],
+) -> None:
+    path = tmp_path / f"{schema_variant}.sqlite3"
+    _seed_structurally_complete_result_schema(path, **schema_options)
+    before = _database_state(path)
+
+    error: Exception | None = None
+    try:
+        BacktestResultStore(path)
+    except Exception as caught:  # noqa: BLE001 - preserve state after the failed boundary
+        error = caught
+
+    assert _database_state(path) == before
+    assert isinstance(error, MigrationPreflightError)
+    assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+def test_generated_column_fails_before_any_sqlite_mutation(tmp_path: Path) -> None:
+    path = tmp_path / "generated-column.sqlite3"
+    BacktestResultStore(path)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute(
+            "ALTER TABLE backtest_run ADD COLUMN derived_status TEXT "
+            "GENERATED ALWAYS AS (json_extract(summary_json, '$.status')) STORED"
+        )
+        connection.commit()
+    before = _database_state(path)
+
+    error: Exception | None = None
+    try:
+        BacktestResultStore(path)
+    except Exception as caught:  # noqa: BLE001 - preserve state after the failed boundary
+        error = caught
+
+    assert _database_state(path) == before
+    assert isinstance(error, MigrationPreflightError)
+    assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+def test_partial_replacement_index_fails_before_any_sqlite_mutation(tmp_path: Path) -> None:
+    path = tmp_path / "partial-index.sqlite3"
+    BacktestResultStore(path)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(
+            """
+            DROP INDEX ix_backtest_run_retention;
+            CREATE INDEX ix_backtest_run_retention
+                ON backtest_run (status, pinned, completed_at DESC, run_id DESC)
+                WHERE status = 'COMPLETED';
+            """
+        )
+        connection.commit()
+    before = _database_state(path)
+
+    error: Exception | None = None
+    try:
+        BacktestResultStore(path)
+    except Exception as caught:  # noqa: BLE001 - preserve state after the failed boundary
+        error = caught
+
+    assert _database_state(path) == before
+    assert isinstance(error, MigrationPreflightError)
+    assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+def test_wal_domain_conflict_fails_without_reopening_or_mutating_source(tmp_path: Path) -> None:
+    path = tmp_path / "market-domain.sqlite3"
+    BacktestMarketStore(path)
+    before = _database_state(path)
+
+    with pytest.raises(ValueError, match="another storage domain"):
+        BacktestResultStore(path)
+
+    assert _database_state(path) == before
+
+
+def test_unknown_schema_cannot_receive_migration_authorization(tmp_path: Path) -> None:
+    path = tmp_path / "unknown-authorization.sqlite3"
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("CREATE TABLE unrelated_state (identity TEXT PRIMARY KEY)")
+        connection.commit()
+    inventory = inspect_result_database(path)
+
+    assert inventory.database_state == DatabaseState.UNKNOWN
+    with pytest.raises(
+        MigrationPreflightError,
+        match="UNRECOGNIZED_SCHEMA_CANNOT_BE_MIGRATED",
+    ):
+        authorize_migration(
+            inventory,
+            VerifiedBackupFacts(
+                source_fingerprint=inventory.source_fingerprint.digest,
+                backup_sha256="a" * 64,
+                backup_size_bytes=path.stat().st_size,
+                verified_at=datetime(2026, 8, 26, 18, 0, tzinfo=_SHANGHAI),
+                coordinator_stopped=True,
+            ),
+        )
 
 
 def test_fresh_inventory_precedes_store_initialization(tmp_path: Path) -> None:

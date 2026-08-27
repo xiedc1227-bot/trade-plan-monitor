@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from contextlib import closing
 from pathlib import Path
 
@@ -39,23 +40,33 @@ def reject_incompatible_database(
     *,
     store_name: str,
     forbidden_prefixes: tuple[str, ...],
+    observed_table_names: Iterable[str] | None = None,
 ) -> None:
     """Reject an existing SQLite file owned by another storage domain."""
 
-    if not path.exists() or path.stat().st_size == 0:
-        return
-    try:
-        with closing(
-            sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=5)
-        ) as connection:
-            tables = {
-                str(row[0])
-                for row in connection.execute(
-                    "SELECT name FROM sqlite_schema WHERE type = 'table'"
-                ).fetchall()
-            }
-    except sqlite3.Error as error:
-        raise ValueError(f"{store_name} database_path must be a readable SQLite file") from error
+    if observed_table_names is None:
+        if not path.exists() or path.stat().st_size == 0:
+            return
+        try:
+            with closing(
+                sqlite3.connect(
+                    f"{path.as_uri()}?mode=ro&immutable=1",
+                    uri=True,
+                    timeout=5,
+                )
+            ) as connection:
+                tables = {
+                    str(row[0])
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_schema WHERE type = 'table'"
+                    ).fetchall()
+                }
+        except sqlite3.Error as error:
+            raise ValueError(
+                f"{store_name} database_path must be a readable SQLite file"
+            ) from error
+    else:
+        tables = {str(table) for table in observed_table_names}
     conflicting = sorted(
         table
         for table in tables

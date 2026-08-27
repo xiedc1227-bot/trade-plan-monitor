@@ -353,12 +353,13 @@ class BacktestResultStore:
         if self._path.exists() and not self._path.is_file():
             raise ValueError("database_path must point to a file")
         self._migration_inventory = inspect_result_database(self._path)
-        require_safe_store_initialization(self._migration_inventory)
         reject_incompatible_database(
             self._path,
             store_name="backtest result",
             forbidden_prefixes=("market_",),
+            observed_table_names=self._migration_inventory.table_names,
         )
+        require_safe_store_initialization(self._migration_inventory)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._busy_timeout_ms = busy_timeout_ms
         self._initialize()
