@@ -350,6 +350,30 @@ class PositionLot(_ExecutionValue):
         )
 
     @classmethod
+    def from_initial_input(
+        cls,
+        *,
+        run_id: str,
+        symbol: str,
+        lot_key: str,
+        bucket: PositionBucket,
+        acquired_trade_date: date,
+        quantity: int,
+        cost_basis_fen: int,
+    ) -> Self:
+        """Derive one run-bound lot from an already-hashed public input."""
+
+        return cls.create_initial(
+            run_id=run_id,
+            symbol=symbol,
+            bucket=bucket,
+            acquired_trade_date=acquired_trade_date,
+            quantity=quantity,
+            cost_basis_fen=cost_basis_fen,
+            source_key=lot_key,
+        )
+
+    @classmethod
     def from_fill(
         cls,
         *,

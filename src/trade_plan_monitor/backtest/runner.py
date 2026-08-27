@@ -27,6 +27,14 @@ from trade_plan_monitor.backtest.models import (
     PositionLot,
     PositionSnapshot,
 )
+from trade_plan_monitor.backtest.run_input import (
+    CALENDAR_CONTEXT_DAYS,
+    DAILY_CONTEXT_BARS,
+    FIVE_MINUTE_CONTEXT_BARS,
+    RUN_FORMULA_V1,
+    BacktestInitialLotInput,
+    BacktestRunInput,
+)
 from trade_plan_monitor.decision.engine import evaluate
 from trade_plan_monitor.decision.models import (
     DailyIndicatorProvenance,
@@ -44,7 +52,6 @@ from trade_plan_monitor.decision.models import (
     RiskTransitionIntent,
     SignalType,
 )
-from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
 from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
@@ -60,11 +67,11 @@ from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBa
 from trade_plan_monitor.market_data.reconciliation import reconcile_daily_close
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
-RUN_FORMULA_VERSION = "backtest-run-v1"
+RUN_FORMULA_VERSION = RUN_FORMULA_V1
 _REPORT_SCHEMA_VERSION = "backtest-report-v1"
-_FIVE_MINUTE_CONTEXT_BARS = 512
-_DAILY_CONTEXT_BARS = 499
-_CALENDAR_CONTEXT_DAYS = 512
+_FIVE_MINUTE_CONTEXT_BARS = FIVE_MINUTE_CONTEXT_BARS
+_DAILY_CONTEXT_BARS = DAILY_CONTEXT_BARS
+_CALENDAR_CONTEXT_DAYS = CALENDAR_CONTEXT_DAYS
 _METRIC_DECIMAL_CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN)
 _LIMITATIONS = (
     "UNADJUSTED_PRICES_NO_CORPORATE_ACTIONS",
@@ -199,7 +206,7 @@ class OfflineBacktestRunner:
         execution_config: ExecutionConfig,
         manual_event_risk: bool,
         plan_version_id: UUID | None = None,
-        initial_lots: tuple[PositionLot, ...] = (),
+        initial_lots: tuple[BacktestInitialLotInput, ...] = (),
     ) -> BacktestRunReport:
         """Run a finite offline replay; no provider, scheduler, or notification is reachable."""
 
@@ -215,7 +222,17 @@ class OfflineBacktestRunner:
         scope = manifest.scope
         if plan.symbol not in scope.symbols:
             raise BacktestBlockedError(f"PLAN_SYMBOL_NOT_IN_DATASET:{plan.symbol}")
-        plan_hash = plan_sha256(plan)
+        run_input = BacktestRunInput.create(
+            plan=plan,
+            manifest=manifest,
+            initial_cash_fen=initial_cash_fen,
+            initial_lots=initial_lots,
+            execution_config=execution_config,
+            manual_event_risk=manual_event_risk,
+            plan_version_id=plan_version_id,
+        )
+        position_lots = run_input.derive_position_lots()
+        plan_hash = run_input.plan_sha256
         exchange = exchange_for_symbol(plan.symbol)
         frozen_calendar = self._store.dataset_trading_days(dataset_hash, exchange)
         calendar_by_date = {value.cal_date: value for value in frozen_calendar}
@@ -228,18 +245,10 @@ class OfflineBacktestRunner:
                 f"INSUFFICIENT_DAILY_WARMUP:{len(official_history)}:{required_warmup}"
             )
         initial_equity_fen = initial_cash_fen + sum(
-            lot.remaining_quantity * official_history[-1].close_fen for lot in initial_lots
+            lot.remaining_quantity * official_history[-1].close_fen for lot in position_lots
         )
 
-        run_id = backtest_run_id(
-            plan=plan,
-            manifest=manifest,
-            initial_cash_fen=initial_cash_fen,
-            execution_config=execution_config,
-            manual_event_risk=manual_event_risk,
-            plan_version_id=plan_version_id,
-            initial_lots=initial_lots,
-        )
+        run_id = run_input.run_id
         engine = DeterministicExecutionEngine(
             config=execution_config,
             run_id=run_id,
@@ -250,7 +259,7 @@ class OfflineBacktestRunner:
             max_position_qty=plan.position.max_qty,
             core_target_qty=plan.position.core_target_qty,
             tactical_target_qty=plan.position.tactical_target_qty,
-            initial_lots=initial_lots,
+            initial_lots=position_lots,
         )
         activation_origin = datetime.combine(scope.start, time(9, 0), SHANGHAI)
         risk_state = RiskStateSnapshot(
@@ -443,7 +452,7 @@ class OfflineBacktestRunner:
         execution_config: ExecutionConfig,
         manual_event_risk: bool,
         plan_version_id: UUID | None,
-        initial_lots: tuple[PositionLot, ...],
+        initial_lots: tuple[BacktestInitialLotInput, ...],
     ) -> None:
         if not isinstance(plan, TradePlan):
             raise TypeError("plan must be a TradePlan")
@@ -458,9 +467,9 @@ class OfflineBacktestRunner:
             raise TypeError("manual_event_risk must be an explicit bool")
         _validate_plan_version_id(plan_version_id)
         if type(initial_lots) is not tuple or any(
-            not isinstance(item, PositionLot) for item in initial_lots
+            not isinstance(item, BacktestInitialLotInput) for item in initial_lots
         ):
-            raise TypeError("initial_lots must be a tuple of PositionLot values")
+            raise TypeError("initial_lots must be a tuple of BacktestInitialLotInput values")
 
     def _intraday_context(
         self,
@@ -688,50 +697,19 @@ def backtest_run_id(
     execution_config: ExecutionConfig,
     manual_event_risk: bool,
     plan_version_id: UUID | None = None,
-    initial_lots: tuple[PositionLot, ...] = (),
+    initial_lots: tuple[BacktestInitialLotInput, ...] = (),
 ) -> str:
-    """Return v1 identity; lookup-only ``plan_version_id`` is excluded from its preimage."""
+    """Return the exact v1/v2 identity selected by normalized initial-lot inputs."""
 
-    if not isinstance(plan, TradePlan):
-        raise TypeError("plan must be a TradePlan")
-    if not isinstance(manifest, DatasetManifest):
-        raise TypeError("manifest must be a DatasetManifest")
-    if type(initial_cash_fen) is not int or initial_cash_fen <= 0:
-        raise ValueError("initial_cash_fen must be a positive integer")
-    if not isinstance(execution_config, ExecutionConfig):
-        raise TypeError("execution_config must be an ExecutionConfig")
-    if type(manual_event_risk) is not bool:
-        raise TypeError("manual_event_risk must be an explicit bool")
-    _validate_plan_version_id(plan_version_id)
-    if type(initial_lots) is not tuple or any(
-        not isinstance(item, PositionLot) for item in initial_lots
-    ):
-        raise TypeError("initial_lots must be a tuple of PositionLot values")
-    return _stable_hash(
-        {
-            "formula_version": RUN_FORMULA_VERSION,
-            "plan_hash": plan_sha256(plan),
-            "plan_version": plan.version,
-            "dataset_hash": manifest.dataset_hash,
-            "start": manifest.scope.start.isoformat(),
-            "end": manifest.scope.end.isoformat(),
-            "initial_cash_fen": initial_cash_fen,
-            "initial_lots": [
-                item.model_dump(mode="python", round_trip=True)
-                for item in sorted(initial_lots, key=lambda value: value.lot_id)
-            ],
-            "indicator_formula_version": plan.monitoring.indicator_formula_version,
-            "context_bounds": {
-                "calendar_days": _CALENDAR_CONTEXT_DAYS,
-                "daily_bars_before_current": _DAILY_CONTEXT_BARS,
-                "five_minute_bars": _FIVE_MINUTE_CONTEXT_BARS,
-            },
-            "execution_config_hash": execution_config.config_hash,
-            "execution_config": execution_config.model_dump(mode="python", round_trip=True),
-            "manual_event_risk": manual_event_risk,
-        },
-        domain="backtest-run-v1",
-    )
+    return BacktestRunInput.create(
+        plan=plan,
+        manifest=manifest,
+        initial_cash_fen=initial_cash_fen,
+        initial_lots=initial_lots,
+        execution_config=execution_config,
+        manual_event_risk=manual_event_risk,
+        plan_version_id=plan_version_id,
+    ).run_id
 
 
 def _validate_plan_version_id(plan_version_id: UUID | None) -> None:
