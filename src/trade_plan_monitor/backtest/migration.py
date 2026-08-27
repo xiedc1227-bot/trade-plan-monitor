@@ -94,6 +94,7 @@ _RESULT_COLUMN_CONTRACTS: dict[str, dict[str, _ColumnContract]] = {
         "summary_hash": ("TEXT", True, None, 0),
         "summary_json": ("TEXT", True, None, 0),
         "created_at": ("TEXT", True, None, 0),
+        "stage_revision": ("INTEGER", True, "1", 0),
     },
     "backtest_fill": {
         "fill_id": ("TEXT", False, None, 1),
@@ -288,7 +289,8 @@ _RESULT_TABLE_SQL_CONTRACTS = {
             ),
             summary_hash TEXT NOT NULL,
             summary_json TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            stage_revision INTEGER NOT NULL DEFAULT 1 CHECK (stage_revision >= 1)
         )
     """,
     "backtest_fill": """
@@ -359,6 +361,106 @@ _RESULT_TRIGGER_SQL_CONTRACTS = {
             SELECT RAISE(ABORT, 'BACKTEST_RESULTS_COMPLETED_ONLY');
         END
     """,
+    "trg_backtest_fill_stage_revision_insert": """
+        CREATE TRIGGER trg_backtest_fill_stage_revision_insert
+        AFTER INSERT ON backtest_fill
+        WHEN (SELECT materialized FROM backtest_run WHERE run_id = NEW.run_id) = 0
+        BEGIN
+            UPDATE backtest_run SET stage_revision = stage_revision + 1
+            WHERE run_id = NEW.run_id;
+        END
+    """,
+    "trg_backtest_fill_stage_revision_update": """
+        CREATE TRIGGER trg_backtest_fill_stage_revision_update
+        AFTER UPDATE OF run_id, filled_at, content_domain, content_hash, payload_json
+        ON backtest_fill
+        BEGIN
+            UPDATE backtest_run SET stage_revision = stage_revision + 1
+            WHERE run_id IN (OLD.run_id, NEW.run_id) AND materialized = 0;
+        END
+    """,
+    "trg_backtest_fill_stage_revision_delete": """
+        CREATE TRIGGER trg_backtest_fill_stage_revision_delete
+        AFTER DELETE ON backtest_fill
+        WHEN (SELECT materialized FROM backtest_run WHERE run_id = OLD.run_id) = 0
+        BEGIN
+            UPDATE backtest_run SET stage_revision = stage_revision + 1
+            WHERE run_id = OLD.run_id;
+        END
+    """,
+    "trg_backtest_detail_stage_revision_insert": """
+        CREATE TRIGGER trg_backtest_detail_stage_revision_insert
+        AFTER INSERT ON backtest_detail
+        WHEN (SELECT materialized FROM backtest_run WHERE run_id = NEW.run_id) = 0
+        BEGIN
+            UPDATE backtest_run SET stage_revision = stage_revision + 1
+            WHERE run_id = NEW.run_id;
+        END
+    """,
+    "trg_backtest_detail_stage_revision_update": """
+        CREATE TRIGGER trg_backtest_detail_stage_revision_update
+        AFTER UPDATE OF run_id, kind, event_at, content_domain, content_hash, payload_json
+        ON backtest_detail
+        BEGIN
+            UPDATE backtest_run SET stage_revision = stage_revision + 1
+            WHERE run_id IN (OLD.run_id, NEW.run_id) AND materialized = 0;
+        END
+    """,
+    "trg_backtest_detail_stage_revision_delete": """
+        CREATE TRIGGER trg_backtest_detail_stage_revision_delete
+        AFTER DELETE ON backtest_detail
+        WHEN (SELECT materialized FROM backtest_run WHERE run_id = OLD.run_id) = 0
+        BEGIN
+            UPDATE backtest_run SET stage_revision = stage_revision + 1
+            WHERE run_id = OLD.run_id;
+        END
+    """,
+}
+
+_BT016_RESULT_COLUMN_CONTRACTS = {
+    table: dict(columns) for table, columns in _RESULT_COLUMN_CONTRACTS.items()
+}
+del _BT016_RESULT_COLUMN_CONTRACTS["backtest_run"]["stage_revision"]
+_BT016_RESULT_TABLE_SQL_CONTRACTS = {
+    **_RESULT_TABLE_SQL_CONTRACTS,
+    "backtest_run": """
+        CREATE TABLE backtest_run (
+            run_id TEXT PRIMARY KEY,
+            plan_sha256 TEXT NOT NULL,
+            dataset_hash TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('COMPLETED', 'FAILED', 'CANCELLED')),
+            completed_at TEXT NOT NULL,
+            pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+            materialized INTEGER NOT NULL DEFAULT 1 CHECK (materialized IN (0, 1)),
+            publication_fill_count INTEGER
+                CHECK (publication_fill_count IS NULL OR publication_fill_count >= 0),
+            publication_detail_count INTEGER
+                CHECK (publication_detail_count IS NULL OR publication_detail_count >= 0),
+            publication_fill_set_hash TEXT,
+            publication_detail_set_hash TEXT,
+            summary_domain TEXT NOT NULL DEFAULT 'backtest-run-summary-v1' CHECK (
+                summary_domain IN ('backtest-run-summary-v1', 'backtest-run-summary-v2')
+            ),
+            publication_fill_set_domain TEXT CHECK (
+                publication_fill_set_domain IS NULL OR publication_fill_set_domain IN (
+                    'backtest-fill-set-v1', 'backtest-fill-set-v2'
+                )
+            ),
+            publication_detail_set_domain TEXT CHECK (
+                publication_detail_set_domain IS NULL OR publication_detail_set_domain IN (
+                    'backtest-detail-set-v1', 'backtest-detail-set-v2'
+                )
+            ),
+            summary_hash TEXT NOT NULL,
+            summary_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """,
+}
+_BT016_RESULT_TRIGGER_SQL_CONTRACTS = {
+    name: sql
+    for name, sql in _RESULT_TRIGGER_SQL_CONTRACTS.items()
+    if name.startswith("trg_backtest_run_completed_only_")
 }
 
 _IndexColumnContract = tuple[str, bool, str]
@@ -758,16 +860,30 @@ def migrate_result_database(
             or before["compatibility_only_run_ids"] != inventory.compatibility_only_run_ids
         ):
             raise MigrationPreflightError("MIGRATION_SOURCE_CHANGED_AFTER_PREFLIGHT")
-        if not _is_supported_legacy_result_schema(connection, table_names):
+        legacy_v1 = _is_supported_legacy_result_schema(connection, table_names)
+        completed_only_v2 = _is_supported_bt016_result_schema(connection, table_names)
+        if not legacy_v1 and not completed_only_v2:
             raise MigrationPreflightError("RESULT_SCHEMA_MIGRATION_SCOPE_MISMATCH")
-        content_hash = _result_v1_content_hash(connection)
-        _rebuild_completed_only_result_schema(connection)
+        content_hash = (
+            _result_completed_only_content_hash(connection)
+            if completed_only_v2
+            else _result_v1_content_hash(connection)
+        )
+        if completed_only_v2:
+            _add_result_stage_revision_fence(connection)
+        else:
+            _rebuild_completed_only_result_schema(connection)
         after = _inspect_results(connection, _RESULT_TABLES)
         if (
             after["database_state"] is not DatabaseState.CURRENT
             or after["terminal_run_count"]
             or after["compatibility_only_run_ids"] != inventory.compatibility_only_run_ids
-            or _result_v1_content_hash(connection) != content_hash
+            or (
+                _result_completed_only_content_hash(connection)
+                if completed_only_v2
+                else _result_v1_content_hash(connection)
+            )
+            != content_hash
         ):
             raise MigrationPreflightError("RESULT_SCHEMA_POST_MIGRATION_MISMATCH")
         if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
@@ -849,6 +965,31 @@ def _is_supported_legacy_result_schema(
         if not required_columns <= columns or not columns <= allowed:
             return False
     return True
+
+
+def _is_supported_bt016_result_schema(
+    connection: sqlite3.Connection,
+    table_names: frozenset[str],
+) -> bool:
+    return _has_required_schema(
+        connection,
+        table_names,
+        column_contracts=_BT016_RESULT_COLUMN_CONTRACTS,
+        foreign_key_contracts=_RESULT_FOREIGN_KEY_CONTRACTS,
+        table_sql_contracts=_BT016_RESULT_TABLE_SQL_CONTRACTS,
+        index_contracts=_RESULT_INDEX_CONTRACTS,
+        trigger_sql_contracts=_BT016_RESULT_TRIGGER_SQL_CONTRACTS,
+    )
+
+
+def _add_result_stage_revision_fence(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "ALTER TABLE backtest_run ADD COLUMN stage_revision "
+        "INTEGER NOT NULL DEFAULT 1 CHECK (stage_revision >= 1)"
+    )
+    for name, statement in _RESULT_TRIGGER_SQL_CONTRACTS.items():
+        if name not in _BT016_RESULT_TRIGGER_SQL_CONTRACTS:
+            connection.execute(statement)
 
 
 def _rebuild_completed_only_result_schema(connection: sqlite3.Connection) -> None:
@@ -947,6 +1088,32 @@ def _result_v1_content_hash(connection: sqlite3.Connection) -> str:
         "FROM backtest_fill ORDER BY fill_id",
         "SELECT detail_id, run_id, kind, event_at, content_hash, payload_json, created_at "
         "FROM backtest_detail ORDER BY detail_id",
+    ):
+        cursor = connection.execute(query)
+        while rows := cursor.fetchmany(1_000):
+            for row in rows:
+                for value in row:
+                    _hash_component(digest, _raw_bytes(value))
+                _hash_component(digest, b"\n")
+    return digest.hexdigest()
+
+
+def _result_completed_only_content_hash(connection: sqlite3.Connection) -> str:
+    digest = sha256()
+    for query in (
+        "SELECT run_id, plan_sha256, dataset_hash, status, completed_at, pinned, "
+        "materialized, publication_fill_count, publication_detail_count, "
+        "publication_fill_set_hash, publication_detail_set_hash, summary_domain, "
+        "publication_fill_set_domain, publication_detail_set_domain, summary_hash, "
+        "summary_json, created_at FROM backtest_run ORDER BY run_id",
+        "SELECT fill_id, run_id, filled_at, content_domain, content_hash, payload_json, "
+        "created_at FROM backtest_fill ORDER BY fill_id",
+        "SELECT detail_id, run_id, kind, event_at, content_domain, content_hash, "
+        "payload_json, created_at FROM backtest_detail ORDER BY detail_id",
+        "SELECT plan_sha256, snapshot_json, created_at FROM backtest_plan_snapshot "
+        "ORDER BY plan_sha256",
+        "SELECT run_id, plan_sha256, input_hash, input_json, created_at "
+        "FROM backtest_run_input ORDER BY run_id",
     ):
         cursor = connection.execute(query)
         while rows := cursor.fetchmany(1_000):

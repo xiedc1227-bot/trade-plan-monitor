@@ -696,6 +696,108 @@ def test_completed_only_result_migration_preserves_legacy_v1_content(
             connection.execute("UPDATE backtest_run SET status = 'FAILED'")
 
 
+def test_bt016_completed_only_schema_adds_revision_fence_without_row_changes(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "bt016-completed-only.sqlite3"
+    run_id = "a" * 64
+    with closing(sqlite3.connect(path)) as connection:
+        for statement in migration_module._BT016_RESULT_TABLE_SQL_CONTRACTS.values():
+            connection.execute(statement)
+        for statement in (
+            "CREATE INDEX ix_backtest_run_retention "
+            "ON backtest_run (status, pinned, completed_at DESC, run_id DESC)",
+            "CREATE INDEX ix_backtest_run_retention_v2 "
+            "ON backtest_run (status, pinned, materialized, created_at DESC, run_id DESC)",
+            "CREATE INDEX ix_backtest_fill_run ON backtest_fill (run_id, filled_at, fill_id)",
+            "CREATE INDEX ix_backtest_detail_retention "
+            "ON backtest_detail (kind, run_id, detail_id)",
+            "CREATE INDEX ix_backtest_detail_run_event "
+            "ON backtest_detail (run_id, event_at, detail_id)",
+            *migration_module._BT016_RESULT_TRIGGER_SQL_CONTRACTS.values(),
+        ):
+            connection.execute(statement)
+        connection.execute(
+            """
+            INSERT INTO backtest_run (
+                run_id, plan_sha256, dataset_hash, status, completed_at,
+                pinned, materialized, summary_domain, summary_hash,
+                summary_json, created_at
+            ) VALUES (?, ?, ?, 'COMPLETED', ?, 0, 0, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                "b" * 64,
+                "c" * 64,
+                "2026-08-24T15:00:00.000000+08:00",
+                "backtest-run-summary-v2",
+                "d" * 64,
+                '{"runId":"preserved"}',
+                "2026-08-27T18:00:00.000000+08:00",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO backtest_fill (
+                fill_id, run_id, filled_at, content_domain,
+                content_hash, payload_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "e" * 64,
+                run_id,
+                "2026-08-24T14:30:00.000000+08:00",
+                "backtest-fill-record-v2",
+                "f" * 64,
+                '{"fillId":"preserved"}',
+                "2026-08-27T18:00:00.000000+08:00",
+            ),
+        )
+        connection.commit()
+    with closing(sqlite3.connect(path)) as connection:
+        before = migration_module._result_completed_only_content_hash(connection)
+    inventory = inspect_result_database(path)
+    decision = authorize_migration(
+        inventory,
+        VerifiedBackupFacts(
+            source_fingerprint=inventory.source_fingerprint.digest,
+            backup_sha256="1" * 64,
+            backup_size_bytes=path.stat().st_size,
+            verified_at=datetime(2026, 8, 27, 18, 0, tzinfo=_SHANGHAI),
+            coordinator_stopped=True,
+        ),
+    )
+
+    migrated = migrate_result_database(inventory, decision)
+
+    assert migrated.database_state is DatabaseState.CURRENT
+    with closing(sqlite3.connect(path)) as connection:
+        assert migration_module._result_completed_only_content_hash(connection) == before
+        assert connection.execute(
+            "SELECT stage_revision FROM backtest_run WHERE run_id = ?", (run_id,)
+        ).fetchone() == (1,)
+        connection.execute(
+            """
+            INSERT INTO backtest_detail (
+                detail_id, run_id, kind, event_at, content_domain,
+                content_hash, payload_json, created_at
+            ) VALUES (?, ?, 'DECISION', ?, ?, ?, ?, ?)
+            """,
+            (
+                "2" * 64,
+                run_id,
+                "2026-08-24T14:35:00.000000+08:00",
+                "backtest-detail-record-v2",
+                "3" * 64,
+                '{"detailId":"new"}',
+                "2026-08-27T18:01:00.000000+08:00",
+            ),
+        )
+        assert connection.execute(
+            "SELECT stage_revision FROM backtest_run WHERE run_id = ?", (run_id,)
+        ).fetchone() == (2,)
+
+
 def test_market_inventory_locks_utc_metadata_and_dataset_hash_bytes(
     tmp_path: Path,
 ) -> None:

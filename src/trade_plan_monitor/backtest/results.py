@@ -7,13 +7,15 @@ import math
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum, StrEnum
 from hashlib import sha256
 from itertools import islice
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Protocol, Self
+from weakref import WeakSet
 from zoneinfo import ZoneInfo
 
 from pydantic import (
@@ -53,7 +55,13 @@ StableIdentifier = Annotated[
 ]
 UtcDatetime = Annotated[datetime, AwareDatetime()]
 
+
+class _HashDigest(Protocol):
+    def update(self, value: bytes) -> None: ...
+
+
 _MAX_BATCH_SIZE = 1_000
+_MAX_ITEM_BYTES = 32 * 1_024
 _SUCCESS_DETAIL_DAYS = 90
 _SUCCESS_DETAIL_RUNS = 100
 _DIAGNOSTIC_DETAIL_DAYS = 14
@@ -96,7 +104,8 @@ CREATE TABLE IF NOT EXISTS backtest_run (
     ),
     summary_hash TEXT NOT NULL,
     summary_json TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    stage_revision INTEGER NOT NULL DEFAULT 1 CHECK (stage_revision >= 1)
 );
 CREATE INDEX IF NOT EXISTS ix_backtest_run_retention
     ON backtest_run (status, pinned, completed_at DESC, run_id DESC);
@@ -156,6 +165,47 @@ BEGIN SELECT RAISE(ABORT, 'BACKTEST_RESULTS_COMPLETED_ONLY'); END;
 CREATE TRIGGER IF NOT EXISTS trg_backtest_run_completed_only_update
 BEFORE UPDATE OF status ON backtest_run WHEN NEW.status <> 'COMPLETED'
 BEGIN SELECT RAISE(ABORT, 'BACKTEST_RESULTS_COMPLETED_ONLY'); END;
+CREATE TRIGGER IF NOT EXISTS trg_backtest_fill_stage_revision_insert
+AFTER INSERT ON backtest_fill
+WHEN (SELECT materialized FROM backtest_run WHERE run_id = NEW.run_id) = 0
+BEGIN
+    UPDATE backtest_run SET stage_revision = stage_revision + 1
+    WHERE run_id = NEW.run_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_backtest_fill_stage_revision_update
+AFTER UPDATE OF run_id, filled_at, content_domain, content_hash, payload_json ON backtest_fill
+BEGIN
+    UPDATE backtest_run SET stage_revision = stage_revision + 1
+    WHERE run_id IN (OLD.run_id, NEW.run_id) AND materialized = 0;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_backtest_fill_stage_revision_delete
+AFTER DELETE ON backtest_fill
+WHEN (SELECT materialized FROM backtest_run WHERE run_id = OLD.run_id) = 0
+BEGIN
+    UPDATE backtest_run SET stage_revision = stage_revision + 1
+    WHERE run_id = OLD.run_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_backtest_detail_stage_revision_insert
+AFTER INSERT ON backtest_detail
+WHEN (SELECT materialized FROM backtest_run WHERE run_id = NEW.run_id) = 0
+BEGIN
+    UPDATE backtest_run SET stage_revision = stage_revision + 1
+    WHERE run_id = NEW.run_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_backtest_detail_stage_revision_update
+AFTER UPDATE OF run_id, kind, event_at, content_domain, content_hash, payload_json
+ON backtest_detail
+BEGIN
+    UPDATE backtest_run SET stage_revision = stage_revision + 1
+    WHERE run_id IN (OLD.run_id, NEW.run_id) AND materialized = 0;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_backtest_detail_stage_revision_delete
+AFTER DELETE ON backtest_detail
+WHEN (SELECT materialized FROM backtest_run WHERE run_id = OLD.run_id) = 0
+BEGIN
+    UPDATE backtest_run SET stage_revision = stage_revision + 1
+    WHERE run_id = OLD.run_id;
+END;
 """
 
 
@@ -395,6 +445,24 @@ class RetentionPruneResult(_ResultValue):
     has_more: Annotated[bool, Field(strict=True)]
 
 
+@dataclass(frozen=True, slots=True, weakref_slot=True)
+class VerifiedBacktestPublication:
+    run_id: str
+    stage_revision: int
+    fill_count: int
+    detail_count: int
+    fill_set_hash: str
+    detail_set_hash: str
+    fill_set_domain: str
+    detail_set_domain: str
+    summary_fingerprint: str
+    input_fingerprint: str | None
+    already_materialized: bool
+    read_batch_count: int
+    max_read_batch_size: int
+    _store_token: object = field(repr=False, compare=False)
+
+
 class BacktestResultStore:
     """Own the independent result database; never opens live or market stores."""
 
@@ -418,6 +486,8 @@ class BacktestResultStore:
         require_safe_store_initialization(self._migration_inventory)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._busy_timeout_ms = busy_timeout_ms
+        self._publication_token = object()
+        self._verified_publications: WeakSet[VerifiedBacktestPublication] = WeakSet()
         self._initialize()
 
     @property
@@ -494,46 +564,10 @@ class BacktestResultStore:
 
         normalized_run_id = _validate_hash(run_id, "run_id")
         with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT input.run_id, input.plan_sha256, input.input_hash, input.input_json,
-                       snapshot.snapshot_json
-                FROM backtest_run_input AS input
-                JOIN backtest_plan_snapshot AS snapshot
-                  ON snapshot.plan_sha256 = input.plan_sha256
-                WHERE input.run_id = ?
-                """,
-                (normalized_run_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        snapshot = load_plan_json(str(row[4]))
-        if dump_plan_json(snapshot) != str(row[4]) or plan_sha256(snapshot) != str(row[1]):
-            raise RuntimeError("stored canonical plan snapshot failed verification")
-        input_json = str(row[3])
-        if _content_hash(_RUN_INPUT_HASH_DOMAIN, input_json) != str(row[2]):
-            raise RuntimeError("stored backtest run input failed its content hash")
-        payload = json.loads(input_json)
-        if not isinstance(payload, dict):
-            raise RuntimeError("stored backtest run input payload is invalid")
-        run_input = BacktestRunInput.model_validate(
-            {**payload, "plan_snapshot": snapshot},
-            strict=False,
-        )
-        if (
-            run_input.run_id != normalized_run_id
-            or run_input.run_id != str(row[0])
-            or run_input.plan_sha256 != str(row[1])
-            or canonical_json(
-                run_input.model_dump(
-                    mode="python",
-                    round_trip=True,
-                    exclude={"plan_snapshot"},
-                )
+            run_input, _fingerprint = _publication_run_input(
+                connection,
+                normalized_run_id,
             )
-            != input_json
-        ):
-            raise RuntimeError("stored backtest run input identity is invalid")
         return run_input
 
     def record_verified_run(
@@ -581,6 +615,7 @@ class BacktestResultStore:
             else _normalize_datetime(retention_at, "retention_at")
         )
         summary_json = _summary_json(summary, version=version)
+        _require_item_size(summary_json, "backtest summary")
         summary_domain = _domain(_RUN_DOMAINS, version)
         summary_hash = _content_hash(_domain_bytes(summary_domain), summary_json)
         now = _datetime_text(normalized_retention_at, version=version)
@@ -899,125 +934,176 @@ class BacktestResultStore:
         expected_fill_set_hash: str,
         expected_detail_set_hash: str,
     ) -> bool:
-        """Publish a staged run only after every durable row is present."""
+        """Compatibility wrapper around bounded verification and short publication."""
 
-        normalized_run_id = _validate_hash(run_id, "run_id")
-        normalized_report_hash = _validate_hash(expected_report_hash, "expected_report_hash")
-        normalized_fill_set_hash = _validate_hash(
-            expected_fill_set_hash,
-            "expected_fill_set_hash",
+        proof = self.verify_staged_publication(
+            run_id,
+            expected_fill_count=expected_fill_count,
+            expected_detail_count=expected_detail_count,
+            expected_report_hash=expected_report_hash,
+            expected_fill_set_hash=expected_fill_set_hash,
+            expected_detail_set_hash=expected_detail_set_hash,
         )
-        normalized_detail_set_hash = _validate_hash(
-            expected_detail_set_hash,
-            "expected_detail_set_hash",
+        return self.publish_verified_publication(proof)
+
+    def verify_staged_publication(
+        self,
+        run_id: str,
+        *,
+        expected_fill_count: int,
+        expected_detail_count: int,
+        expected_report_hash: str,
+        expected_fill_set_hash: str,
+        expected_detail_set_hash: str,
+    ) -> VerifiedBacktestPublication:
+        """Verify exact staged content in one bounded, query-only WAL snapshot."""
+
+        expectations = _publication_expectations(
+            run_id,
+            expected_fill_count=expected_fill_count,
+            expected_detail_count=expected_detail_count,
+            expected_report_hash=expected_report_hash,
+            expected_fill_set_hash=expected_fill_set_hash,
+            expected_detail_set_hash=expected_detail_set_hash,
         )
-        for value, name in (
-            (expected_fill_count, "expected_fill_count"),
-            (expected_detail_count, "expected_detail_count"),
-        ):
-            if type(value) is not int or value < 0:
-                raise ValueError(f"{name} must be a non-negative integer")
+        normalized_run_id = expectations[0]
         with self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                """
-                SELECT run_id, plan_sha256, dataset_hash, status, completed_at,
-                       summary_domain, summary_hash, summary_json, pinned, materialized,
-                       publication_fill_count, publication_detail_count,
-                       publication_fill_set_hash, publication_detail_set_hash,
-                       publication_fill_set_domain, publication_detail_set_domain
-                FROM backtest_run WHERE run_id = ?
-                """,
-                (normalized_run_id,),
-            ).fetchone()
-            if row is None:
-                raise KeyError(f"unknown run_id: {normalized_run_id}")
+            connection.execute("PRAGMA query_only=ON")
+            connection.execute("BEGIN")
+            row = _publication_run_row(connection, normalized_run_id)
             summary = _load_summary_row(row[:9], expected_run_id=normalized_run_id)
+            _require_item_size(str(row[7]), "backtest summary")
             version = _version_from_domain(str(row[5]), _RUN_DOMAINS)
-            if summary.assumptions.get("reportHash") != normalized_report_hash:
+            if summary.assumptions.get("reportHash") != expectations[3]:
                 raise ResultConflictError("completed report hash does not match the staged summary")
-            if bool(row[9]):
-                stored_metadata = row[10:]
-                if all(value is None for value in stored_metadata):
-                    actual_metadata = _materialization_metadata(
-                        connection,
-                        normalized_run_id,
-                        version=version,
-                    )
-                    _require_publication_metadata(
-                        actual_metadata,
-                        expected_fill_count=expected_fill_count,
-                        expected_detail_count=expected_detail_count,
-                        expected_fill_set_hash=normalized_fill_set_hash,
-                        expected_detail_set_hash=normalized_detail_set_hash,
-                        version=version,
-                        staged=False,
-                    )
-                    connection.execute(
-                        """
-                        UPDATE backtest_run SET
-                            publication_fill_count = ?,
-                            publication_detail_count = ?,
-                            publication_fill_set_hash = ?,
-                            publication_detail_set_hash = ?,
-                            publication_fill_set_domain = ?,
-                            publication_detail_set_domain = ?
-                        WHERE run_id = ?
-                        """,
-                        (*actual_metadata, normalized_run_id),
-                    )
-                elif any(value is None for value in stored_metadata):
-                    raise RuntimeError("materialized publication metadata is incomplete")
-                else:
-                    published_metadata = (
-                        int(stored_metadata[0]),
-                        int(stored_metadata[1]),
-                        str(stored_metadata[2]),
-                        str(stored_metadata[3]),
-                        str(stored_metadata[4]),
-                        str(stored_metadata[5]),
-                    )
-                    _require_publication_metadata(
-                        published_metadata,
-                        expected_fill_count=expected_fill_count,
-                        expected_detail_count=expected_detail_count,
-                        expected_fill_set_hash=normalized_fill_set_hash,
-                        expected_detail_set_hash=normalized_detail_set_hash,
-                        version=version,
-                        staged=False,
-                    )
-                connection.commit()
-                return False
-            actual_metadata = _materialization_metadata(
+            run_input, input_fingerprint = _publication_run_input(
                 connection,
                 normalized_run_id,
-                version=version,
             )
+            if version == "v2":
+                if run_input is None:
+                    raise ResultConflictError(
+                        "active v2 publication requires a canonical run input"
+                    )
+                _validate_summary_input(summary, run_input)
+
+            stored_metadata = row[10:16]
+            already_materialized = bool(row[9])
+            if any(value is None for value in stored_metadata) and not all(
+                value is None for value in stored_metadata
+            ):
+                raise RuntimeError("materialized publication metadata is incomplete")
+            if already_materialized and all(value is not None for value in stored_metadata):
+                metadata = _stored_publication_metadata(stored_metadata)
+                read_batch_count = 0
+                max_read_batch_size = 0
+            else:
+                metadata, read_batch_count, max_read_batch_size = _bounded_materialization_metadata(
+                    connection,
+                    normalized_run_id,
+                    version=version,
+                )
             _require_publication_metadata(
-                actual_metadata,
-                expected_fill_count=expected_fill_count,
-                expected_detail_count=expected_detail_count,
-                expected_fill_set_hash=normalized_fill_set_hash,
-                expected_detail_set_hash=normalized_detail_set_hash,
+                metadata,
+                expected_fill_count=expectations[1],
+                expected_detail_count=expectations[2],
+                expected_fill_set_hash=expectations[4],
+                expected_detail_set_hash=expectations[5],
                 version=version,
-                staged=True,
+                staged=not already_materialized,
             )
-            connection.execute(
-                """
-                UPDATE backtest_run SET
-                    materialized = 1,
-                    publication_fill_count = ?,
-                    publication_detail_count = ?,
-                    publication_fill_set_hash = ?,
-                    publication_detail_set_hash = ?,
-                    publication_fill_set_domain = ?,
-                    publication_detail_set_domain = ?
-                WHERE run_id = ?
-                """,
-                (*actual_metadata, normalized_run_id),
+            proof = VerifiedBacktestPublication(
+                run_id=normalized_run_id,
+                stage_revision=int(row[16]),
+                fill_count=metadata[0],
+                detail_count=metadata[1],
+                fill_set_hash=metadata[2],
+                detail_set_hash=metadata[3],
+                fill_set_domain=metadata[4],
+                detail_set_domain=metadata[5],
+                summary_fingerprint=_publication_summary_fingerprint(row),
+                input_fingerprint=input_fingerprint,
+                already_materialized=already_materialized,
+                read_batch_count=read_batch_count,
+                max_read_batch_size=max_read_batch_size,
+                _store_token=self._publication_token,
             )
-            connection.commit()
+            self._verified_publications.add(proof)
+            return proof
+
+    def materialize_verified_publication(
+        self,
+        connection: sqlite3.Connection,
+        proof: VerifiedBacktestPublication,
+    ) -> bool:
+        """Participate in a caller-owned writer transaction without committing it."""
+
+        if not isinstance(connection, sqlite3.Connection):
+            raise TypeError("connection must be a sqlite3.Connection")
+        if not isinstance(proof, VerifiedBacktestPublication):
+            raise TypeError("proof must come from verify_staged_publication")
+        if proof._store_token is not self._publication_token:
+            raise ValueError("publication proof belongs to another result store instance")
+        if proof not in self._verified_publications:
+            raise ValueError("publication proof was not issued by this result store instance")
+        if not connection.in_transaction:
+            raise RuntimeError("publication participant requires an active transaction")
+        _require_store_connection(connection, self._path)
+        row = _publication_run_row(connection, proof.run_id)
+        if int(row[16]) != proof.stage_revision:
+            raise ResultConflictError("staged result changed after its stage revision snapshot")
+        if _publication_summary_fingerprint(row) != proof.summary_fingerprint:
+            raise ResultConflictError("staged summary changed after verification")
+        input_fingerprint = _publication_input_fingerprint(connection, proof.run_id)
+        if input_fingerprint != proof.input_fingerprint:
+            raise ResultConflictError("staged run input or plan changed after verification")
+
+        metadata = _proof_metadata(proof)
+        stored_metadata = row[10:16]
+        if bool(row[9]):
+            if all(value is None for value in stored_metadata):
+                connection.execute(
+                    """
+                    UPDATE backtest_run SET
+                        publication_fill_count = ?, publication_detail_count = ?,
+                        publication_fill_set_hash = ?, publication_detail_set_hash = ?,
+                        publication_fill_set_domain = ?, publication_detail_set_domain = ?
+                    WHERE run_id = ? AND stage_revision = ? AND materialized = 1
+                    """,
+                    (*metadata, proof.run_id, proof.stage_revision),
+                )
+            elif any(value is None for value in stored_metadata):
+                raise RuntimeError("materialized publication metadata is incomplete")
+            elif _stored_publication_metadata(stored_metadata) != metadata:
+                raise ResultConflictError("materialized publication metadata changed")
+            return False
+        if proof.already_materialized:
+            raise ResultConflictError("materialized publication state regressed")
+        if any(value is not None for value in stored_metadata):
+            raise ResultConflictError("staged publication metadata must be empty")
+        cursor = connection.execute(
+            """
+            UPDATE backtest_run SET
+                materialized = 1,
+                publication_fill_count = ?, publication_detail_count = ?,
+                publication_fill_set_hash = ?, publication_detail_set_hash = ?,
+                publication_fill_set_domain = ?, publication_detail_set_domain = ?
+            WHERE run_id = ? AND stage_revision = ? AND materialized = 0
+            """,
+            (*metadata, proof.run_id, proof.stage_revision),
+        )
+        if cursor.rowcount != 1:
+            raise ResultConflictError("staged result changed before publication")
         return True
+
+    def publish_verified_publication(self, proof: VerifiedBacktestPublication) -> bool:
+        """Commit one pre-verified publication in its own short transaction."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            changed = self.materialize_verified_publication(connection, proof)
+            connection.commit()
+        return changed
 
     def _initialize(self) -> None:
         with self._connect() as connection:
@@ -1060,6 +1146,7 @@ class BacktestResultStore:
                     record.model_dump(mode="python", round_trip=True),
                     version=version,
                 )
+                _require_item_size(payload_json, "backtest fill")
                 content_hash = _content_hash(_domain_bytes(content_domain), payload_json)
                 existing = connection.execute(
                     """
@@ -1122,6 +1209,7 @@ class BacktestResultStore:
                     record.model_dump(mode="python", round_trip=True),
                     version=version,
                 )
+                _require_item_size(payload_json, "backtest detail")
                 content_hash = _content_hash(_domain_bytes(content_domain), payload_json)
                 existing = connection.execute(
                     """
@@ -1422,6 +1510,187 @@ def _load_detail_row(
     return record
 
 
+def _publication_expectations(
+    run_id: str,
+    *,
+    expected_fill_count: int,
+    expected_detail_count: int,
+    expected_report_hash: str,
+    expected_fill_set_hash: str,
+    expected_detail_set_hash: str,
+) -> tuple[str, int, int, str, str, str]:
+    normalized_run_id = _validate_hash(run_id, "run_id")
+    normalized_report_hash = _validate_hash(expected_report_hash, "expected_report_hash")
+    normalized_fill_set_hash = _validate_hash(
+        expected_fill_set_hash,
+        "expected_fill_set_hash",
+    )
+    normalized_detail_set_hash = _validate_hash(
+        expected_detail_set_hash,
+        "expected_detail_set_hash",
+    )
+    for value, name in (
+        (expected_fill_count, "expected_fill_count"),
+        (expected_detail_count, "expected_detail_count"),
+    ):
+        if type(value) is not int or value < 0:
+            raise ValueError(f"{name} must be a non-negative integer")
+    return (
+        normalized_run_id,
+        expected_fill_count,
+        expected_detail_count,
+        normalized_report_hash,
+        normalized_fill_set_hash,
+        normalized_detail_set_hash,
+    )
+
+
+def _publication_run_row(
+    connection: sqlite3.Connection,
+    run_id: str,
+) -> tuple[object, ...]:
+    row = connection.execute(
+        """
+        SELECT run_id, plan_sha256, dataset_hash, status, completed_at,
+               summary_domain, summary_hash, summary_json, pinned, materialized,
+               publication_fill_count, publication_detail_count,
+               publication_fill_set_hash, publication_detail_set_hash,
+               publication_fill_set_domain, publication_detail_set_domain,
+               stage_revision
+        FROM backtest_run WHERE run_id = ?
+        """,
+        (run_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"unknown run_id: {run_id}")
+    return tuple(row)
+
+
+def _publication_run_input(
+    connection: sqlite3.Connection,
+    run_id: str,
+) -> tuple[BacktestRunInput | None, str | None]:
+    row = _publication_input_row(connection, run_id)
+    if row is None:
+        return None, None
+    try:
+        snapshot = load_plan_json(str(row[4]))
+        input_json = str(row[3])
+        if dump_plan_json(snapshot) != str(row[4]) or plan_sha256(snapshot) != str(row[1]):
+            raise RuntimeError("stored canonical plan snapshot failed verification")
+        if _content_hash(_RUN_INPUT_HASH_DOMAIN, input_json) != str(row[2]):
+            raise RuntimeError("stored backtest run input failed its content hash")
+        payload = json.loads(input_json)
+        if not isinstance(payload, dict):
+            raise RuntimeError("stored backtest run input payload is invalid")
+        run_input = BacktestRunInput.model_validate(
+            {**payload, "plan_snapshot": snapshot},
+            strict=False,
+        )
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("stored backtest run input or plan is invalid") from error
+    if (
+        run_input.run_id != run_id
+        or run_input.run_id != str(row[0])
+        or run_input.plan_sha256 != str(row[1])
+        or canonical_json(
+            run_input.model_dump(
+                mode="python",
+                round_trip=True,
+                exclude={"plan_snapshot"},
+            )
+        )
+        != input_json
+    ):
+        raise RuntimeError("stored backtest run input identity is invalid")
+    return run_input, _publication_input_fingerprint_from_row(row)
+
+
+def _publication_input_row(
+    connection: sqlite3.Connection,
+    run_id: str,
+) -> tuple[object, ...] | None:
+    row = connection.execute(
+        """
+        SELECT input.run_id, input.plan_sha256, input.input_hash, input.input_json,
+               snapshot.snapshot_json
+        FROM backtest_run_input AS input
+        JOIN backtest_plan_snapshot AS snapshot
+          ON snapshot.plan_sha256 = input.plan_sha256
+        WHERE input.run_id = ?
+        """,
+        (run_id,),
+    ).fetchone()
+    return None if row is None else tuple(row)
+
+
+def _publication_input_fingerprint(
+    connection: sqlite3.Connection,
+    run_id: str,
+) -> str | None:
+    row = _publication_input_row(connection, run_id)
+    return None if row is None else _publication_input_fingerprint_from_row(row)
+
+
+def _publication_input_fingerprint_from_row(row: tuple[object, ...]) -> str:
+    return _row_fingerprint(b"backtest-publication-input-v1\0", row)
+
+
+def _publication_summary_fingerprint(row: tuple[object, ...]) -> str:
+    return _row_fingerprint(b"backtest-publication-summary-v1\0", row[:9])
+
+
+def _row_fingerprint(domain: bytes, row: tuple[object, ...]) -> str:
+    digest = sha256(domain)
+    for value in row:
+        encoded = str(value).encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _stored_publication_metadata(
+    values: tuple[object, ...],
+) -> tuple[int, int, str, str, str, str]:
+    if len(values) != 6 or any(value is None for value in values):
+        raise RuntimeError("materialized publication metadata is incomplete")
+    return (
+        int(values[0]),
+        int(values[1]),
+        str(values[2]),
+        str(values[3]),
+        str(values[4]),
+        str(values[5]),
+    )
+
+
+def _proof_metadata(
+    proof: VerifiedBacktestPublication,
+) -> tuple[int, int, str, str, str, str]:
+    return (
+        proof.fill_count,
+        proof.detail_count,
+        proof.fill_set_hash,
+        proof.detail_set_hash,
+        proof.fill_set_domain,
+        proof.detail_set_domain,
+    )
+
+
+def _require_store_connection(connection: sqlite3.Connection, path: Path) -> None:
+    rows = tuple(connection.execute("PRAGMA database_list"))
+    main_rows = tuple(row for row in rows if len(row) >= 3 and str(row[1]) == "main")
+    if len(main_rows) != 1 or not str(main_rows[0][2]):
+        raise ValueError("publication connection must have one file-backed main database")
+    if Path(str(main_rows[0][2])).resolve() != path:
+        raise ValueError("publication connection targets another result database")
+
+
+def _require_item_size(payload_json: str, label: str) -> None:
+    if len(payload_json.encode("utf-8")) > _MAX_ITEM_BYTES:
+        raise ResultConflictError(f"{label} exceeds the 32 KiB publication limit")
+
+
 def backtest_fill_set_hash(
     records: Iterable[BacktestFillRecord],
     *,
@@ -1478,31 +1747,33 @@ def backtest_detail_set_hash(
     )
 
 
-def _materialization_metadata(
+def _bounded_materialization_metadata(
     connection: sqlite3.Connection,
     run_id: str,
     *,
     version: str,
-) -> tuple[int, int, str, str, str, str]:
-    fill_count = int(
-        connection.execute(
-            "SELECT COUNT(*) FROM backtest_fill WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()[0]
+) -> tuple[tuple[int, int, str, str, str, str], int, int]:
+    fill_count, fill_hash, fill_batches, fill_maximum = _validated_fill_set_hash(
+        connection,
+        run_id,
+        version=version,
     )
-    detail_count = int(
-        connection.execute(
-            "SELECT COUNT(*) FROM backtest_detail WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()[0]
+    detail_count, detail_hash, detail_batches, detail_maximum = _validated_detail_set_hash(
+        connection,
+        run_id,
+        version=version,
     )
     return (
-        fill_count,
-        detail_count,
-        _validated_fill_set_hash(connection, run_id, version=version),
-        _validated_detail_set_hash(connection, run_id, version=version),
-        _domain(_FILL_SET_DOMAINS, version),
-        _domain(_DETAIL_SET_DOMAINS, version),
+        (
+            fill_count,
+            detail_count,
+            fill_hash,
+            detail_hash,
+            _domain(_FILL_SET_DOMAINS, version),
+            _domain(_DETAIL_SET_DOMAINS, version),
+        ),
+        fill_batches + detail_batches,
+        max(fill_maximum, detail_maximum),
     )
 
 
@@ -1543,32 +1814,41 @@ def _validated_fill_set_hash(
     run_id: str,
     *,
     version: str,
-) -> str:
-    entries: list[tuple[str, str]] = []
-    rows = connection.execute(
+) -> tuple[int, str, int, int]:
+    digest = sha256(_domain_bytes(_domain(_FILL_SET_DOMAINS, version)))
+    cursor = connection.execute(
         """
         SELECT fill_id, run_id, filled_at, content_domain, content_hash, payload_json
         FROM backtest_fill WHERE run_id = ? ORDER BY fill_id
         """,
         (run_id,),
     )
-    for row in rows:
-        expected_domain = _domain(_FILL_DOMAINS, version)
-        record = _load_fill(str(row[3]), str(row[4]), str(row[5]))
-        if (
-            record.fill_id != str(row[0])
-            or record.run_id != str(row[1])
-            or record.run_id != run_id
-            or _datetime_text(record.filled_at, version=version) != str(row[2])
-            or str(row[3]) != expected_domain
-        ):
-            raise ResultConflictError("staged fill row identity is invalid")
-        entries.append((record.fill_id, str(row[4])))
-    return _record_set_hash(
-        _domain_bytes(_domain(_FILL_SET_DOMAINS, version)),
-        entries,
-        version=version,
-    )
+    count = 0
+    batch_count = 0
+    maximum = 0
+    while rows := cursor.fetchmany(_MAX_BATCH_SIZE):
+        batch_count += 1
+        maximum = max(maximum, len(rows))
+        for row in rows:
+            _require_item_size(str(row[5]), "backtest fill")
+            expected_domain = _domain(_FILL_DOMAINS, version)
+            record = _load_fill(str(row[3]), str(row[4]), str(row[5]))
+            if (
+                record.fill_id != str(row[0])
+                or record.run_id != str(row[1])
+                or record.run_id != run_id
+                or _datetime_text(record.filled_at, version=version) != str(row[2])
+                or str(row[3]) != expected_domain
+            ):
+                raise ResultConflictError("staged fill row identity is invalid")
+            _update_record_set_hash(
+                digest,
+                record.fill_id,
+                str(row[4]),
+                version=version,
+            )
+            count += 1
+    return count, digest.hexdigest(), batch_count, maximum
 
 
 def _validated_detail_set_hash(
@@ -1576,33 +1856,42 @@ def _validated_detail_set_hash(
     run_id: str,
     *,
     version: str,
-) -> str:
-    entries: list[tuple[str, str]] = []
-    rows = connection.execute(
+) -> tuple[int, str, int, int]:
+    digest = sha256(_domain_bytes(_domain(_DETAIL_SET_DOMAINS, version)))
+    cursor = connection.execute(
         """
         SELECT detail_id, run_id, kind, event_at, content_domain, content_hash, payload_json
         FROM backtest_detail WHERE run_id = ? ORDER BY detail_id
         """,
         (run_id,),
     )
-    for row in rows:
-        expected_domain = _domain(_DETAIL_DOMAINS, version)
-        record = _load_detail(str(row[4]), str(row[5]), str(row[6]))
-        if (
-            record.detail_id != str(row[0])
-            or record.run_id != str(row[1])
-            or record.run_id != run_id
-            or record.kind.value != str(row[2])
-            or _datetime_text(record.event_at, version=version) != str(row[3])
-            or str(row[4]) != expected_domain
-        ):
-            raise ResultConflictError("staged detail row identity is invalid")
-        entries.append((record.detail_id, str(row[5])))
-    return _record_set_hash(
-        _domain_bytes(_domain(_DETAIL_SET_DOMAINS, version)),
-        entries,
-        version=version,
-    )
+    count = 0
+    batch_count = 0
+    maximum = 0
+    while rows := cursor.fetchmany(_MAX_BATCH_SIZE):
+        batch_count += 1
+        maximum = max(maximum, len(rows))
+        for row in rows:
+            _require_item_size(str(row[6]), "backtest detail")
+            expected_domain = _domain(_DETAIL_DOMAINS, version)
+            record = _load_detail(str(row[4]), str(row[5]), str(row[6]))
+            if (
+                record.detail_id != str(row[0])
+                or record.run_id != str(row[1])
+                or record.run_id != run_id
+                or record.kind.value != str(row[2])
+                or _datetime_text(record.event_at, version=version) != str(row[3])
+                or str(row[4]) != expected_domain
+            ):
+                raise ResultConflictError("staged detail row identity is invalid")
+            _update_record_set_hash(
+                digest,
+                record.detail_id,
+                str(row[5]),
+                version=version,
+            )
+            count += 1
+    return count, digest.hexdigest(), batch_count, maximum
 
 
 def _record_set_hash(
@@ -1613,14 +1902,24 @@ def _record_set_hash(
 ) -> str:
     digest = sha256(domain)
     for identity, content_hash in entries:
-        digest.update(
-            _canonical_json(
-                {"contentHash": content_hash, "identity": identity},
-                version=version,
-            ).encode("utf-8")
-        )
-        digest.update(b"\n")
+        _update_record_set_hash(digest, identity, content_hash, version=version)
     return digest.hexdigest()
+
+
+def _update_record_set_hash(
+    digest: _HashDigest,
+    identity: str,
+    content_hash: str,
+    *,
+    version: str,
+) -> None:
+    digest.update(
+        _canonical_json(
+            {"contentHash": content_hash, "identity": identity},
+            version=version,
+        ).encode("utf-8")
+    )
+    digest.update(b"\n")
 
 
 def _bounded_values(values: Iterable[object], name: str) -> tuple[object, ...]:
@@ -1841,6 +2140,7 @@ __all__ = [
     "BacktestRunSummary",
     "ResultConflictError",
     "RetentionPruneResult",
+    "VerifiedBacktestPublication",
     "backtest_detail_set_hash",
     "backtest_fill_set_hash",
 ]

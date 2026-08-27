@@ -82,7 +82,7 @@ def persist_report(
     details_created = sum(
         store.record_details(report.run_id, batch) for batch in _chunks(details, _MAX_RESULT_BATCH)
     )
-    store.mark_run_materialized(
+    publication = store.verify_staged_publication(
         report.run_id,
         expected_fill_count=len(report.fills),
         expected_detail_count=len(details),
@@ -90,6 +90,7 @@ def persist_report(
         expected_fill_set_hash=backtest_fill_set_hash(fills, version=version),
         expected_detail_set_hash=backtest_detail_set_hash(details, version=version),
     )
+    store.publish_verified_publication(publication)
     return ReportPersistenceResult(
         summary_created=summary_created,
         fills_created=fills_created,

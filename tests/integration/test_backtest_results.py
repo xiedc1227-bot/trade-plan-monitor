@@ -202,7 +202,8 @@ def test_result_v2_completed_only_persists_canonical_input_and_shanghai_domains(
     with closing(sqlite3.connect(store.database_path)) as connection:
         run_row = connection.execute(
             "SELECT summary_domain, completed_at, publication_fill_set_domain, "
-            "publication_detail_set_domain, summary_json FROM backtest_run WHERE run_id = ?",
+            "publication_detail_set_domain, stage_revision, summary_json "
+            "FROM backtest_run WHERE run_id = ?",
             (run_input.run_id,),
         ).fetchone()
         fill_row = connection.execute(
@@ -221,6 +222,7 @@ def test_result_v2_completed_only_persists_canonical_input_and_shanghai_domains(
         "backtest-fill-set-v2",
         "backtest-detail-set-v2",
     )
+    assert run_row[4] == 3
     assert fill_row[:2] == ("backtest-fill-record-v2", "2026-08-24T15:01:00.000000+08:00")
     assert detail_row[:2] == (
         "backtest-detail-record-v2",
