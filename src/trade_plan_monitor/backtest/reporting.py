@@ -23,6 +23,7 @@ from trade_plan_monitor.backtest.results import (
     backtest_detail_set_hash,
     backtest_fill_set_hash,
 )
+from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.runner import RUN_FORMULA_VERSION, BacktestRunReport
 
 _MAX_RESULT_BATCH = 1_000
@@ -39,6 +40,8 @@ class ReportPersistenceResult(BaseModel):
 def persist_report(
     store: BacktestResultStore,
     report: BacktestRunReport,
+    *,
+    run_input: BacktestRunInput | None = None,
 ) -> ReportPersistenceResult:
     """Persist one immutable report without copying its historical market bars."""
 
@@ -46,16 +49,28 @@ def persist_report(
         raise TypeError("store must be a BacktestResultStore")
     if not isinstance(report, BacktestRunReport):
         raise TypeError("report must be a BacktestRunReport")
-    fills = tuple(BacktestFillRecord.from_value(fill) for fill in report.fills)
-    details = _detail_records(report)
-    completed_at = report.daily_equity[-1].marked_at.astimezone(UTC)
-    summary = _summary_for_report(report, completed_at=completed_at)
-    summary_created = store.record_run(
-        summary,
-        materialized=False,
-        retention_at=datetime.now(UTC),
-    )
-    if not summary_created and store.get_run(report.run_id) is not None:
+    if run_input is not None and not isinstance(run_input, BacktestRunInput):
+        raise TypeError("run_input must be a BacktestRunInput or None")
+    version = "v2" if run_input is not None else "v1"
+    fills = tuple(BacktestFillRecord.from_value(fill, version=version) for fill in report.fills)
+    details = _detail_records(report, version=version)
+    completed_at = report.daily_equity[-1].marked_at
+    summary = _summary_for_report(report, completed_at=completed_at, run_input=run_input)
+    if run_input is None:
+        summary_created = store.record_run(
+            summary,
+            materialized=False,
+            retention_at=datetime.now(UTC),
+        )
+        existing = store.get_run(report.run_id)
+    else:
+        summary_created = store.record_verified_run(
+            summary,
+            run_input=run_input,
+            retention_at=datetime.now(completed_at.tzinfo),
+        )
+        existing = store.get_verified_run(report.run_id)
+    if not summary_created and existing is not None:
         return ReportPersistenceResult(
             summary_created=False,
             fills_created=0,
@@ -72,8 +87,8 @@ def persist_report(
         expected_fill_count=len(report.fills),
         expected_detail_count=len(details),
         expected_report_hash=report.report_hash,
-        expected_fill_set_hash=backtest_fill_set_hash(fills),
-        expected_detail_set_hash=backtest_detail_set_hash(details),
+        expected_fill_set_hash=backtest_fill_set_hash(fills, version=version),
+        expected_detail_set_hash=backtest_detail_set_hash(details, version=version),
     )
     return ReportPersistenceResult(
         summary_created=summary_created,
@@ -86,6 +101,7 @@ def _summary_for_report(
     report: BacktestRunReport,
     *,
     completed_at: datetime,
+    run_input: BacktestRunInput | None = None,
 ) -> BacktestRunSummary:
     detail_count = (
         len(report.decisions)
@@ -93,6 +109,17 @@ def _summary_for_report(
         + len(report.outcomes)
         + len(report.daily_equity)
     )
+    assumptions = {
+        "adjustmentPolicy": "NONE",
+        "executionConfig": report.execution_config.model_dump(
+            mode="python",
+            round_trip=True,
+        ),
+        "executionConfigHash": report.execution_config.config_hash,
+        "limitations": report.limitations,
+        "manualEventRisk": report.manual_event_risk,
+        "reportHash": report.report_hash,
+    }
     return BacktestRunSummary(
         run_id=report.run_id,
         plan_sha256=report.plan_hash,
@@ -113,21 +140,11 @@ def _summary_for_report(
             "signalCount": len(report.signals),
             "start": report.start,
         },
-        assumptions={
-            "adjustmentPolicy": "NONE",
-            "executionConfig": report.execution_config.model_dump(
-                mode="python",
-                round_trip=True,
-            ),
-            "executionConfigHash": report.execution_config.config_hash,
-            "limitations": report.limitations,
-            "manualEventRisk": report.manual_event_risk,
-            "reportHash": report.report_hash,
-        },
+        assumptions=assumptions,
         formula_versions={
             "execution": report.execution_config.formula_version,
             "indicator": "ta-v1",
-            "runner": RUN_FORMULA_VERSION,
+            "runner": (RUN_FORMULA_VERSION if run_input is None else run_input.run_formula_version),
         },
         final_metrics=report.metrics.model_dump(mode="python", round_trip=True),
     )
@@ -245,7 +262,11 @@ def write_persisted_report_files(
     return resolved_json, resolved_csv
 
 
-def _detail_records(report: BacktestRunReport) -> tuple[BacktestDetailRecord, ...]:
+def _detail_records(
+    report: BacktestRunReport,
+    *,
+    version: str = "v1",
+) -> tuple[BacktestDetailRecord, ...]:
     values: list[BacktestDetailRecord] = []
     for decision in report.decisions:
         values.append(
@@ -259,6 +280,7 @@ def _detail_records(report: BacktestRunReport) -> tuple[BacktestDetailRecord, ..
                     BacktestDetailKind.DECISION,
                     f"{decision.result_hash}:{decision.snapshot.evaluated_at.isoformat()}",
                 ),
+                version=version,
             )
         )
     for signal in report.signals:
@@ -271,6 +293,7 @@ def _detail_records(report: BacktestRunReport) -> tuple[BacktestDetailRecord, ..
                     BacktestDetailKind.SIGNAL,
                     signal.signal_id,
                 ),
+                version=version,
             )
         )
     for outcome in report.outcomes:
@@ -285,6 +308,7 @@ def _detail_records(report: BacktestRunReport) -> tuple[BacktestDetailRecord, ..
                     BacktestDetailKind.EXECUTION_OUTCOME,
                     outcome.outcome_id,
                 ),
+                version=version,
             )
         )
     for snapshot in report.daily_equity:
@@ -297,6 +321,7 @@ def _detail_records(report: BacktestRunReport) -> tuple[BacktestDetailRecord, ..
                     BacktestDetailKind.DAILY_EQUITY,
                     snapshot.snapshot_id,
                 ),
+                version=version,
             )
         )
     return tuple(values)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -10,9 +11,11 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from trade_plan_monitor.backtest.application import BacktestApplicationService
+from trade_plan_monitor.backtest.dataset import DatasetManifest, DatasetScope
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import (
     EquitySnapshot,
+    ExecutionConfig,
     ExecutionOutcome,
     ExecutionSignal,
     ExecutionStatus,
@@ -29,7 +32,13 @@ from trade_plan_monitor.backtest.results import (
     backtest_detail_set_hash,
     backtest_fill_set_hash,
 )
+from trade_plan_monitor.backtest.run_input import BacktestInitialLotInput, BacktestRunInput
 from trade_plan_monitor.decision.models import ActionableSignalType
+from trade_plan_monitor.domain.plan_codec import load_plan_yaml
+from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
+
+_PLAN_PATH = Path(__file__).parents[2] / "config" / "plans" / "003043.SZ.sample.yaml"
+_SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 def test_backtest_storage_domains_reject_aliases_and_live_tables(tmp_path) -> None:
@@ -97,18 +106,174 @@ def _summary(
     )
 
 
-def _fill(summary: BacktestRunSummary, label: str = "fill") -> BacktestFillRecord:
-    return BacktestFillRecord.from_value(
-        {
-            "fill_id": _hash(f"{summary.run_id}:{label}"),
-            "run_id": summary.run_id,
-            "filled_at": datetime(2026, 8, 24, 7, 1, tzinfo=UTC),
-            "symbol": "600000.SH",
-            "quantity": 100,
-            "price_fen": 1_012,
-            "fees": {"commission_fen": 500, "transfer_fee_fen": 1},
+def _canonical_run_input() -> BacktestRunInput:
+    plan = load_plan_yaml(_PLAN_PATH.read_text(encoding="utf-8"))
+    start = date(2026, 8, 20)
+    manifest = DatasetManifest(
+        dataset_hash=_hash("canonical-input-dataset"),
+        scope=DatasetScope(
+            symbols=(plan.symbol,),
+            start=start,
+            end=date(2026, 8, 24),
+            warmup_start=date(2025, 8, 20),
+            historical_profile=HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1,
+        ),
+        items=(),
+    )
+    return BacktestRunInput.create(
+        plan=plan,
+        manifest=manifest,
+        initial_cash_fen=10_000_000,
+        initial_lots=(
+            BacktestInitialLotInput(
+                lot_key="existing-tactical",
+                bucket="TACTICAL",
+                acquired_trade_date=start,
+                quantity=100,
+                cost_basis_fen=100_000,
+            ),
+        ),
+        execution_config=ExecutionConfig(
+            commission_rate=Decimal("0.0003"),
+            minimum_commission_fen=500,
+            stamp_duty_rate=Decimal("0.0005"),
+            transfer_fee_rate=Decimal("0.00001"),
+            buy_slippage_bps=Decimal("2"),
+            sell_slippage_bps=Decimal("2"),
+        ),
+        manual_event_risk=False,
+    )
+
+
+def test_result_v2_completed_only_persists_canonical_input_and_shanghai_domains(
+    tmp_path: Path,
+) -> None:
+    store = BacktestResultStore(tmp_path / "result-v2.sqlite3")
+    run_input = _canonical_run_input()
+    summary = _summary(
+        "result-v2",
+        completed_at=datetime(2026, 8, 24, 15, 30, tzinfo=_SHANGHAI),
+    ).model_copy(
+        update={
+            "run_id": run_input.run_id,
+            "plan_sha256": run_input.plan_sha256,
+            "dataset_hash": run_input.dataset_hash,
+            "event_start": run_input.start,
+            "event_end": run_input.end,
+            "symbols": (run_input.plan_snapshot.symbol,),
+            "assumptions": {
+                **_summary("result-v2").assumptions,
+                "executionConfigHash": run_input.execution_config.config_hash,
+                "manualEventRisk": run_input.manual_event_risk,
+            },
+            "formula_versions": {
+                "execution": run_input.execution_config.formula_version,
+                "indicator": run_input.indicator_formula_version,
+                "runner": run_input.run_formula_version,
+            },
         }
     )
+    fill_payload = _fill_payload(summary)
+    fill = BacktestFillRecord.from_value(fill_payload, version="v2")
+    detail = _detail(summary, BacktestDetailKind.DECISION)
+
+    assert store.record_run_input(run_input) is True
+    assert store.record_run_input(run_input) is False
+    assert store.record_verified_run(summary, run_input=run_input) is True
+    assert store.record_fills(summary.run_id, (fill_payload,)) == 1
+    assert store.record_details(summary.run_id, (detail,)) == 1
+    report_hash = summary.assumptions["reportHash"]
+    assert isinstance(report_hash, str)
+    assert store.mark_run_materialized(
+        summary.run_id,
+        expected_fill_count=1,
+        expected_detail_count=1,
+        expected_report_hash=report_hash,
+        expected_fill_set_hash=backtest_fill_set_hash((fill,), version="v2"),
+        expected_detail_set_hash=backtest_detail_set_hash((detail,), version="v2"),
+    )
+    assert store.get_run_input(run_input.run_id) == run_input
+    verified = store.get_verified_run(run_input.run_id)
+    assert verified == summary
+    assert verified is not None and verified.completed_at.utcoffset() == timedelta(hours=8)
+    assert store.list_fills(run_input.run_id)[0].filled_at.utcoffset() == timedelta(hours=8)
+    assert store.list_details(run_input.run_id)[0].event_at.utcoffset() == timedelta(hours=8)
+
+    with closing(sqlite3.connect(store.database_path)) as connection:
+        run_row = connection.execute(
+            "SELECT summary_domain, completed_at, publication_fill_set_domain, "
+            "publication_detail_set_domain, summary_json FROM backtest_run WHERE run_id = ?",
+            (run_input.run_id,),
+        ).fetchone()
+        fill_row = connection.execute(
+            "SELECT content_domain, filled_at, payload_json FROM backtest_fill WHERE run_id = ?",
+            (run_input.run_id,),
+        ).fetchone()
+        detail_row = connection.execute(
+            "SELECT content_domain, event_at, payload_json FROM backtest_detail WHERE run_id = ?",
+            (run_input.run_id,),
+        ).fetchone()
+        assert connection.execute("SELECT COUNT(*) FROM backtest_plan_snapshot").fetchone() == (1,)
+        assert connection.execute("SELECT COUNT(*) FROM backtest_run_input").fetchone() == (1,)
+    assert run_row[:4] == (
+        "backtest-run-summary-v2",
+        "2026-08-24T15:30:00.000000+08:00",
+        "backtest-fill-set-v2",
+        "backtest-detail-set-v2",
+    )
+    assert fill_row[:2] == ("backtest-fill-record-v2", "2026-08-24T15:01:00.000000+08:00")
+    assert detail_row[:2] == (
+        "backtest-detail-record-v2",
+        "2026-08-24T15:00:00.000000+08:00",
+    )
+    assert all(
+        "+08:00" in str(row[-1]) and "+00:00" not in str(row[-1])
+        for row in (run_row, fill_row, detail_row)
+    )
+
+
+def test_legacy_v1_completed_row_is_compatibility_only_and_terminal_writes_fail(
+    tmp_path: Path,
+) -> None:
+    store = BacktestResultStore(tmp_path / "legacy-v1.sqlite3")
+    summary = _summary("legacy-v1")
+    _materialize(store, summary)
+
+    assert store.get_run(summary.run_id) == summary
+    assert store.get_verified_run(summary.run_id) is None
+    assert store.get_run_input(summary.run_id) is None
+    with pytest.raises(ValueError, match="completed-only"):
+        store.record_run(_summary("failed", status=BacktestRunStatus.FAILED))
+    with pytest.raises(ValueError, match="completed-only"):
+        store.record_run(_summary("cancelled", status=BacktestRunStatus.CANCELLED))
+
+    with closing(sqlite3.connect(store.database_path)) as connection:
+        row = connection.execute(
+            "SELECT summary_domain, completed_at FROM backtest_run WHERE run_id = ?",
+            (summary.run_id,),
+        ).fetchone()
+    assert row == ("backtest-run-summary-v1", "2026-08-25T04:00:00.000000+00:00")
+
+
+def _fill(
+    summary: BacktestRunSummary,
+    label: str = "fill",
+    *,
+    version: str = "v1",
+) -> BacktestFillRecord:
+    return BacktestFillRecord.from_value(_fill_payload(summary, label), version=version)
+
+
+def _fill_payload(summary: BacktestRunSummary, label: str = "fill") -> dict[str, object]:
+    return {
+        "fill_id": _hash(f"{summary.run_id}:{label}"),
+        "run_id": summary.run_id,
+        "filled_at": datetime(2026, 8, 24, 7, 1, tzinfo=UTC),
+        "symbol": "600000.SH",
+        "quantity": 100,
+        "price_fen": 1_012,
+        "fees": {"commission_fen": 500, "transfer_fee_fen": 1},
+    }
 
 
 def _detail(
@@ -272,7 +437,13 @@ def test_result_store_is_wal_isolated_canonical_and_conflict_closed(tmp_path: Pa
             ).fetchone()[0]
         )
 
-    assert tables == {"backtest_detail", "backtest_fill", "backtest_run"}
+    assert tables == {
+        "backtest_detail",
+        "backtest_fill",
+        "backtest_plan_snapshot",
+        "backtest_run",
+        "backtest_run_input",
+    }
     assert all("minute" not in table and "market" not in table for table in tables)
     assert {
         "ix_backtest_run_retention",
@@ -410,7 +581,7 @@ def test_retention_boundedly_removes_abandoned_staged_rows_only(tmp_path: Path) 
     assert store.list_details(retained.run_id) == (retained_detail,)
 
 
-def test_detail_retention_combines_age_count_failure_debug_and_pin_rules(
+def test_detail_retention_combines_age_count_debug_and_pin_rules(
     tmp_path: Path,
 ) -> None:
     store = BacktestResultStore(tmp_path / "backtest-results.sqlite3")
@@ -444,23 +615,6 @@ def test_detail_retention_combines_age_count_failure_debug_and_pin_rules(
     _materialize(store, debug_success, details=(debug_detail, decision_detail))
     expected_kept.add(decision_detail.detail_id)
 
-    failed = _summary(
-        "failed",
-        status=BacktestRunStatus.FAILED,
-        completed_at=as_of - timedelta(days=15),
-    )
-    failed_detail = _detail(failed, BacktestDetailKind.DIAGNOSTIC)
-    _materialize(store, failed, details=(failed_detail,))
-
-    cancelled_boundary = _summary(
-        "cancelled-boundary",
-        status=BacktestRunStatus.CANCELLED,
-        completed_at=as_of - timedelta(days=14),
-    )
-    cancelled_detail = _detail(cancelled_boundary, BacktestDetailKind.DIAGNOSTIC)
-    _materialize(store, cancelled_boundary, details=(cancelled_detail,))
-    expected_kept.add(cancelled_detail.detail_id)
-
     pinned = _summary(
         "pinned",
         completed_at=as_of - timedelta(days=500),
@@ -483,14 +637,14 @@ def test_detail_retention_combines_age_count_failure_debug_and_pin_rules(
         if not result.has_more:
             break
 
-    assert deleted == 6
+    assert deleted == 5
     kept_ids: set[str] = set()
     for summary in store.list_runs(limit=200):
         kept_ids.update(item.detail_id for item in store.list_details(summary.run_id))
     assert kept_ids == expected_kept
 
     statistics = store.statistics()
-    assert statistics.run_count == 107
+    assert statistics.run_count == 105
     assert statistics.fill_count == 104
     assert statistics.detail_count == len(expected_kept)
     assert store.get_run(old_success.run_id) == old_success
@@ -499,14 +653,15 @@ def test_detail_retention_combines_age_count_failure_debug_and_pin_rules(
         store.record_details(old_success.run_id, (old_success_detail,))
 
 
-def test_result_batches_are_bounded_and_detail_kind_matches_terminal_status(
+def test_result_batches_are_bounded_and_result_writes_are_completed_only(
     tmp_path: Path,
 ) -> None:
     store = BacktestResultStore(tmp_path / "backtest-results.sqlite3")
     completed = _summary("completed")
-    failed = _summary("failed", status=BacktestRunStatus.FAILED)
     store.record_run(completed)
-    store.record_run(failed)
+    for status in (BacktestRunStatus.FAILED, BacktestRunStatus.CANCELLED):
+        with pytest.raises(ValueError, match="completed-only"):
+            store.record_run(_summary(status.value.lower(), status=status))
 
     fills = tuple(_fill(completed, str(index)) for index in range(1_001))
     with pytest.raises(ValueError, match="at most 1000"):
@@ -521,8 +676,6 @@ def test_result_batches_are_bounded_and_detail_kind_matches_terminal_status(
             completed.run_id,
             (_detail(completed, BacktestDetailKind.DIAGNOSTIC),),
         )
-    with pytest.raises(ValueError, match="FAILED"):
-        store.record_details(failed.run_id, (_detail(failed, BacktestDetailKind.DECISION),))
     with pytest.raises(ValueError, match="batch_size"):
         store.prune_details(
             as_of=datetime(2026, 8, 25, tzinfo=UTC),

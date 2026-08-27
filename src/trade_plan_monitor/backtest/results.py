@@ -14,6 +14,7 @@ from hashlib import sha256
 from itertools import islice
 from pathlib import Path
 from typing import Annotated, Self
+from zoneinfo import ZoneInfo
 
 from pydantic import (
     AwareDatetime,
@@ -25,13 +26,17 @@ from pydantic import (
     model_validator,
 )
 
-from trade_plan_monitor.backtest.canonical import canonical_decimal
+from trade_plan_monitor.backtest.canonical import canonical_decimal, canonical_json
 from trade_plan_monitor.backtest.migration import (
     MigrationInventory,
     inspect_result_database,
     require_safe_store_initialization,
 )
+from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
+from trade_plan_monitor.backtest.time import format_shanghai_datetime
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
+from trade_plan_monitor.domain.plan_hash import plan_sha256
 
 Sha256Hex = Annotated[
     str,
@@ -52,11 +57,14 @@ _MAX_BATCH_SIZE = 1_000
 _SUCCESS_DETAIL_DAYS = 90
 _SUCCESS_DETAIL_RUNS = 100
 _DIAGNOSTIC_DETAIL_DAYS = 14
-_RUN_HASH_DOMAIN = b"backtest-run-summary-v1\0"
-_FILL_HASH_DOMAIN = b"backtest-fill-record-v1\0"
-_DETAIL_HASH_DOMAIN = b"backtest-detail-record-v1\0"
-_FILL_SET_HASH_DOMAIN = b"backtest-fill-set-v1\0"
-_DETAIL_SET_HASH_DOMAIN = b"backtest-detail-set-v1\0"
+_SHANGHAI = ZoneInfo("Asia/Shanghai")
+_VERSIONS = frozenset({"v1", "v2"})
+_RUN_DOMAINS = {version: f"backtest-run-summary-{version}" for version in _VERSIONS}
+_FILL_DOMAINS = {version: f"backtest-fill-record-{version}" for version in _VERSIONS}
+_DETAIL_DOMAINS = {version: f"backtest-detail-record-{version}" for version in _VERSIONS}
+_FILL_SET_DOMAINS = {version: f"backtest-fill-set-{version}" for version in _VERSIONS}
+_DETAIL_SET_DOMAINS = {version: f"backtest-detail-set-{version}" for version in _VERSIONS}
+_RUN_INPUT_HASH_DOMAIN = b"backtest-run-input-record-v1\0"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS backtest_run (
@@ -73,16 +81,34 @@ CREATE TABLE IF NOT EXISTS backtest_run (
         CHECK (publication_detail_count IS NULL OR publication_detail_count >= 0),
     publication_fill_set_hash TEXT,
     publication_detail_set_hash TEXT,
+    summary_domain TEXT NOT NULL DEFAULT 'backtest-run-summary-v1' CHECK (
+        summary_domain IN ('backtest-run-summary-v1', 'backtest-run-summary-v2')
+    ),
+    publication_fill_set_domain TEXT CHECK (
+        publication_fill_set_domain IS NULL OR publication_fill_set_domain IN (
+            'backtest-fill-set-v1', 'backtest-fill-set-v2'
+        )
+    ),
+    publication_detail_set_domain TEXT CHECK (
+        publication_detail_set_domain IS NULL OR publication_detail_set_domain IN (
+            'backtest-detail-set-v1', 'backtest-detail-set-v2'
+        )
+    ),
     summary_hash TEXT NOT NULL,
     summary_json TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_backtest_run_retention
     ON backtest_run (status, pinned, completed_at DESC, run_id DESC);
+CREATE INDEX IF NOT EXISTS ix_backtest_run_retention_v2
+    ON backtest_run (status, pinned, materialized, created_at DESC, run_id DESC);
 CREATE TABLE IF NOT EXISTS backtest_fill (
     fill_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES backtest_run (run_id) ON DELETE RESTRICT,
     filled_at TEXT NOT NULL,
+    content_domain TEXT NOT NULL DEFAULT 'backtest-fill-record-v1' CHECK (
+        content_domain IN ('backtest-fill-record-v1', 'backtest-fill-record-v2')
+    ),
     content_hash TEXT NOT NULL,
     payload_json TEXT NOT NULL,
     created_at TEXT NOT NULL
@@ -100,6 +126,9 @@ CREATE TABLE IF NOT EXISTS backtest_detail (
         )
     ),
     event_at TEXT NOT NULL,
+    content_domain TEXT NOT NULL DEFAULT 'backtest-detail-record-v1' CHECK (
+        content_domain IN ('backtest-detail-record-v1', 'backtest-detail-record-v2')
+    ),
     content_hash TEXT NOT NULL,
     payload_json TEXT NOT NULL,
     created_at TEXT NOT NULL
@@ -108,6 +137,25 @@ CREATE INDEX IF NOT EXISTS ix_backtest_detail_retention
     ON backtest_detail (kind, run_id, detail_id);
 CREATE INDEX IF NOT EXISTS ix_backtest_detail_run_event
     ON backtest_detail (run_id, event_at, detail_id);
+CREATE TABLE IF NOT EXISTS backtest_plan_snapshot (
+    plan_sha256 TEXT PRIMARY KEY,
+    snapshot_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS backtest_run_input (
+    run_id TEXT PRIMARY KEY,
+    plan_sha256 TEXT NOT NULL
+        REFERENCES backtest_plan_snapshot (plan_sha256) ON DELETE RESTRICT,
+    input_hash TEXT NOT NULL,
+    input_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS trg_backtest_run_completed_only_insert
+BEFORE INSERT ON backtest_run WHEN NEW.status <> 'COMPLETED'
+BEGIN SELECT RAISE(ABORT, 'BACKTEST_RESULTS_COMPLETED_ONLY'); END;
+CREATE TRIGGER IF NOT EXISTS trg_backtest_run_completed_only_update
+BEFORE UPDATE OF status ON backtest_run WHEN NEW.status <> 'COMPLETED'
+BEGIN SELECT RAISE(ABORT, 'BACKTEST_RESULTS_COMPLETED_ONLY'); END;
 """
 
 
@@ -116,7 +164,7 @@ class ResultConflictError(ValueError):
 
 
 class BacktestRunStatus(StrEnum):
-    """Terminal backtest states persisted by the result store."""
+    """Completed state plus readable compatibility values from legacy payloads."""
 
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
@@ -236,16 +284,22 @@ class BacktestFillRecord(_ResultValue):
         return self
 
     @classmethod
-    def from_value(cls, value: BaseModel | Mapping[str, object]) -> Self:
+    def from_value(
+        cls,
+        value: BaseModel | Mapping[str, object],
+        *,
+        version: str = "v1",
+    ) -> Self:
         """Wrap an ``ExecutionFill`` or fill-shaped mapping losslessly."""
 
-        payload = _model_or_mapping(value, "fill")
+        raw_payload = _model_or_mapping(value, "fill")
         try:
-            fill_id = payload["fill_id"]
-            run_id = payload["run_id"]
-            filled_at = payload["filled_at"]
+            fill_id = raw_payload["fill_id"]
+            run_id = raw_payload["run_id"]
+            filled_at = raw_payload["filled_at"]
         except KeyError as error:
             raise ValueError(f"fill payload is missing {error.args[0]}") from None
+        payload = _canonical_mapping(raw_payload, version=version)
         return cls(
             fill_id=fill_id,
             run_id=run_id,
@@ -289,6 +343,7 @@ class BacktestDetailRecord(_ResultValue):
         run_id: str | None = None,
         event_at: datetime | None = None,
         detail_id: str | None = None,
+        version: str = "v1",
     ) -> Self:
         """Wrap execution signals/outcomes/equity or another normalized model.
 
@@ -296,14 +351,14 @@ class BacktestDetailRecord(_ResultValue):
         Event times for execution and other models are inferred by field name.
         """
 
-        payload = _model_or_mapping(value, "detail")
+        raw_payload = _model_or_mapping(value, "detail")
         resolved_id = detail_id or _first_string(
-            payload,
+            raw_payload,
             ("detail_id", "snapshot_id", "outcome_id", "signal_id", "result_hash"),
         )
-        resolved_run = run_id or _optional_string(payload.get("run_id"))
+        resolved_run = run_id or _optional_string(raw_payload.get("run_id"))
         resolved_event = event_at or _first_datetime(
-            payload,
+            raw_payload,
             (
                 "event_at",
                 "resolved_at",
@@ -319,6 +374,7 @@ class BacktestDetailRecord(_ResultValue):
             raise ValueError("run_id could not be inferred")
         if resolved_event is None:
             raise ValueError("event_at could not be inferred")
+        payload = _canonical_mapping(raw_payload, version=version)
         return cls(
             detail_id=resolved_id,
             run_id=resolved_run,
@@ -374,6 +430,125 @@ class BacktestResultStore:
 
         return self._migration_inventory
 
+    def record_run_input(self, run_input: BacktestRunInput) -> bool:
+        """Persist one canonical input and its deduplicated immutable plan snapshot."""
+
+        if not isinstance(run_input, BacktestRunInput):
+            raise TypeError("run_input must be a BacktestRunInput")
+        run_input.validate_canonical_input()
+        snapshot_json = dump_plan_json(run_input.plan_snapshot)
+        if plan_sha256(run_input.plan_snapshot) != run_input.plan_sha256:
+            raise ValueError("run input plan hash does not match its canonical snapshot")
+        input_json = canonical_json(
+            run_input.model_dump(
+                mode="python",
+                round_trip=True,
+                exclude={"plan_snapshot"},
+            )
+        )
+        input_hash = _content_hash(_RUN_INPUT_HASH_DOMAIN, input_json)
+        now = _datetime_text(datetime.now(_SHANGHAI), version="v2")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            snapshot = connection.execute(
+                "SELECT snapshot_json FROM backtest_plan_snapshot WHERE plan_sha256 = ?",
+                (run_input.plan_sha256,),
+            ).fetchone()
+            if snapshot is None:
+                connection.execute(
+                    "INSERT INTO backtest_plan_snapshot "
+                    "(plan_sha256, snapshot_json, created_at) VALUES (?, ?, ?)",
+                    (run_input.plan_sha256, snapshot_json, now),
+                )
+            elif str(snapshot[0]) != snapshot_json:
+                raise ResultConflictError(
+                    "conflicting plan snapshot content under an existing plan_sha256"
+                )
+            existing = connection.execute(
+                "SELECT plan_sha256, input_hash, input_json FROM backtest_run_input "
+                "WHERE run_id = ?",
+                (run_input.run_id,),
+            ).fetchone()
+            if existing is not None:
+                if tuple(map(str, existing)) != (
+                    run_input.plan_sha256,
+                    input_hash,
+                    input_json,
+                ):
+                    raise ResultConflictError(
+                        "conflicting canonical input under an existing run_id"
+                    )
+                connection.commit()
+                return False
+            connection.execute(
+                "INSERT INTO backtest_run_input "
+                "(run_id, plan_sha256, input_hash, input_json, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (run_input.run_id, run_input.plan_sha256, input_hash, input_json, now),
+            )
+            connection.commit()
+        return True
+
+    def get_run_input(self, run_id: str) -> BacktestRunInput | None:
+        """Return a hash-verified canonical input, or ``None`` for compatibility rows."""
+
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT input.run_id, input.plan_sha256, input.input_hash, input.input_json,
+                       snapshot.snapshot_json
+                FROM backtest_run_input AS input
+                JOIN backtest_plan_snapshot AS snapshot
+                  ON snapshot.plan_sha256 = input.plan_sha256
+                WHERE input.run_id = ?
+                """,
+                (normalized_run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        snapshot = load_plan_json(str(row[4]))
+        if dump_plan_json(snapshot) != str(row[4]) or plan_sha256(snapshot) != str(row[1]):
+            raise RuntimeError("stored canonical plan snapshot failed verification")
+        input_json = str(row[3])
+        if _content_hash(_RUN_INPUT_HASH_DOMAIN, input_json) != str(row[2]):
+            raise RuntimeError("stored backtest run input failed its content hash")
+        payload = json.loads(input_json)
+        if not isinstance(payload, dict):
+            raise RuntimeError("stored backtest run input payload is invalid")
+        run_input = BacktestRunInput.model_validate(
+            {**payload, "plan_snapshot": snapshot},
+            strict=False,
+        )
+        if (
+            run_input.run_id != normalized_run_id
+            or run_input.run_id != str(row[0])
+            or run_input.plan_sha256 != str(row[1])
+            or canonical_json(
+                run_input.model_dump(
+                    mode="python",
+                    round_trip=True,
+                    exclude={"plan_snapshot"},
+                )
+            )
+            != input_json
+        ):
+            raise RuntimeError("stored backtest run input identity is invalid")
+        return run_input
+
+    def record_verified_run(
+        self,
+        summary: BacktestRunSummary,
+        *,
+        run_input: BacktestRunInput,
+        retention_at: datetime | None = None,
+    ) -> bool:
+        """Stage one active v2 completed row backed by independently verified input."""
+
+        _validate_summary_input(summary, run_input)
+        self.record_run_input(run_input)
+        return self._record_run(summary, version="v2", retention_at=retention_at)
+
     def record_run(
         self,
         summary: BacktestRunSummary,
@@ -381,7 +556,7 @@ class BacktestResultStore:
         materialized: bool = False,
         retention_at: datetime | None = None,
     ) -> bool:
-        """Stage an immutable terminal summary; publication uses ``mark_run_materialized``."""
+        """Stage an explicit v1 compatibility row; active callers use verified input."""
 
         if not isinstance(summary, BacktestRunSummary):
             raise TypeError("summary must be a BacktestRunSummary")
@@ -389,14 +564,26 @@ class BacktestResultStore:
             raise TypeError("materialized must be a bool")
         if materialized:
             raise ValueError("direct materialization is not allowed")
+        return self._record_run(summary, version="v1", retention_at=retention_at)
+
+    def _record_run(
+        self,
+        summary: BacktestRunSummary,
+        *,
+        version: str,
+        retention_at: datetime | None,
+    ) -> bool:
+        if summary.status is not BacktestRunStatus.COMPLETED:
+            raise ValueError("backtest results are completed-only")
         normalized_retention_at = (
             summary.completed_at
             if retention_at is None
             else _normalize_datetime(retention_at, "retention_at")
         )
-        summary_json = _summary_json(summary)
-        summary_hash = _content_hash(_RUN_HASH_DOMAIN, summary_json)
-        now = _datetime_text(normalized_retention_at)
+        summary_json = _summary_json(summary, version=version)
+        summary_domain = _domain(_RUN_DOMAINS, version)
+        summary_hash = _content_hash(_domain_bytes(summary_domain), summary_json)
+        now = _datetime_text(normalized_retention_at, version=version)
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
@@ -414,17 +601,19 @@ class BacktestResultStore:
                 """
                 INSERT INTO backtest_run (
                     run_id, plan_sha256, dataset_hash, status, completed_at,
-                    pinned, materialized, summary_hash, summary_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    pinned, materialized, summary_domain, summary_hash,
+                    summary_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     summary.run_id,
                     summary.plan_sha256,
                     summary.dataset_hash,
                     summary.status.value,
-                    _datetime_text(summary.completed_at),
+                    _datetime_text(summary.completed_at, version=version),
                     int(summary.pinned),
                     0,
+                    summary_domain,
                     summary_hash,
                     summary_json,
                     now,
@@ -442,8 +631,15 @@ class BacktestResultStore:
 
         normalized_run_id = _validate_hash(run_id, "run_id")
         values = _bounded_values(fills, "fills")
+        with self._connect() as connection:
+            _status, _materialized, version = _require_run_state(
+                connection,
+                normalized_run_id,
+            )
         records = tuple(
-            value if isinstance(value, BacktestFillRecord) else BacktestFillRecord.from_value(value)
+            value
+            if isinstance(value, BacktestFillRecord)
+            else BacktestFillRecord.from_value(value, version=version)
             for value in values
         )
         if any(record.run_id != normalized_run_id for record in records):
@@ -480,7 +676,7 @@ class BacktestResultStore:
             row = connection.execute(
                 f"""
                 SELECT run_id, plan_sha256, dataset_hash, status, completed_at,
-                       summary_hash, summary_json, pinned
+                       summary_domain, summary_hash, summary_json, pinned
                 FROM backtest_run WHERE run_id = ?{materialized_filter}
                 """,
                 (normalized_run_id,),
@@ -488,6 +684,30 @@ class BacktestResultStore:
         if row is None:
             return None
         return _load_summary_row(row, expected_run_id=normalized_run_id)
+
+    def get_verified_run(self, run_id: str) -> BacktestRunSummary | None:
+        """Return only active v2 rows whose persisted input independently re-derives identity."""
+
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        run_input = self.get_run_input(normalized_run_id)
+        if run_input is None:
+            return None
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT run_id, plan_sha256, dataset_hash, status, completed_at,
+                       summary_domain, summary_hash, summary_json, pinned
+                FROM backtest_run
+                WHERE run_id = ? AND materialized = 1
+                  AND summary_domain = 'backtest-run-summary-v2'
+                """,
+                (normalized_run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        summary = _load_summary_row(row, expected_run_id=normalized_run_id)
+        _validate_summary_input(summary, run_input)
+        return summary
 
     def list_runs(self, *, limit: int = 100, offset: int = 0) -> tuple[BacktestRunSummary, ...]:
         if type(limit) is not int or not 1 <= limit <= _MAX_BATCH_SIZE:
@@ -498,7 +718,7 @@ class BacktestResultStore:
             rows = connection.execute(
                 """
                 SELECT run_id, plan_sha256, dataset_hash, status, completed_at,
-                       summary_hash, summary_json, pinned
+                       summary_domain, summary_hash, summary_json, pinned
                 FROM backtest_run
                 WHERE materialized = 1
                 ORDER BY created_at DESC, run_id DESC
@@ -513,7 +733,7 @@ class BacktestResultStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT f.fill_id, f.run_id, f.filled_at,
+                SELECT f.fill_id, f.run_id, f.filled_at, f.content_domain,
                        f.content_hash, f.payload_json
                 FROM backtest_fill AS f
                 JOIN backtest_run AS r ON r.run_id = f.run_id
@@ -534,7 +754,7 @@ class BacktestResultStore:
         if kind is not None and not isinstance(kind, BacktestDetailKind):
             raise TypeError("kind must be a BacktestDetailKind or None")
         query = """
-            SELECT d.detail_id, d.run_id, d.kind, d.event_at,
+            SELECT d.detail_id, d.run_id, d.kind, d.event_at, d.content_domain,
                    d.content_hash, d.payload_json
             FROM backtest_detail AS d
             JOIN backtest_run AS r ON r.run_id = d.run_id
@@ -702,28 +922,35 @@ class BacktestResultStore:
             row = connection.execute(
                 """
                 SELECT run_id, plan_sha256, dataset_hash, status, completed_at,
-                       summary_hash, summary_json, pinned, materialized,
+                       summary_domain, summary_hash, summary_json, pinned, materialized,
                        publication_fill_count, publication_detail_count,
-                       publication_fill_set_hash, publication_detail_set_hash
+                       publication_fill_set_hash, publication_detail_set_hash,
+                       publication_fill_set_domain, publication_detail_set_domain
                 FROM backtest_run WHERE run_id = ?
                 """,
                 (normalized_run_id,),
             ).fetchone()
             if row is None:
                 raise KeyError(f"unknown run_id: {normalized_run_id}")
-            summary = _load_summary_row(row[:8], expected_run_id=normalized_run_id)
+            summary = _load_summary_row(row[:9], expected_run_id=normalized_run_id)
+            version = _version_from_domain(str(row[5]), _RUN_DOMAINS)
             if summary.assumptions.get("reportHash") != normalized_report_hash:
                 raise ResultConflictError("completed report hash does not match the staged summary")
-            if bool(row[8]):
-                stored_metadata = row[9:]
+            if bool(row[9]):
+                stored_metadata = row[10:]
                 if all(value is None for value in stored_metadata):
-                    actual_metadata = _materialization_metadata(connection, normalized_run_id)
+                    actual_metadata = _materialization_metadata(
+                        connection,
+                        normalized_run_id,
+                        version=version,
+                    )
                     _require_publication_metadata(
                         actual_metadata,
                         expected_fill_count=expected_fill_count,
                         expected_detail_count=expected_detail_count,
                         expected_fill_set_hash=normalized_fill_set_hash,
                         expected_detail_set_hash=normalized_detail_set_hash,
+                        version=version,
                         staged=False,
                     )
                     connection.execute(
@@ -732,7 +959,9 @@ class BacktestResultStore:
                             publication_fill_count = ?,
                             publication_detail_count = ?,
                             publication_fill_set_hash = ?,
-                            publication_detail_set_hash = ?
+                            publication_detail_set_hash = ?,
+                            publication_fill_set_domain = ?,
+                            publication_detail_set_domain = ?
                         WHERE run_id = ?
                         """,
                         (*actual_metadata, normalized_run_id),
@@ -745,6 +974,8 @@ class BacktestResultStore:
                         int(stored_metadata[1]),
                         str(stored_metadata[2]),
                         str(stored_metadata[3]),
+                        str(stored_metadata[4]),
+                        str(stored_metadata[5]),
                     )
                     _require_publication_metadata(
                         published_metadata,
@@ -752,17 +983,23 @@ class BacktestResultStore:
                         expected_detail_count=expected_detail_count,
                         expected_fill_set_hash=normalized_fill_set_hash,
                         expected_detail_set_hash=normalized_detail_set_hash,
+                        version=version,
                         staged=False,
                     )
                 connection.commit()
                 return False
-            actual_metadata = _materialization_metadata(connection, normalized_run_id)
+            actual_metadata = _materialization_metadata(
+                connection,
+                normalized_run_id,
+                version=version,
+            )
             _require_publication_metadata(
                 actual_metadata,
                 expected_fill_count=expected_fill_count,
                 expected_detail_count=expected_detail_count,
                 expected_fill_set_hash=normalized_fill_set_hash,
                 expected_detail_set_hash=normalized_detail_set_hash,
+                version=version,
                 staged=True,
             )
             connection.execute(
@@ -772,7 +1009,9 @@ class BacktestResultStore:
                     publication_fill_count = ?,
                     publication_detail_count = ?,
                     publication_fill_set_hash = ?,
-                    publication_detail_set_hash = ?
+                    publication_detail_set_hash = ?,
+                    publication_fill_set_domain = ?,
+                    publication_detail_set_domain = ?
                 WHERE run_id = ?
                 """,
                 (*actual_metadata, normalized_run_id),
@@ -787,35 +1026,6 @@ class BacktestResultStore:
                 raise RuntimeError("backtest result database did not enter WAL mode")
             connection.execute("PRAGMA synchronous=NORMAL")
             connection.executescript(_SCHEMA)
-            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(backtest_run)")}
-            if "materialized" not in columns:
-                connection.execute(
-                    "ALTER TABLE backtest_run ADD COLUMN materialized INTEGER NOT NULL DEFAULT 1 "
-                    "CHECK (materialized IN (0, 1))"
-                )
-                columns.add("materialized")
-            publication_columns = {
-                "publication_fill_count": (
-                    "INTEGER CHECK (publication_fill_count IS NULL OR publication_fill_count >= 0)"
-                ),
-                "publication_detail_count": (
-                    "INTEGER CHECK (publication_detail_count IS NULL "
-                    "OR publication_detail_count >= 0)"
-                ),
-                "publication_fill_set_hash": "TEXT",
-                "publication_detail_set_hash": "TEXT",
-            }
-            for name, declaration in publication_columns.items():
-                if name not in columns:
-                    connection.execute(f"ALTER TABLE backtest_run ADD COLUMN {name} {declaration}")
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS ix_backtest_run_retention_v2
-                ON backtest_run (
-                    status, pinned, materialized, created_at DESC, run_id DESC
-                )
-                """
-            )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -840,28 +1050,33 @@ class BacktestResultStore:
         records: tuple[BacktestFillRecord, ...],
     ) -> int:
         inserted = 0
-        now = _utc_now()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            _status, materialized = _require_run_state(connection, run_id)
+            _status, materialized, version = _require_run_state(connection, run_id)
+            content_domain = _domain(_FILL_DOMAINS, version)
+            now = _now_text(version)
             for record in records:
-                payload_json = _canonical_json(record.model_dump(mode="python", round_trip=True))
-                content_hash = _content_hash(_FILL_HASH_DOMAIN, payload_json)
+                payload_json = _canonical_json(
+                    record.model_dump(mode="python", round_trip=True),
+                    version=version,
+                )
+                content_hash = _content_hash(_domain_bytes(content_domain), payload_json)
                 existing = connection.execute(
                     """
-                    SELECT run_id, filled_at, content_hash, payload_json
+                    SELECT run_id, filled_at, content_domain, content_hash, payload_json
                     FROM backtest_fill WHERE fill_id = ?
                     """,
                     (record.fill_id,),
                 ).fetchone()
                 if existing is not None:
-                    stored = _load_fill(str(existing[2]), str(existing[3]))
+                    stored = _load_fill(str(existing[2]), str(existing[3]), str(existing[4]))
                     if (
                         str(existing[0]) != run_id
-                        or str(existing[1]) != _datetime_text(stored.filled_at)
+                        or str(existing[1]) != _datetime_text(stored.filled_at, version=version)
                         or stored.fill_id != record.fill_id
                         or stored.run_id != run_id
-                        or str(existing[2]) != content_hash
+                        or str(existing[2]) != content_domain
+                        or str(existing[3]) != content_hash
                     ):
                         raise ResultConflictError(
                             "conflicting fill content under an existing fill_id"
@@ -872,13 +1087,15 @@ class BacktestResultStore:
                 connection.execute(
                     """
                     INSERT INTO backtest_fill (
-                        fill_id, run_id, filled_at, content_hash, payload_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                        fill_id, run_id, filled_at, content_domain,
+                        content_hash, payload_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         record.fill_id,
                         run_id,
-                        _datetime_text(record.filled_at),
+                        _datetime_text(record.filled_at, version=version),
+                        content_domain,
                         content_hash,
                         payload_json,
                         now,
@@ -894,30 +1111,35 @@ class BacktestResultStore:
         records: tuple[BacktestDetailRecord, ...],
     ) -> int:
         inserted = 0
-        now = _utc_now()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            status, materialized = _require_run_state(connection, run_id)
+            status, materialized, version = _require_run_state(connection, run_id)
+            content_domain = _domain(_DETAIL_DOMAINS, version)
+            now = _now_text(version)
             for record in records:
                 _validate_detail_status(status, record.kind)
-                payload_json = _canonical_json(record.model_dump(mode="python", round_trip=True))
-                content_hash = _content_hash(_DETAIL_HASH_DOMAIN, payload_json)
+                payload_json = _canonical_json(
+                    record.model_dump(mode="python", round_trip=True),
+                    version=version,
+                )
+                content_hash = _content_hash(_domain_bytes(content_domain), payload_json)
                 existing = connection.execute(
                     """
-                    SELECT run_id, kind, event_at, content_hash, payload_json
+                    SELECT run_id, kind, event_at, content_domain, content_hash, payload_json
                     FROM backtest_detail WHERE detail_id = ?
                     """,
                     (record.detail_id,),
                 ).fetchone()
                 if existing is not None:
-                    stored = _load_detail(str(existing[3]), str(existing[4]))
+                    stored = _load_detail(str(existing[3]), str(existing[4]), str(existing[5]))
                     if (
                         str(existing[0]) != run_id
                         or str(existing[1]) != stored.kind.value
-                        or str(existing[2]) != _datetime_text(stored.event_at)
+                        or str(existing[2]) != _datetime_text(stored.event_at, version=version)
                         or stored.detail_id != record.detail_id
                         or stored.run_id != run_id
-                        or str(existing[3]) != content_hash
+                        or str(existing[3]) != content_domain
+                        or str(existing[4]) != content_hash
                     ):
                         raise ResultConflictError(
                             "conflicting detail content under an existing detail_id"
@@ -929,14 +1151,15 @@ class BacktestResultStore:
                     """
                     INSERT INTO backtest_detail (
                         detail_id, run_id, kind, event_at,
-                        content_hash, payload_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        content_domain, content_hash, payload_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         record.detail_id,
                         run_id,
                         record.kind.value,
-                        _datetime_text(record.event_at),
+                        _datetime_text(record.event_at, version=version),
+                        content_domain,
                         content_hash,
                         payload_json,
                         now,
@@ -994,10 +1217,6 @@ WHERE r.pinned = 0
   AND (
       (d.kind = 'DEBUG_TRACE' AND r.created_at < ?)
       OR (
-          r.status IN ('FAILED', 'CANCELLED')
-          AND r.created_at < ?
-      )
-      OR (
           r.status = 'COMPLETED'
           AND d.kind != 'DEBUG_TRACE'
           AND (r.created_at < ? OR ranked.run_rank > ?)
@@ -1008,10 +1227,10 @@ LIMIT ?
 """
 
 
-def _retention_parameters(as_of: datetime) -> tuple[str, str, str, int]:
+def _retention_parameters(as_of: datetime) -> tuple[str, str, int]:
     diagnostic_cutoff = _datetime_text(as_of - timedelta(days=_DIAGNOSTIC_DETAIL_DAYS))
     success_cutoff = _datetime_text(as_of - timedelta(days=_SUCCESS_DETAIL_DAYS))
-    return diagnostic_cutoff, diagnostic_cutoff, success_cutoff, _SUCCESS_DETAIL_RUNS
+    return diagnostic_cutoff, success_cutoff, _SUCCESS_DETAIL_RUNS
 
 
 def _candidate_ids(
@@ -1061,35 +1280,46 @@ def _validate_detail_status(status: BacktestRunStatus, kind: BacktestDetailKind)
         BacktestDetailKind.DAILY_EQUITY,
         BacktestDetailKind.DEBUG_TRACE,
     }
-    diagnostic = {BacktestDetailKind.DIAGNOSTIC, BacktestDetailKind.DEBUG_TRACE}
-    allowed = successful if status is BacktestRunStatus.COMPLETED else diagnostic
-    if kind not in allowed:
+    if status is not BacktestRunStatus.COMPLETED or kind not in successful:
         raise ValueError(f"{kind.value} detail is not valid for {status.value} runs")
 
 
 def _require_run_state(
     connection: sqlite3.Connection,
     run_id: str,
-) -> tuple[BacktestRunStatus, bool]:
+) -> tuple[BacktestRunStatus, bool, str]:
     row = connection.execute(
-        "SELECT status, materialized FROM backtest_run WHERE run_id = ?",
+        "SELECT status, materialized, summary_domain FROM backtest_run WHERE run_id = ?",
         (run_id,),
     ).fetchone()
     if row is None:
         raise KeyError(f"unknown run_id: {run_id}")
-    return BacktestRunStatus(str(row[0])), bool(row[1])
+    return (
+        BacktestRunStatus(str(row[0])),
+        bool(row[1]),
+        _version_from_domain(str(row[2]), _RUN_DOMAINS),
+    )
 
 
-def _summary_json(summary: BacktestRunSummary) -> str:
+def _summary_json(summary: BacktestRunSummary, *, version: str) -> str:
     payload = summary.model_dump(mode="python", exclude={"pinned"}, round_trip=True)
-    return _canonical_json(payload)
+    return _canonical_json(payload, version=version)
 
 
-def _load_summary(summary_hash: str, summary_json: str, pinned: bool) -> BacktestRunSummary:
-    expected = _content_hash(_RUN_HASH_DOMAIN, summary_json)
+def _load_summary(
+    summary_domain: str,
+    summary_hash: str,
+    summary_json: str,
+    pinned: bool,
+) -> BacktestRunSummary:
+    expected = _content_hash(_domain_bytes(summary_domain), summary_json)
     if summary_hash != expected:
         raise RuntimeError("stored backtest summary failed its content hash")
     summary = BacktestRunSummary.model_validate_json(summary_json)
+    if _version_from_domain(summary_domain, _RUN_DOMAINS) == "v2":
+        summary = summary.model_copy(
+            update={"completed_at": summary.completed_at.astimezone(_SHANGHAI)}
+        )
     return summary.model_copy(update={"pinned": pinned})
 
 
@@ -1098,9 +1328,10 @@ def _load_summary_row(
     *,
     expected_run_id: str | None = None,
 ) -> BacktestRunSummary:
-    if len(row) != 8:
+    if len(row) != 9:
         raise RuntimeError("stored backtest summary row shape is invalid")
-    summary = _load_summary(str(row[5]), str(row[6]), bool(row[7]))
+    version = _version_from_domain(str(row[5]), _RUN_DOMAINS)
+    summary = _load_summary(str(row[5]), str(row[6]), str(row[7]), bool(row[8]))
     sql_identity = (
         str(row[0]),
         str(row[1]),
@@ -1113,7 +1344,7 @@ def _load_summary_row(
         summary.plan_sha256,
         summary.dataset_hash,
         summary.status.value,
-        _datetime_text(summary.completed_at),
+        _datetime_text(summary.completed_at, version=version),
     )
     if sql_identity != canonical_identity:
         raise RuntimeError("stored backtest summary SQL identity is invalid")
@@ -1122,11 +1353,19 @@ def _load_summary_row(
     return summary
 
 
-def _load_fill(content_hash: str, payload_json: str) -> BacktestFillRecord:
-    expected = _content_hash(_FILL_HASH_DOMAIN, payload_json)
+def _load_fill(
+    content_domain: str,
+    content_hash: str,
+    payload_json: str,
+) -> BacktestFillRecord:
+    _version_from_domain(content_domain, _FILL_DOMAINS)
+    expected = _content_hash(_domain_bytes(content_domain), payload_json)
     if content_hash != expected:
         raise RuntimeError("stored backtest fill failed its content hash")
-    return BacktestFillRecord.model_validate_json(payload_json)
+    record = BacktestFillRecord.model_validate_json(payload_json)
+    if _version_from_domain(content_domain, _FILL_DOMAINS) == "v2":
+        return record.model_copy(update={"filled_at": record.filled_at.astimezone(_SHANGHAI)})
+    return record
 
 
 def _load_fill_row(
@@ -1134,24 +1373,33 @@ def _load_fill_row(
     *,
     expected_run_id: str,
 ) -> BacktestFillRecord:
-    if len(row) != 5:
+    if len(row) != 6:
         raise RuntimeError("stored backtest fill row shape is invalid")
-    record = _load_fill(str(row[3]), str(row[4]))
+    version = _version_from_domain(str(row[3]), _FILL_DOMAINS)
+    record = _load_fill(str(row[3]), str(row[4]), str(row[5]))
     if (
         record.fill_id != str(row[0])
         or record.run_id != str(row[1])
         or record.run_id != expected_run_id
-        or _datetime_text(record.filled_at) != str(row[2])
+        or _datetime_text(record.filled_at, version=version) != str(row[2])
     ):
         raise RuntimeError("stored backtest fill SQL identity is invalid")
     return record
 
 
-def _load_detail(content_hash: str, payload_json: str) -> BacktestDetailRecord:
-    expected = _content_hash(_DETAIL_HASH_DOMAIN, payload_json)
+def _load_detail(
+    content_domain: str,
+    content_hash: str,
+    payload_json: str,
+) -> BacktestDetailRecord:
+    _version_from_domain(content_domain, _DETAIL_DOMAINS)
+    expected = _content_hash(_domain_bytes(content_domain), payload_json)
     if content_hash != expected:
         raise RuntimeError("stored backtest detail failed its content hash")
-    return BacktestDetailRecord.model_validate_json(payload_json)
+    record = BacktestDetailRecord.model_validate_json(payload_json)
+    if _version_from_domain(content_domain, _DETAIL_DOMAINS) == "v2":
+        return record.model_copy(update={"event_at": record.event_at.astimezone(_SHANGHAI)})
+    return record
 
 
 def _load_detail_row(
@@ -1159,48 +1407,83 @@ def _load_detail_row(
     *,
     expected_run_id: str,
 ) -> BacktestDetailRecord:
-    if len(row) != 6:
+    if len(row) != 7:
         raise RuntimeError("stored backtest detail row shape is invalid")
-    record = _load_detail(str(row[4]), str(row[5]))
+    version = _version_from_domain(str(row[4]), _DETAIL_DOMAINS)
+    record = _load_detail(str(row[4]), str(row[5]), str(row[6]))
     if (
         record.detail_id != str(row[0])
         or record.run_id != str(row[1])
         or record.run_id != expected_run_id
         or record.kind.value != str(row[2])
-        or _datetime_text(record.event_at) != str(row[3])
+        or _datetime_text(record.event_at, version=version) != str(row[3])
     ):
         raise RuntimeError("stored backtest detail SQL identity is invalid")
     return record
 
 
-def backtest_fill_set_hash(records: Iterable[BacktestFillRecord]) -> str:
+def backtest_fill_set_hash(
+    records: Iterable[BacktestFillRecord],
+    *,
+    version: str = "v1",
+) -> str:
     """Hash an exact canonical fill identity/content set for publication."""
 
     entries: list[tuple[str, str]] = []
     for record in records:
         if not isinstance(record, BacktestFillRecord):
             raise TypeError("records must contain BacktestFillRecord values")
-        payload_json = _canonical_json(record.model_dump(mode="python", round_trip=True))
-        entries.append((record.fill_id, _content_hash(_FILL_HASH_DOMAIN, payload_json)))
-    return _record_set_hash(_FILL_SET_HASH_DOMAIN, sorted(entries))
+        payload_json = _canonical_json(
+            record.model_dump(mode="python", round_trip=True),
+            version=version,
+        )
+        entries.append(
+            (
+                record.fill_id,
+                _content_hash(_domain_bytes(_domain(_FILL_DOMAINS, version)), payload_json),
+            )
+        )
+    return _record_set_hash(
+        _domain_bytes(_domain(_FILL_SET_DOMAINS, version)),
+        sorted(entries),
+        version=version,
+    )
 
 
-def backtest_detail_set_hash(records: Iterable[BacktestDetailRecord]) -> str:
+def backtest_detail_set_hash(
+    records: Iterable[BacktestDetailRecord],
+    *,
+    version: str = "v1",
+) -> str:
     """Hash an exact canonical detail identity/content set for publication."""
 
     entries: list[tuple[str, str]] = []
     for record in records:
         if not isinstance(record, BacktestDetailRecord):
             raise TypeError("records must contain BacktestDetailRecord values")
-        payload_json = _canonical_json(record.model_dump(mode="python", round_trip=True))
-        entries.append((record.detail_id, _content_hash(_DETAIL_HASH_DOMAIN, payload_json)))
-    return _record_set_hash(_DETAIL_SET_HASH_DOMAIN, sorted(entries))
+        payload_json = _canonical_json(
+            record.model_dump(mode="python", round_trip=True),
+            version=version,
+        )
+        entries.append(
+            (
+                record.detail_id,
+                _content_hash(_domain_bytes(_domain(_DETAIL_DOMAINS, version)), payload_json),
+            )
+        )
+    return _record_set_hash(
+        _domain_bytes(_domain(_DETAIL_SET_DOMAINS, version)),
+        sorted(entries),
+        version=version,
+    )
 
 
 def _materialization_metadata(
     connection: sqlite3.Connection,
     run_id: str,
-) -> tuple[int, int, str, str]:
+    *,
+    version: str,
+) -> tuple[int, int, str, str, str, str]:
     fill_count = int(
         connection.execute(
             "SELECT COUNT(*) FROM backtest_fill WHERE run_id = ?",
@@ -1216,18 +1499,21 @@ def _materialization_metadata(
     return (
         fill_count,
         detail_count,
-        _validated_fill_set_hash(connection, run_id),
-        _validated_detail_set_hash(connection, run_id),
+        _validated_fill_set_hash(connection, run_id, version=version),
+        _validated_detail_set_hash(connection, run_id, version=version),
+        _domain(_FILL_SET_DOMAINS, version),
+        _domain(_DETAIL_SET_DOMAINS, version),
     )
 
 
 def _require_publication_metadata(
-    actual: tuple[int, int, str, str],
+    actual: tuple[int, int, str, str, str, str],
     *,
     expected_fill_count: int,
     expected_detail_count: int,
     expected_fill_set_hash: str,
     expected_detail_set_hash: str,
+    version: str,
     staged: bool,
 ) -> None:
     expected = (
@@ -1235,6 +1521,8 @@ def _require_publication_metadata(
         expected_detail_count,
         expected_fill_set_hash,
         expected_detail_set_hash,
+        _domain(_FILL_SET_DOMAINS, version),
+        _domain(_DETAIL_SET_DOMAINS, version),
     )
     if actual[:2] != expected[:2]:
         if staged:
@@ -1246,58 +1534,90 @@ def _require_publication_metadata(
     if actual[3] != expected[3]:
         label = "staged detail set" if staged else "materialized detail publication"
         raise ResultConflictError(f"{label} does not match the expected report")
+    if actual[4:] != expected[4:]:
+        raise ResultConflictError("publication set domains do not match the result version")
 
 
-def _validated_fill_set_hash(connection: sqlite3.Connection, run_id: str) -> str:
+def _validated_fill_set_hash(
+    connection: sqlite3.Connection,
+    run_id: str,
+    *,
+    version: str,
+) -> str:
     entries: list[tuple[str, str]] = []
     rows = connection.execute(
         """
-        SELECT fill_id, run_id, filled_at, content_hash, payload_json
+        SELECT fill_id, run_id, filled_at, content_domain, content_hash, payload_json
         FROM backtest_fill WHERE run_id = ? ORDER BY fill_id
         """,
         (run_id,),
     )
     for row in rows:
-        record = _load_fill(str(row[3]), str(row[4]))
+        expected_domain = _domain(_FILL_DOMAINS, version)
+        record = _load_fill(str(row[3]), str(row[4]), str(row[5]))
         if (
             record.fill_id != str(row[0])
             or record.run_id != str(row[1])
             or record.run_id != run_id
-            or _datetime_text(record.filled_at) != str(row[2])
+            or _datetime_text(record.filled_at, version=version) != str(row[2])
+            or str(row[3]) != expected_domain
         ):
             raise ResultConflictError("staged fill row identity is invalid")
-        entries.append((record.fill_id, str(row[3])))
-    return _record_set_hash(_FILL_SET_HASH_DOMAIN, entries)
+        entries.append((record.fill_id, str(row[4])))
+    return _record_set_hash(
+        _domain_bytes(_domain(_FILL_SET_DOMAINS, version)),
+        entries,
+        version=version,
+    )
 
 
-def _validated_detail_set_hash(connection: sqlite3.Connection, run_id: str) -> str:
+def _validated_detail_set_hash(
+    connection: sqlite3.Connection,
+    run_id: str,
+    *,
+    version: str,
+) -> str:
     entries: list[tuple[str, str]] = []
     rows = connection.execute(
         """
-        SELECT detail_id, run_id, kind, event_at, content_hash, payload_json
+        SELECT detail_id, run_id, kind, event_at, content_domain, content_hash, payload_json
         FROM backtest_detail WHERE run_id = ? ORDER BY detail_id
         """,
         (run_id,),
     )
     for row in rows:
-        record = _load_detail(str(row[4]), str(row[5]))
+        expected_domain = _domain(_DETAIL_DOMAINS, version)
+        record = _load_detail(str(row[4]), str(row[5]), str(row[6]))
         if (
             record.detail_id != str(row[0])
             or record.run_id != str(row[1])
             or record.run_id != run_id
             or record.kind.value != str(row[2])
-            or _datetime_text(record.event_at) != str(row[3])
+            or _datetime_text(record.event_at, version=version) != str(row[3])
+            or str(row[4]) != expected_domain
         ):
             raise ResultConflictError("staged detail row identity is invalid")
-        entries.append((record.detail_id, str(row[4])))
-    return _record_set_hash(_DETAIL_SET_HASH_DOMAIN, entries)
+        entries.append((record.detail_id, str(row[5])))
+    return _record_set_hash(
+        _domain_bytes(_domain(_DETAIL_SET_DOMAINS, version)),
+        entries,
+        version=version,
+    )
 
 
-def _record_set_hash(domain: bytes, entries: Iterable[tuple[str, str]]) -> str:
+def _record_set_hash(
+    domain: bytes,
+    entries: Iterable[tuple[str, str]],
+    *,
+    version: str,
+) -> str:
     digest = sha256(domain)
     for identity, content_hash in entries:
         digest.update(
-            _canonical_json({"contentHash": content_hash, "identity": identity}).encode("utf-8")
+            _canonical_json(
+                {"contentHash": content_hash, "identity": identity},
+                version=version,
+            ).encode("utf-8")
         )
         digest.update(b"\n")
     return digest.hexdigest()
@@ -1331,24 +1651,27 @@ def _model_or_mapping(
     return raw
 
 
-def _canonical_mapping(value: object) -> dict[str, object]:
+def _canonical_mapping(value: object, *, version: str = "v1") -> dict[str, object]:
     if not isinstance(value, Mapping):
         raise TypeError("value must be a mapping")
-    canonical = _canonical_value(value)
+    canonical = _canonical_value(value, version=version)
     if not isinstance(canonical, dict):
         raise TypeError("value must canonicalize to an object")
     return canonical
 
 
-def _canonical_value(value: object) -> object:
+def _canonical_value(value: object, *, version: str) -> object:
     if isinstance(value, BaseModel):
-        return _canonical_value(value.model_dump(mode="python", round_trip=True))
+        return _canonical_value(
+            value.model_dump(mode="python", round_trip=True),
+            version=version,
+        )
     if isinstance(value, Enum):
-        return _canonical_value(value.value)
+        return _canonical_value(value.value, version=version)
     if isinstance(value, Decimal):
         return canonical_decimal(value)
     if isinstance(value, datetime):
-        return _datetime_text(_normalize_datetime(value, "canonical datetime"))
+        return _datetime_text(value, version=version)
     if isinstance(value, date):
         return value.isoformat()
     if value is None or isinstance(value, (str, bool, int)):
@@ -1362,16 +1685,17 @@ def _canonical_value(value: object) -> object:
         for key in sorted(value):
             if not isinstance(key, str):
                 raise ValueError("canonical object keys must be strings")
-            normalized[key] = _canonical_value(value[key])
+            normalized[key] = _canonical_value(value[key], version=version)
         return normalized
     if isinstance(value, (list, tuple)):
-        return [_canonical_value(item) for item in value]
+        return [_canonical_value(item, version=version) for item in value]
     raise TypeError(f"unsupported canonical result value: {type(value).__name__}")
 
 
-def _canonical_json(value: object) -> str:
+def _canonical_json(value: object, *, version: str = "v1") -> str:
+    _validate_version(version)
     return json.dumps(
-        _canonical_value(value),
+        _canonical_value(value, version=version),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -1388,9 +1712,13 @@ def _normalize_datetime(value: datetime, name: str) -> datetime:
     return value.astimezone(UTC)
 
 
-def _datetime_text(value: datetime) -> str:
-    normalized = value.astimezone(UTC)
-    return normalized.isoformat(timespec="microseconds")
+def _datetime_text(value: datetime, *, version: str = "v1") -> str:
+    _validate_version(version)
+    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("result datetime must be timezone-aware")
+    if version == "v2":
+        return format_shanghai_datetime(value.astimezone(_SHANGHAI))
+    return value.astimezone(UTC).isoformat(timespec="microseconds")
 
 
 def _optional_string(value: object) -> str | None:
@@ -1435,8 +1763,72 @@ def _materialized_count(connection: sqlite3.Connection, table: str) -> int:
     )
 
 
-def _utc_now() -> str:
-    return _datetime_text(datetime.now(UTC))
+def _now_text(version: str) -> str:
+    zone = _SHANGHAI if version == "v2" else UTC
+    return _datetime_text(datetime.now(zone), version=version)
+
+
+def _validate_version(version: str) -> str:
+    if version not in _VERSIONS:
+        raise ValueError("result version must be v1 or v2")
+    return version
+
+
+def _domain(domains: Mapping[str, str], version: str) -> str:
+    return domains[_validate_version(version)]
+
+
+def _version_from_domain(value: str, domains: Mapping[str, str]) -> str:
+    for version, domain in domains.items():
+        if value == domain:
+            return version
+    raise RuntimeError("stored backtest result domain is unsupported")
+
+
+def _domain_bytes(value: str) -> bytes:
+    return value.encode("ascii") + b"\0"
+
+
+def _validate_summary_input(
+    summary: BacktestRunSummary,
+    run_input: BacktestRunInput,
+) -> None:
+    if not isinstance(summary, BacktestRunSummary):
+        raise TypeError("summary must be a BacktestRunSummary")
+    if not isinstance(run_input, BacktestRunInput):
+        raise TypeError("run_input must be a BacktestRunInput")
+    expected = (
+        run_input.run_id,
+        run_input.plan_sha256,
+        run_input.dataset_hash,
+        run_input.start,
+        run_input.end,
+        (run_input.plan_snapshot.symbol,),
+    )
+    actual = (
+        summary.run_id,
+        summary.plan_sha256,
+        summary.dataset_hash,
+        summary.event_start,
+        summary.event_end,
+        summary.symbols,
+    )
+    if actual != expected:
+        raise ValueError("summary identity must match the canonical run input")
+    if summary.status is not BacktestRunStatus.COMPLETED:
+        raise ValueError("backtest results are completed-only")
+    expected_versions = {
+        "execution": run_input.execution_config.formula_version,
+        "indicator": run_input.indicator_formula_version,
+        "runner": run_input.run_formula_version,
+    }
+    if any(summary.formula_versions.get(key) != value for key, value in expected_versions.items()):
+        raise ValueError("summary formula versions must match the canonical run input")
+    if (
+        summary.assumptions.get("executionConfigHash") != run_input.execution_config.config_hash
+        or summary.assumptions.get("manualEventRisk") is not run_input.manual_event_risk
+    ):
+        raise ValueError("summary assumptions must match the canonical run input")
 
 
 __all__ = [

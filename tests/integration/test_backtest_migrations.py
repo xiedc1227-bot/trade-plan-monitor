@@ -23,6 +23,7 @@ from trade_plan_monitor.backtest.migration import (
     authorize_migration,
     inspect_market_database,
     inspect_result_database,
+    migrate_result_database,
 )
 from trade_plan_monitor.backtest.results import BacktestResultStore
 from trade_plan_monitor.market_data.historical_provider import (
@@ -305,6 +306,21 @@ def _database_state(path: Path) -> dict[str, object]:
         "journal_mode": journal_mode,
         "sidecars": sidecars,
     }
+
+
+def _legacy_result_content(path: Path) -> tuple[tuple[object, ...], ...]:
+    with closing(sqlite3.connect(path)) as connection:
+        return tuple(
+            tuple(connection.execute(query))
+            for query in (
+                "SELECT run_id, plan_sha256, dataset_hash, status, completed_at, pinned, "
+                "summary_hash, summary_json, created_at FROM backtest_run ORDER BY run_id",
+                "SELECT fill_id, run_id, filled_at, content_hash, payload_json, created_at "
+                "FROM backtest_fill ORDER BY fill_id",
+                "SELECT detail_id, run_id, kind, event_at, content_hash, payload_json, "
+                "created_at FROM backtest_detail ORDER BY detail_id",
+            )
+        )
 
 
 def test_legacy_terminal_rows_fail_before_any_sqlite_mutation(tmp_path: Path) -> None:
@@ -647,6 +663,37 @@ def test_legacy_completed_rows_are_inventory_only_without_guessed_inputs(
     ):
         BacktestResultStore(path)
     assert _database_state(path) == before
+
+
+def test_completed_only_result_migration_preserves_legacy_v1_content(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "legacy-completed-v1.sqlite3"
+    _seed_legacy_results(path)
+    before = _legacy_result_content(path)
+    inventory = inspect_result_database(path)
+    decision = authorize_migration(
+        inventory,
+        VerifiedBackupFacts(
+            source_fingerprint=inventory.source_fingerprint.digest,
+            backup_sha256="a" * 64,
+            backup_size_bytes=path.stat().st_size,
+            verified_at=datetime(2026, 8, 27, 18, 0, tzinfo=_SHANGHAI),
+            coordinator_stopped=True,
+        ),
+    )
+
+    migrated = migrate_result_database(inventory, decision)
+
+    assert migrated.database_state is DatabaseState.CURRENT
+    assert migrated.compatibility_only_run_ids == ("legacy-completed-v1",)
+    assert _legacy_result_content(path) == before
+    with closing(sqlite3.connect(path)) as connection:
+        assert connection.execute("SELECT summary_domain FROM backtest_run").fetchone() == (
+            "backtest-run-summary-v1",
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="COMPLETED_ONLY"):
+            connection.execute("UPDATE backtest_run SET status = 'FAILED'")
 
 
 def test_market_inventory_locks_utc_metadata_and_dataset_hash_bytes(
