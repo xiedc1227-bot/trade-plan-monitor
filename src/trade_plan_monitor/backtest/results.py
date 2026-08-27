@@ -73,6 +73,28 @@ _DETAIL_DOMAINS = {version: f"backtest-detail-record-{version}" for version in _
 _FILL_SET_DOMAINS = {version: f"backtest-fill-set-{version}" for version in _VERSIONS}
 _DETAIL_SET_DOMAINS = {version: f"backtest-detail-set-{version}" for version in _VERSIONS}
 _RUN_INPUT_HASH_DOMAIN = b"backtest-run-input-record-v1\0"
+_PIN_REQUEST_HASH_DOMAIN = b"backtest-pin-request-v1\0"
+_PIN_RESPONSE_HASH_DOMAIN = b"backtest-pin-response-v1\0"
+_PIN_IDEMPOTENCY_DAYS = 14
+_MAX_EQUITY_POINTS = 2_000
+_PUBLIC_ARTIFACT_KINDS = (
+    "DAILY_EQUITY",
+    "DECISION",
+    "EXECUTION_OUTCOME",
+    "SIGNAL",
+)
+_COVERAGE_FIELDS = {
+    "DAILY_EQUITY": "dailyEquityCount",
+    "DECISION": "decisionCount",
+    "EXECUTION_OUTCOME": "outcomeCount",
+    "SIGNAL": "signalCount",
+}
+_ARTIFACT_COLUMNS = {
+    "DAILY_EQUITY": ("daily_equity_original_count", "daily_equity_expired_at"),
+    "DECISION": ("decision_original_count", "decision_expired_at"),
+    "EXECUTION_OUTCOME": ("outcome_original_count", "outcome_expired_at"),
+    "SIGNAL": ("signal_original_count", "signal_expired_at"),
+}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS backtest_run (
@@ -105,7 +127,23 @@ CREATE TABLE IF NOT EXISTS backtest_run (
     summary_hash TEXT NOT NULL,
     summary_json TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    stage_revision INTEGER NOT NULL DEFAULT 1 CHECK (stage_revision >= 1)
+    stage_revision INTEGER NOT NULL DEFAULT 1 CHECK (stage_revision >= 1),
+    pin_revision INTEGER NOT NULL DEFAULT 0 CHECK (pin_revision >= 0),
+    catalog_revision INTEGER
+        CHECK (catalog_revision IS NULL OR catalog_revision >= 1),
+    decision_original_count INTEGER
+        CHECK (decision_original_count IS NULL OR decision_original_count >= 0),
+    decision_expired_at TEXT,
+    signal_original_count INTEGER
+        CHECK (signal_original_count IS NULL OR signal_original_count >= 0),
+    signal_expired_at TEXT,
+    outcome_original_count INTEGER
+        CHECK (outcome_original_count IS NULL OR outcome_original_count >= 0),
+    outcome_expired_at TEXT,
+    daily_equity_original_count INTEGER
+        CHECK (daily_equity_original_count IS NULL OR daily_equity_original_count >= 0),
+    daily_equity_expired_at TEXT,
+    pin_idempotency_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS ix_backtest_run_retention
     ON backtest_run (status, pinned, completed_at DESC, run_id DESC);
@@ -230,6 +268,14 @@ class BacktestDetailKind(StrEnum):
     DAILY_EQUITY = "DAILY_EQUITY"
     DIAGNOSTIC = "DIAGNOSTIC"
     DEBUG_TRACE = "DEBUG_TRACE"
+
+
+class BacktestArtifactAvailability(StrEnum):
+    """Public lifecycle of one optional completed-result artifact family."""
+
+    AVAILABLE = "AVAILABLE"
+    EXPIRED = "EXPIRED"
+    NOT_RECORDED = "NOT_RECORDED"
 
 
 class _ResultValue(BaseModel):
@@ -440,6 +486,24 @@ class BacktestResultStatistics(_ResultValue):
     detail_count: Annotated[int, Field(strict=True, ge=0)]
 
 
+class BacktestArtifactState(_ResultValue):
+    """Persisted original count plus its derived public availability."""
+
+    kind: BacktestDetailKind
+    availability: BacktestArtifactAvailability
+    original_count: Annotated[int, Field(strict=True, ge=0)]
+
+
+class BacktestRunRecord(_ResultValue):
+    """Application-facing completed run with mutable metadata kept outside identity."""
+
+    summary: BacktestRunSummary
+    plan_version_id: str | None
+    revision: Annotated[int, Field(strict=True, ge=0)]
+    fill_count: Annotated[int, Field(strict=True, ge=0)]
+    availability: tuple[BacktestArtifactState, ...]
+
+
 class RetentionPruneResult(_ResultValue):
     deleted_count: Annotated[int, Field(strict=True, ge=0, le=_MAX_BATCH_SIZE)]
     has_more: Annotated[bool, Field(strict=True)]
@@ -455,12 +519,31 @@ class VerifiedBacktestPublication:
     detail_set_hash: str
     fill_set_domain: str
     detail_set_domain: str
+    artifact_counts: tuple[tuple[str, int], ...]
     summary_fingerprint: str
     input_fingerprint: str | None
     already_materialized: bool
     read_batch_count: int
     max_read_batch_size: int
     _store_token: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestRunQueryRow:
+    record: BacktestRunRecord
+    position: tuple[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestFillQueryRow:
+    record: BacktestFillRecord
+    position: tuple[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestDetailQueryRow:
+    record: BacktestDetailRecord
+    position: tuple[str, str]
 
 
 class BacktestResultStore:
@@ -744,6 +827,302 @@ class BacktestResultStore:
         _validate_summary_input(summary, run_input)
         return summary
 
+    def get_result_run(self, run_id: str) -> BacktestRunRecord | None:
+        """Return one active v2 completed result with verified mutable metadata."""
+
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        rows = self._query_result_runs(run_id=normalized_run_id, limit=1)
+        return None if not rows else rows[0].record
+
+    def result_run_high_water(self) -> int:
+        """Capture the immutable publication-membership fence for one traversal."""
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COALESCE(MAX(catalog_revision), 0) FROM backtest_run
+                WHERE materialized = 1 AND summary_domain = 'backtest-run-summary-v2'
+                """
+            ).fetchone()
+        return int(row[0])
+
+    def query_result_runs(
+        self,
+        *,
+        limit: int,
+        snapshot_revision: int,
+        symbol: str | None = None,
+        plan_version_id: str | None = None,
+        dataset_hash: str | None = None,
+        completed_from: datetime | None = None,
+        completed_to: datetime | None = None,
+        pinned: bool | None = None,
+        last_seen: tuple[str, str] | None = None,
+    ) -> tuple[BacktestRunQueryRow, ...]:
+        """Read one bounded descending keyset page behind an insertion fence."""
+
+        if type(limit) is not int or not 1 <= limit <= 101:
+            raise ValueError("query limit must be between 1 and 101")
+        if type(snapshot_revision) is not int or snapshot_revision < 0:
+            raise ValueError("snapshot_revision must be a non-negative integer")
+        if dataset_hash is not None:
+            dataset_hash = _validate_hash(dataset_hash, "dataset_hash")
+        if pinned is not None and type(pinned) is not bool:
+            raise TypeError("pinned must be a bool or None")
+        if last_seen is not None:
+            _require_position(last_seen, "last_seen")
+        clauses = [
+            "r.materialized = 1",
+            "r.summary_domain = 'backtest-run-summary-v2'",
+            "r.catalog_revision IS NOT NULL",
+            "r.catalog_revision <= ?",
+        ]
+        parameters: list[object] = [snapshot_revision]
+        if symbol is not None:
+            clauses.append(
+                "EXISTS (SELECT 1 FROM json_each(r.summary_json, '$.symbols') WHERE value = ?)"
+            )
+            parameters.append(symbol)
+        if plan_version_id is not None:
+            clauses.append("json_extract(input.input_json, '$.plan_version_id') = ?")
+            parameters.append(plan_version_id)
+        if dataset_hash is not None:
+            clauses.append("r.dataset_hash = ?")
+            parameters.append(dataset_hash)
+        if completed_from is not None:
+            clauses.append("r.completed_at >= ?")
+            parameters.append(_datetime_text(completed_from, version="v2"))
+        if completed_to is not None:
+            clauses.append("r.completed_at <= ?")
+            parameters.append(_datetime_text(completed_to, version="v2"))
+        if pinned is not None:
+            clauses.append("r.pinned = ?")
+            parameters.append(int(pinned))
+        if last_seen is not None:
+            clauses.append("(r.completed_at < ? OR (r.completed_at = ? AND r.run_id < ?))")
+            parameters.extend((last_seen[0], last_seen[0], last_seen[1]))
+        parameters.append(limit)
+        query = f"""
+            SELECT r.run_id, r.plan_sha256, r.dataset_hash, r.status, r.completed_at,
+                   r.summary_domain, r.summary_hash, r.summary_json, r.pinned,
+                   r.pin_revision, r.publication_fill_count,
+                   input.run_id, input.plan_sha256, input.input_hash, input.input_json,
+                   snapshot.snapshot_json
+            FROM backtest_run AS r
+            JOIN backtest_run_input AS input ON input.run_id = r.run_id
+            JOIN backtest_plan_snapshot AS snapshot
+              ON snapshot.plan_sha256 = input.plan_sha256
+            WHERE {" AND ".join(clauses)}
+            ORDER BY r.completed_at DESC, r.run_id DESC
+            LIMIT ?
+        """
+        with self._connect() as connection:
+            rows = tuple(connection.execute(query, tuple(parameters)).fetchall())
+            availability = _availability_by_run(
+                connection,
+                tuple(str(row[0]) for row in rows),
+            )
+            return tuple(_load_run_query_row(tuple(row), availability[str(row[0])]) for row in rows)
+
+    def _query_result_runs(
+        self,
+        *,
+        run_id: str,
+        limit: int,
+    ) -> tuple[BacktestRunQueryRow, ...]:
+        with self._connect() as connection:
+            rows = tuple(
+                connection.execute(
+                    """
+                    SELECT r.run_id, r.plan_sha256, r.dataset_hash, r.status, r.completed_at,
+                           r.summary_domain, r.summary_hash, r.summary_json, r.pinned,
+                           r.pin_revision, r.publication_fill_count,
+                           input.run_id, input.plan_sha256, input.input_hash,
+                           input.input_json, snapshot.snapshot_json
+                    FROM backtest_run AS r
+                    JOIN backtest_run_input AS input ON input.run_id = r.run_id
+                    JOIN backtest_plan_snapshot AS snapshot
+                      ON snapshot.plan_sha256 = input.plan_sha256
+                    WHERE r.run_id = ? AND r.materialized = 1
+                      AND r.summary_domain = 'backtest-run-summary-v2'
+                      AND r.catalog_revision IS NOT NULL
+                    LIMIT ?
+                    """,
+                    (run_id, limit),
+                ).fetchall()
+            )
+            availability = _availability_by_run(
+                connection,
+                tuple(str(row[0]) for row in rows),
+            )
+            return tuple(_load_run_query_row(tuple(row), availability[str(row[0])]) for row in rows)
+
+    def query_result_fills(
+        self,
+        run_id: str,
+        *,
+        limit: int,
+        high_water: tuple[str, str] | None,
+        last_seen: tuple[str, str] | None,
+    ) -> tuple[BacktestFillQueryRow, ...]:
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        if type(limit) is not int or not 1 <= limit <= 101:
+            raise ValueError("query limit must be between 1 and 101")
+        clauses = ["f.run_id = ?", "r.materialized = 1"]
+        parameters: list[object] = [normalized_run_id]
+        for value, name, operator in (
+            (high_water, "high_water", "<="),
+            (last_seen, "last_seen", ">"),
+        ):
+            if value is not None:
+                _require_position(value, name)
+                clauses.append(f"(f.filled_at, f.fill_id) {operator} (?, ?)")
+                parameters.extend(value)
+        parameters.append(limit)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT f.fill_id, f.run_id, f.filled_at, f.content_domain,
+                       f.content_hash, f.payload_json
+                FROM backtest_fill AS f
+                JOIN backtest_run AS r ON r.run_id = f.run_id
+                WHERE {" AND ".join(clauses)}
+                ORDER BY f.filled_at, f.fill_id
+                LIMIT ?
+                """,
+                tuple(parameters),
+            ).fetchall()
+        return tuple(
+            BacktestFillQueryRow(
+                record=_load_fill_row(tuple(row), expected_run_id=normalized_run_id),
+                position=(str(row[2]), str(row[0])),
+            )
+            for row in rows
+        )
+
+    def result_fill_high_water(self, run_id: str) -> tuple[str, str] | None:
+        return self._result_item_high_water(run_id, table="backtest_fill")
+
+    def query_result_details(
+        self,
+        run_id: str,
+        *,
+        kind: BacktestDetailKind,
+        limit: int,
+        high_water: tuple[str, str] | None,
+        last_seen: tuple[str, str] | None,
+    ) -> tuple[BacktestDetailQueryRow, ...]:
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        if not isinstance(kind, BacktestDetailKind):
+            raise TypeError("kind must be a BacktestDetailKind")
+        if type(limit) is not int or not 1 <= limit <= 2_001:
+            raise ValueError("query limit must be between 1 and 2001")
+        clauses = ["d.run_id = ?", "d.kind = ?", "r.materialized = 1"]
+        parameters: list[object] = [normalized_run_id, kind.value]
+        for value, name, operator in (
+            (high_water, "high_water", "<="),
+            (last_seen, "last_seen", ">"),
+        ):
+            if value is not None:
+                _require_position(value, name)
+                clauses.append(f"(d.event_at, d.detail_id) {operator} (?, ?)")
+                parameters.extend(value)
+        parameters.append(limit)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT d.detail_id, d.run_id, d.kind, d.event_at, d.content_domain,
+                       d.content_hash, d.payload_json
+                FROM backtest_detail AS d
+                JOIN backtest_run AS r ON r.run_id = d.run_id
+                WHERE {" AND ".join(clauses)}
+                ORDER BY d.event_at, d.detail_id
+                LIMIT ?
+                """,
+                tuple(parameters),
+            ).fetchall()
+        return tuple(
+            BacktestDetailQueryRow(
+                record=_load_detail_row(tuple(row), expected_run_id=normalized_run_id),
+                position=(str(row[3]), str(row[0])),
+            )
+            for row in rows
+        )
+
+    def result_detail_high_water(
+        self,
+        run_id: str,
+        *,
+        kind: BacktestDetailKind,
+    ) -> tuple[str, str] | None:
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT d.event_at, d.detail_id
+                FROM backtest_detail AS d
+                JOIN backtest_run AS r ON r.run_id = d.run_id
+                WHERE d.run_id = ? AND d.kind = ? AND r.materialized = 1
+                ORDER BY d.event_at DESC, d.detail_id DESC LIMIT 1
+                """,
+                (normalized_run_id, kind.value),
+            ).fetchone()
+        return None if row is None else (str(row[0]), str(row[1]))
+
+    def artifact_state(
+        self,
+        run_id: str,
+        kind: BacktestDetailKind,
+    ) -> BacktestArtifactState | None:
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        if kind.value not in _PUBLIC_ARTIFACT_KINDS:
+            raise ValueError("kind is not a public result artifact")
+        with self._connect() as connection:
+            exists = connection.execute(
+                """
+                SELECT 1 FROM backtest_run
+                WHERE run_id = ? AND materialized = 1
+                  AND summary_domain = 'backtest-run-summary-v2'
+                """,
+                (normalized_run_id,),
+            ).fetchone()
+            if exists is None:
+                return None
+            rows = _availability_by_run(connection, (normalized_run_id,))[normalized_run_id]
+            state = next(item for item in rows if item.kind is kind)
+            if state.availability is BacktestArtifactAvailability.AVAILABLE:
+                actual = int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM backtest_detail WHERE run_id = ? AND kind = ?",
+                        (normalized_run_id, kind.value),
+                    ).fetchone()[0]
+                )
+                if actual != state.original_count:
+                    raise RuntimeError("available backtest artifact count is inconsistent")
+            return state
+
+    def _result_item_high_water(
+        self,
+        run_id: str,
+        *,
+        table: str,
+    ) -> tuple[str, str] | None:
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        if table != "backtest_fill":
+            raise ValueError("unsupported result item table")
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT f.filled_at, f.fill_id
+                FROM backtest_fill AS f
+                JOIN backtest_run AS r ON r.run_id = f.run_id
+                WHERE f.run_id = ? AND r.materialized = 1
+                ORDER BY f.filled_at DESC, f.fill_id DESC LIMIT 1
+                """,
+                (normalized_run_id,),
+            ).fetchone()
+        return None if row is None else (str(row[0]), str(row[1]))
+
     def list_runs(self, *, limit: int = 100, offset: int = 0) -> tuple[BacktestRunSummary, ...]:
         if type(limit) is not int or not 1 <= limit <= _MAX_BATCH_SIZE:
             raise ValueError("limit must be between 1 and 1000")
@@ -833,11 +1212,117 @@ class BacktestResultStore:
                 connection.commit()
                 return False
             connection.execute(
-                "UPDATE backtest_run SET pinned = ? WHERE run_id = ?",
+                "UPDATE backtest_run SET pinned = ?, pin_revision = pin_revision + 1 "
+                "WHERE run_id = ?",
                 (int(pinned), normalized_run_id),
             )
             connection.commit()
         return True
+
+    def set_pinned_idempotent(
+        self,
+        run_id: str,
+        *,
+        pinned: bool,
+        expected_revision: int,
+        idempotency_key: str,
+        recorded_at: datetime,
+    ) -> BacktestRunRecord:
+        """Atomically apply or replay one revision-checked pin intent."""
+
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        if type(pinned) is not bool:
+            raise TypeError("pinned must be a bool")
+        if type(expected_revision) is not int or expected_revision < 0:
+            raise ValueError("expected_revision must be a non-negative integer")
+        normalized_key = _validate_stable_identifier(idempotency_key, "idempotency_key")
+        normalized_recorded_at = _normalize_datetime(recorded_at, "recorded_at")
+        recorded_text = _datetime_text(normalized_recorded_at, version="v2")
+        expires_text = _datetime_text(
+            normalized_recorded_at + timedelta(days=_PIN_IDEMPOTENCY_DAYS),
+            version="v2",
+        )
+        request_json = canonical_json(
+            {
+                "expectedRevision": expected_revision,
+                "pinned": pinned,
+                "runId": normalized_run_id,
+            }
+        )
+        request_hash = _content_hash(_PIN_REQUEST_HASH_DOMAIN, request_json)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = _find_pin_idempotency(
+                connection,
+                normalized_key,
+                as_of=recorded_text,
+            )
+            if existing is not None:
+                if existing["requestHash"] != request_hash:
+                    raise ResultConflictError("idempotency key already belongs to another intent")
+                response_json = existing["responseJson"]
+                if (
+                    _content_hash(_PIN_RESPONSE_HASH_DOMAIN, response_json)
+                    != existing["responseHash"]
+                ):
+                    raise RuntimeError("stored pin idempotency response failed its content hash")
+                try:
+                    response = BacktestRunRecord.model_validate_json(response_json)
+                except (TypeError, ValueError) as error:
+                    raise RuntimeError("stored pin idempotency response is invalid") from error
+                connection.commit()
+                return response
+
+            row = _active_result_run_row(connection, normalized_run_id)
+            if row is None:
+                raise KeyError(f"unknown run_id: {normalized_run_id}")
+            current_revision = int(row[9])
+            if current_revision != expected_revision:
+                raise ResultConflictError("pin revision does not match expected revision")
+            current_pinned = bool(row[8])
+            if current_pinned is not pinned:
+                cursor = connection.execute(
+                    """
+                    UPDATE backtest_run
+                    SET pinned = ?, pin_revision = pin_revision + 1
+                    WHERE run_id = ? AND pin_revision = ? AND materialized = 1
+                    """,
+                    (int(pinned), normalized_run_id, expected_revision),
+                )
+                if cursor.rowcount != 1:
+                    raise ResultConflictError("pin revision changed before update")
+                row = _active_result_run_row(connection, normalized_run_id)
+                assert row is not None
+            availability = _availability_by_run(connection, (normalized_run_id,))[normalized_run_id]
+            response = _load_run_query_row(row, availability).record
+            response_json = canonical_json(response.model_dump(mode="python", round_trip=True))
+            _require_item_size(response_json, "pin response")
+            response_hash = _content_hash(_PIN_RESPONSE_HASH_DOMAIN, response_json)
+            stored_map = connection.execute(
+                "SELECT pin_idempotency_json FROM backtest_run WHERE run_id = ?",
+                (normalized_run_id,),
+            ).fetchone()
+            if stored_map is None:
+                raise KeyError(f"unknown run_id: {normalized_run_id}")
+            idempotency = _load_pin_idempotency_map(str(stored_map[0]))
+            if normalized_key in idempotency:
+                raise RuntimeError("pin idempotency key was duplicated during one transaction")
+            idempotency[normalized_key] = {
+                "expiresAt": expires_text,
+                "recordedAt": recorded_text,
+                "requestHash": request_hash,
+                "responseHash": response_hash,
+                "responseJson": response_json,
+            }
+            idempotency_json = canonical_json(idempotency)
+            if len(idempotency_json.encode("utf-8")) >= 4 * 1024 * 1024:
+                raise ResultConflictError("pin idempotency metadata exceeds 4 MiB")
+            connection.execute(
+                "UPDATE backtest_run SET pin_idempotency_json = ? WHERE run_id = ?",
+                (idempotency_json, normalized_run_id),
+            )
+            connection.commit()
+        return response
 
     def prune_details(
         self,
@@ -896,6 +1381,11 @@ class BacktestResultStore:
                 connection,
                 _RETENTION_CANDIDATES_SQL,
                 (*parameters, remaining),
+            )
+            _mark_expired_artifacts(
+                connection,
+                retained_detail_ids,
+                expired_at=_datetime_text(normalized_as_of, version="v2"),
             )
             deleted_count += _delete_ids(
                 connection,
@@ -1012,6 +1502,15 @@ class BacktestResultStore:
                 version=version,
                 staged=not already_materialized,
             )
+            artifact_counts = (
+                _publication_artifact_counts(
+                    connection,
+                    summary,
+                    staged=not already_materialized,
+                )
+                if version == "v2"
+                else ()
+            )
             proof = VerifiedBacktestPublication(
                 run_id=normalized_run_id,
                 stage_revision=int(row[16]),
@@ -1021,6 +1520,7 @@ class BacktestResultStore:
                 detail_set_hash=metadata[3],
                 fill_set_domain=metadata[4],
                 detail_set_domain=metadata[5],
+                artifact_counts=artifact_counts,
                 summary_fingerprint=_publication_summary_fingerprint(row),
                 input_fingerprint=input_fingerprint,
                 already_materialized=already_materialized,
@@ -1076,6 +1576,7 @@ class BacktestResultStore:
                 raise RuntimeError("materialized publication metadata is incomplete")
             elif _stored_publication_metadata(stored_metadata) != metadata:
                 raise ResultConflictError("materialized publication metadata changed")
+            _persist_artifact_counts(connection, proof.run_id, proof.artifact_counts)
             return False
         if proof.already_materialized:
             raise ResultConflictError("materialized publication state regressed")
@@ -1094,6 +1595,7 @@ class BacktestResultStore:
         )
         if cursor.rowcount != 1:
             raise ResultConflictError("staged result changed before publication")
+        _persist_artifact_counts(connection, proof.run_id, proof.artifact_counts)
         return True
 
     def publish_verified_publication(self, proof: VerifiedBacktestPublication) -> bool:
@@ -1256,6 +1758,380 @@ class BacktestResultStore:
                 inserted += 1
             connection.commit()
         return inserted
+
+
+def _find_pin_idempotency(
+    connection: sqlite3.Connection,
+    idempotency_key: str,
+    *,
+    as_of: str,
+) -> dict[str, str] | None:
+    active: dict[str, str] | None = None
+    cursor = connection.execute(
+        """
+        SELECT run_id, pin_idempotency_json FROM backtest_run
+        WHERE pin_idempotency_json <> '{}' ORDER BY run_id
+        """
+    )
+    while rows := cursor.fetchmany(_MAX_BATCH_SIZE):
+        for run_id, payload_json in rows:
+            payload = _load_pin_idempotency_map(str(payload_json))
+            expired_keys = tuple(
+                key for key, candidate in payload.items() if candidate["expiresAt"] <= as_of
+            )
+            for expired_key in expired_keys:
+                del payload[expired_key]
+            if expired_keys:
+                connection.execute(
+                    "UPDATE backtest_run SET pin_idempotency_json = ? WHERE run_id = ?",
+                    (canonical_json(payload), str(run_id)),
+                )
+            entry = payload.get(idempotency_key)
+            if entry is None:
+                continue
+            if active is not None:
+                raise RuntimeError("pin idempotency key is stored more than once")
+            active = entry
+    return active
+
+
+def _load_pin_idempotency_map(value: str) -> dict[str, dict[str, str]]:
+    try:
+        raw = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("stored pin idempotency metadata is invalid") from error
+    if not isinstance(raw, dict) or canonical_json(raw) != value:
+        raise RuntimeError("stored pin idempotency metadata is not canonical")
+    result: dict[str, dict[str, str]] = {}
+    expected_fields = {
+        "expiresAt",
+        "recordedAt",
+        "requestHash",
+        "responseHash",
+        "responseJson",
+    }
+    for key, raw_entry in raw.items():
+        try:
+            normalized_key = _validate_stable_identifier(key, "idempotency_key")
+        except (TypeError, ValueError) as error:
+            raise RuntimeError("stored pin idempotency key is invalid") from error
+        if (
+            not isinstance(raw_entry, dict)
+            or set(raw_entry) != expected_fields
+            or any(type(item) is not str for item in raw_entry.values())
+        ):
+            raise RuntimeError("stored pin idempotency entry is invalid")
+        entry = {name: str(raw_entry[name]) for name in sorted(expected_fields)}
+        for field_name in ("requestHash", "responseHash"):
+            try:
+                _validate_hash(entry[field_name], field_name)
+            except (TypeError, ValueError) as error:
+                raise RuntimeError("stored pin idempotency hash is invalid") from error
+        for field_name in ("recordedAt", "expiresAt"):
+            try:
+                parsed = datetime.fromisoformat(entry[field_name])
+            except ValueError as error:
+                raise RuntimeError("stored pin idempotency timestamp is invalid") from error
+            if (
+                parsed.utcoffset() != timedelta(hours=8)
+                or _datetime_text(parsed, version="v2") != entry[field_name]
+            ):
+                raise RuntimeError("stored pin idempotency timestamp is not canonical +08:00")
+        result[normalized_key] = entry
+    return result
+
+
+def _active_result_run_row(
+    connection: sqlite3.Connection,
+    run_id: str,
+) -> tuple[object, ...] | None:
+    row = connection.execute(
+        """
+        SELECT r.run_id, r.plan_sha256, r.dataset_hash, r.status, r.completed_at,
+               r.summary_domain, r.summary_hash, r.summary_json, r.pinned,
+               r.pin_revision, r.publication_fill_count,
+               input.run_id, input.plan_sha256, input.input_hash, input.input_json,
+               snapshot.snapshot_json
+        FROM backtest_run AS r
+        JOIN backtest_run_input AS input ON input.run_id = r.run_id
+        JOIN backtest_plan_snapshot AS snapshot
+          ON snapshot.plan_sha256 = input.plan_sha256
+        WHERE r.run_id = ? AND r.materialized = 1
+          AND r.summary_domain = 'backtest-run-summary-v2'
+          AND r.catalog_revision IS NOT NULL
+        """,
+        (run_id,),
+    ).fetchone()
+    return None if row is None else tuple(row)
+
+
+def _load_run_query_row(
+    row: tuple[object, ...],
+    availability: tuple[BacktestArtifactState, ...],
+) -> BacktestRunQueryRow:
+    if len(row) != 16:
+        raise RuntimeError("stored result run query row shape is invalid")
+    run_id = str(row[0])
+    summary = _load_summary_row(row[:9], expected_run_id=run_id)
+    run_input = _load_run_input_row(row[11:16], expected_run_id=run_id)
+    _validate_summary_input(summary, run_input)
+    if row[10] is None:
+        raise RuntimeError("materialized result is missing its fill count")
+    return BacktestRunQueryRow(
+        record=BacktestRunRecord(
+            summary=summary,
+            plan_version_id=(
+                None if run_input.plan_version_id is None else str(run_input.plan_version_id)
+            ),
+            revision=int(row[9]),
+            fill_count=int(row[10]),
+            availability=availability,
+        ),
+        position=(str(row[4]), run_id),
+    )
+
+
+def _availability_by_run(
+    connection: sqlite3.Connection,
+    run_ids: tuple[str, ...],
+) -> dict[str, tuple[BacktestArtifactState, ...]]:
+    if not run_ids:
+        return {}
+    placeholders = ",".join("?" for _ in run_ids)
+    rows = connection.execute(
+        f"""
+        SELECT run_id,
+               daily_equity_original_count, daily_equity_expired_at,
+               decision_original_count, decision_expired_at,
+               outcome_original_count, outcome_expired_at,
+               signal_original_count, signal_expired_at
+        FROM backtest_run WHERE run_id IN ({placeholders})
+        ORDER BY run_id
+        """,
+        run_ids,
+    ).fetchall()
+    result: dict[str, tuple[BacktestArtifactState, ...]] = {}
+    for row in rows:
+        run_id = str(row[0])
+        states: list[BacktestArtifactState] = []
+        for index, kind_text in enumerate(_PUBLIC_ARTIFACT_KINDS):
+            raw_count = row[1 + index * 2]
+            expired_at = None if row[2 + index * 2] is None else str(row[2 + index * 2])
+            if raw_count is None or int(raw_count) < 0:
+                raise RuntimeError("materialized result availability metadata is incomplete")
+            original_count = int(raw_count)
+            if expired_at is not None:
+                try:
+                    parsed_expired_at = datetime.fromisoformat(expired_at)
+                except ValueError as error:
+                    raise RuntimeError("stored result expiry marker is invalid") from error
+                if (
+                    parsed_expired_at.utcoffset() != timedelta(hours=8)
+                    or _datetime_text(parsed_expired_at, version="v2") != expired_at
+                ):
+                    raise RuntimeError("stored result expiry marker is not canonical +08:00")
+            if original_count == 0 and expired_at is not None:
+                raise RuntimeError("unrecorded result artifact cannot be expired")
+            availability = (
+                BacktestArtifactAvailability.NOT_RECORDED
+                if original_count == 0
+                else BacktestArtifactAvailability.EXPIRED
+                if expired_at is not None
+                else BacktestArtifactAvailability.AVAILABLE
+            )
+            states.append(
+                BacktestArtifactState(
+                    kind=BacktestDetailKind(kind_text),
+                    availability=availability,
+                    original_count=original_count,
+                )
+            )
+        result[run_id] = tuple(states)
+    if result.keys() != dict.fromkeys(run_ids).keys():
+        raise RuntimeError("materialized result availability metadata is incomplete")
+    return result
+
+
+def _load_run_input_row(
+    row: tuple[object, ...],
+    *,
+    expected_run_id: str,
+) -> BacktestRunInput:
+    if len(row) != 5:
+        raise RuntimeError("stored backtest run input row shape is invalid")
+    try:
+        snapshot = load_plan_json(str(row[4]))
+        input_json = str(row[3])
+        if dump_plan_json(snapshot) != str(row[4]) or plan_sha256(snapshot) != str(row[1]):
+            raise RuntimeError("stored canonical plan snapshot failed verification")
+        if _content_hash(_RUN_INPUT_HASH_DOMAIN, input_json) != str(row[2]):
+            raise RuntimeError("stored backtest run input failed its content hash")
+        payload = json.loads(input_json)
+        if not isinstance(payload, dict):
+            raise RuntimeError("stored backtest run input payload is invalid")
+        run_input = BacktestRunInput.model_validate(
+            {**payload, "plan_snapshot": snapshot},
+            strict=False,
+        )
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("stored backtest run input or plan is invalid") from error
+    if (
+        run_input.run_id != expected_run_id
+        or run_input.run_id != str(row[0])
+        or run_input.plan_sha256 != str(row[1])
+        or canonical_json(
+            run_input.model_dump(
+                mode="python",
+                round_trip=True,
+                exclude={"plan_snapshot"},
+            )
+        )
+        != input_json
+    ):
+        raise RuntimeError("stored backtest run input identity is invalid")
+    return run_input
+
+
+def _publication_artifact_counts(
+    connection: sqlite3.Connection,
+    summary: BacktestRunSummary,
+    *,
+    staged: bool,
+) -> tuple[tuple[str, int], ...]:
+    actual_by_kind: dict[str, int] = {}
+    if staged:
+        actual_by_kind = {
+            str(row[0]): int(row[1])
+            for row in connection.execute(
+                """
+                SELECT kind, COUNT(*) FROM backtest_detail
+                WHERE run_id = ? GROUP BY kind
+                """,
+                (summary.run_id,),
+            ).fetchall()
+        }
+        if any(kind not in _PUBLIC_ARTIFACT_KINDS for kind in actual_by_kind):
+            raise ResultConflictError("active v2 publication contains a non-public detail kind")
+    expected: list[tuple[str, int]] = []
+    for kind in _PUBLIC_ARTIFACT_KINDS:
+        raw_count = summary.coverage.get(_COVERAGE_FIELDS[kind])
+        if raw_count is None and staged:
+            raw_count = actual_by_kind.get(kind, 0)
+        if type(raw_count) is not int or raw_count < 0:
+            raise ResultConflictError(
+                f"completed summary is missing canonical {_COVERAGE_FIELDS[kind]}"
+            )
+        if kind == "DAILY_EQUITY" and raw_count > _MAX_EQUITY_POINTS:
+            raise ResultConflictError("daily equity must not exceed 2,000 points")
+        expected.append((kind, raw_count))
+    counts = tuple(expected)
+    if staged:
+        if tuple((kind, actual_by_kind.get(kind, 0)) for kind in _PUBLIC_ARTIFACT_KINDS) != counts:
+            raise ResultConflictError("completed summary artifact counts do not match staged rows")
+    return counts
+
+
+def _persist_artifact_counts(
+    connection: sqlite3.Connection,
+    run_id: str,
+    counts: tuple[tuple[str, int], ...],
+) -> None:
+    for kind, count in counts:
+        count_column, _expired_column = _ARTIFACT_COLUMNS[kind]
+        existing = connection.execute(
+            f"SELECT {count_column} FROM backtest_run WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if existing is None:
+            raise KeyError(f"unknown run_id: {run_id}")
+        if existing[0] is None:
+            connection.execute(
+                f"UPDATE backtest_run SET {count_column} = ? WHERE run_id = ?",
+                (count, run_id),
+            )
+        elif int(existing[0]) != count:
+            raise ResultConflictError("persisted result availability count changed")
+    if counts:
+        row = connection.execute(
+            "SELECT catalog_revision FROM backtest_run WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown run_id: {run_id}")
+        if row[0] is None:
+            cursor = connection.execute(
+                """
+                UPDATE backtest_run SET catalog_revision = (
+                    SELECT COALESCE(MAX(catalog_revision), 0) + 1 FROM backtest_run
+                )
+                WHERE run_id = ? AND catalog_revision IS NULL AND materialized = 1
+                """,
+                (run_id,),
+            )
+            if cursor.rowcount != 1:
+                raise ResultConflictError("result catalog revision changed before publication")
+
+
+def _mark_expired_artifacts(
+    connection: sqlite3.Connection,
+    detail_ids: tuple[str, ...],
+    *,
+    expired_at: str,
+) -> None:
+    if not detail_ids:
+        return
+    placeholders = ",".join("?" for _ in detail_ids)
+    rows = connection.execute(
+        f"""
+        SELECT DISTINCT run_id, kind FROM backtest_detail
+        WHERE detail_id IN ({placeholders})
+          AND kind IN ('DECISION', 'SIGNAL', 'EXECUTION_OUTCOME', 'DAILY_EQUITY')
+        """,
+        detail_ids,
+    ).fetchall()
+    for run_id, kind in rows:
+        count_column, expired_column = _ARTIFACT_COLUMNS[str(kind)]
+        metadata = connection.execute(
+            f"SELECT summary_domain, {count_column} FROM backtest_run WHERE run_id = ?",
+            (str(run_id),),
+        ).fetchone()
+        if metadata is None:
+            raise RuntimeError("retained detail belongs to an unknown run")
+        if str(metadata[0]) != "backtest-run-summary-v2":
+            continue
+        if metadata[1] is None or int(metadata[1]) <= 0:
+            raise RuntimeError("active result is missing availability metadata")
+        cursor = connection.execute(
+            f"""
+            UPDATE backtest_run
+            SET {expired_column} = COALESCE({expired_column}, ?)
+            WHERE run_id = ?
+            """,
+            (expired_at, str(run_id)),
+        )
+        if cursor.rowcount != 1:
+            raise RuntimeError("active result is missing availability metadata")
+
+
+def _require_position(value: tuple[str, str], name: str) -> None:
+    if (
+        type(value) is not tuple
+        or len(value) != 2
+        or any(type(item) is not str or not item for item in value)
+    ):
+        raise ValueError(f"{name} must contain two non-empty strings")
+
+
+def _validate_stable_identifier(value: str, name: str) -> str:
+    allowed = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-")
+    if (
+        type(value) is not str
+        or not 1 <= len(value) <= 128
+        or not value[0].isalnum()
+        or any(character not in allowed for character in value)
+    ):
+        raise ValueError(f"{name} must be a stable identifier")
+    return value
 
 
 _STALE_STAGED_DETAIL_SQL = """
@@ -2131,11 +3007,14 @@ def _validate_summary_input(
 
 
 __all__ = [
+    "BacktestArtifactAvailability",
+    "BacktestArtifactState",
     "BacktestDetailKind",
     "BacktestDetailRecord",
     "BacktestFillRecord",
     "BacktestResultStatistics",
     "BacktestResultStore",
+    "BacktestRunRecord",
     "BacktestRunStatus",
     "BacktestRunSummary",
     "ResultConflictError",

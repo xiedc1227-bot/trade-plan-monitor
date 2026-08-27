@@ -798,6 +798,121 @@ def test_bt016_completed_only_schema_adds_revision_fence_without_row_changes(
         ).fetchone() == (2,)
 
 
+def test_bt017_result_schema_adds_query_metadata_without_changing_result_content(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "bt017-results.sqlite3"
+    run_id = "4" * 64
+    with closing(sqlite3.connect(path)) as connection:
+        for statement in migration_module._BT017_RESULT_TABLE_SQL_CONTRACTS.values():
+            connection.execute(statement)
+        for statement in (
+            "CREATE INDEX ix_backtest_run_retention "
+            "ON backtest_run (status, pinned, completed_at DESC, run_id DESC)",
+            "CREATE INDEX ix_backtest_run_retention_v2 "
+            "ON backtest_run (status, pinned, materialized, created_at DESC, run_id DESC)",
+            "CREATE INDEX ix_backtest_fill_run ON backtest_fill (run_id, filled_at, fill_id)",
+            "CREATE INDEX ix_backtest_detail_retention "
+            "ON backtest_detail (kind, run_id, detail_id)",
+            "CREATE INDEX ix_backtest_detail_run_event "
+            "ON backtest_detail (run_id, event_at, detail_id)",
+            *migration_module._BT017_RESULT_TRIGGER_SQL_CONTRACTS.values(),
+        ):
+            connection.execute(statement)
+        connection.execute(
+            "INSERT INTO backtest_plan_snapshot VALUES (?, '{}', ?)",
+            ("5" * 64, "2026-08-27T18:00:00.000000+08:00"),
+        )
+        connection.execute(
+            "INSERT INTO backtest_run_input VALUES (?, ?, ?, '{}', ?)",
+            (
+                run_id,
+                "5" * 64,
+                "6" * 64,
+                "2026-08-27T18:00:00.000000+08:00",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO backtest_run (
+                run_id, plan_sha256, dataset_hash, status, completed_at, pinned,
+                materialized, publication_fill_count, publication_detail_count,
+                publication_fill_set_hash, publication_detail_set_hash,
+                summary_domain, publication_fill_set_domain,
+                publication_detail_set_domain, summary_hash, summary_json,
+                created_at, stage_revision
+            ) VALUES (?, ?, ?, 'COMPLETED', ?, 0, 1, 0, 3, ?, ?, ?, ?, ?, ?, ?, ?, 4)
+            """,
+            (
+                run_id,
+                "5" * 64,
+                "7" * 64,
+                "2026-08-24T15:00:00.000000+08:00",
+                "8" * 64,
+                "9" * 64,
+                "backtest-run-summary-v2",
+                "backtest-fill-set-v2",
+                "backtest-detail-set-v2",
+                "a" * 64,
+                '{"coverage":{"dailyEquityCount":1,"decisionCount":2,'
+                '"detailCount":3,"fillCount":0,"outcomeCount":0,'
+                '"signalCount":0}}',
+                "2026-08-27T18:00:00.000000+08:00",
+            ),
+        )
+        for index, kind in enumerate(("DECISION", "DECISION", "DAILY_EQUITY")):
+            connection.execute(
+                """
+                INSERT INTO backtest_detail (
+                    detail_id, run_id, kind, event_at, content_domain,
+                    content_hash, payload_json, created_at
+                ) VALUES (?, ?, ?, ?, 'backtest-detail-record-v2', ?, '{}', ?)
+                """,
+                (
+                    f"detail-{index}",
+                    run_id,
+                    kind,
+                    f"2026-08-24T14:0{index}:00.000000+08:00",
+                    str(index) * 64,
+                    "2026-08-27T18:00:00.000000+08:00",
+                ),
+            )
+        connection.commit()
+        before = migration_module._result_completed_only_content_hash(connection)
+
+    inventory = inspect_result_database(path)
+    decision = authorize_migration(
+        inventory,
+        VerifiedBackupFacts(
+            source_fingerprint=inventory.source_fingerprint.digest,
+            backup_sha256="b" * 64,
+            backup_size_bytes=path.stat().st_size,
+            verified_at=datetime(2026, 8, 27, 18, 0, tzinfo=_SHANGHAI),
+            coordinator_stopped=True,
+        ),
+    )
+    migrated = migrate_result_database(inventory, decision)
+
+    assert migrated.database_state is DatabaseState.CURRENT
+    with closing(sqlite3.connect(path)) as connection:
+        assert migration_module._result_completed_only_content_hash(connection) == before
+        assert connection.execute(
+            "SELECT pin_revision, catalog_revision FROM backtest_run WHERE run_id = ?",
+            (run_id,),
+        ).fetchone() == (0, 1)
+        assert connection.execute(
+            """
+            SELECT decision_original_count, decision_expired_at,
+                   signal_original_count, signal_expired_at,
+                   outcome_original_count, outcome_expired_at,
+                   daily_equity_original_count, daily_equity_expired_at,
+                   pin_idempotency_json
+            FROM backtest_run WHERE run_id = ?
+            """,
+            (run_id,),
+        ).fetchone() == (2, None, 0, None, 0, None, 1, None, "{}")
+
+
 def test_market_inventory_locks_utc_metadata_and_dataset_hash_bytes(
     tmp_path: Path,
 ) -> None:

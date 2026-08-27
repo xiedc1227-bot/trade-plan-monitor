@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from contextlib import closing
@@ -83,6 +84,8 @@ _RESULT_COLUMN_CONTRACTS: dict[str, dict[str, _ColumnContract]] = {
         "status": ("TEXT", True, None, 0),
         "completed_at": ("TEXT", True, None, 0),
         "pinned": ("INTEGER", True, "0", 0),
+        "pin_revision": ("INTEGER", True, "0", 0),
+        "catalog_revision": ("INTEGER", False, None, 0),
         "materialized": ("INTEGER", True, "1", 0),
         "publication_fill_count": ("INTEGER", False, None, 0),
         "publication_detail_count": ("INTEGER", False, None, 0),
@@ -95,6 +98,15 @@ _RESULT_COLUMN_CONTRACTS: dict[str, dict[str, _ColumnContract]] = {
         "summary_json": ("TEXT", True, None, 0),
         "created_at": ("TEXT", True, None, 0),
         "stage_revision": ("INTEGER", True, "1", 0),
+        "decision_original_count": ("INTEGER", False, None, 0),
+        "decision_expired_at": ("TEXT", False, None, 0),
+        "signal_original_count": ("INTEGER", False, None, 0),
+        "signal_expired_at": ("TEXT", False, None, 0),
+        "outcome_original_count": ("INTEGER", False, None, 0),
+        "outcome_expired_at": ("TEXT", False, None, 0),
+        "daily_equity_original_count": ("INTEGER", False, None, 0),
+        "daily_equity_expired_at": ("TEXT", False, None, 0),
+        "pin_idempotency_json": ("TEXT", True, "'{}'", 0),
     },
     "backtest_fill": {
         "fill_id": ("TEXT", False, None, 1),
@@ -290,7 +302,23 @@ _RESULT_TABLE_SQL_CONTRACTS = {
             summary_hash TEXT NOT NULL,
             summary_json TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            stage_revision INTEGER NOT NULL DEFAULT 1 CHECK (stage_revision >= 1)
+            stage_revision INTEGER NOT NULL DEFAULT 1 CHECK (stage_revision >= 1),
+            pin_revision INTEGER NOT NULL DEFAULT 0 CHECK (pin_revision >= 0),
+            catalog_revision INTEGER
+                CHECK (catalog_revision IS NULL OR catalog_revision >= 1),
+            decision_original_count INTEGER
+                CHECK (decision_original_count IS NULL OR decision_original_count >= 0),
+            decision_expired_at TEXT,
+            signal_original_count INTEGER
+                CHECK (signal_original_count IS NULL OR signal_original_count >= 0),
+            signal_expired_at TEXT,
+            outcome_original_count INTEGER
+                CHECK (outcome_original_count IS NULL OR outcome_original_count >= 0),
+            outcome_expired_at TEXT,
+            daily_equity_original_count INTEGER
+                CHECK (daily_equity_original_count IS NULL OR daily_equity_original_count >= 0),
+            daily_equity_expired_at TEXT,
+            pin_idempotency_json TEXT NOT NULL DEFAULT '{}'
         )
     """,
     "backtest_fill": """
@@ -417,12 +445,58 @@ _RESULT_TRIGGER_SQL_CONTRACTS = {
     """,
 }
 
-_BT016_RESULT_COLUMN_CONTRACTS = {
+_BT017_RESULT_COLUMN_CONTRACTS = {
     table: dict(columns) for table, columns in _RESULT_COLUMN_CONTRACTS.items()
+}
+for _column_name in (
+    "pin_revision",
+    "catalog_revision",
+    "decision_original_count",
+    "decision_expired_at",
+    "signal_original_count",
+    "signal_expired_at",
+    "outcome_original_count",
+    "outcome_expired_at",
+    "daily_equity_original_count",
+    "daily_equity_expired_at",
+    "pin_idempotency_json",
+):
+    del _BT017_RESULT_COLUMN_CONTRACTS["backtest_run"][_column_name]
+_BT017_RESULT_TABLE_SQL_CONTRACTS = dict(_RESULT_TABLE_SQL_CONTRACTS)
+_BT017_RESULT_TABLE_SQL_CONTRACTS["backtest_run"] = _RESULT_TABLE_SQL_CONTRACTS[
+    "backtest_run"
+].replace(
+    """,\n            pin_revision INTEGER NOT NULL DEFAULT 0 CHECK (pin_revision >= 0),
+            catalog_revision INTEGER
+                CHECK (catalog_revision IS NULL OR catalog_revision >= 1),
+            decision_original_count INTEGER
+                CHECK (decision_original_count IS NULL OR decision_original_count >= 0),
+            decision_expired_at TEXT,
+            signal_original_count INTEGER
+                CHECK (signal_original_count IS NULL OR signal_original_count >= 0),
+            signal_expired_at TEXT,
+            outcome_original_count INTEGER
+                CHECK (outcome_original_count IS NULL OR outcome_original_count >= 0),
+            outcome_expired_at TEXT,
+            daily_equity_original_count INTEGER
+                CHECK (daily_equity_original_count IS NULL OR daily_equity_original_count >= 0),
+            daily_equity_expired_at TEXT,
+            pin_idempotency_json TEXT NOT NULL DEFAULT '{}'\n""",
+    "",
+)
+_BT017_RESULT_FOREIGN_KEY_CONTRACTS = {
+    table: contracts
+    for table, contracts in _RESULT_FOREIGN_KEY_CONTRACTS.items()
+    if table in _BT017_RESULT_COLUMN_CONTRACTS
+}
+_BT017_RESULT_TRIGGER_SQL_CONTRACTS = dict(_RESULT_TRIGGER_SQL_CONTRACTS)
+
+_BT016_RESULT_COLUMN_CONTRACTS = {
+    table: dict(columns) for table, columns in _BT017_RESULT_COLUMN_CONTRACTS.items()
 }
 del _BT016_RESULT_COLUMN_CONTRACTS["backtest_run"]["stage_revision"]
 _BT016_RESULT_TABLE_SQL_CONTRACTS = {
-    **_RESULT_TABLE_SQL_CONTRACTS,
+    **_BT017_RESULT_TABLE_SQL_CONTRACTS,
     "backtest_run": """
         CREATE TABLE backtest_run (
             run_id TEXT PRIMARY KEY,
@@ -459,7 +533,7 @@ _BT016_RESULT_TABLE_SQL_CONTRACTS = {
 }
 _BT016_RESULT_TRIGGER_SQL_CONTRACTS = {
     name: sql
-    for name, sql in _RESULT_TRIGGER_SQL_CONTRACTS.items()
+    for name, sql in _BT017_RESULT_TRIGGER_SQL_CONTRACTS.items()
     if name.startswith("trg_backtest_run_completed_only_")
 }
 
@@ -545,6 +619,7 @@ _RESULT_INDEX_CONTRACTS: dict[str, _IndexContract] = {
         ),
     ),
 }
+_BT017_RESULT_INDEX_CONTRACTS = dict(_RESULT_INDEX_CONTRACTS)
 
 
 class MigrationPreflightError(RuntimeError):
@@ -820,7 +895,7 @@ def migrate_result_database(
     inventory: MigrationInventory,
     decision: MigrationDecision,
 ) -> MigrationInventory:
-    """Upgrade a verified completed-only v1 result store without adopting its rows."""
+    """Upgrade a verified completed-only result store without changing result identity."""
 
     if not isinstance(inventory, MigrationInventory):
         raise TypeError("inventory must be a MigrationInventory")
@@ -861,18 +936,20 @@ def migrate_result_database(
         ):
             raise MigrationPreflightError("MIGRATION_SOURCE_CHANGED_AFTER_PREFLIGHT")
         legacy_v1 = _is_supported_legacy_result_schema(connection, table_names)
-        completed_only_v2 = _is_supported_bt016_result_schema(connection, table_names)
-        if not legacy_v1 and not completed_only_v2:
+        bt016_schema = _is_supported_bt016_result_schema(connection, table_names)
+        bt017_schema = _is_supported_bt017_result_schema(connection, table_names)
+        if not legacy_v1 and not bt016_schema and not bt017_schema:
             raise MigrationPreflightError("RESULT_SCHEMA_MIGRATION_SCOPE_MISMATCH")
         content_hash = (
             _result_completed_only_content_hash(connection)
-            if completed_only_v2
+            if bt016_schema or bt017_schema
             else _result_v1_content_hash(connection)
         )
-        if completed_only_v2:
+        if bt016_schema:
             _add_result_stage_revision_fence(connection)
-        else:
+        elif legacy_v1:
             _rebuild_completed_only_result_schema(connection)
+        _add_result_query_metadata(connection)
         after = _inspect_results(connection, _RESULT_TABLES)
         if (
             after["database_state"] is not DatabaseState.CURRENT
@@ -880,7 +957,7 @@ def migrate_result_database(
             or after["compatibility_only_run_ids"] != inventory.compatibility_only_run_ids
             or (
                 _result_completed_only_content_hash(connection)
-                if completed_only_v2
+                if bt016_schema or bt017_schema
                 else _result_v1_content_hash(connection)
             )
             != content_hash
@@ -975,10 +1052,25 @@ def _is_supported_bt016_result_schema(
         connection,
         table_names,
         column_contracts=_BT016_RESULT_COLUMN_CONTRACTS,
-        foreign_key_contracts=_RESULT_FOREIGN_KEY_CONTRACTS,
+        foreign_key_contracts=_BT017_RESULT_FOREIGN_KEY_CONTRACTS,
         table_sql_contracts=_BT016_RESULT_TABLE_SQL_CONTRACTS,
-        index_contracts=_RESULT_INDEX_CONTRACTS,
+        index_contracts=_BT017_RESULT_INDEX_CONTRACTS,
         trigger_sql_contracts=_BT016_RESULT_TRIGGER_SQL_CONTRACTS,
+    )
+
+
+def _is_supported_bt017_result_schema(
+    connection: sqlite3.Connection,
+    table_names: frozenset[str],
+) -> bool:
+    return _has_required_schema(
+        connection,
+        table_names,
+        column_contracts=_BT017_RESULT_COLUMN_CONTRACTS,
+        foreign_key_contracts=_BT017_RESULT_FOREIGN_KEY_CONTRACTS,
+        table_sql_contracts=_BT017_RESULT_TABLE_SQL_CONTRACTS,
+        index_contracts=_BT017_RESULT_INDEX_CONTRACTS,
+        trigger_sql_contracts=_BT017_RESULT_TRIGGER_SQL_CONTRACTS,
     )
 
 
@@ -992,9 +1084,102 @@ def _add_result_stage_revision_fence(connection: sqlite3.Connection) -> None:
             connection.execute(statement)
 
 
+def _add_result_query_metadata(connection: sqlite3.Connection) -> None:
+    for definition in (
+        "pin_revision INTEGER NOT NULL DEFAULT 0 CHECK (pin_revision >= 0)",
+        "catalog_revision INTEGER CHECK (catalog_revision IS NULL OR catalog_revision >= 1)",
+        "decision_original_count INTEGER "
+        "CHECK (decision_original_count IS NULL OR decision_original_count >= 0)",
+        "decision_expired_at TEXT",
+        "signal_original_count INTEGER "
+        "CHECK (signal_original_count IS NULL OR signal_original_count >= 0)",
+        "signal_expired_at TEXT",
+        "outcome_original_count INTEGER "
+        "CHECK (outcome_original_count IS NULL OR outcome_original_count >= 0)",
+        "outcome_expired_at TEXT",
+        "daily_equity_original_count INTEGER "
+        "CHECK (daily_equity_original_count IS NULL OR daily_equity_original_count >= 0)",
+        "daily_equity_expired_at TEXT",
+        "pin_idempotency_json TEXT NOT NULL DEFAULT '{}'",
+    ):
+        connection.execute(f"ALTER TABLE backtest_run ADD COLUMN {definition}")
+    coverage_fields = (
+        ("DAILY_EQUITY", "dailyEquityCount"),
+        ("DECISION", "decisionCount"),
+        ("EXECUTION_OUTCOME", "outcomeCount"),
+        ("SIGNAL", "signalCount"),
+    )
+    rows = connection.execute(
+        """
+        SELECT run.run_id, run.summary_json, run.publication_detail_count
+        FROM backtest_run AS run
+        JOIN backtest_run_input AS input ON input.run_id = run.run_id
+        WHERE run.materialized = 1
+          AND run.summary_domain = 'backtest-run-summary-v2'
+        ORDER BY run.created_at, run.run_id
+        """
+    ).fetchall()
+    for catalog_revision, (
+        run_id_value,
+        summary_json,
+        publication_detail_count,
+    ) in enumerate(rows, start=1):
+        run_id = str(run_id_value)
+        try:
+            payload = json.loads(str(summary_json))
+            coverage = payload["coverage"]
+        except (json.JSONDecodeError, KeyError, TypeError) as error:
+            raise MigrationPreflightError(
+                "RESULT_QUERY_METADATA_REQUIRES_CANONICAL_COVERAGE"
+            ) from error
+        if not isinstance(coverage, dict):
+            raise MigrationPreflightError("RESULT_QUERY_METADATA_REQUIRES_CANONICAL_COVERAGE")
+        counts: list[tuple[str, int]] = []
+        for kind, field in coverage_fields:
+            count = coverage.get(field)
+            if type(count) is not int or count < 0:
+                raise MigrationPreflightError("RESULT_QUERY_METADATA_REQUIRES_CANONICAL_COVERAGE")
+            if kind == "DAILY_EQUITY" and count > 2_000:
+                raise MigrationPreflightError("RESULT_EQUITY_POINT_LIMIT_EXCEEDED")
+            counts.append((kind, count))
+        if publication_detail_count is None or int(publication_detail_count) != sum(
+            count for _kind, count in counts
+        ):
+            raise MigrationPreflightError("RESULT_QUERY_METADATA_COUNT_MISMATCH")
+        actual = {
+            str(kind): int(count)
+            for kind, count in connection.execute(
+                "SELECT kind, COUNT(*) FROM backtest_detail WHERE run_id = ? GROUP BY kind",
+                (run_id,),
+            ).fetchall()
+        }
+        if any(kind not in dict(coverage_fields) for kind in actual) or tuple(
+            (kind, actual.get(kind, 0)) for kind, _field in coverage_fields
+        ) != tuple(counts):
+            raise MigrationPreflightError("RESULT_QUERY_METADATA_COUNT_MISMATCH")
+        count_by_kind = dict(counts)
+        connection.execute(
+            """
+            UPDATE backtest_run SET
+                catalog_revision = ?,
+                decision_original_count = ?, signal_original_count = ?,
+                outcome_original_count = ?, daily_equity_original_count = ?
+            WHERE run_id = ?
+            """,
+            (
+                catalog_revision,
+                count_by_kind["DECISION"],
+                count_by_kind["SIGNAL"],
+                count_by_kind["EXECUTION_OUTCOME"],
+                count_by_kind["DAILY_EQUITY"],
+                run_id,
+            ),
+        )
+
+
 def _rebuild_completed_only_result_schema(connection: sqlite3.Connection) -> None:
     run_columns = set(_table_columns(connection, "backtest_run"))
-    for index_name in _RESULT_INDEX_CONTRACTS:
+    for index_name in _BT017_RESULT_INDEX_CONTRACTS:
         connection.execute(f'DROP INDEX IF EXISTS "{index_name}"')
     for table in ("backtest_detail", "backtest_fill", "backtest_run"):
         connection.execute(f'ALTER TABLE "{table}" RENAME TO "{table}_bt016_v1"')
@@ -1005,7 +1190,7 @@ def _rebuild_completed_only_result_schema(connection: sqlite3.Connection) -> Non
         "backtest_fill",
         "backtest_detail",
     ):
-        connection.execute(_RESULT_TABLE_SQL_CONTRACTS[table])
+        connection.execute(_BT017_RESULT_TABLE_SQL_CONTRACTS[table])
     optional = {
         name: name if name in run_columns else default
         for name, default in (
@@ -1074,7 +1259,7 @@ def _create_result_indexes_and_triggers(connection: sqlite3.Connection) -> None:
         "CREATE INDEX ix_backtest_detail_retention ON backtest_detail (kind, run_id, detail_id)",
         "CREATE INDEX ix_backtest_detail_run_event "
         "ON backtest_detail (run_id, event_at, detail_id)",
-        *_RESULT_TRIGGER_SQL_CONTRACTS.values(),
+        *_BT017_RESULT_TRIGGER_SQL_CONTRACTS.values(),
     ):
         connection.execute(statement)
 

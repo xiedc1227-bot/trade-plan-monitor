@@ -14,6 +14,8 @@ from trade_plan_monitor.backtest.canonical import canonical_json
 
 CURSOR_VERSION = "cursor-v1"
 MAX_CURSOR_CHARACTERS = 512
+MAX_PAGE_ITEMS = 100
+MAX_PAGE_BYTES = 4 * 1024 * 1024
 _CURSOR_FIELDS = {"v", "r", "f", "o", "h", "l"}
 
 
@@ -136,6 +138,23 @@ class HmacCursorSigner:
             raise InvalidCursorError from None
 
 
+def validate_page_limit(limit: int) -> int:
+    """Reject booleans and every public result page outside the 1..100 contract."""
+
+    if type(limit) is not int or not 1 <= limit <= MAX_PAGE_ITEMS:
+        raise ValueError("limit must be between 1 and 100")
+    return limit
+
+
+def require_bounded_page_json(payload_json: str) -> None:
+    """Fail closed if one serialized page crosses the public four-MiB ceiling."""
+
+    if type(payload_json) is not str:
+        raise TypeError("payload_json must be a string")
+    if len(payload_json.encode("utf-8")) >= MAX_PAGE_BYTES:
+        raise ValueError("serialized result page must be smaller than 4 MiB")
+
+
 def _filters_hash(filters: object) -> str:
     return _encode_segment(sha256(canonical_json(filters).encode("utf-8")).digest())
 
@@ -175,8 +194,12 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
 __all__ = [
     "CURSOR_VERSION",
     "MAX_CURSOR_CHARACTERS",
+    "MAX_PAGE_BYTES",
+    "MAX_PAGE_ITEMS",
     "CursorSigner",
     "DecodedCursor",
     "HmacCursorSigner",
     "InvalidCursorError",
+    "require_bounded_page_json",
+    "validate_page_limit",
 ]
