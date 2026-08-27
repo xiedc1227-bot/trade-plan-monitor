@@ -20,6 +20,7 @@ from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
 from trade_plan_monitor.backtest.reporting import persist_report, write_report_files
 from trade_plan_monitor.backtest.results import BacktestDetailKind, BacktestResultStore
+from trade_plan_monitor.backtest.run_input import BacktestInitialLotInput, BacktestRunInput
 from trade_plan_monitor.backtest.runner import OfflineBacktestRunner
 from trade_plan_monitor.decision.engine import evaluate
 from trade_plan_monitor.decision.models import (
@@ -619,6 +620,69 @@ def test_second_symbol_twenty_day_replays_are_actionable_stable_and_shanghai(tmp
         )
 
     assert source.open_count == 4
+
+
+def test_runner_v2_initial_lot_preserves_t1_equity_and_restart_bytes(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "initial-lot.sqlite3")
+    dataset_hash, fixture = _seed_two_symbol_replay_dataset(store)
+    plan = _plan_for_fixture_symbol(fixture["symbols"][0])
+    start = date.fromisoformat(str(fixture["start"]))
+    initial_lot = BacktestInitialLotInput(
+        lot_key="same-day-tactical",
+        bucket="TACTICAL",
+        acquired_trade_date=start,
+        quantity=100,
+        cost_basis_fen=640_000,
+    )
+    run_input = BacktestRunInput.create(
+        plan=plan,
+        manifest=store.dataset_manifest(dataset_hash),
+        initial_cash_fen=10_000_000,
+        initial_lots=(initial_lot,),
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+    expected_lot_id = run_input.derive_position_lots()[0].lot_id
+    cancellation_token = CancellationToken()
+    cancel_once = True
+
+    def sell_existing_tactical(context: EvaluationContext) -> EvaluationResult:
+        nonlocal cancel_once
+        result = _actionable_fixture_for_dates(
+            context,
+            buy_date=date.min,
+            sell_date=context.trade_date,
+        )
+        if (
+            cancel_once
+            and isinstance(context.target, IntradayEvaluationTarget)
+            and context.target.bucket_end.time() == time(9, 35)
+        ):
+            cancellation_token.cancel()
+            cancel_once = False
+        return result
+
+    runner = OfflineBacktestRunner(store, evaluator=sell_existing_tactical)
+    arguments = {
+        "plan": plan,
+        "dataset_hash": dataset_hash,
+        "initial_cash_fen": 10_000_000,
+        "initial_lots": (initial_lot,),
+        "execution_config": _execution_config(),
+        "manual_event_risk": False,
+    }
+    cancelled = runner.run(**arguments, cancellation_token=cancellation_token)
+    restarted = runner.run(**arguments)
+    repeated = runner.run(**arguments)
+    assert isinstance(cancelled, BacktestCancellationResult) and cancelled.phase == "RUN_MINUTE"
+    assert restarted.canonical_json() == repeated.canonical_json()
+    assert restarted.run_id == run_input.run_id
+    assert restarted.metrics.initial_equity_fen == 10_647_400
+    assert tuple(snapshot.position_quantity for snapshot in restarted.daily_equity) == (100, 0)
+    assert tuple(snapshot.cost_basis_fen for snapshot in restarted.daily_equity) == (640_000, 0)
+    assert restarted.outcomes[0].reason.value == "T_PLUS_ONE"
+    assert restarted.fills[0].filled_at.date() > initial_lot.acquired_trade_date
+    assert {signal.target_lot_id for signal in restarted.signals} == {expected_lot_id}
 
 
 def test_offline_runner_is_byte_stable_and_emits_only_daily_equity(tmp_path) -> None:
