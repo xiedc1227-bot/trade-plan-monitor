@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "backtest-two-symbol-20d-v1",
+  "warmupStart": "2026-05-18",
+  "start": "2026-08-03",
+  "end": "2026-08-22",
+  "openTradeDates": [
+    "2026-08-03",
+    "2026-08-04"
+  ],
+  "symbols": [
+    {
+      "symbol": "600000.SH",
+      "market": "SSE",
+      "name": "浦发银行",
+      "basePriceFen": 6400
+    },
+    {
+      "symbol": "000001.SZ",
+      "market": "SZSE",
+      "name": "平安银行",
+      "basePriceFen": 1200
+    }
+  ]
+}

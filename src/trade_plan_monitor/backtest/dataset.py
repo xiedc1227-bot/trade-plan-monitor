@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import AbstractContextManager
 from datetime import date, datetime
-from typing import Literal, Protocol, Self
+from typing import Literal, Protocol, Self, runtime_checkable
 
 from pydantic import (
     BaseModel,
@@ -226,6 +227,16 @@ class FrozenDatasetReader(Protocol):
     def __iter__(self) -> Iterator[FrozenSymbolDay]: ...
 
 
+@runtime_checkable
+class FrozenDatasetSource(Protocol):
+    """Factory boundary that opens a fresh frozen reader for each replay attempt."""
+
+    def open_frozen_dataset(
+        self,
+        dataset_hash: str,
+    ) -> AbstractContextManager[FrozenDatasetReader]: ...
+
+
 class DatasetFreezeResult(_DatasetValue):
     """Fail-closed verification outcome."""
 
@@ -292,6 +303,7 @@ __all__ = [
     "DatasetManifest",
     "DatasetScope",
     "FrozenDatasetReader",
+    "FrozenDatasetSource",
     "FrozenSymbolDay",
     "MarketStoreStatistics",
     "exchange_for_symbol",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Callable, Mapping
 from datetime import date, datetime, time
 from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
@@ -13,9 +14,19 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from trade_plan_monitor.backtest.canonical import canonical_json
-from trade_plan_monitor.backtest.dataset import DatasetManifest, exchange_for_symbol
+from trade_plan_monitor.backtest.control import (
+    BacktestCancellationResult,
+    BacktestOperationCancelled,
+    CancellationToken,
+    check_cancelled,
+    validate_operation_controls,
+)
+from trade_plan_monitor.backtest.dataset import (
+    DatasetManifest,
+    FrozenDatasetReader,
+    FrozenDatasetSource,
+)
 from trade_plan_monitor.backtest.execution import DeterministicExecutionEngine
-from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import (
     EquitySnapshot,
     ExecutionBar,
@@ -186,15 +197,15 @@ class OfflineBacktestRunner:
 
     def __init__(
         self,
-        market_store: BacktestMarketStore,
+        dataset_source: FrozenDatasetSource,
         *,
         evaluator: Evaluator = evaluate,
     ) -> None:
-        if not isinstance(market_store, BacktestMarketStore):
-            raise TypeError("market_store must be a BacktestMarketStore")
+        if not isinstance(dataset_source, FrozenDatasetSource):
+            raise TypeError("dataset_source must open frozen dataset readers")
         if not callable(evaluator):
             raise TypeError("evaluator must be callable")
-        self._store = market_store
+        self._dataset_source = dataset_source
         self._evaluator = evaluator
 
     def run(
@@ -207,7 +218,8 @@ class OfflineBacktestRunner:
         manual_event_risk: bool,
         plan_version_id: UUID | None = None,
         initial_lots: tuple[BacktestInitialLotInput, ...] = (),
-    ) -> BacktestRunReport:
+        cancellation_token: CancellationToken | None = None,
+    ) -> BacktestRunReport | BacktestCancellationResult:
         """Run a finite offline replay; no provider, scheduler, or notification is reachable."""
 
         self._validate_request(
@@ -218,10 +230,46 @@ class OfflineBacktestRunner:
             plan_version_id=plan_version_id,
             initial_lots=initial_lots,
         )
-        manifest = self._store.dataset_manifest(dataset_hash)
-        scope = manifest.scope
+        validate_operation_controls(cancellation_token, None)
+        try:
+            check_cancelled(cancellation_token, "RUN_DAY_TRANSITION")
+            with self._dataset_source.open_frozen_dataset(dataset_hash) as reader:
+                return self._run_from_reader(
+                    reader=reader,
+                    plan=plan,
+                    dataset_hash=dataset_hash,
+                    initial_cash_fen=initial_cash_fen,
+                    execution_config=execution_config,
+                    manual_event_risk=manual_event_risk,
+                    plan_version_id=plan_version_id,
+                    initial_lots=initial_lots,
+                    cancellation_token=cancellation_token,
+                )
+        except BacktestOperationCancelled as cancelled:
+            return BacktestCancellationResult(
+                phase=cancelled.phase,
+                last_safe_event_id=cancelled.last_safe_event_id,
+            )
+
+    def _run_from_reader(
+        self,
+        *,
+        reader: FrozenDatasetReader,
+        plan: TradePlan,
+        dataset_hash: str,
+        initial_cash_fen: int,
+        execution_config: ExecutionConfig,
+        manual_event_risk: bool,
+        plan_version_id: UUID | None,
+        initial_lots: tuple[BacktestInitialLotInput, ...],
+        cancellation_token: CancellationToken | None,
+    ) -> BacktestRunReport:
+        if reader.dataset_hash != dataset_hash:
+            raise BacktestBlockedError("DATASET_READER_IDENTITY_MISMATCH")
+        scope = reader.scope
         if plan.symbol not in scope.symbols:
             raise BacktestBlockedError(f"PLAN_SYMBOL_NOT_IN_DATASET:{plan.symbol}")
+        manifest = DatasetManifest(dataset_hash=dataset_hash, scope=scope, items=())
         run_input = BacktestRunInput.create(
             plan=plan,
             manifest=manifest,
@@ -233,21 +281,6 @@ class OfflineBacktestRunner:
         )
         position_lots = run_input.derive_position_lots()
         plan_hash = run_input.plan_sha256
-        exchange = exchange_for_symbol(plan.symbol)
-        frozen_calendar = self._store.dataset_trading_days(dataset_hash, exchange)
-        calendar_by_date = {value.cal_date: value for value in frozen_calendar}
-        frozen_daily = self._store.dataset_daily_bars(dataset_hash, plan.symbol)
-        daily_by_date = {value.trade_date: value for value in frozen_daily}
-        official_history = [value for value in frozen_daily if value.trade_date < scope.start]
-        required_warmup = _required_daily_warmup(plan)
-        if len(official_history) < required_warmup:
-            raise BacktestBlockedError(
-                f"INSUFFICIENT_DAILY_WARMUP:{len(official_history)}:{required_warmup}"
-            )
-        initial_equity_fen = initial_cash_fen + sum(
-            lot.remaining_quantity * official_history[-1].close_fen for lot in position_lots
-        )
-
         run_id = run_input.run_id
         engine = DeterministicExecutionEngine(
             config=execution_config,
@@ -262,15 +295,7 @@ class OfflineBacktestRunner:
             initial_lots=position_lots,
         )
         activation_origin = datetime.combine(scope.start, time(9, 0), SHANGHAI)
-        risk_state = RiskStateSnapshot(
-            symbol=plan.symbol,
-            plan_hash=plan_hash,
-            status=RiskStatus.CLEAR,
-            breach_trade_date=None,
-            prior_close_fen=official_history[-1].close_fen,
-            revision=0,
-            updated_at=activation_origin,
-        )
+        risk_state: RiskStateSnapshot | None = None
         episode = None
         decisions: list[EvaluationResult] = []
         signals: list[ExecutionSignal] = []
@@ -278,47 +303,89 @@ class OfflineBacktestRunner:
         fills: list[ExecutionFill] = []
         outcomes: list[ExecutionOutcome] = []
         daily_equity: list[EquitySnapshot] = []
-        complete_five_minute_bars: list[FiveMinuteBar] = []
+        complete_five_minute_bars: deque[FiveMinuteBar] = deque(maxlen=_FIVE_MINUTE_CONTEXT_BARS)
+        trading_calendar: deque[TradingDay] = deque(maxlen=_CALENDAR_CONTEXT_DAYS)
+        official_history: deque[DailyBar] = deque(maxlen=_DAILY_CONTEXT_BARS)
+        required_warmup = _required_daily_warmup(plan)
+        initial_equity_fen: int | None = None
+        open_day_count = 0
+        last_safe_event_id: str | None = None
 
-        open_dates = tuple(
-            value.cal_date
-            for value in frozen_calendar
-            if scope.start <= value.cal_date <= scope.end and value.is_open
-        )
-        if not open_dates:
-            raise BacktestBlockedError("NO_OPEN_TRADING_DAYS")
-        for trade_date in open_dates:
-            trading_calendar = tuple(
-                value for value in frozen_calendar if value.cal_date <= trade_date
-            )[-_CALENDAR_CONTEXT_DAYS:]
-            trading_day = calendar_by_date[trade_date]
-            daily_limit = self._store.dataset_daily_limit(
-                dataset_hash,
-                plan.symbol,
-                trade_date,
+        for symbol_day in reader:
+            check_cancelled(
+                cancellation_token,
+                "RUN_DAY_TRANSITION",
+                last_safe_event_id,
             )
-            minutes = self._store.dataset_minutes(dataset_hash, plan.symbol, trade_date)
-            official_bar = daily_by_date[trade_date]
+            if symbol_day.symbol != plan.symbol:
+                continue
+            trade_date = symbol_day.trade_date
+            trading_day = symbol_day.trading_day
+            trading_calendar.append(trading_day)
+            official_bar = symbol_day.daily_bar
+            if trade_date < scope.start:
+                if trading_day.is_open:
+                    if official_bar is None:  # pragma: no cover - dataset model guards this
+                        raise BacktestBlockedError(
+                            f"MISSING_WARMUP_DAILY:{plan.symbol}:{trade_date.isoformat()}"
+                        )
+                    official_history.append(official_bar)
+                    last_safe_event_id = _safe_event_id(official_bar)
+                continue
+            if trade_date > scope.end:
+                raise BacktestBlockedError("DATASET_READER_SCOPE_MISMATCH")
+            if not trading_day.is_open:
+                continue
+            if len(official_history) < required_warmup:
+                raise BacktestBlockedError(
+                    f"INSUFFICIENT_DAILY_WARMUP:{len(official_history)}:{required_warmup}"
+                )
+            if risk_state is None:
+                prior_close_fen = official_history[-1].close_fen
+                initial_equity_fen = initial_cash_fen + sum(
+                    lot.remaining_quantity * prior_close_fen for lot in position_lots
+                )
+                risk_state = RiskStateSnapshot(
+                    symbol=plan.symbol,
+                    plan_hash=plan_hash,
+                    status=RiskStatus.CLEAR,
+                    breach_trade_date=None,
+                    prior_close_fen=prior_close_fen,
+                    revision=0,
+                    updated_at=activation_origin,
+                )
+            if (
+                symbol_day.daily_limit is None or official_bar is None or not symbol_day.minutes
+            ):  # pragma: no cover - dataset model guards this
+                raise BacktestBlockedError(
+                    f"INCOMPLETE_SYMBOL_DAY:{plan.symbol}:{trade_date.isoformat()}"
+                )
+            daily_limit = symbol_day.daily_limit
+            minutes = symbol_day.minutes
             self._validate_day_facts(trading_day, daily_limit, minutes, official_bar)
+            open_day_count += 1
             day_minutes: list[MinuteBar] = []
             provisional: DailyBar | None = None
 
             for minute_index, minute in enumerate(minutes, start=1):
+                check_cancelled(cancellation_token, "RUN_MINUTE", last_safe_event_id)
+                execution_bar = ExecutionBar.create(
+                    symbol=minute.symbol,
+                    bar_end=minute.bar_end,
+                    open_fen=minute.open_fen,
+                    high_fen=minute.high_fen,
+                    low_fen=minute.low_fen,
+                    close_fen=minute.close_fen,
+                    volume_shares=minute.volume_shares,
+                    is_tradable=minute.volume_shares > 0,
+                )
                 execution_batch = engine.process_bar(
-                    ExecutionBar.create(
-                        symbol=minute.symbol,
-                        bar_end=minute.bar_end,
-                        open_fen=minute.open_fen,
-                        high_fen=minute.high_fen,
-                        low_fen=minute.low_fen,
-                        close_fen=minute.close_fen,
-                        volume_shares=minute.volume_shares,
-                        is_tradable=minute.volume_shares > 0,
-                    ),
+                    execution_bar,
                     daily_limit,
                 )
                 fills.extend(execution_batch.fills)
                 outcomes.extend(execution_batch.outcomes)
+                last_safe_event_id = execution_bar.source_bar_id
                 day_minutes.append(minute)
                 if minute_index % 5:
                     continue
@@ -343,11 +410,11 @@ class OfflineBacktestRunner:
                 context = self._intraday_context(
                     plan=plan,
                     plan_hash=plan_hash,
-                    trading_calendar=trading_calendar,
+                    trading_calendar=tuple(trading_calendar),
                     daily_limit=daily_limit,
-                    official_history=tuple(official_history[-_DAILY_CONTEXT_BARS:]),
+                    official_history=tuple(official_history),
                     current_minutes=tuple(day_minutes),
-                    five_minute_bars=tuple(complete_five_minute_bars[-_FIVE_MINUTE_CONTEXT_BARS:]),
+                    five_minute_bars=tuple(complete_five_minute_bars),
                     provisional=provisional,
                     risk_state=risk_state,
                     episode=episode,
@@ -355,6 +422,7 @@ class OfflineBacktestRunner:
                     manual_event_risk=manual_event_risk,
                     activation_origin=activation_origin,
                 )
+                check_cancelled(cancellation_token, "RUN_EVALUATION", last_safe_event_id)
                 result = self._evaluate_context(context)
                 decisions.append(result)
                 episode, risk_state = _advance_state(result, episode, risk_state)
@@ -370,6 +438,7 @@ class OfflineBacktestRunner:
                     submitted = engine.submit_signal(signal)
                     orders.extend(submitted.orders)
                     outcomes.extend(submitted.outcomes)
+                last_safe_event_id = result.result_hash
 
             if provisional is None:
                 raise BacktestBlockedError(
@@ -378,11 +447,11 @@ class OfflineBacktestRunner:
             official_context = self._official_context(
                 plan=plan,
                 plan_hash=plan_hash,
-                trading_calendar=trading_calendar,
+                trading_calendar=tuple(trading_calendar),
                 daily_limit=daily_limit,
-                official_history=tuple(official_history[-_DAILY_CONTEXT_BARS:]),
+                official_history=tuple(official_history),
                 current_minutes=tuple(day_minutes),
-                five_minute_bars=tuple(complete_five_minute_bars[-_FIVE_MINUTE_CONTEXT_BARS:]),
+                five_minute_bars=tuple(complete_five_minute_bars),
                 provisional=provisional,
                 official=official_bar,
                 risk_state=risk_state,
@@ -391,6 +460,7 @@ class OfflineBacktestRunner:
                 manual_event_risk=manual_event_risk,
                 activation_origin=activation_origin,
             )
+            check_cancelled(cancellation_token, "RUN_EVALUATION", last_safe_event_id)
             official_result = self._evaluate_context(official_context)
             decisions.append(official_result)
             episode, risk_state = _advance_state(official_result, episode, risk_state)
@@ -406,6 +476,7 @@ class OfflineBacktestRunner:
                 submitted = engine.submit_signal(signal)
                 orders.extend(submitted.orders)
                 outcomes.extend(submitted.outcomes)
+            last_safe_event_id = official_result.result_hash
             daily_equity.append(
                 engine.equity_snapshot(
                     at=official_bar.received_at,
@@ -414,7 +485,12 @@ class OfflineBacktestRunner:
             )
             official_history.append(official_bar)
 
+        if open_day_count == 0:
+            raise BacktestBlockedError("NO_OPEN_TRADING_DAYS")
+        if initial_equity_fen is None:  # pragma: no cover - open-day guard initializes it
+            raise BacktestBlockedError("INITIAL_EQUITY_UNAVAILABLE")
         replay_boundary = max(decision.snapshot.evaluated_at for decision in decisions)
+        check_cancelled(cancellation_token, "RUN_FINALIZE", last_safe_event_id)
         finalized = engine.finalize(replay_boundary=replay_boundary)
         outcomes.extend(finalized.outcomes)
         metrics = _metrics(
@@ -425,6 +501,7 @@ class OfflineBacktestRunner:
             fills=tuple(fills),
             daily_equity=tuple(daily_equity),
         )
+        check_cancelled(cancellation_token, "RUN_REPORT_HANDOFF", last_safe_event_id)
         return BacktestRunReport.build(
             run_id=run_id,
             plan_hash=plan_hash,
@@ -648,6 +725,15 @@ def _position_lots(values: tuple[PositionLot, ...]) -> tuple[PositionLotSnapshot
         )
         for value in values
         if value.remaining_quantity > 0
+    )
+
+
+def _safe_event_id(value: DailyBar) -> str:
+    """Identify the last fully consumed warm-up fact without retaining its payload."""
+
+    return _stable_hash(
+        value.model_dump(mode="python", round_trip=True),
+        domain="backtest-safe-event-v1",
     )
 
 

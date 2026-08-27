@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, localcontext
 from pathlib import Path
@@ -12,6 +14,7 @@ import pytest
 
 import trade_plan_monitor.backtest.application as application_module
 from trade_plan_monitor.backtest.application import BacktestApplicationService
+from trade_plan_monitor.backtest.control import BacktestCancellationResult, CancellationToken
 from trade_plan_monitor.backtest.dataset import DatasetScope
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
@@ -46,6 +49,44 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 SYMBOL = "600000.SH"
 TRADE_DATE = date(2026, 8, 24)
 PROFILE = HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1
+REPLAY_FIXTURE = Path("tests/fixtures/replay/backtest_two_symbol_20d.json")
+
+
+class _ObservedFrozenReader:
+    def __init__(self, reader, source: _FrozenReaderSource) -> None:
+        self._reader = reader
+        self._source = source
+
+    @property
+    def dataset_hash(self):
+        return self._reader.dataset_hash
+
+    @property
+    def scope(self):
+        return self._reader.scope
+
+    def __iter__(self):
+        for symbol_day in self._reader:
+            self._source.last_yielded = (symbol_day.symbol, symbol_day.trade_date)
+            self._source.yielded_by_open[-1].append(self._source.last_yielded)
+            yield symbol_day
+
+
+class _FrozenReaderSource:
+    """Test adapter exposing only the bounded reader-opening contract."""
+
+    def __init__(self, store: BacktestMarketStore) -> None:
+        self._store = store
+        self.open_count = 0
+        self.last_yielded: tuple[str, date] | None = None
+        self.yielded_by_open: list[list[tuple[str, date]]] = []
+
+    @contextmanager
+    def open_frozen_dataset(self, dataset_hash: str):
+        self.open_count += 1
+        self.yielded_by_open.append([])
+        with self._store.open_frozen_dataset(dataset_hash) as reader:
+            yield _ObservedFrozenReader(reader, self)
 
 
 def _plan() -> TradePlan:
@@ -237,18 +278,162 @@ def _extend_dataset_to_second_day(store: BacktestMarketStore, dataset_hash: str)
     return frozen.dataset_hash
 
 
+def _replay_fixture() -> dict[str, object]:
+    fixture = json.loads(REPLAY_FIXTURE.read_text(encoding="utf-8"))
+    assert fixture["schemaVersion"] == "backtest-two-symbol-20d-v1"
+    return fixture
+
+
+def _plan_for_fixture_symbol(symbol_fixture: dict[str, object]) -> TradePlan:
+    values = _plan().model_dump(mode="python", round_trip=True)
+    values.update(
+        {
+            "symbol": symbol_fixture["symbol"],
+            "market": symbol_fixture["market"],
+            "name": symbol_fixture["name"],
+        }
+    )
+    return TradePlan.model_validate(values)
+
+
+def _seed_two_symbol_replay_dataset(store: BacktestMarketStore) -> tuple[str, dict[str, object]]:
+    fixture = _replay_fixture()
+    warmup_start = date.fromisoformat(str(fixture["warmupStart"]))
+    start = date.fromisoformat(str(fixture["start"]))
+    end = date.fromisoformat(str(fixture["end"]))
+    symbol_fixtures = tuple(fixture["symbols"])
+    assert (end - start).days + 1 == 20
+    event_dates = tuple(date.fromisoformat(str(value)) for value in fixture["openTradeDates"])
+    assert len(event_dates) == 2
+
+    previous_open = {
+        str(item["market"]): warmup_start - timedelta(days=3) for item in symbol_fixtures
+    }
+    calendar: list[TradingDay] = []
+    daily: list[DailyBar] = []
+    cursor = warmup_start
+    while cursor <= end:
+        is_open = cursor.weekday() < 5 and (cursor < start or cursor in event_dates)
+        for symbol_fixture in symbol_fixtures:
+            exchange = str(symbol_fixture["market"])
+            calendar.append(
+                TradingDay(
+                    exchange=exchange,
+                    cal_date=cursor,
+                    is_open=is_open,
+                    previous_trade_date=previous_open[exchange],
+                )
+            )
+            if not is_open:
+                continue
+            symbol = str(symbol_fixture["symbol"])
+            close_fen = int(symbol_fixture["basePriceFen"]) + (cursor - warmup_start).days
+            daily.append(
+                DailyBar(
+                    symbol=symbol,
+                    trade_date=cursor,
+                    open_fen=close_fen,
+                    high_fen=close_fen + 2,
+                    low_fen=close_fen - 2,
+                    close_fen=close_fen,
+                    volume_shares=2_000_000,
+                    amount_yuan=Decimal(close_fen * 20_000),
+                    is_official=True,
+                    received_at=datetime.combine(cursor, time(15, 20), SHANGHAI),
+                )
+            )
+            previous_open[exchange] = cursor
+        cursor += timedelta(days=1)
+    store.record_trading_days(tuple(calendar))
+    store.record_daily_bars(tuple(daily))
+
+    for symbol_fixture in symbol_fixtures:
+        symbol = str(symbol_fixture["symbol"])
+        for trade_date in event_dates:
+            close_fen = int(symbol_fixture["basePriceFen"]) + (trade_date - warmup_start).days
+            minutes = tuple(
+                MinuteBar(
+                    symbol=symbol,
+                    bar_end=bar_end,
+                    open_fen=close_fen,
+                    high_fen=close_fen + 1,
+                    low_fen=close_fen - 1,
+                    close_fen=close_fen,
+                    volume_shares=1_000,
+                    amount_yuan=Decimal(close_fen * 10),
+                    received_at=bar_end + timedelta(seconds=12),
+                )
+                for bar_end in expected_minute_ends(trade_date, is_open=True)
+            )
+            store.record_minute_batch(
+                HistoricalMinuteBatch(
+                    symbol=symbol,
+                    trade_date=trade_date,
+                    contract_version=PROFILE,
+                    bars=minutes,
+                    opening_special=HistoricalOpeningSpecial(
+                        symbol=symbol,
+                        source_time=datetime.combine(trade_date, time(9, 30), SHANGHAI),
+                        open_fen=close_fen,
+                        high_fen=close_fen + 1,
+                        low_fen=close_fen - 1,
+                        close_fen=close_fen,
+                        volume_shares=500,
+                        amount_yuan=Decimal(close_fen * 5),
+                    ),
+                )
+            )
+            store.record_daily_limits(
+                (
+                    DailyLimit(
+                        symbol=symbol,
+                        trade_date=trade_date,
+                        up_limit_fen=close_fen * 11 // 10,
+                        down_limit_fen=close_fen * 9 // 10,
+                        received_at=datetime.combine(trade_date, time(9, 30), SHANGHAI),
+                    ),
+                )
+            )
+
+    frozen = store.freeze_dataset(
+        DatasetScope(
+            symbols=tuple(str(item["symbol"]) for item in symbol_fixtures),
+            start=start,
+            end=end,
+            warmup_start=warmup_start,
+            historical_profile=PROFILE,
+        )
+    )
+    assert frozen.ready is True
+    assert frozen.dataset_hash is not None
+    return frozen.dataset_hash, fixture
+
+
 def _actionable_fixture(context: EvaluationContext) -> EvaluationResult:
+    return _actionable_fixture_for_dates(
+        context,
+        buy_date=TRADE_DATE,
+        sell_date=TRADE_DATE + timedelta(days=1),
+    )
+
+
+def _actionable_fixture_for_dates(
+    context: EvaluationContext,
+    *,
+    buy_date: date,
+    sell_date: date,
+) -> EvaluationResult:
     base = evaluate(context)
     if not isinstance(context.target, IntradayEvaluationTarget):
         return base
     if context.target.bucket_end.time() != time(9, 35):
         return base
-    if context.trade_date == TRADE_DATE and not context.positions:
+    if context.trade_date == buy_date and not context.positions:
         signal_type = ActionableSignalType.BUY_TACTICAL_READY
         zone = "LOW_BUY"
         decision_zone = DecisionZone.LOW_BUY
         target_lot_id = None
-    elif context.trade_date == TRADE_DATE + timedelta(days=1) and context.positions:
+    elif context.trade_date == sell_date and context.positions:
         signal_type = ActionableSignalType.PRESSURE_REDUCE_READY
         zone = "PRESSURE"
         decision_zone = DecisionZone.PRESSURE
@@ -291,6 +476,149 @@ def _actionable_fixture(context: EvaluationContext) -> EvaluationResult:
         next_step=next_step,
         evaluation_identity=base.evaluation_identity,
     )
+
+
+def test_bounded_reader_cancellation_returns_no_partial_report(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    dataset_hash = _seed_dataset(store)
+    source = _FrozenReaderSource(store)
+    cancellation_token = CancellationToken()
+    cancellation_token.cancel()
+
+    result = OfflineBacktestRunner(source).run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+        cancellation_token=cancellation_token,
+    )
+
+    assert result == BacktestCancellationResult(
+        phase="RUN_DAY_TRANSITION",
+        last_safe_event_id=None,
+    )
+    assert not hasattr(result, "report_hash")
+    assert source.open_count == 0
+    with pytest.raises(ValueError):
+        BacktestCancellationResult(phase="SYNC_DAILY", last_safe_event_id=None)
+
+
+def test_runner_consumes_only_the_bounded_reader_contract(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    dataset_hash = _seed_dataset(store)
+    source = _FrozenReaderSource(store)
+
+    report = OfflineBacktestRunner(source).run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+
+    assert report.status == "COMPLETED"
+    assert len(report.decisions) == 49
+    assert source.open_count == 1
+
+
+def test_midrun_cancellation_and_restart_replay_from_the_frozen_beginning(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    dataset_hash = _seed_dataset(store)
+    source = _FrozenReaderSource(store)
+    cancellation_token = CancellationToken()
+
+    def cancelling_evaluator(context: EvaluationContext) -> EvaluationResult:
+        assert source.last_yielded == (context.plan.symbol, context.trade_date)
+        result = _actionable_fixture(context)
+        if isinstance(
+            context.target, IntradayEvaluationTarget
+        ) and context.target.bucket_end.time() == time(9, 35):
+            cancellation_token.cancel()
+        return result
+
+    runner = OfflineBacktestRunner(source, evaluator=cancelling_evaluator)
+    cancelled = runner.run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+        cancellation_token=cancellation_token,
+    )
+
+    assert isinstance(cancelled, BacktestCancellationResult)
+    assert cancelled.phase == "RUN_MINUTE"
+    assert cancelled.last_safe_event_id is not None
+    assert re.fullmatch(r"[0-9a-f]{64}", cancelled.last_safe_event_id)
+    assert not hasattr(cancelled, "decisions")
+
+    restarted = runner.run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+    repeated = runner.run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+
+    assert restarted.canonical_json() == repeated.canonical_json()
+    assert source.open_count == 3
+    assert len(source.yielded_by_open) == 3
+    assert len({trace[0] for trace in source.yielded_by_open}) == 1
+
+
+def test_second_symbol_twenty_day_replays_are_actionable_stable_and_shanghai(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "two-symbol-20d.sqlite3")
+    dataset_hash, fixture = _seed_two_symbol_replay_dataset(store)
+    source = _FrozenReaderSource(store)
+    buy_date = date.fromisoformat(str(fixture["start"]))
+    sell_date = buy_date + timedelta(days=1)
+
+    def actionable(context: EvaluationContext) -> EvaluationResult:
+        assert source.last_yielded == (context.plan.symbol, context.trade_date)
+        return _actionable_fixture_for_dates(
+            context,
+            buy_date=buy_date,
+            sell_date=sell_date,
+        )
+
+    for symbol_fixture in fixture["symbols"]:
+        runner = OfflineBacktestRunner(source, evaluator=actionable)
+        arguments = {
+            "plan": _plan_for_fixture_symbol(symbol_fixture),
+            "dataset_hash": dataset_hash,
+            "initial_cash_fen": 10_000_000,
+            "execution_config": _execution_config(),
+            "manual_event_risk": False,
+        }
+        first = runner.run(**arguments)
+        second = runner.run(**arguments)
+
+        assert first.canonical_json() == second.canonical_json()
+        assert tuple(fill.side.value for fill in first.fills) == ("BUY", "SELL")
+        assert first.fills[1].filled_at.date() > first.fills[0].filled_at.date()
+        assert len(first.daily_equity) == 2
+        timestamps = re.findall(
+            r'\d{4}-\d{2}-\d{2}T[^"\\]+',
+            first.canonical_json(),
+        )
+        assert timestamps
+        assert all(
+            re.fullmatch(
+                r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}[+]08:00",
+                timestamp,
+            )
+            for timestamp in timestamps
+        )
+
+    assert source.open_count == 4
 
 
 def test_offline_runner_is_byte_stable_and_emits_only_daily_equity(tmp_path) -> None:
