@@ -12,6 +12,11 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import trade_plan_monitor.backtest.market_store as market_store_module
+from trade_plan_monitor.backtest.control import (
+    BacktestOperationCancelled,
+    BacktestProgress,
+    CancellationToken,
+)
 from trade_plan_monitor.backtest.dataset import DatasetScope
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.market_data.historical_provider import (
@@ -425,3 +430,40 @@ def test_freeze_rejects_a_head_correction_between_validation_and_publication(
 
     assert corrected is True
     assert store.statistics().dataset_count == 0
+
+
+def test_freeze_cancel_during_publication_rolls_back_and_resubmit_is_complete(
+    tmp_path,
+) -> None:
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    _seed_complete(store)
+    token = CancellationToken()
+    progress: list[BacktestProgress] = []
+
+    def cancel_publication(value: BacktestProgress) -> None:
+        progress.append(value)
+        if value.phase == "FREEZE_PUBLISH":
+            token.cancel()
+
+    with pytest.raises(
+        BacktestOperationCancelled,
+        match="BACKTEST_OPERATION_CANCELLED:FREEZE_PUBLISH",
+    ):
+        store.freeze_dataset(
+            _scope(),
+            cancellation_token=token,
+            progress_callback=cancel_publication,
+        )
+
+    assert [item.phase for item in progress] == ["FREEZE_VERIFY", "FREEZE_PUBLISH"]
+    assert store.statistics().dataset_count == 0
+    with closing(sqlite3.connect(store.database_path)) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM market_dataset_item").fetchone() == (0,)
+
+    frozen = store.freeze_dataset(_scope())
+    completed_statistics = store.statistics()
+    refrozen = store.freeze_dataset(_scope())
+
+    assert frozen.ready is True
+    assert refrozen.dataset_hash == frozen.dataset_hash
+    assert store.statistics() == completed_statistics

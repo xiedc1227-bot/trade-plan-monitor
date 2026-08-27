@@ -15,6 +15,13 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 
 from trade_plan_monitor.backtest.canonical import canonical_json
+from trade_plan_monitor.backtest.control import (
+    BacktestProgressCallback,
+    CancellationToken,
+    check_cancelled,
+    report_progress,
+    validate_operation_controls,
+)
 from trade_plan_monitor.backtest.dataset import (
     DATASET_SCHEMA_VERSION,
     BacktestDatasetCoverage,
@@ -431,22 +438,47 @@ class BacktestMarketStore:
             raise RuntimeError("current calendar artifact identity is invalid")
         return value
 
-    def freeze_dataset(self, scope: DatasetScope) -> DatasetFreezeResult:
+    def freeze_dataset(
+        self,
+        scope: DatasetScope,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        progress_callback: BacktestProgressCallback | None = None,
+    ) -> DatasetFreezeResult:
         """Verify required surfaces and freeze their current immutable revisions."""
 
         if not isinstance(scope, DatasetScope):
             raise TypeError("scope must be a DatasetScope")
+        validate_operation_controls(cancellation_token, progress_callback)
+        check_cancelled(cancellation_token, "FREEZE_VERIFY")
         with self._connect() as connection:
             # Hold a stable WAL read snapshot while validating historical facts. In
             # particular, do not reserve the database writer for a multi-year scan.
             connection.execute("BEGIN")
-            required = self._required_keys(scope, connection)
+            required = self._required_keys(scope, connection, cancellation_token)
             items: list[DatasetItem] = []
             blockers: list[str] = []
             calendars: list[TradingDay] = []
             daily_limits: dict[tuple[str, date], DailyLimit] = {}
             daily_bars: dict[tuple[str, date], DailyBar] = {}
-            for natural_key, kind, symbol, trade_date in required:
+            total_required = len(required)
+
+            def finish_verification_unit(completed_units: int) -> None:
+                if completed_units % 1_000 == 0 or completed_units == total_required:
+                    report_progress(
+                        progress_callback,
+                        phase="FREEZE_VERIFY",
+                        completed_units=completed_units,
+                        total_units=total_required,
+                    )
+                    check_cancelled(cancellation_token, "FREEZE_VERIFY")
+
+            for completed_required, (natural_key, kind, symbol, trade_date) in enumerate(
+                required,
+                start=1,
+            ):
+                if completed_required == 1 or (completed_required - 1) % 1_000 == 0:
+                    check_cancelled(cancellation_token, "FREEZE_VERIFY")
                 row = connection.execute(
                     """
                     SELECT a.artifact_hash, a.kind, a.provider, a.contract_version,
@@ -459,6 +491,7 @@ class BacktestMarketStore:
                 ).fetchone()
                 if row is None:
                     blockers.append(self._missing_blocker(kind, symbol, trade_date, natural_key))
+                    finish_verification_unit(completed_required)
                     continue
                 try:
                     content = _validated_market_artifact(
@@ -501,6 +534,7 @@ class BacktestMarketStore:
                         daily_bars[(symbol, trade_date)] = daily
                 except RuntimeError, TypeError, ValueError, json.JSONDecodeError:
                     blockers.append(_invalid_blocker(kind, symbol, trade_date, natural_key))
+                    finish_verification_unit(completed_required)
                     continue
                 items.append(
                     DatasetItem(
@@ -511,6 +545,7 @@ class BacktestMarketStore:
                         trade_date=trade_date,
                     )
                 )
+                finish_verification_unit(completed_required)
             blockers.extend(_calendar_chain_blockers(calendars))
             connection.commit()
             if blockers:
@@ -530,6 +565,7 @@ class BacktestMarketStore:
             manifest_json = _canonical_json(manifest.model_dump(mode="python", round_trip=True))
             # Only publication reserves the writer. Revalidate every selected head
             # after acquiring it so a concurrent correction cannot be mixed in.
+            check_cancelled(cancellation_token, "FREEZE_PUBLISH")
             connection.execute("BEGIN IMMEDIATE")
             self._assert_current_heads(connection, ordered_items)
             connection.execute(
@@ -550,7 +586,12 @@ class BacktestMarketStore:
                 )
                 for item in ordered_items
             )
-            for start in range(0, len(item_rows), 1_000):
+            publication_batches = (len(item_rows) + 999) // 1_000
+            for completed_batches, start in enumerate(
+                range(0, len(item_rows), 1_000),
+                start=1,
+            ):
+                check_cancelled(cancellation_token, "FREEZE_PUBLISH")
                 connection.executemany(
                     """
                     INSERT OR IGNORE INTO market_dataset_item (
@@ -559,6 +600,13 @@ class BacktestMarketStore:
                     """,
                     item_rows[start : start + 1_000],
                 )
+                report_progress(
+                    progress_callback,
+                    phase="FREEZE_PUBLISH",
+                    completed_units=completed_batches,
+                    total_units=publication_batches,
+                )
+            check_cancelled(cancellation_token, "FREEZE_PUBLISH")
             if self._load_manifest(connection, dataset_hash) != manifest:
                 self._manifest_cache.pop(dataset_hash, None)
                 self._manifest_item_cache.pop(dataset_hash, None)
@@ -925,11 +973,13 @@ class BacktestMarketStore:
         self,
         scope: DatasetScope,
         connection: sqlite3.Connection,
+        cancellation_token: CancellationToken | None = None,
     ) -> tuple[tuple[str, _ArtifactKind, str | None, date], ...]:
         required: list[tuple[str, _ArtifactKind, str | None, date]] = []
         cursor = scope.warmup_start
         exchanges = tuple(sorted({exchange_for_symbol(symbol) for symbol in scope.symbols}))
         while cursor <= scope.end:
+            check_cancelled(cancellation_token, "FREEZE_VERIFY")
             open_exchanges: set[str] = set()
             for exchange in exchanges:
                 calendar_key = f"CALENDAR:{exchange}:{cursor.isoformat()}"

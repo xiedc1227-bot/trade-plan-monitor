@@ -8,6 +8,14 @@ from typing import Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from trade_plan_monitor.backtest.control import (
+    BacktestOperationPhase,
+    BacktestProgressCallback,
+    CancellationToken,
+    check_cancelled,
+    report_progress,
+    validate_operation_controls,
+)
 from trade_plan_monitor.backtest.dataset import DatasetScope, exchange_for_symbol
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProvider
@@ -74,13 +82,22 @@ class BacktestSyncService:
         self._controller = request_controller
         self._today = today
 
-    async def sync(self, scope: DatasetScope, *, refresh: bool = False) -> BacktestSyncResult:
+    async def sync(
+        self,
+        scope: DatasetScope,
+        *,
+        refresh: bool = False,
+        cancellation_token: CancellationToken | None = None,
+        progress_callback: BacktestProgressCallback | None = None,
+    ) -> BacktestSyncResult:
         """Synchronize a closed range; network calls never overlap DB transactions."""
 
         if not isinstance(scope, DatasetScope):
             raise TypeError("scope must be a DatasetScope")
         if type(refresh) is not bool:
             raise TypeError("refresh must be a bool")
+        validate_operation_controls(cancellation_token, progress_callback)
+        check_cancelled(cancellation_token, "SYNC_CALENDAR")
         today = self._today()
         if isinstance(today, datetime) or not isinstance(today, date):
             raise TypeError("today must return a date")
@@ -105,7 +122,7 @@ class BacktestSyncService:
                 for day in _dates(scope.warmup_start, scope.end)
             )
         )
-        for exchange in missing_exchanges:
+        for completed_calendars, exchange in enumerate(missing_exchanges, start=1):
             calendar = tuple(
                 await self._execute(
                     TushareOperation.TRADING_CALENDAR,
@@ -118,6 +135,8 @@ class BacktestSyncService:
                         f"backtest:calendar:{exchange}:{scope.warmup_start.isoformat()}:"
                         f"{scope.end.isoformat()}"
                     ),
+                    cancellation_token=cancellation_token,
+                    phase="SYNC_CALENDAR",
                 )
             )
             _require_exact_identities(
@@ -131,7 +150,15 @@ class BacktestSyncService:
             self._store.record_trading_days(calendar)
             calendar_rows += len(calendar)
             network_calls += 1
+            report_progress(
+                progress_callback,
+                phase="SYNC_CALENDAR",
+                completed_units=completed_calendars,
+                total_units=len(missing_exchanges),
+            )
+            check_cancelled(cancellation_token, "SYNC_CALENDAR")
 
+        check_cancelled(cancellation_token, "SYNC_DAILY")
         open_dates = tuple(
             day
             for day in _dates(scope.warmup_start, scope.end)
@@ -142,6 +169,7 @@ class BacktestSyncService:
             )
         )
 
+        symbol_work: list[tuple[str, tuple[date, ...], tuple[date, ...], tuple[date, ...]]] = []
         for symbol in scope.symbols:
             symbol_exchange = exchange_for_symbol(symbol)
             symbol_open_dates = tuple(
@@ -155,6 +183,20 @@ class BacktestSyncService:
                 for day in symbol_open_dates
                 if refresh or not self._store.has_head(f"DAILY:{symbol}:{day.isoformat()}")
             )
+            missing_minutes = tuple(
+                day
+                for day in symbol_open_dates
+                if day >= scope.start
+                and (refresh or not self._store.has_head(f"MINUTE:{symbol}:{day.isoformat()}"))
+            )
+            symbol_work.append((symbol, symbol_open_dates, missing_daily, missing_minutes))
+
+        daily_total = sum(bool(missing_daily) for _, _, missing_daily, _ in symbol_work)
+        minute_total = sum(len(missing_minutes) for _, _, _, missing_minutes in symbol_work)
+        completed_daily = 0
+        completed_minutes = 0
+        for symbol, _symbol_open_dates, missing_daily, missing_minutes in symbol_work:
+            check_cancelled(cancellation_token, "SYNC_DAILY")
             if missing_daily:
                 daily = tuple(
                     await self._execute(
@@ -170,11 +212,13 @@ class BacktestSyncService:
                             f"backtest:daily:{symbol}:{missing_daily[0].isoformat()}:"
                             f"{missing_daily[-1].isoformat()}"
                         ),
+                        cancellation_token=cancellation_token,
+                        phase="SYNC_DAILY",
                     ),
                 )
                 requested_range = frozenset(
                     (symbol, day)
-                    for day in symbol_open_dates
+                    for day in _symbol_open_dates
                     if missing_daily[0] <= day <= missing_daily[-1]
                 )
                 _require_exact_identities(
@@ -191,24 +235,43 @@ class BacktestSyncService:
                 self._store.record_daily_bars(selected_daily)
                 daily_rows += len(selected_daily)
                 network_calls += 1
+                completed_daily += 1
+                report_progress(
+                    progress_callback,
+                    phase="SYNC_DAILY",
+                    completed_units=completed_daily,
+                    total_units=daily_total,
+                )
+                check_cancelled(cancellation_token, "SYNC_DAILY")
 
-            for day in (value for value in symbol_open_dates if value >= scope.start):
-                minute_key = f"MINUTE:{symbol}:{day.isoformat()}"
-                if refresh or not self._store.has_head(minute_key):
-                    batch = await self._execute(
-                        TushareOperation.HISTORICAL_MINUTES,
-                        lambda symbol=symbol, day=day: self._provider.historical_minute_batch(
-                            symbol,
-                            day,
-                        ),
-                        work_key=f"backtest:minutes:{symbol}:{day.isoformat()}",
-                    )
-                    if batch.symbol != symbol or batch.trade_date != day:
-                        raise ValueError("INVALID_RESPONSE:stk_mins")
-                    self._store.record_minute_batch(batch)
-                    minute_days += 1
-                    network_calls += 1
+            for day in missing_minutes:
+                check_cancelled(cancellation_token, "SYNC_MINUTE")
+                batch = await self._execute(
+                    TushareOperation.HISTORICAL_MINUTES,
+                    lambda symbol=symbol, day=day: self._provider.historical_minute_batch(
+                        symbol,
+                        day,
+                    ),
+                    work_key=f"backtest:minutes:{symbol}:{day.isoformat()}",
+                    cancellation_token=cancellation_token,
+                    phase="SYNC_MINUTE",
+                )
+                if batch.symbol != symbol or batch.trade_date != day:
+                    raise ValueError("INVALID_RESPONSE:stk_mins")
+                self._store.record_minute_batch(batch)
+                minute_days += 1
+                network_calls += 1
+                completed_minutes += 1
+                report_progress(
+                    progress_callback,
+                    phase="SYNC_MINUTE",
+                    completed_units=completed_minutes,
+                    total_units=minute_total,
+                )
+                check_cancelled(cancellation_token, "SYNC_MINUTE")
 
+        check_cancelled(cancellation_token, "SYNC_LIMIT")
+        limit_work: list[tuple[date, tuple[str, ...]]] = []
         for day in (value for value in open_dates if value >= scope.start):
             missing_symbols = tuple(
                 symbol
@@ -224,11 +287,17 @@ class BacktestSyncService:
             )
             if not missing_symbols:
                 continue
+            limit_work.append((day, missing_symbols))
+
+        for completed_limits, (day, missing_symbols) in enumerate(limit_work, start=1):
+            check_cancelled(cancellation_token, "SYNC_LIMIT")
             limits = tuple(
                 await self._execute(
                     TushareOperation.DAILY_LIMITS,
                     lambda day=day: self._provider.daily_limits(day),
                     work_key=f"backtest:limits:{day.isoformat()}",
+                    cancellation_token=cancellation_token,
+                    phase="SYNC_LIMIT",
                 )
             )
             selected_limits = tuple(item for item in limits if item.symbol in missing_symbols)
@@ -241,6 +310,13 @@ class BacktestSyncService:
             self._store.record_daily_limits(selected_limits)
             limit_rows += len(selected_limits)
             network_calls += 1
+            report_progress(
+                progress_callback,
+                phase="SYNC_LIMIT",
+                completed_units=completed_limits,
+                total_units=len(limit_work),
+            )
+            check_cancelled(cancellation_token, "SYNC_LIMIT")
 
         return BacktestSyncResult(
             calendar_rows=calendar_rows,
@@ -256,10 +332,18 @@ class BacktestSyncService:
         call: Callable[[], _T],
         *,
         work_key: str,
+        cancellation_token: CancellationToken | None,
+        phase: BacktestOperationPhase,
     ) -> _T:
+        check_cancelled(cancellation_token, phase)
+
+        def guarded_call() -> _T:
+            check_cancelled(cancellation_token, phase)
+            return call()
+
         return await self._controller.execute(
             operation,
-            call,
+            guarded_call,
             work_key=work_key,
             priority=RequestPriority.BACKGROUND,
         )

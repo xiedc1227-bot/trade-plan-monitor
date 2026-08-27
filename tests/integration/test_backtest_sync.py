@@ -5,11 +5,17 @@ from __future__ import annotations
 import asyncio
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from threading import Thread
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
 
+from trade_plan_monitor.backtest.control import (
+    BacktestOperationCancelled,
+    BacktestProgress,
+    CancellationToken,
+)
 from trade_plan_monitor.backtest.dataset import DatasetScope
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.sync import BacktestSyncService
@@ -158,6 +164,167 @@ def test_sync_fetches_missing_surfaces_then_repeats_without_network(tmp_path) ->
     assert tuple(provider.calls) == first_calls
     assert set(controller.priorities) == {RequestPriority.BACKGROUND}
     assert store.freeze_dataset(_scope()).ready is True
+
+
+def test_cancellation_token_is_cross_thread_safe() -> None:
+    token = CancellationToken()
+    worker = Thread(target=token.cancel)
+
+    worker.start()
+    worker.join(timeout=5)
+
+    assert worker.is_alive() is False
+    assert token.cancelled is True
+    with pytest.raises(
+        BacktestOperationCancelled,
+        match="BACKTEST_OPERATION_CANCELLED:SYNC_CALENDAR",
+    ):
+        token.raise_if_cancelled("SYNC_CALENDAR")
+
+
+def test_sync_cancel_before_first_surface_starts_no_provider_call(tmp_path) -> None:
+    token = CancellationToken()
+    token.cancel()
+    provider = _Provider()
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    service = BacktestSyncService(
+        provider=provider,
+        store=store,
+        request_controller=_Controller(),
+        today=lambda: date(2026, 8, 25),
+    )
+
+    with pytest.raises(
+        BacktestOperationCancelled,
+        match="BACKTEST_OPERATION_CANCELLED:SYNC_CALENDAR",
+    ):
+        asyncio.run(service.sync(_scope(), cancellation_token=token))
+
+    assert provider.calls == []
+    assert store.statistics().artifact_count == 0
+
+
+def test_sync_cancel_while_queued_starts_no_provider_call(tmp_path) -> None:
+    token = CancellationToken()
+
+    class CancellingAdmissionController:
+        async def execute(self, _operation, call, *, work_key, priority):
+            assert work_key.startswith("backtest:")
+            assert priority is RequestPriority.BACKGROUND
+            token.cancel()
+            return call()
+
+    provider = _Provider()
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    service = BacktestSyncService(
+        provider=provider,
+        store=store,
+        request_controller=CancellingAdmissionController(),
+        today=lambda: date(2026, 8, 25),
+    )
+
+    with pytest.raises(
+        BacktestOperationCancelled,
+        match="BACKTEST_OPERATION_CANCELLED:SYNC_CALENDAR",
+    ):
+        asyncio.run(service.sync(_scope(), cancellation_token=token))
+
+    assert provider.calls == []
+    assert store.statistics().artifact_count == 0
+
+
+def test_sync_cancel_after_inflight_surface_commits_and_resubmit_reuses_fact(
+    tmp_path,
+) -> None:
+    token = CancellationToken()
+
+    class CancellingProvider(_Provider):
+        def trading_calendar(
+            self,
+            exchange: str,
+            start: date,
+            end: date,
+        ) -> tuple[TradingDay, ...]:
+            values = super().trading_calendar(exchange, start, end)
+            token.cancel()
+            return values
+
+    provider = CancellingProvider()
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    service = BacktestSyncService(
+        provider=provider,
+        store=store,
+        request_controller=_Controller(),
+        today=lambda: date(2026, 8, 25),
+    )
+    progress: list[BacktestProgress] = []
+
+    with pytest.raises(
+        BacktestOperationCancelled,
+        match="BACKTEST_OPERATION_CANCELLED:SYNC_CALENDAR",
+    ):
+        asyncio.run(
+            service.sync(
+                _scope(),
+                cancellation_token=token,
+                progress_callback=progress.append,
+            )
+        )
+
+    assert tuple(name for name, _ in provider.calls) == ("calendar",)
+    assert store.has_head(f"CALENDAR:SSE:{TRADE_DATE.isoformat()}") is True
+    assert store.has_head(f"DAILY:{SYMBOL}:{TRADE_DATE.isoformat()}") is False
+    assert [(item.phase, item.completed_units, item.total_units) for item in progress] == [
+        ("SYNC_CALENDAR", 1, 1)
+    ]
+
+    resumed = asyncio.run(service.sync(_scope()))
+    frozen = store.freeze_dataset(_scope())
+    completed_statistics = store.statistics()
+    repeated = asyncio.run(service.sync(_scope()))
+    refrozen = store.freeze_dataset(_scope())
+
+    assert resumed.network_calls == 3
+    assert repeated.network_calls == 0
+    assert frozen.ready is True
+    assert refrozen.dataset_hash == frozen.dataset_hash
+    assert store.statistics() == completed_statistics
+
+
+def test_sync_progress_is_bounded_and_excluded_from_dataset_identity(tmp_path) -> None:
+    progress: list[BacktestProgress] = []
+    first_store = BacktestMarketStore(tmp_path / "first.sqlite3")
+    second_store = BacktestMarketStore(tmp_path / "second.sqlite3")
+    first = BacktestSyncService(
+        provider=_Provider(),
+        store=first_store,
+        request_controller=_Controller(),
+        today=lambda: date(2026, 8, 25),
+    )
+    second = BacktestSyncService(
+        provider=_Provider(),
+        store=second_store,
+        request_controller=_Controller(),
+        today=lambda: date(2026, 8, 25),
+    )
+
+    asyncio.run(first.sync(_scope(), progress_callback=progress.append))
+    asyncio.run(second.sync(_scope()))
+    first_frozen = first_store.freeze_dataset(_scope())
+    second_frozen = second_store.freeze_dataset(_scope())
+
+    assert [item.phase for item in progress] == [
+        "SYNC_CALENDAR",
+        "SYNC_DAILY",
+        "SYNC_MINUTE",
+        "SYNC_LIMIT",
+    ]
+    assert all(
+        item.completed_units == item.total_units == 1
+        and set(item.model_dump()) == {"phase", "completed_units", "total_units"}
+        for item in progress
+    )
+    assert first_frozen.dataset_hash == second_frozen.dataset_hash
 
 
 def test_refresh_rechecks_content_without_duplicate_artifacts(tmp_path) -> None:
