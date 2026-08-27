@@ -17,7 +17,6 @@ _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _SQLITE_HEADER = b"SQLite format 3\x00"
 _SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 _MAX_INVENTORIED_IDENTITIES = 10_000
-_UTC_SUFFIXES = ("Z", "+00:00")
 
 _ColumnContract = tuple[str, bool, str | None, int]
 
@@ -405,6 +404,7 @@ class TimestampMetadataInventory:
     value_count: int
     utc_value_count: int
     ordered_values_sha256: str
+    invalid_value_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -484,6 +484,8 @@ def require_safe_store_initialization(inventory: MigrationInventory) -> None:
         raise MigrationPreflightError("SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT")
     if inventory.requires_schema_migration:
         raise MigrationPreflightError("LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION")
+    if "INVALID_MARKET_METADATA_TIMESTAMP" in inventory.migration_reasons:
+        raise MigrationPreflightError("INVALID_MARKET_METADATA_TIMESTAMP")
     if "UTC_MARKET_METADATA" in inventory.migration_reasons:
         raise MigrationPreflightError("MARKET_METADATA_REQUIRES_VERIFIED_MIGRATION")
     assert_source_unchanged(inventory)
@@ -510,6 +512,8 @@ def authorize_migration(
         raise MigrationPreflightError("LEGACY_TERMINAL_RUNS_REQUIRE_MIGRATION")
     if inventory.database_state is DatabaseState.UNKNOWN:
         raise MigrationPreflightError("UNRECOGNIZED_SCHEMA_CANNOT_BE_MIGRATED")
+    if "INVALID_MARKET_METADATA_TIMESTAMP" in inventory.migration_reasons:
+        raise MigrationPreflightError("INVALID_MARKET_METADATA_TIMESTAMP")
     if not inventory.migration_reasons:
         raise MigrationPreflightError("MIGRATION_NOT_REQUIRED")
     if not verified_backup.coordinator_stopped:
@@ -541,6 +545,8 @@ def migrate_market_metadata(
         raise MigrationPreflightError("MARKET_METADATA_MIGRATION_NOT_AUTHORIZED")
     if inventory.database_state is not DatabaseState.CURRENT:
         raise MigrationPreflightError("MARKET_METADATA_REQUIRES_CURRENT_SCHEMA")
+    if "INVALID_MARKET_METADATA_TIMESTAMP" in inventory.migration_reasons:
+        raise MigrationPreflightError("INVALID_MARKET_METADATA_TIMESTAMP")
     if inventory.migration_reasons != ("UTC_MARKET_METADATA",):
         raise MigrationPreflightError("MARKET_METADATA_MIGRATION_SCOPE_MISMATCH")
     if (
@@ -726,6 +732,8 @@ def _inspect_market(
     )
     if any(item.utc_value_count for item in metadata):
         reasons.append("UTC_MARKET_METADATA")
+    if any(item.invalid_value_count for item in metadata):
+        reasons.append("INVALID_MARKET_METADATA_TIMESTAMP")
     return {
         "database_state": state,
         "dataset_hash_goldens": dataset_hashes,
@@ -799,6 +807,7 @@ def _timestamp_inventory(
     digest = sha256()
     value_count = 0
     utc_count = 0
+    invalid_count = 0
     cursor = connection.execute(
         f'SELECT "{column}" FROM "{table}" ORDER BY CAST("{column}" AS BLOB), rowid'
     )
@@ -808,13 +817,18 @@ def _timestamp_inventory(
             _hash_component(digest, raw)
             value_count += 1
             text = raw.decode("utf-8", errors="replace")
-            if text.endswith(_UTC_SUFFIXES):
-                utc_count += 1
+            try:
+                _, converted = normalize_market_metadata_timestamp(text)
+            except TypeError, ValueError:
+                invalid_count += 1
+            else:
+                utc_count += int(converted)
     return TimestampMetadataInventory(
         table=table,
         column=column,
         value_count=value_count,
         utc_value_count=utc_count,
+        invalid_value_count=invalid_count,
         ordered_values_sha256=digest.hexdigest(),
     )
 

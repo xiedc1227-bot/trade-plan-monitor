@@ -681,8 +681,57 @@ def test_market_inventory_locks_utc_metadata_and_dataset_hash_bytes(
     )
     assert dataset_times.value_count == 3
     assert dataset_times.utc_value_count == 3
+    assert dataset_times.invalid_value_count == 0
     assert len(dataset_times.ordered_values_sha256) == 64
     assert inventory.migration_reasons == ("UTC_MARKET_METADATA",)
+    assert _database_state(path) == before
+
+
+@pytest.mark.parametrize(
+    "invalid_timestamp",
+    (
+        "2026-08-24T16:20:00.000000+09:00",
+        "2026-08-24T15:20:00.000000",
+        "2026-08-24T15:20:00.0000001+08:00",
+    ),
+)
+def test_current_market_store_rejects_noncanonical_metadata_on_initialization(
+    tmp_path: Path,
+    invalid_timestamp: str,
+) -> None:
+    path = tmp_path / "noncanonical-current-market.sqlite3"
+    store = BacktestMarketStore(path)
+    store.record_trading_days(
+        (
+            TradingDay(
+                exchange="SSE",
+                cal_date=_TRADE_DATE,
+                is_open=True,
+                previous_trade_date=date(2026, 8, 21),
+            ),
+        )
+    )
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute(
+            "UPDATE market_artifact SET created_at = ?",
+            (invalid_timestamp,),
+        )
+        connection.execute(
+            "UPDATE market_head SET updated_at = ?",
+            (invalid_timestamp,),
+        )
+        connection.commit()
+    before = _database_state(path)
+
+    inventory = inspect_market_database(path)
+
+    assert inventory.migration_reasons == ("INVALID_MARKET_METADATA_TIMESTAMP",)
+    assert sum(item.invalid_value_count for item in inventory.utc_metadata) == 2
+    with pytest.raises(
+        MigrationPreflightError,
+        match="INVALID_MARKET_METADATA_TIMESTAMP",
+    ):
+        BacktestMarketStore(path)
     assert _database_state(path) == before
 
 
@@ -850,15 +899,9 @@ def test_market_metadata_migration_rejects_ambiguous_time_before_mutation(
         connection.execute("UPDATE market_head SET updated_at = '2026-08-24T16:20:00+09:00'")
         connection.commit()
     inventory = inspect_market_database(path)
-    decision = authorize_migration(
-        inventory,
-        VerifiedBackupFacts(
-            source_fingerprint=inventory.source_fingerprint.digest,
-            backup_sha256="b" * 64,
-            backup_size_bytes=path.stat().st_size,
-            verified_at=datetime(2026, 8, 27, 16, 0, tzinfo=_SHANGHAI),
-            coordinator_stopped=True,
-        ),
+    assert inventory.migration_reasons == (
+        "UTC_MARKET_METADATA",
+        "INVALID_MARKET_METADATA_TIMESTAMP",
     )
     before = _database_state(path)
 
@@ -866,7 +909,16 @@ def test_market_metadata_migration_rejects_ambiguous_time_before_mutation(
         MigrationPreflightError,
         match="INVALID_MARKET_METADATA_TIMESTAMP",
     ):
-        migration_module.migrate_market_metadata(inventory, decision)
+        authorize_migration(
+            inventory,
+            VerifiedBackupFacts(
+                source_fingerprint=inventory.source_fingerprint.digest,
+                backup_sha256="b" * 64,
+                backup_size_bytes=path.stat().st_size,
+                verified_at=datetime(2026, 8, 27, 16, 0, tzinfo=_SHANGHAI),
+                coordinator_stopped=True,
+            ),
+        )
 
     assert _database_state(path) == before
 
