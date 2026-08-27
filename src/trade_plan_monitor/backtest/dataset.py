@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal, Self
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
 from trade_plan_monitor.market_data.models import AShareSymbol
@@ -13,6 +21,8 @@ from trade_plan_monitor.market_data.models import AShareSymbol
 DATASET_SCHEMA_VERSION = "backtest-dataset-v1"
 MAX_BACKTEST_YEARS = 5
 MAX_WARMUP_YEARS = 2
+MAX_DATASET_BLOCKERS = 100
+_SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 class _DatasetValue(BaseModel):
@@ -91,6 +101,64 @@ class DatasetManifest(_DatasetValue):
     items: tuple[DatasetItem, ...]
 
 
+class BacktestDatasetScopeSummary(_DatasetValue):
+    """Bounded public projection of one frozen dataset scope."""
+
+    symbols: tuple[AShareSymbol, ...]
+    start: date
+    end: date
+    warmup_start: date
+    historical_profile: HistoricalMinuteProfile
+    adjustment_policy: Literal["NONE"] = "NONE"
+
+
+class BacktestDatasetCoverage(_DatasetValue):
+    """Bounded coverage counts for a verified immutable dataset."""
+
+    symbol_count: int = Field(ge=0)
+    trading_day_count: int = Field(ge=0)
+    calendar_row_count: int = Field(ge=0)
+    minute_day_count: int = Field(ge=0)
+    minute_bar_count: int = Field(ge=0)
+    daily_limit_row_count: int = Field(ge=0)
+    daily_bar_row_count: int = Field(ge=0)
+    blockers: tuple[str, ...] = Field(max_length=MAX_DATASET_BLOCKERS)
+
+    @field_validator("blockers")
+    @classmethod
+    def validate_blockers(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if value != tuple(sorted(set(value))):
+            raise ValueError("blockers must be ordered and unique")
+        if any(
+            not blocker or not blocker.replace("_", "").isalnum() or blocker != blocker.upper()
+            for blocker in value
+        ):
+            raise ValueError("blockers must contain stable UPPER_SNAKE codes")
+        return value
+
+
+class BacktestDatasetSummary(_DatasetValue):
+    """Public dataset catalog value that never carries manifest membership."""
+
+    dataset_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    schema_version: Literal["backtest-dataset-v1"] = DATASET_SCHEMA_VERSION
+    scope: BacktestDatasetScopeSummary
+    coverage: BacktestDatasetCoverage
+    created_at: datetime
+    verified_at: datetime
+
+    @field_validator("created_at", "verified_at")
+    @classmethod
+    def canonicalize_business_time(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("dataset metadata time must be timezone-aware")
+        return value.astimezone(_SHANGHAI)
+
+    @field_serializer("created_at", "verified_at", when_used="json")
+    def serialize_business_time(self, value: datetime) -> str:
+        return value.isoformat(timespec="microseconds")
+
+
 class DatasetFreezeResult(_DatasetValue):
     """Fail-closed verification outcome."""
 
@@ -145,7 +213,11 @@ def _calendar_years_after(value: date, years: int) -> date:
 
 
 __all__ = [
+    "BacktestDatasetCoverage",
+    "BacktestDatasetScopeSummary",
+    "BacktestDatasetSummary",
     "DATASET_SCHEMA_VERSION",
+    "MAX_DATASET_BLOCKERS",
     "MAX_BACKTEST_YEARS",
     "MAX_WARMUP_YEARS",
     "DatasetFreezeResult",

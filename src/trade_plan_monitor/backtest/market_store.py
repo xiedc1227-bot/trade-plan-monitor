@@ -17,6 +17,9 @@ from pydantic import BaseModel
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.dataset import (
     DATASET_SCHEMA_VERSION,
+    BacktestDatasetCoverage,
+    BacktestDatasetScopeSummary,
+    BacktestDatasetSummary,
     DatasetFreezeResult,
     DatasetItem,
     DatasetManifest,
@@ -472,6 +475,49 @@ class BacktestMarketStore:
         with self._connect() as connection:
             return self._load_manifest(connection, normalized_hash)
 
+    def dataset_summary(self, dataset_hash: str) -> BacktestDatasetSummary:
+        """Return one bounded public projection without loading manifest membership."""
+
+        normalized_hash = _validate_hash(dataset_hash, "dataset_hash")
+        with self._connect() as connection:
+            rows = self._query_dataset_summaries(
+                connection,
+                limit=1,
+                dataset_hash=normalized_hash,
+            )
+        if not rows:
+            raise KeyError(normalized_hash)
+        return rows[0]
+
+    def list_dataset_summaries(
+        self,
+        *,
+        limit: int,
+        symbol: str | None = None,
+        start_on_or_after: date | None = None,
+        end_on_or_before: date | None = None,
+        historical_profile: str | None = None,
+        adjustment_policy: str | None = None,
+        high_water: tuple[str, str] | None = None,
+        after: tuple[str, str] | None = None,
+    ) -> tuple[BacktestDatasetSummary, ...]:
+        """Read one bounded keyset window ordered by creation time and hash."""
+
+        if type(limit) is not int or not 1 <= limit <= 101:
+            raise ValueError("internal dataset query limit must be between 1 and 101")
+        with self._connect() as connection:
+            return self._query_dataset_summaries(
+                connection,
+                limit=limit,
+                symbol=symbol,
+                start_on_or_after=start_on_or_after,
+                end_on_or_before=end_on_or_before,
+                historical_profile=historical_profile,
+                adjustment_policy=adjustment_policy,
+                high_water=high_water,
+                after=after,
+            )
+
     def dataset_minutes(
         self,
         dataset_hash: str,
@@ -874,6 +920,83 @@ class BacktestMarketStore:
         }
         return manifest
 
+    def _query_dataset_summaries(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        limit: int,
+        dataset_hash: str | None = None,
+        symbol: str | None = None,
+        start_on_or_after: date | None = None,
+        end_on_or_before: date | None = None,
+        historical_profile: str | None = None,
+        adjustment_policy: str | None = None,
+        high_water: tuple[str, str] | None = None,
+        after: tuple[str, str] | None = None,
+    ) -> tuple[BacktestDatasetSummary, ...]:
+        conditions: list[str] = []
+        parameters: list[object] = []
+        if dataset_hash is not None:
+            conditions.append("d.dataset_hash = ?")
+            parameters.append(dataset_hash)
+        if symbol is not None:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM json_each(json_extract(d.manifest_json, "
+                "'$.scope.symbols')) WHERE value = ?)"
+            )
+            parameters.append(symbol)
+        if start_on_or_after is not None:
+            conditions.append("json_extract(d.manifest_json, '$.scope.start') >= ?")
+            parameters.append(start_on_or_after.isoformat())
+        if end_on_or_before is not None:
+            conditions.append("json_extract(d.manifest_json, '$.scope.end') <= ?")
+            parameters.append(end_on_or_before.isoformat())
+        if historical_profile is not None:
+            conditions.append("json_extract(d.manifest_json, '$.scope.historical_profile') = ?")
+            parameters.append(historical_profile)
+        if adjustment_policy is not None:
+            conditions.append("json_extract(d.manifest_json, '$.scope.adjustment_policy') = ?")
+            parameters.append(adjustment_policy)
+        if high_water is not None:
+            high_water_time, high_water_hash = _catalog_storage_key(high_water)
+            conditions.append("(d.created_at < ? OR (d.created_at = ? AND d.dataset_hash <= ?))")
+            parameters.extend((high_water_time, high_water_time, high_water_hash))
+        if after is not None:
+            after_time, after_hash = _catalog_storage_key(after)
+            conditions.append("(d.created_at < ? OR (d.created_at = ? AND d.dataset_hash < ?))")
+            parameters.extend((after_time, after_time, after_hash))
+        where_clause = "" if not conditions else "WHERE " + " AND ".join(conditions)
+        parameters.append(limit)
+        rows = connection.execute(
+            f"""
+            WITH selected_dataset AS (
+                SELECT d.dataset_hash,
+                       json_extract(d.manifest_json, '$.schema_version') AS schema_version,
+                       json_extract(d.manifest_json, '$.scope') AS scope_json,
+                       d.created_at
+                FROM market_dataset AS d
+                {where_clause}
+                ORDER BY d.created_at DESC, d.dataset_hash DESC
+                LIMIT ?
+            )
+            SELECT d.dataset_hash,
+                   d.schema_version,
+                   d.scope_json,
+                   d.created_at,
+                   COUNT(DISTINCT CASE WHEN i.kind = 'MINUTE' THEN i.trade_date END),
+                   SUM(CASE WHEN i.kind = 'CALENDAR' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN i.kind = 'MINUTE' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN i.kind = 'LIMIT' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN i.kind = 'DAILY' THEN 1 ELSE 0 END)
+            FROM selected_dataset AS d
+            LEFT JOIN market_dataset_item AS i ON i.dataset_hash = d.dataset_hash
+            GROUP BY d.dataset_hash, d.schema_version, d.scope_json, d.created_at
+            ORDER BY d.created_at DESC, d.dataset_hash DESC
+            """,
+            tuple(parameters),
+        ).fetchall()
+        return tuple(_dataset_summary_from_row(row) for row in rows)
+
     def _dataset_contents_for_items(
         self,
         manifest: DatasetManifest,
@@ -1004,6 +1127,60 @@ class BacktestMarketStore:
 
 def _canonical_json(value: object) -> str:
     return canonical_json(value)
+
+
+def _dataset_summary_from_row(row: tuple[object, ...]) -> BacktestDatasetSummary:
+    if len(row) != 9:
+        raise RuntimeError("stored dataset summary row shape is invalid")
+    dataset_hash = _validate_hash(str(row[0]), "stored dataset_hash")
+    if str(row[1]) != DATASET_SCHEMA_VERSION:
+        raise RuntimeError("stored dataset schema version is invalid")
+    try:
+        stored_scope = DatasetScope.model_validate_json(str(row[2]))
+        scope = BacktestDatasetScopeSummary(
+            symbols=stored_scope.symbols,
+            start=stored_scope.start,
+            end=stored_scope.end,
+            warmup_start=stored_scope.warmup_start,
+            historical_profile=stored_scope.historical_profile,
+            adjustment_policy=stored_scope.adjustment_policy,
+        )
+        created_at = datetime.fromisoformat(str(row[3]))
+        coverage = BacktestDatasetCoverage(
+            symbol_count=len(scope.symbols),
+            trading_day_count=int(row[4]),
+            calendar_row_count=int(row[5]),
+            minute_day_count=int(row[6]),
+            minute_bar_count=int(row[6]) * 240,
+            daily_limit_row_count=int(row[7]),
+            daily_bar_row_count=int(row[8]),
+            blockers=(),
+        )
+        return BacktestDatasetSummary(
+            dataset_hash=dataset_hash,
+            scope=scope,
+            coverage=coverage,
+            created_at=created_at,
+            verified_at=created_at,
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise RuntimeError("stored dataset summary is invalid") from error
+
+
+def _catalog_storage_key(value: tuple[str, str]) -> tuple[str, str]:
+    if type(value) is not tuple or len(value) != 2:
+        raise ValueError("dataset catalog key must contain created_at and dataset_hash")
+    created_at_text, dataset_hash = value
+    normalized_hash = _validate_hash(dataset_hash, "dataset catalog hash")
+    try:
+        created_at = datetime.fromisoformat(created_at_text)
+    except (TypeError, ValueError) as error:
+        raise ValueError("dataset catalog time is invalid") from error
+    if created_at.tzinfo is None or created_at.utcoffset() != timedelta(hours=8):
+        raise ValueError("dataset catalog time must use +08:00")
+    if created_at.isoformat(timespec="microseconds") != created_at_text:
+        raise ValueError("dataset catalog time must use fixed-six-digit +08:00")
+    return created_at.astimezone(UTC).isoformat(timespec="microseconds"), normalized_hash
 
 
 def _dataset_identity(
