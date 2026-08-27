@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date, datetime
-from typing import Literal, Self
-from zoneinfo import ZoneInfo
+from typing import Literal, Protocol, Self
 
 from pydantic import (
     BaseModel,
@@ -16,13 +16,20 @@ from pydantic import (
 )
 
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
-from trade_plan_monitor.market_data.models import AShareSymbol
+from trade_plan_monitor.market_data.models import (
+    AShareSymbol,
+    DailyBar,
+    DailyLimit,
+    MinuteBar,
+    TradingDay,
+)
+
+from .time import SHANGHAI, format_shanghai_datetime
 
 DATASET_SCHEMA_VERSION = "backtest-dataset-v1"
 MAX_BACKTEST_YEARS = 5
 MAX_WARMUP_YEARS = 2
 MAX_DATASET_BLOCKERS = 100
-_SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 class _DatasetValue(BaseModel):
@@ -152,11 +159,71 @@ class BacktestDatasetSummary(_DatasetValue):
     def canonicalize_business_time(cls, value: datetime) -> datetime:
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("dataset metadata time must be timezone-aware")
-        return value.astimezone(_SHANGHAI)
+        return value.astimezone(SHANGHAI)
 
     @field_serializer("created_at", "verified_at", when_used="json")
     def serialize_business_time(self, value: datetime) -> str:
-        return value.isoformat(timespec="microseconds")
+        return format_shanghai_datetime(value)
+
+
+class FrozenSymbolDay(_DatasetValue):
+    """One verified symbol-day payload yielded by the internal frozen reader."""
+
+    symbol: AShareSymbol
+    trade_date: date
+    trading_day: TradingDay
+    minutes: tuple[MinuteBar, ...] = Field(max_length=240)
+    daily_limit: DailyLimit | None
+    daily_bar: DailyBar | None
+
+    @model_validator(mode="after")
+    def validate_symbol_day(self) -> Self:
+        if self.trading_day.cal_date != self.trade_date:
+            raise ValueError("trading_day must match trade_date")
+        if self.trading_day.exchange != exchange_for_symbol(self.symbol):
+            raise ValueError("trading_day exchange must match symbol")
+        if not self.trading_day.is_open:
+            if self.minutes or self.daily_limit is not None or self.daily_bar is not None:
+                raise ValueError("closed symbol-day cannot contain market payloads")
+            return self
+        if self.daily_bar is None:
+            raise ValueError("open symbol-day requires an official daily bar")
+        if (
+            self.daily_bar.symbol != self.symbol
+            or self.daily_bar.trade_date != self.trade_date
+            or not self.daily_bar.is_official
+        ):
+            raise ValueError("daily_bar must be official and match symbol-day")
+        if bool(self.minutes) != (self.daily_limit is not None):
+            raise ValueError("minutes and daily_limit must be present together")
+        if self.minutes:
+            if len(self.minutes) != 240:
+                raise ValueError("event-range symbol-day requires exactly 240 minutes")
+            if any(
+                minute.symbol != self.symbol or minute.bar_end.date() != self.trade_date
+                for minute in self.minutes
+            ):
+                raise ValueError("minutes must match symbol-day")
+            if self.daily_limit is None:  # pragma: no cover - guarded above
+                raise ValueError("event-range symbol-day requires daily_limit")
+            if (
+                self.daily_limit.symbol != self.symbol
+                or self.daily_limit.trade_date != self.trade_date
+            ):
+                raise ValueError("daily_limit must match symbol-day")
+        return self
+
+
+class FrozenDatasetReader(Protocol):
+    """One-shot internal stream over a verified frozen dataset snapshot."""
+
+    @property
+    def dataset_hash(self) -> str: ...
+
+    @property
+    def scope(self) -> DatasetScope: ...
+
+    def __iter__(self) -> Iterator[FrozenSymbolDay]: ...
 
 
 class DatasetFreezeResult(_DatasetValue):
@@ -224,6 +291,8 @@ __all__ = [
     "DatasetItem",
     "DatasetManifest",
     "DatasetScope",
+    "FrozenDatasetReader",
+    "FrozenSymbolDay",
     "MarketStoreStatistics",
     "exchange_for_symbol",
 ]

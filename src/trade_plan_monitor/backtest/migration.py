@@ -11,6 +11,8 @@ from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
 
+from trade_plan_monitor.backtest.time import normalize_market_metadata_timestamp
+
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _SQLITE_HEADER = b"SQLite format 3\x00"
 _SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
@@ -482,6 +484,8 @@ def require_safe_store_initialization(inventory: MigrationInventory) -> None:
         raise MigrationPreflightError("SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT")
     if inventory.requires_schema_migration:
         raise MigrationPreflightError("LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION")
+    if "UTC_MARKET_METADATA" in inventory.migration_reasons:
+        raise MigrationPreflightError("MARKET_METADATA_REQUIRES_VERIFIED_MIGRATION")
     assert_source_unchanged(inventory)
 
 
@@ -521,6 +525,102 @@ def authorize_migration(
         migration_reasons=inventory.migration_reasons,
         verified_backup=verified_backup,
     )
+
+
+def migrate_market_metadata(
+    inventory: MigrationInventory,
+    decision: MigrationDecision,
+) -> MigrationInventory:
+    """Convert only authorized market operational timestamps to canonical China time."""
+
+    if not isinstance(inventory, MigrationInventory):
+        raise TypeError("inventory must be a MigrationInventory")
+    if not isinstance(decision, MigrationDecision):
+        raise TypeError("decision must be a MigrationDecision")
+    if not decision.authorized:
+        raise MigrationPreflightError("MARKET_METADATA_MIGRATION_NOT_AUTHORIZED")
+    if inventory.database_state is not DatabaseState.CURRENT:
+        raise MigrationPreflightError("MARKET_METADATA_REQUIRES_CURRENT_SCHEMA")
+    if inventory.migration_reasons != ("UTC_MARKET_METADATA",):
+        raise MigrationPreflightError("MARKET_METADATA_MIGRATION_SCOPE_MISMATCH")
+    if (
+        decision.source_fingerprint != inventory.source_fingerprint.digest
+        or decision.migration_reasons != inventory.migration_reasons
+        or decision.verified_backup.source_fingerprint != inventory.source_fingerprint.digest
+    ):
+        raise MigrationPreflightError("MIGRATION_DECISION_SOURCE_MISMATCH")
+    if not decision.verified_backup.coordinator_stopped:
+        raise MigrationPreflightError("MIGRATION_REQUIRES_STOPPED_COORDINATOR")
+    assert_source_unchanged(inventory)
+
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(inventory.database_path, isolation_level=None, timeout=5)
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("PRAGMA busy_timeout=5000")
+        connection.execute("BEGIN IMMEDIATE")
+        before = _inspect_market(connection, frozenset(inventory.table_names))
+        if (
+            before["database_state"] is not DatabaseState.CURRENT
+            or before["dataset_hash_goldens"] != inventory.dataset_hash_goldens
+            or before["utc_metadata"] != inventory.utc_metadata
+            or before["migration_reasons"] != inventory.migration_reasons
+        ):
+            raise MigrationPreflightError("MIGRATION_SOURCE_CHANGED_AFTER_PREFLIGHT")
+        for table, column in _MARKET_METADATA_COLUMNS:
+            cursor = connection.execute(f'SELECT rowid, "{column}" FROM "{table}" ORDER BY rowid')
+            while rows := cursor.fetchmany(1_000):
+                updates: list[tuple[str, int, str]] = []
+                for rowid, raw_value in rows:
+                    try:
+                        normalized, converted = normalize_market_metadata_timestamp(raw_value)
+                    except (TypeError, ValueError) as error:
+                        raise MigrationPreflightError(
+                            "INVALID_MARKET_METADATA_TIMESTAMP"
+                        ) from error
+                    if converted:
+                        updates.append((normalized, int(rowid), str(raw_value)))
+                if not updates:
+                    continue
+                connection.executemany(
+                    f'UPDATE "{table}" SET "{column}" = ? WHERE rowid = ? AND "{column}" = ?',
+                    updates,
+                )
+        after = _inspect_market(connection, frozenset(inventory.table_names))
+        if (
+            after["database_state"] is not DatabaseState.CURRENT
+            or after["dataset_hash_goldens"] != inventory.dataset_hash_goldens
+            or after["migration_reasons"]
+        ):
+            raise MigrationPreflightError("MARKET_METADATA_POST_MIGRATION_MISMATCH")
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise MigrationPreflightError("MARKET_METADATA_FOREIGN_KEY_CHECK_FAILED")
+        integrity = connection.execute("PRAGMA integrity_check").fetchone()
+        if integrity != ("ok",):
+            raise MigrationPreflightError("MARKET_METADATA_INTEGRITY_CHECK_FAILED")
+        connection.commit()
+    except MigrationPreflightError:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except sqlite3.Error as error:
+        if connection is not None:
+            connection.rollback()
+        raise MigrationPreflightError("MARKET_METADATA_MIGRATION_FAILED") from error
+    finally:
+        if connection is not None:
+            connection.close()
+
+    migrated = inspect_market_database(inventory.database_path)
+    if (
+        migrated.database_state is not DatabaseState.CURRENT
+        or migrated.schema_sha256 != inventory.schema_sha256
+        or migrated.table_names != inventory.table_names
+        or migrated.dataset_hash_goldens != inventory.dataset_hash_goldens
+        or migrated.migration_reasons
+    ):
+        raise MigrationPreflightError("MARKET_METADATA_POST_MIGRATION_MISMATCH")
+    return migrated
 
 
 def _inspect_database(path: str | Path, *, store: str) -> MigrationInventory:
@@ -1053,5 +1153,6 @@ __all__ = [
     "authorize_migration",
     "inspect_market_database",
     "inspect_result_database",
+    "migrate_market_metadata",
     "require_safe_store_initialization",
 ]

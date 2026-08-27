@@ -24,6 +24,8 @@ from trade_plan_monitor.backtest.dataset import (
     DatasetItem,
     DatasetManifest,
     DatasetScope,
+    FrozenDatasetReader,
+    FrozenSymbolDay,
     MarketStoreStatistics,
     exchange_for_symbol,
 )
@@ -33,6 +35,7 @@ from trade_plan_monitor.backtest.migration import (
     require_safe_store_initialization,
 )
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
+from trade_plan_monitor.backtest.time import shanghai_now_text
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteBatch
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
 
@@ -106,6 +109,99 @@ CREATE TABLE IF NOT EXISTS market_dataset_item (
 CREATE INDEX IF NOT EXISTS ix_market_dataset_item_lookup
     ON market_dataset_item (dataset_hash, kind, symbol, trade_date);
 """
+
+
+class _SQLiteFrozenDatasetReader:
+    """One-shot reader bound to one stable SQLite read transaction."""
+
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        dataset_hash: str,
+        scope: DatasetScope,
+    ) -> None:
+        self._connection = connection
+        self._dataset_hash = dataset_hash
+        self._scope = scope
+        self._started = False
+        self._closed = False
+
+    @property
+    def dataset_hash(self) -> str:
+        return self._dataset_hash
+
+    @property
+    def scope(self) -> DatasetScope:
+        return self._scope
+
+    def __iter__(self) -> Iterator[FrozenSymbolDay]:
+        if self._closed:
+            raise RuntimeError("frozen dataset reader is closed")
+        if self._started:
+            raise RuntimeError("frozen dataset reader is one-shot")
+        self._started = True
+        return self._iterate_symbol_days()
+
+    def close(self) -> None:
+        self._closed = True
+
+    def _iterate_symbol_days(self) -> Iterator[FrozenSymbolDay]:
+        for symbol in self._scope.symbols:
+            exchange = exchange_for_symbol(symbol)
+            trade_date = self._scope.warmup_start
+            while trade_date <= self._scope.end:
+                if self._closed:
+                    raise RuntimeError("frozen dataset reader is closed")
+                trading_day = TradingDay.model_validate_json(
+                    _frozen_reader_content(
+                        self._connection,
+                        self._dataset_hash,
+                        f"CALENDAR:{exchange}:{trade_date.isoformat()}",
+                        "CALENDAR",
+                    )
+                )
+                minutes: tuple[MinuteBar, ...] = ()
+                daily_limit: DailyLimit | None = None
+                daily_bar: DailyBar | None = None
+                if trading_day.is_open:
+                    daily_bar = DailyBar.model_validate_json(
+                        _frozen_reader_content(
+                            self._connection,
+                            self._dataset_hash,
+                            f"DAILY:{symbol}:{trade_date.isoformat()}",
+                            "DAILY",
+                        )
+                    )
+                    if trade_date >= self._scope.start:
+                        minute_content = _frozen_reader_content(
+                            self._connection,
+                            self._dataset_hash,
+                            f"MINUTE:{symbol}:{trade_date.isoformat()}",
+                            "MINUTE",
+                        )
+                        minutes = _validated_minute_batch(
+                            self._connection,
+                            minute_content,
+                            expected_symbol=symbol,
+                            expected_date=trade_date,
+                        ).bars
+                        daily_limit = DailyLimit.model_validate_json(
+                            _frozen_reader_content(
+                                self._connection,
+                                self._dataset_hash,
+                                f"LIMIT:{symbol}:{trade_date.isoformat()}",
+                                "LIMIT",
+                            )
+                        )
+                yield FrozenSymbolDay(
+                    symbol=symbol,
+                    trade_date=trade_date,
+                    trading_day=trading_day,
+                    minutes=minutes,
+                    daily_limit=daily_limit,
+                    daily_bar=daily_bar,
+                )
+                trade_date += timedelta(days=1)
 
 
 class BacktestMarketStore:
@@ -189,7 +285,7 @@ class BacktestMarketStore:
                 "content": day_content,
             }
         )
-        now = _utc_now()
+        now = shanghai_now_text()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             for artifact_hash, symbol, bar_end, content_json in minute_rows:
@@ -441,7 +537,7 @@ class BacktestMarketStore:
                 INSERT OR IGNORE INTO market_dataset (dataset_hash, manifest_json, created_at)
                 VALUES (?, ?, ?)
                 """,
-                (dataset_hash, manifest_json, _utc_now()),
+                (dataset_hash, manifest_json, shanghai_now_text()),
             )
             item_rows = tuple(
                 (
@@ -474,6 +570,20 @@ class BacktestMarketStore:
         normalized_hash = _validate_hash(dataset_hash, "dataset_hash")
         with self._connect() as connection:
             return self._load_manifest(connection, normalized_hash)
+
+    @contextmanager
+    def open_frozen_dataset(self, dataset_hash: str) -> Iterator[FrozenDatasetReader]:
+        """Open one stable one-shot symbol-day stream over verified membership."""
+
+        normalized_hash = _validate_hash(dataset_hash, "dataset_hash")
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            reader = _open_frozen_reader(connection, normalized_hash)
+            try:
+                yield reader
+                connection.commit()
+            finally:
+                reader.close()
 
     def dataset_summary(self, dataset_hash: str) -> BacktestDatasetSummary:
         """Return one bounded public projection without loading manifest membership."""
@@ -762,7 +872,7 @@ class BacktestMarketStore:
         self,
         prepared: list[tuple[str, str, str | None, date, str, str]],
     ) -> tuple[str, ...]:
-        now = _utc_now()
+        now = shanghai_now_text()
         hashes: list[str] = []
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -957,12 +1067,16 @@ class BacktestMarketStore:
         if adjustment_policy is not None:
             conditions.append("json_extract(d.manifest_json, '$.scope.adjustment_policy') = ?")
             parameters.append(adjustment_policy)
+        legacy_utc = _dataset_catalog_uses_legacy_utc(connection)
         if high_water is not None:
-            high_water_time, high_water_hash = _catalog_storage_key(high_water)
+            high_water_time, high_water_hash = _catalog_storage_key(
+                high_water,
+                legacy_utc=legacy_utc,
+            )
             conditions.append("(d.created_at < ? OR (d.created_at = ? AND d.dataset_hash <= ?))")
             parameters.extend((high_water_time, high_water_time, high_water_hash))
         if after is not None:
-            after_time, after_hash = _catalog_storage_key(after)
+            after_time, after_hash = _catalog_storage_key(after, legacy_utc=legacy_utc)
             conditions.append("(d.created_at < ? OR (d.created_at = ? AND d.dataset_hash < ?))")
             parameters.extend((after_time, after_time, after_hash))
         where_clause = "" if not conditions else "WHERE " + " AND ".join(conditions)
@@ -1129,6 +1243,145 @@ def _canonical_json(value: object) -> str:
     return canonical_json(value)
 
 
+def _open_frozen_reader(
+    connection: sqlite3.Connection,
+    dataset_hash: str,
+) -> _SQLiteFrozenDatasetReader:
+    row = connection.execute(
+        """
+        SELECT json_extract(manifest_json, '$.dataset_hash'),
+               json_extract(manifest_json, '$.schema_version'),
+               json_extract(manifest_json, '$.scope'),
+               json_array_length(manifest_json, '$.items')
+        FROM market_dataset
+        WHERE dataset_hash = ?
+        """,
+        (dataset_hash,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"unknown dataset_hash: {dataset_hash}")
+    root_fields = frozenset(
+        str(item[0])
+        for item in connection.execute(
+            """
+            SELECT manifest_field.key
+            FROM market_dataset AS dataset,
+                 json_each(dataset.manifest_json) AS manifest_field
+            WHERE dataset.dataset_hash = ?
+            """,
+            (dataset_hash,),
+        )
+    )
+    if root_fields != {"dataset_hash", "schema_version", "scope", "items"}:
+        raise RuntimeError("stored dataset manifest fields are invalid")
+    if str(row[0]) != dataset_hash or str(row[1]) != DATASET_SCHEMA_VERSION:
+        raise RuntimeError("stored dataset manifest identity is invalid")
+    try:
+        scope = DatasetScope.model_validate_json(str(row[2]))
+        expected_item_count = int(row[3])
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("stored dataset manifest is invalid") from error
+    _verify_frozen_membership(
+        connection,
+        dataset_hash=dataset_hash,
+        scope=scope,
+        expected_item_count=expected_item_count,
+    )
+    return _SQLiteFrozenDatasetReader(connection, dataset_hash, scope)
+
+
+def _verify_frozen_membership(
+    connection: sqlite3.Connection,
+    *,
+    dataset_hash: str,
+    scope: DatasetScope,
+    expected_item_count: int,
+) -> None:
+    manifest_items = connection.execute(
+        """
+        SELECT manifest_item.value
+        FROM market_dataset AS dataset,
+             json_each(dataset.manifest_json, '$.items') AS manifest_item
+        WHERE dataset.dataset_hash = ?
+        ORDER BY CAST(manifest_item.key AS INTEGER)
+        """,
+        (dataset_hash,),
+    )
+    stored_items = connection.execute(
+        """
+        SELECT natural_key, artifact_hash, kind, symbol, trade_date
+        FROM market_dataset_item
+        WHERE dataset_hash = ?
+        ORDER BY natural_key
+        """,
+        (dataset_hash,),
+    )
+    digest = sha256()
+    digest.update(b'{"items":[')
+    item_count = 0
+    while rows := stored_items.fetchmany(1_000):
+        for row in rows:
+            item = DatasetItem(
+                natural_key=str(row[0]),
+                artifact_hash=str(row[1]),
+                kind=str(row[2]),
+                symbol=None if row[3] is None else str(row[3]),
+                trade_date=date.fromisoformat(str(row[4])),
+            )
+            manifest_row = manifest_items.fetchone()
+            if manifest_row is None:
+                raise RuntimeError("stored dataset membership exceeds its manifest")
+            try:
+                manifest_item = DatasetItem.model_validate_json(str(manifest_row[0]))
+            except ValueError as error:
+                raise RuntimeError("stored dataset manifest item is invalid") from error
+            if manifest_item != item:
+                raise RuntimeError("stored dataset membership does not match its manifest")
+            if item_count:
+                digest.update(b",")
+            digest.update(
+                _canonical_json(item.model_dump(mode="python", round_trip=True)).encode("utf-8")
+            )
+            item_count += 1
+    if manifest_items.fetchone() is not None or item_count != expected_item_count:
+        raise RuntimeError("stored dataset manifest membership count is invalid")
+    digest.update(b'],"schema_version":')
+    digest.update(_canonical_json(DATASET_SCHEMA_VERSION).encode("utf-8"))
+    digest.update(b',"scope":')
+    digest.update(_canonical_json(scope.model_dump(mode="python", round_trip=True)).encode("utf-8"))
+    digest.update(b"}")
+    if digest.hexdigest() != dataset_hash:
+        raise RuntimeError("stored dataset manifest failed its content hash")
+
+
+def _frozen_reader_content(
+    connection: sqlite3.Connection,
+    dataset_hash: str,
+    natural_key: str,
+    expected_kind: _ArtifactKind,
+) -> str:
+    row = connection.execute(
+        """
+        SELECT i.natural_key, i.artifact_hash, i.kind, i.symbol, i.trade_date,
+               a.artifact_hash, a.kind, a.provider, a.contract_version,
+               a.natural_key, a.content_json
+        FROM market_dataset_item AS i
+        JOIN market_artifact AS a ON a.artifact_hash = i.artifact_hash
+        WHERE i.dataset_hash = ? AND i.natural_key = ?
+        """,
+        (dataset_hash, natural_key),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("frozen dataset membership is incomplete")
+    if str(row[0]) != natural_key or str(row[2]) != expected_kind:
+        raise RuntimeError("frozen dataset membership identity is invalid")
+    return _validated_market_artifact(
+        row[5:],
+        expected_key=natural_key,
+        expected_kind=expected_kind,
+    )
+
+
 def _dataset_summary_from_row(row: tuple[object, ...]) -> BacktestDatasetSummary:
     if len(row) != 9:
         raise RuntimeError("stored dataset summary row shape is invalid")
@@ -1167,7 +1420,20 @@ def _dataset_summary_from_row(row: tuple[object, ...]) -> BacktestDatasetSummary
         raise RuntimeError("stored dataset summary is invalid") from error
 
 
-def _catalog_storage_key(value: tuple[str, str]) -> tuple[str, str]:
+def _dataset_catalog_uses_legacy_utc(connection: sqlite3.Connection) -> bool:
+    return (
+        connection.execute(
+            "SELECT 1 FROM market_dataset WHERE created_at LIKE '%+00:00' LIMIT 1"
+        ).fetchone()
+        is not None
+    )
+
+
+def _catalog_storage_key(
+    value: tuple[str, str],
+    *,
+    legacy_utc: bool,
+) -> tuple[str, str]:
     if type(value) is not tuple or len(value) != 2:
         raise ValueError("dataset catalog key must contain created_at and dataset_hash")
     created_at_text, dataset_hash = value
@@ -1180,7 +1446,12 @@ def _catalog_storage_key(value: tuple[str, str]) -> tuple[str, str]:
         raise ValueError("dataset catalog time must use +08:00")
     if created_at.isoformat(timespec="microseconds") != created_at_text:
         raise ValueError("dataset catalog time must use fixed-six-digit +08:00")
-    return created_at.astimezone(UTC).isoformat(timespec="microseconds"), normalized_hash
+    normalized_time = (
+        created_at.astimezone(UTC).isoformat(timespec="microseconds")
+        if legacy_utc
+        else created_at_text
+    )
+    return normalized_time, normalized_hash
 
 
 def _dataset_identity(
@@ -1393,10 +1664,6 @@ def _validate_hash(value: str, name: str) -> str:
     if any(character not in "0123456789abcdef" for character in value):
         raise ValueError(f"{name} must be a lowercase SHA-256 hex digest")
     return value
-
-
-def _utc_now() -> str:
-    return datetime.now(UTC).isoformat(timespec="microseconds")
 
 
 __all__ = ["BacktestMarketStore"]

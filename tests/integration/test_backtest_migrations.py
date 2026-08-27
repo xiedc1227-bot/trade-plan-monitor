@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import closing
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from hashlib import sha256
+from importlib import import_module
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
+import trade_plan_monitor.backtest.migration as migration_module
+from trade_plan_monitor.backtest.dataset import DatasetScope
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.migration import (
     DatabaseState,
@@ -21,9 +25,119 @@ from trade_plan_monitor.backtest.migration import (
     inspect_result_database,
 )
 from trade_plan_monitor.backtest.results import BacktestResultStore
+from trade_plan_monitor.market_data.historical_provider import (
+    HistoricalMinuteBatch,
+    HistoricalMinuteProfile,
+    HistoricalOpeningSpecial,
+)
+from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
+from trade_plan_monitor.market_data.sessions import expected_minute_ends
 
 _FIXTURE_DIRECTORY = Path(__file__).parents[1] / "fixtures" / "backtest"
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
+_SYMBOL = "600000.SH"
+_TRADE_DATE = date(2026, 8, 24)
+_PROFILE = HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1
+
+
+def _seed_frozen_market_dataset(store: BacktestMarketStore) -> tuple[DatasetScope, str]:
+    bars = tuple(
+        MinuteBar(
+            symbol=_SYMBOL,
+            bar_end=bar_end,
+            open_fen=1_000,
+            high_fen=1_001,
+            low_fen=999,
+            close_fen=1_000,
+            volume_shares=1_000 + index,
+            amount_yuan=Decimal(10_000 + index),
+            received_at=bar_end + timedelta(seconds=12),
+        )
+        for index, bar_end in enumerate(expected_minute_ends(_TRADE_DATE, is_open=True))
+    )
+    store.record_minute_batch(
+        HistoricalMinuteBatch(
+            symbol=_SYMBOL,
+            trade_date=_TRADE_DATE,
+            contract_version=_PROFILE,
+            bars=bars,
+            opening_special=HistoricalOpeningSpecial(
+                symbol=_SYMBOL,
+                source_time=datetime.combine(_TRADE_DATE, time(9, 30), _SHANGHAI),
+                open_fen=1_000,
+                high_fen=1_001,
+                low_fen=999,
+                close_fen=1_000,
+                volume_shares=500,
+                amount_yuan=Decimal("5000"),
+            ),
+        )
+    )
+    store.record_trading_days(
+        (
+            TradingDay(
+                exchange="SSE",
+                cal_date=_TRADE_DATE,
+                is_open=True,
+                previous_trade_date=date(2026, 8, 21),
+            ),
+        )
+    )
+    store.record_daily_limits(
+        (
+            DailyLimit(
+                symbol=_SYMBOL,
+                trade_date=_TRADE_DATE,
+                up_limit_fen=1_100,
+                down_limit_fen=900,
+                received_at=datetime.combine(_TRADE_DATE, time(9, 30), _SHANGHAI),
+            ),
+        )
+    )
+    store.record_daily_bars(
+        (
+            DailyBar(
+                symbol=_SYMBOL,
+                trade_date=_TRADE_DATE,
+                open_fen=1_000,
+                high_fen=1_050,
+                low_fen=950,
+                close_fen=1_020,
+                volume_shares=2_000_000,
+                amount_yuan=Decimal("20000000"),
+                is_official=True,
+                received_at=datetime.combine(_TRADE_DATE, time(15, 20), _SHANGHAI),
+            ),
+        )
+    )
+    scope = DatasetScope(
+        symbols=(_SYMBOL,),
+        start=_TRADE_DATE,
+        end=_TRADE_DATE,
+        warmup_start=_TRADE_DATE,
+        historical_profile=_PROFILE,
+    )
+    frozen = store.freeze_dataset(scope)
+    assert frozen.dataset_hash is not None
+    return scope, frozen.dataset_hash
+
+
+def _market_identity_snapshot(path: Path) -> tuple[tuple[object, ...], ...]:
+    queries = (
+        "SELECT artifact_hash, kind, provider, contract_version, natural_key, content_json "
+        "FROM market_artifact ORDER BY artifact_hash",
+        "SELECT natural_key, artifact_hash, revision, kind, symbol, trade_date "
+        "FROM market_head ORDER BY natural_key",
+        "SELECT artifact_hash, symbol, bar_end, content_json "
+        "FROM market_minute_artifact ORDER BY artifact_hash",
+        "SELECT symbol, bar_end, artifact_hash, revision "
+        "FROM market_minute_head ORDER BY symbol, bar_end",
+        "SELECT dataset_hash, manifest_json FROM market_dataset ORDER BY dataset_hash",
+        "SELECT dataset_hash, natural_key, artifact_hash, kind, symbol, trade_date "
+        "FROM market_dataset_item ORDER BY dataset_hash, natural_key",
+    )
+    with closing(sqlite3.connect(path)) as connection:
+        return tuple(tuple(connection.execute(query)) for query in queries)
 
 
 def _seed_legacy_results(path: Path, *, status: str = "COMPLETED") -> None:
@@ -624,3 +738,162 @@ def test_migration_decision_is_bound_to_source_and_verified_backup_facts(
                 coordinator_stopped=True,
             ),
         )
+
+
+def test_market_metadata_new_writes_and_parser_use_fixed_shanghai_time(
+    tmp_path: Path,
+) -> None:
+    time_module = import_module("trade_plan_monitor.backtest.time")
+    parsed = time_module.parse_shanghai_datetime("2026-08-27T10:03:04+08:00")
+
+    assert time_module.format_shanghai_datetime(parsed) == "2026-08-27T10:03:04.000000+08:00"
+    for invalid in (
+        "2026-08-27T02:03:04.000000Z",
+        "2026-08-27T10:03:04",
+        "2026-08-27T11:03:04.000000+09:00",
+        "2026-08-27T10:03:04.0000001+08:00",
+    ):
+        with pytest.raises(ValueError, match="Shanghai datetime"):
+            time_module.parse_shanghai_datetime(invalid)
+
+    path = tmp_path / "new-market.sqlite3"
+    store = BacktestMarketStore(path)
+    store.record_trading_days(
+        (
+            TradingDay(
+                exchange="SSE",
+                cal_date=_TRADE_DATE,
+                is_open=True,
+                previous_trade_date=date(2026, 8, 21),
+            ),
+        )
+    )
+    with closing(sqlite3.connect(path)) as connection:
+        values = connection.execute(
+            "SELECT created_at FROM market_artifact UNION ALL SELECT updated_at FROM market_head"
+        ).fetchall()
+    assert len(values) == 2
+    assert all(
+        time_module.format_shanghai_datetime(time_module.parse_shanghai_datetime(str(row[0])))
+        == row[0]
+        for row in values
+    )
+
+
+def test_market_metadata_migration_preserves_all_identity_bearing_rows(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "legacy-utc-market.sqlite3"
+    store = BacktestMarketStore(path)
+    _, dataset_hash = _seed_frozen_market_dataset(store)
+    legacy_utc = "2026-08-24T07:20:00.000000+00:00"
+    with closing(sqlite3.connect(path)) as connection:
+        for table, column in (
+            ("market_artifact", "created_at"),
+            ("market_head", "updated_at"),
+            ("market_minute_artifact", "created_at"),
+            ("market_minute_head", "updated_at"),
+            ("market_dataset", "created_at"),
+        ):
+            connection.execute(f'UPDATE "{table}" SET "{column}" = ?', (legacy_utc,))
+        connection.commit()
+    before_identity = _market_identity_snapshot(path)
+    inventory = inspect_market_database(path)
+    decision = authorize_migration(
+        inventory,
+        VerifiedBackupFacts(
+            source_fingerprint=inventory.source_fingerprint.digest,
+            backup_sha256="a" * 64,
+            backup_size_bytes=path.stat().st_size,
+            verified_at=datetime(2026, 8, 27, 16, 0, tzinfo=_SHANGHAI),
+            coordinator_stopped=True,
+        ),
+    )
+
+    migrated = migration_module.migrate_market_metadata(inventory, decision)
+
+    assert migrated.database_state is DatabaseState.CURRENT
+    assert migrated.migration_reasons == ()
+    assert migrated.dataset_hash_goldens == inventory.dataset_hash_goldens
+    assert _market_identity_snapshot(path) == before_identity
+    with closing(sqlite3.connect(path)) as connection:
+        for table, column in (
+            ("market_artifact", "created_at"),
+            ("market_head", "updated_at"),
+            ("market_minute_artifact", "created_at"),
+            ("market_minute_head", "updated_at"),
+            ("market_dataset", "created_at"),
+        ):
+            values = tuple(connection.execute(f'SELECT "{column}" FROM "{table}"'))
+            assert values
+            assert {row[0] for row in values} == {"2026-08-24T15:20:00.000000+08:00"}
+    assert BacktestMarketStore(path).dataset_manifest(dataset_hash).dataset_hash == dataset_hash
+
+
+def test_market_metadata_migration_rejects_ambiguous_time_before_mutation(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ambiguous-market-time.sqlite3"
+    store = BacktestMarketStore(path)
+    store.record_trading_days(
+        (
+            TradingDay(
+                exchange="SSE",
+                cal_date=_TRADE_DATE,
+                is_open=True,
+                previous_trade_date=date(2026, 8, 21),
+            ),
+        )
+    )
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("UPDATE market_artifact SET created_at = '2026-08-24T07:20:00+00:00'")
+        connection.execute("UPDATE market_head SET updated_at = '2026-08-24T16:20:00+09:00'")
+        connection.commit()
+    inventory = inspect_market_database(path)
+    decision = authorize_migration(
+        inventory,
+        VerifiedBackupFacts(
+            source_fingerprint=inventory.source_fingerprint.digest,
+            backup_sha256="b" * 64,
+            backup_size_bytes=path.stat().st_size,
+            verified_at=datetime(2026, 8, 27, 16, 0, tzinfo=_SHANGHAI),
+            coordinator_stopped=True,
+        ),
+    )
+    before = _database_state(path)
+
+    with pytest.raises(
+        MigrationPreflightError,
+        match="INVALID_MARKET_METADATA_TIMESTAMP",
+    ):
+        migration_module.migrate_market_metadata(inventory, decision)
+
+    assert _database_state(path) == before
+
+
+def test_frozen_reader_streams_one_verified_symbol_day_without_manifest_projection(
+    tmp_path: Path,
+) -> None:
+    store = BacktestMarketStore(tmp_path / "frozen-reader.sqlite3")
+    scope, dataset_hash = _seed_frozen_market_dataset(store)
+
+    with store.open_frozen_dataset(dataset_hash) as reader:
+        assert reader.dataset_hash == dataset_hash
+        assert reader.scope == scope
+        assert not hasattr(reader, "manifest")
+        assert not hasattr(reader, "items")
+        iterator = iter(reader)
+        symbol_day = next(iterator)
+        assert symbol_day.symbol == _SYMBOL
+        assert symbol_day.trade_date == _TRADE_DATE
+        assert symbol_day.trading_day.is_open is True
+        assert symbol_day.daily_bar is not None
+        assert symbol_day.daily_limit is not None
+        assert len(symbol_day.minutes) == 240
+        with pytest.raises(StopIteration):
+            next(iterator)
+        with pytest.raises(RuntimeError, match="one-shot"):
+            iter(reader)
+
+    with pytest.raises(RuntimeError, match="closed"):
+        iter(reader)
