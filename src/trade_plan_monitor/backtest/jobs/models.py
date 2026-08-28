@@ -10,6 +10,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SecretStr,
     StringConstraints,
     field_serializer,
     field_validator,
@@ -26,6 +27,9 @@ MAX_JOB_REQUEST_BYTES = 256 * 1024
 MAX_JOB_ERROR_CHARACTERS = 512
 MAX_QUEUED_JOBS = 100
 JOB_IDEMPOTENCY_DAYS = 14
+JOB_LEASE_SECONDS = 30
+JOB_MAX_CLAIM_GENERATIONS = 3
+JOB_PROGRESS_INTERVAL_SECONDS = 1.0
 
 Sha256Hex = Annotated[
     str,
@@ -233,6 +237,85 @@ class BacktestJobReceipt(_JobValue):
         return self
 
 
+class BacktestJobClaim(_JobValue):
+    """Internal worker claim; its opaque token is redacted from representations."""
+
+    job_id: JobIdentifier
+    kind: BacktestJobKind
+    canonical_request_json: SecretStr
+    run_id: Sha256Hex | None = None
+    dataset_hash: Sha256Hex | None = None
+    attempt: Annotated[
+        int,
+        Field(strict=True, ge=1, le=JOB_MAX_CLAIM_GENERATIONS),
+    ]
+    revision: Annotated[int, Field(strict=True, ge=1)]
+    claim_token: SecretStr
+    claimed_at: datetime
+    lease_expires_at: datetime
+
+    @field_validator("canonical_request_json")
+    @classmethod
+    def validate_request_bytes(cls, value: SecretStr) -> SecretStr:
+        request_json = value.get_secret_value()
+        if not request_json:
+            raise ValueError("canonical job request must not be empty")
+        if len(request_json.encode("utf-8")) > MAX_JOB_REQUEST_BYTES:
+            raise ValueError("canonical job request exceeds 256 KiB")
+        return value
+
+    @field_validator("claim_token")
+    @classmethod
+    def validate_claim_token(cls, value: SecretStr) -> SecretStr:
+        token = value.get_secret_value()
+        if len(token) != 64 or any(character not in "0123456789abcdef" for character in token):
+            raise ValueError("claim_token must be an opaque 256-bit value")
+        return value
+
+    @field_validator("claimed_at", "lease_expires_at")
+    @classmethod
+    def normalize_claim_times(cls, value: datetime) -> datetime:
+        return _canonical_business_time(value)
+
+    @field_serializer("claimed_at", "lease_expires_at", when_used="json")
+    def serialize_claim_times(self, value: datetime) -> str:
+        return format_shanghai_datetime(value)
+
+    @model_validator(mode="after")
+    def validate_claim_shape(self) -> Self:
+        if self.lease_expires_at <= self.claimed_at:
+            raise ValueError("lease_expires_at must follow claimed_at")
+        if self.kind is BacktestJobKind.BACKTEST_RUN:
+            if self.run_id is None or self.dataset_hash is None:
+                raise ValueError("BACKTEST_RUN claim requires run_id and dataset_hash")
+        elif self.run_id is not None:
+            raise ValueError("non-run claim cannot expose run_id")
+        if self.kind is BacktestJobKind.DATA_SYNC and self.dataset_hash is not None:
+            raise ValueError("DATA_SYNC claim cannot expose dataset_hash")
+        return self
+
+
+class BacktestJobCancellationReceipt(_JobValue):
+    """Canonical cancellation response retained independently of later job state."""
+
+    job_id: JobIdentifier
+    status: Literal[
+        BacktestJobStatus.CANCEL_REQUESTED,
+        BacktestJobStatus.COMPLETED,
+        BacktestJobStatus.FAILED,
+        BacktestJobStatus.CANCELLED,
+    ]
+    attempt: Annotated[int, Field(strict=True, ge=0, le=JOB_MAX_CLAIM_GENERATIONS)]
+    revision: NonNegativeInteger
+    responded_at: datetime
+
+    _normalize_responded_at = field_validator("responded_at")(_canonical_business_time)
+
+    @field_serializer("responded_at", when_used="json")
+    def serialize_responded_at(self, value: datetime) -> str:
+        return format_shanghai_datetime(value)
+
+
 class BacktestJobView(_JobValue):
     job_id: JobIdentifier
     kind: BacktestJobKind
@@ -317,11 +400,36 @@ class BacktestJobView(_JobValue):
             raise ValueError("run job and result run_id must agree")
         if self.reused and self.status is not BacktestJobStatus.COMPLETED:
             raise ValueError("only a completed job may be reused")
+        if self.status is BacktestJobStatus.QUEUED and self.attempt != 0:
+            raise ValueError("queued job must have attempt=0")
+        if (
+            self.status
+            in {
+                BacktestJobStatus.RUNNING,
+                BacktestJobStatus.CANCEL_REQUESTED,
+            }
+            and self.attempt == 0
+        ):
+            raise ValueError("active job must have a worker claim")
+        if self.status is BacktestJobStatus.CANCEL_REQUESTED:
+            if self.cancel_requested_at is None:
+                raise ValueError("CANCEL_REQUESTED job requires cancel_requested_at")
+        elif self.status is not BacktestJobStatus.CANCELLED:
+            if self.cancel_requested_at is not None:
+                raise ValueError("only cancelling/cancelled jobs expose cancel_requested_at")
+        if self.status is BacktestJobStatus.FAILED:
+            if self.error_code is None:
+                raise ValueError("failed job requires a sanitized error")
+        elif self.error_code is not None:
+            raise ValueError("only a failed job may expose an error")
         return self
 
 
 __all__ = [
     "JOB_IDEMPOTENCY_DAYS",
+    "JOB_LEASE_SECONDS",
+    "JOB_MAX_CLAIM_GENERATIONS",
+    "JOB_PROGRESS_INTERVAL_SECONDS",
     "MAX_JOB_ERROR_CHARACTERS",
     "MAX_JOB_REQUEST_BYTES",
     "MAX_QUEUED_JOBS",
@@ -329,6 +437,8 @@ __all__ = [
     "BacktestDatasetVerificationJobResult",
     "BacktestDataSyncJobResult",
     "BacktestJobKind",
+    "BacktestJobClaim",
+    "BacktestJobCancellationReceipt",
     "BacktestJobPhase",
     "BacktestJobProgress",
     "BacktestJobReceipt",

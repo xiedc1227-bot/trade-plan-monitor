@@ -10,15 +10,22 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
+from secrets import token_hex
 from uuid import uuid4
 
 from trade_plan_monitor.backtest.canonical import canonical_json
+from trade_plan_monitor.backtest.control import MonotonicProgressThrottle
 from trade_plan_monitor.backtest.jobs.models import (
     JOB_IDEMPOTENCY_DAYS,
+    JOB_LEASE_SECONDS,
+    JOB_MAX_CLAIM_GENERATIONS,
+    JOB_PROGRESS_INTERVAL_SECONDS,
     MAX_JOB_REQUEST_BYTES,
     MAX_QUEUED_JOBS,
     BacktestDatasetVerificationJobResult,
     BacktestDataSyncJobResult,
+    BacktestJobCancellationReceipt,
+    BacktestJobClaim,
     BacktestJobKind,
     BacktestJobPhase,
     BacktestJobProgress,
@@ -52,8 +59,11 @@ from trade_plan_monitor.backtest.time import (
 _REQUEST_HASH_DOMAIN = b"backtest-job-request-v1\0"
 _OPERATION_HASH_DOMAIN = b"backtest-job-operation-v1\0"
 _RUN_INPUT_HASH_DOMAIN = b"backtest-run-input-record-v1\0"
+_CANCEL_HASH_DOMAIN = b"backtest-job-cancel-v1\0"
 _IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _REQUEST_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+_CLAIM_TOKEN_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_ERROR_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,127}$")
 _ACTIVE_STATUSES = (
     BacktestJobStatus.QUEUED.value,
     BacktestJobStatus.RUNNING.value,
@@ -65,6 +75,10 @@ _JOB_COLUMNS = """
     attempt, revision, created_at, started_at, updated_at,
     finished_at, cancel_requested_at, reused, result_json,
     error_code, error_message
+"""
+_CLAIM_COLUMNS = """
+    job_id, kind, request_json, run_id, dataset_hash,
+    attempt, revision, claim_token, heartbeat_at, lease_expires_at
 """
 
 
@@ -90,6 +104,7 @@ class BacktestJobRepository:
         *,
         busy_timeout_ms: int = 5_000,
         clock: Callable[[], datetime] | None = None,
+        monotonic_clock: Callable[[], float] | None = None,
     ) -> None:
         if not isinstance(database_path, (str, Path)):
             raise TypeError("database_path must be a string or Path")
@@ -99,11 +114,21 @@ class BacktestJobRepository:
             raise ValueError("busy_timeout_ms must be between 1 and 60000")
         if clock is not None and not callable(clock):
             raise TypeError("clock must be callable")
+        if monotonic_clock is not None and not callable(monotonic_clock):
+            raise TypeError("monotonic_clock must be callable")
         self._path = Path(database_path).expanduser().resolve()
         if self._path.exists() and not self._path.is_file():
             raise ValueError("database_path must point to a file")
         self._busy_timeout_ms = busy_timeout_ms
         self._clock = clock
+        self._progress_throttle = (
+            MonotonicProgressThrottle(interval_seconds=JOB_PROGRESS_INTERVAL_SECONDS)
+            if monotonic_clock is None
+            else MonotonicProgressThrottle(
+                interval_seconds=JOB_PROGRESS_INTERVAL_SECONDS,
+                clock=monotonic_clock,
+            )
+        )
         self._migration_inventory = inspect_result_database(self._path)
         reject_incompatible_database(
             self._path,
@@ -340,6 +365,665 @@ class BacktestJobRepository:
             ).fetchall()
         return tuple(_view_from_row(row) for row in rows)
 
+    def claim_next(self) -> BacktestJobClaim | None:
+        """Atomically claim the oldest queued job when the single slot is free."""
+
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        lease_text = format_shanghai_datetime(now + timedelta(seconds=JOB_LEASE_SECONDS))
+        claim_token = token_hex(32)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            active = connection.execute(
+                "SELECT job_id FROM backtest_job "
+                "WHERE status IN ('RUNNING', 'CANCEL_REQUESTED') LIMIT 2"
+            ).fetchall()
+            if len(active) > 1:
+                raise RuntimeError("durable job store contains more than one active job")
+            if active:
+                connection.commit()
+                return None
+            row = connection.execute(
+                """
+                SELECT job_id FROM backtest_job
+                WHERE status = 'QUEUED' AND attempt = 0
+                ORDER BY created_at, job_id LIMIT 1
+                """
+            ).fetchone()
+            if row is None:
+                connection.commit()
+                return None
+            job_id = str(row[0])
+            membership_revision = _next_membership_revision(connection)
+            updated = connection.execute(
+                """
+                UPDATE backtest_job
+                SET status = 'RUNNING', phase = 'VALIDATING_INPUT', attempt = 1,
+                    revision = revision + 1, membership_revision = ?,
+                    started_at = ?, updated_at = ?, claim_token = ?,
+                    lease_expires_at = ?, heartbeat_at = ?, progress_updated_at = NULL
+                WHERE job_id = ? AND status = 'QUEUED' AND attempt = 0
+                """,
+                (
+                    membership_revision,
+                    now_text,
+                    now_text,
+                    claim_token,
+                    lease_text,
+                    now_text,
+                    job_id,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("queued job claim lost inside its write transaction")
+            claim = self._load_claim(connection, job_id)
+            connection.commit()
+        return claim
+
+    def heartbeat(self, job_id: str, claim_token: str) -> bool:
+        """Extend a current active claim without changing its public revision."""
+
+        normalized_job_id = _validate_job_id(job_id)
+        normalized_token = _validate_claim_token(claim_token)
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        lease_text = format_shanghai_datetime(now + timedelta(seconds=JOB_LEASE_SECONDS))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            updated = connection.execute(
+                """
+                UPDATE backtest_job
+                SET heartbeat_at = ?, lease_expires_at = ?
+                WHERE job_id = ? AND claim_token = ?
+                  AND status IN ('RUNNING', 'CANCEL_REQUESTED')
+                  AND lease_expires_at > ?
+                """,
+                (
+                    now_text,
+                    lease_text,
+                    normalized_job_id,
+                    normalized_token,
+                    now_text,
+                ),
+            )
+            connection.commit()
+        return updated.rowcount == 1
+
+    def update_progress(
+        self,
+        job_id: str,
+        claim_token: str,
+        *,
+        phase: BacktestJobPhase,
+        completed_units: int,
+        total_units: int | None = None,
+    ) -> bool:
+        """Persist monotonic worker progress, throttled outside phase transitions."""
+
+        normalized_job_id = _validate_job_id(job_id)
+        normalized_token = _validate_claim_token(claim_token)
+        if not isinstance(phase, BacktestJobPhase):
+            raise TypeError("phase must be a BacktestJobPhase")
+        if phase in {BacktestJobPhase.QUEUED, BacktestJobPhase.TERMINAL}:
+            raise ValueError("worker progress phase must be nonterminal")
+        if type(completed_units) is not int or completed_units < 0:
+            raise ValueError("completed_units must be a non-negative integer")
+        if total_units is not None and (type(total_units) is not int or total_units < 0):
+            raise ValueError("total_units must be a non-negative integer or None")
+        if total_units is not None and completed_units > total_units:
+            raise ValueError("completed_units cannot exceed total_units")
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        throttle_key = f"{normalized_job_id}:{normalized_token}"
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT phase, completed_units, total_units
+                FROM backtest_job
+                WHERE job_id = ? AND claim_token = ? AND status = 'RUNNING'
+                  AND lease_expires_at > ?
+                """,
+                (normalized_job_id, normalized_token, now_text),
+            ).fetchone()
+            if row is None:
+                connection.commit()
+                return False
+            previous_completed = int(row[1])
+            previous_total = None if row[2] is None else int(row[2])
+            if completed_units < previous_completed:
+                raise ValueError("completed_units must be monotonic within an attempt")
+            normalized_total = previous_total if total_units is None else total_units
+            if (
+                previous_total is not None
+                and normalized_total is not None
+                and normalized_total < previous_total
+            ):
+                raise ValueError("total_units must be monotonic within an attempt")
+            if normalized_total is not None and completed_units > normalized_total:
+                raise ValueError("completed_units cannot exceed total_units")
+            phase_changed = str(row[0]) != phase.value
+            if not self._progress_throttle.admit(throttle_key, force=phase_changed):
+                connection.commit()
+                return False
+            updated = connection.execute(
+                """
+                UPDATE backtest_job
+                SET phase = ?, completed_units = ?, total_units = ?,
+                    progress_updated_at = ?, updated_at = ?, revision = revision + 1
+                WHERE job_id = ? AND claim_token = ? AND status = 'RUNNING'
+                  AND lease_expires_at > ?
+                """,
+                (
+                    phase.value,
+                    completed_units,
+                    normalized_total,
+                    now_text,
+                    now_text,
+                    normalized_job_id,
+                    normalized_token,
+                    now_text,
+                ),
+            )
+            if updated.rowcount != 1:
+                self._progress_throttle.forget(throttle_key)
+                connection.commit()
+                return False
+            connection.commit()
+        return True
+
+    def complete(
+        self,
+        job_id: str,
+        claim_token: str,
+        result: BacktestDataSyncJobResult
+        | BacktestDatasetVerificationJobResult
+        | BacktestRunJobResult,
+    ) -> bool:
+        """Commit one token-fenced completed job representation."""
+
+        normalized_job_id = _validate_job_id(job_id)
+        normalized_token = _validate_claim_token(claim_token)
+        if not isinstance(
+            result,
+            (
+                BacktestDataSyncJobResult,
+                BacktestDatasetVerificationJobResult,
+                BacktestRunJobResult,
+            ),
+        ):
+            raise TypeError("result must be a closed backtest job result")
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        expires_at = format_shanghai_datetime(now + timedelta(days=JOB_IDEMPOTENCY_DAYS))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT kind, run_id, dataset_hash FROM backtest_job
+                WHERE job_id = ? AND claim_token = ? AND status = 'RUNNING'
+                  AND lease_expires_at > ?
+                """,
+                (normalized_job_id, normalized_token, now_text),
+            ).fetchone()
+            if row is None:
+                connection.commit()
+                return False
+            kind = BacktestJobKind(str(row[0]))
+            if result.kind is not kind:
+                raise ValueError("job result kind does not match the claimed job")
+            if isinstance(result, BacktestRunJobResult) and result.run_id != str(row[1]):
+                raise ValueError("run result identity does not match the claimed job")
+            dataset_hash = (
+                result.dataset_hash
+                if isinstance(result, BacktestDatasetVerificationJobResult)
+                else (None if row[2] is None else str(row[2]))
+            )
+            membership_revision = _next_membership_revision(connection)
+            updated = connection.execute(
+                """
+                UPDATE backtest_job
+                SET status = 'COMPLETED', phase = 'TERMINAL', dataset_hash = ?,
+                    result_json = ?, finished_at = ?, updated_at = ?,
+                    revision = revision + 1, membership_revision = ?,
+                    claim_token = NULL, lease_expires_at = NULL, heartbeat_at = NULL,
+                    error_code = NULL, error_message = NULL
+                WHERE job_id = ? AND claim_token = ? AND status = 'RUNNING'
+                  AND lease_expires_at > ?
+                """,
+                (
+                    dataset_hash,
+                    canonical_json(result.model_dump(mode="json", round_trip=True)),
+                    now_text,
+                    now_text,
+                    membership_revision,
+                    normalized_job_id,
+                    normalized_token,
+                    now_text,
+                ),
+            )
+            if updated.rowcount != 1:
+                connection.commit()
+                return False
+            _expire_job_idempotency(connection, normalized_job_id, expires_at)
+            connection.commit()
+        self._progress_throttle.forget(f"{normalized_job_id}:{normalized_token}")
+        return True
+
+    def fail(
+        self,
+        job_id: str,
+        claim_token: str,
+        error_code: str,
+        error_message: str,
+    ) -> bool:
+        """Commit one sanitized failure only for the current unexpired claim."""
+
+        normalized_job_id = _validate_job_id(job_id)
+        normalized_token = _validate_claim_token(claim_token)
+        normalized_code, normalized_message = _validate_sanitized_error(error_code, error_message)
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        expires_at = format_shanghai_datetime(now + timedelta(days=JOB_IDEMPOTENCY_DAYS))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            membership_revision = _next_membership_revision(connection)
+            updated = connection.execute(
+                """
+                UPDATE backtest_job
+                SET status = 'FAILED', phase = 'TERMINAL', result_json = NULL,
+                    error_code = ?, error_message = ?, finished_at = ?, updated_at = ?,
+                    revision = revision + 1, membership_revision = ?,
+                    claim_token = NULL, lease_expires_at = NULL, heartbeat_at = NULL
+                WHERE job_id = ? AND claim_token = ? AND status = 'RUNNING'
+                  AND lease_expires_at > ?
+                """,
+                (
+                    normalized_code,
+                    normalized_message,
+                    now_text,
+                    now_text,
+                    membership_revision,
+                    normalized_job_id,
+                    normalized_token,
+                    now_text,
+                ),
+            )
+            if updated.rowcount != 1:
+                connection.rollback()
+                return False
+            _expire_job_idempotency(connection, normalized_job_id, expires_at)
+            connection.commit()
+        self._progress_throttle.forget(f"{normalized_job_id}:{normalized_token}")
+        return True
+
+    def request_cancel(
+        self,
+        job_id: str,
+        idempotency_key: str,
+    ) -> BacktestJobCancellationReceipt:
+        """Atomically request cancellation and retain its canonical response."""
+
+        normalized_job_id = _validate_job_id(job_id)
+        normalized_key = _validate_idempotency_key(idempotency_key)
+        request_json = canonical_json({"jobId": normalized_job_id, "operation": "CANCEL"})
+        request_hash = sha256(_CANCEL_HASH_DOMAIN + request_json.encode("utf-8")).hexdigest()
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            replay = self._claim_or_replay_cancellation(
+                connection,
+                idempotency_key=normalized_key,
+                request_hash=request_hash,
+                now=now,
+                created_at=now_text,
+            )
+            if replay is not None:
+                connection.commit()
+                return replay
+            row = connection.execute(
+                """
+                SELECT status, attempt, revision, finished_at
+                FROM backtest_job WHERE job_id = ?
+                """,
+                (normalized_job_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("backtest job not found")
+            status = BacktestJobStatus(str(row[0]))
+            attempt = int(row[1])
+            revision = int(row[2])
+            finished_at = None if row[3] is None else parse_shanghai_datetime(str(row[3]))
+            if status is BacktestJobStatus.QUEUED:
+                membership_revision = _next_membership_revision(connection)
+                updated = connection.execute(
+                    """
+                    UPDATE backtest_job
+                    SET status = 'CANCELLED', phase = 'TERMINAL',
+                        cancel_requested_at = ?, finished_at = ?, updated_at = ?,
+                        revision = revision + 1, membership_revision = ?
+                    WHERE job_id = ? AND status = 'QUEUED' AND attempt = 0
+                    """,
+                    (
+                        now_text,
+                        now_text,
+                        now_text,
+                        membership_revision,
+                        normalized_job_id,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise RuntimeError("queued cancellation lost inside its write transaction")
+                status = BacktestJobStatus.CANCELLED
+                revision += 1
+                finished_at = now
+            elif status is BacktestJobStatus.RUNNING:
+                membership_revision = _next_membership_revision(connection)
+                updated = connection.execute(
+                    """
+                    UPDATE backtest_job
+                    SET status = 'CANCEL_REQUESTED', cancel_requested_at = ?,
+                        updated_at = ?, revision = revision + 1,
+                        membership_revision = ?
+                    WHERE job_id = ? AND status = 'RUNNING'
+                    """,
+                    (
+                        now_text,
+                        now_text,
+                        membership_revision,
+                        normalized_job_id,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise RuntimeError("running cancellation lost inside its write transaction")
+                status = BacktestJobStatus.CANCEL_REQUESTED
+                revision += 1
+            receipt = BacktestJobCancellationReceipt(
+                job_id=normalized_job_id,
+                status=status,
+                attempt=attempt,
+                revision=revision,
+                responded_at=now,
+            )
+            expires_at = (
+                None
+                if finished_at is None
+                else format_shanghai_datetime(finished_at + timedelta(days=JOB_IDEMPOTENCY_DAYS))
+            )
+            self._bind_cancellation_response(
+                connection,
+                idempotency_key=normalized_key,
+                request_hash=request_hash,
+                job_id=normalized_job_id,
+                receipt=receipt,
+                created_at=now_text,
+                expires_at=expires_at,
+            )
+            if expires_at is not None:
+                _expire_job_idempotency(connection, normalized_job_id, expires_at)
+            connection.commit()
+            return receipt
+
+    def acknowledge_cancel(self, job_id: str, claim_token: str) -> bool:
+        """Let only the current unexpired worker acknowledge cancellation."""
+
+        normalized_job_id = _validate_job_id(job_id)
+        normalized_token = _validate_claim_token(claim_token)
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        expires_at = format_shanghai_datetime(now + timedelta(days=JOB_IDEMPOTENCY_DAYS))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            membership_revision = _next_membership_revision(connection)
+            updated = connection.execute(
+                """
+                UPDATE backtest_job
+                SET status = 'CANCELLED', phase = 'TERMINAL', result_json = NULL,
+                    finished_at = ?, updated_at = ?, revision = revision + 1,
+                    membership_revision = ?, claim_token = NULL,
+                    lease_expires_at = NULL, heartbeat_at = NULL,
+                    error_code = NULL, error_message = NULL
+                WHERE job_id = ? AND claim_token = ?
+                  AND status = 'CANCEL_REQUESTED' AND lease_expires_at > ?
+                """,
+                (
+                    now_text,
+                    now_text,
+                    membership_revision,
+                    normalized_job_id,
+                    normalized_token,
+                    now_text,
+                ),
+            )
+            if updated.rowcount != 1:
+                connection.rollback()
+                return False
+            _expire_job_idempotency(connection, normalized_job_id, expires_at)
+            connection.commit()
+        self._progress_throttle.forget(f"{normalized_job_id}:{normalized_token}")
+        return True
+
+    def recover_expired(self) -> BacktestJobClaim | None:
+        """Recover or terminate the one expired active claim deterministically."""
+
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        terminal_expiry = format_shanghai_datetime(now + timedelta(days=JOB_IDEMPOTENCY_DAYS))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                """
+                SELECT job_id, kind, status, request_json, run_id, dataset_hash,
+                       attempt, revision, claim_token, lease_expires_at,
+                       network_authorized_at
+                FROM backtest_job
+                WHERE status IN ('RUNNING', 'CANCEL_REQUESTED')
+                ORDER BY created_at, job_id LIMIT 2
+                """
+            ).fetchall()
+            if len(rows) > 1:
+                raise RuntimeError("durable job store contains more than one active job")
+            if not rows:
+                connection.commit()
+                return None
+            row = rows[0]
+            if row[9] is None or str(row[9]) > now_text:
+                connection.commit()
+                return None
+            job_id = str(row[0])
+            kind = BacktestJobKind(str(row[1]))
+            status = BacktestJobStatus(str(row[2]))
+            attempt = int(row[6])
+            previous_token = None if row[8] is None else str(row[8])
+            if previous_token is None:
+                raise RuntimeError("active job is missing its claim token")
+            if status is BacktestJobStatus.CANCEL_REQUESTED:
+                membership_revision = _next_membership_revision(connection)
+                connection.execute(
+                    """
+                    UPDATE backtest_job
+                    SET status = 'CANCELLED', phase = 'TERMINAL', result_json = NULL,
+                        finished_at = ?, updated_at = ?, revision = revision + 1,
+                        membership_revision = ?, claim_token = NULL,
+                        lease_expires_at = NULL, heartbeat_at = NULL,
+                        error_code = NULL, error_message = NULL
+                    WHERE job_id = ? AND status = 'CANCEL_REQUESTED'
+                      AND claim_token = ? AND lease_expires_at <= ?
+                    """,
+                    (
+                        now_text,
+                        now_text,
+                        membership_revision,
+                        job_id,
+                        previous_token,
+                        now_text,
+                    ),
+                )
+                _expire_job_idempotency(connection, job_id, terminal_expiry)
+                connection.commit()
+                self._progress_throttle.forget(f"{job_id}:{previous_token}")
+                return None
+            recovery_error: tuple[str, str] | None = None
+            if attempt >= JOB_MAX_CLAIM_GENERATIONS:
+                recovery_error = (
+                    "WORKER_RECOVERY_EXHAUSTED",
+                    "Worker lease expired after three claim generations.",
+                )
+            elif kind is BacktestJobKind.DATA_SYNC and not _has_sync_authorization(
+                request_json=str(row[3]),
+                network_authorized_at=row[10],
+            ):
+                recovery_error = (
+                    "NETWORK_AUTHORIZATION_MISSING",
+                    "Persisted job-scoped network authorization is missing.",
+                )
+            if recovery_error is not None:
+                membership_revision = _next_membership_revision(connection)
+                connection.execute(
+                    """
+                    UPDATE backtest_job
+                    SET status = 'FAILED', phase = 'TERMINAL', result_json = NULL,
+                        error_code = ?, error_message = ?, finished_at = ?, updated_at = ?,
+                        revision = revision + 1, membership_revision = ?,
+                        claim_token = NULL, lease_expires_at = NULL, heartbeat_at = NULL
+                    WHERE job_id = ? AND status = 'RUNNING'
+                      AND claim_token = ? AND lease_expires_at <= ?
+                    """,
+                    (
+                        *recovery_error,
+                        now_text,
+                        now_text,
+                        membership_revision,
+                        job_id,
+                        previous_token,
+                        now_text,
+                    ),
+                )
+                _expire_job_idempotency(connection, job_id, terminal_expiry)
+                connection.commit()
+                self._progress_throttle.forget(f"{job_id}:{previous_token}")
+                return None
+            new_token = token_hex(32)
+            lease_text = format_shanghai_datetime(now + timedelta(seconds=JOB_LEASE_SECONDS))
+            updated = connection.execute(
+                """
+                UPDATE backtest_job
+                SET attempt = attempt + 1, revision = revision + 1,
+                    phase = 'VALIDATING_INPUT', completed_units = 0,
+                    total_units = NULL, updated_at = ?, claim_token = ?,
+                    lease_expires_at = ?, heartbeat_at = ?, progress_updated_at = NULL
+                WHERE job_id = ? AND status = 'RUNNING' AND attempt < ?
+                  AND claim_token = ? AND lease_expires_at <= ?
+                """,
+                (
+                    now_text,
+                    new_token,
+                    lease_text,
+                    now_text,
+                    job_id,
+                    JOB_MAX_CLAIM_GENERATIONS,
+                    previous_token,
+                    now_text,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("expired claim recovery lost inside its write transaction")
+            claim = self._load_claim(connection, job_id)
+            connection.commit()
+        self._progress_throttle.forget(f"{job_id}:{previous_token}")
+        return claim
+
+    @staticmethod
+    def _load_claim(connection: sqlite3.Connection, job_id: str) -> BacktestJobClaim:
+        row = connection.execute(
+            f"SELECT {_CLAIM_COLUMNS} FROM backtest_job WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("claimed job disappeared inside its write transaction")
+        return _claim_from_row(row)
+
+    def _claim_or_replay_cancellation(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        idempotency_key: str,
+        request_hash: str,
+        now: datetime,
+        created_at: str,
+    ) -> BacktestJobCancellationReceipt | None:
+        claimed = connection.execute(
+            """
+            INSERT INTO backtest_job_idempotency (
+                idempotency_key, operation, request_hash, job_id,
+                response_json, created_at, expires_at
+            ) VALUES (?, 'CANCEL', ?, NULL, NULL, ?, NULL)
+            ON CONFLICT(idempotency_key) DO NOTHING
+            """,
+            (idempotency_key, request_hash, created_at),
+        )
+        if claimed.rowcount == 1:
+            return None
+        row = connection.execute(
+            """
+            SELECT operation, request_hash, response_json, expires_at
+            FROM backtest_job_idempotency WHERE idempotency_key = ?
+            """,
+            (idempotency_key,),
+        ).fetchone()
+        if row is None:
+            return None
+        expires_at = None if row[3] is None else parse_shanghai_datetime(str(row[3]))
+        if expires_at is not None and now > expires_at:
+            connection.execute(
+                "DELETE FROM backtest_job_idempotency WHERE idempotency_key = ?",
+                (idempotency_key,),
+            )
+            return self._claim_or_replay_cancellation(
+                connection,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                now=now,
+                created_at=created_at,
+            )
+        if str(row[0]) != "CANCEL" or str(row[1]) != request_hash:
+            raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
+        if row[2] is None:
+            raise RuntimeError("committed cancellation claim is missing its canonical response")
+        return BacktestJobCancellationReceipt.model_validate_json(str(row[2]))
+
+    @staticmethod
+    def _bind_cancellation_response(
+        connection: sqlite3.Connection,
+        *,
+        idempotency_key: str,
+        request_hash: str,
+        job_id: str,
+        receipt: BacktestJobCancellationReceipt,
+        created_at: str,
+        expires_at: str | None,
+    ) -> None:
+        response_json = canonical_json(receipt.model_dump(mode="json", round_trip=True))
+        updated = connection.execute(
+            """
+            UPDATE backtest_job_idempotency
+            SET job_id = ?, response_json = ?, created_at = ?, expires_at = ?
+            WHERE idempotency_key = ? AND operation = 'CANCEL'
+              AND request_hash = ? AND job_id IS NULL AND response_json IS NULL
+            """,
+            (
+                job_id,
+                response_json,
+                created_at,
+                expires_at,
+                idempotency_key,
+                request_hash,
+            ),
+        )
+        if updated.rowcount != 1:
+            raise RuntimeError("cancellation claim could not bind its canonical response")
+
     def _claim_or_replay_idempotency(
         self,
         connection: sqlite3.Connection,
@@ -455,10 +1139,59 @@ def _validate_request_id(value: str | None) -> str:
     return value
 
 
+def _validate_claim_token(value: str) -> str:
+    if type(value) is not str or _CLAIM_TOKEN_PATTERN.fullmatch(value) is None:
+        raise ValueError("claim_token must be an opaque 256-bit value")
+    return value
+
+
 def _validate_job_id(value: str) -> str:
     if type(value) is not str or _IDEMPOTENCY_KEY_PATTERN.fullmatch(value) is None:
         raise ValueError("job_id must contain 1..128 allowlisted characters")
     return value
+
+
+def _validate_sanitized_error(error_code: str, error_message: str) -> tuple[str, str]:
+    if type(error_code) is not str or _ERROR_CODE_PATTERN.fullmatch(error_code) is None:
+        raise ValueError("error_code must contain 1..128 stable allowlisted characters")
+    if (
+        type(error_message) is not str
+        or not 1 <= len(error_message) <= 512
+        or not error_message.isprintable()
+    ):
+        raise ValueError("error_message must be 1..512 printable characters")
+    return error_code, error_message
+
+
+def _has_sync_authorization(
+    *,
+    request_json: str,
+    network_authorized_at: object,
+) -> bool:
+    if network_authorized_at is None:
+        return False
+    try:
+        authorized_at = parse_shanghai_datetime(str(network_authorized_at))
+        payload = json.loads(request_json)
+    except json.JSONDecodeError, TypeError, ValueError:
+        return False
+    return (
+        authorized_at.utcoffset() is not None
+        and type(payload) is dict
+        and payload.get("kind") == BacktestJobKind.DATA_SYNC.value
+        and payload.get("allowNetwork") is True
+    )
+
+
+def _expire_job_idempotency(
+    connection: sqlite3.Connection,
+    job_id: str,
+    expires_at: str,
+) -> None:
+    connection.execute(
+        "UPDATE backtest_job_idempotency SET expires_at = ? WHERE job_id = ?",
+        (expires_at, job_id),
+    )
 
 
 def _request_identities(request: BacktestJobRequest) -> tuple[str | None, str | None]:
@@ -574,6 +1307,23 @@ def _receipt_from_row(row: sqlite3.Row | tuple[object, ...]) -> BacktestJobRecei
         revision=int(row[11]),
         reused=bool(row[17]),
         submitted_at=parse_shanghai_datetime(str(row[12])),
+    )
+
+
+def _claim_from_row(row: sqlite3.Row | tuple[object, ...]) -> BacktestJobClaim:
+    if row[7] is None or row[8] is None or row[9] is None:
+        raise RuntimeError("active job claim fields are incomplete")
+    return BacktestJobClaim(
+        job_id=str(row[0]),
+        kind=BacktestJobKind(str(row[1])),
+        canonical_request_json=str(row[2]),
+        run_id=None if row[3] is None else str(row[3]),
+        dataset_hash=None if row[4] is None else str(row[4]),
+        attempt=int(row[5]),
+        revision=int(row[6]),
+        claim_token=str(row[7]),
+        claimed_at=parse_shanghai_datetime(str(row[8])),
+        lease_expires_at=parse_shanghai_datetime(str(row[9])),
     )
 
 

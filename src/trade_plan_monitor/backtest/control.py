@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from threading import Event
+from threading import Event, Lock
+from time import monotonic
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -93,6 +94,59 @@ class CancellationToken:
             raise BacktestOperationCancelled(phase, last_safe_event_id)
 
 
+class MonotonicProgressThrottle:
+    """Thread-safe one-second write throttle with no persisted elapsed values."""
+
+    __slots__ = ("_clock", "_interval_seconds", "_last_key", "_last_seen", "_lock")
+
+    def __init__(
+        self,
+        *,
+        interval_seconds: float = 1.0,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
+        if isinstance(interval_seconds, bool) or not isinstance(interval_seconds, int | float):
+            raise TypeError("interval_seconds must be a number")
+        if float(interval_seconds) <= 0:
+            raise ValueError("interval_seconds must be positive")
+        if not callable(clock):
+            raise TypeError("clock must be callable")
+        self._interval_seconds = float(interval_seconds)
+        self._clock = clock
+        self._last_key: str | None = None
+        self._last_seen: float | None = None
+        self._lock = Lock()
+
+    def admit(self, key: str, *, force: bool = False) -> bool:
+        """Return whether one write may proceed, forcing named transitions through."""
+
+        if type(key) is not str or not key:
+            raise ValueError("progress throttle key must be a non-empty string")
+        if type(force) is not bool:
+            raise TypeError("force must be a boolean")
+        current = float(self._clock())
+        with self._lock:
+            previous = self._last_seen if self._last_key == key else None
+            if previous is not None and current < previous:
+                raise RuntimeError("monotonic clock moved backwards")
+            if not force and previous is not None:
+                if current - previous < self._interval_seconds:
+                    return False
+            self._last_key = key
+            self._last_seen = current
+            return True
+
+    def forget(self, key: str) -> None:
+        """Discard one completed or superseded claim's in-memory throttle state."""
+
+        if type(key) is not str or not key:
+            raise ValueError("progress throttle key must be a non-empty string")
+        with self._lock:
+            if self._last_key == key:
+                self._last_key = None
+                self._last_seen = None
+
+
 def validate_operation_controls(
     cancellation_token: CancellationToken | None,
     progress_callback: BacktestProgressCallback | None,
@@ -144,6 +198,7 @@ __all__ = [
     "BacktestProgress",
     "BacktestProgressCallback",
     "CancellationToken",
+    "MonotonicProgressThrottle",
     "check_cancelled",
     "report_progress",
     "validate_operation_controls",

@@ -413,3 +413,21 @@ def test_additive_job_schema_requires_verified_migration_for_existing_results(
         ).kind
         is BacktestJobKind.DATASET_VERIFY
     )
+
+
+def test_cancelled_run_resubmission_uses_a_new_job_and_the_same_run_identity(
+    tmp_path: Path,
+) -> None:
+    repository = BacktestJobRepository(tmp_path / "cancelled-run.sqlite3")
+    run_input = _run_input("cancelled-rerun")
+    request = BacktestRunJobRequest(run_input=run_input)
+    first = repository.submit(request, "first-run")
+
+    cancelled = repository.request_cancel(first.job_id, "cancel-first-run")
+    assert cancelled.status is BacktestJobStatus.CANCELLED
+    second = repository.submit(request, "second-run")
+
+    assert second.job_id != first.job_id
+    assert second.run_id == first.run_id == run_input.run_id
+    assert second.status is BacktestJobStatus.QUEUED
+    assert len(repository.list_jobs()) == 2
