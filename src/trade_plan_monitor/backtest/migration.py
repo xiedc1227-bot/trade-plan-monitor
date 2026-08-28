@@ -621,6 +621,226 @@ _RESULT_INDEX_CONTRACTS: dict[str, _IndexContract] = {
 }
 _BT017_RESULT_INDEX_CONTRACTS = dict(_RESULT_INDEX_CONTRACTS)
 
+# BT020 keeps the prior completed-result schema as a readable compatibility state while
+# defining the exact additive job schema used by the shared results database. Existing
+# databases require the verified migration workflow; a fresh job repository creates both
+# domains before acknowledging any submission.
+_BT019_RESULT_COLUMN_CONTRACTS = {
+    table: dict(columns) for table, columns in _RESULT_COLUMN_CONTRACTS.items()
+}
+_BT019_RESULT_TABLE_SQL_CONTRACTS = dict(_RESULT_TABLE_SQL_CONTRACTS)
+_BT019_RESULT_FOREIGN_KEY_CONTRACTS = dict(_RESULT_FOREIGN_KEY_CONTRACTS)
+_BT019_RESULT_INDEX_CONTRACTS = dict(_RESULT_INDEX_CONTRACTS)
+_BT019_RESULT_TRIGGER_SQL_CONTRACTS = dict(_RESULT_TRIGGER_SQL_CONTRACTS)
+
+_JOB_COLUMN_CONTRACTS: dict[str, dict[str, _ColumnContract]] = {
+    "backtest_job": {
+        "job_id": ("TEXT", False, None, 1),
+        "kind": ("TEXT", True, None, 0),
+        "status": ("TEXT", True, None, 0),
+        "request_hash": ("TEXT", True, None, 0),
+        "operation_hash": ("TEXT", True, None, 0),
+        "request_json": ("TEXT", True, None, 0),
+        "run_id": ("TEXT", False, None, 0),
+        "dataset_hash": ("TEXT", False, None, 0),
+        "phase": ("TEXT", True, None, 0),
+        "progress_unit": ("TEXT", True, None, 0),
+        "completed_units": ("INTEGER", True, "0", 0),
+        "total_units": ("INTEGER", False, None, 0),
+        "attempt": ("INTEGER", True, "0", 0),
+        "revision": ("INTEGER", True, "0", 0),
+        "membership_revision": ("INTEGER", True, "0", 0),
+        "created_at": ("TEXT", True, None, 0),
+        "started_at": ("TEXT", False, None, 0),
+        "updated_at": ("TEXT", True, None, 0),
+        "finished_at": ("TEXT", False, None, 0),
+        "cancel_requested_at": ("TEXT", False, None, 0),
+        "reused": ("INTEGER", True, "0", 0),
+        "result_json": ("TEXT", False, None, 0),
+        "error_code": ("TEXT", False, None, 0),
+        "error_message": ("TEXT", False, None, 0),
+        "network_authorized_at": ("TEXT", False, None, 0),
+        "request_id": ("TEXT", False, None, 0),
+        "claim_token": ("TEXT", False, None, 0),
+        "lease_expires_at": ("TEXT", False, None, 0),
+        "heartbeat_at": ("TEXT", False, None, 0),
+        "progress_updated_at": ("TEXT", False, None, 0),
+    },
+    "backtest_job_idempotency": {
+        "idempotency_key": ("TEXT", False, None, 1),
+        "operation": ("TEXT", True, None, 0),
+        "request_hash": ("TEXT", True, None, 0),
+        "job_id": ("TEXT", False, None, 0),
+        "response_json": ("TEXT", False, None, 0),
+        "created_at": ("TEXT", True, None, 0),
+        "expires_at": ("TEXT", False, None, 0),
+    },
+    "backtest_job_state": {
+        "state_key": ("TEXT", False, None, 1),
+        "membership_revision": ("INTEGER", True, "0", 0),
+    },
+}
+_JOB_TABLE_SQL_CONTRACTS = {
+    "backtest_job": """
+        CREATE TABLE backtest_job (
+            job_id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL CHECK (
+                kind IN ('DATA_SYNC', 'DATASET_VERIFY', 'BACKTEST_RUN')
+            ),
+            status TEXT NOT NULL CHECK (
+                status IN (
+                    'QUEUED', 'RUNNING', 'CANCEL_REQUESTED',
+                    'COMPLETED', 'FAILED', 'CANCELLED'
+                )
+            ),
+            request_hash TEXT NOT NULL CHECK (length(request_hash) = 64),
+            operation_hash TEXT NOT NULL CHECK (length(operation_hash) = 64),
+            request_json TEXT NOT NULL CHECK (
+                length(CAST(request_json AS BLOB)) <= 262144
+            ),
+            run_id TEXT CHECK (run_id IS NULL OR length(run_id) = 64),
+            dataset_hash TEXT CHECK (dataset_hash IS NULL OR length(dataset_hash) = 64),
+            phase TEXT NOT NULL CHECK (
+                phase IN (
+                    'QUEUED', 'VALIDATING_INPUT', 'SYNCING_DATA',
+                    'VERIFYING_DATASET', 'REPLAYING', 'MATERIALIZING_RESULTS',
+                    'FINALIZING', 'TERMINAL'
+                )
+            ),
+            progress_unit TEXT NOT NULL CHECK (
+                progress_unit IN ('ITEMS', 'SYMBOL_DAYS', 'EVENTS', 'ROWS')
+            ),
+            completed_units INTEGER NOT NULL DEFAULT 0 CHECK (completed_units >= 0),
+            total_units INTEGER CHECK (
+                total_units IS NULL OR total_units >= completed_units
+            ),
+            attempt INTEGER NOT NULL DEFAULT 0 CHECK (attempt BETWEEN 0 AND 3),
+            revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),
+            membership_revision INTEGER NOT NULL DEFAULT 0 CHECK (membership_revision >= 0),
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            updated_at TEXT NOT NULL,
+            finished_at TEXT,
+            cancel_requested_at TEXT,
+            reused INTEGER NOT NULL DEFAULT 0 CHECK (reused IN (0, 1)),
+            result_json TEXT,
+            error_code TEXT CHECK (error_code IS NULL OR length(error_code) BETWEEN 1 AND 128),
+            error_message TEXT CHECK (
+                error_message IS NULL OR length(error_message) BETWEEN 1 AND 512
+            ),
+            network_authorized_at TEXT,
+            request_id TEXT,
+            claim_token TEXT,
+            lease_expires_at TEXT,
+            heartbeat_at TEXT,
+            progress_updated_at TEXT,
+            CHECK (
+                (kind = 'BACKTEST_RUN' AND run_id IS NOT NULL AND dataset_hash IS NOT NULL)
+                OR (kind <> 'BACKTEST_RUN' AND run_id IS NULL)
+            ),
+            CHECK (kind <> 'DATA_SYNC' OR dataset_hash IS NULL),
+            CHECK (
+                (kind = 'DATA_SYNC' AND network_authorized_at IS NOT NULL
+                    AND request_id IS NOT NULL)
+                OR (kind <> 'DATA_SYNC' AND network_authorized_at IS NULL
+                    AND request_id IS NULL)
+            ),
+            CHECK (reused = 0 OR status = 'COMPLETED'),
+            CHECK (
+                (status IN ('COMPLETED', 'FAILED', 'CANCELLED'))
+                = (finished_at IS NOT NULL)
+            ),
+            CHECK ((status = 'COMPLETED') = (result_json IS NOT NULL)),
+            CHECK ((error_code IS NULL) = (error_message IS NULL))
+        )
+    """,
+    "backtest_job_idempotency": """
+        CREATE TABLE backtest_job_idempotency (
+            idempotency_key TEXT PRIMARY KEY CHECK (
+                length(idempotency_key) BETWEEN 1 AND 128
+            ),
+            operation TEXT NOT NULL CHECK (operation IN ('SUBMIT', 'CANCEL')),
+            request_hash TEXT NOT NULL CHECK (length(request_hash) = 64),
+            job_id TEXT
+                REFERENCES backtest_job (job_id) ON DELETE RESTRICT,
+            response_json TEXT CHECK (
+                response_json IS NULL
+                OR length(CAST(response_json AS BLOB)) <= 65536
+            ),
+            created_at TEXT NOT NULL,
+            expires_at TEXT,
+            CHECK ((job_id IS NULL) = (response_json IS NULL))
+        )
+    """,
+    "backtest_job_state": """
+        CREATE TABLE backtest_job_state (
+            state_key TEXT PRIMARY KEY CHECK (state_key = 'GLOBAL'),
+            membership_revision INTEGER NOT NULL DEFAULT 0 CHECK (membership_revision >= 0)
+        )
+    """,
+}
+_JOB_FOREIGN_KEY_CONTRACTS: dict[str, frozenset[_ForeignKeyContract]] = {
+    "backtest_job": frozenset(),
+    "backtest_job_idempotency": frozenset(
+        {
+            (
+                "job_id",
+                "backtest_job",
+                "job_id",
+                "NO ACTION",
+                "RESTRICT",
+                "NONE",
+            )
+        }
+    ),
+    "backtest_job_state": frozenset(),
+}
+_JOB_INDEX_CONTRACTS: dict[str, _IndexContract] = {
+    "ix_backtest_job_active_operation": (
+        "backtest_job",
+        (
+            ("operation_hash", False, "BINARY"),
+            ("status", False, "BINARY"),
+            ("created_at", False, "BINARY"),
+            ("job_id", False, "BINARY"),
+        ),
+    ),
+    "ix_backtest_job_queue": (
+        "backtest_job",
+        (
+            ("status", False, "BINARY"),
+            ("created_at", False, "BINARY"),
+            ("job_id", False, "BINARY"),
+        ),
+    ),
+    "ix_backtest_job_list": (
+        "backtest_job",
+        (("created_at", True, "BINARY"), ("job_id", True, "BINARY")),
+    ),
+    "ix_backtest_job_idempotency_expiry": (
+        "backtest_job_idempotency",
+        (("expires_at", False, "BINARY"), ("idempotency_key", False, "BINARY")),
+    ),
+}
+
+_RESULT_COLUMN_CONTRACTS = {
+    **_BT019_RESULT_COLUMN_CONTRACTS,
+    **_JOB_COLUMN_CONTRACTS,
+}
+_RESULT_TABLE_SQL_CONTRACTS = {
+    **_BT019_RESULT_TABLE_SQL_CONTRACTS,
+    **_JOB_TABLE_SQL_CONTRACTS,
+}
+_RESULT_FOREIGN_KEY_CONTRACTS = {
+    **_BT019_RESULT_FOREIGN_KEY_CONTRACTS,
+    **_JOB_FOREIGN_KEY_CONTRACTS,
+}
+_RESULT_INDEX_CONTRACTS = {
+    **_BT019_RESULT_INDEX_CONTRACTS,
+    **_JOB_INDEX_CONTRACTS,
+}
+_RESULT_TABLES = frozenset(_RESULT_COLUMN_CONTRACTS)
+
 
 class MigrationPreflightError(RuntimeError):
     """A stable blocker raised before a migration or store mutation can start."""
@@ -903,7 +1123,11 @@ def migrate_result_database(
         raise TypeError("decision must be a MigrationDecision")
     if inventory.terminal_run_count:
         raise MigrationPreflightError("LEGACY_TERMINAL_RUNS_REQUIRE_MIGRATION")
-    if inventory.database_state is not DatabaseState.LEGACY:
+    additive_job_migration = (
+        inventory.database_state is DatabaseState.CURRENT
+        and "MISSING_BACKTEST_JOB_SCHEMA" in inventory.migration_reasons
+    )
+    if inventory.database_state is not DatabaseState.LEGACY and not additive_job_migration:
         raise MigrationPreflightError("RESULT_SCHEMA_MIGRATION_REQUIRES_LEGACY_SCHEMA")
     if not decision.authorized:
         raise MigrationPreflightError("RESULT_SCHEMA_MIGRATION_NOT_AUTHORIZED")
@@ -929,7 +1153,7 @@ def migrate_result_database(
         )
         before = _inspect_results(connection, table_names)
         if (
-            before["database_state"] is not DatabaseState.LEGACY
+            before["database_state"] is not inventory.database_state
             or before["terminal_run_count"]
             or before["migration_reasons"] != inventory.migration_reasons
             or before["compatibility_only_run_ids"] != inventory.compatibility_only_run_ids
@@ -938,18 +1162,21 @@ def migrate_result_database(
         legacy_v1 = _is_supported_legacy_result_schema(connection, table_names)
         bt016_schema = _is_supported_bt016_result_schema(connection, table_names)
         bt017_schema = _is_supported_bt017_result_schema(connection, table_names)
-        if not legacy_v1 and not bt016_schema and not bt017_schema:
+        bt019_schema = _is_supported_bt019_result_schema(connection, table_names)
+        if not legacy_v1 and not bt016_schema and not bt017_schema and not bt019_schema:
             raise MigrationPreflightError("RESULT_SCHEMA_MIGRATION_SCOPE_MISMATCH")
         content_hash = (
             _result_completed_only_content_hash(connection)
-            if bt016_schema or bt017_schema
+            if bt016_schema or bt017_schema or bt019_schema
             else _result_v1_content_hash(connection)
         )
         if bt016_schema:
             _add_result_stage_revision_fence(connection)
         elif legacy_v1:
             _rebuild_completed_only_result_schema(connection)
-        _add_result_query_metadata(connection)
+        if not bt019_schema:
+            _add_result_query_metadata(connection)
+        create_backtest_job_schema(connection)
         after = _inspect_results(connection, _RESULT_TABLES)
         if (
             after["database_state"] is not DatabaseState.CURRENT
@@ -957,7 +1184,7 @@ def migrate_result_database(
             or after["compatibility_only_run_ids"] != inventory.compatibility_only_run_ids
             or (
                 _result_completed_only_content_hash(connection)
-                if bt016_schema or bt017_schema
+                if bt016_schema or bt017_schema or bt019_schema
                 else _result_v1_content_hash(connection)
             )
             != content_hash
@@ -1071,6 +1298,21 @@ def _is_supported_bt017_result_schema(
         table_sql_contracts=_BT017_RESULT_TABLE_SQL_CONTRACTS,
         index_contracts=_BT017_RESULT_INDEX_CONTRACTS,
         trigger_sql_contracts=_BT017_RESULT_TRIGGER_SQL_CONTRACTS,
+    )
+
+
+def _is_supported_bt019_result_schema(
+    connection: sqlite3.Connection,
+    table_names: frozenset[str],
+) -> bool:
+    return _has_required_schema(
+        connection,
+        table_names,
+        column_contracts=_BT019_RESULT_COLUMN_CONTRACTS,
+        foreign_key_contracts=_BT019_RESULT_FOREIGN_KEY_CONTRACTS,
+        table_sql_contracts=_BT019_RESULT_TABLE_SQL_CONTRACTS,
+        index_contracts=_BT019_RESULT_INDEX_CONTRACTS,
+        trigger_sql_contracts=_BT019_RESULT_TRIGGER_SQL_CONTRACTS,
     )
 
 
@@ -1264,6 +1506,36 @@ def _create_result_indexes_and_triggers(connection: sqlite3.Connection) -> None:
         connection.execute(statement)
 
 
+def create_backtest_job_schema(connection: sqlite3.Connection) -> None:
+    """Create the exact additive BT020 tables inside an already-authorized transaction."""
+
+    if not isinstance(connection, sqlite3.Connection):
+        raise TypeError("connection must be a sqlite3.Connection")
+    table_names = frozenset(
+        str(row[0])
+        for row in connection.execute("SELECT name FROM sqlite_schema WHERE type = 'table'")
+    )
+    present = table_names & frozenset(_JOB_COLUMN_CONTRACTS)
+    if present:
+        if present == frozenset(_JOB_COLUMN_CONTRACTS):
+            return
+        raise MigrationPreflightError("PARTIAL_BACKTEST_JOB_SCHEMA")
+    for statement in _JOB_TABLE_SQL_CONTRACTS.values():
+        connection.execute(statement)
+    for statement in (
+        "CREATE INDEX ix_backtest_job_active_operation "
+        "ON backtest_job (operation_hash, status, created_at, job_id)",
+        "CREATE INDEX ix_backtest_job_queue ON backtest_job (status, created_at, job_id)",
+        "CREATE INDEX ix_backtest_job_list ON backtest_job (created_at DESC, job_id DESC)",
+        "CREATE INDEX ix_backtest_job_idempotency_expiry "
+        "ON backtest_job_idempotency (expires_at, idempotency_key)",
+    ):
+        connection.execute(statement)
+    connection.execute(
+        "INSERT INTO backtest_job_state (state_key, membership_revision) VALUES ('GLOBAL', 0)"
+    )
+
+
 def _result_v1_content_hash(connection: sqlite3.Connection) -> str:
     digest = sha256()
     for query in (
@@ -1441,9 +1713,10 @@ def _inspect_results(
         index_contracts=_RESULT_INDEX_CONTRACTS,
         trigger_sql_contracts=_RESULT_TRIGGER_SQL_CONTRACTS,
     )
+    bt019_current = _is_supported_bt019_result_schema(connection, table_names)
     state = (
         DatabaseState.CURRENT
-        if current
+        if current or bt019_current
         else DatabaseState.LEGACY
         if present
         else DatabaseState.UNKNOWN
@@ -1486,6 +1759,8 @@ def _inspect_results(
         reasons.append("LEGACY_SCHEMA")
     elif state == DatabaseState.UNKNOWN:
         reasons.append("UNRECOGNIZED_SCHEMA")
+    elif bt019_current:
+        reasons.append("MISSING_BACKTEST_JOB_SCHEMA")
     if terminal_count:
         reasons.insert(0, "LEGACY_TERMINAL_RUNS_REQUIRE_MIGRATION")
     return {
