@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -249,6 +249,10 @@ END;
 
 class ResultConflictError(ValueError):
     """An immutable identity already exists with different canonical content."""
+
+
+class ExportCancelled(RuntimeError):
+    """Internal control signal raised before the next bounded export batch."""
 
 
 class BacktestRunStatus(StrEnum):
@@ -834,6 +838,71 @@ class BacktestResultStore:
         rows = self._query_result_runs(run_id=normalized_run_id, limit=1)
         return None if not rows else rows[0].record
 
+    def export_summary(self, run_id: str) -> BacktestRunSummary:
+        """Return one verified active-v2 summary for incremental export encoding."""
+
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        with self._connect() as connection:
+            summary, _fill_count, _fill_set_hash = _active_v2_export_metadata(
+                connection,
+                normalized_run_id,
+            )
+        return summary
+
+    def iter_export_fill_batches(
+        self,
+        run_id: str,
+        cancelled: Callable[[], bool],
+    ) -> Iterator[tuple[BacktestFillRecord, ...]]:
+        """Yield verified active-v2 fills from one stable snapshot in bounded batches."""
+
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        if not callable(cancelled):
+            raise TypeError("cancelled must be callable")
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            _summary, expected_count, expected_set_hash = _active_v2_export_metadata(
+                connection,
+                normalized_run_id,
+            )
+            actual_count, actual_set_hash, _batch_count, _maximum = _validated_fill_set_hash(
+                connection,
+                normalized_run_id,
+                version="v2",
+                cancelled=cancelled,
+            )
+            if (actual_count, actual_set_hash) != (expected_count, expected_set_hash):
+                raise RuntimeError("materialized v2 fill ledger failed publication verification")
+            cursor = connection.execute(
+                """
+                SELECT fill_id, run_id, filled_at, content_domain, content_hash, payload_json
+                FROM backtest_fill
+                WHERE run_id = ?
+                ORDER BY filled_at, fill_id
+                """,
+                (normalized_run_id,),
+            )
+            yielded = 0
+            while True:
+                if cancelled():
+                    raise ExportCancelled
+                rows = cursor.fetchmany(_MAX_BATCH_SIZE)
+                if not rows:
+                    break
+                batch = tuple(
+                    _load_fill_row(tuple(row), expected_run_id=normalized_run_id) for row in rows
+                )
+                if any(
+                    _datetime_text(record.filled_at, version="v2") != str(row[2])
+                    or str(row[3]) != _FILL_DOMAINS["v2"]
+                    for record, row in zip(batch, rows, strict=True)
+                ):
+                    raise RuntimeError("materialized v2 fill ledger contains a non-v2 row")
+                yielded += len(batch)
+                yield batch
+            if yielded != expected_count:
+                raise RuntimeError("materialized v2 fill ledger changed during export")
+
     def result_run_high_water(self) -> int:
         """Capture the immutable publication-membership fence for one traversal."""
 
@@ -1330,21 +1399,42 @@ class BacktestResultStore:
         as_of: datetime,
         batch_size: int = _MAX_BATCH_SIZE,
     ) -> RetentionPruneResult:
-        """Delete one bounded retention batch, including abandoned staged rows."""
+        """Compatibility wrapper for the caller-budgeted result participant."""
 
-        normalized_as_of = _normalize_datetime(as_of, "as_of")
         if type(batch_size) is not int or not 1 <= batch_size <= _MAX_BATCH_SIZE:
             raise ValueError("batch_size must be between 1 and 1000")
+        return self.prune_result_rows(as_of=as_of, remaining_budget=batch_size)
+
+    def prune_result_rows(
+        self,
+        *,
+        as_of: datetime,
+        remaining_budget: int,
+    ) -> RetentionPruneResult:
+        """Consume at most the caller's remaining maintenance row budget once."""
+
+        normalized_as_of = _normalize_datetime(as_of, "as_of")
+        if type(remaining_budget) is not int or not 0 <= remaining_budget <= _MAX_BATCH_SIZE:
+            raise ValueError("remaining_budget must be between 0 and 1000")
         parameters = _retention_parameters(normalized_as_of)
-        staged_cutoff = parameters[0]
+        staged_cutoffs = parameters[:2]
+        retention_parameters = parameters[2:]
+        if remaining_budget == 0:
+            with self._connect() as connection:
+                has_more = _result_retention_has_more(
+                    connection,
+                    staged_cutoffs=staged_cutoffs,
+                    retention_parameters=retention_parameters,
+                )
+            return RetentionPruneResult(deleted_count=0, has_more=has_more)
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             deleted_count = 0
-            remaining = batch_size
+            remaining = remaining_budget
             staged_detail_ids = _candidate_ids(
                 connection,
                 _STALE_STAGED_DETAIL_SQL,
-                (staged_cutoff, remaining),
+                (*staged_cutoffs, remaining),
             )
             deleted_count += _delete_ids(
                 connection,
@@ -1352,11 +1442,11 @@ class BacktestResultStore:
                 "detail_id",
                 staged_detail_ids,
             )
-            remaining = batch_size - deleted_count
+            remaining = remaining_budget - deleted_count
             staged_fill_ids = _candidate_ids(
                 connection,
                 _STALE_STAGED_FILL_SQL,
-                (staged_cutoff, remaining),
+                (*staged_cutoffs, remaining),
             )
             deleted_count += _delete_ids(
                 connection,
@@ -1364,11 +1454,11 @@ class BacktestResultStore:
                 "fill_id",
                 staged_fill_ids,
             )
-            remaining = batch_size - deleted_count
+            remaining = remaining_budget - deleted_count
             staged_run_ids = _candidate_ids(
                 connection,
                 _STALE_STAGED_RUN_SQL,
-                (staged_cutoff, remaining),
+                (*staged_cutoffs, remaining),
             )
             deleted_count += _delete_ids(
                 connection,
@@ -1376,11 +1466,11 @@ class BacktestResultStore:
                 "run_id",
                 staged_run_ids,
             )
-            remaining = batch_size - deleted_count
+            remaining = remaining_budget - deleted_count
             retained_detail_ids = _candidate_ids(
                 connection,
                 _RETENTION_CANDIDATES_SQL,
-                (*parameters, remaining),
+                (*retention_parameters, remaining),
             )
             _mark_expired_artifacts(
                 connection,
@@ -1393,14 +1483,10 @@ class BacktestResultStore:
                 "detail_id",
                 retained_detail_ids,
             )
-            has_more = any(
-                _has_candidate(connection, query, query_parameters)
-                for query, query_parameters in (
-                    (_STALE_STAGED_DETAIL_SQL, (staged_cutoff, 1)),
-                    (_STALE_STAGED_FILL_SQL, (staged_cutoff, 1)),
-                    (_STALE_STAGED_RUN_SQL, (staged_cutoff, 1)),
-                    (_RETENTION_CANDIDATES_SQL, (*parameters, 1)),
-                )
+            has_more = _result_retention_has_more(
+                connection,
+                staged_cutoffs=staged_cutoffs,
+                retention_parameters=retention_parameters,
             )
             connection.commit()
         return RetentionPruneResult(deleted_count=deleted_count, has_more=has_more)
@@ -1865,6 +1951,37 @@ def _active_result_run_row(
     return None if row is None else tuple(row)
 
 
+def _active_v2_export_metadata(
+    connection: sqlite3.Connection,
+    run_id: str,
+) -> tuple[BacktestRunSummary, int, str]:
+    row = _active_result_run_row(connection, run_id)
+    if row is None:
+        raise KeyError(f"active v2 run not found: {run_id}")
+    availability = _availability_by_run(connection, (run_id,))[run_id]
+    record = _load_run_query_row(row, availability).record
+    publication = connection.execute(
+        """
+        SELECT publication_fill_count, publication_fill_set_hash,
+               publication_fill_set_domain
+        FROM backtest_run WHERE run_id = ?
+        """,
+        (run_id,),
+    ).fetchone()
+    if (
+        publication is None
+        or publication[0] is None
+        or publication[1] is None
+        or str(publication[2]) != _FILL_SET_DOMAINS["v2"]
+    ):
+        raise RuntimeError("active v2 run is missing fill publication metadata")
+    fill_count = int(publication[0])
+    fill_set_hash = _validate_hash(str(publication[1]), "publication_fill_set_hash")
+    if fill_count != record.fill_count:
+        raise RuntimeError("active v2 run fill count is inconsistent")
+    return record.summary, fill_count, fill_set_hash
+
+
 def _load_run_query_row(
     row: tuple[object, ...],
     availability: tuple[BacktestArtifactState, ...],
@@ -2138,7 +2255,11 @@ _STALE_STAGED_DETAIL_SQL = """
 SELECT d.detail_id
 FROM backtest_detail AS d
 JOIN backtest_run AS r ON r.run_id = d.run_id
-WHERE r.materialized = 0 AND r.pinned = 0 AND r.created_at < ?
+WHERE r.materialized = 0 AND r.pinned = 0
+  AND (
+      (r.summary_domain = 'backtest-run-summary-v1' AND r.created_at < ?)
+      OR (r.summary_domain = 'backtest-run-summary-v2' AND r.created_at < ?)
+  )
 ORDER BY r.created_at, d.detail_id
 LIMIT ?
 """
@@ -2147,7 +2268,11 @@ _STALE_STAGED_FILL_SQL = """
 SELECT f.fill_id
 FROM backtest_fill AS f
 JOIN backtest_run AS r ON r.run_id = f.run_id
-WHERE r.materialized = 0 AND r.pinned = 0 AND r.created_at < ?
+WHERE r.materialized = 0 AND r.pinned = 0
+  AND (
+      (r.summary_domain = 'backtest-run-summary-v1' AND r.created_at < ?)
+      OR (r.summary_domain = 'backtest-run-summary-v2' AND r.created_at < ?)
+  )
 ORDER BY r.created_at, f.fill_id
 LIMIT ?
 """
@@ -2157,7 +2282,10 @@ SELECT r.run_id
 FROM backtest_run AS r
 WHERE r.materialized = 0
   AND r.pinned = 0
-  AND r.created_at < ?
+  AND (
+      (r.summary_domain = 'backtest-run-summary-v1' AND r.created_at < ?)
+      OR (r.summary_domain = 'backtest-run-summary-v2' AND r.created_at < ?)
+  )
   AND NOT EXISTS (SELECT 1 FROM backtest_detail AS d WHERE d.run_id = r.run_id)
   AND NOT EXISTS (SELECT 1 FROM backtest_fill AS f WHERE f.run_id = r.run_id)
 ORDER BY r.created_at, r.run_id
@@ -2179,11 +2307,21 @@ LEFT JOIN ranked_success AS ranked ON ranked.run_id = r.run_id
 WHERE r.pinned = 0
   AND r.materialized = 1
   AND (
-      (d.kind = 'DEBUG_TRACE' AND r.created_at < ?)
+      (
+          d.kind = 'DEBUG_TRACE'
+          AND (
+              (r.summary_domain = 'backtest-run-summary-v1' AND r.created_at < ?)
+              OR (r.summary_domain = 'backtest-run-summary-v2' AND r.created_at < ?)
+          )
+      )
       OR (
           r.status = 'COMPLETED'
           AND d.kind != 'DEBUG_TRACE'
-          AND (r.created_at < ? OR ranked.run_rank > ?)
+          AND (
+              (r.summary_domain = 'backtest-run-summary-v1' AND r.created_at < ?)
+              OR (r.summary_domain = 'backtest-run-summary-v2' AND r.created_at < ?)
+              OR ranked.run_rank > ?
+          )
       )
   )
 ORDER BY r.created_at, d.detail_id
@@ -2191,10 +2329,19 @@ LIMIT ?
 """
 
 
-def _retention_parameters(as_of: datetime) -> tuple[str, str, int]:
-    diagnostic_cutoff = _datetime_text(as_of - timedelta(days=_DIAGNOSTIC_DETAIL_DAYS))
-    success_cutoff = _datetime_text(as_of - timedelta(days=_SUCCESS_DETAIL_DAYS))
-    return diagnostic_cutoff, success_cutoff, _SUCCESS_DETAIL_RUNS
+def _retention_parameters(as_of: datetime) -> tuple[str, str, str, str, str, str, int]:
+    staged_at = as_of - timedelta(days=_DIAGNOSTIC_DETAIL_DAYS)
+    diagnostic_at = as_of - timedelta(days=_DIAGNOSTIC_DETAIL_DAYS)
+    success_at = as_of - timedelta(days=_SUCCESS_DETAIL_DAYS)
+    return (
+        _datetime_text(staged_at, version="v1"),
+        _datetime_text(staged_at, version="v2"),
+        _datetime_text(diagnostic_at, version="v1"),
+        _datetime_text(diagnostic_at, version="v2"),
+        _datetime_text(success_at, version="v1"),
+        _datetime_text(success_at, version="v2"),
+        _SUCCESS_DETAIL_RUNS,
+    )
 
 
 def _candidate_ids(
@@ -2211,6 +2358,23 @@ def _has_candidate(
     parameters: tuple[object, ...],
 ) -> bool:
     return connection.execute(query, parameters).fetchone() is not None
+
+
+def _result_retention_has_more(
+    connection: sqlite3.Connection,
+    *,
+    staged_cutoffs: tuple[object, ...],
+    retention_parameters: tuple[object, ...],
+) -> bool:
+    return any(
+        _has_candidate(connection, query, query_parameters)
+        for query, query_parameters in (
+            (_STALE_STAGED_DETAIL_SQL, (*staged_cutoffs, 1)),
+            (_STALE_STAGED_FILL_SQL, (*staged_cutoffs, 1)),
+            (_STALE_STAGED_RUN_SQL, (*staged_cutoffs, 1)),
+            (_RETENTION_CANDIDATES_SQL, (*retention_parameters, 1)),
+        )
+    )
 
 
 def _delete_ids(
@@ -2690,6 +2854,7 @@ def _validated_fill_set_hash(
     run_id: str,
     *,
     version: str,
+    cancelled: Callable[[], bool] | None = None,
 ) -> tuple[int, str, int, int]:
     digest = sha256(_domain_bytes(_domain(_FILL_SET_DOMAINS, version)))
     cursor = connection.execute(
@@ -2702,7 +2867,12 @@ def _validated_fill_set_hash(
     count = 0
     batch_count = 0
     maximum = 0
-    while rows := cursor.fetchmany(_MAX_BATCH_SIZE):
+    while True:
+        if cancelled is not None and cancelled():
+            raise ExportCancelled
+        rows = cursor.fetchmany(_MAX_BATCH_SIZE)
+        if not rows:
+            break
         batch_count += 1
         maximum = max(maximum, len(rows))
         for row in rows:
@@ -3017,6 +3187,7 @@ __all__ = [
     "BacktestRunRecord",
     "BacktestRunStatus",
     "BacktestRunSummary",
+    "ExportCancelled",
     "ResultConflictError",
     "RetentionPruneResult",
     "VerifiedBacktestPublication",

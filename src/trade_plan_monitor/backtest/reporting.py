@@ -6,6 +6,7 @@ import csv
 import json
 import os
 import tempfile
+from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime
 from hashlib import sha256
 from io import StringIO
@@ -20,6 +21,7 @@ from trade_plan_monitor.backtest.results import (
     BacktestResultStore,
     BacktestRunStatus,
     BacktestRunSummary,
+    ExportCancelled,
     backtest_detail_set_hash,
     backtest_fill_set_hash,
 )
@@ -27,6 +29,22 @@ from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.runner import RUN_FORMULA_VERSION, BacktestRunReport
 
 _MAX_RESULT_BATCH = 1_000
+_MAX_EXPORT_CHUNK_BYTES = 64 * 1_024
+_V2_FILL_FIELDS = (
+    "schema_version",
+    "run_id",
+    "fill_id",
+    "filled_at",
+    "side",
+    "symbol",
+    "bucket",
+    "quantity",
+    "price_fen",
+    "notional_fen",
+    "fees_fen",
+    "cash_delta_fen",
+    "realized_pnl_fen",
+)
 
 
 class ReportPersistenceResult(BaseModel):
@@ -175,6 +193,84 @@ def write_report_files(
     )
 
 
+def iter_export_summary(
+    store: BacktestResultStore,
+    run_id: str,
+    cancelled: Callable[[], bool],
+) -> Iterator[bytes]:
+    """Incrementally encode one verified active-v2 summary without a file buffer."""
+
+    _require_export_inputs(store, cancelled)
+    if cancelled():
+        return
+    summary = store.export_summary(run_id)
+    report_hash = summary.assumptions.get("reportHash")
+    if not isinstance(report_hash, str):
+        raise ValueError("summary assumptions must include reportHash")
+    payload = {
+        "schemaVersion": "backtest-report-summary-v2",
+        "runId": summary.run_id,
+        "reportHash": report_hash,
+        "status": summary.status.value,
+        "planHash": summary.plan_sha256,
+        "datasetHash": summary.dataset_hash,
+        "completedAt": summary.completed_at,
+        "eventStart": summary.event_start,
+        "eventEnd": summary.event_end,
+        "symbols": summary.symbols,
+        "coverage": summary.coverage,
+        "assumptions": summary.assumptions,
+        "formulaVersions": summary.formula_versions,
+        "finalMetrics": summary.final_metrics,
+        "blockers": summary.blockers,
+    }
+    encoder = json.JSONEncoder(
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=_json_default,
+    )
+    for fragment in encoder.iterencode(payload):
+        if cancelled():
+            return
+        yield _bounded_export_chunk(fragment)
+    if cancelled():
+        return
+    yield b"\n"
+
+
+def iter_export_fills(
+    store: BacktestResultStore,
+    run_id: str,
+    cancelled: Callable[[], bool],
+) -> Iterator[bytes]:
+    """Incrementally encode verified active-v2 fill batches as stable CSV rows."""
+
+    _require_export_inputs(store, cancelled)
+    batches = store.iter_export_fill_batches(run_id, cancelled)
+    try:
+        try:
+            batch = next(batches)
+        except ExportCancelled:
+            return
+        except StopIteration:
+            batch = None
+        yield _v2_csv_header()
+        while batch is not None:
+            for fill in batch:
+                if cancelled():
+                    return
+                yield _v2_fill_csv_row(fill)
+            try:
+                batch = next(batches)
+            except ExportCancelled:
+                return
+            except StopIteration:
+                batch = None
+    finally:
+        batches.close()
+
+
 def write_persisted_report_files(
     summary: BacktestRunSummary,
     fills: tuple[BacktestFillRecord, ...],
@@ -182,7 +278,24 @@ def write_persisted_report_files(
     json_path: str | Path,
     csv_path: str | Path,
 ) -> tuple[Path, Path]:
-    """Rebuild durable summary/ledger files without retaining prunable details."""
+    """Compatibility alias for the explicitly offline immutable v1 exporter."""
+
+    return write_offline_v1_compatibility_report_files(
+        summary,
+        fills,
+        json_path=json_path,
+        csv_path=csv_path,
+    )
+
+
+def write_offline_v1_compatibility_report_files(
+    summary: BacktestRunSummary,
+    fills: tuple[BacktestFillRecord, ...],
+    *,
+    json_path: str | Path,
+    csv_path: str | Path,
+) -> tuple[Path, Path]:
+    """Rebuild immutable UTC-v1 files for explicitly offline compatibility only."""
 
     if not isinstance(summary, BacktestRunSummary):
         raise TypeError("summary must be a BacktestRunSummary")
@@ -261,6 +374,59 @@ def write_persisted_report_files(
     _atomic_write_if_changed(resolved_json, _stable_json(json_payload) + "\n")
     _atomic_write_if_changed(resolved_csv, csv_buffer.getvalue())
     return resolved_json, resolved_csv
+
+
+def _require_export_inputs(
+    store: BacktestResultStore,
+    cancelled: Callable[[], bool],
+) -> None:
+    if not isinstance(store, BacktestResultStore):
+        raise TypeError("store must be a BacktestResultStore")
+    if not callable(cancelled):
+        raise TypeError("cancelled must be callable")
+
+
+def _bounded_export_chunk(content: str) -> bytes:
+    encoded = content.encode("utf-8")
+    if not encoded or len(encoded) > _MAX_EXPORT_CHUNK_BYTES:
+        raise RuntimeError("export chunk must contain between 1 byte and 64 KiB")
+    return encoded
+
+
+def _v2_csv_header() -> bytes:
+    buffer = StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=_V2_FILL_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    return _bounded_export_chunk(buffer.getvalue())
+
+
+def _v2_fill_csv_row(fill: BacktestFillRecord) -> bytes:
+    payload = fill.payload
+    fees = payload.get("fees")
+    if not isinstance(fees, dict):
+        raise ValueError("stored fill fees must be an object")
+    buffer = StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=_V2_FILL_FIELDS, lineterminator="\n")
+    writer.writerow(
+        {
+            "schema_version": "backtest-simulated-fills-v2",
+            "run_id": fill.run_id,
+            "fill_id": fill.fill_id,
+            "filled_at": fill.filled_at.isoformat(timespec="microseconds"),
+            "side": payload["side"],
+            "symbol": payload["symbol"],
+            "bucket": payload["bucket"],
+            "quantity": payload["quantity"],
+            "price_fen": payload["price_fen"],
+            "notional_fen": payload["notional_fen"],
+            "fees_fen": fees["total_fen"],
+            "cash_delta_fen": payload["cash_delta_fen"],
+            "realized_pnl_fen": (
+                "" if payload.get("realized_pnl_fen") is None else payload["realized_pnl_fen"]
+            ),
+        }
+    )
+    return _bounded_export_chunk(buffer.getvalue())
 
 
 def _detail_records(
@@ -393,7 +559,10 @@ def _json_default(value: object) -> object:
 
 __all__ = [
     "ReportPersistenceResult",
+    "iter_export_fills",
+    "iter_export_summary",
     "persist_report",
+    "write_offline_v1_compatibility_report_files",
     "write_persisted_report_files",
     "write_report_files",
 ]
