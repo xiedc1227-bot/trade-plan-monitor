@@ -11,12 +11,23 @@ from pydantic import TypeAdapter, ValidationError
 
 from trade_plan_monitor.web.backtest_schemas import (
     MAX_SAFE_INTEGER,
+    BacktestDatasetCoverageView,
+    BacktestDatasetFiltersView,
+    BacktestDatasetPage,
     BacktestDatasetScopeInput,
+    BacktestDatasetScopeView,
     BacktestDatasetVerificationCommand,
+    BacktestDatasetVerificationJobResultView,
+    BacktestDatasetView,
     BacktestDataSyncCommand,
+    BacktestDataSyncJobResultView,
     BacktestExecutionConfigInput,
     BacktestInitialLotInput,
+    BacktestJobProgressView,
+    BacktestJobReceipt,
+    BacktestJobView,
     BacktestRunCommand,
+    BacktestRunJobResultView,
     DecimalText,
     FenText,
     ShanghaiDatetime,
@@ -24,6 +35,10 @@ from trade_plan_monitor.web.backtest_schemas import (
 
 _UUID = "4c623c8c-ca26-4cd8-8cb2-08cd5e61be93"
 _HASH = "a" * 64
+_RUN_HASH = "b" * 64
+_REPORT_HASH = "c" * 64
+_TIME = "2026-08-28T09:30:00+08:00"
+_FIXED_TIME = "2026-08-28T09:30:00.000000+08:00"
 
 
 def _scope_payload() -> dict[str, object]:
@@ -383,3 +398,437 @@ def test_input_run_enforces_authoritative_date_and_position_caps() -> None:
         limits.update(kwargs)
         with pytest.raises(ValueError, match=message):
             command.validate_initial_lot_limits(**limits)
+
+
+def _coverage_payload(*, blockers: list[str] | None = None) -> dict[str, object]:
+    return {
+        "symbolCount": 2,
+        "tradingDayCount": 5,
+        "calendarRowCount": 7,
+        "minuteDayCount": 10,
+        "minuteBarCount": 2_400,
+        "dailyLimitRowCount": 10,
+        "dailyBarRowCount": 10,
+        "blockers": [] if blockers is None else blockers,
+    }
+
+
+def _dataset_view_payload(
+    *,
+    dataset_hash: str = _HASH,
+    blockers: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "datasetHash": dataset_hash,
+        "schemaVersion": "backtest-dataset-v1",
+        "scope": _scope_payload(),
+        "coverage": _coverage_payload(blockers=blockers),
+        "createdAt": _TIME,
+        "verifiedAt": "2026-08-28T09:31:00.123+08:00",
+    }
+
+
+def _progress_payload(
+    *,
+    phase: str = "QUEUED",
+    completed_units: int = 0,
+    total_units: int | None = None,
+    unit: str = "ITEMS",
+) -> dict[str, object]:
+    return {
+        "phase": phase,
+        "completedUnits": completed_units,
+        "totalUnits": total_units,
+        "unit": unit,
+        "updatedAt": _TIME,
+    }
+
+
+def _run_result_payload(*, run_id: str = _RUN_HASH) -> dict[str, object]:
+    return {
+        "kind": "BACKTEST_RUN",
+        "runId": run_id,
+        "reportHash": _REPORT_HASH,
+        "reused": False,
+    }
+
+
+def _job_view_payload() -> dict[str, object]:
+    return {
+        "jobId": "job-001",
+        "kind": "BACKTEST_RUN",
+        "status": "COMPLETED",
+        "requestHash": _HASH,
+        "runId": _RUN_HASH,
+        "datasetHash": _HASH,
+        "progress": _progress_payload(
+            phase="TERMINAL",
+            completed_units=10,
+            total_units=10,
+            unit="EVENTS",
+        ),
+        "result": _run_result_payload(),
+        "attempt": 1,
+        "revision": 4,
+        "createdAt": "2026-08-28T09:29:00+08:00",
+        "startedAt": _TIME,
+        "updatedAt": "2026-08-28T09:31:00+08:00",
+        "finishedAt": "2026-08-28T09:31:00+08:00",
+        "cancelRequestedAt": None,
+        "reused": False,
+        "errorCode": None,
+        "errorMessage": None,
+    }
+
+
+def test_job_receipt_is_closed_and_canonicalizes_shanghai_time() -> None:
+    receipt = BacktestJobReceipt.model_validate(
+        {
+            "jobId": "job-001",
+            "kind": "BACKTEST_RUN",
+            "status": "QUEUED",
+            "runId": _RUN_HASH,
+            "datasetHash": _HASH,
+            "attempt": 0,
+            "revision": 0,
+            "reused": False,
+            "submittedAt": _TIME,
+        }
+    )
+
+    assert receipt.model_dump(mode="json")["submittedAt"] == _FIXED_TIME
+    assert set(receipt.model_dump(mode="json")) == {
+        "jobId",
+        "kind",
+        "status",
+        "runId",
+        "datasetHash",
+        "attempt",
+        "revision",
+        "reused",
+        "submittedAt",
+    }
+    with pytest.raises(ValidationError):
+        BacktestJobReceipt.model_validate(receipt.canonical_payload() | {"claimToken": "secret"})
+
+
+@pytest.mark.parametrize(
+    "update",
+    (
+        {"kind": "DATA_SYNC"},
+        {"runId": None},
+        {"datasetHash": None},
+        {"attempt": 1},
+        {"revision": MAX_SAFE_INTEGER + 1},
+        {"submittedAt": "2026-08-28T01:30:00Z"},
+    ),
+)
+def test_job_receipt_rejects_contradictory_or_unsafe_values(
+    update: dict[str, object],
+) -> None:
+    payload = {
+        "jobId": "job-reused",
+        "kind": "BACKTEST_RUN",
+        "status": "COMPLETED",
+        "runId": _RUN_HASH,
+        "datasetHash": _HASH,
+        "attempt": 0,
+        "revision": 0,
+        "reused": True,
+        "submittedAt": _TIME,
+    }
+    with pytest.raises(ValidationError):
+        BacktestJobReceipt.model_validate(payload | update)
+
+
+def test_job_progress_is_bounded_and_uses_fixed_six_digit_time() -> None:
+    progress = BacktestJobProgressView.model_validate(
+        _progress_payload(completed_units=3, total_units=10)
+    )
+
+    assert progress.model_dump(mode="json")["updatedAt"] == _FIXED_TIME
+    for update in (
+        {"completedUnits": 11, "totalUnits": 10},
+        {"completedUnits": -1},
+        {"completedUnits": MAX_SAFE_INTEGER + 1},
+        {"unit": "BYTES"},
+        {"phase": "UNKNOWN"},
+        {"updatedAt": "2026-08-28T09:30:00.1234567+08:00"},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestJobProgressView.model_validate(_progress_payload() | update)
+
+
+def test_job_result_union_accepts_only_exact_discriminator_variants() -> None:
+    sync = BacktestDataSyncJobResultView.model_validate(
+        {
+            "kind": "DATA_SYNC",
+            "calendarRows": 5,
+            "minuteDays": 10,
+            "dailyLimitRows": 10,
+            "dailyBarRows": 10,
+            "networkCalls": 2,
+        }
+    )
+    verification = BacktestDatasetVerificationJobResultView.model_validate(
+        {
+            "kind": "DATASET_VERIFY",
+            "ready": True,
+            "datasetHash": _HASH,
+            "coverage": _coverage_payload(),
+            "blockers": [],
+        }
+    )
+    run = BacktestRunJobResultView.model_validate(_run_result_payload())
+
+    assert (sync.kind, verification.kind, run.kind) == (
+        "DATA_SYNC",
+        "DATASET_VERIFY",
+        "BACKTEST_RUN",
+    )
+    for model, payload in (
+        (BacktestDataSyncJobResultView, sync.canonical_payload() | {"databasePath": "x"}),
+        (
+            BacktestDatasetVerificationJobResultView,
+            verification.canonical_payload() | {"providerPayload": {}},
+        ),
+        (BacktestRunJobResultView, run.canonical_payload() | {"kind": "DATA_SYNC"}),
+    ):
+        with pytest.raises(ValidationError):
+            model.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "update",
+    (
+        {"ready": True, "datasetHash": None},
+        {"ready": False, "datasetHash": _HASH},
+        {"ready": False, "datasetHash": None, "blockers": []},
+        {"ready": True, "datasetHash": _HASH, "blockers": ["MISSING_DAILY_BAR"]},
+        {
+            "ready": False,
+            "datasetHash": None,
+            "blockers": ["MISSING_DAILY_BAR"],
+            "coverage": _coverage_payload(),
+        },
+    ),
+)
+def test_dataset_verification_job_result_rejects_readiness_conflicts(
+    update: dict[str, object],
+) -> None:
+    payload = {
+        "kind": "DATASET_VERIFY",
+        "ready": True,
+        "datasetHash": _HASH,
+        "coverage": _coverage_payload(),
+        "blockers": [],
+    }
+    with pytest.raises(ValidationError):
+        BacktestDatasetVerificationJobResultView.model_validate(payload | update)
+
+
+def test_job_view_serializes_one_valid_completed_run_union() -> None:
+    view = BacktestJobView.model_validate(_job_view_payload())
+    dumped = view.model_dump(mode="json")
+
+    assert dumped["kind"] == dumped["result"]["kind"] == "BACKTEST_RUN"
+    assert dumped["runId"] == dumped["result"]["runId"] == _RUN_HASH
+    assert dumped["createdAt"] == "2026-08-28T09:29:00.000000+08:00"
+    assert dumped["finishedAt"] == "2026-08-28T09:31:00.000000+08:00"
+    assert "claimToken" not in BacktestJobView.model_fields
+    assert "canonicalRequestJson" not in BacktestJobView.model_fields
+
+
+@pytest.mark.parametrize(
+    "update",
+    (
+        {"result": None},
+        {"status": "RUNNING", "finishedAt": None},
+        {"progress": _progress_payload(phase="FINALIZING")},
+        {"finishedAt": None},
+        {"kind": "DATA_SYNC"},
+        {"runId": None},
+        {"datasetHash": None},
+        {"result": _run_result_payload(run_id="d" * 64)},
+        {"reused": True},
+        {"errorCode": "FAILED", "errorMessage": "sanitized"},
+        {"createdAt": "2026-08-28T01:29:00Z"},
+        {"rawDiagnostics": {"trace": "internal"}},
+    ),
+)
+def test_job_view_rejects_every_contradictory_completed_projection(
+    update: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        BacktestJobView.model_validate(_job_view_payload() | update)
+
+
+@pytest.mark.parametrize("status", ("FAILED", "CANCELLED"))
+def test_job_terminal_failure_or_cancellation_requires_sanitized_error(
+    status: str,
+) -> None:
+    payload = _job_view_payload() | {
+        "kind": "DATA_SYNC",
+        "status": status,
+        "runId": None,
+        "datasetHash": None,
+        "result": None,
+        "attempt": 1 if status == "FAILED" else 0,
+        "startedAt": _TIME if status == "FAILED" else None,
+        "cancelRequestedAt": _TIME if status == "CANCELLED" else None,
+        "errorCode": "JOB_CANCELLED" if status == "CANCELLED" else "JOB_FAILED",
+        "errorMessage": "sanitized public message",
+    }
+    view = BacktestJobView.model_validate(payload)
+    assert view.status == status
+
+    if status == "CANCELLED":
+        with pytest.raises(ValidationError):
+            BacktestJobView.model_validate(payload | {"startedAt": _TIME})
+
+    for update in (
+        {"errorCode": None},
+        {"errorMessage": None},
+        {"errorCode": "bad-code"},
+        {"errorMessage": "line one\nline two"},
+        {"errorMessage": "x" * 513},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestJobView.model_validate(payload | update)
+
+
+def test_job_view_rejects_nonterminal_and_cancellation_state_conflicts() -> None:
+    queued = _job_view_payload() | {
+        "kind": "DATA_SYNC",
+        "status": "QUEUED",
+        "runId": None,
+        "datasetHash": None,
+        "progress": _progress_payload(),
+        "result": None,
+        "attempt": 0,
+        "startedAt": None,
+        "finishedAt": None,
+        "errorCode": None,
+        "errorMessage": None,
+    }
+    assert BacktestJobView.model_validate(queued).status == "QUEUED"
+
+    for update in (
+        {"attempt": 1},
+        {"startedAt": _TIME},
+        {"finishedAt": _TIME},
+        {"progress": _progress_payload(phase="TERMINAL")},
+        {"cancelRequestedAt": _TIME},
+        {"reused": True},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestJobView.model_validate(queued | update)
+
+    running = _job_view_payload() | {
+        "status": "RUNNING",
+        "progress": _progress_payload(phase="REPLAYING"),
+        "result": None,
+        "finishedAt": None,
+    }
+    assert BacktestJobView.model_validate(running).status == "RUNNING"
+    with pytest.raises(ValidationError):
+        BacktestJobView.model_validate(running | {"progress": _progress_payload(phase="QUEUED")})
+
+
+def test_dataset_scope_and_coverage_views_are_bounded_and_closed() -> None:
+    scope = BacktestDatasetScopeView.model_validate(_scope_payload())
+    coverage = BacktestDatasetCoverageView.model_validate(
+        _coverage_payload(blockers=["MISSING_DAILY_BAR", "MISSING_MINUTE_DAY"])
+    )
+
+    assert scope.symbols == ("000001.SZ", "600000.SH")
+    assert coverage.blockers == ("MISSING_DAILY_BAR", "MISSING_MINUTE_DAY")
+    for payload in (
+        _coverage_payload(blockers=["MISSING", "MISSING"]),
+        _coverage_payload(blockers=["lower_case"]),
+        _coverage_payload(blockers=["X" * 129]),
+        _coverage_payload(blockers=[f"BLOCKER_{index:03d}" for index in range(101)]),
+        _coverage_payload() | {"minuteBarCount": MAX_SAFE_INTEGER + 1},
+        _coverage_payload() | {"membershipRows": []},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestDatasetCoverageView.model_validate(payload)
+
+
+def test_dataset_view_exposes_only_bounded_projection_and_fixed_times() -> None:
+    view = BacktestDatasetView.model_validate(_dataset_view_payload())
+    dumped = view.model_dump(mode="json")
+
+    assert dumped["createdAt"] == _FIXED_TIME
+    assert dumped["verifiedAt"] == "2026-08-28T09:31:00.123000+08:00"
+    assert set(dumped) == {
+        "datasetHash",
+        "schemaVersion",
+        "scope",
+        "coverage",
+        "createdAt",
+        "verifiedAt",
+    }
+    for forbidden in ("membershipRows", "artifacts", "providerPayload", "databasePath"):
+        with pytest.raises(ValidationError):
+            BacktestDatasetView.model_validate(_dataset_view_payload() | {forbidden: []})
+
+
+def test_dataset_page_is_bounded_and_has_closed_normalized_filters() -> None:
+    items = [_dataset_view_payload(dataset_hash=f"{index:064x}") for index in range(100)]
+    filters = {
+        "symbol": "000001.SZ",
+        "startOnOrAfter": "2024-01-01",
+        "endOnOrBefore": "2026-01-01",
+        "historicalProfile": "TUSHARE_STK_MINS_241_END_V1",
+        "adjustmentPolicy": "NONE",
+    }
+    page = BacktestDatasetPage.model_validate(
+        {
+            "filters": filters,
+            "items": items,
+            "limit": 100,
+            "nextCursor": "next.token",
+            "hasMore": True,
+            "highWatermark": "high.water",
+        }
+    )
+
+    assert len(page.items) == 100
+    assert page.filters == BacktestDatasetFiltersView.model_validate(filters)
+    assert page.model_dump(mode="json")["items"][0]["datasetHash"] == "0" * 64
+
+
+@pytest.mark.parametrize(
+    "update",
+    (
+        {"items": [_dataset_view_payload()] * 101},
+        {"limit": 0},
+        {"limit": 101},
+        {"items": [_dataset_view_payload()] * 2, "limit": 1},
+        {"hasMore": True, "nextCursor": None},
+        {"hasMore": False, "nextCursor": "next.token"},
+        {"nextCursor": "not-a-signed-token"},
+        {"highWatermark": ""},
+        {"membershipRevision": 1},
+    ),
+)
+def test_dataset_page_rejects_unbounded_or_contradictory_projection(
+    update: dict[str, object],
+) -> None:
+    payload = {
+        "filters": {
+            "symbol": None,
+            "startOnOrAfter": None,
+            "endOnOrBefore": None,
+            "historicalProfile": None,
+            "adjustmentPolicy": None,
+        },
+        "items": [_dataset_view_payload()],
+        "limit": 20,
+        "nextCursor": None,
+        "hasMore": False,
+        "highWatermark": "high.water",
+    }
+    with pytest.raises(ValidationError):
+        BacktestDatasetPage.model_validate(payload | update)

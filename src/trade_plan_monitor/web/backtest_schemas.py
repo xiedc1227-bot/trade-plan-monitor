@@ -386,15 +386,409 @@ class BacktestRunCommand(_BacktestApiInput):
         return self
 
 
+JobIdentifier = Annotated[
+    str,
+    StringConstraints(
+        strict=True,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+    ),
+]
+StableErrorCode = Annotated[
+    str,
+    StringConstraints(
+        strict=True,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Z][A-Z0-9_]*$",
+    ),
+]
+StableBlockerCode = Annotated[
+    str,
+    StringConstraints(
+        strict=True,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Z][A-Z0-9_]*$",
+    ),
+]
+AShareSymbolText = Annotated[
+    str,
+    StringConstraints(strict=True, pattern=r"^[0-9]{6}\.(?:SH|SZ)$"),
+]
+CursorToken = Annotated[
+    str,
+    StringConstraints(
+        strict=True,
+        min_length=3,
+        max_length=512,
+        pattern=r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$",
+    ),
+]
+
+
+def _require_json_array(value: object, *, field_name: str) -> tuple[object, ...]:
+    if type(value) is not list:
+        raise ValueError(f"{field_name} must be a JSON array")
+    return tuple(value)
+
+
+class BacktestDatasetScopeView(BacktestDatasetScopeInput):
+    """Bounded public projection of one verified dataset scope."""
+
+
+class BacktestDatasetCoverageView(_BacktestApiInput):
+    """Exact public counts and stable blockers for one dataset."""
+
+    symbol_count: JavaScriptSafeInteger
+    trading_day_count: JavaScriptSafeInteger
+    calendar_row_count: JavaScriptSafeInteger
+    minute_day_count: JavaScriptSafeInteger
+    minute_bar_count: JavaScriptSafeInteger
+    daily_limit_row_count: JavaScriptSafeInteger
+    daily_bar_row_count: JavaScriptSafeInteger
+    blockers: Annotated[tuple[StableBlockerCode, ...], Field(max_length=100)]
+
+    @field_validator("blockers", mode="before")
+    @classmethod
+    def require_blocker_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="blockers")
+
+    @field_validator("blockers")
+    @classmethod
+    def validate_blocker_order(
+        cls,
+        value: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        if value != tuple(sorted(set(value))):
+            raise ValueError("blockers must be ordered and unique")
+        return value
+
+
+class BacktestDatasetView(_BacktestApiInput):
+    """Public dataset projection without manifest membership or provider payloads."""
+
+    dataset_hash: Sha256Hex
+    schema_version: Literal["backtest-dataset-v1"]
+    scope: BacktestDatasetScopeView
+    coverage: BacktestDatasetCoverageView
+    created_at: ShanghaiDatetime
+    verified_at: ShanghaiDatetime
+
+
+class BacktestDatasetFiltersView(_BacktestApiInput):
+    """Closed normalized filters echoed by a dataset traversal page."""
+
+    symbol: AShareSymbolText | None
+    start_on_or_after: ApiDate | None
+    end_on_or_before: ApiDate | None
+    historical_profile: Literal["TUSHARE_STK_MINS_241_END_V1"] | None
+    adjustment_policy: Literal["NONE"] | None
+
+    @model_validator(mode="after")
+    def validate_date_filter_order(self) -> Self:
+        if (
+            self.start_on_or_after is not None
+            and self.end_on_or_before is not None
+            and self.start_on_or_after > self.end_on_or_before
+        ):
+            raise ValueError("startOnOrAfter cannot be after endOnOrBefore")
+        return self
+
+
+class BacktestDatasetPage(_BacktestApiInput):
+    """One bounded dataset page anchored by signed cursor tokens."""
+
+    filters: BacktestDatasetFiltersView
+    items: Annotated[tuple[BacktestDatasetView, ...], Field(max_length=100)]
+    limit: Annotated[int, Field(strict=True, ge=1, le=100)]
+    next_cursor: CursorToken | None
+    has_more: bool = Field(strict=True)
+    high_watermark: CursorToken
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def require_item_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="items")
+
+    @model_validator(mode="after")
+    def validate_page_shape(self) -> Self:
+        if len(self.items) > self.limit:
+            raise ValueError("dataset page cannot contain more than limit items")
+        if self.has_more != (self.next_cursor is not None):
+            raise ValueError("hasMore and nextCursor must agree")
+        return self
+
+
+BacktestJobKind = Literal["DATA_SYNC", "DATASET_VERIFY", "BACKTEST_RUN"]
+BacktestJobStatus = Literal[
+    "QUEUED",
+    "RUNNING",
+    "CANCEL_REQUESTED",
+    "COMPLETED",
+    "FAILED",
+    "CANCELLED",
+]
+BacktestJobPhase = Literal[
+    "QUEUED",
+    "VALIDATING_INPUT",
+    "SYNCING_DATA",
+    "VERIFYING_DATASET",
+    "REPLAYING",
+    "MATERIALIZING_RESULTS",
+    "FINALIZING",
+    "TERMINAL",
+]
+BacktestProgressUnit = Literal["ITEMS", "SYMBOL_DAYS", "EVENTS", "ROWS"]
+
+
+class BacktestJobReceipt(_BacktestApiInput):
+    """Canonical submission receipt for active or immediately reused work."""
+
+    job_id: JobIdentifier
+    kind: BacktestJobKind
+    status: BacktestJobStatus
+    run_id: Sha256Hex | None
+    dataset_hash: Sha256Hex | None
+    attempt: Annotated[int, Field(strict=True, ge=0, le=3)]
+    revision: JavaScriptSafeInteger
+    reused: bool = Field(strict=True)
+    submitted_at: ShanghaiDatetime
+
+    @model_validator(mode="after")
+    def validate_receipt_shape(self) -> Self:
+        if self.kind == "BACKTEST_RUN":
+            if self.run_id is None or self.dataset_hash is None:
+                raise ValueError("BACKTEST_RUN receipt requires runId and datasetHash")
+        elif self.run_id is not None:
+            raise ValueError("non-run receipt cannot expose runId")
+        if self.kind == "DATA_SYNC" and self.dataset_hash is not None:
+            raise ValueError("DATA_SYNC receipt cannot expose datasetHash")
+        if self.status == "QUEUED" and self.attempt != 0:
+            raise ValueError("queued receipt must have attempt=0")
+        if self.status in {"RUNNING", "CANCEL_REQUESTED"} and self.attempt == 0:
+            raise ValueError("active receipt must identify a claim generation")
+        if self.status == "COMPLETED" and self.attempt == 0 and not self.reused:
+            raise ValueError("attempt=0 completed receipt must be reused")
+        if self.reused and (
+            self.kind != "BACKTEST_RUN"
+            or self.status != "COMPLETED"
+            or self.attempt != 0
+            or self.revision != 0
+        ):
+            raise ValueError("reused receipt must be an immediate completed run")
+        return self
+
+
+class BacktestJobProgressView(_BacktestApiInput):
+    """Bounded public progress for one job claim generation."""
+
+    phase: BacktestJobPhase
+    completed_units: JavaScriptSafeInteger
+    total_units: JavaScriptSafeInteger | None
+    unit: BacktestProgressUnit
+    updated_at: ShanghaiDatetime
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> Self:
+        if self.total_units is not None and self.completed_units > self.total_units:
+            raise ValueError("completedUnits cannot exceed totalUnits")
+        return self
+
+
+class BacktestDataSyncJobResultView(_BacktestApiInput):
+    kind: Literal["DATA_SYNC"]
+    calendar_rows: JavaScriptSafeInteger
+    minute_days: JavaScriptSafeInteger
+    daily_limit_rows: JavaScriptSafeInteger
+    daily_bar_rows: JavaScriptSafeInteger
+    network_calls: JavaScriptSafeInteger
+
+
+class BacktestDatasetVerificationJobResultView(_BacktestApiInput):
+    kind: Literal["DATASET_VERIFY"]
+    ready: bool = Field(strict=True)
+    dataset_hash: Sha256Hex | None
+    coverage: BacktestDatasetCoverageView
+    blockers: Annotated[tuple[StableBlockerCode, ...], Field(max_length=100)]
+
+    @field_validator("blockers", mode="before")
+    @classmethod
+    def require_blocker_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="blockers")
+
+    @model_validator(mode="after")
+    def validate_readiness(self) -> Self:
+        if self.blockers != tuple(sorted(set(self.blockers))):
+            raise ValueError("blockers must be ordered and unique")
+        if self.blockers != self.coverage.blockers:
+            raise ValueError("result blockers must match coverage blockers")
+        if self.ready:
+            if self.dataset_hash is None or self.blockers:
+                raise ValueError("ready verification requires datasetHash and no blockers")
+        elif self.dataset_hash is not None or not self.blockers:
+            raise ValueError("blocked verification requires blockers and no datasetHash")
+        return self
+
+
+class BacktestRunJobResultView(_BacktestApiInput):
+    kind: Literal["BACKTEST_RUN"]
+    run_id: Sha256Hex
+    report_hash: Sha256Hex
+    reused: bool = Field(strict=True)
+
+
+type BacktestJobResultView = Annotated[
+    BacktestDataSyncJobResultView
+    | BacktestDatasetVerificationJobResultView
+    | BacktestRunJobResultView,
+    Field(discriminator="kind"),
+]
+
+
+class BacktestJobView(_BacktestApiInput):
+    """Closed public job state with jointly validated lifecycle discriminators."""
+
+    job_id: JobIdentifier
+    kind: BacktestJobKind
+    status: BacktestJobStatus
+    request_hash: Sha256Hex
+    run_id: Sha256Hex | None
+    dataset_hash: Sha256Hex | None
+    progress: BacktestJobProgressView
+    result: BacktestJobResultView | None
+    attempt: Annotated[int, Field(strict=True, ge=0, le=3)]
+    revision: JavaScriptSafeInteger
+    created_at: ShanghaiDatetime
+    started_at: ShanghaiDatetime | None
+    updated_at: ShanghaiDatetime
+    finished_at: ShanghaiDatetime | None
+    cancel_requested_at: ShanghaiDatetime | None
+    reused: bool = Field(strict=True)
+    error_code: StableErrorCode | None
+    error_message: Annotated[str, Field(strict=True, min_length=1, max_length=512)] | None
+
+    @field_validator("error_message")
+    @classmethod
+    def validate_sanitized_error(cls, value: str | None) -> str | None:
+        if value is not None and any(
+            ord(character) < 32 or ord(character) == 127 for character in value
+        ):
+            raise ValueError("errorMessage must not contain control characters")
+        return value
+
+    @model_validator(mode="after")
+    def validate_closed_job_union(self) -> Self:
+        terminal = self.status in {"COMPLETED", "FAILED", "CANCELLED"}
+        if terminal != (self.finished_at is not None):
+            raise ValueError("terminal status and finishedAt must agree")
+        if terminal != (self.progress.phase == "TERMINAL"):
+            raise ValueError("terminal status and progress phase must agree")
+
+        if self.status == "COMPLETED":
+            if self.result is None:
+                raise ValueError("completed job requires result")
+        elif self.result is not None:
+            raise ValueError("only completed job may expose result")
+        if self.result is not None and self.result.kind != self.kind:
+            raise ValueError("result kind must match job kind")
+
+        has_error = self.error_code is not None and self.error_message is not None
+        if (self.error_code is None) != (self.error_message is None):
+            raise ValueError("errorCode and errorMessage must appear together")
+        if (self.status in {"FAILED", "CANCELLED"}) != has_error:
+            raise ValueError("only failed or cancelled jobs require public errors")
+
+        if self.kind == "BACKTEST_RUN":
+            if self.run_id is None or self.dataset_hash is None:
+                raise ValueError("BACKTEST_RUN job requires runId and datasetHash")
+        elif self.run_id is not None:
+            raise ValueError("non-run job cannot expose runId")
+        if self.kind == "DATA_SYNC" and self.dataset_hash is not None:
+            raise ValueError("DATA_SYNC job cannot expose datasetHash")
+        if isinstance(self.result, BacktestRunJobResultView):
+            if self.run_id != self.result.run_id:
+                raise ValueError("run result must match runId")
+            if self.reused != self.result.reused:
+                raise ValueError("run result reused flag must match job")
+        if isinstance(self.result, BacktestDatasetVerificationJobResultView):
+            if self.dataset_hash != self.result.dataset_hash:
+                raise ValueError("verification result must match datasetHash")
+
+        allowed_phases = {
+            "DATA_SYNC": {"QUEUED", "VALIDATING_INPUT", "SYNCING_DATA", "FINALIZING", "TERMINAL"},
+            "DATASET_VERIFY": {
+                "QUEUED",
+                "VALIDATING_INPUT",
+                "VERIFYING_DATASET",
+                "FINALIZING",
+                "TERMINAL",
+            },
+            "BACKTEST_RUN": {
+                "QUEUED",
+                "VALIDATING_INPUT",
+                "REPLAYING",
+                "MATERIALIZING_RESULTS",
+                "FINALIZING",
+                "TERMINAL",
+            },
+        }
+        if self.progress.phase not in allowed_phases[self.kind]:
+            raise ValueError("progress phase must match job kind")
+
+        if self.status == "QUEUED":
+            if self.attempt != 0 or self.started_at is not None or self.progress.phase != "QUEUED":
+                raise ValueError("queued job must be unclaimed and remain in QUEUED phase")
+        elif self.status in {"RUNNING", "CANCEL_REQUESTED"}:
+            if self.attempt == 0 or self.started_at is None or self.progress.phase == "QUEUED":
+                raise ValueError("active job requires a claim generation and active phase")
+        elif self.attempt == 0 and self.started_at is not None:
+            raise ValueError("unclaimed terminal job cannot expose startedAt")
+        elif self.attempt > 0 and self.started_at is None:
+            raise ValueError("claimed terminal job requires startedAt")
+
+        if self.status in {"CANCEL_REQUESTED", "CANCELLED"}:
+            if self.cancel_requested_at is None:
+                raise ValueError("cancelling or cancelled job requires cancelRequestedAt")
+        elif self.cancel_requested_at is not None:
+            raise ValueError("only cancelling or cancelled job exposes cancelRequestedAt")
+
+        if self.status == "COMPLETED" and self.attempt == 0 and not self.reused:
+            raise ValueError("attempt=0 completed job must be reused")
+        if self.status == "FAILED" and self.attempt == 0:
+            raise ValueError("failed job must have a claim generation")
+        if self.reused and (
+            self.kind != "BACKTEST_RUN"
+            or self.status != "COMPLETED"
+            or self.attempt != 0
+            or self.revision != 0
+        ):
+            raise ValueError("reused job must be an immediate completed run")
+        return self
+
+
 __all__ = [
     "MAX_INITIAL_LOTS",
     "MAX_SAFE_INTEGER",
     "BacktestDataSyncCommand",
+    "BacktestDataSyncJobResultView",
+    "BacktestDatasetCoverageView",
+    "BacktestDatasetFiltersView",
+    "BacktestDatasetPage",
     "BacktestDatasetScopeInput",
+    "BacktestDatasetScopeView",
     "BacktestDatasetVerificationCommand",
+    "BacktestDatasetVerificationJobResultView",
+    "BacktestDatasetView",
     "BacktestExecutionConfigInput",
     "BacktestInitialLotInput",
+    "BacktestJobProgressView",
+    "BacktestJobReceipt",
+    "BacktestJobResultView",
+    "BacktestJobView",
     "BacktestRunCommand",
+    "BacktestRunJobResultView",
     "DecimalText",
     "FenText",
     "JavaScriptSafeInteger",
