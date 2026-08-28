@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta
 from typing import Protocol, TypeVar
@@ -38,6 +39,24 @@ class HistoricalRequestController(Protocol):
         work_key: str,
         priority: RequestPriority,
     ) -> Awaitable[_T]: ...
+
+
+class _InlineHistoricalRequestController:
+    """Execute one provider call inline on the coordinator-owned worker thread."""
+
+    async def execute(
+        self,
+        _operation: TushareOperation,
+        call: Callable[[], _T],
+        *,
+        work_key: str,
+        priority: RequestPriority,
+    ) -> _T:
+        if not work_key.startswith("backtest:"):
+            raise ValueError("historical work_key must use the backtest namespace")
+        if priority is not RequestPriority.BACKGROUND:
+            raise ValueError("historical sync must use background priority")
+        return call()
 
 
 class BacktestSyncResult(BaseModel):
@@ -349,6 +368,52 @@ class BacktestSyncService:
         )
 
 
+class BlockingBacktestSyncCore:
+    """Blocking worker facade that owns no executor or request-controller thread."""
+
+    def __init__(
+        self,
+        *,
+        provider: HistoricalMinuteProvider,
+        store: BacktestMarketStore,
+        today: Callable[[], date],
+    ) -> None:
+        self._service = BacktestSyncService(
+            provider=provider,
+            store=store,
+            request_controller=_InlineHistoricalRequestController(),
+            today=today,
+        )
+
+    def sync(
+        self,
+        scope: DatasetScope,
+        *,
+        refresh: bool = False,
+        cancellation_token: CancellationToken | None = None,
+        progress_callback: BacktestProgressCallback | None = None,
+    ) -> BacktestSyncResult:
+        """Run the existing workflow inline; only the outer coordinator owns a thread."""
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError("blocking historical sync cannot run in an event loop")
+        return asyncio.run(
+            self._service.sync(
+                scope,
+                refresh=refresh,
+                cancellation_token=cancellation_token,
+                progress_callback=progress_callback,
+            )
+        )
+
+
+BacktestBlockingSyncService = BlockingBacktestSyncCore
+
+
 def _dates(start: date, end: date) -> tuple[date, ...]:
     values: list[date] = []
     cursor = start
@@ -376,7 +441,9 @@ def _require_exact_identities[T](
 
 
 __all__ = [
+    "BacktestBlockingSyncService",
     "BacktestSyncResult",
     "BacktestSyncService",
+    "BlockingBacktestSyncCore",
     "HistoricalRequestController",
 ]
