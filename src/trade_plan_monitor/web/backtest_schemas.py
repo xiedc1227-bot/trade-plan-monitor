@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from datetime import date, datetime, timedelta
+from decimal import ROUND_HALF_EVEN, Context, Decimal, InvalidOperation, localcontext
 from typing import Annotated, Any, Literal, Self
 from uuid import RFC_4122, UUID
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -22,9 +23,24 @@ from pydantic import (
 )
 
 from trade_plan_monitor.backtest.canonical import canonical_decimal
+from trade_plan_monitor.backtest.models import ExecutionStatus, UnfilledReason
 from trade_plan_monitor.backtest.time import (
     format_shanghai_datetime,
     parse_shanghai_datetime,
+)
+from trade_plan_monitor.decision.models import (
+    ActionableSignalType,
+    ConditionOutcome,
+    DataHealthStatus,
+    DecisionZone,
+    EpisodeStatus,
+    EvidenceCode,
+    EvidenceKey,
+    EvidenceUnit,
+    MissingInputCode,
+    NextStepCode,
+    RiskStatus,
+    SignalType,
 )
 
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
@@ -518,6 +534,32 @@ class BacktestDatasetPage(_BacktestApiInput):
             raise ValueError("dataset page cannot contain more than limit items")
         if self.has_more != (self.next_cursor is not None):
             raise ValueError("hasMore and nextCursor must agree")
+        positions = tuple((item.created_at, item.dataset_hash) for item in self.items)
+        _require_ordered_unique_positions(positions, reverse=True, resource="dataset")
+        for item in self.items:
+            if self.filters.symbol is not None and self.filters.symbol not in item.scope.symbols:
+                raise ValueError("dataset item must match symbol filter")
+            if (
+                self.filters.start_on_or_after is not None
+                and item.scope.start < self.filters.start_on_or_after
+            ):
+                raise ValueError("dataset item must match startOnOrAfter filter")
+            if (
+                self.filters.end_on_or_before is not None
+                and item.scope.end > self.filters.end_on_or_before
+            ):
+                raise ValueError("dataset item must match endOnOrBefore filter")
+            if (
+                self.filters.historical_profile is not None
+                and item.scope.historical_profile != self.filters.historical_profile
+            ):
+                raise ValueError("dataset item must match historicalProfile filter")
+            if (
+                self.filters.adjustment_policy is not None
+                and item.scope.adjustment_policy != self.filters.adjustment_policy
+            ):
+                raise ValueError("dataset item must match adjustmentPolicy filter")
+        _validate_bounded_page(self, self.items)
         return self
 
 
@@ -768,11 +810,854 @@ class BacktestJobView(_BacktestApiInput):
         return self
 
 
+def _validate_non_negative_fen(value: str) -> str:
+    if int(value) < 0:
+        raise ValueError("fen value must be non-negative")
+    return value
+
+
+def _validate_positive_fen(value: str) -> str:
+    if int(value) <= 0:
+        raise ValueError("fen value must be positive")
+    return value
+
+
+NonNegativeFenText = Annotated[FenText, AfterValidator(_validate_non_negative_fen)]
+PositiveFenText = Annotated[FenText, AfterValidator(_validate_positive_fen)]
+StableIdentifier = JobIdentifier
+StableToken = Annotated[
+    str,
+    StringConstraints(
+        strict=True,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+    ),
+]
+BacktestArtifactAvailability = Literal["AVAILABLE", "EXPIRED", "NOT_RECORDED"]
+
+
+class BacktestResultAvailabilityView(_BacktestApiInput):
+    """Exact lifecycle states for optional completed-result artifacts."""
+
+    decision_details: BacktestArtifactAvailability
+    signal_details: BacktestArtifactAvailability
+    execution_outcome_details: BacktestArtifactAvailability
+    equity_series: BacktestArtifactAvailability
+
+
+class BacktestMetricsView(_BacktestApiInput):
+    """Exact completed-run metrics with all money represented as FenText."""
+
+    initial_cash_fen: PositiveFenText
+    initial_equity_fen: PositiveFenText
+    final_cash_fen: NonNegativeFenText
+    final_equity_fen: NonNegativeFenText
+    total_return: DecimalText
+    maximum_drawdown: DecimalText
+    trade_count: JavaScriptSafeInteger
+    winning_sell_count: JavaScriptSafeInteger
+    win_rate: DecimalText
+    turnover_fen: NonNegativeFenText
+    total_cost_fen: NonNegativeFenText
+    realized_pnl_fen: FenText
+    unrealized_pnl_fen: FenText
+    blocked_count: JavaScriptSafeInteger
+    skipped_count: JavaScriptSafeInteger
+
+    @model_validator(mode="after")
+    def validate_metric_domains(self) -> Self:
+        with localcontext(Context(prec=28, rounding=ROUND_HALF_EVEN)):
+            expected_return = Decimal(
+                int(self.final_equity_fen) - int(self.initial_equity_fen)
+            ) / Decimal(int(self.initial_equity_fen))
+        if self.total_return != expected_return:
+            raise ValueError("totalReturn must match initial and final equity")
+        if self.total_return < Decimal("-1"):
+            raise ValueError("totalReturn cannot be below -1")
+        if not Decimal("0") <= self.maximum_drawdown <= Decimal("1"):
+            raise ValueError("maximumDrawdown must be between 0 and 1")
+        if not Decimal("0") <= self.win_rate <= Decimal("1"):
+            raise ValueError("winRate must be between 0 and 1")
+        if self.winning_sell_count > self.trade_count:
+            raise ValueError("winningSellCount cannot exceed tradeCount")
+        return self
+
+
+class BacktestExecutionConfigView(_BacktestApiInput):
+    """Exact execution assumptions with FenText money and DecimalText rates."""
+
+    commission_rate: DecimalText
+    minimum_commission_fen: NonNegativeFenText
+    stamp_duty_rate: DecimalText
+    transfer_fee_rate: DecimalText
+    buy_slippage_bps: DecimalText
+    sell_slippage_bps: DecimalText
+
+    @model_validator(mode="after")
+    def validate_decimal_ranges(self) -> Self:
+        for name in ("commission_rate", "stamp_duty_rate", "transfer_fee_rate"):
+            if not Decimal("0") <= getattr(self, name) <= Decimal("1"):
+                raise ValueError(f"{_to_camel(name)} must be between 0 and 1")
+        for name in ("buy_slippage_bps", "sell_slippage_bps"):
+            if not Decimal("0") <= getattr(self, name) < Decimal("10000"):
+                raise ValueError(f"{_to_camel(name)} must be between 0 and 10000")
+        return self
+
+
+class BacktestAssumptionsView(_BacktestApiInput):
+    event_risk_assumption: Literal["NO_EVENT_RISK", "MANUAL_EVENT_RISK"]
+    execution_config: BacktestExecutionConfigView
+    execution_config_hash: Sha256Hex
+    price_adjustment_policy: Literal["NONE"]
+    historical_profile: Literal["TUSHARE_STK_MINS_241_END_V1"]
+
+
+class BacktestFormulaVersionsView(_BacktestApiInput):
+    run_formula_version: StableToken
+    report_schema_version: StableToken
+    execution_formula_version: StableToken
+    metric_formula_version: StableToken
+
+
+class BacktestRunCoverageView(_BacktestApiInput):
+    event_start: ApiDate
+    event_end: ApiDate
+    trading_day_count: JavaScriptSafeInteger
+    decision_count: JavaScriptSafeInteger
+    signal_count: JavaScriptSafeInteger
+    order_count: JavaScriptSafeInteger
+    fill_count: JavaScriptSafeInteger
+    outcome_count: JavaScriptSafeInteger
+    equity_point_count: JavaScriptSafeInteger
+
+    @model_validator(mode="after")
+    def validate_event_range(self) -> Self:
+        if self.event_end < self.event_start:
+            raise ValueError("eventEnd cannot precede eventStart")
+        return self
+
+
+class BacktestRunSummaryView(_BacktestApiInput):
+    """Public run summary that can exist only after completed publication."""
+
+    run_id: Sha256Hex
+    report_hash: Sha256Hex
+    plan_version_id: Rfc4122Uuid | None
+    plan_hash: Sha256Hex
+    dataset_hash: Sha256Hex
+    symbol: AShareSymbolText
+    status: Literal["COMPLETED"]
+    event_start: ApiDate
+    event_end: ApiDate
+    completed_at: ShanghaiDatetime
+    pinned: bool = Field(strict=True)
+    revision: JavaScriptSafeInteger
+    fill_count: JavaScriptSafeInteger
+    metrics: BacktestMetricsView
+    availability: BacktestResultAvailabilityView
+
+    @model_validator(mode="after")
+    def validate_completed_summary(self) -> Self:
+        if self.event_end < self.event_start:
+            raise ValueError("eventEnd cannot precede eventStart")
+        if self.fill_count != self.metrics.trade_count:
+            raise ValueError("fillCount must match metrics.tradeCount")
+        _require_max_item_bytes(self)
+        return self
+
+
+class BacktestRunView(BacktestRunSummaryView):
+    """Complete public run projection with no staged or failed variant."""
+
+    initial_cash_fen: PositiveFenText
+    coverage: BacktestRunCoverageView
+    assumptions: BacktestAssumptionsView
+    formula_versions: BacktestFormulaVersionsView
+    limitations: Annotated[tuple[StableToken, ...], Field(max_length=32)]
+
+    @field_validator("limitations", mode="before")
+    @classmethod
+    def require_limitation_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="limitations")
+
+    @model_validator(mode="after")
+    def validate_complete_run(self) -> Self:
+        if self.limitations != tuple(sorted(set(self.limitations))):
+            raise ValueError("limitations must be ordered and unique")
+        if self.initial_cash_fen != self.metrics.initial_cash_fen:
+            raise ValueError("initialCashFen must match metrics.initialCashFen")
+        if (self.coverage.event_start, self.coverage.event_end) != (
+            self.event_start,
+            self.event_end,
+        ):
+            raise ValueError("coverage event range must match the run")
+        if self.coverage.fill_count != self.fill_count:
+            raise ValueError("coverage.fillCount must match fillCount")
+        artifact_counts = (
+            ("decisionDetails", self.coverage.decision_count, self.availability.decision_details),
+            ("signalDetails", self.coverage.signal_count, self.availability.signal_details),
+            (
+                "executionOutcomeDetails",
+                self.coverage.outcome_count,
+                self.availability.execution_outcome_details,
+            ),
+            ("equitySeries", self.coverage.equity_point_count, self.availability.equity_series),
+        )
+        for name, count, availability in artifact_counts:
+            if (count == 0) != (availability == "NOT_RECORDED"):
+                raise ValueError(f"{name} availability must match its original count")
+        return self
+
+
+MAX_RESULT_ITEM_BYTES = 32 * 1024
+MAX_RESULT_PAGE_BYTES = 4 * 1024 * 1024
+MAX_EQUITY_POINTS = 2_000
+MAX_EVIDENCE = 50
+MAX_EVIDENCE_FACTS = 512
+MAX_MISSING_INPUTS = 16
+
+
+def _require_max_item_bytes(value: BaseModel) -> None:
+    if len(value.model_dump_json().encode("utf-8")) > MAX_RESULT_ITEM_BYTES:
+        raise ValueError("encoded result item must not exceed 32 KiB")
+
+
+ConditionOutcomeValue = Annotated[ConditionOutcome, Field(strict=False)]
+DataHealthStatusValue = Annotated[DataHealthStatus, Field(strict=False)]
+DecisionZoneValue = Annotated[DecisionZone, Field(strict=False)]
+EpisodeStatusValue = Annotated[EpisodeStatus, Field(strict=False)]
+EvidenceUnitValue = Annotated[EvidenceUnit, Field(strict=False)]
+MissingInputCodeValue = Annotated[MissingInputCode, Field(strict=False)]
+NextStepCodeValue = Annotated[NextStepCode, Field(strict=False)]
+RiskStatusValue = Annotated[RiskStatus, Field(strict=False)]
+SignalTypeValue = Annotated[SignalType, Field(strict=False)]
+ActionableSignalTypeValue = Annotated[ActionableSignalType, Field(strict=False)]
+ExecutionStatusValue = Annotated[ExecutionStatus, Field(strict=False)]
+UnfilledReasonValue = Annotated[UnfilledReason, Field(strict=False)]
+type BacktestEvidenceScalar = bool | int | Decimal | ShanghaiDatetime | ApiDate | EvidenceCode
+
+
+class BacktestEvidenceFactView(_BacktestApiInput):
+    key: EvidenceKey
+    value: BacktestEvidenceScalar
+    unit: EvidenceUnitValue
+
+
+class BacktestDecisionEvidenceView(_BacktestApiInput):
+    kind: Literal["CONDITION", "RULE"]
+    code: EvidenceCode
+    outcome: ConditionOutcomeValue
+    facts: Annotated[tuple[BacktestEvidenceFactView, ...], Field(max_length=MAX_EVIDENCE_FACTS)]
+    missing_inputs: Annotated[
+        tuple[MissingInputCodeValue, ...],
+        Field(max_length=MAX_MISSING_INPUTS),
+    ]
+    children: Annotated[tuple[BacktestDecisionEvidenceView, ...], Field(max_length=MAX_EVIDENCE)]
+
+    @field_validator("facts", "missing_inputs", "children", mode="before")
+    @classmethod
+    def require_evidence_arrays(cls, value: object, info: Any) -> tuple[object, ...]:
+        return _require_json_array(value, field_name=_to_camel(info.field_name))
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> Self:
+        if len({fact.key for fact in self.facts}) != len(self.facts):
+            raise ValueError("evidence fact keys must be unique")
+        if len(set(self.missing_inputs)) != len(self.missing_inputs):
+            raise ValueError("missing inputs must be unique")
+        if self.outcome is ConditionOutcome.MISSING_INPUT:
+            child_missing = any(
+                child.outcome is ConditionOutcome.MISSING_INPUT for child in self.children
+            )
+            if not self.missing_inputs and not child_missing:
+                raise ValueError("missing evidence must identify unavailable input")
+        elif self.missing_inputs:
+            raise ValueError("non-missing evidence cannot contain missing inputs")
+        return self
+
+
+class BacktestPositionSummaryView(_BacktestApiInput):
+    core_quantity: JavaScriptSafeInteger
+    tactical_quantity: JavaScriptSafeInteger
+    total_quantity: JavaScriptSafeInteger
+    sellable_core_quantity: JavaScriptSafeInteger
+    sellable_tactical_quantity: JavaScriptSafeInteger
+
+    @model_validator(mode="after")
+    def validate_quantities(self) -> Self:
+        if self.total_quantity != self.core_quantity + self.tactical_quantity:
+            raise ValueError("totalQuantity must equal core plus tactical quantity")
+        if self.sellable_core_quantity > self.core_quantity:
+            raise ValueError("sellableCoreQuantity cannot exceed coreQuantity")
+        if self.sellable_tactical_quantity > self.tactical_quantity:
+            raise ValueError("sellableTacticalQuantity cannot exceed tacticalQuantity")
+        return self
+
+
+class BacktestDataHealthView(_BacktestApiInput):
+    status: DataHealthStatusValue
+    latest_bar_end: ShanghaiDatetime | None
+    data_age_seconds: JavaScriptSafeInteger | None
+    required_data_complete: bool = Field(strict=True)
+    fresh: bool = Field(strict=True)
+
+    @model_validator(mode="after")
+    def validate_health(self) -> Self:
+        if (self.latest_bar_end is None) != (self.data_age_seconds is None):
+            raise ValueError("latest bar and data age must appear together")
+        if self.fresh and self.latest_bar_end is None:
+            raise ValueError("fresh health requires a latest bar")
+        if self.status is DataHealthStatus.LIVE and (
+            not self.fresh or not self.required_data_complete or self.latest_bar_end is None
+        ):
+            raise ValueError("LIVE health requires fresh complete data")
+        if self.status is DataHealthStatus.STALE and self.fresh:
+            raise ValueError("STALE health cannot be fresh")
+        if self.status in {DataHealthStatus.GAPPED, DataHealthStatus.BLOCKED} and (
+            self.required_data_complete
+        ):
+            raise ValueError("gapped or blocked health cannot be complete")
+        return self
+
+
+class BacktestNextStepView(_BacktestApiInput):
+    code: NextStepCodeValue
+    not_before: ShanghaiDatetime | ApiDate | None
+    required_inputs: Annotated[
+        tuple[MissingInputCodeValue, ...],
+        Field(max_length=MAX_MISSING_INPUTS),
+    ]
+
+    @field_validator("required_inputs", mode="before")
+    @classmethod
+    def require_input_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="requiredInputs")
+
+    @model_validator(mode="after")
+    def validate_inputs(self) -> Self:
+        if len(set(self.required_inputs)) != len(self.required_inputs):
+            raise ValueError("next-step inputs must be unique")
+        return self
+
+
+class BacktestAuthoritativeDecisionView(_BacktestApiInput):
+    """Live-decision-equivalent projection with FenText money only for backtests."""
+
+    symbol: AShareSymbolText
+    result_hash: Sha256Hex
+    plan_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)]
+    plan_version: PositiveJavaScriptSafeInteger
+    plan_hash: Sha256Hex
+    evaluated_at: ShanghaiDatetime
+    market_data_at: ShanghaiDatetime | None
+    data_age_seconds: JavaScriptSafeInteger | None
+    price_fen: PositiveFenText | None
+    zone: DecisionZoneValue
+    signal_type: SignalTypeValue
+    position: BacktestPositionSummaryView
+    episode_status: EpisodeStatusValue | None
+    episode_low_fen: PositiveFenText | None
+    risk_status: RiskStatusValue
+    risk_breach_trade_date: ApiDate | None
+    data_health: BacktestDataHealthView
+    evidence: Annotated[tuple[BacktestDecisionEvidenceView, ...], Field(max_length=MAX_EVIDENCE)]
+    next_step: BacktestNextStepView
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def require_evidence_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="evidence")
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> Self:
+        market_values = (self.market_data_at, self.data_age_seconds, self.price_fen)
+        if any(value is None for value in market_values) and any(
+            value is not None for value in market_values
+        ):
+            raise ValueError("market time, data age, and price must appear together")
+        if self.market_data_at is not None:
+            age = self.evaluated_at - self.market_data_at
+            if age < timedelta(0) or int(age.total_seconds()) != self.data_age_seconds:
+                raise ValueError("decision data age must match its timestamps")
+        if self.data_health.latest_bar_end is not None:
+            health_age = self.evaluated_at - self.data_health.latest_bar_end
+            if health_age < timedelta(0) or int(health_age.total_seconds()) != (
+                self.data_health.data_age_seconds
+            ):
+                raise ValueError("health data age must match evaluation time")
+        if (self.episode_status is None) != (self.episode_low_fen is None):
+            raise ValueError("episode status and low must appear together")
+        if self.risk_status is RiskStatus.CLEAR:
+            if self.risk_breach_trade_date is not None:
+                raise ValueError("clear risk cannot retain a breach date")
+        elif self.risk_breach_trade_date is None:
+            raise ValueError("active risk requires a breach date")
+        if (
+            self.risk_breach_trade_date is not None
+            and self.risk_breach_trade_date > self.evaluated_at.date()
+        ):
+            raise ValueError("risk breach cannot follow evaluation")
+        actionable = {signal.value for signal in ActionableSignalType}
+        if (
+            self.signal_type.value in actionable
+            and self.data_health.status is not DataHealthStatus.LIVE
+        ):
+            raise ValueError("actionable decisions require LIVE data")
+        return self
+
+
+class BacktestFeeBreakdownView(_BacktestApiInput):
+    commission_fen: NonNegativeFenText
+    stamp_duty_fen: NonNegativeFenText
+    transfer_fee_fen: NonNegativeFenText
+    total_fen: NonNegativeFenText
+
+    @model_validator(mode="after")
+    def validate_total(self) -> Self:
+        components = (
+            int(self.commission_fen) + int(self.stamp_duty_fen) + int(self.transfer_fee_fen)
+        )
+        if int(self.total_fen) != components:
+            raise ValueError("fee total must equal its components")
+        return self
+
+
+class BacktestFillView(_BacktestApiInput):
+    fill_id: StableIdentifier
+    order_id: StableIdentifier
+    signal_id: StableIdentifier
+    run_id: Sha256Hex
+    plan_hash: Sha256Hex
+    dataset_hash: Sha256Hex
+    result_hash: Sha256Hex
+    config_hash: Sha256Hex
+    source_bar_id: StableIdentifier
+    side: Literal["BUY", "SELL"]
+    symbol: AShareSymbolText
+    bucket: Literal["CORE", "TACTICAL"]
+    target_lot_id: StableIdentifier | None
+    filled_at: ShanghaiDatetime
+    requested_quantity: PositiveSafeBoardLot
+    quantity: PositiveSafeBoardLot
+    price_fen: PositiveFenText
+    notional_fen: PositiveFenText
+    fees: BacktestFeeBreakdownView
+    cash_delta_fen: FenText
+    cost_basis_released_fen: NonNegativeFenText
+    realized_pnl_fen: FenText | None
+
+    @model_validator(mode="after")
+    def validate_fill(self) -> Self:
+        if self.quantity > self.requested_quantity:
+            raise ValueError("quantity cannot exceed requestedQuantity")
+        notional = int(self.price_fen) * self.quantity
+        if int(self.notional_fen) != notional:
+            raise ValueError("notionalFen must equal priceFen times quantity")
+        cash_delta = int(self.cash_delta_fen)
+        fees = int(self.fees.total_fen)
+        released = int(self.cost_basis_released_fen)
+        if self.side == "BUY":
+            if cash_delta != -(notional + fees):
+                raise ValueError("buy cashDeltaFen must include notional and fees")
+            if released != 0 or self.realized_pnl_fen is not None or self.target_lot_id is not None:
+                raise ValueError("buy fill cannot release, realize, or target a lot")
+        else:
+            if cash_delta != notional - fees:
+                raise ValueError("sell cashDeltaFen must equal net proceeds")
+            if self.target_lot_id is None or self.realized_pnl_fen is None:
+                raise ValueError("sell fill requires a target lot and realizedPnlFen")
+            if int(self.realized_pnl_fen) != cash_delta - released:
+                raise ValueError("sell realizedPnlFen must equal net proceeds less cost basis")
+        _require_max_item_bytes(self)
+        return self
+
+
+class _BacktestDetailBase(_BacktestApiInput):
+    detail_id: StableIdentifier
+    run_id: Sha256Hex
+    event_at: ShanghaiDatetime
+
+
+class BacktestDecisionView(_BacktestDetailBase):
+    kind: Literal["DECISION"]
+    result_hash: Sha256Hex
+    decision: BacktestAuthoritativeDecisionView
+
+    @model_validator(mode="after")
+    def validate_identity_and_item_size(self) -> Self:
+        if self.result_hash != self.decision.result_hash:
+            raise ValueError("resultHash must match the authoritative decision")
+        if self.event_at != self.decision.evaluated_at:
+            raise ValueError("eventAt must match the authoritative decision evaluation time")
+        _require_max_item_bytes(self)
+        return self
+
+
+class BacktestSignalView(_BacktestDetailBase):
+    kind: Literal["SIGNAL"]
+    signal_id: StableIdentifier
+    result_hash: Sha256Hex
+    signal_type: ActionableSignalTypeValue
+    symbol: AShareSymbolText
+    quantity: PositiveSafeBoardLot | None
+    bucket: Literal["CORE", "TACTICAL"] | None
+    target_lot_id: StableIdentifier | None
+    cause_id: StableIdentifier
+
+    @model_validator(mode="after")
+    def validate_signal_shape(self) -> Self:
+        if self.signal_type is ActionableSignalType.RISK_BREACH:
+            if any(value is not None for value in (self.quantity, self.bucket, self.target_lot_id)):
+                raise ValueError("risk breach cannot imply an execution order")
+        else:
+            if self.quantity is None or self.bucket is None:
+                raise ValueError("trade-shaped signal requires quantity and bucket")
+            buy = self.signal_type in {
+                ActionableSignalType.BUY_CORE_READY,
+                ActionableSignalType.BUY_TACTICAL_READY,
+            }
+            if buy == (self.target_lot_id is not None):
+                raise ValueError("only sell-shaped signals require targetLotId")
+            if self.signal_type is ActionableSignalType.BUY_CORE_READY and self.bucket != "CORE":
+                raise ValueError("core buy must use CORE bucket")
+            if (
+                self.signal_type
+                in {
+                    ActionableSignalType.BUY_TACTICAL_READY,
+                    ActionableSignalType.PRESSURE_REDUCE_READY,
+                }
+                and self.bucket != "TACTICAL"
+            ):
+                raise ValueError("tactical signal must use TACTICAL bucket")
+        _require_max_item_bytes(self)
+        return self
+
+
+class BacktestExecutionOutcomeView(_BacktestDetailBase):
+    kind: Literal["EXECUTION_OUTCOME"]
+    outcome_id: StableIdentifier
+    signal_id: StableIdentifier
+    order_id: StableIdentifier | None
+    source_bar_id: StableIdentifier | None
+    status: ExecutionStatusValue
+    reason: UnfilledReasonValue | None
+    fill_id: StableIdentifier | None
+
+    @model_validator(mode="after")
+    def validate_outcome_shape(self) -> Self:
+        if self.status is ExecutionStatus.FILLED:
+            if (
+                self.fill_id is None
+                or self.reason is not None
+                or self.order_id is None
+                or self.source_bar_id is None
+            ):
+                raise ValueError("filled outcome requires order/fill/source bar and no reason")
+        elif self.fill_id is not None or self.reason is None:
+            raise ValueError("non-filled outcome requires a reason and no fill")
+        if self.status is ExecutionStatus.UNFILLED and self.order_id is None:
+            raise ValueError("unfilled outcome requires an accepted order")
+        if self.status is ExecutionStatus.IGNORED and (
+            self.order_id is not None or self.source_bar_id is not None
+        ):
+            raise ValueError("ignored outcome cannot identify an order or source bar")
+        if self.status is ExecutionStatus.UNFILLED:
+            if (self.reason is UnfilledReason.NO_NEXT_MINUTE) != (self.source_bar_id is None):
+                raise ValueError("unfilled source bar must match its reason")
+        _require_max_item_bytes(self)
+        return self
+
+
+type BacktestDetailView = Annotated[
+    BacktestDecisionView | BacktestSignalView | BacktestExecutionOutcomeView,
+    Field(discriminator="kind"),
+]
+
+
+class BacktestEquityPointView(_BacktestApiInput):
+    snapshot_id: StableIdentifier
+    run_id: Sha256Hex
+    symbol: AShareSymbolText
+    marked_at: ShanghaiDatetime
+    mark_price_fen: PositiveFenText
+    cash_fen: NonNegativeFenText
+    position_quantity: Annotated[
+        int, Field(strict=True, ge=0, le=MAX_SAFE_INTEGER, multiple_of=100)
+    ]
+    market_value_fen: NonNegativeFenText
+    cost_basis_fen: NonNegativeFenText
+    realized_pnl_fen: FenText
+    unrealized_pnl_fen: FenText
+    total_cost_fen: NonNegativeFenText
+    equity_fen: NonNegativeFenText
+
+    @model_validator(mode="after")
+    def validate_equity(self) -> Self:
+        market_value = int(self.mark_price_fen) * self.position_quantity
+        if int(self.market_value_fen) != market_value:
+            raise ValueError("marketValueFen must equal markPriceFen times positionQuantity")
+        if int(self.unrealized_pnl_fen) != market_value - int(self.cost_basis_fen):
+            raise ValueError("unrealizedPnlFen must equal market value less cost basis")
+        if int(self.equity_fen) != int(self.cash_fen) + market_value:
+            raise ValueError("equityFen must equal cashFen plus marketValueFen")
+        _require_max_item_bytes(self)
+        return self
+
+
+def _validate_bounded_page(value: BaseModel, items: tuple[BaseModel, ...]) -> None:
+    limit = value.limit
+    next_cursor = value.next_cursor
+    has_more = value.has_more
+    if len(items) > limit:
+        raise ValueError("page cannot contain more than limit items")
+    if has_more != (next_cursor is not None):
+        raise ValueError("hasMore and nextCursor must agree")
+    for item in items:
+        _require_max_item_bytes(item)
+    if len(value.model_dump_json().encode("utf-8")) >= MAX_RESULT_PAGE_BYTES:
+        raise ValueError("encoded page must be smaller than 4 MiB")
+
+
+def _require_ordered_unique_positions(
+    positions: tuple[tuple[Any, ...], ...],
+    *,
+    reverse: bool,
+    resource: str,
+) -> None:
+    if len(set(positions)) != len(positions):
+        raise ValueError(f"{resource} page positions must be unique")
+    if positions != tuple(sorted(positions, reverse=reverse)):
+        direction = "descending" if reverse else "ascending"
+        raise ValueError(f"{resource} page must use canonical {direction} order")
+
+
+class BacktestEquitySeries(_BacktestApiInput):
+    availability: BacktestArtifactAvailability
+    items: Annotated[tuple[BacktestEquityPointView, ...], Field(max_length=MAX_EQUITY_POINTS)]
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def require_item_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="items")
+
+    @model_validator(mode="after")
+    def validate_series(self) -> Self:
+        if (self.availability == "AVAILABLE") != bool(self.items):
+            raise ValueError("equity availability must match its empty or non-empty shape")
+        positions = tuple((item.marked_at, item.snapshot_id) for item in self.items)
+        if positions != tuple(sorted(positions)):
+            raise ValueError("equity points must be ordered by markedAt and snapshotId")
+        if len({item.snapshot_id for item in self.items}) != len(self.items):
+            raise ValueError("equity snapshot identities must be unique")
+        return self
+
+
+class BacktestJobFiltersView(_BacktestApiInput):
+    kind: BacktestJobKind | None
+    status: BacktestJobStatus | None
+    run_id: Sha256Hex | None
+    dataset_hash: Sha256Hex | None
+    created_from: ShanghaiDatetime | None
+    created_to: ShanghaiDatetime | None
+
+    @model_validator(mode="after")
+    def validate_created_range(self) -> Self:
+        if (
+            self.created_from is not None
+            and self.created_to is not None
+            and self.created_from > self.created_to
+        ):
+            raise ValueError("createdFrom cannot be after createdTo")
+        return self
+
+
+class BacktestRunFiltersView(_BacktestApiInput):
+    symbol: AShareSymbolText | None
+    plan_version_id: Rfc4122Uuid | None
+    dataset_hash: Sha256Hex | None
+    completed_from: ShanghaiDatetime | None
+    completed_to: ShanghaiDatetime | None
+    pinned: bool | None
+
+    @field_validator("pinned", mode="before")
+    @classmethod
+    def require_strict_optional_boolean(cls, value: object) -> object:
+        if value is not None and type(value) is not bool:
+            raise ValueError("pinned must be a boolean or null")
+        return value
+
+    @model_validator(mode="after")
+    def validate_completed_range(self) -> Self:
+        if (
+            self.completed_from is not None
+            and self.completed_to is not None
+            and self.completed_from > self.completed_to
+        ):
+            raise ValueError("completedFrom cannot be after completedTo")
+        return self
+
+
+class BacktestFillFiltersView(_BacktestApiInput):
+    """Closed empty filter object for one run's long-lived fill ledger."""
+
+
+BacktestPublicDetailKind = Literal["DECISION", "SIGNAL", "EXECUTION_OUTCOME"]
+
+
+class BacktestDetailFiltersView(_BacktestApiInput):
+    kind: BacktestPublicDetailKind
+
+
+class BacktestJobPage(_BacktestApiInput):
+    filters: BacktestJobFiltersView
+    items: Annotated[tuple[BacktestJobView, ...], Field(max_length=100)]
+    limit: Annotated[int, Field(strict=True, ge=1, le=100)]
+    next_cursor: CursorToken | None
+    has_more: bool = Field(strict=True)
+    high_watermark: CursorToken
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def require_item_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="items")
+
+    @model_validator(mode="after")
+    def validate_page(self) -> Self:
+        positions = tuple((item.created_at, item.job_id) for item in self.items)
+        _require_ordered_unique_positions(positions, reverse=True, resource="job")
+        for item in self.items:
+            if self.filters.kind is not None and item.kind != self.filters.kind:
+                raise ValueError("job item must match kind filter")
+            if self.filters.status is not None and item.status != self.filters.status:
+                raise ValueError("job item must match status filter")
+            if self.filters.run_id is not None and item.run_id != self.filters.run_id:
+                raise ValueError("job item must match runId filter")
+            if (
+                self.filters.dataset_hash is not None
+                and item.dataset_hash != self.filters.dataset_hash
+            ):
+                raise ValueError("job item must match datasetHash filter")
+            if (
+                self.filters.created_from is not None
+                and item.created_at < self.filters.created_from
+            ):
+                raise ValueError("job item must match createdFrom filter")
+            if self.filters.created_to is not None and item.created_at > self.filters.created_to:
+                raise ValueError("job item must match createdTo filter")
+        _validate_bounded_page(self, self.items)
+        return self
+
+
+class BacktestRunPage(_BacktestApiInput):
+    filters: BacktestRunFiltersView
+    items: Annotated[tuple[BacktestRunSummaryView, ...], Field(max_length=100)]
+    limit: Annotated[int, Field(strict=True, ge=1, le=100)]
+    next_cursor: CursorToken | None
+    has_more: bool = Field(strict=True)
+    high_watermark: CursorToken
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def require_item_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="items")
+
+    @model_validator(mode="after")
+    def validate_page(self) -> Self:
+        positions = tuple((item.completed_at, item.run_id) for item in self.items)
+        _require_ordered_unique_positions(positions, reverse=True, resource="run")
+        for item in self.items:
+            if self.filters.symbol is not None and item.symbol != self.filters.symbol:
+                raise ValueError("run item must match symbol filter")
+            if (
+                self.filters.plan_version_id is not None
+                and item.plan_version_id != self.filters.plan_version_id
+            ):
+                raise ValueError("run item must match planVersionId filter")
+            if (
+                self.filters.dataset_hash is not None
+                and item.dataset_hash != self.filters.dataset_hash
+            ):
+                raise ValueError("run item must match datasetHash filter")
+            if (
+                self.filters.completed_from is not None
+                and item.completed_at < self.filters.completed_from
+            ):
+                raise ValueError("run item must match completedFrom filter")
+            if (
+                self.filters.completed_to is not None
+                and item.completed_at > self.filters.completed_to
+            ):
+                raise ValueError("run item must match completedTo filter")
+            if self.filters.pinned is not None and item.pinned != self.filters.pinned:
+                raise ValueError("run item must match pinned filter")
+        _validate_bounded_page(self, self.items)
+        return self
+
+
+class BacktestFillPage(_BacktestApiInput):
+    filters: BacktestFillFiltersView
+    items: Annotated[tuple[BacktestFillView, ...], Field(max_length=100)]
+    limit: Annotated[int, Field(strict=True, ge=1, le=100)]
+    next_cursor: CursorToken | None
+    has_more: bool = Field(strict=True)
+    high_watermark: CursorToken
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def require_item_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="items")
+
+    @model_validator(mode="after")
+    def validate_page(self) -> Self:
+        positions = tuple((item.filled_at, item.fill_id) for item in self.items)
+        _require_ordered_unique_positions(positions, reverse=False, resource="fill")
+        _validate_bounded_page(self, self.items)
+        return self
+
+
+class BacktestDetailPage(_BacktestApiInput):
+    kind: BacktestPublicDetailKind
+    availability: BacktestArtifactAvailability
+    filters: BacktestDetailFiltersView
+    items: Annotated[tuple[BacktestDetailView, ...], Field(max_length=100)]
+    limit: Annotated[int, Field(strict=True, ge=1, le=100)]
+    next_cursor: CursorToken | None
+    has_more: bool = Field(strict=True)
+    high_watermark: CursorToken
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def require_item_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="items")
+
+    @model_validator(mode="after")
+    def validate_page(self) -> Self:
+        if self.kind != self.filters.kind:
+            raise ValueError("detail kind must match normalized filters")
+        if any(item.kind != self.kind for item in self.items):
+            raise ValueError("detail item discriminator must match page kind")
+        if self.availability == "AVAILABLE" and not self.items:
+            raise ValueError("available detail page must contain an item")
+        if self.availability != "AVAILABLE" and (
+            self.items or self.next_cursor is not None or self.has_more
+        ):
+            raise ValueError("unavailable detail page must be empty and terminal")
+        positions = tuple((item.event_at, item.detail_id) for item in self.items)
+        _require_ordered_unique_positions(positions, reverse=False, resource="detail")
+        _validate_bounded_page(self, self.items)
+        return self
+
+
 __all__ = [
     "MAX_INITIAL_LOTS",
     "MAX_SAFE_INTEGER",
+    "BacktestArtifactAvailability",
+    "BacktestAssumptionsView",
+    "BacktestAuthoritativeDecisionView",
     "BacktestDataSyncCommand",
     "BacktestDataSyncJobResultView",
+    "BacktestDecisionView",
     "BacktestDatasetCoverageView",
     "BacktestDatasetFiltersView",
     "BacktestDatasetPage",
@@ -781,14 +1666,36 @@ __all__ = [
     "BacktestDatasetVerificationCommand",
     "BacktestDatasetVerificationJobResultView",
     "BacktestDatasetView",
+    "BacktestDetailFiltersView",
+    "BacktestDetailPage",
+    "BacktestDetailView",
+    "BacktestEquityPointView",
+    "BacktestEquitySeries",
     "BacktestExecutionConfigInput",
+    "BacktestExecutionConfigView",
+    "BacktestExecutionOutcomeView",
+    "BacktestFeeBreakdownView",
+    "BacktestFillFiltersView",
+    "BacktestFillPage",
+    "BacktestFillView",
+    "BacktestFormulaVersionsView",
     "BacktestInitialLotInput",
+    "BacktestJobFiltersView",
+    "BacktestJobPage",
     "BacktestJobProgressView",
     "BacktestJobReceipt",
     "BacktestJobResultView",
     "BacktestJobView",
+    "BacktestMetricsView",
+    "BacktestResultAvailabilityView",
     "BacktestRunCommand",
+    "BacktestRunCoverageView",
+    "BacktestRunFiltersView",
     "BacktestRunJobResultView",
+    "BacktestRunPage",
+    "BacktestRunSummaryView",
+    "BacktestRunView",
+    "BacktestSignalView",
     "DecimalText",
     "FenText",
     "JavaScriptSafeInteger",

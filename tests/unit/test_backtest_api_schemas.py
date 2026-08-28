@@ -11,6 +11,9 @@ from pydantic import TypeAdapter, ValidationError
 
 from trade_plan_monitor.web.backtest_schemas import (
     MAX_SAFE_INTEGER,
+    BacktestAssumptionsView,
+    BacktestAuthoritativeDecisionView,
+    BacktestDataHealthView,
     BacktestDatasetCoverageView,
     BacktestDatasetFiltersView,
     BacktestDatasetPage,
@@ -21,16 +24,45 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestDatasetView,
     BacktestDataSyncCommand,
     BacktestDataSyncJobResultView,
+    BacktestDecisionEvidenceView,
+    BacktestDecisionView,
+    BacktestDetailPage,
+    BacktestEquityPointView,
+    BacktestEquitySeries,
+    BacktestEvidenceFactView,
     BacktestExecutionConfigInput,
+    BacktestExecutionConfigView,
+    BacktestExecutionOutcomeView,
+    BacktestFeeBreakdownView,
+    BacktestFillPage,
+    BacktestFillView,
+    BacktestFormulaVersionsView,
     BacktestInitialLotInput,
+    BacktestJobPage,
     BacktestJobProgressView,
     BacktestJobReceipt,
     BacktestJobView,
+    BacktestMetricsView,
+    BacktestNextStepView,
+    BacktestPositionSummaryView,
+    BacktestResultAvailabilityView,
     BacktestRunCommand,
     BacktestRunJobResultView,
+    BacktestRunPage,
+    BacktestRunSummaryView,
+    BacktestRunView,
+    BacktestSignalView,
     DecimalText,
     FenText,
     ShanghaiDatetime,
+)
+from trade_plan_monitor.web.routers.dashboard import (
+    AuthoritativeDecisionView,
+    DataHealthView,
+    DecisionEvidenceView,
+    EvidenceFactView,
+    NextStepView,
+    PositionSummaryView,
 )
 
 _UUID = "4c623c8c-ca26-4cd8-8cb2-08cd5e61be93"
@@ -775,11 +807,11 @@ def test_dataset_view_exposes_only_bounded_projection_and_fixed_times() -> None:
 
 
 def test_dataset_page_is_bounded_and_has_closed_normalized_filters() -> None:
-    items = [_dataset_view_payload(dataset_hash=f"{index:064x}") for index in range(100)]
+    items = [_dataset_view_payload(dataset_hash=f"{index:064x}") for index in reversed(range(100))]
     filters = {
         "symbol": "000001.SZ",
         "startOnOrAfter": "2024-01-01",
-        "endOnOrBefore": "2026-01-01",
+        "endOnOrBefore": "2026-08-28",
         "historicalProfile": "TUSHARE_STK_MINS_241_END_V1",
         "adjustmentPolicy": "NONE",
     }
@@ -796,7 +828,7 @@ def test_dataset_page_is_bounded_and_has_closed_normalized_filters() -> None:
 
     assert len(page.items) == 100
     assert page.filters == BacktestDatasetFiltersView.model_validate(filters)
-    assert page.model_dump(mode="json")["items"][0]["datasetHash"] == "0" * 64
+    assert page.model_dump(mode="json")["items"][0]["datasetHash"] == f"{99:064x}"
 
 
 @pytest.mark.parametrize(
@@ -806,11 +838,21 @@ def test_dataset_page_is_bounded_and_has_closed_normalized_filters() -> None:
         {"limit": 0},
         {"limit": 101},
         {"items": [_dataset_view_payload()] * 2, "limit": 1},
+        {"items": [_dataset_view_payload()] * 2},
         {"hasMore": True, "nextCursor": None},
         {"hasMore": False, "nextCursor": "next.token"},
         {"nextCursor": "not-a-signed-token"},
         {"highWatermark": ""},
         {"membershipRevision": 1},
+        {
+            "filters": {
+                "symbol": "600001.SH",
+                "startOnOrAfter": None,
+                "endOnOrBefore": None,
+                "historicalProfile": None,
+                "adjustmentPolicy": None,
+            }
+        },
     ),
 )
 def test_dataset_page_rejects_unbounded_or_contradictory_projection(
@@ -832,3 +874,544 @@ def test_dataset_page_rejects_unbounded_or_contradictory_projection(
     }
     with pytest.raises(ValidationError):
         BacktestDatasetPage.model_validate(payload | update)
+
+
+def _result_availability_payload() -> dict[str, object]:
+    return {
+        "decisionDetails": "AVAILABLE",
+        "signalDetails": "AVAILABLE",
+        "executionOutcomeDetails": "EXPIRED",
+        "equitySeries": "AVAILABLE",
+    }
+
+
+def _metrics_view_payload() -> dict[str, object]:
+    return {
+        "initialCashFen": "1000000",
+        "initialEquityFen": "1000000",
+        "finalCashFen": "899998",
+        "finalEquityFen": "1019998",
+        "totalReturn": "0.019998",
+        "maximumDrawdown": "0.01",
+        "tradeCount": 1,
+        "winningSellCount": 0,
+        "winRate": "0",
+        "turnoverFen": "100000",
+        "totalCostFen": "2",
+        "realizedPnlFen": "0",
+        "unrealizedPnlFen": "20000",
+        "blockedCount": 0,
+        "skippedCount": 1,
+    }
+
+
+def _execution_config_view_payload() -> dict[str, object]:
+    return {
+        "commissionRate": "0.0003",
+        "minimumCommissionFen": "500",
+        "stampDutyRate": "0.0005",
+        "transferFeeRate": "0.00001",
+        "buySlippageBps": "2.5",
+        "sellSlippageBps": "3",
+    }
+
+
+def _run_summary_payload(*, run_id: str = _RUN_HASH) -> dict[str, object]:
+    return {
+        "runId": run_id,
+        "reportHash": _REPORT_HASH,
+        "planVersionId": _UUID,
+        "planHash": _HASH,
+        "datasetHash": "d" * 64,
+        "symbol": "000001.SZ",
+        "status": "COMPLETED",
+        "eventStart": "2024-01-02",
+        "eventEnd": "2024-01-05",
+        "completedAt": _TIME,
+        "pinned": False,
+        "revision": 2,
+        "fillCount": 1,
+        "metrics": _metrics_view_payload(),
+        "availability": _result_availability_payload(),
+    }
+
+
+def _run_view_payload() -> dict[str, object]:
+    return _run_summary_payload() | {
+        "initialCashFen": "1000000",
+        "coverage": {
+            "eventStart": "2024-01-02",
+            "eventEnd": "2024-01-05",
+            "tradingDayCount": 4,
+            "decisionCount": 4,
+            "signalCount": 1,
+            "orderCount": 1,
+            "fillCount": 1,
+            "outcomeCount": 1,
+            "equityPointCount": 4,
+        },
+        "assumptions": {
+            "eventRiskAssumption": "NO_EVENT_RISK",
+            "executionConfig": _execution_config_view_payload(),
+            "executionConfigHash": "e" * 64,
+            "priceAdjustmentPolicy": "NONE",
+            "historicalProfile": "TUSHARE_STK_MINS_241_END_V1",
+        },
+        "formulaVersions": {
+            "runFormulaVersion": "backtest-run-v1",
+            "reportSchemaVersion": "backtest-report-v1",
+            "executionFormulaVersion": "execution-model-v1",
+            "metricFormulaVersion": "backtest-metrics-v1",
+        },
+        "limitations": ["DAILY_EQUITY_DRAWDOWN_SAMPLING", "NO_INTRADAY_EVENT_RISK"],
+    }
+
+
+def _fees_view_payload() -> dict[str, object]:
+    return {
+        "commissionFen": "1",
+        "stampDutyFen": "0",
+        "transferFeeFen": "1",
+        "totalFen": "2",
+    }
+
+
+def _fill_view_payload() -> dict[str, object]:
+    return {
+        "fillId": "fill-001",
+        "orderId": "order-001",
+        "signalId": "signal-001",
+        "runId": _RUN_HASH,
+        "planHash": _HASH,
+        "datasetHash": "d" * 64,
+        "resultHash": _REPORT_HASH,
+        "configHash": "e" * 64,
+        "sourceBarId": "bar-001",
+        "side": "BUY",
+        "symbol": "000001.SZ",
+        "bucket": "CORE",
+        "targetLotId": None,
+        "filledAt": _TIME,
+        "requestedQuantity": 100,
+        "quantity": 100,
+        "priceFen": "1000",
+        "notionalFen": "100000",
+        "fees": _fees_view_payload(),
+        "cashDeltaFen": "-100002",
+        "costBasisReleasedFen": "0",
+        "realizedPnlFen": None,
+    }
+
+
+def _decision_payload() -> dict[str, object]:
+    return {
+        "symbol": "000001.SZ",
+        "resultHash": _REPORT_HASH,
+        "planId": "sample-plan",
+        "planVersion": 3,
+        "planHash": _HASH,
+        "evaluatedAt": _TIME,
+        "marketDataAt": "2026-08-28T09:29:00+08:00",
+        "dataAgeSeconds": 60,
+        "priceFen": "1234",
+        "zone": "LOW_BUY",
+        "signalType": "BUY_CORE_READY",
+        "position": {
+            "coreQuantity": 1000,
+            "tacticalQuantity": 0,
+            "totalQuantity": 1000,
+            "sellableCoreQuantity": 1000,
+            "sellableTacticalQuantity": 0,
+        },
+        "episodeStatus": "ALERTED",
+        "episodeLowFen": "1220",
+        "riskStatus": "CLEAR",
+        "riskBreachTradeDate": None,
+        "dataHealth": {
+            "status": "LIVE",
+            "latestBarEnd": "2026-08-28T09:29:00+08:00",
+            "dataAgeSeconds": 60,
+            "requiredDataComplete": True,
+            "fresh": True,
+        },
+        "evidence": [
+            {
+                "kind": "RULE",
+                "code": "BUY_CONDITION",
+                "outcome": "SATISFIED",
+                "facts": [{"key": "price_fen", "value": 1234, "unit": "FEN"}],
+                "missingInputs": [],
+                "children": [],
+            }
+        ],
+        "nextStep": {
+            "code": "RECORD_CONFIRMED_FILL",
+            "notBefore": None,
+            "requiredInputs": [],
+        },
+    }
+
+
+def _decision_view_payload() -> dict[str, object]:
+    return {
+        "kind": "DECISION",
+        "detailId": "decision-001",
+        "runId": _RUN_HASH,
+        "eventAt": _TIME,
+        "resultHash": _REPORT_HASH,
+        "decision": _decision_payload(),
+    }
+
+
+def _signal_view_payload() -> dict[str, object]:
+    return {
+        "kind": "SIGNAL",
+        "detailId": "signal-detail-001",
+        "runId": _RUN_HASH,
+        "eventAt": _TIME,
+        "signalId": "signal-001",
+        "resultHash": _REPORT_HASH,
+        "signalType": "BUY_CORE_READY",
+        "symbol": "000001.SZ",
+        "quantity": 100,
+        "bucket": "CORE",
+        "targetLotId": None,
+        "causeId": "decision-001",
+    }
+
+
+def _outcome_view_payload() -> dict[str, object]:
+    return {
+        "kind": "EXECUTION_OUTCOME",
+        "detailId": "outcome-detail-001",
+        "runId": _RUN_HASH,
+        "eventAt": _TIME,
+        "outcomeId": "outcome-001",
+        "signalId": "signal-001",
+        "orderId": "order-001",
+        "sourceBarId": "bar-001",
+        "status": "FILLED",
+        "reason": None,
+        "fillId": "fill-001",
+    }
+
+
+def _equity_point_payload(*, snapshot_id: str = "snapshot-001") -> dict[str, object]:
+    return {
+        "snapshotId": snapshot_id,
+        "runId": _RUN_HASH,
+        "symbol": "000001.SZ",
+        "markedAt": _TIME,
+        "markPriceFen": "1200",
+        "cashFen": "899998",
+        "positionQuantity": 100,
+        "marketValueFen": "120000",
+        "costBasisFen": "100002",
+        "realizedPnlFen": "0",
+        "unrealizedPnlFen": "19998",
+        "totalCostFen": "2",
+        "equityFen": "1019998",
+    }
+
+
+def test_run_summary_and_view_are_completed_only_closed_contracts() -> None:
+    summary = BacktestRunSummaryView.model_validate(_run_summary_payload())
+    view = BacktestRunView.model_validate(_run_view_payload())
+
+    assert summary.status == view.status == "COMPLETED"
+    assert summary.model_dump(mode="json")["completedAt"] == _FIXED_TIME
+    assert view.model_dump(mode="json")["initialCashFen"] == "1000000"
+    assert set(BacktestRunView.model_fields) == set(BacktestRunSummaryView.model_fields) | {
+        "initial_cash_fen",
+        "coverage",
+        "assumptions",
+        "formula_versions",
+        "limitations",
+    }
+    for update in (
+        {"status": "FAILED"},
+        {"status": "STAGED"},
+        {"eventEnd": "2024-01-01"},
+        {"metrics": _metrics_view_payload() | {"initialCashFen": 1000000}},
+        {"providerPayload": {}},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestRunSummaryView.model_validate(_run_summary_payload() | update)
+
+
+@pytest.mark.parametrize(
+    "update",
+    (
+        {"initialCashFen": "999999"},
+        {"coverage": _run_view_payload()["coverage"] | {"fillCount": 2}},
+        {"coverage": _run_view_payload()["coverage"] | {"decisionCount": 0}},
+        {"availability": _result_availability_payload() | {"signalDetails": "NOT_RECORDED"}},
+        {"coverage": _run_view_payload()["coverage"] | {"outcomeCount": 0}},
+        {"limitations": ["NO_INTRADAY_EVENT_RISK", "NO_INTRADAY_EVENT_RISK"]},
+        {"limitations": ["z-last", "a-first"]},
+        {"limitations": ["X" * 129]},
+        {"assumptions": _run_view_payload()["assumptions"] | {"executionConfigHash": "x"}},
+    ),
+)
+def test_run_view_rejects_cross_projection_conflicts(update: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        BacktestRunView.model_validate(_run_view_payload() | update)
+
+
+def test_run_view_rejects_an_item_larger_than_32_kib() -> None:
+    oversized_metrics = _metrics_view_payload() | {"realizedPnlFen": "1" * (32 * 1024)}
+    with pytest.raises(ValidationError, match="32 KiB"):
+        BacktestRunView.model_validate(_run_view_payload() | {"metrics": oversized_metrics})
+
+
+def test_metrics_assumptions_and_formula_versions_are_exact_value_views() -> None:
+    metrics = BacktestMetricsView.model_validate(_metrics_view_payload())
+    config = BacktestExecutionConfigView.model_validate(_execution_config_view_payload())
+    assumptions = BacktestAssumptionsView.model_validate(_run_view_payload()["assumptions"])
+    versions = BacktestFormulaVersionsView.model_validate(_run_view_payload()["formulaVersions"])
+
+    assert metrics.total_return == Decimal("0.019998")
+    assert config.commission_rate == Decimal("0.0003")
+    assert assumptions.event_risk_assumption == "NO_EVENT_RISK"
+    assert versions.report_schema_version == "backtest-report-v1"
+    for update in (
+        {"totalReturn": "0.02"},
+        {"maximumDrawdown": "1.01"},
+        {"winRate": "-0.01"},
+        {"totalReturn": "-1.01"},
+        {"winningSellCount": 2},
+        {"turnoverFen": "-1"},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestMetricsView.model_validate(_metrics_view_payload() | update)
+
+
+def test_fill_view_uses_fen_text_and_rejects_arithmetic_or_secret_fields() -> None:
+    fill = BacktestFillView.model_validate(_fill_view_payload())
+    fees = BacktestFeeBreakdownView.model_validate(_fees_view_payload())
+    dumped = fill.model_dump(mode="json")
+
+    assert dumped["priceFen"] == "1000"
+    assert dumped["filledAt"] == _FIXED_TIME
+    assert fees.total_fen == "2"
+    for update in (
+        {"priceFen": 1000},
+        {"notionalFen": "99999"},
+        {"cashDeltaFen": "-1"},
+        {"costBasisReleasedFen": "1"},
+        {"realizedPnlFen": "0"},
+        {"providerPayload": {"token": "secret"}},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestFillView.model_validate(_fill_view_payload() | update)
+
+
+def test_backtest_decision_preserves_live_field_parity_but_serializes_fen_text() -> None:
+    decision = BacktestAuthoritativeDecisionView.model_validate(_decision_payload())
+    detail = BacktestDecisionView.model_validate(_decision_view_payload())
+    dumped = detail.model_dump(mode="json")
+
+    assert decision.price_fen == "1234"
+    assert set(BacktestAuthoritativeDecisionView.model_fields) == set(
+        AuthoritativeDecisionView.model_fields
+    )
+    for backtest_model, live_model in (
+        (BacktestEvidenceFactView, EvidenceFactView),
+        (BacktestDecisionEvidenceView, DecisionEvidenceView),
+        (BacktestPositionSummaryView, PositionSummaryView),
+        (BacktestDataHealthView, DataHealthView),
+        (BacktestNextStepView, NextStepView),
+    ):
+        assert set(backtest_model.model_fields) == set(live_model.model_fields)
+    assert dumped["decision"]["priceFen"] == "1234"
+    assert dumped["decision"]["episodeLowFen"] == "1220"
+    assert dumped["eventAt"] == _FIXED_TIME
+    assert len(detail.model_dump_json().encode("utf-8")) <= 32 * 1024
+    with pytest.raises(ValidationError):
+        BacktestAuthoritativeDecisionView.model_validate(_decision_payload() | {"priceFen": 1234})
+    for update in (
+        {"resultHash": "f" * 64},
+        {"eventAt": "2026-08-28T09:31:00+08:00"},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestDecisionView.model_validate(_decision_view_payload() | update)
+
+
+def test_decision_item_rejects_oversized_evidence_without_truncation() -> None:
+    facts = [
+        {"key": f"fact_{index:03d}", "value": "X" * 64, "unit": "CODE"} for index in range(512)
+    ]
+    evidence = _decision_payload()["evidence"][0] | {"facts": facts}
+    decision = _decision_payload() | {"evidence": [evidence]}
+    with pytest.raises(ValidationError, match="32 KiB"):
+        BacktestDecisionView.model_validate(_decision_view_payload() | {"decision": decision})
+
+
+def test_signal_and_outcome_detail_discriminators_reject_contradictory_shapes() -> None:
+    signal = BacktestSignalView.model_validate(_signal_view_payload())
+    outcome = BacktestExecutionOutcomeView.model_validate(_outcome_view_payload())
+    assert (signal.kind, outcome.kind) == ("SIGNAL", "EXECUTION_OUTCOME")
+
+    for model, payload in (
+        (BacktestSignalView, _signal_view_payload() | {"kind": "DIAGNOSTIC"}),
+        (BacktestSignalView, _signal_view_payload() | {"targetLotId": "lot-001"}),
+        (BacktestExecutionOutcomeView, _outcome_view_payload() | {"fillId": None}),
+        (
+            BacktestExecutionOutcomeView,
+            _outcome_view_payload() | {"status": "UNFILLED", "reason": None},
+        ),
+    ):
+        with pytest.raises(ValidationError):
+            model.model_validate(payload)
+
+
+def test_equity_point_and_availability_series_are_bounded_and_consistent() -> None:
+    point = BacktestEquityPointView.model_validate(_equity_point_payload())
+    available = BacktestEquitySeries.model_validate(
+        {"availability": "AVAILABLE", "items": [_equity_point_payload()]}
+    )
+    unavailable = BacktestEquitySeries.model_validate({"availability": "EXPIRED", "items": []})
+    assert point.equity_fen == "1019998"
+    assert len(available.items) == 1
+    assert unavailable.items == ()
+
+    for payload in (
+        {"availability": "EXPIRED", "items": [_equity_point_payload()]},
+        {"availability": "AVAILABLE", "items": []},
+        {"availability": "UNKNOWN", "items": []},
+        {"availability": "AVAILABLE", "items": [_equity_point_payload()] * 2001},
+        {
+            "availability": "AVAILABLE",
+            "items": [
+                _equity_point_payload(snapshot_id="snapshot-002"),
+                _equity_point_payload(snapshot_id="snapshot-001"),
+            ],
+        },
+    ):
+        with pytest.raises(ValidationError):
+            BacktestEquitySeries.model_validate(payload)
+
+
+def test_result_availability_is_closed_and_exact() -> None:
+    availability = BacktestResultAvailabilityView.model_validate(_result_availability_payload())
+    assert set(availability.model_dump(mode="json")) == {
+        "decisionDetails",
+        "signalDetails",
+        "executionOutcomeDetails",
+        "equitySeries",
+    }
+    with pytest.raises(ValidationError):
+        BacktestResultAvailabilityView.model_validate(
+            _result_availability_payload() | {"debugTrace": "AVAILABLE"}
+        )
+
+
+def test_job_run_and_fill_pages_are_closed_bounded_and_ordered() -> None:
+    job_page = BacktestJobPage.model_validate(
+        {
+            "filters": {
+                "kind": "BACKTEST_RUN",
+                "status": "COMPLETED",
+                "runId": _RUN_HASH,
+                "datasetHash": _HASH,
+                "createdFrom": None,
+                "createdTo": None,
+            },
+            "items": [_job_view_payload()],
+            "limit": 20,
+            "nextCursor": None,
+            "hasMore": False,
+            "highWatermark": "high.water",
+        }
+    )
+    run_page = BacktestRunPage.model_validate(
+        {
+            "filters": {
+                "symbol": "000001.SZ",
+                "planVersionId": _UUID,
+                "datasetHash": "d" * 64,
+                "completedFrom": None,
+                "completedTo": None,
+                "pinned": False,
+            },
+            "items": [_run_summary_payload()],
+            "limit": 20,
+            "nextCursor": None,
+            "hasMore": False,
+            "highWatermark": "high.water",
+        }
+    )
+    fill_page = BacktestFillPage.model_validate(
+        {
+            "filters": {},
+            "items": [_fill_view_payload()],
+            "limit": 20,
+            "nextCursor": None,
+            "hasMore": False,
+            "highWatermark": "high.water",
+        }
+    )
+    assert len(job_page.items) == len(run_page.items) == len(fill_page.items) == 1
+    assert len(run_page.model_dump_json().encode("utf-8")) < 4 * 1024 * 1024
+    for page_model, page in (
+        (BacktestJobPage, job_page),
+        (BacktestRunPage, run_page),
+        (BacktestFillPage, fill_page),
+    ):
+        item = page.model_dump(mode="json")["items"][0]
+        with pytest.raises(ValidationError):
+            page_model.model_validate(page.model_dump(mode="json") | {"items": [item, item]})
+    with pytest.raises(ValidationError):
+        BacktestJobPage.model_validate(
+            job_page.model_dump(mode="json")
+            | {"filters": job_page.filters.canonical_payload() | {"status": "RUNNING"}}
+        )
+    with pytest.raises(ValidationError):
+        BacktestRunPage.model_validate(
+            run_page.model_dump(mode="json")
+            | {"filters": run_page.filters.canonical_payload() | {"pinned": True}}
+        )
+
+
+def test_detail_page_binds_kind_availability_and_item_discriminator() -> None:
+    page = BacktestDetailPage.model_validate(
+        {
+            "kind": "SIGNAL",
+            "availability": "AVAILABLE",
+            "filters": {"kind": "SIGNAL"},
+            "items": [_signal_view_payload()],
+            "limit": 20,
+            "nextCursor": None,
+            "hasMore": False,
+            "highWatermark": "high.water",
+        }
+    )
+    assert page.items[0].kind == "SIGNAL"
+    with pytest.raises(ValidationError):
+        BacktestDetailPage.model_validate(
+            page.model_dump(mode="json")
+            | {"items": [_signal_view_payload(), _signal_view_payload()]}
+        )
+
+    base = page.model_dump(mode="json")
+    for update in (
+        {"kind": "DECISION"},
+        {"filters": {"kind": "DECISION"}},
+        {"items": [_outcome_view_payload()]},
+        {"items": []},
+        {"availability": "EXPIRED"},
+        {"kind": "DIAGNOSTIC", "filters": {"kind": "DIAGNOSTIC"}, "items": []},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestDetailPage.model_validate(base | update)
+
+    expired = BacktestDetailPage.model_validate(
+        base
+        | {
+            "availability": "EXPIRED",
+            "items": [],
+            "nextCursor": None,
+            "hasMore": False,
+        }
+    )
+    assert expired.items == ()
