@@ -1140,8 +1140,16 @@ class _FakePlanOperationService:
         self.background_runs = 0
         self.activation_runs = 0
 
-    async def list_plan_versions(self, *, offset: int, limit: int) -> object:
-        self.calls.append(("list_plan_versions", offset, limit))
+    async def list_plan_versions(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        symbol: str | None = None,
+        status: object | None = None,
+        can_activate: bool | None = None,
+    ) -> object:
+        self.calls.append(("list_plan_versions", offset, limit, symbol, status, can_activate))
         return {
             "items": [_plan_version_payload()],
             "offset": offset,
@@ -1380,10 +1388,77 @@ def test_plan_versions_are_paginated_and_details_revalidate_canonical_identity()
     assert detail.json()["planJson"].startswith('{"activation"')
     _assert_error_envelope(missing, status=404, code="NOT_FOUND")
     assert service.calls == [
-        ("list_plan_versions", 0, 20),
+        ("list_plan_versions", 0, 20, None, None, None),
         ("get_plan_version", _PLAN_VERSION_ID),
         ("get_plan_version", missing_id),
     ]
+
+
+def test_plan_version_filters_are_applied_by_the_server_service() -> None:
+    service = _FakePlanOperationService()
+    response = TestClient(create_app(plan_service=service)).get(
+        "/api/v1/plan-versions",
+        params={
+            "symbol": "003043.SZ",
+            "status": "DRAFT",
+            "canActivate": "true",
+            "offset": 0,
+            "limit": 20,
+        },
+    )
+
+    assert response.status_code == 200
+    assert service.calls == [("list_plan_versions", 0, 20, "003043.SZ", "DRAFT", True)]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"symbol": "003043.US"},
+        {"status": "ARCHIVED"},
+        {"canActivate": "yes"},
+    ],
+)
+def test_plan_version_filters_reject_invalid_values_before_service(
+    params: dict[str, str],
+) -> None:
+    service = _FakePlanOperationService()
+    response = TestClient(create_app(plan_service=service)).get(
+        "/api/v1/plan-versions", params=params
+    )
+
+    _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+
+
+@pytest.mark.parametrize(
+    ("params", "payload_update"),
+    [
+        ({"symbol": "000001.SZ"}, {}),
+        ({"status": "ACTIVE"}, {}),
+        ({"canActivate": "false"}, {}),
+    ],
+)
+def test_plan_version_filters_revalidate_service_items(
+    params: dict[str, str],
+    payload_update: dict[str, object],
+) -> None:
+    class _MismatchedFilterService(_FakePlanOperationService):
+        async def list_plan_versions(self, **kwargs: object) -> object:
+            payload = _plan_version_payload() | payload_update
+            return {
+                "items": [payload],
+                "offset": kwargs["offset"],
+                "limit": kwargs["limit"],
+                "total": 1,
+            }
+
+    response = TestClient(
+        create_app(plan_service=_MismatchedFilterService()),
+        raise_server_exceptions=False,
+    ).get("/api/v1/plan-versions", params=params)
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
 
 
 def test_plan_draft_and_import_require_current_revision_and_idempotency_context() -> None:
@@ -1911,7 +1986,9 @@ def test_ai_provider_create_and_update_reject_mismatched_service_configuration()
 
 def test_plan_and_ai_provider_empty_pages_allow_offset_after_total() -> None:
     class _EmptyPlanPageService(_FakePlanOperationService):
-        async def list_plan_versions(self, *, offset: int, limit: int) -> object:
+        async def list_plan_versions(
+            self, *, offset: int, limit: int, **_filters: object
+        ) -> object:
             return {"items": [], "offset": offset, "limit": limit, "total": 1}
 
     class _EmptyProviderPageService(_FakeAIOperationService):

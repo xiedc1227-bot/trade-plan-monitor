@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Protocol, Self, cast
+from typing import Annotated, Literal, Protocol, Self, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Request, status
@@ -46,6 +46,15 @@ _MAX_EXPECTED_REVISION = 9_223_372_036_854_775_806
 
 OffsetQuery = Annotated[int, Query(ge=0, le=_MAX_ROWS)]
 LimitQuery = Annotated[int, Query(ge=1, le=_MAX_LIMIT)]
+PlanSymbolQuery = Annotated[
+    str | None,
+    Query(min_length=9, max_length=9, pattern=r"^[0-9]{6}\.(?:SH|SZ|BJ)$"),
+]
+PlanStatusQuery = Annotated[PlanVersionStatus | None, Query()]
+CanActivateQuery = Annotated[
+    Literal["true", "false"] | None,
+    Query(alias="canActivate"),
+]
 ResourceIdPath = Annotated[UUID, Path()]
 NonNegativeRevision = Annotated[
     int,
@@ -325,7 +334,15 @@ class ActivePlanView(ApiValue):
 class PlanOperationService(Protocol):
     """Application-service contract for atomic idempotency, revision, and audit work."""
 
-    async def list_plan_versions(self, *, offset: int, limit: int) -> PlanVersionPage: ...
+    async def list_plan_versions(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        symbol: str | None,
+        status: PlanVersionStatus | None,
+        can_activate: bool | None,
+    ) -> PlanVersionPage: ...
 
     async def get_plan_version(self, *, version_id: str) -> PlanVersionView | None: ...
 
@@ -383,15 +400,32 @@ PlanServiceDependency = Annotated[
 @router.get("/plan-versions", response_model=PlanVersionPage)
 async def list_plan_versions(
     service: PlanServiceDependency,
+    symbol: PlanSymbolQuery = None,
+    status: PlanStatusQuery = None,
+    can_activate: CanActivateQuery = None,
     offset: OffsetQuery = 0,
     limit: LimitQuery = _DEFAULT_LIMIT,
 ) -> PlanVersionPage:
+    can_activate_value = None if can_activate is None else can_activate == "true"
     page = validate_api_response(
-        await service.list_plan_versions(offset=offset, limit=limit),
+        await service.list_plan_versions(
+            offset=offset,
+            limit=limit,
+            symbol=symbol,
+            status=status,
+            can_activate=can_activate_value,
+        ),
         PlanVersionPage,
     )
     if page.offset != offset or page.limit != limit:
         raise RuntimeError("plan service returned mismatched pagination")
+    for item in page.items:
+        if symbol is not None and item.symbol != symbol:
+            raise RuntimeError("plan service returned a mismatched symbol filter")
+        if status is not None and item.status is not status:
+            raise RuntimeError("plan service returned a mismatched status filter")
+        if can_activate_value is not None and item.can_activate != can_activate_value:
+            raise RuntimeError("plan service returned a mismatched activation filter")
     return page
 
 
