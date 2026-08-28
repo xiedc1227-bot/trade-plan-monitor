@@ -35,12 +35,13 @@ from trade_plan_monitor.backtest.results import (
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _MAX_ITEM_BYTES = 32 * 1024
-_RUN_ROUTE = "backtest-results:runs"
+_RUN_ROUTE = "runs"
 _FILL_ROUTE = "backtest-results:fills"
 _DETAIL_ROUTE = "backtest-results:details"
 _RUN_ORDER = "completedAt:desc,runId:desc"
 _FILL_ORDER = "filledAt:asc,fillId:asc"
 _DETAIL_ORDER = "eventAt:asc,detailId:asc"
+_EMPTY_RUN_HIGH_WATER = ("0001-01-01T00:00:00.000000+08:00", "0" * 64)
 _PUBLIC_DETAIL_KINDS = frozenset(
     {
         BacktestDetailKind.DECISION,
@@ -64,6 +65,10 @@ class BacktestResultNotFoundError(LookupError):
 
     def __init__(self) -> None:
         super().__init__("backtest result not found")
+
+
+class BacktestRunMembershipConflictError(RuntimeError):
+    """A pinned traversal changed membership after its first page."""
 
 
 class _ServiceValue(BaseModel):
@@ -115,6 +120,7 @@ class BacktestRunPage(_ServiceValue):
     next_cursor: str | None
     has_more: Annotated[bool, Field(strict=True)]
     high_watermark: tuple[str, ...]
+    snapshot: tuple[int, ...] = Field(exclude=True)
 
 
 class BacktestFillPage(_ServiceValue):
@@ -182,7 +188,17 @@ class BacktestResultService:
         filter_context = normalized_filters.model_dump(mode="json")
         if cursor is None:
             snapshot_revision = self._store.result_run_high_water()
-            high_water = (str(snapshot_revision),)
+            pin_revision = (
+                self._store.result_pin_membership_revision()
+                if normalized_filters.pinned is not None
+                else None
+            )
+            snapshot = (
+                (snapshot_revision, pin_revision)
+                if pin_revision is not None
+                else (snapshot_revision,)
+            )
+            high_water = None
             last_seen = None
         else:
             decoded = self._cursor_signer.decode(
@@ -191,8 +207,21 @@ class BacktestResultService:
                 filters=filter_context,
                 order=_RUN_ORDER,
             )
-            snapshot_revision = _snapshot_revision(decoded.high_water)
-            high_water = decoded.high_water
+            try:
+                snapshot_revision, pin_revision = _run_snapshot(
+                    decoded.snapshot,
+                    pinned=normalized_filters.pinned is not None,
+                )
+                high_water = _required_cursor_position(decoded.high_water)
+            except ValueError:
+                raise InvalidCursorError from None
+            snapshot = decoded.snapshot
+            if snapshot is None:  # pragma: no cover - _run_snapshot rejects this
+                raise InvalidCursorError
+            if pin_revision is not None and (
+                self._store.result_pin_membership_revision() != pin_revision
+            ):
+                raise BacktestRunMembershipConflictError
             last_seen = _required_cursor_position(decoded.last_seen)
         rows = self._store.query_result_runs(
             limit=normalized_limit + 1,
@@ -207,8 +236,16 @@ class BacktestResultService:
             completed_from=normalized_filters.completed_from,
             completed_to=normalized_filters.completed_to,
             pinned=normalized_filters.pinned,
+            high_water=high_water,
             last_seen=last_seen,
         )
+        if (
+            pin_revision is not None
+            and self._store.result_pin_membership_revision() != pin_revision
+        ):
+            raise BacktestRunMembershipConflictError
+        if high_water is None:
+            high_water = rows[0].position if rows else _EMPTY_RUN_HIGH_WATER
         page_rows = rows[:normalized_limit]
         items = tuple(row.record for row in page_rows)
         _require_bounded_items(items)
@@ -220,6 +257,7 @@ class BacktestResultService:
                 order=_RUN_ORDER,
                 high_water=high_water,
                 last_seen=page_rows[-1].position,
+                snapshot=snapshot,
             )
             if has_more
             else None
@@ -230,6 +268,7 @@ class BacktestResultService:
             next_cursor=next_cursor,
             has_more=has_more,
             high_watermark=high_water,
+            snapshot=snapshot,
         )
         _require_bounded_page(page)
         return page
@@ -410,16 +449,15 @@ class BacktestResultService:
         return response
 
 
-def _snapshot_revision(high_water: tuple[str, ...]) -> int:
-    if len(high_water) != 1:
-        raise InvalidCursorError
-    try:
-        value = int(high_water[0])
-    except ValueError:
-        raise InvalidCursorError from None
-    if value < 0 or str(value) != high_water[0]:
-        raise InvalidCursorError
-    return value
+def _run_snapshot(
+    snapshot: tuple[int, ...] | None,
+    *,
+    pinned: bool,
+) -> tuple[int, int | None]:
+    expected_length = 2 if pinned else 1
+    if snapshot is None or len(snapshot) != expected_length:
+        raise ValueError("run cursor snapshot has invalid arity")
+    return snapshot[0], snapshot[1] if pinned else None
 
 
 def _two_part_position(value: tuple[str, ...] | None) -> tuple[str, str] | None:
@@ -464,6 +502,7 @@ __all__ = [
     "BacktestFillPage",
     "BacktestResultNotFoundError",
     "BacktestResultService",
+    "BacktestRunMembershipConflictError",
     "BacktestRunFilters",
     "BacktestRunPage",
 ]

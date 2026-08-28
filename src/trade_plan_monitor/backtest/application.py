@@ -333,80 +333,52 @@ class BacktestApplicationService:
         return asyncio.run(self._execute_job(request))
 
 
-class _LocalBacktestJobUseCases:
-    """Execute CLI commands through the same durable repository/coordinator path."""
+def create_backtest_job_operations(
+    *,
+    config_path: str | Path,
+    market_store: BacktestMarketStore,
+    result_store: BacktestResultStore,
+) -> BacktestJobOperations:
+    """Bind long-lived worker operations to explicitly owned backtest stores.
+
+    Configuration loading and historical-provider construction remain inside the
+    data-sync operation so creating a production composition is local-only.
+    """
+
+    if not isinstance(market_store, BacktestMarketStore):
+        raise TypeError("market_store must be a BacktestMarketStore")
+    if not isinstance(result_store, BacktestResultStore):
+        raise TypeError("result_store must be a BacktestResultStore")
+    owner = _BacktestWorkerOperationOwner(
+        config_path=Path(config_path).expanduser().resolve(),
+        market_store=market_store,
+        result_store=result_store,
+        provider_timeout_seconds=_LocalBacktestShutdownPolicy().provider_timeout_seconds,
+    )
+    return BacktestJobOperations(
+        data_sync=owner.data_sync,
+        dataset_verify=owner.dataset_verify,
+        backtest_run=owner.backtest_run,
+    )
+
+
+class _BacktestWorkerOperationOwner:
+    """Retain the dependencies behind one public worker-operation dispatcher."""
 
     def __init__(
         self,
         *,
         config_path: Path,
-        market_database: Path,
-        results_database: Path,
+        market_store: BacktestMarketStore,
+        result_store: BacktestResultStore,
+        provider_timeout_seconds: int,
     ) -> None:
         self._config_path = config_path
-        self._shutdown_policy = _LocalBacktestShutdownPolicy()
-        self._market_store = BacktestMarketStore(
-            market_database,
-            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
-        )
-        self._repository = BacktestJobRepository(
-            results_database,
-            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
-        )
-        self._results = BacktestResultStore(
-            results_database,
-            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
-        )
+        self._market_store = market_store
+        self._results = result_store
+        self._provider_timeout_seconds = provider_timeout_seconds
 
-    async def execute(
-        self,
-        request: BacktestJobRequest,
-        *,
-        request_id: str | None = None,
-    ) -> BacktestJobResult:
-        receipt = self._repository.submit(
-            request,
-            f"cli-{uuid4().hex}",
-            request_id=request_id,
-        )
-        view = self._repository.get(receipt.job_id)
-        if view is None:
-            raise RuntimeError("durable job disappeared after submission")
-        if view.status is not BacktestJobStatus.COMPLETED:
-            operations = BacktestJobOperations(
-                data_sync=self._sync,
-                dataset_verify=self._verify,
-                backtest_run=self._run,
-            )
-            coordinator = BacktestJobCoordinator(
-                repository=self._repository,
-                operations=operations,
-                shutdown_timeout_seconds=self._shutdown_policy.shutdown_timeout_seconds,
-            )
-            await coordinator.start()
-            try:
-                while True:
-                    view = self._repository.get(receipt.job_id)
-                    if view is None:
-                        raise RuntimeError("durable job disappeared during execution")
-                    if view.status in {
-                        BacktestJobStatus.COMPLETED,
-                        BacktestJobStatus.FAILED,
-                        BacktestJobStatus.CANCELLED,
-                    }:
-                        break
-                    await asyncio.sleep(0.01)
-            finally:
-                await coordinator.shutdown()
-        if view.status is BacktestJobStatus.FAILED:
-            raise RuntimeError(f"{view.error_code}: {view.error_message}")
-        if view.status is BacktestJobStatus.CANCELLED:
-            raise RuntimeError("BACKTEST_OPERATION_CANCELLED")
-        if view.status is not BacktestJobStatus.COMPLETED or view.result is None:
-            raise RuntimeError("durable job did not produce a terminal result")
-        return view.result
-
-    def _sync(
+    def data_sync(
         self,
         request: BacktestJobRequest,
         *,
@@ -420,7 +392,7 @@ class _LocalBacktestJobUseCases:
             update={
                 "timeout_seconds": min(
                     configuration.tushare.timeout_seconds,
-                    self._shutdown_policy.provider_timeout_seconds,
+                    self._provider_timeout_seconds,
                 )
             }
         )
@@ -444,7 +416,7 @@ class _LocalBacktestJobUseCases:
             result.model_dump(mode="python", round_trip=True)
         )
 
-    def _verify(
+    def dataset_verify(
         self,
         request: BacktestJobRequest,
         *,
@@ -479,7 +451,7 @@ class _LocalBacktestJobUseCases:
             blockers=outcome.blockers,
         )
 
-    def _run(
+    def backtest_run(
         self,
         request: BacktestJobRequest,
         *,
@@ -540,6 +512,80 @@ class _LocalBacktestJobUseCases:
             report_hash=report.report_hash,
             reused=False,
         )
+
+
+class _LocalBacktestJobUseCases:
+    """Execute CLI commands through the same durable repository/coordinator path."""
+
+    def __init__(
+        self,
+        *,
+        config_path: Path,
+        market_database: Path,
+        results_database: Path,
+    ) -> None:
+        self._config_path = config_path
+        self._shutdown_policy = _LocalBacktestShutdownPolicy()
+        self._market_store = BacktestMarketStore(
+            market_database,
+            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
+        )
+        self._repository = BacktestJobRepository(
+            results_database,
+            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
+        )
+        self._results = BacktestResultStore(
+            results_database,
+            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
+        )
+        self._operations = create_backtest_job_operations(
+            config_path=self._config_path,
+            market_store=self._market_store,
+            result_store=self._results,
+        )
+
+    async def execute(
+        self,
+        request: BacktestJobRequest,
+        *,
+        request_id: str | None = None,
+    ) -> BacktestJobResult:
+        receipt = self._repository.submit(
+            request,
+            f"cli-{uuid4().hex}",
+            request_id=request_id,
+        )
+        view = self._repository.get(receipt.job_id)
+        if view is None:
+            raise RuntimeError("durable job disappeared after submission")
+        if view.status is not BacktestJobStatus.COMPLETED:
+            coordinator = BacktestJobCoordinator(
+                repository=self._repository,
+                operations=self._operations,
+                shutdown_timeout_seconds=self._shutdown_policy.shutdown_timeout_seconds,
+            )
+            await coordinator.start()
+            try:
+                while True:
+                    view = self._repository.get(receipt.job_id)
+                    if view is None:
+                        raise RuntimeError("durable job disappeared during execution")
+                    if view.status in {
+                        BacktestJobStatus.COMPLETED,
+                        BacktestJobStatus.FAILED,
+                        BacktestJobStatus.CANCELLED,
+                    }:
+                        break
+                    await asyncio.sleep(0.01)
+            finally:
+                await coordinator.shutdown()
+        if view.status is BacktestJobStatus.FAILED:
+            raise RuntimeError(f"{view.error_code}: {view.error_message}")
+        if view.status is BacktestJobStatus.CANCELLED:
+            raise RuntimeError("BACKTEST_OPERATION_CANCELLED")
+        if view.status is not BacktestJobStatus.COMPLETED or view.result is None:
+            raise RuntimeError("durable job did not produce a terminal result")
+        return view.result
 
 
 def _scope(
@@ -653,4 +699,5 @@ __all__ = [
     "DEFAULT_RESULTS_DATABASE",
     "DEFAULT_WARMUP_CALENDAR_DAYS",
     "VERIFIED_HISTORICAL_PROFILE",
+    "create_backtest_job_operations",
 ]

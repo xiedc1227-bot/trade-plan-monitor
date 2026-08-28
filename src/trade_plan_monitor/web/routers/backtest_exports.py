@@ -79,8 +79,8 @@ EmptyExportQueryDependency = Annotated[None, Depends(require_empty_export_query)
     responses={
         200: {
             "content": {
-                "application/json": {},
-                "text/csv": {},
+                "application/json": {"schema": {"type": "string", "format": "binary"}},
+                "text/csv": {"schema": {"type": "string", "format": "binary"}},
             },
         },
     },

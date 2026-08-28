@@ -153,6 +153,492 @@ export type AuthoritativeDecisionView = {
   zone: components["schemas"]["DecisionZone"];
 };
 
+export type BacktestAssumptionsView = {
+  eventRiskAssumption: "NO_EVENT_RISK" | "MANUAL_EVENT_RISK";
+  executionConfig: components["schemas"]["BacktestExecutionConfigView"];
+  executionConfigHash: string;
+  historicalProfile: "TUSHARE_STK_MINS_241_END_V1";
+  priceAdjustmentPolicy: "NONE";
+};
+
+export type BacktestAuthoritativeDecisionView = {
+  dataAgeSeconds: (number) | (null);
+  dataHealth: components["schemas"]["BacktestDataHealthView"];
+  episodeLowFen: (string) | (null);
+  episodeStatus: (components["schemas"]["EpisodeStatus"]) | (null);
+  evaluatedAt: string;
+  evidence: Array<components["schemas"]["BacktestDecisionEvidenceView"]>;
+  marketDataAt: (string) | (null);
+  nextStep: components["schemas"]["BacktestNextStepView"];
+  planHash: string;
+  planId: string;
+  planVersion: number;
+  position: components["schemas"]["BacktestPositionSummaryView"];
+  priceFen: (string) | (null);
+  resultHash: string;
+  riskBreachTradeDate: (string) | (null);
+  riskStatus: components["schemas"]["RiskStatus"];
+  signalType: components["schemas"]["SignalType"];
+  symbol: string;
+  zone: components["schemas"]["DecisionZone"];
+};
+
+export type BacktestDataHealthView = {
+  dataAgeSeconds: (number) | (null);
+  fresh: boolean;
+  latestBarEnd: (string) | (null);
+  requiredDataComplete: boolean;
+  status: components["schemas"]["DataHealthStatus"];
+};
+
+export type BacktestDataSyncCommand = {
+  allowNetwork: true;
+  refresh: boolean;
+  scope: components["schemas"]["BacktestDatasetScopeInput"];
+};
+
+export type BacktestDataSyncJobResultView = {
+  calendarRows: number;
+  dailyBarRows: number;
+  dailyLimitRows: number;
+  kind: "DATA_SYNC";
+  minuteDays: number;
+  networkCalls: number;
+};
+
+export type BacktestDatasetCoverageView = {
+  blockers: Array<string>;
+  calendarRowCount: number;
+  dailyBarRowCount: number;
+  dailyLimitRowCount: number;
+  minuteBarCount: number;
+  minuteDayCount: number;
+  symbolCount: number;
+  tradingDayCount: number;
+};
+
+export type BacktestDatasetFiltersView = {
+  adjustmentPolicy: ("NONE") | (null);
+  endOnOrBefore: (string) | (null);
+  historicalProfile: ("TUSHARE_STK_MINS_241_END_V1") | (null);
+  startOnOrAfter: (string) | (null);
+  symbol: (string) | (null);
+};
+
+export type BacktestDatasetPage = {
+  filters: components["schemas"]["BacktestDatasetFiltersView"];
+  hasMore: boolean;
+  highWatermark: string;
+  items: Array<components["schemas"]["BacktestDatasetView"]>;
+  limit: number;
+  nextCursor: (string) | (null);
+};
+
+export type BacktestDatasetScopeInput = {
+  adjustmentPolicy: "NONE";
+  end: string;
+  historicalProfile: "TUSHARE_STK_MINS_241_END_V1";
+  start: string;
+  symbols: Array<string>;
+  warmupStart: string;
+};
+
+export type BacktestDatasetScopeView = {
+  adjustmentPolicy: "NONE";
+  end: string;
+  historicalProfile: "TUSHARE_STK_MINS_241_END_V1";
+  start: string;
+  symbols: Array<string>;
+  warmupStart: string;
+};
+
+export type BacktestDatasetVerificationCommand = {
+  scope: components["schemas"]["BacktestDatasetScopeInput"];
+};
+
+export type BacktestDatasetVerificationJobResultView = {
+  blockers: Array<string>;
+  coverage: components["schemas"]["BacktestDatasetCoverageView"];
+  datasetHash: (string) | (null);
+  kind: "DATASET_VERIFY";
+  ready: boolean;
+};
+
+export type BacktestDatasetView = {
+  coverage: components["schemas"]["BacktestDatasetCoverageView"];
+  createdAt: string;
+  datasetHash: string;
+  schemaVersion: "backtest-dataset-v1";
+  scope: components["schemas"]["BacktestDatasetScopeView"];
+  verifiedAt: string;
+};
+
+export type BacktestDecisionEvidenceView = {
+  children: Array<components["schemas"]["BacktestDecisionEvidenceView"]>;
+  code: string;
+  facts: Array<components["schemas"]["BacktestEvidenceFactView"]>;
+  kind: "CONDITION" | "RULE";
+  missingInputs: Array<components["schemas"]["MissingInputCode"]>;
+  outcome: components["schemas"]["ConditionOutcome"];
+};
+
+export type BacktestDecisionView = {
+  decision: components["schemas"]["BacktestAuthoritativeDecisionView"];
+  detailId: string;
+  eventAt: string;
+  kind: "DECISION";
+  resultHash: string;
+  runId: string;
+};
+
+export type BacktestDetailFiltersView = {
+  kind: "DECISION" | "SIGNAL" | "EXECUTION_OUTCOME";
+};
+
+export type BacktestDetailPage = {
+  availability: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
+  filters: components["schemas"]["BacktestDetailFiltersView"];
+  hasMore: boolean;
+  highWatermark: string;
+  items: Array<components["schemas"]["BacktestDetailView"]>;
+  kind: "DECISION" | "SIGNAL" | "EXECUTION_OUTCOME";
+  limit: number;
+  nextCursor: (string) | (null);
+};
+
+export type BacktestDetailView = (components["schemas"]["BacktestDecisionView"]) | (components["schemas"]["BacktestSignalView"]) | (components["schemas"]["BacktestExecutionOutcomeView"]);
+
+export type BacktestEquityPointView = {
+  cashFen: string;
+  costBasisFen: string;
+  equityFen: string;
+  markPriceFen: string;
+  markedAt: string;
+  marketValueFen: string;
+  positionQuantity: number;
+  realizedPnlFen: string;
+  runId: string;
+  snapshotId: string;
+  symbol: string;
+  totalCostFen: string;
+  unrealizedPnlFen: string;
+};
+
+export type BacktestEquitySeries = {
+  availability: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
+  items: Array<components["schemas"]["BacktestEquityPointView"]>;
+};
+
+export type BacktestEvidenceFactView = {
+  key: string;
+  unit: components["schemas"]["EvidenceUnit"];
+  value: components["schemas"]["BacktestEvidenceScalar"];
+};
+
+export type BacktestEvidenceScalar = (boolean) | (number) | (string) | (string) | (string) | (string);
+
+export type BacktestExecutionConfigInput = {
+  buySlippageBps: string;
+  commissionRate: string;
+  minimumCommissionFen: number;
+  sellSlippageBps: string;
+  stampDutyRate: string;
+  transferFeeRate: string;
+};
+
+export type BacktestExecutionConfigView = {
+  buySlippageBps: string;
+  commissionRate: string;
+  minimumCommissionFen: string;
+  sellSlippageBps: string;
+  stampDutyRate: string;
+  transferFeeRate: string;
+};
+
+export type BacktestExecutionOutcomeView = {
+  detailId: string;
+  eventAt: string;
+  fillId: (string) | (null);
+  kind: "EXECUTION_OUTCOME";
+  orderId: (string) | (null);
+  outcomeId: string;
+  reason: (components["schemas"]["UnfilledReason"]) | (null);
+  runId: string;
+  signalId: string;
+  sourceBarId: (string) | (null);
+  status: components["schemas"]["ExecutionStatus"];
+};
+
+export type BacktestFeeBreakdownView = {
+  commissionFen: string;
+  stampDutyFen: string;
+  totalFen: string;
+  transferFeeFen: string;
+};
+
+export type BacktestFillFiltersView = {
+};
+
+export type BacktestFillPage = {
+  filters: components["schemas"]["BacktestFillFiltersView"];
+  hasMore: boolean;
+  highWatermark: string;
+  items: Array<components["schemas"]["BacktestFillView"]>;
+  limit: number;
+  nextCursor: (string) | (null);
+};
+
+export type BacktestFillView = {
+  bucket: "CORE" | "TACTICAL";
+  cashDeltaFen: string;
+  configHash: string;
+  costBasisReleasedFen: string;
+  datasetHash: string;
+  fees: components["schemas"]["BacktestFeeBreakdownView"];
+  fillId: string;
+  filledAt: string;
+  notionalFen: string;
+  orderId: string;
+  planHash: string;
+  priceFen: string;
+  quantity: number;
+  realizedPnlFen: (string) | (null);
+  requestedQuantity: number;
+  resultHash: string;
+  runId: string;
+  side: "BUY" | "SELL";
+  signalId: string;
+  sourceBarId: string;
+  symbol: string;
+  targetLotId: (string) | (null);
+};
+
+export type BacktestFormulaVersionsView = {
+  executionFormulaVersion: string;
+  metricFormulaVersion: string;
+  reportSchemaVersion: string;
+  runFormulaVersion: string;
+};
+
+export type BacktestInitialLotInput = {
+  acquiredTradeDate: string;
+  bucket: "CORE" | "TACTICAL";
+  costBasisFen: number;
+  lotKey: string;
+  quantity: number;
+};
+
+export type BacktestJobCancellationCommand = {
+  jobId: string;
+};
+
+export type BacktestJobFiltersView = {
+  createdFrom: (string) | (null);
+  createdTo: (string) | (null);
+  datasetHash: (string) | (null);
+  kind: (Array<"DATA_SYNC" | "DATASET_VERIFY" | "BACKTEST_RUN">) | (null);
+  runId: (string) | (null);
+  status: (Array<"QUEUED" | "RUNNING" | "CANCEL_REQUESTED" | "COMPLETED" | "FAILED" | "CANCELLED">) | (null);
+};
+
+export type BacktestJobPage = {
+  filters: components["schemas"]["BacktestJobFiltersView"];
+  hasMore: boolean;
+  highWatermark: string;
+  items: Array<components["schemas"]["BacktestJobView"]>;
+  limit: number;
+  nextCursor: (string) | (null);
+};
+
+export type BacktestJobProgressView = {
+  completedUnits: number;
+  phase: "QUEUED" | "VALIDATING_INPUT" | "SYNCING_DATA" | "VERIFYING_DATASET" | "REPLAYING" | "MATERIALIZING_RESULTS" | "FINALIZING" | "TERMINAL";
+  totalUnits: (number) | (null);
+  unit: "ITEMS" | "SYMBOL_DAYS" | "EVENTS" | "ROWS";
+  updatedAt: string;
+};
+
+export type BacktestJobReceipt = {
+  attempt: number;
+  datasetHash: (string) | (null);
+  jobId: string;
+  kind: "DATA_SYNC" | "DATASET_VERIFY" | "BACKTEST_RUN";
+  reused: boolean;
+  revision: number;
+  runId: (string) | (null);
+  status: "QUEUED" | "RUNNING" | "CANCEL_REQUESTED" | "COMPLETED" | "FAILED" | "CANCELLED";
+  submittedAt: string;
+};
+
+export type BacktestJobResultView = (components["schemas"]["BacktestDataSyncJobResultView"]) | (components["schemas"]["BacktestDatasetVerificationJobResultView"]) | (components["schemas"]["BacktestRunJobResultView"]);
+
+export type BacktestJobView = {
+  attempt: number;
+  cancelRequestedAt: (string) | (null);
+  createdAt: string;
+  datasetHash: (string) | (null);
+  errorCode: (string) | (null);
+  errorMessage: (string) | (null);
+  finishedAt: (string) | (null);
+  jobId: string;
+  kind: "DATA_SYNC" | "DATASET_VERIFY" | "BACKTEST_RUN";
+  progress: components["schemas"]["BacktestJobProgressView"];
+  requestHash: string;
+  result: (components["schemas"]["BacktestJobResultView"]) | (null);
+  reused: boolean;
+  revision: number;
+  runId: (string) | (null);
+  startedAt: (string) | (null);
+  status: "QUEUED" | "RUNNING" | "CANCEL_REQUESTED" | "COMPLETED" | "FAILED" | "CANCELLED";
+  updatedAt: string;
+};
+
+export type BacktestMetricsView = {
+  blockedCount: number;
+  finalCashFen: string;
+  finalEquityFen: string;
+  initialCashFen: string;
+  initialEquityFen: string;
+  maximumDrawdown: string;
+  realizedPnlFen: string;
+  skippedCount: number;
+  totalCostFen: string;
+  totalReturn: string;
+  tradeCount: number;
+  turnoverFen: string;
+  unrealizedPnlFen: string;
+  winRate: string;
+  winningSellCount: number;
+};
+
+export type BacktestNextStepView = {
+  code: components["schemas"]["NextStepCode"];
+  notBefore: (string) | (string) | (null);
+  requiredInputs: Array<components["schemas"]["MissingInputCode"]>;
+};
+
+export type BacktestPositionSummaryView = {
+  coreQuantity: number;
+  sellableCoreQuantity: number;
+  sellableTacticalQuantity: number;
+  tacticalQuantity: number;
+  totalQuantity: number;
+};
+
+export type BacktestResultAvailabilityView = {
+  decisionDetails: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
+  equitySeries: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
+  executionOutcomeDetails: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
+  signalDetails: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
+};
+
+export type BacktestRunCommand = {
+  datasetHash: string;
+  eventRiskAssumption: "NO_EVENT_RISK" | "MANUAL_EVENT_RISK";
+  executionConfig: components["schemas"]["BacktestExecutionConfigInput"];
+  initialCashFen: number;
+  initialLots: Array<components["schemas"]["BacktestInitialLotInput"]>;
+  planVersionId: string;
+};
+
+export type BacktestRunCoverageView = {
+  decisionCount: number;
+  equityPointCount: number;
+  eventEnd: string;
+  eventStart: string;
+  fillCount: number;
+  orderCount: number;
+  outcomeCount: number;
+  signalCount: number;
+  tradingDayCount: number;
+};
+
+export type BacktestRunFiltersView = {
+  completedFrom: (string) | (null);
+  completedTo: (string) | (null);
+  datasetHash: (string) | (null);
+  pinned: (boolean) | (null);
+  planVersionId: (string) | (null);
+  symbol: (string) | (null);
+};
+
+export type BacktestRunJobResultView = {
+  kind: "BACKTEST_RUN";
+  reportHash: string;
+  reused: boolean;
+  runId: string;
+};
+
+export type BacktestRunPage = {
+  filters: components["schemas"]["BacktestRunFiltersView"];
+  hasMore: boolean;
+  highWatermark: string;
+  items: Array<components["schemas"]["BacktestRunSummaryView"]>;
+  limit: number;
+  nextCursor: (string) | (null);
+};
+
+export type BacktestRunPinCommand = {
+  expectedRevision: number;
+  pinned: boolean;
+};
+
+export type BacktestRunSummaryView = {
+  availability: components["schemas"]["BacktestResultAvailabilityView"];
+  completedAt: string;
+  datasetHash: string;
+  eventEnd: string;
+  eventStart: string;
+  fillCount: number;
+  metrics: components["schemas"]["BacktestMetricsView"];
+  pinned: boolean;
+  planHash: string;
+  planVersionId: (string) | (null);
+  reportHash: string;
+  revision: number;
+  runId: string;
+  status: "COMPLETED";
+  symbol: string;
+};
+
+export type BacktestRunView = {
+  assumptions: components["schemas"]["BacktestAssumptionsView"];
+  availability: components["schemas"]["BacktestResultAvailabilityView"];
+  completedAt: string;
+  coverage: components["schemas"]["BacktestRunCoverageView"];
+  datasetHash: string;
+  eventEnd: string;
+  eventStart: string;
+  fillCount: number;
+  formulaVersions: components["schemas"]["BacktestFormulaVersionsView"];
+  initialCashFen: string;
+  limitations: Array<string>;
+  metrics: components["schemas"]["BacktestMetricsView"];
+  pinned: boolean;
+  planHash: string;
+  planVersionId: (string) | (null);
+  reportHash: string;
+  revision: number;
+  runId: string;
+  status: "COMPLETED";
+  symbol: string;
+};
+
+export type BacktestSignalView = {
+  bucket: ("CORE" | "TACTICAL") | (null);
+  causeId: string;
+  detailId: string;
+  eventAt: string;
+  kind: "SIGNAL";
+  quantity: (number) | (null);
+  resultHash: string;
+  runId: string;
+  signalId: string;
+  signalType: components["schemas"]["ActionableSignalType"];
+  symbol: string;
+  targetLotId: (string) | (null);
+};
+
 export type BarInterval = "ONE_MINUTE" | "FIVE_MINUTES";
 
 export type BarPage = {
@@ -293,6 +779,8 @@ export type EvidenceFactView = {
 export type EvidenceKind = "CONDITION" | "RULE";
 
 export type EvidenceUnit = "FEN" | "SHARES" | "RATIO" | "BARS" | "YUAN" | "COUNT" | "BOOLEAN" | "DATE" | "DATETIME" | "CODE";
+
+export type ExecutionStatus = "FILLED" | "UNFILLED" | "IGNORED";
 
 export type ExecutorHealthView = {
   activeCount: number;
@@ -604,6 +1092,8 @@ export type SymbolSummaryView = {
   totalConditionCount: number;
 };
 
+export type UnfilledReason = "NON_EXECUTABLE_SIGNAL" | "SUSPENDED" | "MISSING_NEXT_MINUTE" | "NO_NEXT_MINUTE" | "LIMIT_UP_LOCKED" | "LIMIT_DOWN_LOCKED" | "INSUFFICIENT_CASH" | "MAX_POSITION_REACHED" | "TARGET_POSITION_REACHED" | "TARGET_LOT_NOT_FOUND" | "T_PLUS_ONE";
+
 export type UnmappedText = {
   end?: (number) | (null);
   excerpt: string;
@@ -666,6 +1156,57 @@ export interface components {
     AlertView: AlertView;
     ApiErrorCode: ApiErrorCode;
     AuthoritativeDecisionView: AuthoritativeDecisionView;
+    BacktestAssumptionsView: BacktestAssumptionsView;
+    BacktestAuthoritativeDecisionView: BacktestAuthoritativeDecisionView;
+    BacktestDataHealthView: BacktestDataHealthView;
+    BacktestDataSyncCommand: BacktestDataSyncCommand;
+    BacktestDataSyncJobResultView: BacktestDataSyncJobResultView;
+    BacktestDatasetCoverageView: BacktestDatasetCoverageView;
+    BacktestDatasetFiltersView: BacktestDatasetFiltersView;
+    BacktestDatasetPage: BacktestDatasetPage;
+    BacktestDatasetScopeInput: BacktestDatasetScopeInput;
+    BacktestDatasetScopeView: BacktestDatasetScopeView;
+    BacktestDatasetVerificationCommand: BacktestDatasetVerificationCommand;
+    BacktestDatasetVerificationJobResultView: BacktestDatasetVerificationJobResultView;
+    BacktestDatasetView: BacktestDatasetView;
+    BacktestDecisionEvidenceView: BacktestDecisionEvidenceView;
+    BacktestDecisionView: BacktestDecisionView;
+    BacktestDetailFiltersView: BacktestDetailFiltersView;
+    BacktestDetailPage: BacktestDetailPage;
+    BacktestDetailView: BacktestDetailView;
+    BacktestEquityPointView: BacktestEquityPointView;
+    BacktestEquitySeries: BacktestEquitySeries;
+    BacktestEvidenceFactView: BacktestEvidenceFactView;
+    BacktestEvidenceScalar: BacktestEvidenceScalar;
+    BacktestExecutionConfigInput: BacktestExecutionConfigInput;
+    BacktestExecutionConfigView: BacktestExecutionConfigView;
+    BacktestExecutionOutcomeView: BacktestExecutionOutcomeView;
+    BacktestFeeBreakdownView: BacktestFeeBreakdownView;
+    BacktestFillFiltersView: BacktestFillFiltersView;
+    BacktestFillPage: BacktestFillPage;
+    BacktestFillView: BacktestFillView;
+    BacktestFormulaVersionsView: BacktestFormulaVersionsView;
+    BacktestInitialLotInput: BacktestInitialLotInput;
+    BacktestJobCancellationCommand: BacktestJobCancellationCommand;
+    BacktestJobFiltersView: BacktestJobFiltersView;
+    BacktestJobPage: BacktestJobPage;
+    BacktestJobProgressView: BacktestJobProgressView;
+    BacktestJobReceipt: BacktestJobReceipt;
+    BacktestJobResultView: BacktestJobResultView;
+    BacktestJobView: BacktestJobView;
+    BacktestMetricsView: BacktestMetricsView;
+    BacktestNextStepView: BacktestNextStepView;
+    BacktestPositionSummaryView: BacktestPositionSummaryView;
+    BacktestResultAvailabilityView: BacktestResultAvailabilityView;
+    BacktestRunCommand: BacktestRunCommand;
+    BacktestRunCoverageView: BacktestRunCoverageView;
+    BacktestRunFiltersView: BacktestRunFiltersView;
+    BacktestRunJobResultView: BacktestRunJobResultView;
+    BacktestRunPage: BacktestRunPage;
+    BacktestRunPinCommand: BacktestRunPinCommand;
+    BacktestRunSummaryView: BacktestRunSummaryView;
+    BacktestRunView: BacktestRunView;
+    BacktestSignalView: BacktestSignalView;
     BarInterval: BarInterval;
     BarPage: BarPage;
     BarView: BarView;
@@ -690,6 +1231,7 @@ export interface components {
     EvidenceFactView: EvidenceFactView;
     EvidenceKind: EvidenceKind;
     EvidenceUnit: EvidenceUnit;
+    ExecutionStatus: ExecutionStatus;
     ExecutorHealthView: ExecutorHealthView;
     ExtractionIssue: ExtractionIssue;
     FieldEvidence: FieldEvidence;
@@ -739,6 +1281,7 @@ export interface components {
     SymbolHealthResponse: SymbolHealthResponse;
     SymbolPage: SymbolPage;
     SymbolSummaryView: SymbolSummaryView;
+    UnfilledReason: UnfilledReason;
     UnmappedText: UnmappedText;
     ValidationIssue: ValidationIssue;
     ValidationSeverity: ValidationSeverity;
@@ -1240,6 +1783,1183 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["AlertPage"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-data-syncs": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["BacktestDataSyncCommand"];
+        };
+      };
+      responses: {
+        "202": {
+          content: {
+            "application/json": components["schemas"]["BacktestJobReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-dataset-verifications": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["BacktestDatasetVerificationCommand"];
+        };
+      };
+      responses: {
+        "202": {
+          content: {
+            "application/json": components["schemas"]["BacktestJobReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-datasets": {
+    get: {
+      parameters: {
+        query?: {
+          adjustmentPolicy?: ("NONE") | (null);
+          cursor?: (string) | (null);
+          endOnOrBefore?: (string) | (null);
+          historicalProfile?: ("TUSHARE_STK_MINS_241_END_V1") | (null);
+          limit?: number;
+          startOnOrAfter?: (string) | (null);
+          symbol?: (string) | (null);
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestDatasetPage"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-datasets/{dataset_hash}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          dataset_hash: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestDatasetView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-job-cancellations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["BacktestJobCancellationCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestJobView"];
+          };
+        };
+        "202": {
+          content: {
+            "application/json": components["schemas"]["BacktestJobView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-jobs": {
+    get: {
+      parameters: {
+        query?: {
+          createdFrom?: (string) | (null);
+          createdTo?: (string) | (null);
+          cursor?: (string) | (null);
+          datasetHash?: (string) | (null);
+          kind?: (Array<"DATA_SYNC" | "DATASET_VERIFY" | "BACKTEST_RUN">) | (null);
+          limit?: number;
+          runId?: (string) | (null);
+          status?: (Array<"QUEUED" | "RUNNING" | "CANCEL_REQUESTED" | "COMPLETED" | "FAILED" | "CANCELLED">) | (null);
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestJobPage"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-jobs/{job_id}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          job_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestJobView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-runs": {
+    get: {
+      parameters: {
+        query?: {
+          completedFrom?: (string) | (null);
+          completedTo?: (string) | (null);
+          cursor?: (string) | (null);
+          datasetHash?: (string) | (null);
+          limit?: number;
+          pinned?: ("true" | "false") | (null);
+          planVersionId?: (string) | (null);
+          symbol?: (string) | (null);
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestRunPage"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["BacktestRunCommand"];
+        };
+      };
+      responses: {
+        "202": {
+          content: {
+            "application/json": components["schemas"]["BacktestJobReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-runs/{run_id}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          run_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestRunView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+    patch: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path: {
+          run_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["BacktestRunPinCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestRunView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-runs/{run_id}/details": {
+    get: {
+      parameters: {
+        query: {
+          cursor?: (string) | (null);
+          kind: "DECISION" | "SIGNAL" | "EXECUTION_OUTCOME";
+          limit?: number;
+        };
+        header?: never;
+        path: {
+          run_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestDetailPage"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-runs/{run_id}/equity-series": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          run_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestEquitySeries"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-runs/{run_id}/exports/{export_kind}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          export_kind: "SUMMARY_JSON" | "FILLS_CSV";
+          run_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": string;
+            "text/csv": string;
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-runs/{run_id}/fills": {
+    get: {
+      parameters: {
+        query?: {
+          cursor?: (string) | (null);
+          limit?: number;
+        };
+        header?: never;
+        path: {
+          run_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestFillPage"];
           };
         };
         "400": {
@@ -2074,8 +3794,11 @@ export interface paths {
     get: {
       parameters: {
         query?: {
+          canActivate?: ("true" | "false") | (null);
           limit?: number;
           offset?: number;
+          status?: (components["schemas"]["PlanVersionStatus"]) | (null);
+          symbol?: (string) | (null);
         };
         header?: never;
         path?: never;

@@ -68,6 +68,7 @@ class ApiError(Exception):
         code: ApiErrorCode,
         *,
         details: tuple[ErrorDetail, ...] = (),
+        retry_after_seconds: int | None = None,
     ) -> None:
         if not isinstance(code, ApiErrorCode):
             raise TypeError("code must be an ApiErrorCode")
@@ -77,8 +78,15 @@ class ApiError(Exception):
             raise TypeError("details must be a tuple of ErrorDetail values")
         if len(details) > _MAX_VALIDATION_DETAILS:
             raise ValueError("API error details exceed the public bound")
+        if retry_after_seconds is not None and (
+            code is not ApiErrorCode.RATE_LIMITED
+            or type(retry_after_seconds) is not int
+            or not 1 <= retry_after_seconds <= 3_600
+        ):
+            raise ValueError("retry_after_seconds must be 1..3600 only for RATE_LIMITED errors")
         self.code = code
         self.details = details
+        self.retry_after_seconds = retry_after_seconds
         super().__init__(code.value)
 
 
@@ -102,6 +110,7 @@ def install_error_boundary(app: FastAPI) -> None:
             request,
             code=error.code,
             details=error.details,
+            retry_after_seconds=error.retry_after_seconds,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -179,6 +188,7 @@ def _error_response(
     code: ApiErrorCode,
     details: tuple[ErrorDetail, ...] = (),
     status_code: int | None = None,
+    retry_after_seconds: int | None = None,
 ) -> JSONResponse:
     request_id = _request_id(request)
     body = ErrorResponse(
@@ -189,10 +199,13 @@ def _error_response(
             request_id=request_id,
         )
     )
+    headers = {_REQUEST_ID_HEADER: request_id, **SECURITY_HEADERS}
+    if retry_after_seconds is not None:
+        headers["Retry-After"] = str(retry_after_seconds)
     return JSONResponse(
         status_code=status_code or _ERROR_STATUS[code],
         content=body.model_dump(mode="json", by_alias=True),
-        headers={_REQUEST_ID_HEADER: request_id, **SECURITY_HEADERS},
+        headers=headers,
     )
 
 

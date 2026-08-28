@@ -17,6 +17,7 @@ MAX_CURSOR_CHARACTERS = 512
 MAX_PAGE_ITEMS = 100
 MAX_PAGE_BYTES = 4 * 1024 * 1024
 _CURSOR_FIELDS = {"v", "r", "f", "o", "h", "l"}
+_SNAPSHOT_CURSOR_FIELDS = _CURSOR_FIELDS | {"s"}
 
 
 class InvalidCursorError(ValueError):
@@ -32,6 +33,7 @@ class DecodedCursor:
 
     high_water: tuple[str, ...]
     last_seen: tuple[str, ...] | None
+    snapshot: tuple[int, ...] | None = None
 
 
 class CursorSigner(Protocol):
@@ -45,6 +47,7 @@ class CursorSigner(Protocol):
         order: str,
         high_water: tuple[str, ...],
         last_seen: tuple[str, ...] | None,
+        snapshot: tuple[int, ...] | None = None,
     ) -> str: ...
 
     def decode(
@@ -73,21 +76,24 @@ class HmacCursorSigner:
         order: str,
         high_water: tuple[str, ...],
         last_seen: tuple[str, ...] | None,
+        snapshot: tuple[int, ...] | None = None,
     ) -> str:
         normalized_route = _context_value(route, "route")
         normalized_order = _context_value(order, "order")
         normalized_high_water = _position(high_water)
         normalized_last_seen = None if last_seen is None else _position(last_seen)
-        payload = canonical_json(
-            {
-                "v": CURSOR_VERSION,
-                "r": normalized_route,
-                "f": _filters_hash(filters),
-                "o": normalized_order,
-                "h": normalized_high_water,
-                "l": normalized_last_seen,
-            }
-        ).encode("utf-8")
+        normalized_snapshot = _snapshot(snapshot)
+        payload_value = {
+            "v": CURSOR_VERSION,
+            "r": normalized_route,
+            "f": _filters_hash(filters),
+            "o": normalized_order,
+            "h": normalized_high_water,
+            "l": normalized_last_seen,
+        }
+        if normalized_snapshot is not None:
+            payload_value["s"] = normalized_snapshot
+        payload = canonical_json(payload_value).encode("utf-8")
         payload_segment = _encode_segment(payload)
         mac_segment = _encode_segment(digest(self._key, payload_segment.encode("ascii"), "sha256"))
         token = f"{payload_segment}.{mac_segment}"
@@ -121,7 +127,10 @@ class HmacCursorSigner:
             ):
                 raise ValueError
             payload = json.loads(payload_bytes, object_pairs_hook=_unique_object)
-            if type(payload) is not dict or set(payload) != _CURSOR_FIELDS:
+            if type(payload) is not dict or frozenset(payload) not in {
+                frozenset(_CURSOR_FIELDS),
+                frozenset(_SNAPSHOT_CURSOR_FIELDS),
+            }:
                 raise ValueError
             if (
                 payload["v"] != CURSOR_VERSION
@@ -133,7 +142,11 @@ class HmacCursorSigner:
             high_water = _position(payload["h"])
             raw_last_seen = payload["l"]
             last_seen = None if raw_last_seen is None else _position(raw_last_seen)
-            return DecodedCursor(high_water=high_water, last_seen=last_seen)
+            return DecodedCursor(
+                high_water=high_water,
+                last_seen=last_seen,
+                snapshot=_snapshot(payload.get("s")),
+            )
         except binascii.Error, KeyError, TypeError, UnicodeError, ValueError, json.JSONDecodeError:
             raise InvalidCursorError from None
 
@@ -170,6 +183,16 @@ def _position(value: object) -> tuple[str, ...]:
         raise ValueError("cursor position must be a non-empty tuple")
     if any(type(item) is not str or not item for item in value):
         raise ValueError("cursor position values must be non-empty strings")
+    return tuple(value)
+
+
+def _snapshot(value: object) -> tuple[int, ...] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)) or not value:
+        raise ValueError("cursor snapshot must be a non-empty tuple")
+    if any(type(item) is not int or not 0 <= item <= 9_007_199_254_740_991 for item in value):
+        raise ValueError("cursor snapshot values must be safe non-negative integers")
     return tuple(value)
 
 

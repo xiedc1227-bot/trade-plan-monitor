@@ -10,11 +10,11 @@
 
 `backtest-jobs` 编排 `backtest-data`、`backtest-engine` 和 `backtest-results`。它负责持久化操作 identity、worker claim generation、队列准入、worker 所有权、进度、取消、恢复、终态诊断和结果/任务原子发布。它不负责供应商映射、策略/成交公式、规范已完成结果、HTTP Schema、Vue 状态、实时监控或通知。
 
-任务与结果记录共享 `backtest-results.sqlite3`，但使用自己的表和前缀；不增加第三个回测数据库。首版只有一个进程内协调器和一个持久化执行槽。同步供应商/SQLite/回放工作只在专用有界 `ThreadPoolExecutor(max_workers=1)` 中执行，绝不在事件循环或默认 executor 中执行。子进程、分布式 worker、逻辑自动重试和并发大于一都不在首版范围。
+任务与结果记录共享 `backtest-results.sqlite3`，但使用自己的表和前缀；不增加第三个回测数据库。首版只有一个进程内协调器和一个持久化执行槽。同步供应商/回放工作与 operation 线程进度持久化在一个专用有界 `ThreadPoolExecutor(max_workers=1)` 中执行；面向事件循环、可能阻塞的 SQLite 协调调用则在协调器拥有的第二个 `ThreadPoolExecutor(max_workers=1)` 中执行。两者都不是默认 executor，也不会嵌套另一个 executor；仓储 executor 不得把持久化操作并发提升到一以上。子进程、分布式 worker、逻辑自动重试和持久化操作并发大于一都不在首版范围。
 
 ## 命令
 
-首版不公开新的直接 worker 命令。生产 FastAPI lifespan 启停一个明确注入的协调器及其专用 executor。协调、轮询、lease 恢复和 heartbeat 保留在事件循环；执行接收跨线程安全取消 Token。关闭时停止新 claim、请求取消、关闭排队 Future，并在有界供应商/安全边界契约后释放 executor。禁止 `asyncio.to_thread` 和未跟踪请求 Task。现有 CLI 命令继续作为兼容适配器，并必须迁移到相同应用用例，不能复制业务规则。未来离线维护命令需要另行批准。
+首版不公开新的直接 worker 命令。生产 FastAPI lifespan 启停一个明确注入的协调器及其拥有的两个 executor。协调、轮询、lease 恢复和 heartbeat 决策保留在事件循环；对应面向事件循环的同步 SQLite 调用只在自有仓储 executor 中运行，operation 进度从 operation executor 持久化，执行接收跨线程安全取消 Token。关闭时停止新 claim、请求取消、关闭排队 Future，并在有界供应商/SQLite/安全边界契约后释放两个 executor；后台 Task 失败时也必须释放。禁止 `asyncio.to_thread`、默认 executor 和未跟踪请求 Task。现有 CLI 命令继续作为兼容适配器，并必须迁移到相同应用用例，不能复制业务规则。未来离线维护命令需要另行批准。
 
 ## 任务模型
 
@@ -37,7 +37,7 @@ CANCELLED
 
 `BacktestJobView` 包含 `jobId`、`kind`、`status`、`requestHash`、可选 `runId`/`datasetHash`、结构化 `phase`、`completedUnits`、可选 `totalUnits`、`attempt`、`revision`、`createdAt`、`startedAt`、`updatedAt`、`finishedAt`、`cancelRequestedAt`、`reused` 和脱敏 `errorCode`/`errorMessage`。每个持久化/公开的生命周期、授权、幂等、claim/lease、heartbeat 和截止日期时间都使用精确 `YYYY-MM-DDTHH:MM:SS.ffffff+08:00` 形式的带时区 `Asia/Shanghai` RFC 3339 文本；拒绝 `Z`、无偏移值、超精度和其他偏移。耗时调度可以使用注入的单调时钟，但不得把单调值作为墙上时间戳持久化或公开。
 
-应用操作包括 `submit(request, idempotency_key)`、`get(job_id)`、`list(filters, limit, cursor)` 和 `request_cancel(job_id, idempotency_key)`。提交与取消在同一个 Unit of Work 中，把 key 原子绑定到其规范请求 hash 和规范响应，并同时完成资源/状态变更。内部 worker 操作包括 `claim_next`、`heartbeat`、`update_progress`、`complete`、`fail`、`acknowledge_cancel`、`recover_expired` 和 `prune_jobs`。
+应用操作包括 `submit(request, idempotency_key)`、`get(job_id)`、`list(filters, limit, cursor)` 和 `request_cancel(job_id, idempotency_key)`。提交与取消在同一个 Unit of Work 中，把 key 原子绑定到其规范请求 hash 和规范响应，并同时完成资源/状态变更。新的公开运行 intent 解析还使用原子 `claim_run_submission`、可续租 `renew_run_submission`、generation-fenced finalize/release 以及同一个由任务拥有的维护事务。内部 worker 操作包括 `claim_next`、`heartbeat`、`update_progress`、`complete`、`fail`、`acknowledge_cancel`、`recover_expired` 和 `prune_jobs`。
 
 规范请求 payload 最多 256 KiB，并且只包含类型化资源值。运行提交保存不可变已校验计划快照和规范化 `BacktestInitialLotInput`；绝不保存计划/报告/数据库路径。`DATA_SYNC` 请求把字面量 `allowNetwork: true` 持久化到规范请求 JSON 和 `requestHash`，并保存服务端生成的 `networkAuthorizedAt` 与提交 `requestId`。该授权只适用于此任务恢复；不持久化凭据，新任务必须重新明确授权。公开错误文本最多 512 个字符。Claim Token 和原始诊断上下文绝不公开。
 
@@ -53,6 +53,8 @@ CANCELLED
 - 失败/取消重试要求新 key 和 `job_id`；确定性校验/供应商失败绝不自动重试。
 
 相同 key 的提交/取消重放保证在任务非终态期间持续有效，并在 `finishedAt` 后保留 14 天，与终态任务/幂等记录保留一致。即使后续 worker 进度改变当前任务表示，取消重放仍返回原始规范取消响应；客户端随后读取权威任务资源。过期后，该 key 可以表示新意图；确定性已完成运行复用仍会防止重复研究结果。
+
+解析新的公开运行 intent 时，在唯一一次实时计划快照读取之前原子预留其 key。未解析预留使用可续租的 30 秒 lease，并由 owner 每 10 秒 heartbeat。其他请求可以观察并轮询预留，但不能仅因截止时间已过就删除或接管。过期未解析预留只能由任务拥有的维护事务在共享 `<=1,000` 行预算内删除；清理完成后，下一个请求才能 claim。Finalize 和 release 由原始 claim generation 隔离，因此一个新 intent 最多持久化一份不可变计划快照并创建一个任务。
 
 最多允许 100 个 `QUEUED` 任务。超过该边界的准入以稳定队列已满条件失败。任何时刻 `RUNNING` 加 `CANCEL_REQUESTED` 的任务数量最多为一个。
 
@@ -101,7 +103,7 @@ CANCELLED
 
 ## 测试策略
 
-使用确定性假操作和时钟。覆盖二十个并发相同提交、key/payload 冲突及 14 天过期、规范 `Asia/Shanghai`/`+08:00` 生命周期/截止时间持久化及拒绝其他日期时间形式、活动操作去重、`attempt=0` 排队/复用任务、两个 worker 对象之间总共三个 claim generation、过期 Token 隔离、单调进度、排队/运行取消、取消/发布事务两个顺序、队列容量、每个安全边界后的重启、持久化同步授权/零凭据/重新提交再授权、零重复事实/manifest/成交/详情、复用已完成运行、失败/取消后使用同一 `run_id` 重跑、唯一 1,000 行维护预算、专用 executor/lifespan 清理、阻塞同步假操作不阻塞 HTTP 轮询/heartbeat，以及请求处理器零回放/供应商工作。
+使用确定性假操作和时钟。覆盖二十个并发相同提交、key/payload 冲突及 14 天过期、规范 `Asia/Shanghai`/`+08:00` 生命周期/截止时间持久化及拒绝其他日期时间形式、活动操作去重、`attempt=0` 排队/复用任务、两个 worker 对象之间总共三个 claim generation、过期 Token 隔离、单调进度、排队/运行取消、取消/发布事务两个顺序、队列容量、每个安全边界后的重启、持久化同步授权/零凭据/重新提交再授权、零重复事实/manifest/成交/详情、复用已完成运行、失败/取消后使用同一 `run_id` 重跑、可续租运行 intent 预留隔离及在唯一 1,000 行维护预算内清理孤儿、成功/超时/后台失败后三种情况下两个专用 executor/lifespan 清理、阻塞同步假操作不阻塞 HTTP 轮询/heartbeat，以及请求处理器零回放/供应商工作。
 
 ## 边界
 
@@ -124,7 +126,7 @@ CANCELLED
 
 ## 已确认的首版决策
 
-已确认的首版决策是：`DATASET_VERIFY` 继续异步；使用一个进程内协调器加一个专用单线程 executor/持久化槽；总共最多允许三个 worker claim generation；策略回放从冻结起点恢复。子进程隔离、事件游标恢复和逻辑自动重试继续延后。
+已确认的首版决策是：`DATASET_VERIFY` 继续异步；使用一个进程内协调器、一个单线程操作 executor、一个单线程仓储 executor 和一个持久化操作槽；总共最多允许三个 worker claim generation；策略回放从冻结起点恢复。子进程隔离、事件游标恢复和逻辑自动重试继续延后。
 
 ## 审核状态
 

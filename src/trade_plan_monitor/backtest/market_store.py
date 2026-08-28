@@ -656,6 +656,7 @@ class BacktestMarketStore:
         end_on_or_before: date | None = None,
         historical_profile: str | None = None,
         adjustment_policy: str | None = None,
+        snapshot_revision: int | None = None,
         high_water: tuple[str, str] | None = None,
         after: tuple[str, str] | None = None,
     ) -> tuple[BacktestDatasetSummary, ...]:
@@ -672,8 +673,19 @@ class BacktestMarketStore:
                 end_on_or_before=end_on_or_before,
                 historical_profile=historical_profile,
                 adjustment_policy=adjustment_policy,
+                snapshot_revision=snapshot_revision,
                 high_water=high_water,
                 after=after,
+            )
+
+    def dataset_catalog_revision(self) -> int:
+        """Return the current SQLite insertion fence for immutable datasets."""
+
+        with self._connect() as connection:
+            return int(
+                connection.execute("SELECT COALESCE(MAX(rowid), 0) FROM market_dataset").fetchone()[
+                    0
+                ]
             )
 
     def dataset_minutes(
@@ -1091,11 +1103,17 @@ class BacktestMarketStore:
         end_on_or_before: date | None = None,
         historical_profile: str | None = None,
         adjustment_policy: str | None = None,
+        snapshot_revision: int | None = None,
         high_water: tuple[str, str] | None = None,
         after: tuple[str, str] | None = None,
     ) -> tuple[BacktestDatasetSummary, ...]:
         conditions: list[str] = []
         parameters: list[object] = []
+        if snapshot_revision is not None:
+            if type(snapshot_revision) is not int or snapshot_revision < 0:
+                raise ValueError("snapshot_revision must be a non-negative integer")
+            conditions.append("d.rowid <= ?")
+            parameters.append(snapshot_revision)
         if dataset_hash is not None:
             conditions.append("d.dataset_hash = ?")
             parameters.append(dataset_hash)

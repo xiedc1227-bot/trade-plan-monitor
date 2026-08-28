@@ -132,9 +132,9 @@ python scripts/generate_frontend_types.py --check
 
 ## 分页与排序
 
-`limit` 默认为 20，范围为 `1..100`。首次请求的 `cursor` 可省略；它是 `CursorToken`：最多 512 个字符的 ASCII Token。精确 Wire 形式是 `<payload_b64url>.<mac_b64url>`，使用无 Padding 的 base64url Segment。规范 payload 包含 `v=cursor-v1`、Route identity、规范化过滤 SHA-256、精确 Order identity、首页高水位 Tuple 和最后已见 Tuple。MAC 是对 payload Segment 使用 HMAC-SHA-256 计算的结果，密钥是安装级本地 256-bit Secret，以限制性本地权限生成并持久化。密钥轮换/缺失、非法编码/MAC/版本、Route/过滤/排序不匹配或畸形 Tuple 都返回相同 `422 VALIDATION_ERROR`，不提供可作 Oracle 的具体原因。
+`limit` 默认为 20，范围为 `1..100`。首次请求的 `cursor` 可省略；它是 `CursorToken`：最多 512 个字符的 ASCII Token。精确 Wire 形式是 `<payload_b64url>.<mac_b64url>`，使用无 Padding 的 base64url Segment。规范 payload 包含 `v=cursor-v1`、Route identity、规范化过滤 SHA-256、精确 Order identity、首页高水位 Tuple 和最后已见 Tuple。数据集和运行 Cursor 还携带由安全非负插入栅栏整数组成的签名 `s` Tuple；`s` 绝不替代或改变精确公开排序 Tuple。MAC 是对 payload Segment 使用 HMAC-SHA-256 计算的结果，密钥是安装级本地 256-bit Secret；该密钥在写入任何密钥字节前即以 owner-only 方式创建，后续先验证 owner/权限，再通过同一个不可替换文件句柄读取；既有密钥若不合规则直接拒绝，不静默修复权限或复用，并对 Windows 并发创建的 sharing violation 执行短时有界重试。密钥轮换/缺失、非法编码/MAC/版本、Route/过滤/排序不匹配或畸形 Tuple 都返回相同 `422 VALIDATION_ERROR`，不提供可作 Oracle 的具体原因。
 
-首页 membership 由签名高水位 Tuple 冻结；之后插入的行不能进入本次遍历。每个 Cursor 页面精确返回 `filters`、`items`、`limit`、`nextCursor`、`hasMore` 和 `highWatermark`；`filters` 是服务端规范化的闭合过滤对象，可空 `nextCursor` 是 `CursorToken`，非空 `highWatermark` 是本次遍历保持不变的签名 `CursorToken` 锚点。精确排序 Tuple 为：
+首页 membership 由签名高水位 Tuple 及必要时的签名插入栅栏共同冻结；之后插入的行（包括具有相同公开时间戳的行）不能进入本次遍历。每个 Cursor 页面精确返回 `filters`、`items`、`limit`、`nextCursor`、`hasMore` 和 `highWatermark`；`filters` 是服务端规范化的闭合过滤对象，可空 `nextCursor` 是 `CursorToken`，非空 `highWatermark` 是本次遍历保持不变的签名 `CursorToken` 锚点。精确排序 Tuple 为：
 
 | 资源 | 排序 |
 |---|---|
@@ -146,7 +146,7 @@ python scripts/generate_frontend_types.py --check
 
 任务过滤为 `kind`、`status`、`runId`、`datasetHash`、`createdFrom` 和 `createdTo`。数据集过滤为 `symbol`、`startOnOrAfter`、`endOnOrBefore`、`historicalProfile` 和 `adjustmentPolicy`。运行过滤为 `symbol`、`planVersionId`、`datasetHash`、`completedFrom`、`completedTo` 和 `pinned`。成交过滤是闭合空对象；详情过滤只包含必填 `kind`。过滤使用 AND 语义；重复枚举值规范化为排序后的不重复 Set；Cursor 绑定完整的规范化过滤对象。
 
-任务 Cursor 还绑定独立的任务列表 `membershipRevision`。只有状态迁移改变带状态过滤的遍历 membership 时才递增该值；普通进度/Heartbeat 更新不递增。如果后续页面请求前已绑定 Revision 发生变化，该页面返回 `409 CONFLICT`，客户端从首页重新开始。不包含可变 `status` 过滤的遍历继续锚定不可变 `(createdAt, jobId)`，不会因为进度或状态展示值变化而失败。
+当过滤包含可变 `status` 或 `datasetHash` membership 时，任务 Cursor 还绑定独立的任务列表 `membershipRevision`。状态改变或校验任务在完成时取得 `datasetHash` 都会递增该值；普通进度/Heartbeat 更新不递增。如果后续页面请求前已绑定 Revision 发生变化，该页面返回 `409 CONFLICT`，客户端从首页重新开始。不包含这两种可变过滤的遍历继续锚定不可变 `(createdAt, jobId)`，不会因为进度或状态展示值变化而失败。非空 `pinned` 过滤的运行遍历同样在 `s` 中绑定全局单调 pin-membership Revision，并在 membership 漂移后返回 `409 CONFLICT`；未过滤运行的展示元数据可以改变，而不会使不可变目录 membership 失效。
 
 每个编码后的 item 最多 32 KiB，每页最多 100 项，包含信封开销的完整 UTF-8 JSON 响应严格低于 `4 * 1024 * 1024` Bytes。在提交 Header 之前检查投影和响应大小不变量；服务端绝不静默截断 item 或页面。导出不使用 JSON 分页。
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Protocol
@@ -114,15 +115,37 @@ class BacktestJobCoordinator:
             max_workers=1,
             thread_name_prefix="backtest-job-worker",
         )
+        self._repository_executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="backtest-job-store",
+        )
         self._task: asyncio.Task[None] | None = None
         self._wake_event: asyncio.Event | None = None
         self._active_cancellation: CancellationToken | None = None
+        self._failure: BaseException | None = None
         self._stopping = False
         self._closed = False
 
     @property
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
+
+    def raise_if_failed(self) -> None:
+        """Fail closed once the owned background task terminates unexpectedly."""
+
+        if self._stopping:
+            return
+        if self._failure is not None:
+            raise RuntimeError("backtest job coordinator failed") from self._failure
+        task = self._task
+        if task is None or not task.done():
+            return
+        if task.cancelled():
+            raise RuntimeError("backtest job coordinator stopped unexpectedly")
+        failure = task.exception()
+        if failure is not None:
+            raise RuntimeError("backtest job coordinator failed") from failure
+        raise RuntimeError("backtest job coordinator stopped unexpectedly")
 
     async def start(self) -> None:
         """Start one owned coordinator task without claiming work at import time."""
@@ -157,42 +180,68 @@ class BacktestJobCoordinator:
         if self._active_cancellation is not None:
             self._active_cancellation.cancel()
         task = self._task
-        if task is not None:
-            try:
-                await asyncio.wait_for(
-                    asyncio.shield(task),
-                    timeout=self._shutdown_timeout_seconds,
-                )
-            except TimeoutError as error:
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
-                self._executor.shutdown(wait=False, cancel_futures=True)
-                self._closed = True
-                raise RuntimeError(
-                    "backtest coordinator operation violated its shutdown safe boundary"
-                ) from error
-        self._executor.shutdown(wait=True, cancel_futures=True)
-        self._closed = True
+        timeout_error: TimeoutError | None = None
+        task_error: BaseException | None = None
+        try:
+            if task is not None:
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(task),
+                        timeout=self._shutdown_timeout_seconds,
+                    )
+                except TimeoutError as error:
+                    timeout_error = error
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                except BaseException as error:
+                    task_error = error
+        finally:
+            self._executor.shutdown(
+                wait=timeout_error is None,
+                cancel_futures=True,
+            )
+            self._repository_executor.shutdown(
+                wait=timeout_error is None,
+                cancel_futures=True,
+            )
+            self._closed = True
+        if timeout_error is not None:
+            raise RuntimeError(
+                "backtest coordinator operation violated its shutdown safe boundary"
+            ) from timeout_error
+        if task_error is not None:
+            raise task_error
 
     stop = shutdown
 
     async def _run(self) -> None:
-        while not self._stopping:
-            claim = self._repository.recover_expired()
-            if claim is None:
-                claim = self._repository.claim_next()
-            if claim is None:
-                if self._wake_event is None:  # pragma: no cover - start owns initialization
-                    raise RuntimeError("coordinator wake event is unavailable")
-                try:
-                    await asyncio.wait_for(
-                        self._wake_event.wait(),
-                        timeout=self._poll_interval_seconds,
-                    )
-                except TimeoutError:
-                    pass
-                continue
-            await self._execute_claim(claim)
+        try:
+            while not self._stopping:
+                claim = await self._repository_call(self._repository.recover_expired)
+                if claim is None:
+                    claim = await self._repository_call(self._repository.claim_next)
+                if claim is None:
+                    if self._wake_event is None:  # pragma: no cover - start owns initialization
+                        raise RuntimeError("coordinator wake event is unavailable")
+                    try:
+                        await asyncio.wait_for(
+                            self._wake_event.wait(),
+                            timeout=self._poll_interval_seconds,
+                        )
+                    except TimeoutError:
+                        pass
+                    continue
+                await self._execute_claim(claim)
+        except asyncio.CancelledError:
+            if self._active_cancellation is not None:
+                self._active_cancellation.cancel()
+            raise
+        except BaseException as error:
+            if not self._stopping and self._failure is None:
+                self._failure = error
+            if self._active_cancellation is not None:
+                self._active_cancellation.cancel()
+            raise
 
     async def _execute_claim(self, claim: BacktestJobClaim) -> None:
         token = CancellationToken()
@@ -220,54 +269,89 @@ class BacktestJobCoordinator:
             ),
         )
         try:
-            while not future.done():
-                await asyncio.wait(
-                    (future,),
-                    timeout=self._heartbeat_interval_seconds,
-                )
-                if future.done():
-                    break
-                view = self._repository.get(claim.job_id)
-                if self._stopping or (
-                    view is not None and view.status is BacktestJobStatus.CANCEL_REQUESTED
-                ):
-                    token.cancel()
-                if not self._repository.heartbeat(claim.job_id, claim_token):
-                    token.cancel()
-            result = await future
-        except BacktestOperationCancelled:
-            self._acknowledge_external_cancellation(claim, claim_token)
-            return
-        except Exception:
-            if self._acknowledge_external_cancellation(claim, claim_token):
+            try:
+                while not future.done():
+                    await asyncio.wait(
+                        (future,),
+                        timeout=self._heartbeat_interval_seconds,
+                    )
+                    if future.done():
+                        break
+                    view = await self._repository_call(self._repository.get, claim.job_id)
+                    if self._stopping or (
+                        view is not None and view.status is BacktestJobStatus.CANCEL_REQUESTED
+                    ):
+                        token.cancel()
+                    if not await self._repository_call(
+                        self._repository.heartbeat,
+                        claim.job_id,
+                        claim_token,
+                    ):
+                        token.cancel()
+            except Exception as coordination_error:
+                if not self._stopping and self._failure is None:
+                    self._failure = coordination_error
+                token.cancel()
+                await asyncio.gather(future, return_exceptions=True)
+                raise
+
+            try:
+                result = await future
+            except BacktestOperationCancelled:
+                await self._acknowledge_external_cancellation(claim, claim_token)
                 return
-            if not self._stopping:
-                self._repository.fail(
-                    claim.job_id,
-                    claim_token,
-                    "BACKTEST_OPERATION_FAILED",
-                    "Backtest operation failed.",
-                )
-            return
+            except Exception:
+                if await self._acknowledge_external_cancellation(claim, claim_token):
+                    return
+                if not self._stopping:
+                    await self._repository_call(
+                        self._repository.fail,
+                        claim.job_id,
+                        claim_token,
+                        "BACKTEST_OPERATION_FAILED",
+                        "Backtest operation failed.",
+                    )
+                return
         finally:
             self._active_cancellation = None
 
         if self._stopping or token.cancelled:
-            self._acknowledge_external_cancellation(claim, claim_token)
+            await self._acknowledge_external_cancellation(claim, claim_token)
             return
-        if self._acknowledge_external_cancellation(claim, claim_token):
+        if await self._acknowledge_external_cancellation(claim, claim_token):
             return
-        self._repository.complete(claim.job_id, claim_token, result)
+        await self._repository_call(
+            self._repository.complete,
+            claim.job_id,
+            claim_token,
+            result,
+        )
 
-    def _acknowledge_external_cancellation(
+    async def _acknowledge_external_cancellation(
         self,
         claim: BacktestJobClaim,
         claim_token: str,
     ) -> bool:
-        view = self._repository.get(claim.job_id)
+        view = await self._repository_call(self._repository.get, claim.job_id)
         if view is None or view.status is not BacktestJobStatus.CANCEL_REQUESTED:
             return False
-        return self._repository.acknowledge_cancel(claim.job_id, claim_token)
+        return await self._repository_call(
+            self._repository.acknowledge_cancel,
+            claim.job_id,
+            claim_token,
+        )
+
+    async def _repository_call[ResultT](
+        self,
+        function: Callable[..., ResultT],
+        /,
+        *args: object,
+    ) -> ResultT:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._repository_executor,
+            partial(function, *args),
+        )
 
 
 def _job_phase(progress: BacktestProgress) -> BacktestJobPhase:

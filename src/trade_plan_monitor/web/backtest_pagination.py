@@ -216,7 +216,9 @@ def _normalized_filters(filters: object) -> object:
 
 def _is_status_filtered_job(route: str, filters: object) -> bool:
     return (
-        route == _JOB_ROUTE and isinstance(filters, Mapping) and filters.get("status") is not None
+        route == _JOB_ROUTE
+        and isinstance(filters, Mapping)
+        and (filters.get("status") is not None or filters.get("datasetHash") is not None)
     )
 
 

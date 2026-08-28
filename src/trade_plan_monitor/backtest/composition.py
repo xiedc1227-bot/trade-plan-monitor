@@ -1,0 +1,1370 @@
+"""Lazy production composition for the isolated backtest HTTP resources."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from collections.abc import Callable, Mapping
+from datetime import date, datetime
+from decimal import Decimal
+from enum import Enum
+from functools import partial
+from pathlib import Path
+from secrets import token_bytes
+from typing import Protocol
+from uuid import UUID
+
+from anyio import sleep, to_thread
+from pydantic import BaseModel, ValidationError
+
+from trade_plan_monitor.backtest.application import (
+    create_backtest_job_operations,
+)
+from trade_plan_monitor.backtest.canonical import canonical_decimal, canonical_json
+from trade_plan_monitor.backtest.cursor_key_security import (
+    create_cursor_key_file,
+    read_cursor_key_file,
+)
+from trade_plan_monitor.backtest.dataset_service import (
+    BacktestDatasetFilters,
+    BacktestDatasetService,
+    DatasetNotFoundError,
+)
+from trade_plan_monitor.backtest.jobs import (
+    BacktestDatasetScopeRequest,
+    BacktestJobCoordinator,
+    BacktestJobKind,
+    BacktestJobRepository,
+    BacktestJobStatus,
+    BacktestRunJobRequest,
+    DatasetVerifyJobRequest,
+    DataSyncJobRequest,
+)
+from trade_plan_monitor.backtest.jobs import (
+    BacktestJobReceipt as DomainBacktestJobReceipt,
+)
+from trade_plan_monitor.backtest.jobs import (
+    BacktestJobView as DomainBacktestJobView,
+)
+from trade_plan_monitor.backtest.jobs.repository import (
+    BacktestJobSubmissionBinding,
+    BacktestRunSubmissionReservation,
+    JobAdmissionError,
+)
+from trade_plan_monitor.backtest.market_store import BacktestMarketStore
+from trade_plan_monitor.backtest.models import ExecutionConfig
+from trade_plan_monitor.backtest.pagination import HmacCursorSigner, InvalidCursorError
+from trade_plan_monitor.backtest.reporting import iter_export_fills, iter_export_summary
+from trade_plan_monitor.backtest.result_service import (
+    BacktestDetailFilters,
+    BacktestResultNotFoundError,
+    BacktestResultService,
+    BacktestRunFilters,
+    BacktestRunMembershipConflictError,
+)
+from trade_plan_monitor.backtest.results import (
+    BacktestArtifactAvailability,
+    BacktestDetailKind,
+    BacktestDetailRecord,
+    BacktestFillRecord,
+    BacktestResultStore,
+    BacktestRunRecord,
+    ResultConflictError,
+)
+from trade_plan_monitor.backtest.run_input import (
+    BacktestInitialLotInput,
+    BacktestRunInput,
+)
+from trade_plan_monitor.backtest.time import (
+    SHANGHAI,
+    format_shanghai_datetime,
+    parse_shanghai_datetime,
+)
+from trade_plan_monitor.decision.models import (
+    ConditionEvidence,
+    EvaluationResult,
+    RuleEvidence,
+)
+from trade_plan_monitor.domain.plan_codec import load_plan_json
+from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
+from trade_plan_monitor.web.backtest_export import (
+    BacktestExportKind,
+    PreparedBacktestExport,
+)
+from trade_plan_monitor.web.backtest_pagination import (
+    BacktestApiCursorSigner,
+    BacktestCursorState,
+    BacktestMembershipConflictError,
+)
+from trade_plan_monitor.web.backtest_schemas import (
+    BacktestDatasetFiltersView,
+    BacktestDatasetPage,
+    BacktestDatasetScopeInput,
+    BacktestDatasetVerificationCommand,
+    BacktestDatasetView,
+    BacktestDataSyncCommand,
+    BacktestDecisionEvidenceView,
+    BacktestDecisionView,
+    BacktestDetailFiltersView,
+    BacktestDetailPage,
+    BacktestEquityPointView,
+    BacktestEquitySeries,
+    BacktestExecutionOutcomeView,
+    BacktestFillFiltersView,
+    BacktestFillPage,
+    BacktestFillView,
+    BacktestJobFiltersView,
+    BacktestJobPage,
+    BacktestJobReceipt,
+    BacktestJobView,
+    BacktestRunCommand,
+    BacktestRunFiltersView,
+    BacktestRunPage,
+    BacktestRunSummaryView,
+    BacktestRunView,
+    BacktestSignalView,
+)
+from trade_plan_monitor.web.errors import ApiError
+from trade_plan_monitor.web.routers.backtest_data import BacktestJobSubmissionOutcome
+from trade_plan_monitor.web.routers.backtest_jobs import (
+    BacktestJobCancellationCommand,
+    BacktestJobCancellationOutcome,
+)
+from trade_plan_monitor.web.routers.backtest_runs import (
+    BacktestRunPinCommand,
+    BacktestRunSubmissionOutcome,
+)
+from trade_plan_monitor.web.routers.plans import PlanVersionView
+from trade_plan_monitor.web.schemas import (
+    ApiErrorCode,
+    MutationContext,
+    validate_api_response,
+)
+
+DEFAULT_BACKTEST_MARKET_DATABASE = Path("data/backtest-market.sqlite3")
+DEFAULT_BACKTEST_RESULTS_DATABASE = Path("data/backtest-results.sqlite3")
+DEFAULT_BACKTEST_CURSOR_KEY = Path("data/backtest-cursor.key")
+_SQLITE_BUSY_TIMEOUT_MS = 2_000
+_SHUTDOWN_TIMEOUT_SECONDS = 5.0
+_RETRY_AFTER_SECONDS = 2
+_RUN_CLAIM_POLL_SECONDS = 0.025
+_RUN_CLAIM_POLL_ATTEMPTS = 200
+_RUN_RESERVATION_HEARTBEAT_SECONDS = 10.0
+_JOB_ROUTE = "/backtest-jobs"
+_JOB_ORDER = "createdAt DESC,jobId DESC"
+_EMPTY_JOB_HIGH_WATER = ("1970-01-01T00:00:00.000000+08:00", "0")
+_EMPTY_RESULT_HIGH_WATER = ("1970-01-01T00:00:00.000000+08:00", "0")
+_RUN_ROUTE = "runs"
+_FILL_ROUTE = "backtest-results:fills"
+_DETAIL_ROUTE = "backtest-results:details"
+_RUN_ORDER = "completedAt:desc,runId:desc"
+_FILL_ORDER = "filledAt:asc,fillId:asc"
+_DETAIL_ORDER = "eventAt:asc,detailId:asc"
+
+
+class PlanSnapshotReader(Protocol):
+    """Read exactly one immutable live plan version for a new run intent."""
+
+    async def get_plan_version(self, *, version_id: str) -> object | None: ...
+
+
+class Coordinator(Protocol):
+    async def start(self) -> None: ...
+
+    async def shutdown(self) -> None: ...
+
+
+class BacktestComposition:
+    """Own one service façade and exactly one coordinator lifecycle."""
+
+    def __init__(
+        self,
+        *,
+        read_service: object,
+        operation_service: object,
+        coordinator: Coordinator,
+    ) -> None:
+        if not callable(getattr(coordinator, "start", None)) or not callable(
+            getattr(coordinator, "shutdown", None)
+        ):
+            raise TypeError("coordinator must expose start and shutdown")
+        self._read_service = read_service
+        self._operation_service = operation_service
+        self._coordinator = coordinator
+        self._started = False
+        self._stopped = False
+
+    @property
+    def read_service(self) -> object:
+        return self._read_service
+
+    @property
+    def operation_service(self) -> object:
+        return self._operation_service
+
+    async def start(self) -> None:
+        if self._stopped:
+            raise RuntimeError("backtest composition is already stopped")
+        if self._started:
+            return
+        await self._coordinator.start()
+        self._started = True
+
+    async def stop(self) -> None:
+        if self._stopped:
+            return
+        self._stopped = True
+        await self._coordinator.shutdown()
+        self._started = False
+
+
+def create_backtest_composition_factory(
+    *,
+    config_path: Path,
+    plan_snapshot_reader: PlanSnapshotReader | None,
+    market_database: Path = DEFAULT_BACKTEST_MARKET_DATABASE,
+    results_database: Path = DEFAULT_BACKTEST_RESULTS_DATABASE,
+    cursor_key_path: Path = DEFAULT_BACKTEST_CURSOR_KEY,
+) -> Callable[[], BacktestComposition]:
+    """Return an inert closure; stores, key material, and threads stay unopened."""
+
+    for name, value in (
+        ("config_path", config_path),
+        ("market_database", market_database),
+        ("results_database", results_database),
+        ("cursor_key_path", cursor_key_path),
+    ):
+        if not isinstance(value, Path):
+            raise TypeError(f"{name} must be a Path")
+    if plan_snapshot_reader is not None and not callable(
+        getattr(plan_snapshot_reader, "get_plan_version", None)
+    ):
+        raise TypeError("plan_snapshot_reader must expose get_plan_version")
+
+    def factory() -> BacktestComposition:
+        return create_backtest_composition(
+            config_path=config_path,
+            plan_snapshot_reader=plan_snapshot_reader,
+            market_database=market_database,
+            results_database=results_database,
+            cursor_key_path=cursor_key_path,
+        )
+
+    return factory
+
+
+def create_backtest_composition(
+    *,
+    config_path: Path,
+    plan_snapshot_reader: PlanSnapshotReader | None,
+    market_database: Path = DEFAULT_BACKTEST_MARKET_DATABASE,
+    results_database: Path = DEFAULT_BACKTEST_RESULTS_DATABASE,
+    cursor_key_path: Path = DEFAULT_BACKTEST_CURSOR_KEY,
+) -> BacktestComposition:
+    """Open the explicitly owned production stores only at lifespan startup."""
+
+    key = _load_or_create_cursor_key(cursor_key_path)
+    market_store = BacktestMarketStore(
+        market_database,
+        busy_timeout_ms=_SQLITE_BUSY_TIMEOUT_MS,
+    )
+    repository = BacktestJobRepository(
+        results_database,
+        busy_timeout_ms=_SQLITE_BUSY_TIMEOUT_MS,
+    )
+    result_store = BacktestResultStore(
+        results_database,
+        busy_timeout_ms=_SQLITE_BUSY_TIMEOUT_MS,
+    )
+    operations = create_backtest_job_operations(
+        config_path=config_path,
+        market_store=market_store,
+        result_store=result_store,
+    )
+    coordinator = BacktestJobCoordinator(
+        repository=repository,
+        operations=operations,
+        shutdown_timeout_seconds=_SHUTDOWN_TIMEOUT_SECONDS,
+    )
+    domain_signer = HmacCursorSigner(key)
+    service = _ProductionBacktestService(
+        plan_snapshot_reader=plan_snapshot_reader,
+        market_store=market_store,
+        repository=repository,
+        result_store=result_store,
+        dataset_service=BacktestDatasetService(
+            store=market_store,
+            cursor_signer=domain_signer,
+        ),
+        result_service=BacktestResultService(
+            store=result_store,
+            cursor_signer=domain_signer,
+        ),
+        coordinator=coordinator,
+        result_cursor_signer=domain_signer,
+        job_cursor_signer=BacktestApiCursorSigner(key),
+    )
+    return BacktestComposition(
+        read_service=service,
+        operation_service=service,
+        coordinator=coordinator,
+    )
+
+
+class _ProductionBacktestService:
+    """Closed application façade shared by every focused backtest router."""
+
+    def __init__(
+        self,
+        *,
+        plan_snapshot_reader: PlanSnapshotReader | None,
+        market_store: object,
+        repository: BacktestJobRepository,
+        result_store: BacktestResultStore,
+        dataset_service: BacktestDatasetService,
+        result_service: BacktestResultService,
+        coordinator: BacktestJobCoordinator,
+        result_cursor_signer: HmacCursorSigner,
+        job_cursor_signer: BacktestApiCursorSigner,
+    ) -> None:
+        self._plan_snapshot_reader = plan_snapshot_reader
+        self._market_store = market_store
+        self._repository = repository
+        self._result_store = result_store
+        self._datasets = dataset_service
+        self._results = result_service
+        self._coordinator = coordinator
+        self._result_cursor_signer = result_cursor_signer
+        self._job_cursor_signer = job_cursor_signer
+
+    async def submit_data_sync(
+        self,
+        *,
+        command: BacktestDataSyncCommand,
+        context: MutationContext,
+    ) -> BacktestJobSubmissionOutcome:
+        self._require_coordinator_healthy()
+        request = DataSyncJobRequest(
+            scope=_scope_request(command.scope),
+            refresh=command.refresh,
+            allow_network=True,
+        )
+        try:
+            receipt = await _run_sync(
+                self._repository.submit,
+                request,
+                context.idempotency_key,
+                request_id=context.request_id,
+            )
+        except JobAdmissionError as error:
+            raise _job_admission_api_error(error) from None
+        return _data_submission_outcome(receipt)
+
+    async def submit_dataset_verification(
+        self,
+        *,
+        command: BacktestDatasetVerificationCommand,
+        context: MutationContext,
+    ) -> BacktestJobSubmissionOutcome:
+        self._require_coordinator_healthy()
+        try:
+            receipt = await _run_sync(
+                self._repository.submit,
+                DatasetVerifyJobRequest(scope=_scope_request(command.scope)),
+                context.idempotency_key,
+            )
+        except JobAdmissionError as error:
+            raise _job_admission_api_error(error) from None
+        return _data_submission_outcome(receipt)
+
+    async def submit_run(
+        self,
+        *,
+        command: BacktestRunCommand,
+        context: MutationContext,
+    ) -> BacktestRunSubmissionOutcome:
+        self._require_coordinator_healthy()
+        reservation: BacktestRunSubmissionReservation | None = None
+        reservation_lost = asyncio.Event()
+        reservation_heartbeat: asyncio.Task[None] | None = None
+        intent_json = canonical_json(command.canonical_payload())
+        try:
+            for _attempt in range(_RUN_CLAIM_POLL_ATTEMPTS):
+                claim = await _run_sync(
+                    self._repository.claim_run_submission,
+                    intent_json,
+                    context.idempotency_key,
+                )
+                if isinstance(claim, BacktestJobSubmissionBinding):
+                    if (
+                        claim.receipt.kind is not BacktestJobKind.BACKTEST_RUN
+                        or not _persisted_run_matches_command(
+                            claim.canonical_request_json,
+                            command,
+                        )
+                    ):
+                        raise ApiError(ApiErrorCode.CONFLICT)
+                    return _run_submission_outcome(claim.receipt)
+                if isinstance(claim, BacktestRunSubmissionReservation):
+                    reservation = claim
+                    reservation_heartbeat = asyncio.create_task(
+                        self._keep_run_reservation_alive(reservation, reservation_lost),
+                        name="backtest-run-submission-reservation",
+                    )
+                    break
+                await sleep(_RUN_CLAIM_POLL_SECONDS)
+            else:
+                raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+            if self._plan_snapshot_reader is None:
+                raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+            value = await self._plan_snapshot_reader.get_plan_version(
+                version_id=str(command.plan_version_id),
+            )
+            if value is None:
+                raise ApiError(ApiErrorCode.NOT_FOUND)
+            try:
+                snapshot = validate_api_response(value, PlanVersionView)
+            except ValidationError:
+                raise RuntimeError("plan snapshot reader returned an invalid version") from None
+            if snapshot.id != command.plan_version_id or not snapshot.can_activate:
+                raise ApiError(ApiErrorCode.CONFLICT)
+            plan = load_plan_json(snapshot.plan_json)
+            try:
+                manifest = await _run_sync(
+                    self._market_store.dataset_manifest,
+                    command.dataset_hash,
+                )
+            except KeyError:
+                raise ApiError(ApiErrorCode.NOT_FOUND) from None
+            if plan.symbol not in manifest.scope.symbols:
+                raise ApiError(ApiErrorCode.CONFLICT)
+            try:
+                command.validate_initial_lot_limits(
+                    dataset_start=manifest.scope.start,
+                    core_target_qty=plan.position.core_target_qty,
+                    tactical_target_qty=plan.position.tactical_target_qty,
+                    max_qty=plan.position.max_qty,
+                )
+                run_input = BacktestRunInput.create(
+                    plan=plan,
+                    manifest=manifest,
+                    initial_cash_fen=command.initial_cash_fen,
+                    initial_lots=tuple(
+                        BacktestInitialLotInput(
+                            lot_key=item.lot_key,
+                            bucket=item.bucket,
+                            acquired_trade_date=item.acquired_trade_date,
+                            quantity=item.quantity,
+                            cost_basis_fen=item.cost_basis_fen,
+                        )
+                        for item in command.initial_lots
+                    ),
+                    execution_config=ExecutionConfig(
+                        commission_rate=command.execution_config.commission_rate,
+                        minimum_commission_fen=(command.execution_config.minimum_commission_fen),
+                        stamp_duty_rate=command.execution_config.stamp_duty_rate,
+                        transfer_fee_rate=command.execution_config.transfer_fee_rate,
+                        buy_slippage_bps=command.execution_config.buy_slippage_bps,
+                        sell_slippage_bps=command.execution_config.sell_slippage_bps,
+                    ),
+                    manual_event_risk=(command.event_risk_assumption == "MANUAL_EVENT_RISK"),
+                    plan_version_id=command.plan_version_id,
+                )
+            except ValueError:
+                raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+            if reservation_lost.is_set():
+                raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+            receipt = await _run_sync(
+                self._repository.finalize_run_submission,
+                BacktestRunJobRequest(run_input=run_input),
+                reservation,
+            )
+            reservation = None
+            return _run_submission_outcome(receipt)
+        except JobAdmissionError as error:
+            raise _job_admission_api_error(error) from None
+        finally:
+            if reservation_heartbeat is not None:
+                reservation_heartbeat.cancel()
+                await asyncio.gather(reservation_heartbeat, return_exceptions=True)
+            if reservation is not None:
+                await _run_sync(
+                    self._repository.release_run_submission,
+                    reservation,
+                )
+
+    async def _keep_run_reservation_alive(
+        self,
+        reservation: BacktestRunSubmissionReservation,
+        lost: asyncio.Event,
+    ) -> None:
+        while True:
+            await sleep(_RUN_RESERVATION_HEARTBEAT_SECONDS)
+            if not await _run_sync(self._repository.renew_run_submission, reservation):
+                lost.set()
+                return
+
+    async def request_cancel(
+        self,
+        *,
+        command: BacktestJobCancellationCommand,
+        context: MutationContext,
+    ) -> BacktestJobCancellationOutcome:
+        self._require_coordinator_healthy()
+        try:
+            binding = await _run_sync(
+                self._repository.request_cancel_with_view,
+                command.job_id,
+                context.idempotency_key,
+            )
+        except KeyError:
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        except JobAdmissionError as error:
+            raise _job_admission_api_error(error) from None
+        receipt = binding.receipt
+        if receipt.status in {BacktestJobStatus.COMPLETED, BacktestJobStatus.FAILED}:
+            raise ApiError(ApiErrorCode.CONFLICT)
+        active = receipt.status is BacktestJobStatus.CANCEL_REQUESTED
+        return BacktestJobCancellationOutcome(
+            job=_job_view(binding.job),
+            status_code=202 if active else 200,
+            location=f"/api/v1/backtest-jobs/{command.job_id}" if active else None,
+            retry_after_seconds=_RETRY_AFTER_SECONDS if active else None,
+        )
+
+    def _require_coordinator_healthy(self) -> None:
+        try:
+            self._coordinator.raise_if_failed()
+        except RuntimeError:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE) from None
+
+    async def pin_run(
+        self,
+        *,
+        run_id: str,
+        command: BacktestRunPinCommand,
+        context: MutationContext,
+    ) -> BacktestRunView:
+        try:
+            record = await _run_sync(
+                self._results.set_pinned,
+                run_id,
+                pinned=command.pinned,
+                expected_revision=command.expected_revision,
+                idempotency_key=context.idempotency_key,
+            )
+        except BacktestResultNotFoundError:
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        except ResultConflictError:
+            raise ApiError(ApiErrorCode.CONFLICT) from None
+        return await self._run_view(record)
+
+    async def list_datasets(
+        self,
+        *,
+        filters: BacktestDatasetFiltersView,
+        limit: int,
+        cursor: str | None,
+    ) -> BacktestDatasetPage:
+        domain_filters = BacktestDatasetFilters(
+            symbol=filters.symbol,
+            start_on_or_after=filters.start_on_or_after,
+            end_on_or_before=filters.end_on_or_before,
+            historical_profile=(
+                None
+                if filters.historical_profile is None
+                else HistoricalMinuteProfile(filters.historical_profile)
+            ),
+            adjustment_policy=filters.adjustment_policy,
+        )
+        try:
+            page = await _run_sync(
+                self._datasets.list_datasets,
+                filters=domain_filters,
+                limit=limit,
+                cursor=cursor,
+            )
+        except InvalidCursorError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+        return BacktestDatasetPage.model_validate(
+            {
+                "filters": filters.canonical_payload(),
+                "items": [_dataset_view(item).canonical_payload() for item in page.items],
+                "limit": page.limit,
+                "nextCursor": page.next_cursor,
+                "hasMore": page.has_more,
+                "highWatermark": page.high_watermark,
+            }
+        )
+
+    async def get_dataset(self, *, dataset_hash: str) -> BacktestDatasetView | None:
+        try:
+            value = await _run_sync(self._datasets.get_dataset, dataset_hash)
+        except DatasetNotFoundError:
+            return None
+        return _dataset_view(value)
+
+    async def list_jobs(
+        self,
+        *,
+        filters: BacktestJobFiltersView,
+        limit: int,
+        cursor: str | None,
+    ) -> BacktestJobPage:
+        filter_payload = filters.canonical_payload()
+        membership_sensitive = filters.status is not None or filters.dataset_hash is not None
+        current_revision = (
+            await _run_sync(self._repository.current_membership_revision)
+            if membership_sensitive
+            else None
+        )
+        cursor_state: BacktestCursorState | None = None
+        high_water: tuple[datetime, str] | None = None
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            cursor_state = self._job_cursor_signer.decode(
+                cursor,
+                route=_JOB_ROUTE,
+                filters=filter_payload,
+                order=_JOB_ORDER,
+                current_membership_revision=current_revision,
+            )
+            high_water = _job_position(cursor_state.high_water)
+            if cursor_state.last_seen is None:
+                raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+            after = _job_position(cursor_state.last_seen)
+        result = await _run_sync(
+            self._repository.query_jobs,
+            kinds=tuple(BacktestJobKind(value) for value in (filters.kind or ())),
+            statuses=tuple(BacktestJobStatus(value) for value in (filters.status or ())),
+            run_id=filters.run_id,
+            dataset_hash=filters.dataset_hash,
+            created_from=filters.created_from,
+            created_to=filters.created_to,
+            high_water=high_water,
+            after=after,
+            limit=limit + 1,
+        )
+        if (
+            cursor_state is not None
+            and membership_sensitive
+            and cursor_state.membership_revision != result.membership_revision
+        ):
+            raise BacktestMembershipConflictError
+        page_rows = result.items[:limit]
+        has_more = len(result.items) > limit
+        if cursor_state is None:
+            high_water_text = (
+                _job_position_text(page_rows[0]) if page_rows else _EMPTY_JOB_HIGH_WATER
+            )
+            cursor_state = BacktestCursorState(
+                high_water=high_water_text,
+                last_seen=None,
+                membership_revision=(result.membership_revision if membership_sensitive else None),
+            )
+        high_watermark = self._job_cursor_signer.high_watermark(
+            route=_JOB_ROUTE,
+            filters=filter_payload,
+            order=_JOB_ORDER,
+            state=cursor_state,
+        )
+        next_cursor = None
+        if has_more:
+            next_cursor = self._job_cursor_signer.encode(
+                route=_JOB_ROUTE,
+                filters=filter_payload,
+                order=_JOB_ORDER,
+                high_water=cursor_state.high_water,
+                last_seen=_job_position_text(page_rows[-1]),
+                membership_revision=cursor_state.membership_revision,
+            )
+        return BacktestJobPage.model_validate(
+            {
+                "filters": filter_payload,
+                "items": [_job_view(item).canonical_payload() for item in page_rows],
+                "limit": limit,
+                "nextCursor": next_cursor,
+                "hasMore": has_more,
+                "highWatermark": high_watermark,
+            }
+        )
+
+    async def get_job(self, *, job_id: str) -> BacktestJobView | None:
+        value = await _run_sync(self._repository.get, job_id)
+        return None if value is None else _job_view(value)
+
+    async def list_runs(
+        self,
+        *,
+        filters: BacktestRunFiltersView,
+        limit: int,
+        cursor: str | None,
+    ) -> BacktestRunPage:
+        domain_filters = BacktestRunFilters(
+            symbol=filters.symbol,
+            plan_version_id=filters.plan_version_id,
+            dataset_hash=filters.dataset_hash,
+            completed_from=filters.completed_from,
+            completed_to=filters.completed_to,
+            pinned=filters.pinned,
+        )
+        try:
+            page = await _run_sync(
+                self._results.list_runs,
+                filters=domain_filters,
+                limit=limit,
+                cursor=cursor,
+            )
+        except InvalidCursorError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+        except BacktestRunMembershipConflictError:
+            raise ApiError(ApiErrorCode.CONFLICT) from None
+        high_watermark = self._result_cursor_signer.encode(
+            route=_RUN_ROUTE,
+            filters=domain_filters.model_dump(mode="json"),
+            order=_RUN_ORDER,
+            high_water=page.high_watermark,
+            last_seen=None,
+            snapshot=page.snapshot,
+        )
+        return BacktestRunPage.model_validate(
+            {
+                "filters": filters.canonical_payload(),
+                "items": [self._run_summary_view(item).canonical_payload() for item in page.items],
+                "limit": page.limit,
+                "nextCursor": page.next_cursor,
+                "hasMore": page.has_more,
+                "highWatermark": high_watermark,
+            }
+        )
+
+    async def get_run(self, *, run_id: str) -> BacktestRunView | None:
+        try:
+            record = await _run_sync(self._results.get_run, run_id)
+        except BacktestResultNotFoundError:
+            return None
+        return await self._run_view(record)
+
+    async def list_fills(
+        self,
+        *,
+        run_id: str,
+        limit: int,
+        cursor: str | None,
+    ) -> BacktestFillPage:
+        try:
+            page = await _run_sync(
+                self._results.list_fills,
+                run_id,
+                limit=limit,
+                cursor=cursor,
+            )
+        except BacktestResultNotFoundError:
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        except InvalidCursorError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+        high_water = page.high_watermark or _EMPTY_RESULT_HIGH_WATER
+        high_watermark = self._result_cursor_signer.encode(
+            route=_FILL_ROUTE,
+            filters={"runId": run_id},
+            order=_FILL_ORDER,
+            high_water=high_water,
+            last_seen=None,
+        )
+        return BacktestFillPage.model_validate(
+            {
+                "filters": BacktestFillFiltersView().canonical_payload(),
+                "items": [_fill_view(item).canonical_payload() for item in page.items],
+                "limit": page.limit,
+                "nextCursor": page.next_cursor,
+                "hasMore": page.has_more,
+                "highWatermark": high_watermark,
+            }
+        )
+
+    async def list_details(
+        self,
+        *,
+        run_id: str,
+        filters: BacktestDetailFiltersView,
+        limit: int,
+        cursor: str | None,
+    ) -> BacktestDetailPage:
+        domain_filters = BacktestDetailFilters(kind=BacktestDetailKind(filters.kind))
+        try:
+            page = await _run_sync(
+                self._results.list_details,
+                run_id,
+                filters=domain_filters,
+                limit=limit,
+                cursor=cursor,
+            )
+        except BacktestResultNotFoundError:
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        except InvalidCursorError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+        filter_context = {"kind": filters.kind, "runId": run_id}
+        high_water = page.high_watermark or _EMPTY_RESULT_HIGH_WATER
+        high_watermark = self._result_cursor_signer.encode(
+            route=_DETAIL_ROUTE,
+            filters=filter_context,
+            order=_DETAIL_ORDER,
+            high_water=high_water,
+            last_seen=None,
+        )
+        return BacktestDetailPage.model_validate(
+            {
+                "kind": filters.kind,
+                "availability": page.availability.value,
+                "filters": filters.canonical_payload(),
+                "items": [_detail_view(item).canonical_payload() for item in page.items],
+                "limit": page.limit,
+                "nextCursor": page.next_cursor,
+                "hasMore": page.has_more,
+                "highWatermark": high_watermark,
+            }
+        )
+
+    async def get_equity_series(self, *, run_id: str) -> BacktestEquitySeries:
+        try:
+            series = await _run_sync(self._results.get_equity_series, run_id)
+        except BacktestResultNotFoundError:
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        return BacktestEquitySeries.model_validate(
+            {
+                "availability": series.availability.value,
+                "items": [_equity_view(item) for item in series.items],
+            }
+        )
+
+    async def prepare_export(
+        self,
+        *,
+        run_id: str,
+        export_kind: BacktestExportKind,
+        cancelled: Callable[[], bool],
+    ) -> PreparedBacktestExport | None:
+        record = await _run_sync(self._result_store.get_result_run, run_id)
+        if record is None:
+            return None
+        if export_kind == "SUMMARY_JSON":
+            chunks = iter_export_summary(self._result_store, run_id, cancelled)
+            schema_version = "backtest-report-summary-v2"
+        else:
+            chunks = iter_export_fills(self._result_store, run_id, cancelled)
+            schema_version = "backtest-simulated-fills-v2"
+        return PreparedBacktestExport(
+            run_id=run_id,
+            export_kind=export_kind,
+            schema_version=schema_version,
+            chunks=chunks,
+        )
+
+    def _run_summary_view(self, record: BacktestRunRecord) -> BacktestRunSummaryView:
+        return _run_summary_view(record)
+
+    async def _run_view(self, record: BacktestRunRecord) -> BacktestRunView:
+        run_input = await _run_sync(
+            self._result_store.get_run_input,
+            record.summary.run_id,
+        )
+        if run_input is None:
+            raise RuntimeError("verified result is missing its immutable run input")
+        return _run_view(record, run_input)
+
+
+async def _run_sync[ResultT](
+    function: Callable[..., ResultT],
+    /,
+    *args: object,
+    **kwargs: object,
+) -> ResultT:
+    return await to_thread.run_sync(partial(function, *args, **kwargs))
+
+
+def _load_or_create_cursor_key(path: Path) -> bytes:
+    """Load one local 256-bit cursor key, creating it with owner-only mode."""
+
+    absolute = path.absolute()
+    absolute.parent.mkdir(parents=True, exist_ok=True)
+    if absolute.exists() or absolute.is_symlink():
+        return _read_cursor_key(absolute)
+
+    key = token_bytes(32)
+    try:
+        create_cursor_key_file(absolute, key)
+    except FileExistsError:
+        return _read_cursor_key(absolute)
+    return key
+
+
+def _read_cursor_key(path: Path) -> bytes:
+    return read_cursor_key_file(path)
+
+
+def _scope_request(scope: BacktestDatasetScopeInput) -> BacktestDatasetScopeRequest:
+    return BacktestDatasetScopeRequest(
+        symbols=scope.symbols,
+        start=scope.start,
+        end=scope.end,
+        warmup_start=scope.warmup_start,
+        historical_profile=HistoricalMinuteProfile(scope.historical_profile),
+        adjustment_policy=scope.adjustment_policy,
+    )
+
+
+def _job_admission_api_error(error: JobAdmissionError) -> ApiError:
+    if error.code == "IDEMPOTENCY_CONFLICT":
+        return ApiError(ApiErrorCode.CONFLICT)
+    if error.code == "QUEUE_FULL":
+        return ApiError(
+            ApiErrorCode.RATE_LIMITED,
+            retry_after_seconds=_RETRY_AFTER_SECONDS,
+        )
+    raise RuntimeError("unknown backtest job admission error")
+
+
+def _data_submission_outcome(
+    receipt: DomainBacktestJobReceipt,
+) -> BacktestJobSubmissionOutcome:
+    return BacktestJobSubmissionOutcome(
+        receipt=_job_receipt(receipt),
+        location=f"/api/v1/backtest-jobs/{receipt.job_id}",
+        retry_after_seconds=(
+            _RETRY_AFTER_SECONDS if receipt.status in _ACTIVE_JOB_STATUSES else None
+        ),
+    )
+
+
+def _run_submission_outcome(
+    receipt: DomainBacktestJobReceipt,
+) -> BacktestRunSubmissionOutcome:
+    return BacktestRunSubmissionOutcome(
+        receipt=_job_receipt(receipt),
+        location=f"/api/v1/backtest-jobs/{receipt.job_id}",
+        retry_after_seconds=(
+            _RETRY_AFTER_SECONDS if receipt.status in _ACTIVE_JOB_STATUSES else None
+        ),
+    )
+
+
+_ACTIVE_JOB_STATUSES = frozenset(
+    {
+        BacktestJobStatus.QUEUED,
+        BacktestJobStatus.RUNNING,
+        BacktestJobStatus.CANCEL_REQUESTED,
+    }
+)
+
+
+def _job_receipt(receipt: DomainBacktestJobReceipt) -> BacktestJobReceipt:
+    return BacktestJobReceipt.model_validate(_public_value(receipt))
+
+
+def _persisted_run_matches_command(
+    canonical_request_json: str,
+    command: BacktestRunCommand,
+) -> bool:
+    try:
+        root = json.loads(canonical_request_json)
+    except TypeError, ValueError:
+        raise RuntimeError("stored backtest request is not canonical JSON") from None
+    if not isinstance(root, dict) or set(root) != {"kind", "runInput"}:
+        raise RuntimeError("stored run request has an invalid envelope")
+    run_input = root.get("runInput")
+    if root.get("kind") != BacktestJobKind.BACKTEST_RUN.value or not isinstance(
+        run_input,
+        dict,
+    ):
+        raise RuntimeError("stored run request has an invalid envelope")
+    execution = run_input.get("execution_config")
+    initial_lots = run_input.get("initial_lots")
+    if (
+        not isinstance(execution, dict)
+        or not isinstance(initial_lots, list)
+        or type(run_input.get("manual_event_risk")) is not bool
+    ):
+        raise RuntimeError("stored run request is missing immutable input fields")
+    try:
+        public_lots = [
+            {
+                "lotKey": item["lot_key"],
+                "bucket": item["bucket"],
+                "acquiredTradeDate": item["acquired_trade_date"],
+                "quantity": item["quantity"],
+                "costBasisFen": item["cost_basis_fen"],
+            }
+            for item in initial_lots
+            if isinstance(item, dict)
+        ]
+        payload = {
+            "planVersionId": run_input["plan_version_id"],
+            "datasetHash": run_input["dataset_hash"],
+            "initialCashFen": run_input["initial_cash_fen"],
+            "initialLots": public_lots,
+            "executionConfig": {
+                "commissionRate": execution["commission_rate"],
+                "minimumCommissionFen": execution["minimum_commission_fen"],
+                "stampDutyRate": execution["stamp_duty_rate"],
+                "transferFeeRate": execution["transfer_fee_rate"],
+                "buySlippageBps": execution["buy_slippage_bps"],
+                "sellSlippageBps": execution["sell_slippage_bps"],
+            },
+            "eventRiskAssumption": (
+                "MANUAL_EVENT_RISK" if run_input["manual_event_risk"] is True else "NO_EVENT_RISK"
+            ),
+        }
+    except KeyError:
+        raise RuntimeError("stored run request is missing immutable input fields") from None
+    if len(public_lots) != len(initial_lots):
+        raise RuntimeError("stored run request contains an invalid initial lot")
+    return payload == command.canonical_payload()
+
+
+def _dataset_view(value: object) -> BacktestDatasetView:
+    return BacktestDatasetView.model_validate(_public_value(value))
+
+
+def _job_view(value: DomainBacktestJobView) -> BacktestJobView:
+    payload = _public_value(value)
+    if not isinstance(payload, dict):
+        raise TypeError("job projection must be an object")
+    if value.status is BacktestJobStatus.FAILED:
+        payload["errorCode"] = value.error_code or "JOB_FAILED"
+        payload["errorMessage"] = "The job failed."
+    elif value.status is BacktestJobStatus.CANCELLED:
+        payload["errorCode"] = value.error_code or "JOB_CANCELLED"
+        payload["errorMessage"] = "The job was cancelled."
+    else:
+        payload["errorCode"] = None
+        payload["errorMessage"] = None
+    return BacktestJobView.model_validate(payload)
+
+
+def _job_position(value: tuple[str, ...]) -> tuple[datetime, str]:
+    if len(value) != 2:
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+    try:
+        created_at = parse_shanghai_datetime(value[0])
+    except ValueError:
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+    if format_shanghai_datetime(created_at) != value[0] or not value[1]:
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+    return created_at, value[1]
+
+
+def _job_position_text(value: DomainBacktestJobView) -> tuple[str, str]:
+    return format_shanghai_datetime(value.created_at), value.job_id
+
+
+def _run_summary_view(record: BacktestRunRecord) -> BacktestRunSummaryView:
+    summary = record.summary
+    if len(summary.symbols) != 1:
+        raise RuntimeError("public backtest runs require exactly one symbol")
+    report_hash = summary.assumptions.get("reportHash")
+    if not isinstance(report_hash, str):
+        raise RuntimeError("verified backtest run is missing reportHash")
+    return BacktestRunSummaryView.model_validate(
+        {
+            "runId": summary.run_id,
+            "reportHash": report_hash,
+            "planVersionId": record.plan_version_id,
+            "planHash": summary.plan_sha256,
+            "datasetHash": summary.dataset_hash,
+            "symbol": summary.symbols[0],
+            "status": summary.status.value,
+            "eventStart": summary.event_start.isoformat(),
+            "eventEnd": summary.event_end.isoformat(),
+            "completedAt": format_shanghai_datetime(summary.completed_at.astimezone(SHANGHAI)),
+            "pinned": summary.pinned,
+            "revision": record.revision,
+            "fillCount": record.fill_count,
+            "metrics": _public_value(summary.final_metrics),
+            "availability": _availability(record),
+        }
+    )
+
+
+def _run_view(record: BacktestRunRecord, run_input: BacktestRunInput) -> BacktestRunView:
+    summary_view = _run_summary_view(record)
+    summary = record.summary
+    coverage = summary.coverage
+    assumptions = summary.assumptions
+    execution = run_input.execution_config
+    limitations = assumptions.get("limitations")
+    if not isinstance(limitations, (list, tuple)) or any(
+        not isinstance(item, str) for item in limitations
+    ):
+        raise RuntimeError("verified backtest run is missing limitations")
+    payload = summary_view.canonical_payload() | {
+        "initialCashFen": str(run_input.initial_cash_fen),
+        "coverage": {
+            "eventStart": summary.event_start.isoformat(),
+            "eventEnd": summary.event_end.isoformat(),
+            "tradingDayCount": _coverage_count(coverage, "dailyEquityCount"),
+            "decisionCount": _coverage_count(coverage, "decisionCount"),
+            "signalCount": _coverage_count(coverage, "signalCount"),
+            "orderCount": _coverage_count(coverage, "orderCount"),
+            "fillCount": _coverage_count(coverage, "fillCount"),
+            "outcomeCount": _coverage_count(coverage, "outcomeCount"),
+            "equityPointCount": _coverage_count(coverage, "dailyEquityCount"),
+        },
+        "assumptions": {
+            "eventRiskAssumption": (
+                "MANUAL_EVENT_RISK" if run_input.manual_event_risk else "NO_EVENT_RISK"
+            ),
+            "executionConfig": {
+                "commissionRate": canonical_decimal(execution.commission_rate),
+                "minimumCommissionFen": str(execution.minimum_commission_fen),
+                "stampDutyRate": canonical_decimal(execution.stamp_duty_rate),
+                "transferFeeRate": canonical_decimal(execution.transfer_fee_rate),
+                "buySlippageBps": canonical_decimal(execution.buy_slippage_bps),
+                "sellSlippageBps": canonical_decimal(execution.sell_slippage_bps),
+            },
+            "executionConfigHash": execution.config_hash,
+            "priceAdjustmentPolicy": "NONE",
+            "historicalProfile": "TUSHARE_STK_MINS_241_END_V1",
+        },
+        "formulaVersions": {
+            "runFormulaVersion": run_input.run_formula_version,
+            "reportSchemaVersion": "backtest-report-v1",
+            "executionFormulaVersion": execution.formula_version,
+            "metricFormulaVersion": "backtest-metrics-v1",
+        },
+        "limitations": sorted(set(limitations)),
+    }
+    return BacktestRunView.model_validate(payload)
+
+
+def _coverage_count(coverage: Mapping[str, object], key: str) -> int:
+    value = coverage.get(key)
+    if type(value) is not int or value < 0:
+        raise RuntimeError(f"verified backtest run is missing {key}")
+    return value
+
+
+def _availability(record: BacktestRunRecord) -> dict[str, str]:
+    state_by_kind = {state.kind: state.availability.value for state in record.availability}
+    return {
+        "decisionDetails": state_by_kind.get(
+            BacktestDetailKind.DECISION,
+            BacktestArtifactAvailability.NOT_RECORDED.value,
+        ),
+        "signalDetails": state_by_kind.get(
+            BacktestDetailKind.SIGNAL,
+            BacktestArtifactAvailability.NOT_RECORDED.value,
+        ),
+        "executionOutcomeDetails": state_by_kind.get(
+            BacktestDetailKind.EXECUTION_OUTCOME,
+            BacktestArtifactAvailability.NOT_RECORDED.value,
+        ),
+        "equitySeries": state_by_kind.get(
+            BacktestDetailKind.DAILY_EQUITY,
+            BacktestArtifactAvailability.NOT_RECORDED.value,
+        ),
+    }
+
+
+def _fill_view(record: BacktestFillRecord) -> BacktestFillView:
+    payload = _public_value(record.payload)
+    if not isinstance(payload, dict):
+        raise TypeError("fill payload must be an object")
+    payload.update(
+        fillId=record.fill_id,
+        runId=record.run_id,
+        filledAt=format_shanghai_datetime(record.filled_at.astimezone(SHANGHAI)),
+    )
+    return BacktestFillView.model_validate(payload)
+
+
+def _detail_view(
+    record: BacktestDetailRecord,
+) -> BacktestDecisionView | BacktestSignalView | BacktestExecutionOutcomeView:
+    event_at = format_shanghai_datetime(record.event_at.astimezone(SHANGHAI))
+    payload = record.payload
+    if record.kind is BacktestDetailKind.DECISION:
+        result = EvaluationResult.model_validate_json(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        )
+        return BacktestDecisionView.model_validate(
+            {
+                "detailId": record.detail_id,
+                "runId": record.run_id,
+                "kind": "DECISION",
+                "eventAt": event_at,
+                "resultHash": result.result_hash,
+                "decision": _decision_projection(result),
+            }
+        )
+    if record.kind is BacktestDetailKind.SIGNAL:
+        return BacktestSignalView.model_validate(
+            {
+                "detailId": record.detail_id,
+                "runId": record.run_id,
+                "kind": "SIGNAL",
+                "eventAt": event_at,
+                "signalId": payload.get("signal_id"),
+                "resultHash": payload.get("result_hash"),
+                "signalType": payload.get("signal_type"),
+                "symbol": payload.get("symbol"),
+                "quantity": payload.get("quantity"),
+                "bucket": payload.get("bucket"),
+                "targetLotId": payload.get("target_lot_id"),
+                "causeId": payload.get("cause_id"),
+            }
+        )
+    if record.kind is BacktestDetailKind.EXECUTION_OUTCOME:
+        return BacktestExecutionOutcomeView.model_validate(
+            {
+                "detailId": record.detail_id,
+                "runId": record.run_id,
+                "kind": "EXECUTION_OUTCOME",
+                "eventAt": event_at,
+                "outcomeId": payload.get("outcome_id"),
+                "signalId": payload.get("signal_id"),
+                "orderId": payload.get("order_id"),
+                "sourceBarId": payload.get("source_bar_id"),
+                "status": payload.get("status"),
+                "reason": payload.get("reason"),
+                "fillId": payload.get("fill_id"),
+            }
+        )
+    raise RuntimeError("unsupported public backtest detail kind")
+
+
+def _decision_projection(result: EvaluationResult) -> dict[str, object]:
+    snapshot = result.snapshot
+    market_data_at = snapshot.market_data_at
+    episode = snapshot.episode
+    risk = snapshot.risk
+    health = snapshot.data_health
+    return {
+        "symbol": snapshot.symbol,
+        "resultHash": result.result_hash,
+        "planId": snapshot.plan_id,
+        "planVersion": snapshot.plan_version,
+        "planHash": snapshot.plan_hash,
+        "evaluatedAt": format_shanghai_datetime(snapshot.evaluated_at),
+        "marketDataAt": (
+            None if market_data_at is None else format_shanghai_datetime(market_data_at)
+        ),
+        "dataAgeSeconds": (
+            None
+            if market_data_at is None
+            else int((snapshot.evaluated_at - market_data_at).total_seconds())
+        ),
+        "priceFen": None if snapshot.price_fen is None else str(snapshot.price_fen),
+        "zone": snapshot.zone.value,
+        "signalType": snapshot.signal_type.value,
+        "position": _public_value(snapshot.position),
+        "episodeStatus": None if episode is None else episode.status.value,
+        "episodeLowFen": None if episode is None else str(episode.episode_low_fen),
+        "riskStatus": risk.status.value,
+        "riskBreachTradeDate": (
+            None if risk.breach_trade_date is None else risk.breach_trade_date.isoformat()
+        ),
+        "dataHealth": {
+            "status": health.status.value,
+            "latestBarEnd": (
+                None
+                if health.latest_bar_end is None
+                else format_shanghai_datetime(health.latest_bar_end)
+            ),
+            "dataAgeSeconds": health.data_age_seconds,
+            "requiredDataComplete": health.required_data_complete,
+            "fresh": health.fresh,
+        },
+        "evidence": [
+            _evidence_view(item).canonical_payload() for item in snapshot.condition_evidence
+        ],
+        "nextStep": _public_value(snapshot.next_step),
+    }
+
+
+def _evidence_view(value: ConditionEvidence | RuleEvidence) -> BacktestDecisionEvidenceView:
+    if isinstance(value, ConditionEvidence):
+        code = value.condition.type
+        children = tuple(_evidence_view(child).canonical_payload() for child in value.children)
+        kind = "CONDITION"
+    else:
+        code = value.code.value
+        children = ()
+        kind = "RULE"
+    facts = []
+    for fact in value.facts:
+        fact_value = fact.value
+        if isinstance(fact_value, datetime):
+            fact_value = format_shanghai_datetime(fact_value)
+        elif type(fact_value) is date:
+            fact_value = fact_value.isoformat()
+        elif isinstance(fact_value, Enum):
+            fact_value = fact_value.value
+        facts.append({"key": fact.key, "value": fact_value, "unit": fact.unit.value})
+    return BacktestDecisionEvidenceView.model_validate(
+        {
+            "kind": kind,
+            "code": code,
+            "outcome": value.outcome.value,
+            "facts": facts,
+            "missingInputs": [item.value for item in value.missing_inputs],
+            "children": list(children),
+        }
+    )
+
+
+def _equity_view(record: BacktestDetailRecord) -> dict[str, object]:
+    if record.kind is not BacktestDetailKind.DAILY_EQUITY:
+        raise RuntimeError("equity series contains a non-equity artifact")
+    payload = _public_value(record.payload)
+    if not isinstance(payload, dict):
+        raise TypeError("equity payload must be an object")
+    payload.update(
+        snapshotId=record.payload.get("snapshot_id"),
+        runId=record.run_id,
+        markedAt=format_shanghai_datetime(record.event_at.astimezone(SHANGHAI)),
+    )
+    return BacktestEquityPointView.model_validate(payload).canonical_payload()
+
+
+def _public_value(value: object, *, field_name: str | None = None) -> object:
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="python", round_trip=True)
+    if isinstance(value, Mapping):
+        return {
+            _camel_key(key): _public_value(item, field_name=_camel_key(key))
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_public_value(item) for item in value]
+    if isinstance(value, datetime):
+        return format_shanghai_datetime(value.astimezone(SHANGHAI))
+    if type(value) is date:
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        text = canonical_decimal(value)
+        return text
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, UUID):
+        return str(value)
+    if field_name is not None and field_name.endswith("Fen") and type(value) is int:
+        return str(value)
+    return value
+
+
+def _camel_key(value: object) -> str:
+    if not isinstance(value, str):
+        raise TypeError("public projection keys must be strings")
+    head, *tail = value.split("_")
+    return head + "".join(part.capitalize() for part in tail)
+
+
+__all__ = [
+    "BacktestComposition",
+    "DEFAULT_BACKTEST_CURSOR_KEY",
+    "DEFAULT_BACKTEST_MARKET_DATABASE",
+    "DEFAULT_BACKTEST_RESULTS_DATABASE",
+    "PlanSnapshotReader",
+    "create_backtest_composition",
+    "create_backtest_composition_factory",
+]

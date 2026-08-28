@@ -23,7 +23,6 @@ from trade_plan_monitor.web.backtest_export import (
 from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.origin_guard import SECURITY_HEADERS
 from trade_plan_monitor.web.routers import backtest_exports
-from trade_plan_monitor.web.routers.backtest_exports import router
 from trade_plan_monitor.web.schemas import ApiErrorCode
 
 _RUN_ID = "b" * 64
@@ -84,7 +83,6 @@ def _client(*, service: object = _MISSING) -> TestClient:
     app = create_app()
     if service is not _MISSING:
         app.state.backtest_read_service = service
-    app.include_router(router)
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -227,7 +225,6 @@ def test_missing_export_service_fails_closed() -> None:
 
 def test_export_route_openapi_declares_both_stream_media_types() -> None:
     app = create_app()
-    app.include_router(router)
     operation = app.openapi()["paths"]["/api/v1/backtest-runs/{run_id}/exports/{export_kind}"][
         "get"
     ]
@@ -235,6 +232,12 @@ def test_export_route_openapi_declares_both_stream_media_types() -> None:
     assert set(operation["responses"]["200"]["content"]) == {
         "application/json",
         "text/csv",
+    }
+    assert {
+        media: value["schema"] for media, value in operation["responses"]["200"]["content"].items()
+    } == {
+        "application/json": {"type": "string", "format": "binary"},
+        "text/csv": {"type": "string", "format": "binary"},
     }
 
 
@@ -368,7 +371,6 @@ def test_actual_asgi_disconnect_stops_route_before_next_threaded_pull() -> None:
     service = _FakeExportService(_prepared(chunks=chunks))
     app = create_app()
     app.state.backtest_read_service = service
-    app.include_router(router)
     receive_calls = 0
     messages: list[Message] = []
     disconnect_ready = asyncio.Event()

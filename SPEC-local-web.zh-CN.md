@@ -135,9 +135,9 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`e0b5435bedf6a98657bb95616bebf8e05589c387049a07eb752d4b8ea48c5102`
+OpenAPI 快照 SHA-256：`29193bc0bf91027f41ea9b74d648fa10eb3338e86753577f2db2802e92b2f71a`
 
-- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 24 个已批准 REST 路径，并用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
+- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 37 个已批准 REST 路径：保持不变的 24 个实时路径加精确 13 个回测路径。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
 - `python scripts/generate_frontend_types.py --check` 是只读检查，只要任一已提交生成文件存在逐字节差异就失败。生成过程遇到不支持或悬空的 Schema 引用、参数位置、Schema 类型或非法 TypeScript 标识符时会封闭失败，而不是静默弱化契约。
 - `web/index.html` 是稳定的 Vite 应用文档，包含一个 `#app` 根节点和一个外部模块入口，不含违反 T040 CSP 的内联脚本或样式。Vite 现在执行会生成 `dist/index.html` 的文档式应用构建；T042 仍负责首个应用外壳、路由和组件挂载，T052 仍负责已安装资源发现及生产组合。
@@ -293,14 +293,14 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 安装后的 `trade-plan-monitor` 控制台入口解析到 `trade_plan_monitor.cli:console_main`。CLI 导入和解析器构造继续保持无副作用；`web` 分支只有在精确回环主机和有界端口解析成功后，才惰性创建一个生产应用上下文并导入/运行 Uvicorn。
 - Vite 继续以 `web/index.html` 为文档输入，并继续生成 `web/dist/index.html`。仅构建时启用的插件会用同一份完整 distribution 替换被忽略的 `src/trade_plan_monitor/web/dist` 暂存目录；setuptools 只打包其中的 `index.html` 和本地 `assets/*`。两个生成目录都不纳入版本控制。
 - 生产资源发现通过 `importlib.resources` 在整个服务生命周期内访问 `trade_plan_monitor.web/dist`。它绝不搜索当前工作目录、仓库根目录、`web/dist` 或其他源码树 fallback。缺少目录、`index.html`、`assets/` 或实际资源时，会在 Uvicorn 启动前只以 `WEB_ASSETS_UNAVAILABLE` 和固定文案 `Installed Web assets are unavailable.` 失败；绝不暴露路径、资源异常、context 或 cause。
-- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 24 个 REST 路径、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
+- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 37 个 REST 路径（保持不变的 24 个实时路径加 13 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
 - T052 不虚构数据库、供应商、只读模型或变更服务。明确注入的生命周期和应用服务继续保持权威；未注入时，打包命令使用无 I/O 的 `DEGRADED` 只读生命周期，既有端点以 `SERVICE_UNAVAILABLE` 封闭失败。该任务不增加 CDN、运行时远程资源、备用监听器、开发目录 fallback、T053 运维重写、T054 回放夹具、T055 浏览器流程、T056 安全矩阵、生成契约变更或 T024 行为。
 
 ### 已批准的回测扩展边界
 
-六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值是已批准的边界目标，但不授权实现：
+六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
-- 当前冻结基线在获批变更同时加入 13 条回测资源路径并更新 OpenAPI 快照、哈希、生成 TypeScript 和运行时保护前，仍是精确 24 条 REST 路径；变更后精确总数为 37 条路径；
+- 当前冻结契约精确为 37 条 REST 路径：保持不变的 24 条实时路径加精确 13 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
 - 当前 Router 基线仍是六条占位路由。扩展会增加真实或 lazy-loaded 的 `/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId` 视图，两个静态子路由必须排在动态路由之前；变更后生产路由集合精确为 10 条路径；
 - 增加四条真实回测路由不能证明六条历史占位路由已经接入其现有业务视图；
 - 新增的 13 条路径、四条路由、生成类型、运行时保护、URL 日期时间筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：输入使用 `+08:00` 和 0～6 位小数秒，输出/存储固定六位，并拒绝 `Z`、无偏移、超精度或其他偏移；
@@ -468,4 +468,4 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节已于 2026-08-26 获批。该批准仅授权生成双语 `BT009`～`BT050` 任务清单。生成后的任务清单仍需单独明确批准；重新生成 OpenAPI、集成路由/服务、实现、提交、推送、依赖安装和任何联网访问仍未获授权。在获批的下游任务改变它们之前，精确 24 路径 OpenAPI 和 6 占位路由基线继续作为权威状态。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。经单独授权的 BT033 生产组合与 BT034 再生建立了当前精确 37 路径 OpenAPI 契约，同时保留 24 条实时路径；6 条占位 Router 基线在获批下游任务改变前继续作为权威状态。提交、推送、依赖安装和任何联网访问继续分别未获授权。

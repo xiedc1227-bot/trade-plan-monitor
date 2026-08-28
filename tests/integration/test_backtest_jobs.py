@@ -6,6 +6,7 @@ import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from dataclasses import FrozenInstanceError
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
@@ -17,6 +18,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from pydantic import ValidationError
 
+from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.dataset import DatasetManifest, DatasetScope
 from trade_plan_monitor.backtest.jobs import (
     MAX_JOB_ERROR_CHARACTERS,
@@ -29,6 +31,11 @@ from trade_plan_monitor.backtest.jobs import (
     DatasetVerifyJobRequest,
     DataSyncJobRequest,
     JobAdmissionError,
+)
+from trade_plan_monitor.backtest.jobs.repository import (
+    BacktestJobQueryResult,
+    BacktestJobSubmissionBinding,
+    BacktestRunSubmissionReservation,
 )
 from trade_plan_monitor.backtest.migration import (
     DatabaseState,
@@ -431,3 +438,242 @@ def test_cancelled_run_resubmission_uses_a_new_job_and_the_same_run_identity(
     assert second.run_id == first.run_id == run_input.run_id
     assert second.status is BacktestJobStatus.QUEUED
     assert len(repository.list_jobs()) == 2
+
+
+def test_submission_binding_replays_persisted_request_and_canonical_receipt(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "submission-binding.sqlite3"
+    repository = BacktestJobRepository(path)
+    request = BacktestRunJobRequest(run_input=_run_input("durable-binding"))
+
+    receipt = repository.submit(request, "durable-submit-key")
+    binding = repository.get_submission_binding("durable-submit-key")
+
+    assert isinstance(binding, BacktestJobSubmissionBinding)
+    assert binding is not None
+    assert binding.receipt == receipt
+    with closing(sqlite3.connect(path)) as connection:
+        persisted_request = str(
+            connection.execute(
+                "SELECT request_json FROM backtest_job WHERE job_id = ?",
+                (receipt.job_id,),
+            ).fetchone()[0]
+        )
+    assert binding.canonical_request_json == persisted_request
+    persisted_payload = json.loads(binding.canonical_request_json)
+    assert persisted_payload["kind"] == "BACKTEST_RUN"
+    assert (
+        persisted_payload["runInput"]["plan_snapshot"]["plan_id"]
+        == request.run_input.plan_snapshot.plan_id
+    )
+    with pytest.raises(FrozenInstanceError):
+        binding.canonical_request_json = "{}"  # type: ignore[misc]
+
+
+def test_submission_binding_conflicts_with_cancel_and_deletes_expiry_atomically(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "submission-binding-expiry.sqlite3"
+    clock = _Clock(datetime(2026, 8, 28, 13, 0, tzinfo=_SHANGHAI))
+    repository = BacktestJobRepository(path, clock=clock)
+    receipt = repository.submit(
+        DatasetVerifyJobRequest(scope=_scope(day=32)),
+        "expiring-submit-key",
+    )
+    repository.request_cancel(receipt.job_id, "expiring-cancel-key")
+
+    clock.advance(timedelta(days=14))
+    assert repository.get_submission_binding("expiring-submit-key") is not None
+    with pytest.raises(JobAdmissionError) as conflict:
+        repository.get_submission_binding("expiring-cancel-key")
+    assert conflict.value.code == "IDEMPOTENCY_CONFLICT"
+
+    clock.advance(timedelta(microseconds=1))
+    assert repository.get_submission_binding("expiring-submit-key") is None
+    assert repository.get_submission_binding("expiring-cancel-key") is None
+    with closing(sqlite3.connect(path)) as connection:
+        remaining = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM backtest_job_idempotency WHERE idempotency_key IN (?, ?)",
+                ("expiring-submit-key", "expiring-cancel-key"),
+            ).fetchone()[0]
+        )
+    assert remaining == 0
+
+
+def test_run_submission_reservation_expires_with_generation_fencing(tmp_path: Path) -> None:
+    clock = _Clock(datetime(2026, 8, 28, 13, 30, tzinfo=_SHANGHAI))
+    repository = BacktestJobRepository(tmp_path / "run-reservation.sqlite3", clock=clock)
+    intent_json = canonical_json({"datasetHash": "a" * 64, "planVersionId": str(UUID(int=1))})
+
+    first = repository.claim_run_submission(intent_json, "reserved-run-intent")
+    pending = repository.claim_run_submission(intent_json, "reserved-run-intent")
+
+    assert isinstance(first, BacktestRunSubmissionReservation)
+    assert pending is None
+
+    clock.advance(timedelta(seconds=30))
+    still_pending = repository.claim_run_submission(intent_json, "reserved-run-intent")
+
+    assert still_pending is None
+    pruned = repository.prune_job_rows(as_of=clock(), remaining_budget=1)
+    assert pruned.deleted_count == 1
+    replacement = repository.claim_run_submission(intent_json, "reserved-run-intent")
+
+    assert isinstance(replacement, BacktestRunSubmissionReservation)
+    assert replacement.claimed_at > first.claimed_at
+    assert repository.release_run_submission(first) is False
+    assert repository.release_run_submission(replacement) is True
+
+
+def test_run_submission_reservation_heartbeat_prevents_live_takeover(tmp_path: Path) -> None:
+    clock = _Clock(datetime(2026, 8, 28, 13, 45, tzinfo=_SHANGHAI))
+    repository = BacktestJobRepository(tmp_path / "renewed-reservation.sqlite3", clock=clock)
+    intent_json = canonical_json({"datasetHash": "b" * 64, "planVersionId": str(UUID(int=2))})
+    reservation = repository.claim_run_submission(intent_json, "renewed-run-intent")
+    assert isinstance(reservation, BacktestRunSubmissionReservation)
+
+    clock.advance(timedelta(seconds=20))
+    assert repository.renew_run_submission(reservation)
+    clock.advance(timedelta(seconds=15))
+
+    assert repository.claim_run_submission(intent_json, "renewed-run-intent") is None
+    assert repository.release_run_submission(reservation)
+
+
+def test_job_keyset_query_filters_and_freezes_created_membership(tmp_path: Path) -> None:
+    clock = _Clock(datetime(2026, 8, 28, 14, 0, tzinfo=_SHANGHAI))
+    repository = BacktestJobRepository(tmp_path / "job-keyset.sqlite3", clock=clock)
+    oldest = repository.submit(
+        DatasetVerifyJobRequest(scope=_scope(day=33)),
+        "query-oldest",
+    )
+    clock.advance(timedelta(seconds=1))
+    middle = repository.submit(
+        DataSyncJobRequest(scope=_scope(day=34), refresh=False, allow_network=True),
+        "query-middle",
+        request_id="a" * 32,
+    )
+    clock.advance(timedelta(seconds=1))
+    run_input = _run_input("query-newest")
+    newest = repository.submit(BacktestRunJobRequest(run_input=run_input), "query-newest")
+
+    first_page = repository.query_jobs(
+        kinds=(),
+        statuses=(BacktestJobStatus.QUEUED,),
+        created_from=datetime(2026, 8, 28, 14, 0, tzinfo=_SHANGHAI),
+        created_to=datetime(2026, 8, 28, 14, 0, 2, tzinfo=_SHANGHAI),
+        limit=2,
+    )
+    assert isinstance(first_page, BacktestJobQueryResult)
+    assert tuple(item.job_id for item in first_page.items) == (newest.job_id, middle.job_id)
+    assert first_page.membership_revision == 3
+    assert repository.current_membership_revision() == first_page.membership_revision
+
+    high_water = (first_page.items[0].created_at, first_page.items[0].job_id)
+    after = (first_page.items[-1].created_at, first_page.items[-1].job_id)
+    clock.advance(timedelta(seconds=1))
+    later = repository.submit(
+        DatasetVerifyJobRequest(scope=_scope(day=35)),
+        "query-after-high-water",
+    )
+    second_page = repository.query_jobs(
+        statuses=(BacktestJobStatus.QUEUED,),
+        high_water=high_water,
+        after=after,
+        limit=101,
+    )
+    assert tuple(item.job_id for item in second_page.items) == (oldest.job_id,)
+    assert later.job_id not in {item.job_id for item in second_page.items}
+    assert second_page.membership_revision == 4
+
+    by_identity = repository.query_jobs(
+        kinds=(BacktestJobKind.DATASET_VERIFY, BacktestJobKind.BACKTEST_RUN),
+        statuses=(),
+        run_id=run_input.run_id,
+        dataset_hash=run_input.dataset_hash,
+        limit=101,
+    )
+    assert tuple(item.job_id for item in by_identity.items) == (newest.job_id,)
+
+    repository.request_cancel(later.job_id, "query-cancel-later")
+    mixed_statuses = repository.query_jobs(
+        kinds=(BacktestJobKind.DATASET_VERIFY,),
+        statuses=(BacktestJobStatus.QUEUED, BacktestJobStatus.CANCELLED),
+    )
+    assert {item.job_id for item in mixed_statuses.items} == {later.job_id, oldest.job_id}
+
+
+def test_job_keyset_query_breaks_equal_created_times_by_descending_job_id(
+    tmp_path: Path,
+) -> None:
+    clock = _Clock(datetime(2026, 8, 28, 14, 30, tzinfo=_SHANGHAI))
+    repository = BacktestJobRepository(tmp_path / "job-keyset-tie.sqlite3", clock=clock)
+    receipts = tuple(
+        repository.submit(
+            DatasetVerifyJobRequest(scope=_scope(day=36 + index)),
+            f"query-tie-{index}",
+        )
+        for index in range(2)
+    )
+    ordered_ids = tuple(sorted((receipt.job_id for receipt in receipts), reverse=True))
+
+    first = repository.query_jobs(limit=1)
+    assert tuple(item.job_id for item in first.items) == ordered_ids[:1]
+    second = repository.query_jobs(
+        high_water=(first.items[0].created_at, first.items[0].job_id),
+        after=(first.items[0].created_at, first.items[0].job_id),
+    )
+    assert tuple(item.job_id for item in second.items) == ordered_ids[1:]
+
+
+def test_job_keyset_insertion_fence_blocks_same_timestamp_late_insert(
+    tmp_path: Path,
+) -> None:
+    clock = _Clock(datetime(2026, 8, 28, 14, 45, tzinfo=_SHANGHAI))
+    repository = BacktestJobRepository(tmp_path / "job-keyset-insertion.sqlite3", clock=clock)
+    oldest = repository.submit(
+        DatasetVerifyJobRequest(scope=_scope(day=38)),
+        "same-time-oldest",
+    )
+    newest = repository.submit(
+        DatasetVerifyJobRequest(scope=_scope(day=39)),
+        "same-time-newest",
+    )
+
+    first = repository.query_jobs(limit=1)
+    assert tuple(item.job_id for item in first.items) == (newest.job_id,)
+    late = repository.submit(
+        DatasetVerifyJobRequest(scope=_scope(day=40)),
+        "same-time-late",
+    )
+    second = repository.query_jobs(
+        high_water=(first.items[0].created_at, first.items[0].job_id),
+        after=(first.items[0].created_at, first.items[0].job_id),
+    )
+
+    assert tuple(item.job_id for item in second.items) == (oldest.job_id,)
+    assert late.job_id not in {item.job_id for item in second.items}
+
+
+def test_job_keyset_query_rejects_non_shanghai_boundaries_and_invalid_bounds(
+    tmp_path: Path,
+) -> None:
+    repository = BacktestJobRepository(tmp_path / "job-keyset-validation.sqlite3")
+    shanghai = datetime(2026, 8, 28, 15, 0, tzinfo=_SHANGHAI)
+    utc = datetime(2026, 8, 28, 7, 0, tzinfo=ZoneInfo("UTC"))
+
+    with pytest.raises(ValueError, match="Shanghai"):
+        repository.query_jobs(created_from=utc)
+    with pytest.raises(ValueError, match="Shanghai"):
+        repository.query_jobs(high_water=(utc, "a" * 32))
+    with pytest.raises(ValueError, match="created_from"):
+        repository.query_jobs(
+            created_from=shanghai + timedelta(seconds=1),
+            created_to=shanghai,
+        )
+    with pytest.raises(ValueError, match="limit"):
+        repository.query_jobs(limit=102)
+    with pytest.raises(TypeError, match="kinds"):
+        repository.query_jobs(kinds=[BacktestJobKind.DATA_SYNC])  # type: ignore[arg-type]

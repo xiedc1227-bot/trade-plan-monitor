@@ -36,6 +36,17 @@ class _WebSocketService:
         await websocket.close(code=1000)
 
 
+class _BacktestLifecycle:
+    read_service = object()
+    operation_service = object()
+
+    async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
+        pass
+
+
 def _write_distribution(directory: Path) -> None:
     assets = directory / "assets"
     assets.mkdir(parents=True)
@@ -125,6 +136,7 @@ def test_production_app_keeps_api_websocket_and_spa_routes_separate(
     with create_production_app(
         runtime_factory=lambda: _Lifecycle(events),
         websocket_service=_WebSocketService(),
+        backtest_lifecycle_factory=_BacktestLifecycle,
     ) as app:
         with TestClient(app, base_url="http://127.0.0.1:8765") as client:
             root = client.get("/")

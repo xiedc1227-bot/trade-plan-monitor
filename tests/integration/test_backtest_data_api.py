@@ -624,6 +624,24 @@ def test_service_errors_are_preserved_as_fixed_public_envelopes() -> None:
     _assert_error(response, status=409, code="CONFLICT")
 
 
+def test_rate_limited_service_error_preserves_required_retry_after() -> None:
+    service = _FakeOperationService(
+        sync_outcome=ApiError(
+            ApiErrorCode.RATE_LIMITED,
+            retry_after_seconds=2,
+        ),
+    )
+
+    response = _client(operation_service=service).post(
+        "/api/v1/backtest-data-syncs",
+        json={"scope": _scope_payload(), "refresh": False, "allowNetwork": True},
+        headers=_HEADERS,
+    )
+
+    _assert_error(response, status=429, code="RATE_LIMITED")
+    assert response.headers["Retry-After"] == "2"
+
+
 def test_router_imports_no_provider_replay_or_persistence_implementation() -> None:
     tree = ast.parse(inspect.getsource(backtest_data))
     imports = {

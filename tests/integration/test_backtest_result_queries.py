@@ -20,6 +20,7 @@ from trade_plan_monitor.backtest.result_service import (
     BacktestDetailFilters,
     BacktestResultService,
     BacktestRunFilters,
+    BacktestRunMembershipConflictError,
 )
 from trade_plan_monitor.backtest.results import (
     BacktestDetailKind,
@@ -240,12 +241,43 @@ def test_run_keyset_filters_are_stable_and_exclude_later_inserts(tmp_path: Path)
     assert staged.run_id not in visited
     assert len(visited) == len(set(visited))
     assert first.high_watermark == second.high_watermark
+    assert first.high_watermark == (
+        first.items[0].summary.completed_at.isoformat(timespec="microseconds"),
+        first.items[0].summary.run_id,
+    )
     assert first.has_more is True and second.has_more is False
     assert len(first.model_dump_json().encode("utf-8")) < 4 * 1024 * 1024
 
     with pytest.raises(InvalidCursorError, match="^invalid cursor$"):
         service.list_runs(
             limit=2,
+            cursor=first.next_cursor,
+            filters=BacktestRunFilters(pinned=True),
+        )
+
+
+def test_pinned_run_traversal_restarts_when_later_pin_changes_membership(
+    tmp_path: Path,
+) -> None:
+    store = BacktestResultStore(tmp_path / "pinned-membership.sqlite3")
+    records = [
+        _materialize(
+            store,
+            label,
+            completed_at=datetime(2026, 8, 24, hour, tzinfo=_SHANGHAI),
+        )[0]
+        for label, hour in (("new", 11), ("middle", 10), ("old", 9))
+    ]
+    assert store.set_pinned(records[0].run_id, True)
+    assert store.set_pinned(records[2].run_id, True)
+    service = _service(store)
+
+    first = service.list_runs(limit=1, filters=BacktestRunFilters(pinned=True))
+    assert store.set_pinned(records[1].run_id, True)
+
+    with pytest.raises(BacktestRunMembershipConflictError):
+        service.list_runs(
+            limit=100,
             cursor=first.next_cursor,
             filters=BacktestRunFilters(pinned=True),
         )

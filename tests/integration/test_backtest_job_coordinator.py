@@ -10,14 +10,17 @@ from decimal import Decimal
 from hashlib import sha256
 from inspect import getsource
 from pathlib import Path
-from threading import Event, get_ident
+from threading import Event, Thread, get_ident
 from time import monotonic
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from trade_plan_monitor.backtest import application as backtest_application
-from trade_plan_monitor.backtest.application import BacktestApplicationService
+from trade_plan_monitor.backtest.application import (
+    BacktestApplicationService,
+    create_backtest_job_operations,
+)
 from trade_plan_monitor.backtest.control import (
     BacktestOperationCancelled,
     BacktestProgress,
@@ -354,7 +357,7 @@ def test_blocking_job_keeps_event_loop_responsive_and_heartbeats_on_one_owned_th
         ]
         assert heartbeat_gaps and max(heartbeat_gaps) < 0.1
         assert not any(
-            thread.name.startswith("backtest-job-worker")
+            thread.name.startswith(("backtest-job-worker", "backtest-job-store"))
             for thread in __import__("threading").enumerate()
         )
         assert not any(
@@ -412,6 +415,152 @@ def test_shutdown_stops_claiming_cancels_active_work_and_joins_owned_resources(
     asyncio.run(scenario())
 
 
+def test_background_repository_failure_closes_both_owned_executors(tmp_path) -> None:
+    async def scenario() -> None:
+        repository = BacktestJobRepository(tmp_path / "failed-coordinator.sqlite3")
+
+        def fail_recovery():
+            raise RuntimeError("db failed")
+
+        repository.recover_expired = fail_recovery  # type: ignore[method-assign]
+        coordinator = BacktestJobCoordinator(
+            repository=repository,
+            operations=_BlockingOperations(),
+            poll_interval_seconds=0.01,
+            shutdown_timeout_seconds=1.0,
+        )
+
+        await coordinator.start()
+        await _wait_until(lambda: coordinator._task is not None and coordinator._task.done())
+        with pytest.raises(RuntimeError, match="coordinator failed") as failed:
+            coordinator.raise_if_failed()
+        assert isinstance(failed.value.__cause__, RuntimeError)
+        with pytest.raises(RuntimeError, match="db failed"):
+            await coordinator.shutdown()
+
+        assert not any(
+            thread.name.startswith(("backtest-job-worker", "backtest-job-store"))
+            for thread in __import__("threading").enumerate()
+        )
+
+    asyncio.run(scenario())
+
+
+def test_active_repository_failure_cancels_operation_before_bounded_shutdown(
+    tmp_path,
+) -> None:
+    async def scenario() -> None:
+        repository = BacktestJobRepository(tmp_path / "active-failure.sqlite3")
+        repository.submit(_sync_request(), "active-failure", request_id="9" * 32)
+        original_get = repository.get
+        get_failed = Event()
+
+        def fail_active_get(job_id: str):
+            get_failed.set()
+            raise RuntimeError("active db failed")
+
+        repository.get = fail_active_get  # type: ignore[method-assign]
+        operations = _BlockingOperations(stop_on_cancel=True)
+        coordinator = BacktestJobCoordinator(
+            repository=repository,
+            operations=operations,
+            poll_interval_seconds=0.01,
+            heartbeat_interval_seconds=0.01,
+            shutdown_timeout_seconds=0.15,
+        )
+
+        await coordinator.start()
+        await _wait_until(operations.started.is_set)
+        await _wait_until(get_failed.is_set)
+
+        def release_if_not_cancelled() -> None:
+            if not operations.cancel_seen.wait(0.3):
+                operations.release.set()
+
+        releaser = Thread(
+            target=release_if_not_cancelled,
+            name="active-failure-test-releaser",
+        )
+        releaser.start()
+        started_at = monotonic()
+        try:
+            with pytest.raises(RuntimeError, match="active db failed"):
+                await coordinator.shutdown()
+        finally:
+            repository.get = original_get  # type: ignore[method-assign]
+            operations.release.set()
+            releaser.join(timeout=1.0)
+        elapsed = monotonic() - started_at
+
+        assert elapsed < 0.15
+        assert operations.cancel_seen.is_set()
+        assert not releaser.is_alive()
+        assert not any(
+            thread.name.startswith(("backtest-job-worker", "backtest-job-store"))
+            for thread in __import__("threading").enumerate()
+        )
+
+    asyncio.run(scenario())
+
+
+def test_active_repository_failure_cannot_bypass_shutdown_timeout(tmp_path) -> None:
+    async def scenario() -> None:
+        repository = BacktestJobRepository(tmp_path / "active-timeout.sqlite3")
+        repository.submit(_sync_request(), "active-timeout", request_id="8" * 32)
+        get_failed = Event()
+
+        def fail_active_get(_job_id: str):
+            get_failed.set()
+            raise RuntimeError("active timeout db failed")
+
+        repository.get = fail_active_get  # type: ignore[method-assign]
+        operations = _BlockingOperations(stop_on_cancel=False)
+        coordinator = BacktestJobCoordinator(
+            repository=repository,
+            operations=operations,
+            poll_interval_seconds=0.01,
+            heartbeat_interval_seconds=0.01,
+            shutdown_timeout_seconds=0.05,
+        )
+
+        await coordinator.start()
+        await _wait_until(operations.started.is_set)
+        await _wait_until(get_failed.is_set)
+
+        def release_if_shutdown_regresses() -> None:
+            operations.release.wait(0.3)
+            operations.release.set()
+
+        releaser = Thread(
+            target=release_if_shutdown_regresses,
+            name="active-timeout-test-releaser",
+        )
+        releaser.start()
+        started_at = monotonic()
+        try:
+            with pytest.raises(RuntimeError, match="shutdown safe boundary") as failed:
+                await coordinator.shutdown()
+        finally:
+            operations.release.set()
+            releaser.join(timeout=1.0)
+        elapsed = monotonic() - started_at
+
+        assert isinstance(failed.value.__cause__, TimeoutError)
+        assert elapsed < 0.15
+        assert operations.cancel_seen.is_set()
+        assert not releaser.is_alive()
+        await _wait_until(
+            lambda: (
+                not any(
+                    thread.name.startswith(("backtest-job-worker", "backtest-job-store"))
+                    for thread in __import__("threading").enumerate()
+                )
+            )
+        )
+
+    asyncio.run(scenario())
+
+
 def test_local_job_composition_binds_transport_sqlite_and_shutdown_to_one_policy(
     tmp_path,
     monkeypatch,
@@ -460,10 +609,11 @@ def test_local_job_composition_binds_transport_sqlite_and_shutdown_to_one_policy
         results_database=tmp_path / "bounded-results.sqlite3",
     )
 
-    result = use_cases._sync(
-        _sync_request(),
-        cancellation_token=CancellationToken(),
-        progress_callback=lambda _progress: None,
+    result = asyncio.run(
+        use_cases.execute(
+            _sync_request(),
+            request_id="8" * 32,
+        )
     )
 
     assert result.network_calls == 1
@@ -473,6 +623,81 @@ def test_local_job_composition_binds_transport_sqlite_and_shutdown_to_one_policy
     assert use_cases._results._busy_timeout_ms == 2_000
     assert use_cases._shutdown_policy.cancellation_safe_boundary_seconds == 4.5
     assert use_cases._shutdown_policy.shutdown_timeout_seconds == 5.0
+
+
+def test_public_operation_factory_is_lazy_and_uses_explicit_stores(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "lazy-app.yaml"
+    captured_timeouts: list[int] = []
+
+    def capture_client(configuration):
+        captured_timeouts.append(configuration.timeout_seconds)
+        return object()
+
+    class ClosedDayProvider:
+        def trading_calendar(self, exchange: str, start: date, end: date):
+            assert (exchange, start, end) == ("SSE", _TRADE_DATE, _TRADE_DATE)
+            return (
+                TradingDay(
+                    exchange="SSE",
+                    cal_date=_TRADE_DATE,
+                    is_open=False,
+                    previous_trade_date=date(2026, 8, 21),
+                ),
+            )
+
+        def historical_minute_batch(self, *_args):
+            raise AssertionError("closed day must not request minutes")
+
+        def daily_limits(self, *_args):
+            raise AssertionError("closed day must not request limits")
+
+        def daily_bars(self, *_args):
+            raise AssertionError("closed day must not request daily bars")
+
+    monkeypatch.setattr(backtest_application, "create_tushare_client", capture_client)
+    monkeypatch.setattr(
+        backtest_application,
+        "TushareHistoricalMinuteProvider",
+        lambda *_args, **_kwargs: ClosedDayProvider(),
+    )
+    market_store = BacktestMarketStore(tmp_path / "factory-market.sqlite3")
+    result_store = BacktestResultStore(tmp_path / "factory-results.sqlite3")
+
+    operations = create_backtest_job_operations(
+        config_path=config_path,
+        market_store=market_store,
+        result_store=result_store,
+    )
+
+    assert isinstance(operations, BacktestJobOperations)
+    assert captured_timeouts == []
+    config_path.write_text(
+        "tushare:\n  api_url: https://api.quicksync.cn\n  timeout_seconds: 30\n",
+        encoding="utf-8",
+    )
+    repository = BacktestJobRepository(tmp_path / "factory-jobs.sqlite3")
+    repository.submit(_sync_request(), "factory", request_id="7" * 32)
+    claim = repository.claim_next()
+    assert claim is not None
+
+    result = operations.execute(
+        claim,
+        cancellation_token=CancellationToken(),
+        progress_callback=lambda _progress: None,
+    )
+
+    assert isinstance(result, BacktestDataSyncJobResult)
+    assert result.network_calls == 1
+    assert captured_timeouts == [2]
+    assert market_store.current_trading_day("SSE", _TRADE_DATE) == TradingDay(
+        exchange="SSE",
+        cal_date=_TRADE_DATE,
+        is_open=False,
+        previous_trade_date=date(2026, 8, 21),
+    )
 
 
 def test_atomic_completion_gives_cancellation_first_one_terminal_and_no_partial_result(

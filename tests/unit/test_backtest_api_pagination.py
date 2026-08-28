@@ -336,6 +336,35 @@ def test_status_filtered_job_cursor_binds_membership_revision_and_detects_drift(
     assert str(captured.value) == ApiErrorCode.CONFLICT.value
 
 
+def test_dataset_hash_filtered_job_cursor_also_detects_mutable_membership_drift() -> None:
+    signer = BacktestApiCursorSigner(_KEY)
+    filters = {
+        "kind": None,
+        "status": None,
+        "runId": None,
+        "datasetHash": "a" * 64,
+        "createdFrom": None,
+        "createdTo": None,
+    }
+    token = signer.encode(
+        route="/backtest-jobs",
+        filters=filters,
+        order="createdAt DESC,jobId DESC",
+        high_water=("2026-08-28T10:00:00.000000+08:00", "job-2"),
+        last_seen=("2026-08-28T09:00:00.000000+08:00", "job-1"),
+        membership_revision=7,
+    )
+
+    with pytest.raises(BacktestMembershipConflictError):
+        signer.decode(
+            token,
+            route="/backtest-jobs",
+            filters=filters,
+            order="createdAt DESC,jobId DESC",
+            current_membership_revision=8,
+        )
+
+
 def test_unfiltered_job_cursor_ignores_heartbeat_progress_and_status_revision_changes() -> None:
     signer = BacktestApiCursorSigner(_KEY)
     filters = {

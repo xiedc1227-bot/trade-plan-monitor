@@ -7,6 +7,7 @@ import re
 import sqlite3
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
@@ -62,17 +63,20 @@ from trade_plan_monitor.backtest.time import (
 
 _REQUEST_HASH_DOMAIN = b"backtest-job-request-v1\0"
 _OPERATION_HASH_DOMAIN = b"backtest-job-operation-v1\0"
+_RUN_INTENT_HASH_DOMAIN = b"backtest-run-public-intent-v1\0"
 _RUN_INPUT_HASH_DOMAIN = b"backtest-run-input-record-v1\0"
 _CANCEL_HASH_DOMAIN = b"backtest-job-cancel-v1\0"
 _IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _REQUEST_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 _CLAIM_TOKEN_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _ERROR_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,127}$")
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _ACTIVE_STATUSES = (
     BacktestJobStatus.QUEUED.value,
     BacktestJobStatus.RUNNING.value,
     BacktestJobStatus.CANCEL_REQUESTED.value,
 )
+_RUN_RESERVATION_SECONDS = 30
 _JOB_COLUMNS = """
     job_id, kind, status, request_hash, run_id, dataset_hash,
     phase, progress_unit, completed_units, total_units,
@@ -84,6 +88,39 @@ _CLAIM_COLUMNS = """
     job_id, kind, request_json, run_id, dataset_hash,
     attempt, revision, claim_token, heartbeat_at, lease_expires_at
 """
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestJobSubmissionBinding:
+    """One durable SUBMIT request and its original canonical receipt."""
+
+    canonical_request_json: str
+    receipt: BacktestJobReceipt
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestRunSubmissionReservation:
+    """One durable owner claim for resolving a public run intent exactly once."""
+
+    idempotency_key: str
+    intent_hash: str
+    claimed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestJobCancellationBinding:
+    """One cancellation receipt and its original canonical job response."""
+
+    receipt: BacktestJobCancellationReceipt
+    job: BacktestJobView
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestJobQueryResult:
+    """One bounded keyset read and its transaction-consistent membership revision."""
+
+    items: tuple[BacktestJobView, ...]
+    membership_revision: int
 
 
 class JobAdmissionError(RuntimeError):
@@ -178,6 +215,40 @@ class BacktestJobRepository:
     ) -> BacktestJobReceipt:
         """Atomically replay, deduplicate, reuse, or admit one durable operation."""
 
+        return self._submit(
+            request,
+            idempotency_key,
+            request_id=request_id,
+            reservation=None,
+        )
+
+    def finalize_run_submission(
+        self,
+        request: BacktestRunJobRequest,
+        reservation: BacktestRunSubmissionReservation,
+    ) -> BacktestJobReceipt:
+        """Admit one resolved run only while its durable public-intent claim is owned."""
+
+        if not isinstance(request, BacktestRunJobRequest):
+            raise TypeError("request must be a BacktestRunJobRequest")
+        if not isinstance(reservation, BacktestRunSubmissionReservation):
+            raise TypeError("reservation must be a BacktestRunSubmissionReservation")
+        return self._submit(
+            request,
+            reservation.idempotency_key,
+            request_id=None,
+            reservation=reservation,
+        )
+
+    def _submit(
+        self,
+        request: BacktestJobRequest,
+        idempotency_key: str,
+        *,
+        request_id: str | None,
+        reservation: BacktestRunSubmissionReservation | None,
+    ) -> BacktestJobReceipt:
+
         if not isinstance(
             request,
             (DataSyncJobRequest, DatasetVerifyJobRequest, BacktestRunJobRequest),
@@ -199,13 +270,25 @@ class BacktestJobRepository:
 
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            replay = self._claim_or_replay_idempotency(
-                connection,
-                idempotency_key=normalized_key,
-                request_hash=request_hash,
-                now=now,
-                created_at=now_text,
-            )
+            if reservation is None:
+                binding_request_hash = request_hash
+                replay = self._claim_or_replay_idempotency(
+                    connection,
+                    idempotency_key=normalized_key,
+                    request_hash=binding_request_hash,
+                    now=now,
+                    created_at=now_text,
+                )
+            else:
+                if normalized_key != reservation.idempotency_key:
+                    raise ValueError("reservation idempotency key does not match")
+                binding_request_hash = reservation.intent_hash
+                self._require_run_submission_reservation(
+                    connection,
+                    reservation=reservation,
+                    now=now,
+                )
+                replay = None
             if replay is not None:
                 connection.commit()
                 return replay
@@ -227,7 +310,7 @@ class BacktestJobRepository:
                 self._bind_idempotency_response(
                     connection,
                     idempotency_key=normalized_key,
-                    request_hash=request_hash,
+                    request_hash=binding_request_hash,
                     receipt=receipt,
                     created_at=now_text,
                     expires_at=None,
@@ -249,7 +332,6 @@ class BacktestJobRepository:
                 if queued >= MAX_QUEUED_JOBS:
                     raise JobAdmissionError("QUEUE_FULL")
 
-            job_id = uuid4().hex
             reused = reused_result is not None
             status = BacktestJobStatus.COMPLETED if reused else BacktestJobStatus.QUEUED
             phase = BacktestJobPhase.TERMINAL if reused else BacktestJobPhase.QUEUED
@@ -265,7 +347,9 @@ class BacktestJobRepository:
                 else None
             )
             finished_at = now_text if reused else None
+            _require_non_decreasing_job_clock(connection, now)
             membership_revision = _next_membership_revision(connection)
+            job_id = _admission_job_id(membership_revision)
             connection.execute(
                 """
                 INSERT INTO backtest_job (
@@ -322,7 +406,7 @@ class BacktestJobRepository:
             self._bind_idempotency_response(
                 connection,
                 idempotency_key=normalized_key,
-                request_hash=request_hash,
+                request_hash=binding_request_hash,
                 receipt=receipt,
                 created_at=now_text,
                 expires_at=expires_at,
@@ -338,6 +422,288 @@ class BacktestJobRepository:
                 (normalized_job_id,),
             ).fetchone()
         return None if row is None else _view_from_row(row)
+
+    def get_submission_binding(
+        self,
+        idempotency_key: str,
+    ) -> BacktestJobSubmissionBinding | None:
+        """Read a live SUBMIT binding without consulting mutable live-plan state."""
+
+        normalized_key = _validate_idempotency_key(idempotency_key)
+        now = self._now()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT binding.operation, binding.job_id, binding.response_json,
+                       binding.expires_at, job.request_json
+                FROM backtest_job_idempotency AS binding
+                LEFT JOIN backtest_job AS job ON job.job_id = binding.job_id
+                WHERE binding.idempotency_key = ?
+                """,
+                (normalized_key,),
+            ).fetchone()
+            if row is None:
+                connection.commit()
+                return None
+            expires_at = None if row[3] is None else parse_shanghai_datetime(str(row[3]))
+            if expires_at is not None and now > expires_at:
+                connection.execute(
+                    "DELETE FROM backtest_job_idempotency WHERE idempotency_key = ?",
+                    (normalized_key,),
+                )
+                connection.commit()
+                return None
+            if str(row[0]) != "SUBMIT":
+                raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
+            if row[1] is None or row[2] is None or row[4] is None:
+                raise RuntimeError("committed submission binding is incomplete")
+            binding = _submission_binding(
+                job_id=str(row[1]),
+                response_json=str(row[2]),
+                request_json=str(row[4]),
+            )
+            connection.commit()
+        return binding
+
+    def claim_run_submission(
+        self,
+        canonical_intent_json: str,
+        idempotency_key: str,
+    ) -> BacktestRunSubmissionReservation | BacktestJobSubmissionBinding | None:
+        """Atomically claim, replay, or observe one in-flight public run intent."""
+
+        normalized_intent_json = _validate_canonical_run_intent(canonical_intent_json)
+        normalized_key = _validate_idempotency_key(idempotency_key)
+        intent_hash = sha256(
+            _RUN_INTENT_HASH_DOMAIN + normalized_intent_json.encode("utf-8")
+        ).hexdigest()
+        now = self._now()
+        claimed_at = now
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT binding.operation, binding.request_hash, binding.job_id,
+                       binding.response_json, binding.created_at, binding.expires_at,
+                       job.request_json
+                FROM backtest_job_idempotency AS binding
+                LEFT JOIN backtest_job AS job ON job.job_id = binding.job_id
+                WHERE binding.idempotency_key = ?
+                """,
+                (normalized_key,),
+            ).fetchone()
+            if (
+                row is not None
+                and row[5] is not None
+                and (row[2] is not None or row[3] is not None)
+            ):
+                expires_at = parse_shanghai_datetime(str(row[5]))
+                if now >= expires_at:
+                    previous_claimed_at = parse_shanghai_datetime(str(row[4]))
+                    connection.execute(
+                        "DELETE FROM backtest_job_idempotency WHERE idempotency_key = ?",
+                        (normalized_key,),
+                    )
+                    row = None
+                    if claimed_at <= previous_claimed_at:
+                        claimed_at = previous_claimed_at + timedelta(microseconds=1)
+            if row is None:
+                claimed_at_text = format_shanghai_datetime(claimed_at)
+                expires_at_text = format_shanghai_datetime(
+                    claimed_at + timedelta(seconds=_RUN_RESERVATION_SECONDS)
+                )
+                connection.execute(
+                    """
+                    INSERT INTO backtest_job_idempotency (
+                        idempotency_key, operation, request_hash, job_id,
+                        response_json, created_at, expires_at
+                    ) VALUES (?, 'SUBMIT', ?, NULL, NULL, ?, ?)
+                    """,
+                    (
+                        normalized_key,
+                        intent_hash,
+                        claimed_at_text,
+                        expires_at_text,
+                    ),
+                )
+                connection.commit()
+                return BacktestRunSubmissionReservation(
+                    idempotency_key=normalized_key,
+                    intent_hash=intent_hash,
+                    claimed_at=claimed_at,
+                )
+            if str(row[0]) != "SUBMIT":
+                raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
+            if row[2] is not None or row[3] is not None:
+                if row[2] is None or row[3] is None or row[6] is None:
+                    raise RuntimeError("committed submission binding is incomplete")
+                binding = _submission_binding(
+                    job_id=str(row[2]),
+                    response_json=str(row[3]),
+                    request_json=str(row[6]),
+                )
+                connection.commit()
+                return binding
+            if str(row[1]) != intent_hash:
+                raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
+            connection.commit()
+            return None
+
+    def renew_run_submission(
+        self,
+        reservation: BacktestRunSubmissionReservation,
+    ) -> bool:
+        """Extend only the caller-owned unresolved plan-snapshot reservation."""
+
+        if not isinstance(reservation, BacktestRunSubmissionReservation):
+            raise TypeError("reservation must be a BacktestRunSubmissionReservation")
+        now = self._now()
+        now_text = format_shanghai_datetime(now)
+        expires_at = format_shanghai_datetime(now + timedelta(seconds=_RUN_RESERVATION_SECONDS))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            updated = connection.execute(
+                """
+                UPDATE backtest_job_idempotency
+                SET expires_at = ?
+                WHERE idempotency_key = ? AND operation = 'SUBMIT'
+                  AND request_hash = ? AND created_at = ?
+                  AND job_id IS NULL AND response_json IS NULL
+                  AND expires_at > ?
+                """,
+                (
+                    expires_at,
+                    reservation.idempotency_key,
+                    reservation.intent_hash,
+                    format_shanghai_datetime(reservation.claimed_at),
+                    now_text,
+                ),
+            )
+            connection.commit()
+        return updated.rowcount == 1
+
+    def release_run_submission(
+        self,
+        reservation: BacktestRunSubmissionReservation,
+    ) -> bool:
+        """Release only the still-unresolved public run intent owned by the caller."""
+
+        if not isinstance(reservation, BacktestRunSubmissionReservation):
+            raise TypeError("reservation must be a BacktestRunSubmissionReservation")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            deleted = connection.execute(
+                """
+                DELETE FROM backtest_job_idempotency
+                WHERE idempotency_key = ? AND operation = 'SUBMIT'
+                  AND request_hash = ? AND created_at = ?
+                  AND job_id IS NULL AND response_json IS NULL
+                """,
+                (
+                    reservation.idempotency_key,
+                    reservation.intent_hash,
+                    format_shanghai_datetime(reservation.claimed_at),
+                ),
+            )
+            connection.commit()
+        return deleted.rowcount == 1
+
+    def query_jobs(
+        self,
+        *,
+        kinds: tuple[BacktestJobKind, ...] = (),
+        statuses: tuple[BacktestJobStatus, ...] = (),
+        run_id: str | None = None,
+        dataset_hash: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+        high_water: tuple[datetime, str] | None = None,
+        after: tuple[datetime, str] | None = None,
+        limit: int = 101,
+    ) -> BacktestJobQueryResult:
+        """Read a descending, insertion-fenced job keyset page of at most 101 rows."""
+
+        normalized_kinds = _validate_enum_filter(kinds, BacktestJobKind, "kinds")
+        normalized_statuses = _validate_enum_filter(statuses, BacktestJobStatus, "statuses")
+        normalized_run_id = _validate_optional_sha256(run_id, "run_id")
+        normalized_dataset_hash = _validate_optional_sha256(dataset_hash, "dataset_hash")
+        normalized_created_from = _validate_optional_query_time(created_from, "created_from")
+        normalized_created_to = _validate_optional_query_time(created_to, "created_to")
+        if (
+            normalized_created_from is not None
+            and normalized_created_to is not None
+            and normalized_created_from > normalized_created_to
+        ):
+            raise ValueError("created_from must not follow created_to")
+        normalized_high_water = _validate_optional_job_position(high_water, "high_water")
+        normalized_after = _validate_optional_job_position(after, "after")
+        if (
+            normalized_high_water is not None
+            and normalized_after is not None
+            and normalized_after > normalized_high_water
+        ):
+            raise ValueError("after must not be newer than high_water")
+        if type(limit) is not int or not 1 <= limit <= 101:
+            raise ValueError("limit must be between 1 and 101")
+
+        clauses: list[str] = []
+        parameters: list[object] = []
+        if normalized_kinds:
+            placeholders = ", ".join("?" for _ in normalized_kinds)
+            clauses.append(f"kind IN ({placeholders})")
+            parameters.extend(value.value for value in normalized_kinds)
+        if normalized_statuses:
+            placeholders = ", ".join("?" for _ in normalized_statuses)
+            clauses.append(f"status IN ({placeholders})")
+            parameters.extend(value.value for value in normalized_statuses)
+        if normalized_run_id is not None:
+            clauses.append("run_id = ?")
+            parameters.append(normalized_run_id)
+        if normalized_dataset_hash is not None:
+            clauses.append("dataset_hash = ?")
+            parameters.append(normalized_dataset_hash)
+        if normalized_created_from is not None:
+            clauses.append("created_at >= ?")
+            parameters.append(format_shanghai_datetime(normalized_created_from))
+        if normalized_created_to is not None:
+            clauses.append("created_at <= ?")
+            parameters.append(format_shanghai_datetime(normalized_created_to))
+        if normalized_high_water is not None:
+            high_water_at = format_shanghai_datetime(normalized_high_water[0])
+            clauses.append("(created_at < ? OR (created_at = ? AND job_id <= ?))")
+            parameters.extend((high_water_at, high_water_at, normalized_high_water[1]))
+        if normalized_after is not None:
+            after_at = format_shanghai_datetime(normalized_after[0])
+            clauses.append("(created_at < ? OR (created_at = ? AND job_id < ?))")
+            parameters.extend((after_at, after_at, normalized_after[1]))
+        where = "" if not clauses else " WHERE " + " AND ".join(clauses)
+        parameters.append(limit)
+
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            membership_revision = _current_membership_revision(connection)
+            rows = connection.execute(
+                f"""
+                SELECT {_JOB_COLUMNS} FROM backtest_job{where}
+                ORDER BY created_at DESC, job_id DESC LIMIT ?
+                """,
+                tuple(parameters),
+            ).fetchall()
+            connection.commit()
+        return BacktestJobQueryResult(
+            items=tuple(_view_from_row(row) for row in rows),
+            membership_revision=membership_revision,
+        )
+
+    def current_membership_revision(self) -> int:
+        """Return the current global status-filtered job-membership revision."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            revision = _current_membership_revision(connection)
+            connection.commit()
+        return revision
 
     def list_jobs(
         self,
@@ -664,20 +1030,49 @@ class BacktestJobRepository:
         normalized_as_of = parse_shanghai_datetime(format_shanghai_datetime(as_of))
         if type(remaining_budget) is not int or not 0 <= remaining_budget <= 1_000:
             raise ValueError("remaining_budget must be between 0 and 1000")
+        as_of_text = format_shanghai_datetime(normalized_as_of)
         cutoff = format_shanghai_datetime(normalized_as_of - timedelta(days=JOB_IDEMPOTENCY_DAYS))
         if remaining_budget == 0:
             has_more = (
                 connection.execute(
                     """
+                    SELECT 1 FROM backtest_job_idempotency
+                    WHERE operation = 'SUBMIT' AND job_id IS NULL
+                      AND response_json IS NULL AND expires_at <= ?
+                    UNION ALL
                     SELECT 1 FROM backtest_job
                     WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
-                      AND finished_at < ? LIMIT 1
+                      AND finished_at < ?
+                    LIMIT 1
                     """,
-                    (cutoff,),
+                    (as_of_text, cutoff),
                 ).fetchone()
                 is not None
             )
             return RetentionPruneResult(deleted_count=0, has_more=has_more)
+        reservation_keys = tuple(
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT idempotency_key FROM backtest_job_idempotency
+                WHERE operation = 'SUBMIT' AND job_id IS NULL
+                  AND response_json IS NULL AND expires_at <= ?
+                ORDER BY expires_at, idempotency_key LIMIT ?
+                """,
+                (as_of_text, remaining_budget),
+            ).fetchall()
+        )
+        deleted_count = 0
+        for idempotency_key in reservation_keys:
+            deleted_count += connection.execute(
+                """
+                DELETE FROM backtest_job_idempotency
+                WHERE idempotency_key = ? AND operation = 'SUBMIT'
+                  AND job_id IS NULL AND response_json IS NULL AND expires_at <= ?
+                """,
+                (idempotency_key, as_of_text),
+            ).rowcount
+        remaining_budget -= deleted_count
         job_ids = tuple(
             str(row[0])
             for row in connection.execute(
@@ -690,7 +1085,6 @@ class BacktestJobRepository:
                 (cutoff, remaining_budget),
             ).fetchall()
         )
-        deleted_count = 0
         for job_id in job_ids:
             connection.execute(
                 "DELETE FROM backtest_job_idempotency WHERE job_id = ?",
@@ -708,11 +1102,16 @@ class BacktestJobRepository:
         has_more = (
             connection.execute(
                 """
+                SELECT 1 FROM backtest_job_idempotency
+                WHERE operation = 'SUBMIT' AND job_id IS NULL
+                  AND response_json IS NULL AND expires_at <= ?
+                UNION ALL
                 SELECT 1 FROM backtest_job
                 WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
-                  AND finished_at < ? LIMIT 1
+                  AND finished_at < ?
+                LIMIT 1
                 """,
-                (cutoff,),
+                (as_of_text, cutoff),
             ).fetchone()
             is not None
         )
@@ -771,6 +1170,15 @@ class BacktestJobRepository:
         idempotency_key: str,
     ) -> BacktestJobCancellationReceipt:
         """Atomically request cancellation and retain its canonical response."""
+
+        return self.request_cancel_with_view(job_id, idempotency_key).receipt
+
+    def request_cancel_with_view(
+        self,
+        job_id: str,
+        idempotency_key: str,
+    ) -> BacktestJobCancellationBinding:
+        """Atomically cancel and replay the exact original public job snapshot."""
 
         normalized_job_id = _validate_job_id(job_id)
         normalized_key = _validate_idempotency_key(idempotency_key)
@@ -854,6 +1262,16 @@ class BacktestJobRepository:
                 revision=revision,
                 responded_at=now,
             )
+            view_row = connection.execute(
+                f"SELECT {_JOB_COLUMNS} FROM backtest_job WHERE job_id = ?",
+                (normalized_job_id,),
+            ).fetchone()
+            if view_row is None:
+                raise RuntimeError("cancelled backtest job disappeared")
+            binding = BacktestJobCancellationBinding(
+                receipt=receipt,
+                job=_view_from_row(view_row),
+            )
             expires_at = (
                 None
                 if finished_at is None
@@ -864,14 +1282,14 @@ class BacktestJobRepository:
                 idempotency_key=normalized_key,
                 request_hash=request_hash,
                 job_id=normalized_job_id,
-                receipt=receipt,
+                binding=binding,
                 created_at=now_text,
                 expires_at=expires_at,
             )
             if expires_at is not None:
                 _expire_job_idempotency(connection, normalized_job_id, expires_at)
             connection.commit()
-            return receipt
+            return binding
 
     def acknowledge_cancel(self, job_id: str, claim_token: str) -> bool:
         """Let only the current unexpired worker acknowledge cancellation."""
@@ -1060,7 +1478,7 @@ class BacktestJobRepository:
         request_hash: str,
         now: datetime,
         created_at: str,
-    ) -> BacktestJobCancellationReceipt | None:
+    ) -> BacktestJobCancellationBinding | None:
         claimed = connection.execute(
             """
             INSERT INTO backtest_job_idempotency (
@@ -1075,7 +1493,7 @@ class BacktestJobRepository:
             return None
         row = connection.execute(
             """
-            SELECT operation, request_hash, response_json, expires_at
+            SELECT operation, request_hash, response_json, expires_at, job_id
             FROM backtest_job_idempotency WHERE idempotency_key = ?
             """,
             (idempotency_key,),
@@ -1099,7 +1517,11 @@ class BacktestJobRepository:
             raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
         if row[2] is None:
             raise RuntimeError("committed cancellation claim is missing its canonical response")
-        return BacktestJobCancellationReceipt.model_validate_json(str(row[2]))
+        return _cancellation_binding_from_json(
+            connection,
+            response_json=str(row[2]),
+            job_id=None if row[4] is None else str(row[4]),
+        )
 
     @staticmethod
     def _bind_cancellation_response(
@@ -1108,11 +1530,16 @@ class BacktestJobRepository:
         idempotency_key: str,
         request_hash: str,
         job_id: str,
-        receipt: BacktestJobCancellationReceipt,
+        binding: BacktestJobCancellationBinding,
         created_at: str,
         expires_at: str | None,
     ) -> None:
-        response_json = canonical_json(receipt.model_dump(mode="json", round_trip=True))
+        response_json = canonical_json(
+            {
+                "job": binding.job.model_dump(mode="json", round_trip=True),
+                "receipt": binding.receipt.model_dump(mode="json", round_trip=True),
+            }
+        )
         updated = connection.execute(
             """
             UPDATE backtest_job_idempotency
@@ -1180,6 +1607,33 @@ class BacktestJobRepository:
         if row[2] is None:
             raise RuntimeError("committed idempotency claim is missing its canonical response")
         return BacktestJobReceipt.model_validate_json(str(row[2]))
+
+    @staticmethod
+    def _require_run_submission_reservation(
+        connection: sqlite3.Connection,
+        *,
+        reservation: BacktestRunSubmissionReservation,
+        now: datetime,
+    ) -> None:
+        row = connection.execute(
+            """
+            SELECT operation, request_hash, created_at, expires_at, job_id, response_json
+            FROM backtest_job_idempotency WHERE idempotency_key = ?
+            """,
+            (reservation.idempotency_key,),
+        ).fetchone()
+        if row is None:
+            raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
+        if (
+            str(row[0]) != "SUBMIT"
+            or str(row[1]) != reservation.intent_hash
+            or str(row[2]) != format_shanghai_datetime(reservation.claimed_at)
+            or row[3] is None
+            or now >= parse_shanghai_datetime(str(row[3]))
+            or row[4] is not None
+            or row[5] is not None
+        ):
+            raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
 
     @staticmethod
     def _bind_idempotency_response(
@@ -1252,6 +1706,43 @@ def _validate_idempotency_key(value: str) -> str:
     return value
 
 
+def _validate_canonical_run_intent(value: str) -> str:
+    if type(value) is not str or not value:
+        raise ValueError("canonical_intent_json must be a non-empty string")
+    if len(value.encode("utf-8")) > MAX_JOB_REQUEST_BYTES:
+        raise ValueError("canonical run intent exceeds 256 KiB")
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise ValueError("canonical_intent_json must contain valid JSON") from error
+    if type(payload) is not dict or canonical_json(payload) != value:
+        raise ValueError("canonical_intent_json must be one canonical JSON object")
+    return value
+
+
+def _submission_binding(
+    *,
+    job_id: str,
+    response_json: str,
+    request_json: str,
+) -> BacktestJobSubmissionBinding:
+    receipt = BacktestJobReceipt.model_validate_json(response_json)
+    if receipt.job_id != job_id:
+        raise RuntimeError("submission binding receipt identity is inconsistent")
+    if canonical_json(receipt.model_dump(mode="json", round_trip=True)) != response_json:
+        raise RuntimeError("submission binding receipt is not canonical JSON")
+    try:
+        request_payload = json.loads(request_json)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("persisted job request is not valid JSON") from error
+    if canonical_json(request_payload) != request_json:
+        raise RuntimeError("persisted job request is not canonical JSON")
+    return BacktestJobSubmissionBinding(
+        canonical_request_json=request_json,
+        receipt=receipt,
+    )
+
+
 def _validate_request_id(value: str | None) -> str:
     if type(value) is not str or _REQUEST_ID_PATTERN.fullmatch(value) is None:
         raise ValueError("request_id must be 32 lowercase hexadecimal characters")
@@ -1268,6 +1759,49 @@ def _validate_job_id(value: str) -> str:
     if type(value) is not str or _IDEMPOTENCY_KEY_PATTERN.fullmatch(value) is None:
         raise ValueError("job_id must contain 1..128 allowlisted characters")
     return value
+
+
+def _validate_enum_filter[EnumType](
+    values: tuple[EnumType, ...],
+    enum_type: type[EnumType],
+    name: str,
+) -> tuple[EnumType, ...]:
+    if type(values) is not tuple or any(not isinstance(value, enum_type) for value in values):
+        raise TypeError(f"{name} must be a tuple of {enum_type.__name__} values")
+    return tuple(dict.fromkeys(values))
+
+
+def _validate_optional_sha256(value: str | None, name: str) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str or _SHA256_PATTERN.fullmatch(value) is None:
+        raise ValueError(f"{name} must be a lowercase SHA-256 hex value or None")
+    return value
+
+
+def _validate_optional_query_time(value: datetime | None, name: str) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, datetime):
+        raise TypeError(f"{name} must be a datetime or None")
+    try:
+        return parse_shanghai_datetime(format_shanghai_datetime(value))
+    except ValueError as error:
+        raise ValueError(f"{name} must use Shanghai/+08:00 time") from error
+
+
+def _validate_optional_job_position(
+    value: tuple[datetime, str] | None,
+    name: str,
+) -> tuple[datetime, str] | None:
+    if value is None:
+        return None
+    if type(value) is not tuple or len(value) != 2:
+        raise TypeError(f"{name} must be a (datetime, job_id) tuple or None")
+    timestamp = _validate_optional_query_time(value[0], f"{name} timestamp")
+    if timestamp is None:  # pragma: no cover - impossible for a two-item position
+        raise TypeError(f"{name} timestamp must be a datetime")
+    return timestamp, _validate_job_id(value[1])
 
 
 def _validate_sanitized_error(error_code: str, error_message: str) -> tuple[str, str]:
@@ -1359,12 +1893,36 @@ def _next_membership_revision(connection: sqlite3.Connection) -> int:
         "UPDATE backtest_job_state SET membership_revision = membership_revision + 1 "
         "WHERE state_key = 'GLOBAL'"
     )
+    return _current_membership_revision(connection)
+
+
+def _require_non_decreasing_job_clock(
+    connection: sqlite3.Connection,
+    now: datetime,
+) -> None:
+    row = connection.execute(
+        "SELECT created_at FROM backtest_job ORDER BY created_at DESC, job_id DESC LIMIT 1"
+    ).fetchone()
+    if row is not None and now < parse_shanghai_datetime(str(row[0])):
+        raise RuntimeError("backtest job clock moved backwards")
+
+
+def _admission_job_id(membership_revision: int) -> str:
+    if not 0 < membership_revision <= 9_223_372_036_854_775_807:
+        raise RuntimeError("backtest job admission sequence is invalid")
+    return f"z{membership_revision:016x}{uuid4().hex[:16]}"
+
+
+def _current_membership_revision(connection: sqlite3.Connection) -> int:
     row = connection.execute(
         "SELECT membership_revision FROM backtest_job_state WHERE state_key = 'GLOBAL'"
     ).fetchone()
     if row is None:
         raise RuntimeError("backtest job state singleton is missing")
-    return int(row[0])
+    revision = int(row[0])
+    if revision < 0:
+        raise RuntimeError("backtest job membership revision is invalid")
+    return revision
 
 
 def _verified_materialized_run(
@@ -1483,4 +2041,36 @@ def _view_from_row(row: sqlite3.Row | tuple[object, ...]) -> BacktestJobView:
     )
 
 
-__all__ = ["BacktestJobRepository", "JobAdmissionError"]
+def _cancellation_binding_from_json(
+    connection: sqlite3.Connection,
+    *,
+    response_json: str,
+    job_id: str | None,
+) -> BacktestJobCancellationBinding:
+    payload = json.loads(response_json)
+    if isinstance(payload, dict) and set(payload) == {"job", "receipt"}:
+        return BacktestJobCancellationBinding(
+            receipt=BacktestJobCancellationReceipt.model_validate_json(
+                canonical_json(payload["receipt"])
+            ),
+            job=BacktestJobView.model_validate_json(canonical_json(payload["job"])),
+        )
+    receipt = BacktestJobCancellationReceipt.model_validate_json(response_json)
+    normalized_job_id = job_id or receipt.job_id
+    row = connection.execute(
+        f"SELECT {_JOB_COLUMNS} FROM backtest_job WHERE job_id = ?",
+        (normalized_job_id,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("legacy cancellation binding references a missing job")
+    return BacktestJobCancellationBinding(receipt=receipt, job=_view_from_row(row))
+
+
+__all__ = [
+    "BacktestJobCancellationBinding",
+    "BacktestJobQueryResult",
+    "BacktestJobRepository",
+    "BacktestJobSubmissionBinding",
+    "BacktestRunSubmissionReservation",
+    "JobAdmissionError",
+]

@@ -12,7 +12,11 @@ from typing import Final
 from fastapi import FastAPI, Request, Response
 
 from trade_plan_monitor.web.errors import install_error_boundary
-from trade_plan_monitor.web.lifespan import RuntimeLifecycleFactory, create_runtime_lifespan
+from trade_plan_monitor.web.lifespan import (
+    BacktestLifecycleFactory,
+    RuntimeLifecycleFactory,
+    create_runtime_lifespan,
+)
 from trade_plan_monitor.web.origin_guard import (
     DEFAULT_WEB_PORT,
     LOOPBACK_HOST,
@@ -25,6 +29,11 @@ from trade_plan_monitor.web.routers.ai import AIOperationService
 from trade_plan_monitor.web.routers.ai import router as ai_router
 from trade_plan_monitor.web.routers.alerts import AlertOperationService
 from trade_plan_monitor.web.routers.alerts import router as alerts_router
+from trade_plan_monitor.web.routers.backtest_data import router as backtest_data_router
+from trade_plan_monitor.web.routers.backtest_exports import router as backtest_exports_router
+from trade_plan_monitor.web.routers.backtest_jobs import router as backtest_jobs_router
+from trade_plan_monitor.web.routers.backtest_results import router as backtest_results_router
+from trade_plan_monitor.web.routers.backtest_runs import router as backtest_runs_router
 from trade_plan_monitor.web.routers.dashboard import MonitorReadService
 from trade_plan_monitor.web.routers.dashboard import router as dashboard_router
 from trade_plan_monitor.web.routers.health import router as health_router
@@ -126,6 +135,7 @@ def create_production_app(
     position_service: PositionOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
+    backtest_lifecycle_factory: BacktestLifecycleFactory | None = None,
     bind_host: str = LOOPBACK_HOST,
     bind_port: int = DEFAULT_WEB_PORT,
 ) -> Iterator[FastAPI]:
@@ -134,9 +144,19 @@ def create_production_app(
     if not isinstance(config_path, Path):
         raise TypeError("config_path must be a Path")
     lifecycle_factory = runtime_factory or _ReadOnlyPackagedLifecycle
+    if backtest_lifecycle_factory is None:
+        from trade_plan_monitor.backtest.composition import (
+            create_backtest_composition_factory,
+        )
+
+        backtest_lifecycle_factory = create_backtest_composition_factory(
+            config_path=config_path,
+            plan_snapshot_reader=plan_service,
+        )
     with installed_web_assets() as static_directory:
         yield create_app(
             runtime_factory=lifecycle_factory,
+            backtest_lifecycle_factory=backtest_lifecycle_factory,
             read_service=read_service,
             plan_service=plan_service,
             ai_service=ai_service,
@@ -158,11 +178,19 @@ def create_app(
     position_service: PositionOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
+    backtest_read_service: object | None = None,
+    backtest_operation_service: object | None = None,
+    backtest_lifecycle_factory: BacktestLifecycleFactory | None = None,
     bind_host: str = LOOPBACK_HOST,
     bind_port: int = DEFAULT_WEB_PORT,
     static_directory: Path | None = None,
 ) -> FastAPI:
     """Build the local API adapter without starting runtime or network work."""
+
+    if backtest_lifecycle_factory is not None and (
+        backtest_read_service is not None or backtest_operation_service is not None
+    ):
+        raise ValueError("backtest services and lifecycle factory are mutually exclusive")
 
     allowed_origin = local_http_origin(bind_host, bind_port)
     static_files = LocalSpaStaticFiles(static_directory) if static_directory is not None else None
@@ -172,6 +200,7 @@ def create_app(
         responses=_PUBLIC_ERROR_RESPONSES,
         lifespan=create_runtime_lifespan(
             runtime_factory,
+            backtest_lifecycle_factory=backtest_lifecycle_factory,
             bind_host=bind_host,
             bind_port=bind_port,
         ),
@@ -190,6 +219,10 @@ def create_app(
         app.state.alert_operation_service = alert_service
     if websocket_service is not None:
         app.state.monitor_websocket_service = websocket_service
+    if backtest_read_service is not None:
+        app.state.backtest_read_service = backtest_read_service
+    if backtest_operation_service is not None:
+        app.state.backtest_operation_service = backtest_operation_service
     app.include_router(dashboard_router)
     app.include_router(symbols_router)
     app.include_router(health_router)
@@ -198,6 +231,11 @@ def create_app(
     app.include_router(positions_router)
     app.include_router(alerts_router)
     app.include_router(websocket_router)
+    app.include_router(backtest_data_router)
+    app.include_router(backtest_jobs_router)
+    app.include_router(backtest_runs_router)
+    app.include_router(backtest_results_router)
+    app.include_router(backtest_exports_router)
     if static_files is not None:
 
         async def serve_static(request: Request) -> Response:

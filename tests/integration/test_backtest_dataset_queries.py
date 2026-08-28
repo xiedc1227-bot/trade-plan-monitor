@@ -198,6 +198,28 @@ def test_signed_keyset_traversal_is_stable_and_excludes_later_inserts(tmp_path) 
     assert len(first.high_watermark) <= 512
 
 
+def test_dataset_traversal_excludes_same_timestamp_rows_inserted_after_first_page(
+    tmp_path,
+) -> None:
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    created_at = "2026-08-27T02:00:00.000000+00:00"
+    initial = {
+        _insert_dataset(store, label="initial-a", created_at=created_at),
+        _insert_dataset(store, label="initial-b", created_at=created_at),
+    }
+    service = _service(store)
+
+    first = service.list_datasets(limit=1)
+    late = {
+        _insert_dataset(store, label=f"late-{index}", created_at=created_at) for index in range(10)
+    }
+    second = service.list_datasets(limit=100, cursor=first.next_cursor)
+
+    visited = {item.dataset_hash for item in (*first.items, *second.items)}
+    assert visited == initial
+    assert visited.isdisjoint(late)
+
+
 def test_dataset_filters_are_applied_and_bound_to_the_cursor(tmp_path) -> None:
     store = BacktestMarketStore(tmp_path / "market.sqlite3")
     _insert_dataset(

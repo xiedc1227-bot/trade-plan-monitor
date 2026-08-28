@@ -970,6 +970,3229 @@
         "title": "AuthoritativeDecisionView",
         "type": "object"
       },
+      "BacktestAssumptionsView": {
+        "additionalProperties": false,
+        "properties": {
+          "eventRiskAssumption": {
+            "enum": [
+              "NO_EVENT_RISK",
+              "MANUAL_EVENT_RISK"
+            ],
+            "title": "Eventriskassumption",
+            "type": "string"
+          },
+          "executionConfig": {
+            "$ref": "#/components/schemas/BacktestExecutionConfigView"
+          },
+          "executionConfigHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Executionconfighash",
+            "type": "string"
+          },
+          "historicalProfile": {
+            "const": "TUSHARE_STK_MINS_241_END_V1",
+            "title": "Historicalprofile",
+            "type": "string"
+          },
+          "priceAdjustmentPolicy": {
+            "const": "NONE",
+            "title": "Priceadjustmentpolicy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventRiskAssumption",
+          "executionConfig",
+          "executionConfigHash",
+          "priceAdjustmentPolicy",
+          "historicalProfile"
+        ],
+        "title": "BacktestAssumptionsView",
+        "type": "object"
+      },
+      "BacktestAuthoritativeDecisionView": {
+        "additionalProperties": false,
+        "description": "Live-decision-equivalent projection with FenText money only for backtests.",
+        "properties": {
+          "dataAgeSeconds": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataageseconds"
+          },
+          "dataHealth": {
+            "$ref": "#/components/schemas/BacktestDataHealthView"
+          },
+          "episodeLowFen": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "pattern": "^(?:0|-?[1-9][0-9]*)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episodelowfen"
+          },
+          "episodeStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EpisodeStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evaluatedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Evaluatedat",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestDecisionEvidenceView"
+            },
+            "maxItems": 50,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "marketDataAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketdataat"
+          },
+          "nextStep": {
+            "$ref": "#/components/schemas/BacktestNextStepView"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Planid",
+            "type": "string"
+          },
+          "planVersion": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Planversion",
+            "type": "integer"
+          },
+          "position": {
+            "$ref": "#/components/schemas/BacktestPositionSummaryView"
+          },
+          "priceFen": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "pattern": "^(?:0|-?[1-9][0-9]*)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricefen"
+          },
+          "resultHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Resulthash",
+            "type": "string"
+          },
+          "riskBreachTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskbreachtradedate"
+          },
+          "riskStatus": {
+            "$ref": "#/components/schemas/RiskStatus"
+          },
+          "signalType": {
+            "$ref": "#/components/schemas/SignalType"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "zone": {
+            "$ref": "#/components/schemas/DecisionZone"
+          }
+        },
+        "required": [
+          "symbol",
+          "resultHash",
+          "planId",
+          "planVersion",
+          "planHash",
+          "evaluatedAt",
+          "marketDataAt",
+          "dataAgeSeconds",
+          "priceFen",
+          "zone",
+          "signalType",
+          "position",
+          "episodeStatus",
+          "episodeLowFen",
+          "riskStatus",
+          "riskBreachTradeDate",
+          "dataHealth",
+          "evidence",
+          "nextStep"
+        ],
+        "title": "BacktestAuthoritativeDecisionView",
+        "type": "object"
+      },
+      "BacktestDataHealthView": {
+        "additionalProperties": false,
+        "properties": {
+          "dataAgeSeconds": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataageseconds"
+          },
+          "fresh": {
+            "title": "Fresh",
+            "type": "boolean"
+          },
+          "latestBarEnd": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestbarend"
+          },
+          "requiredDataComplete": {
+            "title": "Requireddatacomplete",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DataHealthStatus"
+          }
+        },
+        "required": [
+          "status",
+          "latestBarEnd",
+          "dataAgeSeconds",
+          "requiredDataComplete",
+          "fresh"
+        ],
+        "title": "BacktestDataHealthView",
+        "type": "object"
+      },
+      "BacktestDataSyncCommand": {
+        "additionalProperties": false,
+        "description": "Explicitly authorized historical-data synchronization request.",
+        "properties": {
+          "allowNetwork": {
+            "const": true,
+            "title": "Allownetwork",
+            "type": "boolean"
+          },
+          "refresh": {
+            "title": "Refresh",
+            "type": "boolean"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BacktestDatasetScopeInput"
+          }
+        },
+        "required": [
+          "scope",
+          "refresh",
+          "allowNetwork"
+        ],
+        "title": "BacktestDataSyncCommand",
+        "type": "object"
+      },
+      "BacktestDataSyncJobResultView": {
+        "additionalProperties": false,
+        "properties": {
+          "calendarRows": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Calendarrows",
+            "type": "integer"
+          },
+          "dailyBarRows": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Dailybarrows",
+            "type": "integer"
+          },
+          "dailyLimitRows": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Dailylimitrows",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "DATA_SYNC",
+            "title": "Kind",
+            "type": "string"
+          },
+          "minuteDays": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Minutedays",
+            "type": "integer"
+          },
+          "networkCalls": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Networkcalls",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "calendarRows",
+          "minuteDays",
+          "dailyLimitRows",
+          "dailyBarRows",
+          "networkCalls"
+        ],
+        "title": "BacktestDataSyncJobResultView",
+        "type": "object"
+      },
+      "BacktestDatasetCoverageView": {
+        "additionalProperties": false,
+        "description": "Exact public counts and stable blockers for one dataset.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Z][A-Z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "calendarRowCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Calendarrowcount",
+            "type": "integer"
+          },
+          "dailyBarRowCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Dailybarrowcount",
+            "type": "integer"
+          },
+          "dailyLimitRowCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Dailylimitrowcount",
+            "type": "integer"
+          },
+          "minuteBarCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Minutebarcount",
+            "type": "integer"
+          },
+          "minuteDayCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Minutedaycount",
+            "type": "integer"
+          },
+          "symbolCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Symbolcount",
+            "type": "integer"
+          },
+          "tradingDayCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Tradingdaycount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "symbolCount",
+          "tradingDayCount",
+          "calendarRowCount",
+          "minuteDayCount",
+          "minuteBarCount",
+          "dailyLimitRowCount",
+          "dailyBarRowCount",
+          "blockers"
+        ],
+        "title": "BacktestDatasetCoverageView",
+        "type": "object"
+      },
+      "BacktestDatasetFiltersView": {
+        "additionalProperties": false,
+        "description": "Closed normalized filters echoed by a dataset traversal page.",
+        "properties": {
+          "adjustmentPolicy": {
+            "anyOf": [
+              {
+                "const": "NONE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustmentpolicy"
+          },
+          "endOnOrBefore": {
+            "anyOf": [
+              {
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endonorbefore"
+          },
+          "historicalProfile": {
+            "anyOf": [
+              {
+                "const": "TUSHARE_STK_MINS_241_END_V1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Historicalprofile"
+          },
+          "startOnOrAfter": {
+            "anyOf": [
+              {
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startonorafter"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "symbol",
+          "startOnOrAfter",
+          "endOnOrBefore",
+          "historicalProfile",
+          "adjustmentPolicy"
+        ],
+        "title": "BacktestDatasetFiltersView",
+        "type": "object"
+      },
+      "BacktestDatasetPage": {
+        "additionalProperties": false,
+        "description": "One bounded dataset page anchored by signed cursor tokens.",
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/BacktestDatasetFiltersView"
+          },
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "highWatermark": {
+            "maxLength": 512,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+            "title": "Highwatermark",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestDatasetView"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 3,
+                "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "filters",
+          "items",
+          "limit",
+          "nextCursor",
+          "hasMore",
+          "highWatermark"
+        ],
+        "title": "BacktestDatasetPage",
+        "type": "object"
+      },
+      "BacktestDatasetScopeInput": {
+        "additionalProperties": false,
+        "description": "Canonical requested historical range for sync and verification commands.",
+        "properties": {
+          "adjustmentPolicy": {
+            "const": "NONE",
+            "title": "Adjustmentpolicy",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "End",
+            "type": "string"
+          },
+          "historicalProfile": {
+            "const": "TUSHARE_STK_MINS_241_END_V1",
+            "title": "Historicalprofile",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Start",
+            "type": "string"
+          },
+          "symbols": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Symbols",
+            "type": "array"
+          },
+          "warmupStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Warmupstart",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbols",
+          "start",
+          "end",
+          "warmupStart",
+          "historicalProfile",
+          "adjustmentPolicy"
+        ],
+        "title": "BacktestDatasetScopeInput",
+        "type": "object"
+      },
+      "BacktestDatasetScopeView": {
+        "additionalProperties": false,
+        "description": "Bounded public projection of one verified dataset scope.",
+        "properties": {
+          "adjustmentPolicy": {
+            "const": "NONE",
+            "title": "Adjustmentpolicy",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "End",
+            "type": "string"
+          },
+          "historicalProfile": {
+            "const": "TUSHARE_STK_MINS_241_END_V1",
+            "title": "Historicalprofile",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Start",
+            "type": "string"
+          },
+          "symbols": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Symbols",
+            "type": "array"
+          },
+          "warmupStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Warmupstart",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbols",
+          "start",
+          "end",
+          "warmupStart",
+          "historicalProfile",
+          "adjustmentPolicy"
+        ],
+        "title": "BacktestDatasetScopeView",
+        "type": "object"
+      },
+      "BacktestDatasetVerificationCommand": {
+        "additionalProperties": false,
+        "description": "Offline verification request for one canonical dataset scope.",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/BacktestDatasetScopeInput"
+          }
+        },
+        "required": [
+          "scope"
+        ],
+        "title": "BacktestDatasetVerificationCommand",
+        "type": "object"
+      },
+      "BacktestDatasetVerificationJobResultView": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Z][A-Z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BacktestDatasetCoverageView"
+          },
+          "datasetHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datasethash"
+          },
+          "kind": {
+            "const": "DATASET_VERIFY",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "ready",
+          "datasetHash",
+          "coverage",
+          "blockers"
+        ],
+        "title": "BacktestDatasetVerificationJobResultView",
+        "type": "object"
+      },
+      "BacktestDatasetView": {
+        "additionalProperties": false,
+        "description": "Public dataset projection without manifest membership or provider payloads.",
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/BacktestDatasetCoverageView"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "backtest-dataset-v1",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BacktestDatasetScopeView"
+          },
+          "verifiedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Verifiedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "datasetHash",
+          "schemaVersion",
+          "scope",
+          "coverage",
+          "createdAt",
+          "verifiedAt"
+        ],
+        "title": "BacktestDatasetView",
+        "type": "object"
+      },
+      "BacktestDecisionEvidenceView": {
+        "additionalProperties": false,
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestDecisionEvidenceView"
+            },
+            "maxItems": 50,
+            "title": "Children",
+            "type": "array"
+          },
+          "code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestEvidenceFactView"
+            },
+            "maxItems": 512,
+            "title": "Facts",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "CONDITION",
+              "RULE"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "missingInputs": {
+            "items": {
+              "$ref": "#/components/schemas/MissingInputCode"
+            },
+            "maxItems": 16,
+            "title": "Missinginputs",
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ConditionOutcome"
+          }
+        },
+        "required": [
+          "kind",
+          "code",
+          "outcome",
+          "facts",
+          "missingInputs",
+          "children"
+        ],
+        "title": "BacktestDecisionEvidenceView",
+        "type": "object"
+      },
+      "BacktestDecisionView": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/BacktestAuthoritativeDecisionView"
+          },
+          "detailId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Detailid",
+            "type": "string"
+          },
+          "eventAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Eventat",
+            "type": "string"
+          },
+          "kind": {
+            "const": "DECISION",
+            "title": "Kind",
+            "type": "string"
+          },
+          "resultHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Resulthash",
+            "type": "string"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detailId",
+          "runId",
+          "eventAt",
+          "kind",
+          "resultHash",
+          "decision"
+        ],
+        "title": "BacktestDecisionView",
+        "type": "object"
+      },
+      "BacktestDetailFiltersView": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "DECISION",
+              "SIGNAL",
+              "EXECUTION_OUTCOME"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BacktestDetailFiltersView",
+        "type": "object"
+      },
+      "BacktestDetailPage": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "enum": [
+              "AVAILABLE",
+              "EXPIRED",
+              "NOT_RECORDED"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/BacktestDetailFiltersView"
+          },
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "highWatermark": {
+            "maxLength": 512,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+            "title": "Highwatermark",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestDetailView"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "DECISION",
+              "SIGNAL",
+              "EXECUTION_OUTCOME"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 3,
+                "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "kind",
+          "availability",
+          "filters",
+          "items",
+          "limit",
+          "nextCursor",
+          "hasMore",
+          "highWatermark"
+        ],
+        "title": "BacktestDetailPage",
+        "type": "object"
+      },
+      "BacktestDetailView": {
+        "discriminator": {
+          "mapping": {
+            "DECISION": "#/components/schemas/BacktestDecisionView",
+            "EXECUTION_OUTCOME": "#/components/schemas/BacktestExecutionOutcomeView",
+            "SIGNAL": "#/components/schemas/BacktestSignalView"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BacktestDecisionView"
+          },
+          {
+            "$ref": "#/components/schemas/BacktestSignalView"
+          },
+          {
+            "$ref": "#/components/schemas/BacktestExecutionOutcomeView"
+          }
+        ]
+      },
+      "BacktestEquityPointView": {
+        "additionalProperties": false,
+        "properties": {
+          "cashFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Cashfen",
+            "type": "string"
+          },
+          "costBasisFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Costbasisfen",
+            "type": "string"
+          },
+          "equityFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Equityfen",
+            "type": "string"
+          },
+          "markPriceFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Markpricefen",
+            "type": "string"
+          },
+          "markedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Markedat",
+            "type": "string"
+          },
+          "marketValueFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Marketvaluefen",
+            "type": "string"
+          },
+          "positionQuantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Positionquantity",
+            "type": "integer"
+          },
+          "realizedPnlFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Realizedpnlfen",
+            "type": "string"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "snapshotId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Snapshotid",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "totalCostFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Totalcostfen",
+            "type": "string"
+          },
+          "unrealizedPnlFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Unrealizedpnlfen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "snapshotId",
+          "runId",
+          "symbol",
+          "markedAt",
+          "markPriceFen",
+          "cashFen",
+          "positionQuantity",
+          "marketValueFen",
+          "costBasisFen",
+          "realizedPnlFen",
+          "unrealizedPnlFen",
+          "totalCostFen",
+          "equityFen"
+        ],
+        "title": "BacktestEquityPointView",
+        "type": "object"
+      },
+      "BacktestEquitySeries": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "enum": [
+              "AVAILABLE",
+              "EXPIRED",
+              "NOT_RECORDED"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestEquityPointView"
+            },
+            "maxItems": 2000,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "availability",
+          "items"
+        ],
+        "title": "BacktestEquitySeries",
+        "type": "object"
+      },
+      "BacktestEvidenceFactView": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Key",
+            "type": "string"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/EvidenceUnit"
+          },
+          "value": {
+            "$ref": "#/components/schemas/BacktestEvidenceScalar"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "unit"
+        ],
+        "title": "BacktestEvidenceFactView",
+        "type": "object"
+      },
+      "BacktestEvidenceScalar": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          },
+          {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "type": "string"
+          },
+          {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "type": "string"
+          },
+          {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "type": "string"
+          }
+        ]
+      },
+      "BacktestExecutionConfigInput": {
+        "additionalProperties": false,
+        "description": "Version-independent exact simulated execution assumptions.",
+        "properties": {
+          "buySlippageBps": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Buyslippagebps",
+            "type": "string"
+          },
+          "commissionRate": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Commissionrate",
+            "type": "string"
+          },
+          "minimumCommissionFen": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Minimumcommissionfen",
+            "type": "integer"
+          },
+          "sellSlippageBps": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Sellslippagebps",
+            "type": "string"
+          },
+          "stampDutyRate": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Stampdutyrate",
+            "type": "string"
+          },
+          "transferFeeRate": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Transferfeerate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commissionRate",
+          "minimumCommissionFen",
+          "stampDutyRate",
+          "transferFeeRate",
+          "buySlippageBps",
+          "sellSlippageBps"
+        ],
+        "title": "BacktestExecutionConfigInput",
+        "type": "object"
+      },
+      "BacktestExecutionConfigView": {
+        "additionalProperties": false,
+        "description": "Exact execution assumptions with FenText money and DecimalText rates.",
+        "properties": {
+          "buySlippageBps": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Buyslippagebps",
+            "type": "string"
+          },
+          "commissionRate": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Commissionrate",
+            "type": "string"
+          },
+          "minimumCommissionFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Minimumcommissionfen",
+            "type": "string"
+          },
+          "sellSlippageBps": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Sellslippagebps",
+            "type": "string"
+          },
+          "stampDutyRate": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Stampdutyrate",
+            "type": "string"
+          },
+          "transferFeeRate": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Transferfeerate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commissionRate",
+          "minimumCommissionFen",
+          "stampDutyRate",
+          "transferFeeRate",
+          "buySlippageBps",
+          "sellSlippageBps"
+        ],
+        "title": "BacktestExecutionConfigView",
+        "type": "object"
+      },
+      "BacktestExecutionOutcomeView": {
+        "additionalProperties": false,
+        "properties": {
+          "detailId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Detailid",
+            "type": "string"
+          },
+          "eventAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Eventat",
+            "type": "string"
+          },
+          "fillId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fillid"
+          },
+          "kind": {
+            "const": "EXECUTION_OUTCOME",
+            "title": "Kind",
+            "type": "string"
+          },
+          "orderId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orderid"
+          },
+          "outcomeId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Outcomeid",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnfilledReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "signalId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Signalid",
+            "type": "string"
+          },
+          "sourceBarId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcebarid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatus"
+          }
+        },
+        "required": [
+          "detailId",
+          "runId",
+          "eventAt",
+          "kind",
+          "outcomeId",
+          "signalId",
+          "orderId",
+          "sourceBarId",
+          "status",
+          "reason",
+          "fillId"
+        ],
+        "title": "BacktestExecutionOutcomeView",
+        "type": "object"
+      },
+      "BacktestFeeBreakdownView": {
+        "additionalProperties": false,
+        "properties": {
+          "commissionFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Commissionfen",
+            "type": "string"
+          },
+          "stampDutyFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Stampdutyfen",
+            "type": "string"
+          },
+          "totalFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Totalfen",
+            "type": "string"
+          },
+          "transferFeeFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Transferfeefen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commissionFen",
+          "stampDutyFen",
+          "transferFeeFen",
+          "totalFen"
+        ],
+        "title": "BacktestFeeBreakdownView",
+        "type": "object"
+      },
+      "BacktestFillFiltersView": {
+        "additionalProperties": false,
+        "description": "Closed empty filter object for one run's long-lived fill ledger.",
+        "properties": {},
+        "title": "BacktestFillFiltersView",
+        "type": "object"
+      },
+      "BacktestFillPage": {
+        "additionalProperties": false,
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/BacktestFillFiltersView"
+          },
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "highWatermark": {
+            "maxLength": 512,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+            "title": "Highwatermark",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestFillView"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 3,
+                "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "filters",
+          "items",
+          "limit",
+          "nextCursor",
+          "hasMore",
+          "highWatermark"
+        ],
+        "title": "BacktestFillPage",
+        "type": "object"
+      },
+      "BacktestFillView": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "enum": [
+              "CORE",
+              "TACTICAL"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "cashDeltaFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Cashdeltafen",
+            "type": "string"
+          },
+          "configHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Confighash",
+            "type": "string"
+          },
+          "costBasisReleasedFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Costbasisreleasedfen",
+            "type": "string"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "fees": {
+            "$ref": "#/components/schemas/BacktestFeeBreakdownView"
+          },
+          "fillId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Fillid",
+            "type": "string"
+          },
+          "filledAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Filledat",
+            "type": "string"
+          },
+          "notionalFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Notionalfen",
+            "type": "string"
+          },
+          "orderId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Orderid",
+            "type": "string"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "priceFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Pricefen",
+            "type": "string"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "realizedPnlFen": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "pattern": "^(?:0|-?[1-9][0-9]*)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realizedpnlfen"
+          },
+          "requestedQuantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Requestedquantity",
+            "type": "integer"
+          },
+          "resultHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Resulthash",
+            "type": "string"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "signalId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Signalid",
+            "type": "string"
+          },
+          "sourceBarId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Sourcebarid",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "targetLotId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetlotid"
+          }
+        },
+        "required": [
+          "fillId",
+          "orderId",
+          "signalId",
+          "runId",
+          "planHash",
+          "datasetHash",
+          "resultHash",
+          "configHash",
+          "sourceBarId",
+          "side",
+          "symbol",
+          "bucket",
+          "targetLotId",
+          "filledAt",
+          "requestedQuantity",
+          "quantity",
+          "priceFen",
+          "notionalFen",
+          "fees",
+          "cashDeltaFen",
+          "costBasisReleasedFen",
+          "realizedPnlFen"
+        ],
+        "title": "BacktestFillView",
+        "type": "object"
+      },
+      "BacktestFormulaVersionsView": {
+        "additionalProperties": false,
+        "properties": {
+          "executionFormulaVersion": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Executionformulaversion",
+            "type": "string"
+          },
+          "metricFormulaVersion": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Metricformulaversion",
+            "type": "string"
+          },
+          "reportSchemaVersion": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Reportschemaversion",
+            "type": "string"
+          },
+          "runFormulaVersion": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Runformulaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runFormulaVersion",
+          "reportSchemaVersion",
+          "executionFormulaVersion",
+          "metricFormulaVersion"
+        ],
+        "title": "BacktestFormulaVersionsView",
+        "type": "object"
+      },
+      "BacktestInitialLotInput": {
+        "additionalProperties": false,
+        "description": "Caller-stable initial holding without a run-bound lot identity.",
+        "properties": {
+          "acquiredTradeDate": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Acquiredtradedate",
+            "type": "string"
+          },
+          "bucket": {
+            "enum": [
+              "CORE",
+              "TACTICAL"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "costBasisFen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Costbasisfen",
+            "type": "integer"
+          },
+          "lotKey": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Lotkey",
+            "type": "string"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lotKey",
+          "bucket",
+          "acquiredTradeDate",
+          "quantity",
+          "costBasisFen"
+        ],
+        "title": "BacktestInitialLotInput",
+        "type": "object"
+      },
+      "BacktestJobCancellationCommand": {
+        "additionalProperties": false,
+        "description": "The exact public cancellation body; idempotency remains in its header.",
+        "properties": {
+          "jobId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Jobid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jobId"
+        ],
+        "title": "BacktestJobCancellationCommand",
+        "type": "object"
+      },
+      "BacktestJobFiltersView": {
+        "additionalProperties": false,
+        "properties": {
+          "createdFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdfrom"
+          },
+          "createdTo": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdto"
+          },
+          "datasetHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datasethash"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "DATA_SYNC",
+                    "DATASET_VERIFY",
+                    "BACKTEST_RUN"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "QUEUED",
+                    "RUNNING",
+                    "CANCEL_REQUESTED",
+                    "COMPLETED",
+                    "FAILED",
+                    "CANCELLED"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 6,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "runId",
+          "datasetHash",
+          "createdFrom",
+          "createdTo"
+        ],
+        "title": "BacktestJobFiltersView",
+        "type": "object"
+      },
+      "BacktestJobPage": {
+        "additionalProperties": false,
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/BacktestJobFiltersView"
+          },
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "highWatermark": {
+            "maxLength": 512,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+            "title": "Highwatermark",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestJobView"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 3,
+                "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "filters",
+          "items",
+          "limit",
+          "nextCursor",
+          "hasMore",
+          "highWatermark"
+        ],
+        "title": "BacktestJobPage",
+        "type": "object"
+      },
+      "BacktestJobProgressView": {
+        "additionalProperties": false,
+        "description": "Bounded public progress for one job claim generation.",
+        "properties": {
+          "completedUnits": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Completedunits",
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "QUEUED",
+              "VALIDATING_INPUT",
+              "SYNCING_DATA",
+              "VERIFYING_DATASET",
+              "REPLAYING",
+              "MATERIALIZING_RESULTS",
+              "FINALIZING",
+              "TERMINAL"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "totalUnits": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalunits"
+          },
+          "unit": {
+            "enum": [
+              "ITEMS",
+              "SYMBOL_DAYS",
+              "EVENTS",
+              "ROWS"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase",
+          "completedUnits",
+          "totalUnits",
+          "unit",
+          "updatedAt"
+        ],
+        "title": "BacktestJobProgressView",
+        "type": "object"
+      },
+      "BacktestJobReceipt": {
+        "additionalProperties": false,
+        "description": "Canonical submission receipt for active or immediately reused work.",
+        "properties": {
+          "attempt": {
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "datasetHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datasethash"
+          },
+          "jobId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Jobid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "DATA_SYNC",
+              "DATASET_VERIFY",
+              "BACKTEST_RUN"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reused": {
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "CANCEL_REQUESTED",
+              "COMPLETED",
+              "FAILED",
+              "CANCELLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submittedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Submittedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jobId",
+          "kind",
+          "status",
+          "runId",
+          "datasetHash",
+          "attempt",
+          "revision",
+          "reused",
+          "submittedAt"
+        ],
+        "title": "BacktestJobReceipt",
+        "type": "object"
+      },
+      "BacktestJobResultView": {
+        "discriminator": {
+          "mapping": {
+            "BACKTEST_RUN": "#/components/schemas/BacktestRunJobResultView",
+            "DATASET_VERIFY": "#/components/schemas/BacktestDatasetVerificationJobResultView",
+            "DATA_SYNC": "#/components/schemas/BacktestDataSyncJobResultView"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BacktestDataSyncJobResultView"
+          },
+          {
+            "$ref": "#/components/schemas/BacktestDatasetVerificationJobResultView"
+          },
+          {
+            "$ref": "#/components/schemas/BacktestRunJobResultView"
+          }
+        ]
+      },
+      "BacktestJobView": {
+        "additionalProperties": false,
+        "description": "Closed public job state with jointly validated lifecycle discriminators.",
+        "properties": {
+          "attempt": {
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "cancelRequestedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelrequestedat"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "datasetHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datasethash"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Z][A-Z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "errorMessage": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errormessage"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finishedat"
+          },
+          "jobId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Jobid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "DATA_SYNC",
+              "DATASET_VERIFY",
+              "BACKTEST_RUN"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/BacktestJobProgressView"
+          },
+          "requestHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Requesthash",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestJobResultView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reused": {
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "CANCEL_REQUESTED",
+              "COMPLETED",
+              "FAILED",
+              "CANCELLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jobId",
+          "kind",
+          "status",
+          "requestHash",
+          "runId",
+          "datasetHash",
+          "progress",
+          "result",
+          "attempt",
+          "revision",
+          "createdAt",
+          "startedAt",
+          "updatedAt",
+          "finishedAt",
+          "cancelRequestedAt",
+          "reused",
+          "errorCode",
+          "errorMessage"
+        ],
+        "title": "BacktestJobView",
+        "type": "object"
+      },
+      "BacktestMetricsView": {
+        "additionalProperties": false,
+        "description": "Exact completed-run metrics with all money represented as FenText.",
+        "properties": {
+          "blockedCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Blockedcount",
+            "type": "integer"
+          },
+          "finalCashFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Finalcashfen",
+            "type": "string"
+          },
+          "finalEquityFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Finalequityfen",
+            "type": "string"
+          },
+          "initialCashFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Initialcashfen",
+            "type": "string"
+          },
+          "initialEquityFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Initialequityfen",
+            "type": "string"
+          },
+          "maximumDrawdown": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Maximumdrawdown",
+            "type": "string"
+          },
+          "realizedPnlFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Realizedpnlfen",
+            "type": "string"
+          },
+          "skippedCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Skippedcount",
+            "type": "integer"
+          },
+          "totalCostFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Totalcostfen",
+            "type": "string"
+          },
+          "totalReturn": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Totalreturn",
+            "type": "string"
+          },
+          "tradeCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Tradecount",
+            "type": "integer"
+          },
+          "turnoverFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Turnoverfen",
+            "type": "string"
+          },
+          "unrealizedPnlFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Unrealizedpnlfen",
+            "type": "string"
+          },
+          "winRate": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Winrate",
+            "type": "string"
+          },
+          "winningSellCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Winningsellcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "initialCashFen",
+          "initialEquityFen",
+          "finalCashFen",
+          "finalEquityFen",
+          "totalReturn",
+          "maximumDrawdown",
+          "tradeCount",
+          "winningSellCount",
+          "winRate",
+          "turnoverFen",
+          "totalCostFen",
+          "realizedPnlFen",
+          "unrealizedPnlFen",
+          "blockedCount",
+          "skippedCount"
+        ],
+        "title": "BacktestMetricsView",
+        "type": "object"
+      },
+      "BacktestNextStepView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/NextStepCode"
+          },
+          "notBefore": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notbefore"
+          },
+          "requiredInputs": {
+            "items": {
+              "$ref": "#/components/schemas/MissingInputCode"
+            },
+            "maxItems": 16,
+            "title": "Requiredinputs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "notBefore",
+          "requiredInputs"
+        ],
+        "title": "BacktestNextStepView",
+        "type": "object"
+      },
+      "BacktestPositionSummaryView": {
+        "additionalProperties": false,
+        "properties": {
+          "coreQuantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Corequantity",
+            "type": "integer"
+          },
+          "sellableCoreQuantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sellablecorequantity",
+            "type": "integer"
+          },
+          "sellableTacticalQuantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sellabletacticalquantity",
+            "type": "integer"
+          },
+          "tacticalQuantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Tacticalquantity",
+            "type": "integer"
+          },
+          "totalQuantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Totalquantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "coreQuantity",
+          "tacticalQuantity",
+          "totalQuantity",
+          "sellableCoreQuantity",
+          "sellableTacticalQuantity"
+        ],
+        "title": "BacktestPositionSummaryView",
+        "type": "object"
+      },
+      "BacktestResultAvailabilityView": {
+        "additionalProperties": false,
+        "description": "Exact lifecycle states for optional completed-result artifacts.",
+        "properties": {
+          "decisionDetails": {
+            "enum": [
+              "AVAILABLE",
+              "EXPIRED",
+              "NOT_RECORDED"
+            ],
+            "title": "Decisiondetails",
+            "type": "string"
+          },
+          "equitySeries": {
+            "enum": [
+              "AVAILABLE",
+              "EXPIRED",
+              "NOT_RECORDED"
+            ],
+            "title": "Equityseries",
+            "type": "string"
+          },
+          "executionOutcomeDetails": {
+            "enum": [
+              "AVAILABLE",
+              "EXPIRED",
+              "NOT_RECORDED"
+            ],
+            "title": "Executionoutcomedetails",
+            "type": "string"
+          },
+          "signalDetails": {
+            "enum": [
+              "AVAILABLE",
+              "EXPIRED",
+              "NOT_RECORDED"
+            ],
+            "title": "Signaldetails",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decisionDetails",
+          "signalDetails",
+          "executionOutcomeDetails",
+          "equitySeries"
+        ],
+        "title": "BacktestResultAvailabilityView",
+        "type": "object"
+      },
+      "BacktestRunCommand": {
+        "additionalProperties": false,
+        "description": "Canonical public request for one deterministic offline replay.",
+        "properties": {
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "eventRiskAssumption": {
+            "enum": [
+              "NO_EVENT_RISK",
+              "MANUAL_EVENT_RISK"
+            ],
+            "title": "Eventriskassumption",
+            "type": "string"
+          },
+          "executionConfig": {
+            "$ref": "#/components/schemas/BacktestExecutionConfigInput"
+          },
+          "initialCashFen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Initialcashfen",
+            "type": "integer"
+          },
+          "initialLots": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestInitialLotInput"
+            },
+            "maxItems": 200,
+            "title": "Initiallots",
+            "type": "array"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+            "title": "Planversionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "datasetHash",
+          "initialCashFen",
+          "initialLots",
+          "executionConfig",
+          "eventRiskAssumption"
+        ],
+        "title": "BacktestRunCommand",
+        "type": "object"
+      },
+      "BacktestRunCoverageView": {
+        "additionalProperties": false,
+        "properties": {
+          "decisionCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Decisioncount",
+            "type": "integer"
+          },
+          "equityPointCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Equitypointcount",
+            "type": "integer"
+          },
+          "eventEnd": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventend",
+            "type": "string"
+          },
+          "eventStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventstart",
+            "type": "string"
+          },
+          "fillCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Fillcount",
+            "type": "integer"
+          },
+          "orderCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Ordercount",
+            "type": "integer"
+          },
+          "outcomeCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Outcomecount",
+            "type": "integer"
+          },
+          "signalCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Signalcount",
+            "type": "integer"
+          },
+          "tradingDayCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Tradingdaycount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "eventStart",
+          "eventEnd",
+          "tradingDayCount",
+          "decisionCount",
+          "signalCount",
+          "orderCount",
+          "fillCount",
+          "outcomeCount",
+          "equityPointCount"
+        ],
+        "title": "BacktestRunCoverageView",
+        "type": "object"
+      },
+      "BacktestRunFiltersView": {
+        "additionalProperties": false,
+        "properties": {
+          "completedFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedfrom"
+          },
+          "completedTo": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedto"
+          },
+          "datasetHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datasethash"
+          },
+          "pinned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned"
+          },
+          "planVersionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planversionid"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "symbol",
+          "planVersionId",
+          "datasetHash",
+          "completedFrom",
+          "completedTo",
+          "pinned"
+        ],
+        "title": "BacktestRunFiltersView",
+        "type": "object"
+      },
+      "BacktestRunJobResultView": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "BACKTEST_RUN",
+            "title": "Kind",
+            "type": "string"
+          },
+          "reportHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reporthash",
+            "type": "string"
+          },
+          "reused": {
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "runId",
+          "reportHash",
+          "reused"
+        ],
+        "title": "BacktestRunJobResultView",
+        "type": "object"
+      },
+      "BacktestRunPage": {
+        "additionalProperties": false,
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/BacktestRunFiltersView"
+          },
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "highWatermark": {
+            "maxLength": 512,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+            "title": "Highwatermark",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestRunSummaryView"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 3,
+                "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "filters",
+          "items",
+          "limit",
+          "nextCursor",
+          "hasMore",
+          "highWatermark"
+        ],
+        "title": "BacktestRunPage",
+        "type": "object"
+      },
+      "BacktestRunPinCommand": {
+        "additionalProperties": false,
+        "description": "The exact public pin mutation with optimistic concurrency.",
+        "properties": {
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pinned",
+          "expectedRevision"
+        ],
+        "title": "BacktestRunPinCommand",
+        "type": "object"
+      },
+      "BacktestRunSummaryView": {
+        "additionalProperties": false,
+        "description": "Public run summary that can exist only after completed publication.",
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/BacktestResultAvailabilityView"
+          },
+          "completedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Completedat",
+            "type": "string"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "eventEnd": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventend",
+            "type": "string"
+          },
+          "eventStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventstart",
+            "type": "string"
+          },
+          "fillCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Fillcount",
+            "type": "integer"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/BacktestMetricsView"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planversionid"
+          },
+          "reportHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reporthash",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "status": {
+            "const": "COMPLETED",
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "reportHash",
+          "planVersionId",
+          "planHash",
+          "datasetHash",
+          "symbol",
+          "status",
+          "eventStart",
+          "eventEnd",
+          "completedAt",
+          "pinned",
+          "revision",
+          "fillCount",
+          "metrics",
+          "availability"
+        ],
+        "title": "BacktestRunSummaryView",
+        "type": "object"
+      },
+      "BacktestRunView": {
+        "additionalProperties": false,
+        "description": "Complete public run projection with no staged or failed variant.",
+        "properties": {
+          "assumptions": {
+            "$ref": "#/components/schemas/BacktestAssumptionsView"
+          },
+          "availability": {
+            "$ref": "#/components/schemas/BacktestResultAvailabilityView"
+          },
+          "completedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Completedat",
+            "type": "string"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BacktestRunCoverageView"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "eventEnd": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventend",
+            "type": "string"
+          },
+          "eventStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventstart",
+            "type": "string"
+          },
+          "fillCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Fillcount",
+            "type": "integer"
+          },
+          "formulaVersions": {
+            "$ref": "#/components/schemas/BacktestFormulaVersionsView"
+          },
+          "initialCashFen": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "title": "Initialcashfen",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Limitations",
+            "type": "array"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/BacktestMetricsView"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planversionid"
+          },
+          "reportHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reporthash",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "status": {
+            "const": "COMPLETED",
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "reportHash",
+          "planVersionId",
+          "planHash",
+          "datasetHash",
+          "symbol",
+          "status",
+          "eventStart",
+          "eventEnd",
+          "completedAt",
+          "pinned",
+          "revision",
+          "fillCount",
+          "metrics",
+          "availability",
+          "initialCashFen",
+          "coverage",
+          "assumptions",
+          "formulaVersions",
+          "limitations"
+        ],
+        "title": "BacktestRunView",
+        "type": "object"
+      },
+      "BacktestSignalView": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "anyOf": [
+              {
+                "enum": [
+                  "CORE",
+                  "TACTICAL"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "causeId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Causeid",
+            "type": "string"
+          },
+          "detailId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Detailid",
+            "type": "string"
+          },
+          "eventAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Eventat",
+            "type": "string"
+          },
+          "kind": {
+            "const": "SIGNAL",
+            "title": "Kind",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "resultHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Resulthash",
+            "type": "string"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "signalId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Signalid",
+            "type": "string"
+          },
+          "signalType": {
+            "$ref": "#/components/schemas/ActionableSignalType"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "targetLotId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetlotid"
+          }
+        },
+        "required": [
+          "detailId",
+          "runId",
+          "eventAt",
+          "kind",
+          "signalId",
+          "resultHash",
+          "signalType",
+          "symbol",
+          "quantity",
+          "bucket",
+          "targetLotId",
+          "causeId"
+        ],
+        "title": "BacktestSignalView",
+        "type": "object"
+      },
       "BarInterval": {
         "enum": [
           "ONE_MINUTE",
@@ -1811,6 +5034,15 @@
           "CODE"
         ],
         "title": "EvidenceUnit",
+        "type": "string"
+      },
+      "ExecutionStatus": {
+        "enum": [
+          "FILLED",
+          "UNFILLED",
+          "IGNORED"
+        ],
+        "title": "ExecutionStatus",
         "type": "string"
       },
       "ExecutorHealthView": {
@@ -3676,6 +6908,24 @@
         "title": "SymbolSummaryView",
         "type": "object"
       },
+      "UnfilledReason": {
+        "description": "Stable fail-closed outcomes from execution-model-v1.",
+        "enum": [
+          "NON_EXECUTABLE_SIGNAL",
+          "SUSPENDED",
+          "MISSING_NEXT_MINUTE",
+          "NO_NEXT_MINUTE",
+          "LIMIT_UP_LOCKED",
+          "LIMIT_DOWN_LOCKED",
+          "INSUFFICIENT_CASH",
+          "MAX_POSITION_REACHED",
+          "TARGET_POSITION_REACHED",
+          "TARGET_LOT_NOT_FOUND",
+          "T_PLUS_ONE"
+        ],
+        "title": "UnfilledReason",
+        "type": "string"
+      },
       "UnmappedText": {
         "additionalProperties": false,
         "description": "Unsupported source text that cannot become an executable condition.",
@@ -5126,6 +8376,2730 @@
         "summary": "List Alerts",
         "tags": [
           "alerts"
+        ]
+      }
+    },
+    "/api/v1/backtest-data-syncs": {
+      "post": {
+        "operationId": "submit_backtest_data_sync_api_v1_backtest_data_syncs_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestDataSyncCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestJobReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Submit Backtest Data Sync",
+        "tags": [
+          "backtest-data"
+        ]
+      }
+    },
+    "/api/v1/backtest-dataset-verifications": {
+      "post": {
+        "operationId": "submit_backtest_dataset_verification_api_v1_backtest_dataset_verifications_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestDatasetVerificationCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestJobReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Submit Backtest Dataset Verification",
+        "tags": [
+          "backtest-data"
+        ]
+      }
+    },
+    "/api/v1/backtest-datasets": {
+      "get": {
+        "operationId": "list_backtest_datasets_api_v1_backtest_datasets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 9,
+                  "minLength": 9,
+                  "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Symbol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startOnOrAfter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 10,
+                  "minLength": 10,
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Startonorafter"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endOnOrBefore",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 10,
+                  "minLength": 10,
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Endonorbefore"
+            }
+          },
+          {
+            "in": "query",
+            "name": "historicalProfile",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "TUSHARE_STK_MINS_241_END_V1",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Historicalprofile"
+            }
+          },
+          {
+            "in": "query",
+            "name": "adjustmentPolicy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "NONE",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Adjustmentpolicy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestDatasetPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Backtest Datasets",
+        "tags": [
+          "backtest-data"
+        ]
+      }
+    },
+    "/api/v1/backtest-datasets/{dataset_hash}": {
+      "get": {
+        "operationId": "get_backtest_dataset_api_v1_backtest_datasets__dataset_hash__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_hash",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Dataset Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestDatasetView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Backtest Dataset",
+        "tags": [
+          "backtest-data"
+        ]
+      }
+    },
+    "/api/v1/backtest-job-cancellations": {
+      "post": {
+        "operationId": "request_backtest_job_cancellation_api_v1_backtest_job_cancellations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestJobCancellationCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestJobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestJobView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Request Backtest Job Cancellation",
+        "tags": [
+          "backtest-jobs"
+        ]
+      }
+    },
+    "/api/v1/backtest-jobs": {
+      "get": {
+        "operationId": "list_backtest_jobs_api_v1_backtest_jobs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "DATA_SYNC",
+                      "DATASET_VERIFY",
+                      "BACKTEST_RUN"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "QUEUED",
+                      "RUNNING",
+                      "CANCEL_REQUESTED",
+                      "COMPLETED",
+                      "FAILED",
+                      "CANCELLED"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "runId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Runid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "datasetHash",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Datasethash"
+            }
+          },
+          {
+            "in": "query",
+            "name": "createdFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 25,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Createdfrom"
+            }
+          },
+          {
+            "in": "query",
+            "name": "createdTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 25,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Createdto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestJobPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Backtest Jobs",
+        "tags": [
+          "backtest-jobs"
+        ]
+      }
+    },
+    "/api/v1/backtest-jobs/{job_id}": {
+      "get": {
+        "operationId": "get_backtest_job_api_v1_backtest_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestJobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Backtest Job",
+        "tags": [
+          "backtest-jobs"
+        ]
+      }
+    },
+    "/api/v1/backtest-runs": {
+      "get": {
+        "operationId": "list_backtest_runs_api_v1_backtest_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 9,
+                  "minLength": 9,
+                  "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Symbol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "planVersionId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 36,
+                  "minLength": 36,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planversionid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "datasetHash",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Datasethash"
+            }
+          },
+          {
+            "in": "query",
+            "name": "completedFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 25,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Completedfrom"
+            }
+          },
+          {
+            "in": "query",
+            "name": "completedTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 25,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Completedto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "true",
+                    "false"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pinned"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestRunPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Backtest Runs",
+        "tags": [
+          "backtest-runs"
+        ]
+      },
+      "post": {
+        "operationId": "submit_backtest_run_api_v1_backtest_runs_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestRunCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestJobReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Submit Backtest Run",
+        "tags": [
+          "backtest-runs"
+        ]
+      }
+    },
+    "/api/v1/backtest-runs/{run_id}": {
+      "get": {
+        "operationId": "get_backtest_run_api_v1_backtest_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Backtest Run",
+        "tags": [
+          "backtest-runs"
+        ]
+      },
+      "patch": {
+        "operationId": "pin_backtest_run_api_v1_backtest_runs__run_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestRunPinCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Pin Backtest Run",
+        "tags": [
+          "backtest-runs"
+        ]
+      }
+    },
+    "/api/v1/backtest-runs/{run_id}/details": {
+      "get": {
+        "operationId": "list_backtest_details_api_v1_backtest_runs__run_id__details_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "DECISION",
+                "SIGNAL",
+                "EXECUTION_OUTCOME"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestDetailPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Backtest Details",
+        "tags": [
+          "backtest-results"
+        ]
+      }
+    },
+    "/api/v1/backtest-runs/{run_id}/equity-series": {
+      "get": {
+        "operationId": "get_backtest_equity_series_api_v1_backtest_runs__run_id__equity_series_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestEquitySeries"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Backtest Equity Series",
+        "tags": [
+          "backtest-results"
+        ]
+      }
+    },
+    "/api/v1/backtest-runs/{run_id}/exports/{export_kind}": {
+      "get": {
+        "operationId": "export_backtest_result_api_v1_backtest_runs__run_id__exports__export_kind__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "export_kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "SUMMARY_JSON",
+                "FILLS_CSV"
+              ],
+              "title": "Export Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Export Backtest Result",
+        "tags": [
+          "backtest-exports"
+        ]
+      }
+    },
+    "/api/v1/backtest-runs/{run_id}/fills": {
+      "get": {
+        "operationId": "list_backtest_fills_api_v1_backtest_runs__run_id__fills_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestFillPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Backtest Fills",
+        "tags": [
+          "backtest-results"
         ]
       }
     },
@@ -6611,6 +12585,61 @@
       "get": {
         "operationId": "list_plan_versions_api_v1_plan_versions_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 9,
+                  "minLength": 9,
+                  "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Symbol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PlanVersionStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "canActivate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "true",
+                    "false"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Canactivate"
+            }
+          },
           {
             "in": "query",
             "name": "offset",

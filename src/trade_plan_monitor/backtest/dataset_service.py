@@ -13,7 +13,7 @@ from trade_plan_monitor.backtest.pagination import CursorSigner, InvalidCursorEr
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
 from trade_plan_monitor.market_data.models import AShareSymbol
 
-DATASET_CATALOG_ROUTE = "/backtest-datasets"
+DATASET_CATALOG_ROUTE = "datasets"
 DATASET_CATALOG_ORDER = "createdAt DESC,datasetHash DESC"
 DEFAULT_DATASET_PAGE_LIMIT = 20
 MAX_DATASET_PAGE_LIMIT = 100
@@ -107,6 +107,7 @@ class BacktestDatasetService:
         binding = normalized_filters.cursor_binding()
         high_water: tuple[str, str] | None = None
         after: tuple[str, str] | None = None
+        snapshot_revision: int
         if cursor is not None:
             decoded = self._cursor_signer.decode(
                 cursor,
@@ -116,11 +117,14 @@ class BacktestDatasetService:
             )
             try:
                 high_water = _catalog_position(decoded.high_water)
+                snapshot_revision = _catalog_snapshot(decoded.snapshot)
                 if decoded.last_seen is None:
                     raise ValueError
                 after = _catalog_position(decoded.last_seen)
             except TypeError, ValueError:
                 raise InvalidCursorError from None
+        else:
+            snapshot_revision = self._store.dataset_catalog_revision()
 
         values = self._store.list_dataset_summaries(
             limit=limit + 1,
@@ -133,6 +137,7 @@ class BacktestDatasetService:
                 else normalized_filters.historical_profile.value
             ),
             adjustment_policy=normalized_filters.adjustment_policy,
+            snapshot_revision=snapshot_revision,
             high_water=high_water,
             after=after,
         )
@@ -144,6 +149,7 @@ class BacktestDatasetService:
             order=DATASET_CATALOG_ORDER,
             high_water=high_water,
             last_seen=None,
+            snapshot=(snapshot_revision,),
         )
         has_more = len(values) > limit
         items = values[:limit]
@@ -155,6 +161,7 @@ class BacktestDatasetService:
                 order=DATASET_CATALOG_ORDER,
                 high_water=high_water,
                 last_seen=_position_for_summary(items[-1]),
+                snapshot=(snapshot_revision,),
             )
         return BacktestDatasetPage(
             filters=normalized_filters,
@@ -184,6 +191,12 @@ def _catalog_position(value: tuple[str, ...]) -> tuple[str, str]:
     if created_at.isoformat(timespec="microseconds") != created_at_text:
         raise ValueError("dataset cursor time must use fixed-six-digit +08:00")
     return created_at_text, dataset_hash
+
+
+def _catalog_snapshot(value: tuple[int, ...] | None) -> int:
+    if value is None or len(value) != 1:
+        raise ValueError("dataset cursor snapshot must contain one value")
+    return value[0]
 
 
 __all__ = [

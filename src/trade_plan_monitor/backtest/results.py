@@ -952,6 +952,18 @@ class BacktestResultStore:
             ).fetchone()
         return int(row[0])
 
+    def result_pin_membership_revision(self) -> int:
+        """Return a monotone fence for mutable public pin membership."""
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COALESCE(SUM(pin_revision), 0) FROM backtest_run
+                WHERE materialized = 1 AND summary_domain = 'backtest-run-summary-v2'
+                """
+            ).fetchone()
+        return int(row[0])
+
     def query_result_runs(
         self,
         *,
@@ -963,6 +975,7 @@ class BacktestResultStore:
         completed_from: datetime | None = None,
         completed_to: datetime | None = None,
         pinned: bool | None = None,
+        high_water: tuple[str, str] | None = None,
         last_seen: tuple[str, str] | None = None,
     ) -> tuple[BacktestRunQueryRow, ...]:
         """Read one bounded descending keyset page behind an insertion fence."""
@@ -975,6 +988,8 @@ class BacktestResultStore:
             dataset_hash = _validate_hash(dataset_hash, "dataset_hash")
         if pinned is not None and type(pinned) is not bool:
             raise TypeError("pinned must be a bool or None")
+        if high_water is not None:
+            _require_position(high_water, "high_water")
         if last_seen is not None:
             _require_position(last_seen, "last_seen")
         clauses = [
@@ -1004,6 +1019,9 @@ class BacktestResultStore:
         if pinned is not None:
             clauses.append("r.pinned = ?")
             parameters.append(int(pinned))
+        if high_water is not None:
+            clauses.append("(r.completed_at < ? OR (r.completed_at = ? AND r.run_id <= ?))")
+            parameters.extend((high_water[0], high_water[0], high_water[1]))
         if last_seen is not None:
             clauses.append("(r.completed_at < ? OR (r.completed_at = ? AND r.run_id < ?))")
             parameters.extend((last_seen[0], last_seen[0], last_seen[1]))
