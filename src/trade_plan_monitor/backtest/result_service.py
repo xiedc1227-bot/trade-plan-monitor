@@ -299,10 +299,29 @@ class BacktestResultService:
         if not isinstance(filters, BacktestDetailFilters):
             raise TypeError("filters must be BacktestDetailFilters")
         self.get_run(run_id)
-        state = self._store.artifact_state(run_id, filters.kind)
-        if state is None:
-            raise BacktestResultNotFoundError
         filter_context = {"kind": filters.kind.value, "runId": run_id}
+        if cursor is None:
+            high_water = None
+            last_seen = None
+        else:
+            decoded = self._cursor_signer.decode(
+                cursor,
+                route=_DETAIL_ROUTE,
+                filters=filter_context,
+                order=_DETAIL_ORDER,
+            )
+            high_water = _two_part_position(decoded.high_water)
+            last_seen = _required_cursor_position(decoded.last_seen)
+        snapshot = self._store.read_result_detail_snapshot(
+            run_id,
+            kind=filters.kind,
+            limit=normalized_limit + 1,
+            high_water=high_water,
+            last_seen=last_seen,
+        )
+        if snapshot is None:
+            raise BacktestResultNotFoundError
+        state = snapshot.state
         if state.availability is not BacktestArtifactAvailability.AVAILABLE:
             if cursor is not None:
                 raise InvalidCursorError
@@ -314,25 +333,8 @@ class BacktestResultService:
                 high_watermark=None,
                 availability=state.availability,
             )
-        if cursor is None:
-            high_water = self._store.result_detail_high_water(run_id, kind=filters.kind)
-            last_seen = None
-        else:
-            decoded = self._cursor_signer.decode(
-                cursor,
-                route=_DETAIL_ROUTE,
-                filters=filter_context,
-                order=_DETAIL_ORDER,
-            )
-            high_water = _two_part_position(decoded.high_water)
-            last_seen = _required_cursor_position(decoded.last_seen)
-        rows = self._store.query_result_details(
-            run_id,
-            kind=filters.kind,
-            limit=normalized_limit + 1,
-            high_water=high_water,
-            last_seen=last_seen,
-        )
+        high_water = snapshot.high_water
+        rows = snapshot.rows
         page_rows = rows[:normalized_limit]
         items = tuple(row.record for row in page_rows)
         _require_bounded_items(items)
@@ -362,19 +364,19 @@ class BacktestResultService:
     def get_equity_series(self, run_id: str) -> BacktestEquitySeries:
         self.get_run(run_id)
         kind = BacktestDetailKind.DAILY_EQUITY
-        state = self._store.artifact_state(run_id, kind)
-        if state is None:
-            raise BacktestResultNotFoundError
-        if state.availability is not BacktestArtifactAvailability.AVAILABLE:
-            return BacktestEquitySeries(items=(), availability=state.availability)
-        high_water = self._store.result_detail_high_water(run_id, kind=kind)
-        rows = self._store.query_result_details(
+        snapshot = self._store.read_result_detail_snapshot(
             run_id,
             kind=kind,
             limit=2_001,
-            high_water=high_water,
+            high_water=None,
             last_seen=None,
         )
+        if snapshot is None:
+            raise BacktestResultNotFoundError
+        state = snapshot.state
+        if state.availability is not BacktestArtifactAvailability.AVAILABLE:
+            return BacktestEquitySeries(items=(), availability=state.availability)
+        rows = snapshot.rows
         if len(rows) > 2_000 or len(rows) != state.original_count:
             raise RuntimeError("daily equity series exceeds its bounded published count")
         items = tuple(row.record for row in rows)

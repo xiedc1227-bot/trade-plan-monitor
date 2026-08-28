@@ -550,6 +550,15 @@ class BacktestDetailQueryRow:
     position: tuple[str, str]
 
 
+@dataclass(frozen=True, slots=True)
+class BacktestDetailReadSnapshot:
+    """Availability, traversal fence, and rows from one SQLite read snapshot."""
+
+    state: BacktestArtifactState
+    high_water: tuple[str, str] | None
+    rows: tuple[BacktestDetailQueryRow, ...]
+
+
 class BacktestResultStore:
     """Own the independent result database; never opens live or market stores."""
 
@@ -1086,37 +1095,75 @@ class BacktestResultStore:
             raise TypeError("kind must be a BacktestDetailKind")
         if type(limit) is not int or not 1 <= limit <= 2_001:
             raise ValueError("query limit must be between 1 and 2001")
-        clauses = ["d.run_id = ?", "d.kind = ?", "r.materialized = 1"]
-        parameters: list[object] = [normalized_run_id, kind.value]
-        for value, name, operator in (
-            (high_water, "high_water", "<="),
-            (last_seen, "last_seen", ">"),
-        ):
-            if value is not None:
-                _require_position(value, name)
-                clauses.append(f"(d.event_at, d.detail_id) {operator} (?, ?)")
-                parameters.extend(value)
-        parameters.append(limit)
+        if high_water is not None:
+            _require_position(high_water, "high_water")
+        if last_seen is not None:
+            _require_position(last_seen, "last_seen")
         with self._connect() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT d.detail_id, d.run_id, d.kind, d.event_at, d.content_domain,
-                       d.content_hash, d.payload_json
-                FROM backtest_detail AS d
-                JOIN backtest_run AS r ON r.run_id = d.run_id
-                WHERE {" AND ".join(clauses)}
-                ORDER BY d.event_at, d.detail_id
-                LIMIT ?
-                """,
-                tuple(parameters),
-            ).fetchall()
-        return tuple(
-            BacktestDetailQueryRow(
-                record=_load_detail_row(tuple(row), expected_run_id=normalized_run_id),
-                position=(str(row[3]), str(row[0])),
+            return _query_result_detail_rows(
+                connection,
+                normalized_run_id,
+                kind=kind,
+                limit=limit,
+                high_water=high_water,
+                last_seen=last_seen,
             )
-            for row in rows
-        )
+
+    def read_result_detail_snapshot(
+        self,
+        run_id: str,
+        *,
+        kind: BacktestDetailKind,
+        limit: int,
+        high_water: tuple[str, str] | None,
+        last_seen: tuple[str, str] | None,
+    ) -> BacktestDetailReadSnapshot | None:
+        """Read availability, traversal fence, and rows from one short WAL snapshot."""
+
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        if not isinstance(kind, BacktestDetailKind):
+            raise TypeError("kind must be a BacktestDetailKind")
+        if kind.value not in _PUBLIC_ARTIFACT_KINDS:
+            raise ValueError("kind is not a public result artifact")
+        if type(limit) is not int or not 1 <= limit <= 2_001:
+            raise ValueError("query limit must be between 1 and 2001")
+        if high_water is not None:
+            _require_position(high_water, "high_water")
+        if last_seen is not None:
+            _require_position(last_seen, "last_seen")
+        if last_seen is not None and high_water is None:
+            raise ValueError("last_seen requires a high_water position")
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            state = _artifact_state(connection, normalized_run_id, kind)
+            if state is None:
+                connection.commit()
+                return None
+            if state.availability is not BacktestArtifactAvailability.AVAILABLE:
+                snapshot = BacktestDetailReadSnapshot(state=state, high_water=None, rows=())
+            else:
+                resolved_high_water = high_water or _result_detail_high_water(
+                    connection,
+                    normalized_run_id,
+                    kind,
+                )
+                if resolved_high_water is None:
+                    raise RuntimeError("available backtest artifact is missing its high-water mark")
+                rows = _query_result_detail_rows(
+                    connection,
+                    normalized_run_id,
+                    kind=kind,
+                    limit=limit,
+                    high_water=resolved_high_water,
+                    last_seen=last_seen,
+                )
+                snapshot = BacktestDetailReadSnapshot(
+                    state=state,
+                    high_water=resolved_high_water,
+                    rows=rows,
+                )
+            connection.commit()
+        return snapshot
 
     def result_detail_high_water(
         self,
@@ -1126,17 +1173,7 @@ class BacktestResultStore:
     ) -> tuple[str, str] | None:
         normalized_run_id = _validate_hash(run_id, "run_id")
         with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT d.event_at, d.detail_id
-                FROM backtest_detail AS d
-                JOIN backtest_run AS r ON r.run_id = d.run_id
-                WHERE d.run_id = ? AND d.kind = ? AND r.materialized = 1
-                ORDER BY d.event_at DESC, d.detail_id DESC LIMIT 1
-                """,
-                (normalized_run_id, kind.value),
-            ).fetchone()
-        return None if row is None else (str(row[0]), str(row[1]))
+            return _result_detail_high_water(connection, normalized_run_id, kind)
 
     def artifact_state(
         self,
@@ -1147,28 +1184,7 @@ class BacktestResultStore:
         if kind.value not in _PUBLIC_ARTIFACT_KINDS:
             raise ValueError("kind is not a public result artifact")
         with self._connect() as connection:
-            exists = connection.execute(
-                """
-                SELECT 1 FROM backtest_run
-                WHERE run_id = ? AND materialized = 1
-                  AND summary_domain = 'backtest-run-summary-v2'
-                """,
-                (normalized_run_id,),
-            ).fetchone()
-            if exists is None:
-                return None
-            rows = _availability_by_run(connection, (normalized_run_id,))[normalized_run_id]
-            state = next(item for item in rows if item.kind is kind)
-            if state.availability is BacktestArtifactAvailability.AVAILABLE:
-                actual = int(
-                    connection.execute(
-                        "SELECT COUNT(*) FROM backtest_detail WHERE run_id = ? AND kind = ?",
-                        (normalized_run_id, kind.value),
-                    ).fetchone()[0]
-                )
-                if actual != state.original_count:
-                    raise RuntimeError("available backtest artifact count is inconsistent")
-            return state
+            return _artifact_state(connection, normalized_run_id, kind)
 
     def _result_item_high_water(
         self,
@@ -2006,6 +2022,90 @@ def _load_run_query_row(
         ),
         position=(str(row[4]), run_id),
     )
+
+
+def _query_result_detail_rows(
+    connection: sqlite3.Connection,
+    run_id: str,
+    *,
+    kind: BacktestDetailKind,
+    limit: int,
+    high_water: tuple[str, str] | None,
+    last_seen: tuple[str, str] | None,
+) -> tuple[BacktestDetailQueryRow, ...]:
+    clauses = ["d.run_id = ?", "d.kind = ?", "r.materialized = 1"]
+    parameters: list[object] = [run_id, kind.value]
+    for value, operator in ((high_water, "<="), (last_seen, ">")):
+        if value is not None:
+            clauses.append(f"(d.event_at, d.detail_id) {operator} (?, ?)")
+            parameters.extend(value)
+    parameters.append(limit)
+    rows = connection.execute(
+        f"""
+        SELECT d.detail_id, d.run_id, d.kind, d.event_at, d.content_domain,
+               d.content_hash, d.payload_json
+        FROM backtest_detail AS d
+        JOIN backtest_run AS r ON r.run_id = d.run_id
+        WHERE {" AND ".join(clauses)}
+        ORDER BY d.event_at, d.detail_id
+        LIMIT ?
+        """,
+        tuple(parameters),
+    ).fetchall()
+    return tuple(
+        BacktestDetailQueryRow(
+            record=_load_detail_row(tuple(row), expected_run_id=run_id),
+            position=(str(row[3]), str(row[0])),
+        )
+        for row in rows
+    )
+
+
+def _result_detail_high_water(
+    connection: sqlite3.Connection,
+    run_id: str,
+    kind: BacktestDetailKind,
+) -> tuple[str, str] | None:
+    row = connection.execute(
+        """
+        SELECT d.event_at, d.detail_id
+        FROM backtest_detail AS d
+        JOIN backtest_run AS r ON r.run_id = d.run_id
+        WHERE d.run_id = ? AND d.kind = ? AND r.materialized = 1
+        ORDER BY d.event_at DESC, d.detail_id DESC LIMIT 1
+        """,
+        (run_id, kind.value),
+    ).fetchone()
+    return None if row is None else (str(row[0]), str(row[1]))
+
+
+def _artifact_state(
+    connection: sqlite3.Connection,
+    run_id: str,
+    kind: BacktestDetailKind,
+) -> BacktestArtifactState | None:
+    exists = connection.execute(
+        """
+        SELECT 1 FROM backtest_run
+        WHERE run_id = ? AND materialized = 1
+          AND summary_domain = 'backtest-run-summary-v2'
+        """,
+        (run_id,),
+    ).fetchone()
+    if exists is None:
+        return None
+    rows = _availability_by_run(connection, (run_id,))[run_id]
+    state = next(item for item in rows if item.kind is kind)
+    if state.availability is BacktestArtifactAvailability.AVAILABLE:
+        actual = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM backtest_detail WHERE run_id = ? AND kind = ?",
+                (run_id, kind.value),
+            ).fetchone()[0]
+        )
+        if actual != state.original_count:
+            raise RuntimeError("available backtest artifact count is inconsistent")
+    return state
 
 
 def _availability_by_run(
@@ -3180,6 +3280,7 @@ __all__ = [
     "BacktestArtifactAvailability",
     "BacktestArtifactState",
     "BacktestDetailKind",
+    "BacktestDetailReadSnapshot",
     "BacktestDetailRecord",
     "BacktestFillRecord",
     "BacktestResultStatistics",

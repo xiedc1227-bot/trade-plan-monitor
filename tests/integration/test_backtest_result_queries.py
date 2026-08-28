@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
@@ -312,6 +313,66 @@ def test_fill_and_detail_pages_use_declared_orders_and_availability(tmp_path: Pa
     )
     assert expired.availability is BacktestArtifactAvailability.EXPIRED
     assert expired.items == () and expired.next_cursor is None and expired.has_more is False
+
+
+def test_detail_page_uses_one_wal_snapshot_during_partial_cleanup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    store = BacktestResultStore(tmp_path / "snapshot.sqlite3")
+    run_input = _run_input("snapshot-cleanup")
+    details = (
+        _detail(run_input.run_id, BacktestDetailKind.DECISION, "a", 0),
+        _detail(run_input.run_id, BacktestDetailKind.DECISION, "b", 1),
+    )
+    summary, _, _ = _materialize(
+        store,
+        "snapshot-cleanup",
+        completed_at=datetime(2026, 8, 24, 15, tzinfo=_SHANGHAI),
+        details=details,
+        retention_at=datetime(2026, 1, 1, tzinfo=_SHANGHAI),
+    )
+    cleanup_store = BacktestResultStore(store.database_path)
+    original_connect = store._connect
+    cleanup_started = False
+
+    @contextmanager
+    def interleaved_connect():
+        nonlocal cleanup_started
+        with original_connect() as connection:
+
+            class _ConnectionProxy:
+                def execute(self, query, parameters=()):
+                    nonlocal cleanup_started
+                    if not cleanup_started and "SELECT d.event_at, d.detail_id" in query:
+                        cleanup_started = True
+                        result = cleanup_store.prune_result_rows(
+                            as_of=datetime(2027, 1, 1, tzinfo=_SHANGHAI),
+                            remaining_budget=1,
+                        )
+                        assert result.deleted_count == 1
+                    return connection.execute(query, parameters)
+
+                def __getattr__(self, name):
+                    return getattr(connection, name)
+
+            yield _ConnectionProxy()
+
+    monkeypatch.setattr(store, "_connect", interleaved_connect)
+
+    page = _service(store).list_details(
+        summary.run_id,
+        filters=BacktestDetailFilters(kind=BacktestDetailKind.DECISION),
+    )
+
+    assert cleanup_started is True
+    assert page.availability is BacktestArtifactAvailability.AVAILABLE
+    assert tuple(item.detail_id for item in page.items) == tuple(item.detail_id for item in details)
+    assert (
+        cleanup_store.artifact_state(summary.run_id, BacktestDetailKind.DECISION).availability
+        is BacktestArtifactAvailability.EXPIRED
+    )
+    assert len(cleanup_store.list_details(summary.run_id)) == 1
 
 
 def test_public_detail_filter_and_equity_cap_fail_closed(tmp_path: Path) -> None:
