@@ -1,45 +1,13 @@
 import type {
-  ApiErrorCode,
   DashboardResponse,
-  ErrorDetail,
-  ErrorPayload,
-  ErrorResponse,
 } from "./generated";
+import { ApiClientError, invalidResponse, requestJson } from "./transport";
 
-const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
-const MAX_ERROR_DETAILS = 100;
-const MAX_ERROR_TEXT_CHARACTERS = 256;
+export { ApiClientError };
+export type { ApiClientErrorCode } from "./transport";
+
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER;
 const MAX_VALIDATION_DEPTH = 32;
-const MAX_VALIDATION_NODES = 50_000;
-
-const safeErrorMessages: Record<ApiErrorCode, string> = {
-  BAD_REQUEST: "请求格式无效",
-  CONFLICT: "请求与当前状态冲突",
-  FORBIDDEN: "请求被拒绝",
-  INTERNAL_ERROR: "本地监控服务发生内部错误",
-  METHOD_NOT_ALLOWED: "请求方法不受支持",
-  NOT_FOUND: "请求的资源不存在",
-  PAYLOAD_TOO_LARGE: "请求内容过大",
-  RATE_LIMITED: "请求过于频繁，请稍后重试",
-  SERVICE_UNAVAILABLE: "本地监控服务暂不可用",
-  UNAUTHORIZED: "请求未获授权",
-  VALIDATION_ERROR: "请求内容未通过校验",
-};
-
-const apiErrorCodes = new Set<ApiErrorCode>([
-  "BAD_REQUEST",
-  "VALIDATION_ERROR",
-  "UNAUTHORIZED",
-  "FORBIDDEN",
-  "NOT_FOUND",
-  "METHOD_NOT_ALLOWED",
-  "CONFLICT",
-  "PAYLOAD_TOO_LARGE",
-  "RATE_LIMITED",
-  "SERVICE_UNAVAILABLE",
-  "INTERNAL_ERROR",
-]);
 
 const dataHealthStatuses = new Set([
   "STARTING",
@@ -127,32 +95,6 @@ const evidenceUnits = new Set([
   "CODE",
 ]);
 
-export type ApiClientErrorCode = ApiErrorCode | "INVALID_RESPONSE" | "NETWORK_ERROR";
-
-interface ApiClientErrorOptions {
-  code: ApiClientErrorCode;
-  details?: readonly ErrorDetail[] | undefined;
-  message: string;
-  requestId?: string | undefined;
-  status: number;
-}
-
-export class ApiClientError extends Error {
-  readonly code: ApiClientErrorCode;
-  readonly details: readonly ErrorDetail[];
-  readonly requestId: string | undefined;
-  readonly status: number;
-
-  constructor(options: ApiClientErrorOptions) {
-    super(options.message);
-    this.name = "ApiClientError";
-    this.code = options.code;
-    this.details = Object.freeze([...(options.details ?? [])]);
-    this.requestId = options.requestId;
-    this.status = options.status;
-  }
-}
-
 export interface ApiClient {
   getDashboard(options?: { signal?: AbortSignal }): Promise<DashboardResponse>;
 }
@@ -170,118 +112,29 @@ export function createApiClient(
         request.signal = options.signal;
       }
 
-      let response: Response;
-      try {
-        response = await fetchImplementation("/api/v1/dashboard", request);
-      } catch {
-        throw new ApiClientError({
-          code: "NETWORK_ERROR",
-          message: "无法连接本地监控服务",
-          status: 0,
-        });
-      }
-
-      const body = await readJson(response);
-      if (!response.ok) {
-        throw parseErrorResponse(body, response.status);
-      }
+      const { body, status } = await requestJson(
+        fetchImplementation,
+        "/api/v1/dashboard",
+        request,
+      );
       try {
         if (!isDashboardResponse(body)) {
-          throw invalidResponse(response.status);
+          throw invalidResponse(status);
         }
-        return deepFreeze(body);
+        return body;
       } catch (error) {
         if (error instanceof ApiClientError) {
           throw error;
         }
-        throw invalidResponse(response.status);
+        throw invalidResponse(status);
       }
     },
-  });
-}
-
-async function readJson(response: Response): Promise<unknown> {
-  const contentLength = response.headers.get("Content-Length");
-  if (
-    contentLength !== null &&
-    /^\d+$/.test(contentLength) &&
-    Number(contentLength) > MAX_RESPONSE_BYTES
-  ) {
-    await response.body?.cancel().catch(() => undefined);
-    throw invalidResponse(response.status);
-  }
-
-  const stream = response.body;
-  if (stream === null) {
-    throw invalidResponse(response.status);
-  }
-  const reader = stream.getReader();
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  let body = "";
-  let receivedBytes = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        body += decoder.decode();
-        break;
-      }
-      if (value.byteLength > MAX_RESPONSE_BYTES - receivedBytes) {
-        await reader.cancel().catch(() => undefined);
-        throw invalidResponse(response.status);
-      }
-      receivedBytes += value.byteLength;
-      body += decoder.decode(value, { stream: true });
-    }
-  } catch (error) {
-    await reader.cancel().catch(() => undefined);
-    if (error instanceof ApiClientError) {
-      throw error;
-    }
-    throw invalidResponse(response.status);
-  } finally {
-    reader.releaseLock();
-  }
-  try {
-    return JSON.parse(body) as unknown;
-  } catch {
-    throw invalidResponse(response.status);
-  }
-}
-
-function parseErrorResponse(value: unknown, status: number): ApiClientError {
-  if (!isErrorResponse(value)) {
-    return invalidResponse(status);
-  }
-  const payload: ErrorPayload = value.error;
-  const details = payload.details?.map((detail) =>
-    deepFreeze({
-      code: detail.code,
-      location: [...detail.location],
-      message: "请求字段无效",
-    }),
-  );
-  return new ApiClientError({
-    code: payload.code,
-    details,
-    message: safeErrorMessages[payload.code],
-    requestId: payload.requestId,
-    status,
-  });
-}
-
-function invalidResponse(status: number): ApiClientError {
-  return new ApiClientError({
-    code: "INVALID_RESPONSE",
-    message: "本地监控服务返回了无效响应",
-    status,
   });
 }
 
 function isDashboardResponse(value: unknown): value is DashboardResponse {
   if (
     !isRecord(value) ||
-    containsSensitiveKey(value) ||
     !hasOnlyKeys(value, [
       "connectionStatus",
       "counts",
@@ -346,46 +199,6 @@ function isSymbolSummary(value: unknown): boolean {
     shanghaiDateTimeKey(value.observedAt) >=
       shanghaiDateTimeKey(decision.evaluatedAt as string) &&
     (value.connected || (decision.dataHealth as Record<string, unknown>).status !== "LIVE")
-  );
-}
-
-function isErrorResponse(value: unknown): value is ErrorResponse {
-  if (
-    !isRecord(value) ||
-    !hasExactKeys(value, ["error"]) ||
-    !isRecord(value.error) ||
-    !hasOnlyKeys(value.error, ["code", "details", "message", "requestId"])
-  ) {
-    return false;
-  }
-  const error = value.error;
-  return (
-    typeof error.code === "string" &&
-    apiErrorCodes.has(error.code as ApiErrorCode) &&
-    isBoundedString(error.message, MAX_ERROR_TEXT_CHARACTERS) &&
-    typeof error.requestId === "string" &&
-    /^[0-9a-f]{32}$/.test(error.requestId) &&
-    (error.details === undefined ||
-      (Array.isArray(error.details) &&
-        error.details.length <= MAX_ERROR_DETAILS &&
-        error.details.every(isErrorDetail)))
-  );
-}
-
-function isErrorDetail(value: unknown): value is ErrorDetail {
-  return (
-    isRecord(value) &&
-    hasExactKeys(value, ["code", "location", "message"]) &&
-    isStableCode(value.code) &&
-    Array.isArray(value.location) &&
-    value.location.length > 0 &&
-    value.location.length <= 16 &&
-    value.location.every(
-      (part) =>
-        (typeof part === "string" && isLocationPart(part)) ||
-        (typeof part === "number" && Number.isSafeInteger(part) && part >= 0),
-    ) &&
-    isBoundedString(value.message, MAX_ERROR_TEXT_CHARACTERS)
   );
 }
 
@@ -742,38 +555,6 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
   return Object.keys(value).length === keys.length && hasKeys(value, keys);
 }
 
-function containsSensitiveKey(value: unknown): boolean {
-  const pending: Array<{ depth: number; value: unknown }> = [{ depth: 0, value }];
-  let visited = 0;
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (current === undefined) {
-      break;
-    }
-    visited += 1;
-    if (visited > MAX_VALIDATION_NODES || current.depth > MAX_VALIDATION_DEPTH) {
-      return true;
-    }
-    if (Array.isArray(current.value)) {
-      for (const child of current.value) {
-        pending.push({ depth: current.depth + 1, value: child });
-      }
-      continue;
-    }
-    if (!isRecord(current.value)) {
-      continue;
-    }
-    for (const [key, child] of Object.entries(current.value)) {
-      const normalized = key.replaceAll(/[^a-z]/gi, "").toLowerCase();
-      if (/(?:apikey|authorization|credential|password|secret|token)/.test(normalized)) {
-        return true;
-      }
-      pending.push({ depth: current.depth + 1, value: child });
-    }
-  }
-  return false;
-}
-
 function isStableCode(value: unknown): value is string {
   return typeof value === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(value);
 }
@@ -801,10 +582,6 @@ function isDecimalString(value: unknown): value is string {
     digits += 1;
   }
   return digits > 0;
-}
-
-function isLocationPart(value: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(value);
 }
 
 function isSha256(value: unknown): value is string {
@@ -907,29 +684,4 @@ function isGregorianDate(year: number, month: number, day: number): boolean {
 
 function isSafeSequence(value: unknown): value is number {
   return isNonnegativeInteger(value) && value <= MAX_SEQUENCE;
-}
-
-function deepFreeze<Value>(value: Value): Value {
-  const pending: object[] = [];
-  if (typeof value === "object" && value !== null) {
-    pending.push(value);
-  }
-  const visited = new Set<object>();
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (current === undefined || visited.has(current)) {
-      continue;
-    }
-    visited.add(current);
-    if (visited.size > MAX_VALIDATION_NODES) {
-      throw new RangeError("response contains too many values");
-    }
-    for (const child of Object.values(current)) {
-      if (typeof child === "object" && child !== null) {
-        pending.push(child);
-      }
-    }
-    Object.freeze(current);
-  }
-  return value;
 }
