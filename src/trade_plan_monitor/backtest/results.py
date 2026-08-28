@@ -599,6 +599,19 @@ class BacktestResultStore:
     def record_run_input(self, run_input: BacktestRunInput) -> bool:
         """Persist one canonical input and its deduplicated immutable plan snapshot."""
 
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            created = self._record_run_input_participant(connection, run_input)
+            connection.commit()
+        return created
+
+    def _record_run_input_participant(
+        self,
+        connection: sqlite3.Connection,
+        run_input: BacktestRunInput,
+    ) -> bool:
+        """Persist canonical input rows inside the caller-owned transaction."""
+
         if not isinstance(run_input, BacktestRunInput):
             raise TypeError("run_input must be a BacktestRunInput")
         run_input.validate_canonical_input()
@@ -614,45 +627,38 @@ class BacktestResultStore:
         )
         input_hash = _content_hash(_RUN_INPUT_HASH_DOMAIN, input_json)
         now = _datetime_text(datetime.now(_SHANGHAI), version="v2")
-        with self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            snapshot = connection.execute(
-                "SELECT snapshot_json FROM backtest_plan_snapshot WHERE plan_sha256 = ?",
-                (run_input.plan_sha256,),
-            ).fetchone()
-            if snapshot is None:
-                connection.execute(
-                    "INSERT INTO backtest_plan_snapshot "
-                    "(plan_sha256, snapshot_json, created_at) VALUES (?, ?, ?)",
-                    (run_input.plan_sha256, snapshot_json, now),
-                )
-            elif str(snapshot[0]) != snapshot_json:
-                raise ResultConflictError(
-                    "conflicting plan snapshot content under an existing plan_sha256"
-                )
-            existing = connection.execute(
-                "SELECT plan_sha256, input_hash, input_json FROM backtest_run_input "
-                "WHERE run_id = ?",
-                (run_input.run_id,),
-            ).fetchone()
-            if existing is not None:
-                if tuple(map(str, existing)) != (
-                    run_input.plan_sha256,
-                    input_hash,
-                    input_json,
-                ):
-                    raise ResultConflictError(
-                        "conflicting canonical input under an existing run_id"
-                    )
-                connection.commit()
-                return False
+        snapshot = connection.execute(
+            "SELECT snapshot_json FROM backtest_plan_snapshot WHERE plan_sha256 = ?",
+            (run_input.plan_sha256,),
+        ).fetchone()
+        if snapshot is None:
             connection.execute(
-                "INSERT INTO backtest_run_input "
-                "(run_id, plan_sha256, input_hash, input_json, created_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (run_input.run_id, run_input.plan_sha256, input_hash, input_json, now),
+                "INSERT INTO backtest_plan_snapshot "
+                "(plan_sha256, snapshot_json, created_at) VALUES (?, ?, ?)",
+                (run_input.plan_sha256, snapshot_json, now),
             )
-            connection.commit()
+        elif str(snapshot[0]) != snapshot_json:
+            raise ResultConflictError(
+                "conflicting plan snapshot content under an existing plan_sha256"
+            )
+        existing = connection.execute(
+            "SELECT plan_sha256, input_hash, input_json FROM backtest_run_input WHERE run_id = ?",
+            (run_input.run_id,),
+        ).fetchone()
+        if existing is not None:
+            if tuple(map(str, existing)) != (
+                run_input.plan_sha256,
+                input_hash,
+                input_json,
+            ):
+                raise ResultConflictError("conflicting canonical input under an existing run_id")
+            return False
+        connection.execute(
+            "INSERT INTO backtest_run_input "
+            "(run_id, plan_sha256, input_hash, input_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (run_input.run_id, run_input.plan_sha256, input_hash, input_json, now),
+        )
         return True
 
     def get_run_input(self, run_id: str) -> BacktestRunInput | None:
@@ -676,8 +682,17 @@ class BacktestResultStore:
         """Stage one active v2 completed row backed by independently verified input."""
 
         _validate_summary_input(summary, run_input)
-        self.record_run_input(run_input)
-        return self._record_run(summary, version="v2", retention_at=retention_at)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._record_run_input_participant(connection, run_input)
+            created = self._record_run_participant(
+                connection,
+                summary,
+                version="v2",
+                retention_at=retention_at,
+            )
+            connection.commit()
+        return created
 
     def record_run(
         self,
@@ -703,6 +718,25 @@ class BacktestResultStore:
         version: str,
         retention_at: datetime | None,
     ) -> bool:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            created = self._record_run_participant(
+                connection,
+                summary,
+                version=version,
+                retention_at=retention_at,
+            )
+            connection.commit()
+        return created
+
+    def _record_run_participant(
+        self,
+        connection: sqlite3.Connection,
+        summary: BacktestRunSummary,
+        *,
+        version: str,
+        retention_at: datetime | None,
+    ) -> bool:
         if summary.status is not BacktestRunStatus.COMPLETED:
             raise ValueError("backtest results are completed-only")
         normalized_retention_at = (
@@ -715,42 +749,36 @@ class BacktestResultStore:
         summary_domain = _domain(_RUN_DOMAINS, version)
         summary_hash = _content_hash(_domain_bytes(summary_domain), summary_json)
         now = _datetime_text(normalized_retention_at, version=version)
-        with self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            existing = connection.execute(
-                "SELECT summary_hash FROM backtest_run WHERE run_id = ?",
-                (summary.run_id,),
-            ).fetchone()
-            if existing is not None:
-                if str(existing[0]) != summary_hash:
-                    raise ResultConflictError(
-                        "conflicting summary content under an existing run_id"
-                    )
-                connection.commit()
-                return False
-            connection.execute(
-                """
-                INSERT INTO backtest_run (
-                    run_id, plan_sha256, dataset_hash, status, completed_at,
-                    pinned, materialized, summary_domain, summary_hash,
-                    summary_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    summary.run_id,
-                    summary.plan_sha256,
-                    summary.dataset_hash,
-                    summary.status.value,
-                    _datetime_text(summary.completed_at, version=version),
-                    int(summary.pinned),
-                    0,
-                    summary_domain,
-                    summary_hash,
-                    summary_json,
-                    now,
-                ),
-            )
-            connection.commit()
+        existing = connection.execute(
+            "SELECT summary_hash FROM backtest_run WHERE run_id = ?",
+            (summary.run_id,),
+        ).fetchone()
+        if existing is not None:
+            if str(existing[0]) != summary_hash:
+                raise ResultConflictError("conflicting summary content under an existing run_id")
+            return False
+        connection.execute(
+            """
+            INSERT INTO backtest_run (
+                run_id, plan_sha256, dataset_hash, status, completed_at,
+                pinned, materialized, summary_domain, summary_hash,
+                summary_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                summary.run_id,
+                summary.plan_sha256,
+                summary.dataset_hash,
+                summary.status.value,
+                _datetime_text(summary.completed_at, version=version),
+                int(summary.pinned),
+                0,
+                summary_domain,
+                summary_hash,
+                summary_json,
+                now,
+            ),
+        )
         return True
 
     def record_fills(
@@ -1429,82 +1457,125 @@ class BacktestResultStore:
     ) -> RetentionPruneResult:
         """Consume at most the caller's remaining maintenance row budget once."""
 
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            result = self.prune_result_rows_participant(
+                connection,
+                as_of=as_of,
+                remaining_budget=remaining_budget,
+            )
+            connection.commit()
+        return result
+
+    def prune_result_rows_participant(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        as_of: datetime,
+        remaining_budget: int,
+    ) -> RetentionPruneResult:
+        """Consume remaining row budget inside the jobs-owned maintenance transaction."""
+
+        _require_store_connection(connection, self._path)
         normalized_as_of = _normalize_datetime(as_of, "as_of")
         if type(remaining_budget) is not int or not 0 <= remaining_budget <= _MAX_BATCH_SIZE:
             raise ValueError("remaining_budget must be between 0 and 1000")
         parameters = _retention_parameters(normalized_as_of)
         staged_cutoffs = parameters[:2]
         retention_parameters = parameters[2:]
+        stale_input_query = _stale_run_input_query(connection)
         if remaining_budget == 0:
-            with self._connect() as connection:
-                has_more = _result_retention_has_more(
-                    connection,
-                    staged_cutoffs=staged_cutoffs,
-                    retention_parameters=retention_parameters,
-                )
-            return RetentionPruneResult(deleted_count=0, has_more=has_more)
-        with self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            deleted_count = 0
-            remaining = remaining_budget
-            staged_detail_ids = _candidate_ids(
-                connection,
-                _STALE_STAGED_DETAIL_SQL,
-                (*staged_cutoffs, remaining),
-            )
-            deleted_count += _delete_ids(
-                connection,
-                "backtest_detail",
-                "detail_id",
-                staged_detail_ids,
-            )
-            remaining = remaining_budget - deleted_count
-            staged_fill_ids = _candidate_ids(
-                connection,
-                _STALE_STAGED_FILL_SQL,
-                (*staged_cutoffs, remaining),
-            )
-            deleted_count += _delete_ids(
-                connection,
-                "backtest_fill",
-                "fill_id",
-                staged_fill_ids,
-            )
-            remaining = remaining_budget - deleted_count
-            staged_run_ids = _candidate_ids(
-                connection,
-                _STALE_STAGED_RUN_SQL,
-                (*staged_cutoffs, remaining),
-            )
-            deleted_count += _delete_ids(
-                connection,
-                "backtest_run",
-                "run_id",
-                staged_run_ids,
-            )
-            remaining = remaining_budget - deleted_count
-            retained_detail_ids = _candidate_ids(
-                connection,
-                _RETENTION_CANDIDATES_SQL,
-                (*retention_parameters, remaining),
-            )
-            _mark_expired_artifacts(
-                connection,
-                retained_detail_ids,
-                expired_at=_datetime_text(normalized_as_of, version="v2"),
-            )
-            deleted_count += _delete_ids(
-                connection,
-                "backtest_detail",
-                "detail_id",
-                retained_detail_ids,
-            )
             has_more = _result_retention_has_more(
                 connection,
                 staged_cutoffs=staged_cutoffs,
                 retention_parameters=retention_parameters,
+                stale_input_query=stale_input_query,
             )
-            connection.commit()
+            return RetentionPruneResult(deleted_count=0, has_more=has_more)
+        deleted_count = 0
+        remaining = remaining_budget
+        staged_detail_ids = _candidate_ids(
+            connection,
+            _STALE_STAGED_DETAIL_SQL,
+            (*staged_cutoffs, remaining),
+        )
+        deleted_count += _delete_ids(
+            connection,
+            "backtest_detail",
+            "detail_id",
+            staged_detail_ids,
+        )
+        remaining = remaining_budget - deleted_count
+        staged_fill_ids = _candidate_ids(
+            connection,
+            _STALE_STAGED_FILL_SQL,
+            (*staged_cutoffs, remaining),
+        )
+        deleted_count += _delete_ids(
+            connection,
+            "backtest_fill",
+            "fill_id",
+            staged_fill_ids,
+        )
+        remaining = remaining_budget - deleted_count
+        staged_run_ids = _candidate_ids(
+            connection,
+            _STALE_STAGED_RUN_SQL,
+            (*staged_cutoffs, remaining),
+        )
+        deleted_count += _delete_ids(
+            connection,
+            "backtest_run",
+            "run_id",
+            staged_run_ids,
+        )
+        remaining = remaining_budget - deleted_count
+        stale_input_ids = _candidate_ids(
+            connection,
+            stale_input_query,
+            (staged_cutoffs[1], remaining),
+        )
+        deleted_count += _delete_ids(
+            connection,
+            "backtest_run_input",
+            "run_id",
+            stale_input_ids,
+        )
+        remaining = remaining_budget - deleted_count
+        stale_snapshot_ids = _candidate_ids(
+            connection,
+            _STALE_PLAN_SNAPSHOT_SQL,
+            (staged_cutoffs[1], remaining),
+        )
+        deleted_count += _delete_ids(
+            connection,
+            "backtest_plan_snapshot",
+            "plan_sha256",
+            stale_snapshot_ids,
+        )
+        remaining = remaining_budget - deleted_count
+        retained_detail_ids = _candidate_ids(
+            connection,
+            _RETENTION_CANDIDATES_SQL,
+            (*retention_parameters, remaining),
+        )
+        _mark_expired_artifacts(
+            connection,
+            retained_detail_ids,
+            expired_at=_datetime_text(normalized_as_of, version="v2"),
+        )
+        deleted_count += _delete_ids(
+            connection,
+            "backtest_detail",
+            "detail_id",
+            retained_detail_ids,
+        )
+        has_more = _result_retention_has_more(
+            connection,
+            staged_cutoffs=staged_cutoffs,
+            retention_parameters=retention_parameters,
+            stale_input_query=stale_input_query,
+        )
         return RetentionPruneResult(deleted_count=deleted_count, has_more=has_more)
 
     def checkpoint_wal(self) -> tuple[int, int, int]:
@@ -2427,6 +2498,38 @@ ORDER BY r.created_at, r.run_id
 LIMIT ?
 """
 
+_STALE_RUN_INPUT_SQL = """
+SELECT input.run_id
+FROM backtest_run_input AS input
+WHERE input.created_at < ?
+  AND NOT EXISTS (
+      SELECT 1 FROM backtest_run AS run WHERE run.run_id = input.run_id
+  )
+"""
+
+_STALE_RUN_INPUT_JOB_GUARD_SQL = """
+  AND NOT EXISTS (
+      SELECT 1 FROM backtest_job AS job WHERE job.run_id = input.run_id
+  )
+"""
+
+_STALE_RUN_INPUT_ORDER_SQL = """
+ORDER BY input.created_at, input.run_id
+LIMIT ?
+"""
+
+_STALE_PLAN_SNAPSHOT_SQL = """
+SELECT snapshot.plan_sha256
+FROM backtest_plan_snapshot AS snapshot
+WHERE snapshot.created_at < ?
+  AND NOT EXISTS (
+      SELECT 1 FROM backtest_run_input AS input
+      WHERE input.plan_sha256 = snapshot.plan_sha256
+  )
+ORDER BY snapshot.created_at, snapshot.plan_sha256
+LIMIT ?
+"""
+
 _RETENTION_CANDIDATES_SQL = """
 WITH ranked_success AS (
     SELECT
@@ -2495,11 +2598,23 @@ def _has_candidate(
     return connection.execute(query, parameters).fetchone() is not None
 
 
+def _stale_run_input_query(connection: sqlite3.Connection) -> str:
+    has_job_table = (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'backtest_job'"
+        ).fetchone()
+        is not None
+    )
+    job_guard = _STALE_RUN_INPUT_JOB_GUARD_SQL if has_job_table else ""
+    return _STALE_RUN_INPUT_SQL + job_guard + _STALE_RUN_INPUT_ORDER_SQL
+
+
 def _result_retention_has_more(
     connection: sqlite3.Connection,
     *,
     staged_cutoffs: tuple[object, ...],
     retention_parameters: tuple[object, ...],
+    stale_input_query: str,
 ) -> bool:
     return any(
         _has_candidate(connection, query, query_parameters)
@@ -2507,6 +2622,8 @@ def _result_retention_has_more(
             (_STALE_STAGED_DETAIL_SQL, (*staged_cutoffs, 1)),
             (_STALE_STAGED_FILL_SQL, (*staged_cutoffs, 1)),
             (_STALE_STAGED_RUN_SQL, (*staged_cutoffs, 1)),
+            (stale_input_query, (staged_cutoffs[1], 1)),
+            (_STALE_PLAN_SNAPSHOT_SQL, (staged_cutoffs[1], 1)),
             (_RETENTION_CANDIDATES_SQL, (*retention_parameters, 1)),
         )
     )
@@ -2522,6 +2639,8 @@ def _delete_ids(
         ("backtest_detail", "detail_id"),
         ("backtest_fill", "fill_id"),
         ("backtest_run", "run_id"),
+        ("backtest_run_input", "run_id"),
+        ("backtest_plan_snapshot", "plan_sha256"),
     }
     if (table, identity_column) not in supported:
         raise ValueError("unsupported result retention identity")

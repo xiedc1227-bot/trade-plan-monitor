@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from trade_plan_monitor.backtest import application as backtest_application
 from trade_plan_monitor.backtest.application import BacktestApplicationService
 from trade_plan_monitor.backtest.control import (
     BacktestOperationCancelled,
@@ -411,6 +412,69 @@ def test_shutdown_stops_claiming_cancels_active_work_and_joins_owned_resources(
     asyncio.run(scenario())
 
 
+def test_local_job_composition_binds_transport_sqlite_and_shutdown_to_one_policy(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        "tushare:\n  api_url: https://api.quicksync.cn\n  timeout_seconds: 30\n",
+        encoding="utf-8",
+    )
+    captured_timeouts: list[int] = []
+
+    def capture_client(configuration):
+        captured_timeouts.append(configuration.timeout_seconds)
+        return object()
+
+    class ClosedDayProvider:
+        def trading_calendar(self, exchange: str, start: date, end: date):
+            assert (exchange, start, end) == ("SSE", _TRADE_DATE, _TRADE_DATE)
+            return (
+                TradingDay(
+                    exchange="SSE",
+                    cal_date=_TRADE_DATE,
+                    is_open=False,
+                    previous_trade_date=date(2026, 8, 21),
+                ),
+            )
+
+        def historical_minute_batch(self, *_args):
+            raise AssertionError("closed day must not request minutes")
+
+        def daily_limits(self, *_args):
+            raise AssertionError("closed day must not request limits")
+
+        def daily_bars(self, *_args):
+            raise AssertionError("closed day must not request daily bars")
+
+    monkeypatch.setattr(backtest_application, "create_tushare_client", capture_client)
+    monkeypatch.setattr(
+        backtest_application,
+        "TushareHistoricalMinuteProvider",
+        lambda *_args, **_kwargs: ClosedDayProvider(),
+    )
+    use_cases = backtest_application._LocalBacktestJobUseCases(
+        config_path=config_path,
+        market_database=tmp_path / "bounded-market.sqlite3",
+        results_database=tmp_path / "bounded-results.sqlite3",
+    )
+
+    result = use_cases._sync(
+        _sync_request(),
+        cancellation_token=CancellationToken(),
+        progress_callback=lambda _progress: None,
+    )
+
+    assert result.network_calls == 1
+    assert captured_timeouts == [2]
+    assert use_cases._market_store._busy_timeout_ms == 2_000
+    assert use_cases._repository._busy_timeout_ms == 2_000
+    assert use_cases._results._busy_timeout_ms == 2_000
+    assert use_cases._shutdown_policy.cancellation_safe_boundary_seconds == 4.5
+    assert use_cases._shutdown_policy.shutdown_timeout_seconds == 5.0
+
+
 def test_atomic_completion_gives_cancellation_first_one_terminal_and_no_partial_result(
     tmp_path,
 ) -> None:
@@ -553,6 +617,37 @@ def test_maintenance_shares_one_total_budget_between_jobs_and_result_rows(tmp_pa
     second = maintenance.prune(as_of=now[0], batch_size=2)
     assert second.deleted_count == 1
     assert second.has_more is False
+
+
+def test_maintenance_rolls_back_job_pruning_when_result_participant_fails(
+    tmp_path,
+) -> None:
+    now = [datetime(2026, 8, 1, 9, 30, tzinfo=_SHANGHAI)]
+    database = tmp_path / "maintenance-transaction.sqlite3"
+    repository = BacktestJobRepository(database, clock=lambda: now[0])
+    result_store = BacktestResultStore(database)
+    receipt = repository.submit(
+        _sync_request(),
+        "maintenance-transaction-submit",
+        request_id="6" * 32,
+    )
+    repository.request_cancel(receipt.job_id, "maintenance-transaction-cancel")
+    _stage_empty_run(result_store, _run_input(), retention_at=now[0])
+    now[0] += timedelta(days=15)
+    with closing(sqlite3.connect(database)) as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER fail_result_prune
+            BEFORE DELETE ON backtest_run
+            BEGIN SELECT RAISE(ABORT, 'injected result participant failure'); END
+            """
+        )
+        connection.commit()
+    maintenance = BacktestJobMaintenance(repository=repository, results=result_store)
+    with pytest.raises(sqlite3.IntegrityError, match="injected result participant failure"):
+        maintenance.prune(as_of=now[0], batch_size=1_000)
+
+    assert repository.get(receipt.job_id) is not None
 
 
 def test_cli_facade_routes_typed_sync_and_verify_through_durable_job_use_cases(

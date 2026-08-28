@@ -34,14 +34,17 @@ class BacktestJobMaintenance:
     ) -> RetentionPruneResult:
         if type(batch_size) is not int or not 1 <= batch_size <= 1_000:
             raise ValueError("batch_size must be between 1 and 1000")
-        jobs = self._repository.prune_job_rows(
-            as_of=as_of,
-            remaining_budget=batch_size,
-        )
-        results = self._results.prune_result_rows(
-            as_of=as_of,
-            remaining_budget=batch_size - jobs.deleted_count,
-        )
+        with self._repository.maintenance_unit_of_work() as connection:
+            jobs = self._repository.prune_job_rows_participant(
+                connection,
+                as_of=as_of,
+                remaining_budget=batch_size,
+            )
+            results = self._results.prune_result_rows_participant(
+                connection,
+                as_of=as_of,
+                remaining_budget=batch_size - jobs.deleted_count,
+            )
         return RetentionPruneResult(
             deleted_count=jobs.deleted_count + results.deleted_count,
             has_more=jobs.has_more or results.has_more,

@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import Awaitable
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from math import isfinite
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
@@ -75,6 +77,43 @@ DEFAULT_REPORT_DIRECTORY = Path("backtest-reports")
 DEFAULT_WARMUP_CALENDAR_DAYS = 400
 VERIFIED_HISTORICAL_PROFILE = HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1
 _MAX_SUPPORTED_FEN = (1 << 63) - 1
+
+
+@dataclass(frozen=True, slots=True)
+class _LocalBacktestShutdownPolicy:
+    """One auditable source for the local worker's five-second shutdown budget."""
+
+    shutdown_timeout_seconds: float = 5.0
+    provider_timeout_seconds: int = 2
+    sqlite_busy_timeout_ms: int = 2_000
+    cancellation_safe_boundary_seconds: float = 4.5
+
+    def __post_init__(self) -> None:
+        if type(self.provider_timeout_seconds) is not int or self.provider_timeout_seconds <= 0:
+            raise ValueError("provider_timeout_seconds must be a positive integer")
+        if type(self.sqlite_busy_timeout_ms) is not int or self.sqlite_busy_timeout_ms <= 0:
+            raise ValueError("sqlite_busy_timeout_ms must be a positive integer")
+        numeric_limits = (
+            self.shutdown_timeout_seconds,
+            self.cancellation_safe_boundary_seconds,
+        )
+        if any(
+            isinstance(value, bool)
+            or not isinstance(value, int | float)
+            or not isfinite(value)
+            or value <= 0
+            for value in numeric_limits
+        ):
+            raise ValueError("shutdown policy seconds must be positive numbers")
+        if self.shutdown_timeout_seconds != 5.0:
+            raise ValueError("local backtest shutdown deadline must be five seconds")
+        sequential_wait_seconds = (
+            self.provider_timeout_seconds + self.sqlite_busy_timeout_ms / 1_000
+        )
+        if sequential_wait_seconds > self.cancellation_safe_boundary_seconds:
+            raise ValueError("external waits exceed the cancellation safe-boundary budget")
+        if self.cancellation_safe_boundary_seconds >= self.shutdown_timeout_seconds:
+            raise ValueError("cancellation safe boundary must be below the shutdown deadline")
 
 
 class _ApplicationValue(BaseModel):
@@ -305,9 +344,19 @@ class _LocalBacktestJobUseCases:
         results_database: Path,
     ) -> None:
         self._config_path = config_path
-        self._market_store = BacktestMarketStore(market_database)
-        self._repository = BacktestJobRepository(results_database)
-        self._results = BacktestResultStore(results_database)
+        self._shutdown_policy = _LocalBacktestShutdownPolicy()
+        self._market_store = BacktestMarketStore(
+            market_database,
+            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
+        )
+        self._repository = BacktestJobRepository(
+            results_database,
+            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
+        )
+        self._results = BacktestResultStore(
+            results_database,
+            busy_timeout_ms=self._shutdown_policy.sqlite_busy_timeout_ms,
+        )
 
     async def execute(
         self,
@@ -332,6 +381,7 @@ class _LocalBacktestJobUseCases:
             coordinator = BacktestJobCoordinator(
                 repository=self._repository,
                 operations=operations,
+                shutdown_timeout_seconds=self._shutdown_policy.shutdown_timeout_seconds,
             )
             await coordinator.start()
             try:
@@ -366,9 +416,17 @@ class _LocalBacktestJobUseCases:
         if not isinstance(request, DataSyncJobRequest):
             raise TypeError("sync operation requires DataSyncJobRequest")
         configuration = load_application_config(self._config_path)
+        provider_configuration = configuration.tushare.model_copy(
+            update={
+                "timeout_seconds": min(
+                    configuration.tushare.timeout_seconds,
+                    self._shutdown_policy.provider_timeout_seconds,
+                )
+            }
+        )
         clock = SystemClock()
         provider = TushareHistoricalMinuteProvider(
-            create_tushare_client(configuration.tushare),
+            create_tushare_client(provider_configuration),
             now=clock.now,
             profile=VERIFIED_HISTORICAL_PROFILE,
         )

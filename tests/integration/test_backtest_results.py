@@ -12,6 +12,8 @@ import pytest
 
 from trade_plan_monitor.backtest.application import BacktestApplicationService
 from trade_plan_monitor.backtest.dataset import DatasetManifest, DatasetScope
+from trade_plan_monitor.backtest.jobs import BacktestJobRepository
+from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import (
     EquitySnapshot,
@@ -232,6 +234,69 @@ def test_result_v2_completed_only_persists_canonical_input_and_shanghai_domains(
         "+08:00" in str(row[-1]) and "+00:00" not in str(row[-1])
         for row in (run_row, fill_row, detail_row)
     )
+
+
+def test_verified_input_staging_failure_and_fourteen_day_maintenance_leave_no_orphans(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "verified-input-orphans.sqlite3"
+    repository = BacktestJobRepository(database)
+    store = BacktestResultStore(database)
+    run_input = _canonical_run_input()
+    summary = _summary(
+        "verified-input-orphans",
+        completed_at=datetime(2026, 8, 24, 15, 30, tzinfo=_SHANGHAI),
+    ).model_copy(
+        update={
+            "run_id": run_input.run_id,
+            "plan_sha256": run_input.plan_sha256,
+            "dataset_hash": run_input.dataset_hash,
+            "event_start": run_input.start,
+            "event_end": run_input.end,
+            "symbols": (run_input.plan_snapshot.symbol,),
+            "assumptions": {
+                "executionConfigHash": run_input.execution_config.config_hash,
+                "manualEventRisk": run_input.manual_event_risk,
+                "reportHash": _hash("verified-input-orphans-report"),
+            },
+            "formula_versions": {
+                "execution": run_input.execution_config.formula_version,
+                "indicator": run_input.indicator_formula_version,
+                "runner": run_input.run_formula_version,
+            },
+        }
+    )
+
+    with closing(sqlite3.connect(database)) as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER fail_verified_summary_stage
+            BEFORE INSERT ON backtest_run
+            BEGIN SELECT RAISE(ABORT, 'injected summary stage failure'); END
+            """
+        )
+        connection.commit()
+    with pytest.raises(sqlite3.IntegrityError, match="injected summary stage failure"):
+        store.record_verified_run(summary, run_input=run_input)
+
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM backtest_run_input").fetchone() == (0,)
+        assert connection.execute("SELECT COUNT(*) FROM backtest_plan_snapshot").fetchone() == (0,)
+        connection.execute("DROP TRIGGER fail_verified_summary_stage")
+        connection.commit()
+
+    assert store.record_run_input(run_input) is True
+    BacktestJobMaintenance(
+        repository=repository,
+        results=store,
+    ).prune(
+        as_of=datetime.now(_SHANGHAI) + timedelta(days=15),
+        batch_size=1_000,
+    )
+
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM backtest_run_input").fetchone() == (0,)
+        assert connection.execute("SELECT COUNT(*) FROM backtest_plan_snapshot").fetchone() == (0,)
 
 
 def test_legacy_v1_completed_row_is_compatibility_only_and_terminal_writes_fail(

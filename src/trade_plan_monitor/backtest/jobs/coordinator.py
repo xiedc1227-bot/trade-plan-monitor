@@ -141,7 +141,13 @@ class BacktestJobCoordinator:
         )
 
     async def shutdown(self) -> None:
-        """Stop claims, request cooperative cancellation, and join owned resources."""
+        """Stop claims and join resources under the production safe-boundary policy.
+
+        Production composition must bound provider transport, SQLite waits, and
+        operation safe boundaries below ``shutdown_timeout_seconds``. A timeout is
+        therefore a contract violation; Python cannot safely terminate an arbitrary
+        already-running worker thread under the approved single-thread architecture.
+        """
 
         if self._closed:
             return
@@ -159,9 +165,12 @@ class BacktestJobCoordinator:
                 )
             except TimeoutError as error:
                 task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
                 self._executor.shutdown(wait=False, cancel_futures=True)
                 self._closed = True
-                raise RuntimeError("backtest coordinator shutdown exceeded five seconds") from error
+                raise RuntimeError(
+                    "backtest coordinator operation violated its shutdown safe boundary"
+                ) from error
         self._executor.shutdown(wait=True, cancel_futures=True)
         self._closed = True
 

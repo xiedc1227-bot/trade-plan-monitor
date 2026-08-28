@@ -635,52 +635,37 @@ class BacktestJobRepository:
     ) -> RetentionPruneResult:
         """Delete expired terminal jobs within the caller-owned total row budget."""
 
+        with self.maintenance_unit_of_work() as connection:
+            return self.prune_job_rows_participant(
+                connection,
+                as_of=as_of,
+                remaining_budget=remaining_budget,
+            )
+
+    @contextmanager
+    def maintenance_unit_of_work(self) -> Iterator[sqlite3.Connection]:
+        """Own the one job/result maintenance transaction for this database."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            yield connection
+            connection.commit()
+
+    def prune_job_rows_participant(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        as_of: datetime,
+        remaining_budget: int,
+    ) -> RetentionPruneResult:
+        """Delete expired terminal jobs inside the owner maintenance transaction."""
+
+        _require_repository_connection(connection, self._path)
         normalized_as_of = parse_shanghai_datetime(format_shanghai_datetime(as_of))
         if type(remaining_budget) is not int or not 0 <= remaining_budget <= 1_000:
             raise ValueError("remaining_budget must be between 0 and 1000")
         cutoff = format_shanghai_datetime(normalized_as_of - timedelta(days=JOB_IDEMPOTENCY_DAYS))
-        with self._connect() as connection:
-            if remaining_budget == 0:
-                has_more = (
-                    connection.execute(
-                        """
-                        SELECT 1 FROM backtest_job
-                        WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
-                          AND finished_at < ? LIMIT 1
-                        """,
-                        (cutoff,),
-                    ).fetchone()
-                    is not None
-                )
-                return RetentionPruneResult(deleted_count=0, has_more=has_more)
-            connection.execute("BEGIN IMMEDIATE")
-            job_ids = tuple(
-                str(row[0])
-                for row in connection.execute(
-                    """
-                    SELECT job_id FROM backtest_job
-                    WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
-                      AND finished_at < ?
-                    ORDER BY finished_at, job_id LIMIT ?
-                    """,
-                    (cutoff, remaining_budget),
-                ).fetchall()
-            )
-            deleted_count = 0
-            for job_id in job_ids:
-                connection.execute(
-                    "DELETE FROM backtest_job_idempotency WHERE job_id = ?",
-                    (job_id,),
-                )
-                deleted_count += connection.execute(
-                    """
-                    DELETE FROM backtest_job
-                    WHERE job_id = ?
-                      AND status IN ('COMPLETED', 'FAILED', 'CANCELLED')
-                      AND finished_at < ?
-                    """,
-                    (job_id, cutoff),
-                ).rowcount
+        if remaining_budget == 0:
             has_more = (
                 connection.execute(
                     """
@@ -692,7 +677,45 @@ class BacktestJobRepository:
                 ).fetchone()
                 is not None
             )
-            connection.commit()
+            return RetentionPruneResult(deleted_count=0, has_more=has_more)
+        job_ids = tuple(
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT job_id FROM backtest_job
+                WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                  AND finished_at < ?
+                ORDER BY finished_at, job_id LIMIT ?
+                """,
+                (cutoff, remaining_budget),
+            ).fetchall()
+        )
+        deleted_count = 0
+        for job_id in job_ids:
+            connection.execute(
+                "DELETE FROM backtest_job_idempotency WHERE job_id = ?",
+                (job_id,),
+            )
+            deleted_count += connection.execute(
+                """
+                DELETE FROM backtest_job
+                WHERE job_id = ?
+                  AND status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                  AND finished_at < ?
+                """,
+                (job_id, cutoff),
+            ).rowcount
+        has_more = (
+            connection.execute(
+                """
+                SELECT 1 FROM backtest_job
+                WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                  AND finished_at < ? LIMIT 1
+                """,
+                (cutoff,),
+            ).fetchone()
+            is not None
+        )
         return RetentionPruneResult(deleted_count=deleted_count, has_more=has_more)
 
     def fail(
@@ -1210,6 +1233,17 @@ class BacktestJobRepository:
             raise
         finally:
             connection.close()
+
+
+def _require_repository_connection(connection: sqlite3.Connection, path: Path) -> None:
+    if not isinstance(connection, sqlite3.Connection):
+        raise TypeError("connection must be a sqlite3.Connection")
+    rows = tuple(connection.execute("PRAGMA database_list"))
+    main_rows = tuple(row for row in rows if len(row) >= 3 and str(row[1]) == "main")
+    if len(main_rows) != 1 or not str(main_rows[0][2]):
+        raise ValueError("maintenance connection must have one file-backed main database")
+    if Path(str(main_rows[0][2])).resolve() != path:
+        raise ValueError("maintenance connection targets another job database")
 
 
 def _validate_idempotency_key(value: str) -> str:
