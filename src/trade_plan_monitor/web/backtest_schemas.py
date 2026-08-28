@@ -17,6 +17,7 @@ from pydantic import (
     Field,
     PlainSerializer,
     StringConstraints,
+    ValidationInfo,
     WithJsonSchema,
     field_validator,
     model_validator,
@@ -47,6 +48,7 @@ MAX_SAFE_INTEGER = 9_007_199_254_740_991
 MAX_INITIAL_LOTS = 200
 MAX_BACKTEST_YEARS = 5
 MAX_WARMUP_YEARS = 2
+MAX_EXACT_TEXT_CHARACTERS = 4_096
 
 _FEN_TEXT_PATTERN = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
 _DECIMAL_TEXT_PATTERN = re.compile(r"^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\.[0-9]*[1-9])$")
@@ -55,6 +57,11 @@ _UUID_PATTERN = re.compile(
     r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
     r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
 )
+_PUBLIC_ERROR_MESSAGE_BY_STATUS = {
+    "FAILED": "The job failed.",
+    "CANCELLED": "The job was cancelled.",
+}
+_PUBLIC_ERROR_MESSAGES = frozenset(_PUBLIC_ERROR_MESSAGE_BY_STATUS.values())
 
 
 def _to_camel(value: str) -> str:
@@ -63,13 +70,21 @@ def _to_camel(value: str) -> str:
 
 
 def _validate_fen_text(value: object) -> str:
-    if type(value) is not str or _FEN_TEXT_PATTERN.fullmatch(value) is None:
+    if (
+        type(value) is not str
+        or len(value) > MAX_EXACT_TEXT_CHARACTERS
+        or _FEN_TEXT_PATTERN.fullmatch(value) is None
+    ):
         raise ValueError("FenText must be one canonical signed base-10 integer string")
     return value
 
 
 def _validate_decimal_text(value: object) -> Decimal:
-    if type(value) is not str or _DECIMAL_TEXT_PATTERN.fullmatch(value) is None:
+    if (
+        type(value) is not str
+        or len(value) > MAX_EXACT_TEXT_CHARACTERS
+        or _DECIMAL_TEXT_PATTERN.fullmatch(value) is None
+    ):
         raise ValueError("DecimalText must be a non-exponent base-10 string")
     try:
         parsed = Decimal(value)
@@ -91,7 +106,10 @@ def _validate_explicit_true(value: object) -> bool:
 def _validate_shanghai_datetime(value: object) -> datetime:
     if type(value) is not str:
         raise ValueError("ShanghaiDatetime input must be a string")
-    return parse_shanghai_datetime(value)
+    parsed = parse_shanghai_datetime(value)
+    if parsed.utcoffset() != timedelta(hours=8):
+        raise ValueError("ShanghaiDatetime historical offset must remain +08:00")
+    return parsed
 
 
 def _validate_date_text(value: object) -> date:
@@ -120,13 +138,25 @@ def _validate_rfc4122_uuid(value: object) -> UUID:
 FenText = Annotated[
     str,
     BeforeValidator(_validate_fen_text, json_schema_input_type=str),
-    WithJsonSchema({"type": "string", "pattern": _FEN_TEXT_PATTERN.pattern}),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": _FEN_TEXT_PATTERN.pattern,
+            "maxLength": MAX_EXACT_TEXT_CHARACTERS,
+        }
+    ),
 ]
 DecimalText = Annotated[
     Decimal,
     BeforeValidator(_validate_decimal_text, json_schema_input_type=str),
     PlainSerializer(canonical_decimal, return_type=str, when_used="json"),
-    WithJsonSchema({"type": "string", "pattern": _DECIMAL_TEXT_PATTERN.pattern}),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": _DECIMAL_TEXT_PATTERN.pattern,
+            "maxLength": MAX_EXACT_TEXT_CHARACTERS,
+        }
+    ),
 ]
 ShanghaiDatetime = Annotated[
     datetime,
@@ -492,6 +522,14 @@ class BacktestDatasetView(_BacktestApiInput):
     created_at: ShanghaiDatetime
     verified_at: ShanghaiDatetime
 
+    @model_validator(mode="after")
+    def validate_dataset_consistency(self) -> Self:
+        if self.coverage.symbol_count != len(self.scope.symbols):
+            raise ValueError("coverage.symbolCount must match scope symbols")
+        if self.verified_at < self.created_at:
+            raise ValueError("verifiedAt cannot precede createdAt")
+        return self
+
 
 class BacktestDatasetFiltersView(_BacktestApiInput):
     """Closed normalized filters echoed by a dataset traversal page."""
@@ -714,14 +752,25 @@ class BacktestJobView(_BacktestApiInput):
     @field_validator("error_message")
     @classmethod
     def validate_sanitized_error(cls, value: str | None) -> str | None:
-        if value is not None and any(
-            ord(character) < 32 or ord(character) == 127 for character in value
-        ):
-            raise ValueError("errorMessage must not contain control characters")
+        if value is not None and value not in _PUBLIC_ERROR_MESSAGES:
+            raise ValueError("errorMessage must contain allowlisted sanitized public text only")
         return value
 
     @model_validator(mode="after")
     def validate_closed_job_union(self) -> Self:
+        if not self.created_at <= self.progress.updated_at <= self.updated_at:
+            raise ValueError("job timestamp chronology is contradictory")
+        if self.started_at is not None and not (
+            self.created_at <= self.started_at <= self.progress.updated_at
+        ):
+            raise ValueError("job timestamp chronology is contradictory")
+        if self.finished_at is not None and self.finished_at < self.updated_at:
+            raise ValueError("job timestamp chronology is contradictory")
+        if self.cancel_requested_at is not None:
+            cancel_lower_bound = self.started_at or self.created_at
+            if not cancel_lower_bound <= self.cancel_requested_at <= self.updated_at:
+                raise ValueError("job timestamp chronology is contradictory")
+
         terminal = self.status in {"COMPLETED", "FAILED", "CANCELLED"}
         if terminal != (self.finished_at is not None):
             raise ValueError("terminal status and finishedAt must agree")
@@ -741,6 +790,8 @@ class BacktestJobView(_BacktestApiInput):
             raise ValueError("errorCode and errorMessage must appear together")
         if (self.status in {"FAILED", "CANCELLED"}) != has_error:
             raise ValueError("only failed or cancelled jobs require public errors")
+        if self.error_message != _PUBLIC_ERROR_MESSAGE_BY_STATUS.get(self.status):
+            raise ValueError("errorMessage must match the stable public status message")
 
         if self.kind == "BACKTEST_RUN":
             if self.run_id is None or self.dataset_hash is None:
@@ -1450,16 +1501,28 @@ class BacktestEquitySeries(_BacktestApiInput):
             raise ValueError("equity points must be ordered by markedAt and snapshotId")
         if len({item.snapshot_id for item in self.items}) != len(self.items):
             raise ValueError("equity snapshot identities must be unique")
+        if len(self.model_dump_json().encode("utf-8")) >= MAX_RESULT_PAGE_BYTES:
+            raise ValueError("encoded equity series must be smaller than 4 MiB")
         return self
 
 
 class BacktestJobFiltersView(_BacktestApiInput):
-    kind: BacktestJobKind | None
-    status: BacktestJobStatus | None
+    kind: Annotated[tuple[BacktestJobKind, ...], Field(min_length=1, max_length=3)] | None
+    status: Annotated[tuple[BacktestJobStatus, ...], Field(min_length=1, max_length=6)] | None
     run_id: Sha256Hex | None
     dataset_hash: Sha256Hex | None
     created_from: ShanghaiDatetime | None
     created_to: ShanghaiDatetime | None
+
+    @field_validator("kind", "status", mode="before")
+    @classmethod
+    def normalize_repeated_enums(cls, value: object, info: ValidationInfo) -> object:
+        if value is None:
+            return None
+        items = _require_json_array(value, field_name=info.field_name)
+        if not items or any(type(item) is not str for item in items):
+            raise ValueError(f"{info.field_name} must be a non-empty string array")
+        return tuple(sorted(set(items)))
 
     @model_validator(mode="after")
     def validate_created_range(self) -> Self:
@@ -1527,9 +1590,9 @@ class BacktestJobPage(_BacktestApiInput):
         positions = tuple((item.created_at, item.job_id) for item in self.items)
         _require_ordered_unique_positions(positions, reverse=True, resource="job")
         for item in self.items:
-            if self.filters.kind is not None and item.kind != self.filters.kind:
+            if self.filters.kind is not None and item.kind not in self.filters.kind:
                 raise ValueError("job item must match kind filter")
-            if self.filters.status is not None and item.status != self.filters.status:
+            if self.filters.status is not None and item.status not in self.filters.status:
                 raise ValueError("job item must match status filter")
             if self.filters.run_id is not None and item.run_id != self.filters.run_id:
                 raise ValueError("job item must match runId filter")

@@ -38,6 +38,7 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestFillView,
     BacktestFormulaVersionsView,
     BacktestInitialLotInput,
+    BacktestJobFiltersView,
     BacktestJobPage,
     BacktestJobProgressView,
     BacktestJobReceipt,
@@ -155,6 +156,19 @@ def test_primitive_decimal_text_is_canonical_without_binary_float_conversion() -
             adapter.validate_python(invalid)
 
 
+@pytest.mark.parametrize("exact_type", (FenText, DecimalText), ids=("fen", "decimal"))
+def test_primitive_exact_text_types_have_explicit_safe_length_bounds(
+    exact_type: object,
+) -> None:
+    maximum_length = 4_096
+
+    adapter = TypeAdapter(exact_type)
+    assert adapter.json_schema().get("maxLength") == maximum_length
+    assert adapter.validate_python("9" * maximum_length)
+    with pytest.raises(ValidationError):
+        adapter.validate_python("9" * (maximum_length + 1))
+
+
 def test_primitive_safe_integer_and_identity_inputs_fail_closed() -> None:
     payload = _run_payload()
     assert BacktestRunCommand.model_validate(payload).initial_cash_fen == 1_000_000
@@ -209,6 +223,11 @@ def test_shanghai_datetime_accepts_zero_to_six_digits_and_emits_fixed_six() -> N
 def test_shanghai_datetime_rejects_alternate_or_invalid_forms(raw: str) -> None:
     with pytest.raises(ValidationError):
         TypeAdapter(ShanghaiDatetime).validate_python(raw)
+
+
+def test_shanghai_datetime_rejects_historical_non_eight_hour_zone() -> None:
+    with pytest.raises(ValidationError, match="historical offset"):
+        TypeAdapter(ShanghaiDatetime).validate_python("1800-01-01T00:00:00+08:00")
 
 
 def test_input_dataset_scope_is_closed_canonical_and_bounded() -> None:
@@ -709,10 +728,14 @@ def test_job_terminal_failure_or_cancellation_requires_sanitized_error(
         "startedAt": _TIME if status == "FAILED" else None,
         "cancelRequestedAt": _TIME if status == "CANCELLED" else None,
         "errorCode": "JOB_CANCELLED" if status == "CANCELLED" else "JOB_FAILED",
-        "errorMessage": "sanitized public message",
+        "errorMessage": "The job was cancelled." if status == "CANCELLED" else "The job failed.",
     }
     view = BacktestJobView.model_validate(payload)
     assert view.status == status
+
+    other_status_message = "The job failed." if status == "CANCELLED" else "The job was cancelled."
+    with pytest.raises(ValidationError, match="stable public status message"):
+        BacktestJobView.model_validate(payload | {"errorMessage": other_status_message})
 
     if status == "CANCELLED":
         with pytest.raises(ValidationError):
@@ -727,6 +750,41 @@ def test_job_terminal_failure_or_cancellation_requires_sanitized_error(
     ):
         with pytest.raises(ValidationError):
             BacktestJobView.model_validate(payload | update)
+
+
+@pytest.mark.parametrize(
+    "unsafe_message",
+    (
+        "TUSHARE_TOKEN=synthetic-value",
+        "raw provider payload",
+        r"database path C:\Users\sample\trade.db",
+        "report path /var/lib/trade/report.json",
+        "provider URL https://example.invalid/error",
+        "Authorization Bearer synthetic-value",
+        "access key abcdefghijklmnop",
+        "client key abcdefghijklmnop",
+        "database path private.db",
+        "opaque value " + "a" * 32,
+    ),
+)
+def test_job_view_rejects_credentials_provider_text_and_local_paths(
+    unsafe_message: str,
+) -> None:
+    payload = _job_view_payload() | {
+        "kind": "DATA_SYNC",
+        "status": "FAILED",
+        "runId": None,
+        "datasetHash": None,
+        "result": None,
+        "attempt": 1,
+        "startedAt": _TIME,
+        "cancelRequestedAt": None,
+        "errorCode": "JOB_FAILED",
+        "errorMessage": unsafe_message,
+    }
+
+    with pytest.raises(ValidationError, match="sanitized public text"):
+        BacktestJobView.model_validate(payload)
 
 
 def test_job_view_rejects_nonterminal_and_cancellation_state_conflicts() -> None:
@@ -767,6 +825,40 @@ def test_job_view_rejects_nonterminal_and_cancellation_state_conflicts() -> None
         BacktestJobView.model_validate(running | {"progress": _progress_payload(phase="QUEUED")})
 
 
+@pytest.mark.parametrize(
+    "update",
+    (
+        {"updatedAt": "2026-08-28T09:28:00+08:00"},
+        {"startedAt": "2026-08-28T09:28:00+08:00"},
+        {"finishedAt": "2026-08-28T09:30:30+08:00"},
+        {
+            "progress": _progress_payload(
+                phase="TERMINAL", completed_units=10, total_units=10, unit="EVENTS"
+            )
+            | {"updatedAt": "2026-08-28T09:28:00+08:00"}
+        },
+    ),
+)
+def test_job_view_rejects_contradictory_lifecycle_chronology(
+    update: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match="chronology"):
+        BacktestJobView.model_validate(_job_view_payload() | update)
+
+
+def test_job_view_rejects_cancel_request_before_claim_start() -> None:
+    payload = _job_view_payload() | {
+        "status": "CANCEL_REQUESTED",
+        "progress": _progress_payload(phase="REPLAYING"),
+        "result": None,
+        "finishedAt": None,
+        "cancelRequestedAt": "2026-08-28T09:29:30+08:00",
+    }
+
+    with pytest.raises(ValidationError, match="chronology"):
+        BacktestJobView.model_validate(payload)
+
+
 def test_dataset_scope_and_coverage_views_are_bounded_and_closed() -> None:
     scope = BacktestDatasetScopeView.model_validate(_scope_payload())
     coverage = BacktestDatasetCoverageView.model_validate(
@@ -804,6 +896,25 @@ def test_dataset_view_exposes_only_bounded_projection_and_fixed_times() -> None:
     for forbidden in ("membershipRows", "artifacts", "providerPayload", "databasePath"):
         with pytest.raises(ValidationError):
             BacktestDatasetView.model_validate(_dataset_view_payload() | {forbidden: []})
+
+
+@pytest.mark.parametrize("contradiction", ("symbol_count", "timestamp"))
+def test_dataset_view_rejects_scope_count_and_timestamp_contradictions(
+    contradiction: str,
+) -> None:
+    payload = _dataset_view_payload()
+    expected_message = "symbolCount"
+    if contradiction == "symbol_count":
+        payload["coverage"] = payload["coverage"] | {"symbolCount": 1}
+    else:
+        payload |= {
+            "createdAt": "2026-08-28T09:32:00+08:00",
+            "verifiedAt": "2026-08-28T09:31:00+08:00",
+        }
+        expected_message = "verifiedAt"
+
+    with pytest.raises(ValidationError, match=expected_message):
+        BacktestDatasetView.model_validate(payload)
 
 
 def test_dataset_page_is_bounded_and_has_closed_normalized_filters() -> None:
@@ -1159,9 +1270,22 @@ def test_run_view_rejects_cross_projection_conflicts(update: dict[str, object]) 
 
 
 def test_run_view_rejects_an_item_larger_than_32_kib() -> None:
-    oversized_metrics = _metrics_view_payload() | {"realizedPnlFen": "1" * (32 * 1024)}
+    maximum_fen = "9" * 4_096
+    oversized_metrics = _metrics_view_payload() | {
+        "initialCashFen": maximum_fen,
+        "initialEquityFen": maximum_fen,
+        "finalCashFen": maximum_fen,
+        "finalEquityFen": maximum_fen,
+        "totalReturn": "0",
+        "turnoverFen": maximum_fen,
+        "totalCostFen": maximum_fen,
+        "realizedPnlFen": maximum_fen,
+        "unrealizedPnlFen": maximum_fen,
+    }
     with pytest.raises(ValidationError, match="32 KiB"):
-        BacktestRunView.model_validate(_run_view_payload() | {"metrics": oversized_metrics})
+        BacktestRunView.model_validate(
+            _run_view_payload() | {"initialCashFen": maximum_fen, "metrics": oversized_metrics}
+        )
 
 
 def test_metrics_assumptions_and_formula_versions_are_exact_value_views() -> None:
@@ -1292,6 +1416,29 @@ def test_equity_point_and_availability_series_are_bounded_and_consistent() -> No
             BacktestEquitySeries.model_validate(payload)
 
 
+def test_equity_series_rejects_a_complete_response_at_or_above_four_mib() -> None:
+    mark_price_fen = "9" * 1_000
+    market_value_fen = str(int(mark_price_fen) * 100)
+    items = [
+        _equity_point_payload(snapshot_id=f"snapshot-{index:04d}")
+        | {
+            "markPriceFen": mark_price_fen,
+            "cashFen": "0",
+            "positionQuantity": 100,
+            "marketValueFen": market_value_fen,
+            "costBasisFen": "0",
+            "realizedPnlFen": "0",
+            "unrealizedPnlFen": market_value_fen,
+            "totalCostFen": "0",
+            "equityFen": market_value_fen,
+        }
+        for index in range(2_000)
+    ]
+
+    with pytest.raises(ValidationError, match="4 MiB"):
+        BacktestEquitySeries.model_validate({"availability": "AVAILABLE", "items": items})
+
+
 def test_result_availability_is_closed_and_exact() -> None:
     availability = BacktestResultAvailabilityView.model_validate(_result_availability_payload())
     assert set(availability.model_dump(mode="json")) == {
@@ -1306,12 +1453,28 @@ def test_result_availability_is_closed_and_exact() -> None:
         )
 
 
+def test_job_filters_normalize_repeated_enums_as_sorted_unique_sets() -> None:
+    filters = BacktestJobFiltersView.model_validate(
+        {
+            "kind": ["DATA_SYNC", "BACKTEST_RUN", "DATA_SYNC"],
+            "status": ["FAILED", "COMPLETED", "FAILED"],
+            "runId": None,
+            "datasetHash": None,
+            "createdFrom": None,
+            "createdTo": None,
+        }
+    )
+
+    assert filters.kind == ("BACKTEST_RUN", "DATA_SYNC")
+    assert filters.status == ("COMPLETED", "FAILED")
+
+
 def test_job_run_and_fill_pages_are_closed_bounded_and_ordered() -> None:
     job_page = BacktestJobPage.model_validate(
         {
             "filters": {
-                "kind": "BACKTEST_RUN",
-                "status": "COMPLETED",
+                "kind": ["BACKTEST_RUN"],
+                "status": ["COMPLETED"],
                 "runId": _RUN_HASH,
                 "datasetHash": _HASH,
                 "createdFrom": None,
