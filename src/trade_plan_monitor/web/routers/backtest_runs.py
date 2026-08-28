@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol, cast
 
@@ -35,6 +36,18 @@ _SHA256_PATTERN = r"^[0-9a-f]{64}$"
 _SYMBOL_PATTERN = r"^[0-9]{6}\.(?:SH|SZ)$"
 _CURSOR_PATTERN = r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$"
 _NONTERMINAL_STATUSES = frozenset({"QUEUED", "RUNNING", "CANCEL_REQUESTED"})
+_RUN_COLLECTION_QUERY_FIELDS = frozenset(
+    {
+        "symbol",
+        "planVersionId",
+        "datasetHash",
+        "completedFrom",
+        "completedTo",
+        "pinned",
+        "limit",
+        "cursor",
+    }
+)
 
 RunIdPath = Annotated[
     str,
@@ -148,8 +161,24 @@ BacktestRunOperationServiceDependency = Annotated[
 ]
 
 
+def require_run_collection_query(request: Request) -> None:
+    names = tuple(name for name, _value in request.query_params.multi_items())
+    counts = Counter(names)
+    if not counts.keys() <= _RUN_COLLECTION_QUERY_FIELDS or any(
+        count != 1 for count in counts.values()
+    ):
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+
+
+RunCollectionQueryDependency = Annotated[
+    None,
+    Depends(require_run_collection_query),
+]
+
+
 @router.get("/backtest-runs", response_model=BacktestRunPage)
 async def list_backtest_runs(
+    _query: RunCollectionQueryDependency,
     service: BacktestRunReadServiceDependency,
     symbol: SymbolQuery = None,
     plan_version_id: PlanVersionIdQuery = None,

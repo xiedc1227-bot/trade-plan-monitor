@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from enum import StrEnum
 from typing import Annotated, Literal, Protocol, Self, cast
 from uuid import UUID
@@ -43,6 +44,9 @@ _MAX_LIMIT = 100
 _MAX_ROWS = 10_000
 _MAX_SOURCE_CHARS = 200_000
 _MAX_EXPECTED_REVISION = 9_223_372_036_854_775_806
+_PLAN_VERSION_COLLECTION_QUERY_FIELDS = frozenset(
+    {"symbol", "status", "canActivate", "offset", "limit"}
+)
 
 OffsetQuery = Annotated[int, Query(ge=0, le=_MAX_ROWS)]
 LimitQuery = Annotated[int, Query(ge=1, le=_MAX_LIMIT)]
@@ -397,8 +401,24 @@ PlanServiceDependency = Annotated[
 ]
 
 
+def require_plan_version_collection_query(request: Request) -> None:
+    names = tuple(name for name, _value in request.query_params.multi_items())
+    counts = Counter(names)
+    if not counts.keys() <= _PLAN_VERSION_COLLECTION_QUERY_FIELDS or any(
+        count != 1 for count in counts.values()
+    ):
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+
+
+PlanVersionCollectionQueryDependency = Annotated[
+    None,
+    Depends(require_plan_version_collection_query),
+]
+
+
 @router.get("/plan-versions", response_model=PlanVersionPage)
 async def list_plan_versions(
+    _query: PlanVersionCollectionQueryDependency,
     service: PlanServiceDependency,
     symbol: PlanSymbolQuery = None,
     status: PlanStatusQuery = None,

@@ -389,6 +389,47 @@ def test_list_backtest_runs_rejects_invalid_queries_before_service(
     assert service.list_calls == []
 
 
+@pytest.mark.parametrize(
+    "params",
+    [
+        [("unexpected", "x")],
+        [("symbol", "000001.SZ"), ("symbol", "000001.SZ")],
+        [("planVersionId", _PLAN_VERSION_ID), ("planVersionId", _PLAN_VERSION_ID)],
+        [("datasetHash", _DATASET_HASH), ("datasetHash", _DATASET_HASH)],
+        [
+            ("completedFrom", "2026-08-01T09:30:00+08:00"),
+            ("completedFrom", "2026-08-01T09:30:00+08:00"),
+        ],
+        [
+            ("completedTo", "2026-08-28T15:00:00+08:00"),
+            ("completedTo", "2026-08-28T15:00:00+08:00"),
+        ],
+        [("pinned", "true"), ("pinned", "true")],
+        [("limit", "20"), ("limit", "30")],
+        [("cursor", _CURSOR), ("cursor", _CURSOR)],
+    ],
+    ids=[
+        "unknown",
+        "symbol",
+        "plan-version",
+        "dataset-hash",
+        "completed-from",
+        "completed-to",
+        "pinned",
+        "limit",
+        "cursor",
+    ],
+)
+def test_list_backtest_runs_requires_a_closed_query_before_service(
+    params: list[tuple[str, str]],
+) -> None:
+    service = _FakeRunReadService(item=_MISSING)
+    response = _client(read_service=service).get("/api/v1/backtest-runs", params=params)
+
+    _assert_error(response, status=422, code="VALIDATION_ERROR")
+    assert service.list_calls == []
+
+
 def test_list_backtest_runs_revalidates_page_filter_and_limit_echoes() -> None:
     service = _FakeRunReadService(item=_MISSING)
     service.page_override = {

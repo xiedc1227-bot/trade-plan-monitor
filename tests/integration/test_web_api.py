@@ -1432,6 +1432,30 @@ def test_plan_version_filters_reject_invalid_values_before_service(
 
 
 @pytest.mark.parametrize(
+    "params",
+    [
+        [("unexpected", "x")],
+        [("symbol", "003043.SZ"), ("symbol", "003043.SZ")],
+        [("status", "DRAFT"), ("status", "DRAFT")],
+        [("canActivate", "true"), ("canActivate", "true")],
+        [("offset", "0"), ("offset", "1")],
+        [("limit", "20"), ("limit", "30")],
+    ],
+    ids=["unknown", "symbol", "status", "can-activate", "offset", "limit"],
+)
+def test_plan_version_filters_require_a_closed_query_before_service(
+    params: list[tuple[str, str]],
+) -> None:
+    service = _FakePlanOperationService()
+    response = TestClient(create_app(plan_service=service)).get(
+        "/api/v1/plan-versions", params=params
+    )
+
+    _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+
+
+@pytest.mark.parametrize(
     ("params", "payload_update"),
     [
         ({"symbol": "000001.SZ"}, {}),
