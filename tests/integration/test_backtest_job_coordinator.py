@@ -3,34 +3,65 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+import sqlite3
+from contextlib import closing
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from hashlib import sha256
+from inspect import getsource
+from pathlib import Path
 from threading import Event, get_ident
 from time import monotonic
 from zoneinfo import ZoneInfo
 
+import pytest
+
+from trade_plan_monitor.backtest.application import BacktestApplicationService
 from trade_plan_monitor.backtest.control import (
     BacktestOperationCancelled,
     BacktestProgress,
     CancellationToken,
 )
-from trade_plan_monitor.backtest.dataset import DatasetScope
+from trade_plan_monitor.backtest.dataset import (
+    BacktestDatasetCoverage,
+    DatasetManifest,
+    DatasetScope,
+)
 from trade_plan_monitor.backtest.jobs import (
     BacktestDatasetScopeRequest,
+    BacktestDatasetVerificationJobResult,
     BacktestDataSyncJobResult,
     BacktestJobCoordinator,
     BacktestJobOperations,
     BacktestJobRepository,
     BacktestJobStatus,
+    BacktestRunJobRequest,
+    BacktestRunJobResult,
+    DatasetVerifyJobRequest,
     DataSyncJobRequest,
 )
+from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
+from trade_plan_monitor.backtest.models import ExecutionConfig
+from trade_plan_monitor.backtest.results import (
+    BacktestResultStore,
+    BacktestRunStatus,
+    BacktestRunSummary,
+)
+from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.sync import BlockingBacktestSyncCore
+from trade_plan_monitor.domain.plan_codec import load_plan_yaml
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
 from trade_plan_monitor.market_data.models import TradingDay
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _TRADE_DATE = date(2026, 8, 24)
 _PROFILE = HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1
+_PLAN_PATH = Path(__file__).parents[2] / "config" / "plans" / "003043.SZ.sample.yaml"
+
+
+def _hash(label: str) -> str:
+    return sha256(label.encode("utf-8")).hexdigest()
 
 
 def _scope_request() -> BacktestDatasetScopeRequest:
@@ -46,6 +77,83 @@ def _scope_request() -> BacktestDatasetScopeRequest:
 
 def _sync_request() -> DataSyncJobRequest:
     return DataSyncJobRequest(scope=_scope_request(), refresh=False, allow_network=True)
+
+
+def _run_input() -> BacktestRunInput:
+    plan = load_plan_yaml(_PLAN_PATH.read_text(encoding="utf-8"))
+    manifest = DatasetManifest(
+        dataset_hash=_hash("coordinator-dataset"),
+        scope=DatasetScope(
+            symbols=(plan.symbol,),
+            start=_TRADE_DATE,
+            end=_TRADE_DATE,
+            warmup_start=_TRADE_DATE,
+            historical_profile=_PROFILE,
+        ),
+        items=(),
+    )
+    return BacktestRunInput.create(
+        plan=plan,
+        manifest=manifest,
+        initial_cash_fen=10_000_000,
+        initial_lots=(),
+        execution_config=ExecutionConfig(
+            commission_rate=Decimal("0.0003"),
+            minimum_commission_fen=500,
+            stamp_duty_rate=Decimal("0.0005"),
+            transfer_fee_rate=Decimal("0.00001"),
+            buy_slippage_bps=Decimal("2"),
+            sell_slippage_bps=Decimal("2"),
+        ),
+        manual_event_risk=False,
+    )
+
+
+def _stage_empty_run(
+    store: BacktestResultStore,
+    run_input: BacktestRunInput,
+    *,
+    retention_at: datetime | None = None,
+) -> str:
+    report_hash = _hash(f"report:{run_input.run_id}")
+    summary = BacktestRunSummary(
+        run_id=run_input.run_id,
+        plan_sha256=run_input.plan_sha256,
+        dataset_hash=run_input.dataset_hash,
+        status=BacktestRunStatus.COMPLETED,
+        completed_at=datetime(2026, 8, 28, 15, 0, tzinfo=_SHANGHAI),
+        event_start=run_input.start,
+        event_end=run_input.end,
+        symbols=(run_input.plan_snapshot.symbol,),
+        coverage={
+            "dailyEquityCount": 0,
+            "decisionCount": 0,
+            "detailCount": 0,
+            "fillCount": 0,
+            "outcomeCount": 0,
+            "signalCount": 0,
+        },
+        assumptions={
+            "executionConfigHash": run_input.execution_config.config_hash,
+            "manualEventRisk": run_input.manual_event_risk,
+            "reportHash": report_hash,
+        },
+        formula_versions={
+            "execution": run_input.execution_config.formula_version,
+            "indicator": run_input.indicator_formula_version,
+            "runner": run_input.run_formula_version,
+        },
+        final_metrics={},
+    )
+    assert (
+        store.record_verified_run(
+            summary,
+            run_input=run_input,
+            retention_at=retention_at,
+        )
+        is True
+    )
+    return report_hash
 
 
 async def _wait_until(predicate, *, timeout: float = 1.0) -> None:
@@ -301,3 +409,220 @@ def test_shutdown_stops_claiming_cancels_active_work_and_joins_owned_resources(
         )
 
     asyncio.run(scenario())
+
+
+def test_atomic_completion_gives_cancellation_first_one_terminal_and_no_partial_result(
+    tmp_path,
+) -> None:
+    database = tmp_path / "cancel-first.sqlite3"
+    repository = BacktestJobRepository(database)
+    result_store = BacktestResultStore(database)
+    run_input = _run_input()
+    report_hash = _stage_empty_run(result_store, run_input)
+    receipt = repository.submit(
+        BacktestRunJobRequest(run_input=run_input),
+        "atomic-cancel-submit",
+    )
+    claim = repository.claim_next()
+    assert claim is not None and claim.job_id == receipt.job_id
+
+    cancellation = repository.request_cancel(receipt.job_id, "atomic-cancel-request")
+    assert cancellation.status is BacktestJobStatus.CANCEL_REQUESTED
+    assert (
+        repository.complete(
+            receipt.job_id,
+            claim.claim_token.get_secret_value(),
+            BacktestRunJobResult(
+                run_id=run_input.run_id,
+                report_hash=report_hash,
+                reused=False,
+            ),
+        )
+        is False
+    )
+    assert result_store.get_verified_run(run_input.run_id) is None
+    assert (
+        repository.acknowledge_cancel(
+            receipt.job_id,
+            claim.claim_token.get_secret_value(),
+        )
+        is True
+    )
+    assert repository.get(receipt.job_id).status is BacktestJobStatus.CANCELLED
+
+
+def test_atomic_completion_gives_publication_first_one_terminal_and_visible_result(
+    tmp_path,
+) -> None:
+    database = tmp_path / "publish-first.sqlite3"
+    repository = BacktestJobRepository(database)
+    result_store = BacktestResultStore(database)
+    run_input = _run_input()
+    report_hash = _stage_empty_run(result_store, run_input)
+    receipt = repository.submit(
+        BacktestRunJobRequest(run_input=run_input),
+        "atomic-publish-submit",
+    )
+    claim = repository.claim_next()
+    assert claim is not None
+
+    assert (
+        repository.complete(
+            receipt.job_id,
+            claim.claim_token.get_secret_value(),
+            BacktestRunJobResult(
+                run_id=run_input.run_id,
+                report_hash=report_hash,
+                reused=False,
+            ),
+        )
+        is True
+    )
+    assert result_store.get_verified_run(run_input.run_id) is not None
+    cancellation = repository.request_cancel(receipt.job_id, "atomic-publish-cancel")
+    assert cancellation.status is BacktestJobStatus.COMPLETED
+    assert repository.get(receipt.job_id).status is BacktestJobStatus.COMPLETED
+
+
+def test_atomic_completion_rolls_back_publication_when_job_update_fails(tmp_path) -> None:
+    database = tmp_path / "atomic-rollback.sqlite3"
+    repository = BacktestJobRepository(database)
+    result_store = BacktestResultStore(database)
+    run_input = _run_input()
+    report_hash = _stage_empty_run(result_store, run_input)
+    receipt = repository.submit(
+        BacktestRunJobRequest(run_input=run_input),
+        "atomic-rollback-submit",
+    )
+    claim = repository.claim_next()
+    assert claim is not None
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER reject_job_completion
+            BEFORE UPDATE OF status ON backtest_job
+            WHEN NEW.status = 'COMPLETED' AND OLD.status = 'RUNNING'
+            BEGIN
+                SELECT RAISE(ABORT, 'forced completion failure');
+            END
+            """
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="forced completion failure"):
+        repository.complete(
+            receipt.job_id,
+            claim.claim_token.get_secret_value(),
+            BacktestRunJobResult(
+                run_id=run_input.run_id,
+                report_hash=report_hash,
+                reused=False,
+            ),
+        )
+
+    assert result_store.get_verified_run(run_input.run_id) is None
+    assert repository.get(receipt.job_id).status is BacktestJobStatus.RUNNING
+
+
+def test_maintenance_shares_one_total_budget_between_jobs_and_result_rows(tmp_path) -> None:
+    now = [datetime(2026, 8, 1, 9, 30, tzinfo=_SHANGHAI)]
+    database = tmp_path / "maintenance.sqlite3"
+    repository = BacktestJobRepository(database, clock=lambda: now[0])
+    result_store = BacktestResultStore(database)
+    for index in range(2):
+        receipt = repository.submit(
+            _sync_request(),
+            f"maintenance-submit-{index}",
+            request_id=f"{index + 1:032x}",
+        )
+        repository.request_cancel(receipt.job_id, f"maintenance-cancel-{index}")
+    run_input = _run_input()
+    _stage_empty_run(result_store, run_input, retention_at=now[0])
+    now[0] += timedelta(days=15)
+    maintenance = BacktestJobMaintenance(repository=repository, results=result_store)
+
+    first = maintenance.prune(as_of=now[0], batch_size=2)
+
+    assert first.deleted_count == 2
+    assert first.has_more is True
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM backtest_job").fetchone() == (0,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM backtest_run WHERE materialized = 0"
+        ).fetchone() == (1,)
+
+    second = maintenance.prune(as_of=now[0], batch_size=2)
+    assert second.deleted_count == 1
+    assert second.has_more is False
+
+
+def test_cli_facade_routes_typed_sync_and_verify_through_durable_job_use_cases(
+    tmp_path,
+) -> None:
+    calls: list[tuple[object, str | None]] = []
+    coverage = BacktestDatasetCoverage(
+        symbol_count=1,
+        trading_day_count=1,
+        calendar_row_count=1,
+        minute_day_count=1,
+        minute_bar_count=240,
+        daily_limit_row_count=1,
+        daily_bar_row_count=1,
+        blockers=(),
+    )
+
+    class DurableUseCases:
+        async def execute(self, request, *, request_id=None):
+            calls.append((request, request_id))
+            if isinstance(request, DataSyncJobRequest):
+                return BacktestDataSyncJobResult(
+                    calendar_rows=1,
+                    minute_days=1,
+                    daily_limit_rows=1,
+                    daily_bar_rows=1,
+                    network_calls=4,
+                )
+            assert isinstance(request, DatasetVerifyJobRequest)
+            return BacktestDatasetVerificationJobResult(
+                ready=True,
+                dataset_hash=_hash("verified-dataset"),
+                coverage=coverage,
+                blockers=(),
+            )
+
+    service = BacktestApplicationService(
+        config_path=tmp_path / "unused.yaml",
+        market_database=tmp_path / "market.sqlite3",
+        results_database=tmp_path / "results.sqlite3",
+        report_directory=tmp_path / "reports",
+        job_use_cases=DurableUseCases(),
+    )
+
+    sync_result = asyncio.run(
+        service.sync(
+            symbols=("600000.SH",),
+            start=_TRADE_DATE,
+            end=_TRADE_DATE,
+            warmup_start=_TRADE_DATE,
+            refresh=False,
+            allow_network=True,
+        )
+    )
+    verify_result = service.verify(
+        symbols=("600000.SH",),
+        start=_TRADE_DATE,
+        end=_TRADE_DATE,
+        warmup_start=_TRADE_DATE,
+    )
+
+    assert sync_result.network_calls == 4
+    assert verify_result.ready is True
+    assert verify_result.dataset_hash == _hash("verified-dataset")
+    assert isinstance(calls[0][0], DataSyncJobRequest)
+    assert calls[0][0].allow_network is True
+    assert calls[0][1] is not None
+    assert isinstance(calls[1][0], DatasetVerifyJobRequest)
+    assert calls[1][1] is None
+    run_source = getsource(BacktestApplicationService.run)
+    assert "OfflineBacktestRunner" not in run_source
+    assert "persist_report" not in run_source
+    assert "_execute_job" in run_source

@@ -2,42 +2,72 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
-from datetime import UTC, date, datetime, timedelta
+from collections.abc import Awaitable
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Protocol
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from trade_plan_monitor.backtest.control import (
+    BacktestCancellationResult,
+    BacktestOperationCancelled,
+    BacktestProgress,
+    CancellationToken,
+)
 from trade_plan_monitor.backtest.dataset import (
+    BacktestDatasetCoverage,
     DatasetFreezeResult,
     DatasetScope,
     exchange_for_symbol,
 )
+from trade_plan_monitor.backtest.jobs import (
+    BacktestDatasetScopeRequest,
+    BacktestDatasetVerificationJobResult,
+    BacktestDataSyncJobResult,
+    BacktestJobCoordinator,
+    BacktestJobOperations,
+    BacktestJobRepository,
+    BacktestJobRequest,
+    BacktestJobResult,
+    BacktestJobStatus,
+    BacktestRunJobRequest,
+    BacktestRunJobResult,
+    DatasetVerifyJobRequest,
+    DataSyncJobRequest,
+)
+from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
 from trade_plan_monitor.backtest.reporting import (
-    persist_report,
-    write_persisted_report_files,
-    write_report_files,
+    _detail_records,
+    _summary_for_report,
+)
+from trade_plan_monitor.backtest.reporting import (
+    write_persisted_report_files as write_report_files,
 )
 from trade_plan_monitor.backtest.results import (
+    BacktestFillRecord,
     BacktestResultStore,
     BacktestRunSummary,
     RetentionPruneResult,
 )
+from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.runner import (
     OfflineBacktestRunner,
-    backtest_run_id,
 )
-from trade_plan_monitor.backtest.sync import BacktestSyncResult, BacktestSyncService
+from trade_plan_monitor.backtest.sync import BacktestSyncResult, BlockingBacktestSyncCore
+from trade_plan_monitor.backtest.time import SHANGHAI
 from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.domain.plan_codec import load_plan_json, load_plan_yaml
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
 from trade_plan_monitor.market_data.tushare_client import create_tushare_client
 from trade_plan_monitor.market_data.tushare_historical import TushareHistoricalMinuteProvider
 from trade_plan_monitor.runtime.clock import SystemClock
-from trade_plan_monitor.runtime.request_control import TushareRequestController
 
 DEFAULT_MARKET_DATABASE = Path("data/backtest-market.sqlite3")
 DEFAULT_RESULTS_DATABASE = Path("data/backtest-results.sqlite3")
@@ -64,6 +94,17 @@ class BacktestListResult(_ApplicationValue):
     runs: tuple[BacktestRunSummary, ...]
 
 
+class BacktestJobUseCases(Protocol):
+    """One durable request-to-terminal-result boundary shared by CLI and HTTP."""
+
+    def execute(
+        self,
+        request: BacktestJobRequest,
+        *,
+        request_id: str | None = None,
+    ) -> Awaitable[BacktestJobResult]: ...
+
+
 class BacktestApplicationService:
     """Keep sync network-capable and every other backtest command local-only."""
 
@@ -74,11 +115,15 @@ class BacktestApplicationService:
         market_database: str | Path = DEFAULT_MARKET_DATABASE,
         results_database: str | Path = DEFAULT_RESULTS_DATABASE,
         report_directory: str | Path = DEFAULT_REPORT_DIRECTORY,
+        job_use_cases: BacktestJobUseCases | None = None,
     ) -> None:
         self._config_path = Path(config_path).expanduser().resolve()
         self._market_database = Path(market_database).expanduser().resolve()
         self._results_database = Path(results_database).expanduser().resolve()
         self._report_directory = Path(report_directory).expanduser().resolve()
+        if job_use_cases is not None and not callable(getattr(job_use_cases, "execute", None)):
+            raise TypeError("job_use_cases must expose execute")
+        self._job_use_cases = job_use_cases
         if _same_path(self._market_database, self._results_database):
             raise ValueError("market_database and results_database must be different files")
 
@@ -104,25 +149,17 @@ class BacktestApplicationService:
         )
         if unsupported:
             raise ValueError("UNSUPPORTED_HISTORICAL_CALENDAR:BSE")
-        configuration = load_application_config(self._config_path)
-        clock = SystemClock()
-        client = create_tushare_client(configuration.tushare)
-        provider = TushareHistoricalMinuteProvider(
-            client,
-            now=clock.now,
-            profile=VERIFIED_HISTORICAL_PROFILE,
+        result = await self._execute_job(
+            DataSyncJobRequest(
+                scope=_scope_request(scope),
+                refresh=refresh,
+                allow_network=True,
+            ),
+            request_id=uuid4().hex,
         )
-        controller = TushareRequestController(clock=clock)
-        try:
-            service = BacktestSyncService(
-                provider=provider,
-                store=BacktestMarketStore(self._market_database),
-                request_controller=controller,
-                today=lambda: clock.now().date(),
-            )
-            return await service.sync(scope, refresh=refresh)
-        finally:
-            controller.close()
+        if not isinstance(result, BacktestDataSyncJobResult):
+            raise RuntimeError("durable sync returned an invalid result kind")
+        return BacktestSyncResult.model_validate(result.model_dump(mode="python", exclude={"kind"}))
 
     def verify(
         self,
@@ -133,7 +170,14 @@ class BacktestApplicationService:
         warmup_start: date | None,
     ) -> DatasetFreezeResult:
         scope = _scope(symbols, start, end, warmup_start)
-        return BacktestMarketStore(self._market_database).freeze_dataset(scope)
+        result = self._execute_job_sync(DatasetVerifyJobRequest(scope=_scope_request(scope)))
+        if not isinstance(result, BacktestDatasetVerificationJobResult):
+            raise RuntimeError("durable verification returned an invalid result kind")
+        return DatasetFreezeResult(
+            ready=result.ready,
+            dataset_hash=result.dataset_hash,
+            blockers=result.blockers,
+        )
 
     def run(
         self,
@@ -149,8 +193,6 @@ class BacktestApplicationService:
         sell_slippage_bps: Decimal,
         manual_event_risk: bool,
     ) -> BacktestRunCommandResult:
-        market_store = BacktestMarketStore(self._market_database)
-        result_store = BacktestResultStore(self._results_database)
         plan = _load_plan(plan_path)
         initial_cash_fen = _yuan_to_fen(initial_cash_yuan, "initial_cash_yuan", positive=True)
         execution_config = ExecutionConfig(
@@ -165,53 +207,38 @@ class BacktestApplicationService:
             buy_slippage_bps=buy_slippage_bps,
             sell_slippage_bps=sell_slippage_bps,
         )
-        manifest = market_store.dataset_manifest(dataset_hash)
-        expected_run_id = backtest_run_id(
+        manifest = BacktestMarketStore(self._market_database).dataset_manifest(dataset_hash)
+        run_input = BacktestRunInput.create(
             plan=plan,
             manifest=manifest,
             initial_cash_fen=initial_cash_fen,
+            initial_lots=(),
             execution_config=execution_config,
             manual_event_risk=manual_event_risk,
         )
-        json_path = self._report_directory / f"{expected_run_id}.json"
-        csv_path = self._report_directory / f"{expected_run_id}.fills.csv"
-        existing = result_store.get_run(expected_run_id)
-        if existing is not None:
-            report_hash = existing.assumptions.get("reportHash")
-            if not isinstance(report_hash, str):
-                raise RuntimeError("stored completed run is missing reportHash")
-            write_persisted_report_files(
-                existing,
-                result_store.list_fills(expected_run_id),
-                json_path=json_path,
-                csv_path=csv_path,
-            )
-            return BacktestRunCommandResult(
-                run_id=expected_run_id,
-                report_hash=report_hash,
-                reused=True,
-                json_report=str(json_path),
-                csv_report=str(csv_path),
-                metrics=existing.final_metrics,
-            )
-
-        report = OfflineBacktestRunner(market_store).run(
-            plan=plan,
-            dataset_hash=dataset_hash,
-            initial_cash_fen=initial_cash_fen,
-            execution_config=execution_config,
-            manual_event_risk=manual_event_risk,
+        result = self._execute_job_sync(BacktestRunJobRequest(run_input=run_input))
+        if not isinstance(result, BacktestRunJobResult) or result.run_id != run_input.run_id:
+            raise RuntimeError("durable run returned an invalid result identity")
+        result_store = BacktestResultStore(self._results_database)
+        summary = result_store.get_verified_run(result.run_id)
+        if summary is None:
+            raise RuntimeError("completed durable run is missing its verified result")
+        json_path = self._report_directory / f"{result.run_id}.json"
+        csv_path = self._report_directory / f"{result.run_id}.fills.csv"
+        write_report_files(
+            summary,
+            result_store.list_fills(result.run_id),
+            json_path=json_path,
+            csv_path=csv_path,
         )
-        persist_report(result_store, report)
-        write_report_files(report, json_path=json_path, csv_path=csv_path)
         result_store.checkpoint_wal()
         return BacktestRunCommandResult(
-            run_id=report.run_id,
-            report_hash=report.report_hash,
-            reused=False,
+            run_id=result.run_id,
+            report_hash=result.report_hash,
+            reused=result.reused,
             json_report=str(json_path),
             csv_report=str(csv_path),
-            metrics=report.metrics.model_dump(mode="json"),
+            metrics=summary.final_metrics,
         )
 
     def list_runs(self, *, limit: int = 100, offset: int = 0) -> BacktestListResult:
@@ -224,10 +251,236 @@ class BacktestApplicationService:
         as_of: datetime | None = None,
         batch_size: int = 1_000,
     ) -> RetentionPruneResult:
-        cutoff = datetime.now(UTC) if as_of is None else as_of
-        return BacktestResultStore(self._results_database).prune_details(
+        cutoff = datetime.now(SHANGHAI) if as_of is None else as_of
+        results = BacktestResultStore(self._results_database)
+        return BacktestJobMaintenance(
+            repository=BacktestJobRepository(self._results_database),
+            results=results,
+        ).prune(
             as_of=cutoff,
             batch_size=batch_size,
+        )
+
+    async def _execute_job(
+        self,
+        request: BacktestJobRequest,
+        *,
+        request_id: str | None = None,
+    ) -> BacktestJobResult:
+        use_cases = self._job_use_cases or _LocalBacktestJobUseCases(
+            config_path=self._config_path,
+            market_database=self._market_database,
+            results_database=self._results_database,
+        )
+        result = await use_cases.execute(request, request_id=request_id)
+        if not isinstance(
+            result,
+            (
+                BacktestDataSyncJobResult,
+                BacktestDatasetVerificationJobResult,
+                BacktestRunJobResult,
+            ),
+        ):
+            raise TypeError("durable use cases returned an invalid job result")
+        return result
+
+    def _execute_job_sync(self, request: BacktestJobRequest) -> BacktestJobResult:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError("synchronous CLI facade cannot run inside an event loop")
+        return asyncio.run(self._execute_job(request))
+
+
+class _LocalBacktestJobUseCases:
+    """Execute CLI commands through the same durable repository/coordinator path."""
+
+    def __init__(
+        self,
+        *,
+        config_path: Path,
+        market_database: Path,
+        results_database: Path,
+    ) -> None:
+        self._config_path = config_path
+        self._market_store = BacktestMarketStore(market_database)
+        self._repository = BacktestJobRepository(results_database)
+        self._results = BacktestResultStore(results_database)
+
+    async def execute(
+        self,
+        request: BacktestJobRequest,
+        *,
+        request_id: str | None = None,
+    ) -> BacktestJobResult:
+        receipt = self._repository.submit(
+            request,
+            f"cli-{uuid4().hex}",
+            request_id=request_id,
+        )
+        view = self._repository.get(receipt.job_id)
+        if view is None:
+            raise RuntimeError("durable job disappeared after submission")
+        if view.status is not BacktestJobStatus.COMPLETED:
+            operations = BacktestJobOperations(
+                data_sync=self._sync,
+                dataset_verify=self._verify,
+                backtest_run=self._run,
+            )
+            coordinator = BacktestJobCoordinator(
+                repository=self._repository,
+                operations=operations,
+            )
+            await coordinator.start()
+            try:
+                while True:
+                    view = self._repository.get(receipt.job_id)
+                    if view is None:
+                        raise RuntimeError("durable job disappeared during execution")
+                    if view.status in {
+                        BacktestJobStatus.COMPLETED,
+                        BacktestJobStatus.FAILED,
+                        BacktestJobStatus.CANCELLED,
+                    }:
+                        break
+                    await asyncio.sleep(0.01)
+            finally:
+                await coordinator.shutdown()
+        if view.status is BacktestJobStatus.FAILED:
+            raise RuntimeError(f"{view.error_code}: {view.error_message}")
+        if view.status is BacktestJobStatus.CANCELLED:
+            raise RuntimeError("BACKTEST_OPERATION_CANCELLED")
+        if view.status is not BacktestJobStatus.COMPLETED or view.result is None:
+            raise RuntimeError("durable job did not produce a terminal result")
+        return view.result
+
+    def _sync(
+        self,
+        request: BacktestJobRequest,
+        *,
+        cancellation_token: CancellationToken,
+        progress_callback,
+    ) -> BacktestJobResult:
+        if not isinstance(request, DataSyncJobRequest):
+            raise TypeError("sync operation requires DataSyncJobRequest")
+        configuration = load_application_config(self._config_path)
+        clock = SystemClock()
+        provider = TushareHistoricalMinuteProvider(
+            create_tushare_client(configuration.tushare),
+            now=clock.now,
+            profile=VERIFIED_HISTORICAL_PROFILE,
+        )
+        result = BlockingBacktestSyncCore(
+            provider=provider,
+            store=self._market_store,
+            today=lambda: clock.now().date(),
+        ).sync(
+            _dataset_scope(request.scope),
+            refresh=request.refresh,
+            cancellation_token=cancellation_token,
+            progress_callback=progress_callback,
+        )
+        return BacktestDataSyncJobResult.model_validate(
+            result.model_dump(mode="python", round_trip=True)
+        )
+
+    def _verify(
+        self,
+        request: BacktestJobRequest,
+        *,
+        cancellation_token: CancellationToken,
+        progress_callback,
+    ) -> BacktestJobResult:
+        if not isinstance(request, DatasetVerifyJobRequest):
+            raise TypeError("verification operation requires DatasetVerifyJobRequest")
+        outcome = self._market_store.freeze_dataset(
+            _dataset_scope(request.scope),
+            cancellation_token=cancellation_token,
+            progress_callback=progress_callback,
+        )
+        coverage = (
+            self._market_store.dataset_summary(outcome.dataset_hash).coverage
+            if outcome.dataset_hash is not None
+            else BacktestDatasetCoverage(
+                symbol_count=len(request.scope.symbols),
+                trading_day_count=0,
+                calendar_row_count=0,
+                minute_day_count=0,
+                minute_bar_count=0,
+                daily_limit_row_count=0,
+                daily_bar_row_count=0,
+                blockers=outcome.blockers,
+            )
+        )
+        return BacktestDatasetVerificationJobResult(
+            ready=outcome.ready,
+            dataset_hash=outcome.dataset_hash,
+            coverage=coverage,
+            blockers=outcome.blockers,
+        )
+
+    def _run(
+        self,
+        request: BacktestJobRequest,
+        *,
+        cancellation_token: CancellationToken,
+        progress_callback,
+    ) -> BacktestJobResult:
+        if not isinstance(request, BacktestRunJobRequest):
+            raise TypeError("run operation requires BacktestRunJobRequest")
+        run_input = request.run_input
+        report = OfflineBacktestRunner(self._market_store).run(
+            plan=run_input.plan_snapshot,
+            dataset_hash=run_input.dataset_hash,
+            initial_cash_fen=run_input.initial_cash_fen,
+            initial_lots=run_input.initial_lots,
+            execution_config=run_input.execution_config,
+            manual_event_risk=run_input.manual_event_risk,
+            plan_version_id=run_input.plan_version_id,
+            cancellation_token=cancellation_token,
+        )
+        if isinstance(report, BacktestCancellationResult):
+            raise BacktestOperationCancelled(report.phase, report.last_safe_event_id)
+        cancellation_token.raise_if_cancelled("RUN_FINALIZE")
+        existing = self._results.get_verified_run(run_input.run_id)
+        if existing is not None:
+            report_hash = existing.assumptions.get("reportHash")
+            if not isinstance(report_hash, str):
+                raise RuntimeError("stored completed run is missing reportHash")
+            return BacktestRunJobResult(
+                run_id=run_input.run_id,
+                report_hash=report_hash,
+                reused=True,
+            )
+
+        summary = _summary_for_report(
+            report,
+            completed_at=report.daily_equity[-1].marked_at,
+            run_input=run_input,
+        )
+        fills = tuple(BacktestFillRecord.from_value(fill, version="v2") for fill in report.fills)
+        details = _detail_records(report, version="v2")
+        self._results.record_verified_run(summary, run_input=run_input)
+        for start in range(0, len(fills), 1_000):
+            cancellation_token.raise_if_cancelled("RUN_FINALIZE")
+            self._results.record_fills(run_input.run_id, fills[start : start + 1_000])
+        for start in range(0, len(details), 1_000):
+            cancellation_token.raise_if_cancelled("RUN_FINALIZE")
+            self._results.record_details(run_input.run_id, details[start : start + 1_000])
+        cancellation_token.raise_if_cancelled("RUN_REPORT_HANDOFF")
+        progress_callback(
+            BacktestProgress(
+                phase="RUN_REPORT_HANDOFF",
+                completed_units=1,
+                total_units=1,
+            )
+        )
+        return BacktestRunJobResult(
+            run_id=run_input.run_id,
+            report_hash=report.report_hash,
+            reused=False,
         )
 
 
@@ -246,6 +499,28 @@ def _scope(
         end=end,
         warmup_start=resolved_warmup,
         historical_profile=VERIFIED_HISTORICAL_PROFILE,
+    )
+
+
+def _scope_request(scope: DatasetScope) -> BacktestDatasetScopeRequest:
+    return BacktestDatasetScopeRequest(
+        symbols=scope.symbols,
+        start=scope.start,
+        end=scope.end,
+        warmup_start=scope.warmup_start,
+        historical_profile=scope.historical_profile,
+        adjustment_policy=scope.adjustment_policy,
+    )
+
+
+def _dataset_scope(scope: BacktestDatasetScopeRequest) -> DatasetScope:
+    return DatasetScope(
+        symbols=scope.symbols,
+        start=scope.start,
+        end=scope.end,
+        warmup_start=scope.warmup_start,
+        historical_profile=scope.historical_profile,
+        adjustment_policy=scope.adjustment_policy,
     )
 
 

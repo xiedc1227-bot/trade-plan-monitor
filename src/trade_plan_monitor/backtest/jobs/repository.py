@@ -47,7 +47,11 @@ from trade_plan_monitor.backtest.migration import (
     inspect_result_database,
     require_safe_store_initialization,
 )
-from trade_plan_monitor.backtest.results import BacktestResultStore
+from trade_plan_monitor.backtest.results import (
+    BacktestResultStore,
+    RetentionPruneResult,
+    VerifiedBacktestPublication,
+)
 from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
 from trade_plan_monitor.backtest.time import (
@@ -140,8 +144,9 @@ class BacktestJobRepository:
             raise MigrationPreflightError("LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION")
         require_safe_store_initialization(self._migration_inventory)
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        result_store: BacktestResultStore | None = None
         if self._migration_inventory.database_state is DatabaseState.FRESH:
-            BacktestResultStore(self._path, busy_timeout_ms=busy_timeout_ms)
+            result_store = BacktestResultStore(self._path, busy_timeout_ms=busy_timeout_ms)
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 create_backtest_job_schema(connection)
@@ -151,6 +156,10 @@ class BacktestJobRepository:
             "MISSING_BACKTEST_JOB_SCHEMA" in current.migration_reasons
         ):
             raise MigrationPreflightError("BACKTEST_JOB_SCHEMA_INITIALIZATION_FAILED")
+        self._result_store = result_store or BacktestResultStore(
+            self._path,
+            busy_timeout_ms=busy_timeout_ms,
+        )
 
     @property
     def database_path(self) -> Path:
@@ -553,6 +562,12 @@ class BacktestJobRepository:
             ),
         ):
             raise TypeError("result must be a closed backtest job result")
+        publication: VerifiedBacktestPublication | None = None
+        if isinstance(result, BacktestRunJobResult):
+            publication = self._result_store.verify_job_publication(
+                result.run_id,
+                expected_report_hash=result.report_hash,
+            )
         now = self._now()
         now_text = format_shanghai_datetime(now)
         expires_at = format_shanghai_datetime(now + timedelta(days=JOB_IDEMPOTENCY_DAYS))
@@ -574,6 +589,8 @@ class BacktestJobRepository:
                 raise ValueError("job result kind does not match the claimed job")
             if isinstance(result, BacktestRunJobResult) and result.run_id != str(row[1]):
                 raise ValueError("run result identity does not match the claimed job")
+            if publication is not None:
+                self._result_store.materialize_verified_publication(connection, publication)
             dataset_hash = (
                 result.dataset_hash
                 if isinstance(result, BacktestDatasetVerificationJobResult)
@@ -603,12 +620,80 @@ class BacktestJobRepository:
                 ),
             )
             if updated.rowcount != 1:
-                connection.commit()
+                connection.rollback()
                 return False
             _expire_job_idempotency(connection, normalized_job_id, expires_at)
             connection.commit()
         self._progress_throttle.forget(f"{normalized_job_id}:{normalized_token}")
         return True
+
+    def prune_job_rows(
+        self,
+        *,
+        as_of: datetime,
+        remaining_budget: int,
+    ) -> RetentionPruneResult:
+        """Delete expired terminal jobs within the caller-owned total row budget."""
+
+        normalized_as_of = parse_shanghai_datetime(format_shanghai_datetime(as_of))
+        if type(remaining_budget) is not int or not 0 <= remaining_budget <= 1_000:
+            raise ValueError("remaining_budget must be between 0 and 1000")
+        cutoff = format_shanghai_datetime(normalized_as_of - timedelta(days=JOB_IDEMPOTENCY_DAYS))
+        with self._connect() as connection:
+            if remaining_budget == 0:
+                has_more = (
+                    connection.execute(
+                        """
+                        SELECT 1 FROM backtest_job
+                        WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                          AND finished_at < ? LIMIT 1
+                        """,
+                        (cutoff,),
+                    ).fetchone()
+                    is not None
+                )
+                return RetentionPruneResult(deleted_count=0, has_more=has_more)
+            connection.execute("BEGIN IMMEDIATE")
+            job_ids = tuple(
+                str(row[0])
+                for row in connection.execute(
+                    """
+                    SELECT job_id FROM backtest_job
+                    WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                      AND finished_at < ?
+                    ORDER BY finished_at, job_id LIMIT ?
+                    """,
+                    (cutoff, remaining_budget),
+                ).fetchall()
+            )
+            deleted_count = 0
+            for job_id in job_ids:
+                connection.execute(
+                    "DELETE FROM backtest_job_idempotency WHERE job_id = ?",
+                    (job_id,),
+                )
+                deleted_count += connection.execute(
+                    """
+                    DELETE FROM backtest_job
+                    WHERE job_id = ?
+                      AND status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                      AND finished_at < ?
+                    """,
+                    (job_id, cutoff),
+                ).rowcount
+            has_more = (
+                connection.execute(
+                    """
+                    SELECT 1 FROM backtest_job
+                    WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                      AND finished_at < ? LIMIT 1
+                    """,
+                    (cutoff,),
+                ).fetchone()
+                is not None
+            )
+            connection.commit()
+        return RetentionPruneResult(deleted_count=deleted_count, has_more=has_more)
 
     def fail(
         self,

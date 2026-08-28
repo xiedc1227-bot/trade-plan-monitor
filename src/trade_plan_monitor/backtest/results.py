@@ -1558,6 +1558,37 @@ class BacktestResultStore:
             expected_fill_set_hash=expected_fill_set_hash,
             expected_detail_set_hash=expected_detail_set_hash,
         )
+        return self._verify_staged_publication(expectations)
+
+    def verify_job_publication(
+        self,
+        run_id: str,
+        *,
+        expected_report_hash: str,
+    ) -> VerifiedBacktestPublication:
+        """Build the bounded participant proof carried by a completed run job."""
+
+        expectations: tuple[str, int | None, int | None, str, str | None, str | None] = (
+            _validate_hash(run_id, "run_id"),
+            None,
+            None,
+            _validate_hash(expected_report_hash, "expected_report_hash"),
+            None,
+            None,
+        )
+        return self._verify_staged_publication(expectations)
+
+    def _verify_staged_publication(
+        self,
+        expectations: tuple[
+            str,
+            int | None,
+            int | None,
+            str,
+            str | None,
+            str | None,
+        ],
+    ) -> VerifiedBacktestPublication:
         normalized_run_id = expectations[0]
         with self._connect() as connection:
             connection.execute("PRAGMA query_only=ON")
@@ -1595,12 +1626,16 @@ class BacktestResultStore:
                     normalized_run_id,
                     version=version,
                 )
+            expected_fill_count = metadata[0] if expectations[1] is None else expectations[1]
+            expected_detail_count = metadata[1] if expectations[2] is None else expectations[2]
+            expected_fill_set_hash = metadata[2] if expectations[4] is None else expectations[4]
+            expected_detail_set_hash = metadata[3] if expectations[5] is None else expectations[5]
             _require_publication_metadata(
                 metadata,
-                expected_fill_count=expectations[1],
-                expected_detail_count=expectations[2],
-                expected_fill_set_hash=expectations[4],
-                expected_detail_set_hash=expectations[5],
+                expected_fill_count=expected_fill_count,
+                expected_detail_count=expected_detail_count,
+                expected_fill_set_hash=expected_fill_set_hash,
+                expected_detail_set_hash=expected_detail_set_hash,
                 version=version,
                 staged=not already_materialized,
             )
