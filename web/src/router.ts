@@ -47,12 +47,66 @@ const SystemRoute = createRoutePlaceholder(
 );
 
 export const routes: RouteRecordRaw[] = [
-  { path: "/", name: "dashboard", component: DashboardRoute },
-  { path: "/stocks/:symbol", name: "stock-detail", component: StockDetailRoute },
-  { path: "/plans", name: "plans", component: PlansRoute },
-  { path: "/plans/:id", name: "plan-detail", component: PlanDetailRoute },
-  { path: "/alerts", name: "alerts", component: AlertsRoute },
-  { path: "/system", name: "system", component: SystemRoute },
+  {
+    path: "/",
+    name: "dashboard",
+    component: DashboardRoute,
+    meta: { title: "监控总览 · Trade Plan Monitor" },
+  },
+  {
+    path: "/stocks/:symbol",
+    name: "stock-detail",
+    component: StockDetailRoute,
+    meta: { title: "个股详情 · Trade Plan Monitor" },
+  },
+  {
+    path: "/plans",
+    name: "plans",
+    component: PlansRoute,
+    meta: { title: "计划工作台 · Trade Plan Monitor" },
+  },
+  {
+    path: "/plans/:id",
+    name: "plan-detail",
+    component: PlanDetailRoute,
+    meta: { title: "计划详情 · Trade Plan Monitor" },
+  },
+  {
+    path: "/alerts",
+    name: "alerts",
+    component: AlertsRoute,
+    meta: { title: "提醒中心 · Trade Plan Monitor" },
+  },
+  {
+    path: "/system",
+    name: "system",
+    component: SystemRoute,
+    meta: { title: "系统设置 · Trade Plan Monitor" },
+  },
+  {
+    path: "/backtests",
+    name: "backtest-runs",
+    component: () => import("./views/BacktestRunsView.vue"),
+    meta: { section: "backtests", title: "回测运行记录 · Trade Plan Monitor" },
+  },
+  {
+    path: "/backtests/new",
+    name: "backtest-new",
+    component: () => import("./views/BacktestNewView.vue"),
+    meta: { section: "backtests", title: "创建回测 · Trade Plan Monitor" },
+  },
+  {
+    path: "/backtests/data",
+    name: "backtest-data",
+    component: () => import("./views/BacktestDataView.vue"),
+    meta: { section: "backtests", title: "历史数据管理 · Trade Plan Monitor" },
+  },
+  {
+    path: "/backtests/:runId",
+    name: "backtest-run-detail",
+    component: () => import("./views/BacktestRunDetailView.vue"),
+    meta: { section: "backtests", title: "回测结果 · Trade Plan Monitor" },
+  },
 ];
 
 export const router = createRouter({

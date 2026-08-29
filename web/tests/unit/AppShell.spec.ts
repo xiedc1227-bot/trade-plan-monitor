@@ -31,17 +31,37 @@ const expectedPaths = [
   "/plans/:id",
   "/alerts",
   "/system",
+  "/backtests",
+  "/backtests/new",
+  "/backtests/data",
+  "/backtests/:runId",
 ];
 
-function createTestRouter() {
+function createTestRouter(stubBacktestViews = false) {
   return createRouter({
     history: createMemoryHistory(),
-    routes,
+    routes: stubBacktestViews
+      ? routes.map((route) =>
+          route.path.startsWith("/backtests")
+            ? {
+                path: route.path,
+                meta: route.meta ?? {},
+                component: {
+                  template: `<section><h1>${String(route.meta?.title ?? "回测")}</h1><button type="button">保留焦点</button></section>`,
+                },
+              }
+            : route,
+        )
+      : routes,
   });
 }
 
-async function mountShell(path = "/", withConnectionSlot = true) {
-  const router = createTestRouter();
+async function mountShell(
+  path = "/",
+  withConnectionSlot = true,
+  stubBacktestViews = false,
+) {
+  const router = createTestRouter(stubBacktestViews);
   await router.push(path);
   await router.isReady();
 
@@ -58,6 +78,7 @@ async function mountShell(path = "/", withConnectionSlot = true) {
 
 afterEach(() => {
   document.body.replaceChildren();
+  document.title = "";
 });
 
 describe("AppShell", () => {
@@ -70,6 +91,10 @@ describe("AppShell", () => {
 
     expect(wrapper.get('nav[aria-label="主要导航"]')).toBeTruthy();
     expect(wrapper.get('nav[aria-label="移动端主要导航"]')).toBeTruthy();
+    expect(wrapper.get('nav[aria-label="主要导航"] a[href="/backtests"]')).toBeTruthy();
+    expect(
+      wrapper.get('nav[aria-label="移动端主要导航"] a[href="/backtests"]'),
+    ).toBeTruthy();
     expect(wrapper.get('[role="status"][aria-live="polite"]').text()).toContain("连接已恢复");
     expect(wrapper.get("#main-content").text()).toContain("监控总览");
 
@@ -77,6 +102,103 @@ describe("AppShell", () => {
     await flushPromises();
 
     expect(wrapper.get("#main-content").text()).toContain("计划工作台");
+  });
+
+  it("renders native backtest sub-navigation and applies route title and heading focus", async () => {
+    const { router, wrapper } = await mountShell("/backtests", true, true);
+    await flushPromises();
+
+    const subNavigation = wrapper.get('nav[aria-label="回测导航"]');
+    const heading = wrapper.get("#main-content h1");
+
+    expect(subNavigation.get('a[href="/backtests"]').text()).toBe("运行记录");
+    expect(subNavigation.get('a[href="/backtests/new"]').text()).toBe("新建回测");
+    expect(subNavigation.get('a[href="/backtests/data"]').text()).toBe("历史数据");
+    expect(document.title).toBe("回测运行记录 · Trade Plan Monitor");
+    expect(heading.attributes("tabindex")).toBe("-1");
+    expect(document.activeElement).toBe(heading.element);
+
+    await subNavigation.get('a[href="/backtests/data"]').trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/backtests/data");
+    expect(document.title).toBe("历史数据管理 · Trade Plan Monitor");
+    expect(document.activeElement).toBe(wrapper.get("#main-content h1").element);
+  });
+
+  it("does not steal focus when only the current route query changes", async () => {
+    const runId = "a".repeat(64);
+    const { router, wrapper } = await mountShell(
+      `/backtests/${runId}?jobId=run-job-001`,
+      true,
+      true,
+    );
+    await flushPromises();
+
+    const retainedFocus = wrapper.get<HTMLButtonElement>("#main-content button");
+    retainedFocus.element.focus();
+    expect(document.activeElement).toBe(retainedFocus.element);
+
+    await router.replace({ path: `/backtests/${runId}`, query: {} });
+    await flushPromises();
+
+    expect(document.activeElement).toBe(retainedFocus.element);
+  });
+
+  it.each([
+    ["/backtests", "运行记录"],
+    ["/backtests/new", "新建回测"],
+    ["/backtests/data", "历史数据"],
+    [`/backtests/${"a".repeat(64)}`, "运行记录"],
+  ])("marks the backtest section and exact sub-navigation target at %s", async (path, label) => {
+    const { wrapper } = await mountShell(path, true, true);
+    await flushPromises();
+
+    expect(
+      wrapper
+        .get('nav[aria-label="主要导航"] a[href="/backtests"]')
+        .attributes("aria-current"),
+    ).toBe("location");
+    expect(
+      wrapper
+        .get('nav[aria-label="移动端主要导航"] a[href="/backtests"]')
+        .attributes("aria-current"),
+    ).toBe("location");
+
+    const currentLinks = wrapper.findAll(
+      'nav[aria-label="回测导航"] a[aria-current]',
+    );
+    expect(currentLinks).toHaveLength(1);
+    expect(currentLinks[0]?.text()).toBe(label);
+    expect(currentLinks[0]?.attributes("aria-current")).toBe("page");
+  });
+
+  it("preserves exact current-page semantics for non-backtest desktop and mobile links", async () => {
+    const { wrapper } = await mountShell("/plans");
+    await flushPromises();
+
+    for (const label of ["主要导航", "移动端主要导航"]) {
+      const currentLinks = wrapper.findAll(
+        `nav[aria-label="${label}"] a[aria-current]`,
+      );
+      expect(currentLinks).toHaveLength(1);
+      expect(currentLinks[0]?.attributes("href")).toBe("/plans");
+      expect(currentLinks[0]?.attributes("aria-current")).toBe("page");
+    }
+  });
+
+  it("applies title and heading focus only for the latest rapid path navigation", async () => {
+    const { router, wrapper } = await mountShell("/backtests", true, true);
+    await flushPromises();
+
+    const firstNavigation = router.push("/backtests/new");
+    const secondNavigation = router.push("/backtests/data");
+    await Promise.all([firstNavigation, secondNavigation]);
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/backtests/data");
+    expect(document.title).toBe("历史数据管理 · Trade Plan Monitor");
+    expect(document.activeElement).toBe(wrapper.get("#main-content h1").element);
   });
 
   it("renders a semantic non-color-only stream status when no banner slot is supplied", async () => {
@@ -135,7 +257,7 @@ describe("AppShell", () => {
 
     expect(router.currentRoute.value.path).toBe("/alerts");
     expect(menuButton.attributes("aria-expanded")).toBe("false");
-    expect(document.activeElement).toBe(wrapper.get("#main-content").element);
+    expect(document.activeElement).toBe(wrapper.get("#main-content h1").element);
   });
 
   it("uses responsive navigation rules and disables motion for reduced-motion users", () => {

@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { nextTick, shallowRef, useTemplateRef } from "vue";
-import { RouterLink, RouterView } from "vue-router";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  shallowRef,
+  useTemplateRef,
+  watch,
+} from "vue";
+import { RouterLink, RouterView, useRoute } from "vue-router";
 
 import { useMonitorStream } from "../composables/useMonitorStream";
 import type { MonitorStreamConnectionState } from "../composables/useMonitorStream";
@@ -14,15 +21,40 @@ const navigationItems = [
   { to: "/plans", label: "计划" },
   { to: "/alerts", label: "提醒" },
   { to: "/system", label: "系统" },
+  { to: "/backtests", label: "回测" },
 ] as const;
 
+const backtestNavigationItems = [
+  { to: "/backtests", label: "运行记录" },
+  { to: "/backtests/new", label: "新建回测" },
+  { to: "/backtests/data", label: "历史数据" },
+] as const;
+
+const route = useRoute();
 const isMobileNavigationOpen = shallowRef(false);
 const mainContent = useTemplateRef<HTMLElement>("mainContent");
 const mobileNavigationToggle = useTemplateRef<HTMLButtonElement>("mobileNavigationToggle");
 const { connectionState } = useMonitorStream();
+const previousTitle = document.title;
+const isBacktestRoute = computed(() => route.meta.section === "backtests");
+const currentBacktestNavigationPath = computed(() => {
+  if (route.path === "/backtests/new" || route.path === "/backtests/data") {
+    return route.path;
+  }
+  return "/backtests";
+});
+
+let routeEffectGeneration = 0;
 
 function focusMainContent() {
   mainContent.value?.focus();
+}
+
+function mainNavigationAriaCurrent(to: string): "location" | "page" | undefined {
+  if (to === "/backtests") {
+    return isBacktestRoute.value ? "location" : undefined;
+  }
+  return route.path === to ? "page" : undefined;
 }
 
 function toggleMobileNavigation() {
@@ -45,6 +77,33 @@ async function handleMobileNavigation() {
   await nextTick();
   mainContent.value?.focus();
 }
+
+watch(
+  () => route.path,
+  async () => {
+    const activeGeneration = ++routeEffectGeneration;
+    closeMobileNavigation();
+    await nextTick();
+    if (activeGeneration !== routeEffectGeneration) return;
+
+    const title = route.meta.title;
+    if (typeof title === "string") document.title = title;
+
+    const heading = mainContent.value?.querySelector<HTMLElement>("h1");
+    if (heading === undefined || heading === null) {
+      mainContent.value?.focus();
+      return;
+    }
+    heading.tabIndex = -1;
+    heading.focus();
+  },
+  { flush: "post", immediate: true },
+);
+
+onBeforeUnmount(() => {
+  routeEffectGeneration += 1;
+  document.title = previousTitle;
+});
 </script>
 
 <template>
@@ -59,7 +118,17 @@ async function handleMobileNavigation() {
       <nav class="app-shell__desktop-navigation" aria-label="主要导航">
         <ul class="app-shell__navigation-list">
           <li v-for="item in navigationItems" :key="item.to">
-            <RouterLink class="app-shell__navigation-link" :to="item.to">
+            <RouterLink
+              :class="[
+                'app-shell__navigation-link',
+                {
+                  'app-shell__navigation-link--current':
+                    item.to === '/backtests' && isBacktestRoute,
+                },
+              ]"
+              :to="item.to"
+              :aria-current="mainNavigationAriaCurrent(item.to)"
+            >
               {{ item.label }}
             </RouterLink>
           </li>
@@ -88,8 +157,15 @@ async function handleMobileNavigation() {
         <ul class="app-shell__navigation-list app-shell__navigation-list--mobile">
           <li v-for="item in navigationItems" :key="item.to">
             <RouterLink
-              class="app-shell__navigation-link"
+              :class="[
+                'app-shell__navigation-link',
+                {
+                  'app-shell__navigation-link--current':
+                    item.to === '/backtests' && isBacktestRoute,
+                },
+              ]"
               :to="item.to"
+              :aria-current="mainNavigationAriaCurrent(item.to)"
               @click="handleMobileNavigation"
             >
               {{ item.label }}
@@ -98,6 +174,26 @@ async function handleMobileNavigation() {
         </ul>
       </nav>
     </header>
+
+    <nav v-if="isBacktestRoute" class="app-shell__backtest-navigation" aria-label="回测导航">
+      <ul class="app-shell__navigation-list">
+        <li v-for="item in backtestNavigationItems" :key="item.to">
+          <RouterLink
+            :class="[
+              'app-shell__navigation-link',
+              {
+                'app-shell__navigation-link--current':
+                  item.to === currentBacktestNavigationPath,
+              },
+            ]"
+            :to="item.to"
+            :aria-current="item.to === currentBacktestNavigationPath ? 'page' : undefined"
+          >
+            {{ item.label }}
+          </RouterLink>
+        </li>
+      </ul>
+    </nav>
 
     <section
       class="app-shell__connection-banner"
@@ -193,7 +289,8 @@ async function handleMobileNavigation() {
   padding: 0.65rem 0.75rem;
 }
 
-.app-shell__navigation-link.router-link-active {
+.app-shell__navigation-link.router-link-active,
+.app-shell__navigation-link--current {
   font-weight: 700;
   text-decoration-thickness: 0.2em;
 }
@@ -218,6 +315,17 @@ async function handleMobileNavigation() {
   background: var(--color-surface-graphite);
   border-block-end: var(--border-technical);
   transition: opacity 150ms ease;
+}
+
+.app-shell__backtest-navigation {
+  padding: 0.5rem 1rem;
+  overflow-x: auto;
+  background: var(--color-surface-graphite);
+  border-block-end: var(--border-technical);
+}
+
+.app-shell__backtest-navigation .app-shell__navigation-list {
+  width: max-content;
 }
 
 .app-shell__navigation-list--mobile {
