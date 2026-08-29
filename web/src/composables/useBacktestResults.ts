@@ -11,6 +11,7 @@ import {
 
 import type {
   BacktestDetailPage,
+  BacktestEquitySeries,
   BacktestFillPage,
   BacktestResultAvailabilityView,
   BacktestRunView,
@@ -25,7 +26,7 @@ export type BacktestResultRequestState =
   | "EMPTY"
   | "UNAVAILABLE"
   | "FAILED";
-export type BacktestResultTab = "summary" | "fills" | "details";
+export type BacktestResultTab = "summary" | "fills" | "details" | "equity";
 export type BacktestDetailKind = BacktestDetailPage["kind"];
 
 export interface UseBacktestResultsOptions {
@@ -38,6 +39,7 @@ export interface UseBacktestResultsOptions {
 }
 
 const RESULT_PAGE_LIMIT = 100;
+const EQUITY_POINT_LIMIT = 2_000;
 
 export function useBacktestResults(options: UseBacktestResultsOptions) {
   const api = options.api ?? createBacktestApi();
@@ -50,13 +52,18 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
   const detailPage = shallowRef<BacktestDetailPage | null>(null);
   const detailState = shallowRef<BacktestResultRequestState>("IDLE");
   const detailError = shallowRef<string | null>(null);
+  const equitySeries = shallowRef<BacktestEquitySeries | null>(null);
+  const equityState = shallowRef<BacktestResultRequestState>("IDLE");
+  const equityError = shallowRef<string | null>(null);
 
   let summaryController: AbortController | null = null;
   let fillsController: AbortController | null = null;
   let detailController: AbortController | null = null;
+  let equityController: AbortController | null = null;
   let summaryGeneration = 0;
   let fillsGeneration = 0;
   let detailGeneration = 0;
+  let equityGeneration = 0;
   let mounted = false;
 
   function abortSummary(): void {
@@ -77,6 +84,12 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     detailController = null;
   }
 
+  function abortEquity(): void {
+    equityGeneration += 1;
+    equityController?.abort();
+    equityController = null;
+  }
+
   function clearFills(): void {
     abortFills();
     fillsPage.value = null;
@@ -91,9 +104,17 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     detailError.value = null;
   }
 
+  function clearEquity(): void {
+    abortEquity();
+    equitySeries.value = null;
+    equityState.value = "IDLE";
+    equityError.value = null;
+  }
+
   function clearSelectedResources(): void {
     clearFills();
     clearDetails();
+    clearEquity();
   }
 
   async function loadSummary(): Promise<void> {
@@ -208,6 +229,46 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     }
   }
 
+  async function loadEquity(): Promise<void> {
+    const runId = toValue(options.runId);
+    if (!readyFor("equity") || runId === null) return;
+    if (summary.value?.availability.equitySeries !== "AVAILABLE") {
+      equityState.value = "UNAVAILABLE";
+      return;
+    }
+    abortEquity();
+    const activeGeneration = equityGeneration;
+    const controller = new AbortController();
+    equityController = controller;
+    equitySeries.value = null;
+    equityState.value = "LOADING";
+    equityError.value = null;
+    try {
+      const response = await api.getEquitySeries(runId, { signal: controller.signal });
+      if (!currentEquityRequest(controller, activeGeneration)) return;
+      if (
+        response.items.length > EQUITY_POINT_LIMIT ||
+        response.items.some((item) => item.runId !== runId)
+      ) {
+        throw new Error("equity identity mismatch");
+      }
+      equitySeries.value = response;
+      equityState.value =
+        response.availability !== "AVAILABLE"
+          ? "UNAVAILABLE"
+          : response.items.length === 0
+            ? "EMPTY"
+            : "READY";
+    } catch {
+      if (!currentEquityRequest(controller, activeGeneration)) return;
+      equitySeries.value = null;
+      equityState.value = "FAILED";
+      equityError.value = "权益序列暂不可用，请稍后重试";
+    } finally {
+      if (equityController === controller) equityController = null;
+    }
+  }
+
   function currentSummaryRequest(
     controller: AbortController,
     generation: number,
@@ -239,6 +300,18 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     );
   }
 
+  function currentEquityRequest(
+    controller: AbortController,
+    generation: number,
+  ): boolean {
+    return (
+      mounted &&
+      !controller.signal.aborted &&
+      generation === equityGeneration &&
+      readyFor("equity")
+    );
+  }
+
   function readyFor(tab: Exclude<BacktestResultTab, "summary">): boolean {
     return (
       mounted &&
@@ -255,6 +328,7 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     if (summaryState.value !== "READY" || summary.value === null) return;
     if (toValue(options.selectedTab) === "fills") void loadFills();
     else if (toValue(options.selectedTab) === "details") void loadDetails();
+    else if (toValue(options.selectedTab) === "equity") void loadEquity();
   }
 
   function reconcileIdentity(): void {
@@ -303,6 +377,9 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     detailError: readonly(detailError),
     detailPage: readonly(detailPage),
     detailState: readonly(detailState),
+    equityError: readonly(equityError),
+    equitySeries: readonly(equitySeries),
+    equityState: readonly(equityState),
     fillsError: readonly(fillsError),
     fillsPage: readonly(fillsPage),
     fillsState: readonly(fillsState),

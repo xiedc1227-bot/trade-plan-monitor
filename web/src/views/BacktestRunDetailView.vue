@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   computed,
+  defineAsyncComponent,
   onBeforeUnmount,
   shallowRef,
   watch,
@@ -17,6 +18,7 @@ import {
 import type { BacktestJobView } from "../api/generated";
 import { createBacktestApi, type BacktestApi } from "../api/backtests";
 import BacktestDetailTable from "../components/backtests/BacktestDetailTable.vue";
+import BacktestEquityTable from "../components/backtests/BacktestEquityTable.vue";
 import BacktestFillTable from "../components/backtests/BacktestFillTable.vue";
 import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
 import BacktestMetricsSummary from "../components/backtests/BacktestMetricsSummary.vue";
@@ -39,6 +41,9 @@ interface ReadonlyResultPageFrame {
 }
 
 const props = defineProps<Props>();
+const BacktestEquityChart = defineAsyncComponent(
+  () => import("../components/backtests/BacktestEquityChart.vue"),
+);
 const route = useRoute();
 const router = useRouter();
 const api = props.api ?? createBacktestApi();
@@ -48,7 +53,12 @@ const resultUrlError = shallowRef<string | null>(null);
 const RUN_ID_PATTERN = /^[0-9a-f]{64}$/;
 const JOB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const CURSOR_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
-const RESULT_TABS = new Set<BacktestResultTab>(["summary", "fills", "details"]);
+const RESULT_TABS = new Set<BacktestResultTab>([
+  "summary",
+  "fills",
+  "details",
+  "equity",
+]);
 const DETAIL_KIND_OPTIONS: readonly BacktestDetailKind[] = [
   "DECISION",
   "SIGNAL",
@@ -114,7 +124,7 @@ const selectedDetailKind = computed<BacktestDetailKind>(() => {
     : "DECISION";
 });
 const selectedCursor = computed(() => {
-  if (selectedTab.value === "summary") return null;
+  if (selectedTab.value !== "fills" && selectedTab.value !== "details") return null;
   const value = scalarResultQuery("cursor");
   return value !== null && validCursor(value) ? value : null;
 });
@@ -129,7 +139,7 @@ function resultQuery(
   delete query.kind;
   delete query.cursor;
   if (tab === "details") query.kind = kind;
-  if (tab !== "summary" && cursor !== null) query.cursor = cursor;
+  if ((tab === "fills" || tab === "details") && cursor !== null) query.cursor = cursor;
   return query;
 }
 
@@ -145,9 +155,15 @@ const resultUrlCanonical = computed(() => {
     return false;
   }
   if (selectedTab.value !== "details" && route.query.kind !== undefined) return false;
-  if (selectedTab.value === "summary" && route.query.cursor !== undefined) return false;
   if (
-    selectedTab.value !== "summary" &&
+    selectedTab.value !== "fills" &&
+    selectedTab.value !== "details" &&
+    route.query.cursor !== undefined
+  ) {
+    return false;
+  }
+  if (
+    (selectedTab.value === "fills" || selectedTab.value === "details") &&
     route.query.cursor !== undefined &&
     (typeof route.query.cursor !== "string" ||
       scalarResultQuery("cursor") !== selectedCursor.value)
@@ -200,6 +216,21 @@ const detailAvailabilityCopy = computed(() => {
     return "本次运行未记录该明细，不会推测或补造。";
   }
   return "该明细可读取。";
+});
+const activeEquityAvailability = computed(
+  () =>
+    results.equitySeries.value?.availability ??
+    results.summary.value?.availability.equitySeries ??
+    null,
+);
+const equityAvailabilityCopy = computed(() => {
+  if (activeEquityAvailability.value === "EXPIRED") {
+    return "该权益序列已超过保留期，不能重建。";
+  }
+  if (activeEquityAvailability.value === "NOT_RECORDED") {
+    return "本次运行未记录权益序列，不会推测或补造。";
+  }
+  return "该权益序列可读取。";
 });
 
 const matchingJob = computed<BacktestJobView | null>(() => {
@@ -429,6 +460,13 @@ onBeforeUnmount(() => {
         >
           结果明细
         </RouterLink>
+        <RouterLink
+          data-testid="result-tab-equity"
+          :to="{ path: route.path, query: resultQuery('equity') }"
+          :aria-current="selectedTab === 'equity' ? 'page' : undefined"
+        >
+          权益序列
+        </RouterLink>
       </nav>
 
       <BacktestMetricsSummary
@@ -481,7 +519,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
-        v-else
+        v-else-if="selectedTab === 'details'"
         class="run-detail-view__resource"
         aria-labelledby="details-title"
       >
@@ -551,6 +589,72 @@ onBeforeUnmount(() => {
           :items="results.detailPage.value.items"
           :kind="selectedDetailKind"
         />
+      </section>
+
+      <section
+        v-else
+        class="run-detail-view__resource"
+        aria-labelledby="equity-title"
+      >
+        <div class="run-detail-view__resource-heading">
+          <div>
+            <h3 id="equity-title">完整权益序列</h3>
+            <p>趋势图仅使用安全派生展示数值；下方原生表格保留全部精确值。</p>
+          </div>
+          <button
+            v-if="activeEquityAvailability === 'AVAILABLE'"
+            data-testid="refresh-equity-series"
+            type="button"
+            @click="results.refreshSelected"
+          >
+            刷新权益序列
+          </button>
+        </div>
+
+        <p
+          v-if="activeEquityAvailability !== null"
+          class="run-detail-view__availability"
+          data-testid="equity-availability"
+          :data-availability="activeEquityAvailability"
+        >
+          {{ equityAvailabilityCopy }}
+        </p>
+        <p
+          v-if="results.equityState.value === 'LOADING'"
+          class="run-detail-view__state"
+          data-testid="result-resource-state"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          正在读取权益序列…
+        </p>
+        <p
+          v-else-if="results.equityState.value === 'EMPTY'"
+          class="run-detail-view__state"
+          data-testid="result-resource-state"
+        >
+          本次运行没有可展示的权益点。
+        </p>
+        <div
+          v-else-if="results.equityState.value === 'FAILED'"
+          class="run-detail-view__error"
+          data-testid="result-resource-error"
+          role="alert"
+        >
+          <p>{{ results.equityError.value }}</p>
+          <button type="button" @click="results.refreshSelected">重新读取权益序列</button>
+        </div>
+        <div
+          v-else-if="
+            results.equityState.value === 'READY' &&
+            results.equitySeries.value !== null
+          "
+          class="run-detail-view__equity"
+        >
+          <BacktestEquityChart :items="results.equitySeries.value.items" />
+          <BacktestEquityTable :items="results.equitySeries.value.items" />
+        </div>
       </section>
 
       <nav
@@ -653,7 +757,8 @@ onBeforeUnmount(() => {
 }
 
 .run-detail-view__results,
-.run-detail-view__resource {
+.run-detail-view__resource,
+.run-detail-view__equity {
   display: grid;
   gap: var(--space-4);
 }
