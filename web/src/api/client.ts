@@ -1,6 +1,11 @@
 import type {
   DashboardResponse,
 } from "./generated";
+import {
+  isCalendarDate,
+  isShanghaiDateTime,
+  shanghaiDateTimeKey,
+} from "./shanghaiTime";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
 
 export { ApiClientError };
@@ -614,72 +619,6 @@ function isNullableInteger(value: unknown): boolean {
 
 function isShareSymbol(value: unknown): value is string {
   return typeof value === "string" && /^\d{6}\.(?:BJ|SH|SZ)$/.test(value);
-}
-
-function isCalendarDate(value: unknown): value is string {
-  if (typeof value !== "string") {
-    return false;
-  }
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  return match !== null && isGregorianDate(Number(match[1]), Number(match[2]), Number(match[3]));
-}
-
-function isShanghaiDateTime(value: unknown): value is string {
-  return parseShanghaiDateTime(value) !== null;
-}
-
-function parseShanghaiDateTime(value: unknown): bigint | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?\+08:00$/.exec(
-      value,
-    );
-  if (match === null) {
-    return null;
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const hour = Number(match[4]);
-  const minute = Number(match[5]);
-  const second = Number(match[6]);
-  if (
-    !isGregorianDate(year, month, day) ||
-    hour > 23 ||
-    minute > 59 ||
-    second > 59
-  ) {
-    return null;
-  }
-  const priorYear = BigInt(year - 1);
-  const daysBeforeYear =
-    365n * priorYear + priorYear / 4n - priorYear / 100n + priorYear / 400n;
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const daysBeforeMonth = [0, 31, leap ? 60 : 59, leap ? 91 : 90, leap ? 121 : 120, leap ? 152 : 151, leap ? 182 : 181, leap ? 213 : 212, leap ? 244 : 243, leap ? 274 : 273, leap ? 305 : 304, leap ? 335 : 334];
-  const ordinalDay = daysBeforeYear + BigInt((daysBeforeMonth[month - 1] ?? 0) + day - 1);
-  const wholeSeconds =
-    ((ordinalDay * 24n + BigInt(hour)) * 60n + BigInt(minute)) * 60n + BigInt(second);
-  const microseconds = BigInt((match[7] ?? "").padEnd(6, "0") || "0");
-  return wholeSeconds * 1_000_000n + microseconds;
-}
-
-function shanghaiDateTimeKey(value: unknown): bigint {
-  const parsed = parseShanghaiDateTime(value);
-  if (parsed === null) {
-    throw new RangeError("invalid Shanghai datetime");
-  }
-  return parsed;
-}
-
-function isGregorianDate(year: number, month: number, day: number): boolean {
-  if (year < 1 || month < 1 || month > 12 || day < 1) {
-    return false;
-  }
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return day <= (days[month - 1] ?? 0);
 }
 
 function isSafeSequence(value: unknown): value is number {
