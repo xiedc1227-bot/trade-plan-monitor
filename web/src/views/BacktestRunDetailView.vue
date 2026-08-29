@@ -8,6 +8,7 @@ import {
 import {
   isNavigationFailure,
   NavigationFailureType,
+  RouterLink,
   useRoute,
   useRouter,
   type LocationQueryRaw,
@@ -15,14 +16,26 @@ import {
 
 import type { BacktestJobView } from "../api/generated";
 import { createBacktestApi, type BacktestApi } from "../api/backtests";
+import BacktestDetailTable from "../components/backtests/BacktestDetailTable.vue";
+import BacktestFillTable from "../components/backtests/BacktestFillTable.vue";
 import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
 import BacktestMetricsSummary from "../components/backtests/BacktestMetricsSummary.vue";
 import { useBacktestJob } from "../composables/useBacktestJob";
-import { useBacktestResults } from "../composables/useBacktestResults";
+import {
+  detailAvailability,
+  useBacktestResults,
+  type BacktestDetailKind,
+  type BacktestResultTab,
+} from "../composables/useBacktestResults";
 
 interface Props {
   api?: BacktestApi;
   createIdempotencyKey?: () => string;
+}
+
+interface ReadonlyResultPageFrame {
+  readonly hasMore: boolean;
+  readonly nextCursor: string | null;
 }
 
 const props = defineProps<Props>();
@@ -30,9 +43,18 @@ const route = useRoute();
 const router = useRouter();
 const api = props.api ?? createBacktestApi();
 const runtimeIdentityError = shallowRef<string | null>(null);
+const resultUrlError = shallowRef<string | null>(null);
 
 const RUN_ID_PATTERN = /^[0-9a-f]{64}$/;
 const JOB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+const CURSOR_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+const RESULT_TABS = new Set<BacktestResultTab>(["summary", "fills", "details"]);
+const DETAIL_KIND_OPTIONS: readonly BacktestDetailKind[] = [
+  "DECISION",
+  "SIGNAL",
+  "EXECUTION_OUTCOME",
+] as const;
+const DETAIL_KINDS = new Set<BacktestDetailKind>(DETAIL_KIND_OPTIONS);
 
 let navigationGeneration = 0;
 
@@ -58,7 +80,10 @@ const routeIdentityError = computed(() => {
   return null;
 });
 const identityError = computed(
-  () => routeIdentityError.value ?? runtimeIdentityError.value,
+  () =>
+    routeIdentityError.value ??
+    runtimeIdentityError.value ??
+    resultUrlError.value,
 );
 const requestedJobId = computed(() =>
   routeIdentityError.value === null &&
@@ -67,11 +92,77 @@ const requestedJobId = computed(() =>
     ? jobId.value
     : null,
 );
+function scalarResultQuery(key: "tab" | "kind" | "cursor"): string | null {
+  const value = route.query[key];
+  return typeof value === "string" ? value : null;
+}
+
+function validCursor(value: string): boolean {
+  return value.length >= 3 && value.length <= 512 && CURSOR_PATTERN.test(value);
+}
+
+const selectedTab = computed<BacktestResultTab>(() => {
+  const value = scalarResultQuery("tab");
+  return value !== null && RESULT_TABS.has(value as BacktestResultTab)
+    ? (value as BacktestResultTab)
+    : "summary";
+});
+const selectedDetailKind = computed<BacktestDetailKind>(() => {
+  const value = scalarResultQuery("kind");
+  return value !== null && DETAIL_KINDS.has(value as BacktestDetailKind)
+    ? (value as BacktestDetailKind)
+    : "DECISION";
+});
+const selectedCursor = computed(() => {
+  if (selectedTab.value === "summary") return null;
+  const value = scalarResultQuery("cursor");
+  return value !== null && validCursor(value) ? value : null;
+});
+
+function resultQuery(
+  tab: BacktestResultTab,
+  kind: BacktestDetailKind = selectedDetailKind.value,
+  cursor: string | null = null,
+): LocationQueryRaw {
+  const query: LocationQueryRaw = { ...route.query, tab };
+  delete query.jobId;
+  delete query.kind;
+  delete query.cursor;
+  if (tab === "details") query.kind = kind;
+  if (tab !== "summary" && cursor !== null) query.cursor = cursor;
+  return query;
+}
+
+const canonicalSelectedQuery = computed(() =>
+  resultQuery(selectedTab.value, selectedDetailKind.value, selectedCursor.value),
+);
+const resultUrlCanonical = computed(() => {
+  if (scalarResultQuery("tab") !== selectedTab.value) return false;
+  if (
+    selectedTab.value === "details" &&
+    scalarResultQuery("kind") !== selectedDetailKind.value
+  ) {
+    return false;
+  }
+  if (selectedTab.value !== "details" && route.query.kind !== undefined) return false;
+  if (selectedTab.value === "summary" && route.query.cursor !== undefined) return false;
+  if (
+    selectedTab.value !== "summary" &&
+    route.query.cursor !== undefined &&
+    (typeof route.query.cursor !== "string" ||
+      scalarResultQuery("cursor") !== selectedCursor.value)
+  ) {
+    return false;
+  }
+  return true;
+});
 const resultsEnabled = computed(
   () =>
     routeIdentityError.value === null &&
     runtimeIdentityError.value === null &&
-    !hasJobIdentity.value,
+    resultUrlError.value === null &&
+    !hasJobIdentity.value &&
+    resultUrlCanonical.value,
 );
 
 const jobState = useBacktestJob({
@@ -81,7 +172,35 @@ const jobState = useBacktestJob({
     : { createIdempotencyKey: props.createIdempotencyKey }),
   jobId: requestedJobId,
 });
-const results = useBacktestResults({ api, enabled: resultsEnabled, runId });
+const results = useBacktestResults({
+  api,
+  cursor: selectedCursor,
+  detailKind: selectedDetailKind,
+  enabled: resultsEnabled,
+  runId,
+  selectedTab,
+});
+
+const activePage = computed<ReadonlyResultPageFrame | null>(() =>
+  selectedTab.value === "fills"
+    ? results.fillsPage.value
+    : selectedTab.value === "details"
+      ? results.detailPage.value
+      : null,
+);
+const activeDetailAvailability = computed(() =>
+  results.detailPage.value?.availability ??
+  detailAvailability(results.summary.value, selectedDetailKind.value),
+);
+const detailAvailabilityCopy = computed(() => {
+  if (activeDetailAvailability.value === "EXPIRED") {
+    return "该明细已超过保留期，不能重建。";
+  }
+  if (activeDetailAvailability.value === "NOT_RECORDED") {
+    return "本次运行未记录该明细，不会推测或补造。";
+  }
+  return "该明细可读取。";
+});
 
 const matchingJob = computed<BacktestJobView | null>(() => {
   const current = jobState.job.value;
@@ -131,14 +250,54 @@ async function canonicalizeCompletedJob(): Promise<void> {
   }
 }
 
+async function canonicalizeResultUrl(): Promise<void> {
+  const activeGeneration = ++navigationGeneration;
+  resultUrlError.value = null;
+  try {
+    const failure = await router.replace({
+      path: route.path,
+      query: canonicalSelectedQuery.value,
+    });
+    if (activeGeneration !== navigationGeneration) return;
+    if (
+      isNavigationFailure(failure) &&
+      !isNavigationFailure(failure, NavigationFailureType.duplicated)
+    ) {
+      resultUrlError.value = "回测结果 URL 无法规范化，请返回运行记录后重新打开";
+    }
+  } catch {
+    if (activeGeneration === navigationGeneration) {
+      resultUrlError.value = "回测结果 URL 无法规范化，请返回运行记录后重新打开";
+    }
+  }
+}
+
 watch(
   [() => route.params.runId, () => route.query.jobId],
   () => {
     navigationGeneration += 1;
     runtimeIdentityError.value = null;
+    resultUrlError.value = null;
     reconcileJobIdentity(jobState.job.value);
   },
   { deep: true },
+);
+
+watch(
+  () => route.query,
+  () => {
+    navigationGeneration += 1;
+    resultUrlError.value = null;
+    if (
+      routeIdentityError.value === null &&
+      runtimeIdentityError.value === null &&
+      !hasJobIdentity.value &&
+      !resultUrlCanonical.value
+    ) {
+      void canonicalizeResultUrl();
+    }
+  },
+  { deep: true, immediate: true },
 );
 
 function reconcileJobIdentity(current: typeof jobState.job.value): void {
@@ -231,14 +390,197 @@ onBeforeUnmount(() => {
       </button>
     </section>
 
-    <BacktestMetricsSummary
+    <section
       v-else-if="
         resultsEnabled &&
         results.summaryState.value === 'READY' &&
         results.summary.value !== null
       "
-      :run="results.summary.value"
-    />
+      class="run-detail-view__results"
+      aria-labelledby="result-review-title"
+    >
+      <div class="run-detail-view__results-heading">
+        <div>
+          <p class="run-detail-view__eyebrow">BOUNDED RESULT REVIEW</p>
+          <h2 id="result-review-title">结果审阅</h2>
+        </div>
+        <p>每次仅读取 URL 当前选择的一页结果，不执行历史重放或明细重建。</p>
+      </div>
+
+      <nav class="run-detail-view__tabs" aria-label="回测结果资源">
+        <RouterLink
+          data-testid="result-tab-summary"
+          :to="{ path: route.path, query: resultQuery('summary') }"
+          :aria-current="selectedTab === 'summary' ? 'page' : undefined"
+        >
+          汇总
+        </RouterLink>
+        <RouterLink
+          data-testid="result-tab-fills"
+          :to="{ path: route.path, query: resultQuery('fills') }"
+          :aria-current="selectedTab === 'fills' ? 'page' : undefined"
+        >
+          模拟成交
+        </RouterLink>
+        <RouterLink
+          data-testid="result-tab-details"
+          :to="{ path: route.path, query: resultQuery('details') }"
+          :aria-current="selectedTab === 'details' ? 'page' : undefined"
+        >
+          结果明细
+        </RouterLink>
+      </nav>
+
+      <BacktestMetricsSummary
+        v-if="selectedTab === 'summary'"
+        :run="results.summary.value"
+      />
+
+      <section
+        v-else-if="selectedTab === 'fills'"
+        class="run-detail-view__resource"
+        aria-labelledby="fills-title"
+      >
+        <div class="run-detail-view__resource-heading">
+          <div>
+            <h3 id="fills-title">模拟成交（仅供研究）</h3>
+            <p>服务端权威成交账本；不代表真实委托、成交或券商持仓。</p>
+          </div>
+          <button type="button" @click="results.refreshSelected">刷新当前页</button>
+        </div>
+        <p
+          v-if="results.fillsState.value === 'LOADING'"
+          class="run-detail-view__state"
+          data-testid="result-resource-state"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          正在读取模拟成交…
+        </p>
+        <p
+          v-else-if="results.fillsState.value === 'EMPTY'"
+          class="run-detail-view__state"
+          data-testid="result-resource-state"
+        >
+          当前页暂无模拟成交。
+        </p>
+        <div
+          v-else-if="results.fillsState.value === 'FAILED'"
+          class="run-detail-view__error"
+          data-testid="result-resource-error"
+          role="alert"
+        >
+          <p>{{ results.fillsError.value }}</p>
+          <button type="button" @click="results.refreshSelected">重新读取当前页</button>
+        </div>
+        <BacktestFillTable
+          v-else-if="results.fillsState.value === 'READY' && results.fillsPage.value !== null"
+          :items="results.fillsPage.value.items"
+        />
+      </section>
+
+      <section
+        v-else
+        class="run-detail-view__resource"
+        aria-labelledby="details-title"
+      >
+        <div class="run-detail-view__resource-heading">
+          <div>
+            <h3 id="details-title">已物化结果明细</h3>
+            <p>过期或运行时未记录的明细不会通过回放、推断或诊断内容补造。</p>
+          </div>
+          <button
+            v-if="activeDetailAvailability === 'AVAILABLE'"
+            data-testid="refresh-result-details"
+            type="button"
+            @click="results.refreshSelected"
+          >
+            刷新当前页
+          </button>
+        </div>
+
+        <nav class="run-detail-view__detail-kinds" aria-label="结果明细类型">
+          <RouterLink
+            v-for="kind in DETAIL_KIND_OPTIONS"
+            :key="kind"
+            :data-testid="`detail-kind-${kind}`"
+            :to="{ path: route.path, query: resultQuery('details', kind) }"
+            :aria-current="selectedDetailKind === kind ? 'page' : undefined"
+          >
+            {{ kind === "DECISION" ? "决策" : kind === "SIGNAL" ? "信号" : "执行结果" }}
+          </RouterLink>
+        </nav>
+
+        <p
+          v-if="activeDetailAvailability !== null"
+          class="run-detail-view__availability"
+          data-testid="detail-availability"
+          :data-availability="activeDetailAvailability"
+        >
+          {{ detailAvailabilityCopy }}
+        </p>
+        <p
+          v-if="results.detailState.value === 'LOADING'"
+          class="run-detail-view__state"
+          data-testid="result-resource-state"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          正在读取结果明细…
+        </p>
+        <p
+          v-else-if="results.detailState.value === 'EMPTY'"
+          class="run-detail-view__state"
+          data-testid="result-resource-state"
+        >
+          当前页暂无该类型明细。
+        </p>
+        <div
+          v-else-if="results.detailState.value === 'FAILED'"
+          class="run-detail-view__error"
+          data-testid="result-resource-error"
+          role="alert"
+        >
+          <p>{{ results.detailError.value }}</p>
+          <button type="button" @click="results.refreshSelected">重新读取当前页</button>
+        </div>
+        <BacktestDetailTable
+          v-else-if="results.detailState.value === 'READY' && results.detailPage.value !== null"
+          :items="results.detailPage.value.items"
+          :kind="selectedDetailKind"
+        />
+      </section>
+
+      <nav
+        v-if="selectedTab !== 'summary' && activePage !== null"
+        class="run-detail-view__pagination"
+        aria-label="当前结果资源分页"
+      >
+        <RouterLink
+          v-if="selectedCursor !== null"
+          data-testid="first-result-page"
+          :to="{
+            path: route.path,
+            query: resultQuery(selectedTab, selectedDetailKind),
+          }"
+        >
+          返回第一页
+        </RouterLink>
+        <RouterLink
+          v-if="activePage.hasMore && activePage.nextCursor !== null"
+          data-testid="next-result-page"
+          :to="{
+            path: route.path,
+            query: resultQuery(selectedTab, selectedDetailKind, activePage.nextCursor),
+          }"
+        >
+          下一页
+        </RouterLink>
+        <span v-if="!activePage.hasMore">已到当前资源末页</span>
+      </nav>
+    </section>
   </div>
 </template>
 
@@ -262,10 +604,15 @@ onBeforeUnmount(() => {
 
 .run-detail-view__hero h1,
 .run-detail-view__hero p,
+.run-detail-view__results-heading h2,
+.run-detail-view__results-heading p,
+.run-detail-view__resource-heading h3,
+.run-detail-view__resource-heading p,
 .run-detail-view__error h2,
 .run-detail-view__error p,
 .run-detail-view__retry,
-.run-detail-view__state {
+.run-detail-view__state,
+.run-detail-view__availability {
   margin: 0;
 }
 
@@ -283,7 +630,9 @@ onBeforeUnmount(() => {
 .run-detail-view__boundary,
 .run-detail-view__state,
 .run-detail-view__error,
-.run-detail-view__retry {
+.run-detail-view__retry,
+.run-detail-view__availability,
+.run-detail-view__results {
   padding: var(--space-4);
   background: var(--color-surface-graphite);
   border: var(--border-technical);
@@ -301,6 +650,62 @@ onBeforeUnmount(() => {
 
 .run-detail-view__retry {
   border-inline-start: 0.3rem solid var(--color-signal-watch-amber);
+}
+
+.run-detail-view__results,
+.run-detail-view__resource {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.run-detail-view__results-heading,
+.run-detail-view__resource-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.run-detail-view__results-heading > p,
+.run-detail-view__resource-heading p {
+  max-width: 52rem;
+  color: var(--color-text-muted);
+}
+
+.run-detail-view__tabs,
+.run-detail-view__detail-kinds,
+.run-detail-view__pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.run-detail-view__tabs a,
+.run-detail-view__detail-kinds a,
+.run-detail-view__pagination a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  padding-inline: var(--space-4);
+  align-items: center;
+  color: var(--color-text-mineral);
+  text-decoration: none;
+  background: var(--color-surface-raised);
+  border: var(--border-technical);
+}
+
+.run-detail-view__tabs a[aria-current="page"],
+.run-detail-view__detail-kinds a[aria-current="page"] {
+  border-block-end: 0.25rem solid var(--color-signal-info-cyan);
+}
+
+.run-detail-view__availability {
+  border-inline-start: 0.3rem solid var(--color-signal-watch-amber);
+}
+
+.run-detail-view__pagination span {
+  color: var(--color-text-muted);
 }
 
 .run-detail-view button {
