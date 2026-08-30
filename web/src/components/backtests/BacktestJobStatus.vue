@@ -27,6 +27,8 @@ interface Presentation {
 
 const props = withDefaults(defineProps<Props>(), { errorMessage: null });
 const emit = defineEmits<Emits>();
+const statusRoot = useTemplateRef<HTMLElement>("statusRoot");
+const confirmationDialog = useTemplateRef<HTMLDialogElement>("confirmationDialog");
 const cancelTrigger = useTemplateRef<HTMLButtonElement>("cancelTrigger");
 const confirmCancel = useTemplateRef<HTMLButtonElement>("confirmCancel");
 const dismissCancel = useTemplateRef<HTMLButtonElement>("dismissCancel");
@@ -128,21 +130,24 @@ watch(
 );
 
 watch(canRequestCancel, (available) => {
-  if (!available && confirmOpen.value) closeConfirmation(false);
+  if (!available && confirmOpen.value) void closeConfirmation();
 });
 
 async function openConfirmation(): Promise<void> {
   if (!canRequestCancel.value) return;
   confirmOpen.value = true;
   await nextTick();
+  const dialog = confirmationDialog.value;
+  if (dialog !== null && typeof dialog.showModal === "function" && !dialog.open) {
+    dialog.showModal();
+  }
   confirmCancel.value?.focus();
 }
 
-async function closeConfirmation(restoreFocus = true): Promise<void> {
+async function closeConfirmation(): Promise<void> {
   confirmOpen.value = false;
-  if (!restoreFocus) return;
   await nextTick();
-  cancelTrigger.value?.focus();
+  (cancelTrigger.value ?? statusRoot.value)?.focus();
 }
 
 async function confirmCancellation(): Promise<void> {
@@ -172,10 +177,12 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 
 <template>
   <section
+    ref="statusRoot"
     class="backtest-job-status"
     data-testid="backtest-job-status"
     :data-status="props.job?.status ?? 'UNAVAILABLE'"
     aria-labelledby="backtest-job-status-title"
+    tabindex="-1"
   >
     <header class="backtest-job-status__header">
       <div>
@@ -293,13 +300,15 @@ function handleDialogKeydown(event: KeyboardEvent): void {
       </button>
     </div>
 
-    <div
+    <dialog
       v-if="confirmOpen"
+      ref="confirmationDialog"
       class="backtest-job-status__dialog-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="cancel-job-title"
       aria-describedby="cancel-job-description"
+      @cancel.prevent="closeConfirmation()"
       @keydown="handleDialogKeydown"
     >
       <div class="backtest-job-status__dialog">
@@ -326,7 +335,7 @@ function handleDialogKeydown(event: KeyboardEvent): void {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   </section>
 </template>
 
@@ -456,8 +465,14 @@ function handleDialogKeydown(event: KeyboardEvent): void {
   z-index: 20;
   inset: 0;
   display: grid;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
   place-items: center;
   padding: var(--space-4);
+  border: 0;
   background: rgb(0 0 0 / 70%);
 }
 
@@ -485,6 +500,26 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 @media (min-width: 48rem) {
   .backtest-job-status__facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 47.9375rem) {
+  .backtest-job-status__dialog-backdrop {
+    padding: var(--space-3);
+  }
+
+  .backtest-job-status__dialog {
+    padding: var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backtest-job-status,
+  .backtest-job-status * {
+    scroll-behavior: auto;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
   }
 }
 </style>

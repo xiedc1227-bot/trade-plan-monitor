@@ -768,6 +768,7 @@ onBeforeUnmount(() => {
 .run-detail-view__resource,
 .run-detail-view__equity {
   display: grid;
+  min-width: 0;
   gap: var(--space-4);
 }
 
@@ -782,6 +783,7 @@ onBeforeUnmount(() => {
 
 .run-detail-view__results-heading > p,
 .run-detail-view__resource-heading p {
+  min-width: 0;
   max-width: 52rem;
   color: var(--color-text-muted);
 }
@@ -830,6 +832,14 @@ onBeforeUnmount(() => {
   border: var(--border-technical);
 }
 
+.run-detail-view__error a,
+.run-detail-view__retry a {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 2.75rem;
+  align-items: center;
+}
+
 .run-detail-view :focus-visible {
   outline: 0.1875rem solid var(--color-focus-ring);
   outline-offset: 0.1875rem;
@@ -838,6 +848,21 @@ onBeforeUnmount(() => {
 @media (max-width: 47.9375rem) {
   .run-detail-view {
     padding: var(--space-4);
+  }
+
+  .run-detail-view__results-heading,
+  .run-detail-view__resource-heading {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-detail-view,
+  .run-detail-view * {
+    scroll-behavior: auto;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
   }
 }
 </style>

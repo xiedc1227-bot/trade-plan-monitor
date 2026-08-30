@@ -66,6 +66,36 @@ watch(
 function inputValue(event: Event): string {
   return (event.currentTarget as HTMLInputElement | HTMLSelectElement).value;
 }
+
+function errorTargetId(field: string): string {
+  const definition = fieldDefinitions.find((candidate) => candidate.field === field);
+  if (definition !== undefined) return definition.id;
+  if (field === "eventRiskAssumption") return "event-risk-assumption";
+  if (field === "initialLots") return "initial-lots-title";
+
+  const lotField =
+    /^initialLots\.([A-Za-z0-9._:-]+)\.(lotKey|bucket|acquiredTradeDate|quantity|costBasisFen)$/.exec(
+      field,
+    );
+  if (lotField === null) return "run-form-title";
+  const suffixes = {
+    acquiredTradeDate: "date",
+    bucket: "bucket",
+    costBasisFen: "cost",
+    lotKey: "lot-key",
+    quantity: "quantity",
+  } as const;
+  return `${lotField[1]}-${suffixes[lotField[2] as keyof typeof suffixes]}`;
+}
+
+function focusErrorField(field: string, event: MouseEvent): void {
+  event.preventDefault();
+  if (field === "initialLots") {
+    document.querySelector<HTMLButtonElement>('[data-testid="add-initial-lot"]')?.focus();
+    return;
+  }
+  document.getElementById(errorTargetId(field))?.focus();
+}
 </script>
 
 <template>
@@ -88,7 +118,11 @@ function inputValue(event: Event): string {
     >
       <h3>请修正以下回测输入</h3>
       <ul>
-        <li v-for="(message, field) in errors" :key="field">{{ message }}</li>
+        <li v-for="(message, field) in errors" :key="field">
+          <a :href="`#${errorTargetId(field)}`" @click="focusErrorField(field, $event)">
+            {{ message }}
+          </a>
+        </li>
       </ul>
     </div>
 
@@ -96,7 +130,6 @@ function inputValue(event: Event): string {
       <div v-for="definition in fieldDefinitions" :key="definition.field" class="run-form__field">
         <label :for="definition.id">
           {{ definition.label }}
-          <span>{{ definition.help }}</span>
         </label>
         <input
           :id="definition.id"
@@ -117,17 +150,18 @@ function inputValue(event: Event): string {
       <div class="run-form__field">
         <label for="event-risk-assumption">
           事件风险假设
-          <span>显式选择生成契约枚举</span>
         </label>
         <select
           id="event-risk-assumption"
           :value="draft.eventRiskAssumption"
           :disabled="editingDisabled()"
+          aria-describedby="event-risk-assumption-help"
           @change="emit('updateField', 'eventRiskAssumption', inputValue($event))"
         >
           <option value="NO_EVENT_RISK">NO_EVENT_RISK</option>
           <option value="MANUAL_EVENT_RISK">MANUAL_EVENT_RISK</option>
         </select>
+        <p id="event-risk-assumption-help" class="run-form__help">显式选择生成契约枚举</p>
       </div>
 
       <BacktestInitialLotsEditor
@@ -240,6 +274,13 @@ function inputValue(event: Event): string {
   color: var(--color-signal-risk-vermilion);
 }
 
+.run-form__errors a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  color: inherit;
+}
+
 .run-form__field-error {
   color: var(--color-signal-risk-vermilion);
   font-size: 0.875rem;
@@ -273,6 +314,16 @@ function inputValue(event: Event): string {
 
   .run-form__grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-form,
+  .run-form * {
+    scroll-behavior: auto;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
   }
 }
 </style>

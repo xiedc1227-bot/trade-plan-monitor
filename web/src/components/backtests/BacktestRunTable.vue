@@ -70,6 +70,9 @@ function visibleShanghaiTime(value: string): string {
       tabindex="0"
     >
       <table>
+        <caption>
+          回测运行记录，按完成时间倒序排列
+        </caption>
         <thead>
           <tr>
             <th scope="col" aria-sort="descending">完成时间</th>
@@ -115,7 +118,9 @@ function visibleShanghaiTime(value: string): string {
       >
         返回第一页
       </button>
-      <span aria-live="polite">第 {{ pageNumber }} 页</span>
+      <span data-testid="run-page-number" aria-current="page" aria-live="polite">
+        第 {{ pageNumber }} 页
+      </span>
       <button
         data-testid="next-run-page"
         type="button"
@@ -168,6 +173,17 @@ function visibleShanghaiTime(value: string): string {
   border-collapse: collapse;
 }
 
+.run-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .run-table th,
 .run-table td {
   padding: var(--space-3);
@@ -184,8 +200,10 @@ function visibleShanghaiTime(value: string): string {
 }
 
 .run-table__run-link {
-  display: inline-block;
+  display: inline-flex;
   max-width: 18rem;
+  min-height: 2.75rem;
+  align-items: center;
   overflow-wrap: anywhere;
   color: var(--color-signal-info-cyan);
 }
@@ -232,6 +250,26 @@ function visibleShanghaiTime(value: string): string {
   .run-table__header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .run-table__pagination {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .run-table__pagination button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-table,
+  .run-table * {
+    scroll-behavior: auto;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
   }
 }
 </style>
