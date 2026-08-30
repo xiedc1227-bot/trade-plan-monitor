@@ -22,6 +22,7 @@ import BacktestEquityTable from "../components/backtests/BacktestEquityTable.vue
 import BacktestFillTable from "../components/backtests/BacktestFillTable.vue";
 import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
 import BacktestMetricsSummary from "../components/backtests/BacktestMetricsSummary.vue";
+import BacktestResultActions from "../components/backtests/BacktestResultActions.vue";
 import { useBacktestJob } from "../composables/useBacktestJob";
 import {
   detailAvailability,
@@ -437,6 +438,13 @@ onBeforeUnmount(() => {
         </div>
         <p>每次仅读取 URL 当前选择的一页结果，不执行历史重放或明细重建。</p>
       </div>
+
+      <BacktestResultActions
+        :api="api"
+        :create-idempotency-key="props.createIdempotencyKey"
+        :run="results.summary.value"
+        @refresh="results.refreshSummary"
+      />
 
       <nav class="run-detail-view__tabs" aria-label="回测结果资源">
         <RouterLink
