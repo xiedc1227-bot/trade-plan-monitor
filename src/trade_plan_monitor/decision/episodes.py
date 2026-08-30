@@ -12,7 +12,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from trade_plan_monitor.decision.conditions import (
-    evaluate_condition,
+    _evaluate_validated_condition,
     has_complete_current_day_minutes,
 )
 from trade_plan_monitor.decision.models import (
@@ -339,7 +339,7 @@ def _bearish_volume_blocker(
     condition = _entry_volume_cap(context)
     if condition is None:
         return None
-    evidence = evaluate_condition(condition, context)
+    evidence = _evaluate_validated_condition(condition, context)
     if evidence.outcome is not ConditionOutcome.UNSATISFIED:
         return None
     return EpisodeStructuralBlocker(
@@ -587,16 +587,16 @@ def _evaluate_active_episode(
         return _close_episode(context, episode, closure_at=closure_at)
     advanced = _derive_episode_state(context, episode)
     derived_context = context.model_copy(update={"low_zone_episode": advanced})
-    entry_evidence = evaluate_condition(
+    entry_evidence = _evaluate_validated_condition(
         derived_context.plan.entry.condition,
         derived_context,
     )
-    blocker_evidence = evaluate_condition(
+    blocker_evidence = _evaluate_validated_condition(
         derived_context.plan.blockers.condition,
         derived_context,
     )
     bucket = _candidate_bucket(derived_context)
-    availability_evidence = evaluate_condition(
+    availability_evidence = _evaluate_validated_condition(
         PositionBucketAvailableCondition(bucket=bucket),
         derived_context,
     )

@@ -12,7 +12,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from trade_plan_monitor.decision.conditions import (
-    evaluate_condition,
+    _evaluate_validated_condition,
     has_complete_current_day_minutes,
 )
 from trade_plan_monitor.decision.models import (
@@ -464,7 +464,7 @@ def _evaluate_reduction_node(
             for child in condition.conditions
         )
         return _logical_evidence(condition, children)
-    return evaluate_condition(condition, context)
+    return _evaluate_validated_condition(condition, context)
 
 
 def _target_tactical_lot(context: EvaluationContext) -> PositionLotSnapshot | None:
@@ -791,7 +791,7 @@ def evaluate_official_close_risk(
     if type(context) is not EvaluationContext:
         raise TypeError("context must be an EvaluationContext")
 
-    risk_evidence = evaluate_condition(context.plan.risk.condition, context)
+    risk_evidence = _evaluate_validated_condition(context.plan.risk.condition, context)
     if not context.plan_active:
         return _unchanged_official_risk(context, risk_evidence)
     official_bar = _official_bar(context)

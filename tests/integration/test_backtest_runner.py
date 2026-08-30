@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, localcontext
 from pathlib import Path
+from time import perf_counter
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -22,6 +23,7 @@ from trade_plan_monitor.backtest.reporting import persist_report, write_report_f
 from trade_plan_monitor.backtest.results import BacktestDetailKind, BacktestResultStore
 from trade_plan_monitor.backtest.run_input import BacktestInitialLotInput, BacktestRunInput
 from trade_plan_monitor.backtest.runner import OfflineBacktestRunner
+from trade_plan_monitor.decision.conditions import evaluate_condition
 from trade_plan_monitor.decision.engine import evaluate
 from trade_plan_monitor.decision.models import (
     ActionableSignalType,
@@ -192,6 +194,115 @@ def _seed_dataset(store: BacktestMarketStore) -> str:
             symbols=(SYMBOL,),
             start=TRADE_DATE,
             end=TRADE_DATE,
+            warmup_start=warmup_start,
+            historical_profile=PROFILE,
+        )
+    )
+    assert frozen.ready is True
+    assert frozen.dataset_hash is not None
+    return frozen.dataset_hash
+
+
+def _seed_twenty_trading_day_dataset(store: BacktestMarketStore) -> str:
+    trade_dates: list[date] = []
+    cursor = TRADE_DATE
+    while len(trade_dates) < 20:
+        if cursor.weekday() < 5:
+            trade_dates.append(cursor)
+        cursor -= timedelta(days=1)
+    trade_dates.reverse()
+    start = trade_dates[0]
+    end = trade_dates[-1]
+    warmup_start = start - timedelta(days=60)
+    previous_open = warmup_start - timedelta(days=3)
+    calendar: list[TradingDay] = []
+    daily: list[DailyBar] = []
+    cursor = warmup_start
+    while cursor <= end:
+        is_open = cursor.weekday() < 5
+        calendar.append(
+            TradingDay(
+                exchange="SSE",
+                cal_date=cursor,
+                is_open=is_open,
+                previous_trade_date=previous_open,
+            )
+        )
+        if is_open:
+            close_fen = 6_400 + (cursor - warmup_start).days
+            daily.append(
+                DailyBar(
+                    symbol=SYMBOL,
+                    trade_date=cursor,
+                    open_fen=close_fen,
+                    high_fen=close_fen + 2,
+                    low_fen=close_fen - 2,
+                    close_fen=close_fen,
+                    volume_shares=2_000_000,
+                    amount_yuan=Decimal(close_fen * 20_000),
+                    is_official=True,
+                    received_at=datetime.combine(cursor, time(15, 20), SHANGHAI),
+                )
+            )
+            previous_open = cursor
+        cursor += timedelta(days=1)
+    store.record_trading_days(tuple(calendar))
+    store.record_daily_bars(tuple(daily))
+
+    minute_count = 0
+    for trade_date in trade_dates:
+        close_fen = 6_400 + (trade_date - warmup_start).days
+        bars = tuple(
+            MinuteBar(
+                symbol=SYMBOL,
+                bar_end=bar_end,
+                open_fen=close_fen,
+                high_fen=close_fen + 1,
+                low_fen=close_fen - 1,
+                close_fen=close_fen,
+                volume_shares=1_000,
+                amount_yuan=Decimal(close_fen * 10),
+                received_at=bar_end + timedelta(seconds=12),
+            )
+            for bar_end in expected_minute_ends(trade_date, is_open=True)
+        )
+        minute_count += len(bars)
+        store.record_minute_batch(
+            HistoricalMinuteBatch(
+                symbol=SYMBOL,
+                trade_date=trade_date,
+                contract_version=PROFILE,
+                bars=bars,
+                opening_special=HistoricalOpeningSpecial(
+                    symbol=SYMBOL,
+                    source_time=datetime.combine(trade_date, time(9, 30), SHANGHAI),
+                    open_fen=close_fen,
+                    high_fen=close_fen + 1,
+                    low_fen=close_fen - 1,
+                    close_fen=close_fen,
+                    volume_shares=500,
+                    amount_yuan=Decimal(close_fen * 5),
+                ),
+            )
+        )
+        store.record_daily_limits(
+            (
+                DailyLimit(
+                    symbol=SYMBOL,
+                    trade_date=trade_date,
+                    up_limit_fen=close_fen * 11 // 10,
+                    down_limit_fen=close_fen * 9 // 10,
+                    received_at=datetime.combine(trade_date, time(9, 30), SHANGHAI),
+                ),
+            )
+        )
+
+    assert minute_count == 4_800
+    frozen = store.freeze_dataset(
+        DatasetScope(
+            symbols=(SYMBOL,),
+            start=start,
+            end=end,
             warmup_start=warmup_start,
             historical_profile=PROFILE,
         )
@@ -521,6 +632,69 @@ def test_runner_consumes_only_the_bounded_reader_contract(tmp_path) -> None:
     assert report.status == "COMPLETED"
     assert len(report.decisions) == 49
     assert source.open_count == 1
+
+
+def test_runner_reuses_validated_context_once_for_internal_conditions(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    store = BacktestMarketStore(tmp_path / "validated-context.sqlite3")
+    dataset_hash = _seed_dataset(store)
+    source = _FrozenReaderSource(store)
+    validation_count = 0
+    latest_context: EvaluationContext | None = None
+    original_model_validate = EvaluationContext.model_validate
+
+    def counted_model_validate(cls, value, *args, **kwargs):
+        nonlocal validation_count
+        validation_count += 1
+        return original_model_validate(value, *args, **kwargs)
+
+    def observed_evaluator(context: EvaluationContext) -> EvaluationResult:
+        nonlocal latest_context
+        latest_context = context
+        return evaluate(context)
+
+    monkeypatch.setattr(
+        EvaluationContext,
+        "model_validate",
+        classmethod(counted_model_validate),
+    )
+    report = OfflineBacktestRunner(source, evaluator=observed_evaluator).run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+
+    assert len(report.decisions) == 49
+    assert validation_count <= len(report.decisions)
+    assert latest_context is not None
+    before_public_call = validation_count
+    evaluate_condition(latest_context.plan.entry.condition, latest_context)
+    assert validation_count == before_public_call + 1
+
+
+def test_twenty_trading_day_latency_keeps_the_complete_ordered_report(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "twenty-trading-days.sqlite3")
+    dataset_hash = _seed_twenty_trading_day_dataset(store)
+    source = _FrozenReaderSource(store)
+
+    started = perf_counter()
+    report = OfflineBacktestRunner(source).run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+    elapsed_seconds = perf_counter() - started
+
+    assert len(report.decisions) == 20 * 49
+    assert len(report.daily_equity) == 20
+    assert source.open_count == 1
+    assert elapsed_seconds <= 30
 
 
 def test_midrun_cancellation_and_restart_replay_from_the_frozen_beginning(tmp_path) -> None:

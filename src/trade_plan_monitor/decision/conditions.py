@@ -1092,6 +1092,20 @@ def _evaluate(
     return evaluator(condition, context)
 
 
+def _evaluate_validated_condition(
+    condition: ConditionNode,
+    context: EvaluationContext,
+) -> ConditionEvidence:
+    """Evaluate trusted immutable decision values without repeat serialization."""
+
+    if type(context) is not EvaluationContext:
+        raise TypeError("context must be an EvaluationContext")
+    if type(condition) not in CONDITION_EVALUATORS:
+        raise TypeError("condition must be one exact allowlisted condition class")
+    _validate_condition_tree(condition)
+    return _evaluate(condition, context)
+
+
 def evaluate_condition(
     condition: ConditionNode,
     context: EvaluationContext,
@@ -1110,8 +1124,7 @@ def evaluate_condition(
     validated_condition = condition_type.model_validate(
         condition.model_dump(mode="python", round_trip=True)
     )
-    _validate_condition_tree(validated_condition)
-    return _evaluate(validated_condition, validated_context)
+    return _evaluate_validated_condition(validated_condition, validated_context)
 
 
 __all__ = [
