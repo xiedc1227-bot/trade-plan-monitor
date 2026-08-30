@@ -109,6 +109,50 @@ Pop-Location
 These checks validate the installed entry, package assets, frontend tests, types, and production
 build without contacting a live provider.
 
+### Browser, NVDA, and performance gates
+
+The real-browser gate uses deterministic fake REST contracts and must not receive a provider
+token. It covers `/backtests`, `/backtests/new`, `/backtests/data`, and
+`/backtests/:runId` in Chromium without contacting Tushare, AI, Webhook, or any other
+external service:
+
+```powershell
+Push-Location web
+npm run build
+npm run test:e2e -- tests/e2e/backtests.spec.ts tests/e2e/accessibility.spec.ts
+Pop-Location
+```
+
+Run the browser gate at 320, 768, 1024, and 1440 CSS pixels with keyboard-only navigation,
+200-percent text, and reduced motion. It passes only with no console or API failure, no serious or
+critical axe violation, at most one in-flight request per resource, one polling timer per active
+job at an interval of at least two seconds, no polling after a job becomes terminal or its view is
+hidden/unmounted, at most 100 rows per result table page and 2,000 equity points, and zero ECharts
+bytes before the equity tab is selected. The approved acceptance profile is Chromium-only and
+does not claim Gecko/Firefox compatibility evidence.
+
+On Windows, complete one NVDA keyboard pass across the same four routes. Confirm the page title
+and heading, landmark and navigation names, field labels and focused error summary links, labelled
+table scrolling, modal focus containment and restoration, tab and pagination state, export
+controls, and the exact equity table alternative to the chart. Polling must announce a changed
+state once without stealing focus or repeating an unchanged state. Record the date, browser/NVDA
+versions, route/checklist result, and reviewer outside Git; keep screenshots, traces, downloads,
+profiles, and other raw evidence outside the repository.
+
+Measure performance from the production build served on exact loopback with a clean Chromium
+profile at 1440×900, 4× CPU slowdown, and 20 ms loopback latency. Use five warm-up navigations and
+20 measured navigations for each of the four routes. The fixed p75 limits are LCP ≤ 2.5 seconds,
+INP ≤ 200 milliseconds, and CLS ≤ 0.10; interaction latency must also be ≤ 200 milliseconds p95.
+The entry/shared bundle excluding ECharts must be ≤ 150 KiB gzip, every non-chart route must be
+≤ 100 KiB gzip, and the asynchronous ECharts chunk must be ≤ 450 KiB gzip. Store profiles and
+measurement output outside Git; an unavailable or flaky measurement environment blocks the gate
+instead of weakening a threshold.
+
+The production backtest workflow remains `sync` → `verify` → offline `run`. `sync` is the only
+network-capable backtest command and still requires both separate human authorization and the
+literal `--allow-network` flag. Passing the fake browser gate never authorizes live synchronization
+and never proves Tushare availability or semantics.
+
 ## Commands
 
 Run backend commands from `trade-plan-monitor/` and frontend commands from `web/` unless the

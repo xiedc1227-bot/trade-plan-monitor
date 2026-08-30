@@ -110,6 +110,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .backtest-runs-view {
   display: grid;
+  box-sizing: border-box;
   gap: var(--space-6);
   width: min(100%, 90rem);
   margin-inline: auto;

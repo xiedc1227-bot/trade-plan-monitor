@@ -50,6 +50,9 @@ const router = useRouter();
 const api = props.api ?? createBacktestApi();
 const runtimeIdentityError = shallowRef<string | null>(null);
 const resultUrlError = shallowRef<string | null>(null);
+const completedJobAnnouncement = shallowRef("");
+const announcedCompletedJobId = shallowRef<string | null>(null);
+const announcedCompletedRunId = shallowRef<string | null>(null);
 
 const RUN_ID_PATTERN = /^[0-9a-f]{64}$/;
 const JOB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
@@ -310,6 +313,15 @@ watch(
     navigationGeneration += 1;
     runtimeIdentityError.value = null;
     resultUrlError.value = null;
+    if (
+      announcedCompletedRunId.value !== null &&
+      (runId.value !== announcedCompletedRunId.value ||
+        (jobId.value !== null && jobId.value !== announcedCompletedJobId.value))
+    ) {
+      completedJobAnnouncement.value = "";
+      announcedCompletedJobId.value = null;
+      announcedCompletedRunId.value = null;
+    }
     reconcileJobIdentity(jobState.job.value);
   },
   { deep: true },
@@ -343,7 +355,17 @@ function reconcileJobIdentity(current: typeof jobState.job.value): void {
     return;
   }
   runtimeIdentityError.value = null;
-  if (current.status === "COMPLETED") void canonicalizeCompletedJob();
+  if (current.status === "COMPLETED") {
+    if (
+      announcedCompletedJobId.value !== current.jobId ||
+      announcedCompletedRunId.value !== current.runId
+    ) {
+      completedJobAnnouncement.value = "任务已完成，已打开回测结果";
+      announcedCompletedJobId.value = current.jobId;
+      announcedCompletedRunId.value = current.runId;
+    }
+    void canonicalizeCompletedJob();
+  }
 }
 
 watch(jobState.job, reconcileJobIdentity);
@@ -366,6 +388,16 @@ onBeforeUnmount(() => {
     <aside class="run-detail-view__boundary" aria-label="研究边界">
       本页仅供离线研究，不连接券商、不自动下单，也不复用实时监控状态。
     </aside>
+
+    <p
+      class="run-detail-view__visually-hidden"
+      data-testid="completed-job-announcement"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      {{ completedJobAnnouncement }}
+    </p>
 
     <section
       v-if="identityError !== null"
@@ -699,6 +731,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .run-detail-view {
   display: grid;
+  box-sizing: border-box;
   width: min(100%, 90rem);
   gap: var(--space-6);
   margin-inline: auto;
@@ -733,6 +766,17 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
+}
+
+.run-detail-view__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .run-detail-view a {

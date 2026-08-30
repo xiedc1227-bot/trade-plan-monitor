@@ -300,6 +300,43 @@ describe("BacktestRunDetailView", () => {
     wrapper.unmount();
   });
 
+  it("keeps one completed-job announcement across canonicalization without stealing focus", async () => {
+    vi.useFakeTimers();
+    const getJob = vi
+      .fn<BacktestApi["getJob"]>()
+      .mockResolvedValueOnce(job("RUNNING"))
+      .mockResolvedValueOnce(job("COMPLETED"));
+    const focusTarget = document.createElement("button");
+    focusTarget.textContent = "Stable focus target";
+    document.body.append(focusTarget);
+    const { router, wrapper } = await mountDetail({
+      api: apiWith({ getJob, getRun: vi.fn().mockResolvedValue(run()) }),
+      url: `/backtests/${RUN_ID}?jobId=${JOB_ID}`,
+    });
+    focusTarget.focus();
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.jobId).toBeUndefined();
+    const announcement = wrapper.get('[data-testid="completed-job-announcement"]');
+    expect(announcement.attributes()).toMatchObject({
+      "aria-atomic": "true",
+      "aria-live": "polite",
+      role: "status",
+    });
+    expect(announcement.text()).toBe("任务已完成，已打开回测结果");
+    expect(document.activeElement).toBe(focusTarget);
+
+    await vi.advanceTimersByTimeAsync(2_200);
+    await flushPromises();
+    expect(getJob).toHaveBeenCalledTimes(2);
+    expect(announcement.text()).toBe("任务已完成，已打开回测结果");
+    expect(document.activeElement).toBe(focusTarget);
+    wrapper.unmount();
+    focusTarget.remove();
+  });
+
   it("removes only jobId when canonicalizing a completed job", async () => {
     const { router, wrapper } = await mountDetail({
       api: apiWith({

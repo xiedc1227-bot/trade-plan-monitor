@@ -271,7 +271,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
   padding: var(--space-4);
   border-inline-start: 0.3rem solid var(--color-signal-risk-vermilion);
   background: rgb(228 93 67 / 12%);
-  color: var(--color-signal-risk-vermilion);
+  color: var(--color-text-mineral);
 }
 
 .run-form__errors a {

@@ -214,6 +214,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .backtest-data-view {
   display: grid;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
   width: min(100%, 90rem);
   margin-inline: auto;
@@ -245,6 +247,7 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
 }
 
 .backtest-data-view__hero a,

@@ -84,6 +84,43 @@ Pop-Location
 
 这些检查会验证安装入口、包内资源、前端测试、类型和生产构建，不会连接真实供应商。
 
+### 浏览器、NVDA 与性能闸门
+
+真实浏览器闸门使用确定性假 REST 契约，运行时不得提供供应商令牌。它在 Chromium 中覆盖
+`/backtests`、`/backtests/new`、`/backtests/data` 与
+`/backtests/:runId`，且不联系 Tushare、AI、Webhook 或任何其他外部服务：
+
+```powershell
+Push-Location web
+npm run build
+npm run test:e2e -- tests/e2e/backtests.spec.ts tests/e2e/accessibility.spec.ts
+Pop-Location
+```
+
+浏览器闸门必须在 320、768、1024 和 1440 CSS 像素下，以纯键盘导航、200% 文本和减少
+动态效果运行。只有同时满足以下条件才算通过：无控制台或 API 失败、无 serious 或 critical
+级 axe 违规、每个资源最多一个在途请求、每个活动任务只有一个且间隔至少两秒的轮询计时器、
+任务终态或视图隐藏/卸载后不再轮询、每个结果表格页最多 100 行、权益点最多 2,000 个，并且
+选择权益页签前 ECharts 字节数为零。已批准的验收配置仅包含 Chromium，不声称提供
+Gecko/Firefox 兼容性证据。
+
+在 Windows 上，对相同四条路由完成一次 NVDA 纯键盘检查。确认页面标题与标题层级、地标与
+导航名称、字段标签与获得焦点的错误摘要链接、有标签的表格滚动、模态框焦点约束与恢复、页签
+和分页状态、导出控件，以及作为图表精确替代的权益表格。轮询状态发生变化时只能播报一次，
+不得抢夺焦点或重复播报未变化状态。把日期、浏览器/NVDA 版本、路由/清单结果及审核人记录在
+Git 外；截图、追踪、下载、性能 profile 及其他原始证据也必须留在仓库外。
+
+性能必须从生产构建开始测量：仅在精确回环地址提供服务，使用干净 Chromium profile、
+1440×900 视口、4× CPU 降速和 20 ms 回环延迟。四条路由各执行 5 次预热导航和 20 次测量
+导航。固定 p75 上限为 LCP ≤ 2.5 秒、INP ≤ 200 毫秒、CLS ≤ 0.10；交互延迟还必须满足
+p95 ≤ 200 毫秒。排除 ECharts 的入口/共享包必须 ≤ 150 KiB gzip，每条非图表路由必须
+≤ 100 KiB gzip，异步 ECharts 分块必须 ≤ 450 KiB gzip。性能 profile 与测量输出必须存放
+在 Git 外；测量环境不可用或不稳定时应阻断闸门，不能降低阈值。
+
+生产回测流程仍为 `sync` → `verify` → 离线 `run`。`sync` 是唯一可联网的回测命令，并且
+仍需另行人工授权和字面量 `--allow-network` 标志。假浏览器闸门通过绝不授权真实同步，也不
+证明 Tushare 的可用性或语义。
+
 ## 命令
 
 除非命令本身切换目录，后端命令从 `trade-plan-monitor/` 运行，前端命令从 `web/` 运行。

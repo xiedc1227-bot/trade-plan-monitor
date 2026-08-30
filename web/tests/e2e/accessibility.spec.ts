@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 
 import { expect, test } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, Page, TestInfo } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 
@@ -105,7 +105,11 @@ async function openSystemPage(browser: Browser, width: number) {
   return page;
 }
 
-test("has no WCAG 2.1 A/AA axe violations", async ({ browser }) => {
+function expectChromiumProject(testInfo: TestInfo): void {
+  expect(testInfo.project.name).toBe("chromium");
+}
+
+test("has no WCAG 2.1 A/AA axe violations", async ({ browser }, testInfo) => {
   const page = await openSystemPage(browser, 1024);
   await page.addScriptTag({ path: axePath });
   const violations = await page.evaluate(async () => {
@@ -119,14 +123,18 @@ test("has no WCAG 2.1 A/AA axe violations", async ({ browser }) => {
   });
 
   expect(violations).toEqual([]);
+  expectChromiumProject(testInfo);
   await page.close();
 });
 
 test("fits 320, 768, 1024, and 1440 pixel layouts without horizontal overflow", async ({
   browser,
-}) => {
+}, testInfo) => {
   for (const width of [320, 768, 1024, 1440]) {
     const page = await openSystemPage(browser, width);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
     const sizes = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -136,11 +144,12 @@ test("fits 320, 768, 1024, and 1440 pixel layouts without horizontal overflow", 
     );
     await page.close();
   }
+  expectChromiumProject(testInfo);
 });
 
 test("keeps native keyboard order, visible focus, semantic state, and reduced motion", async ({
   browser,
-}) => {
+}, testInfo) => {
   const page = await openSystemPage(browser, 320);
 
   await page.keyboard.press("Tab");
@@ -166,5 +175,6 @@ test("keeps native keyboard order, visible focus, semantic state, and reduced mo
     return duration.endsWith("ms") ? numeric / 1_000 : numeric;
   });
   expect(motionSeconds).toBeLessThanOrEqual(0.000_01);
+  expectChromiumProject(testInfo);
   await page.close();
 });
