@@ -44,6 +44,9 @@ addopts = [
     "--strict-config",
     "--strict-markers",
 ]
+markers = [
+    "live: explicitly authorized tests that access external providers",
+]
 
 [tool.ruff]
 target-version = "py314"
