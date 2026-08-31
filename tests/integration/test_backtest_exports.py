@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from hashlib import sha256
@@ -20,6 +21,7 @@ from trade_plan_monitor.backtest.results import (
     BacktestRunStatus,
     BacktestRunSummary,
     ExportCancelled,
+    ResultConflictError,
     backtest_detail_set_hash,
     backtest_fill_set_hash,
 )
@@ -209,6 +211,37 @@ def test_v2_fill_export_observes_cancellation_between_bounded_database_batches(
     with pytest.raises(ExportCancelled):
         next(batches)
     batches.close()
+
+
+@pytest.mark.parametrize("surface", ["payload", "sql_identity"])
+def test_v2_fill_export_rejects_tampering_before_the_first_fill_row(
+    tmp_path: Path,
+    surface: str,
+) -> None:
+    store = BacktestResultStore(tmp_path / f"tampered-export-{surface}.sqlite3")
+    summary, fills = _materialize_v2(store, f"tampered-export-{surface}", fill_count=1)
+    with sqlite3.connect(store.database_path) as connection:
+        if surface == "payload":
+            connection.execute(
+                "UPDATE backtest_fill SET payload_json = payload_json || ' ' WHERE fill_id = ?",
+                (fills[0].fill_id,),
+            )
+        else:
+            connection.execute(
+                "UPDATE backtest_fill SET filled_at = ? WHERE fill_id = ?",
+                ("2026-08-24T09:31:00.000000+08:00", fills[0].fill_id),
+            )
+        connection.commit()
+
+    chunks = reporting.iter_export_fills(store, summary.run_id, cancelled=lambda: False)
+    assert next(chunks) == (
+        b"schema_version,run_id,fill_id,filled_at,side,symbol,bucket,quantity,"
+        b"price_fen,notional_fen,fees_fen,cash_delta_fen,realized_pnl_fen\n"
+    )
+    failure = RuntimeError if surface == "payload" else ResultConflictError
+    with pytest.raises(failure):
+        next(chunks)
+    chunks.close()
 
 
 def test_active_export_rejects_v1_while_named_offline_export_preserves_v1_bytes(

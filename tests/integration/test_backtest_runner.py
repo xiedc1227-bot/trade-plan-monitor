@@ -14,6 +14,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import trade_plan_monitor.backtest.application as application_module
+import trade_plan_monitor.backtest.runner as runner_module
+import trade_plan_monitor.decision.models as decision_models_module
 from trade_plan_monitor.backtest.application import BacktestApplicationService
 from trade_plan_monitor.backtest.control import BacktestCancellationResult, CancellationToken
 from trade_plan_monitor.backtest.dataset import DatasetScope
@@ -35,6 +37,7 @@ from trade_plan_monitor.decision.models import (
     IntradayEvaluationTarget,
     NextStep,
     NextStepCode,
+    RuleEvidence,
     SignalIntent,
     SignalType,
 )
@@ -634,6 +637,41 @@ def test_runner_consumes_only_the_bounded_reader_contract(tmp_path) -> None:
     assert source.open_count == 1
 
 
+def test_runner_selects_only_the_plan_symbol_when_the_source_supports_it(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "selective-market.sqlite3")
+    dataset_hash, fixture = _seed_two_symbol_replay_dataset(store)
+    selected_symbol = str(fixture["symbols"][0]["symbol"])
+
+    class SelectiveSource:
+        def __init__(self) -> None:
+            self.selected: list[tuple[str, str]] = []
+
+        @contextmanager
+        def open_frozen_dataset(self, dataset_hash: str):
+            del dataset_hash
+            raise AssertionError("runner opened the full multi-symbol stream")
+            yield
+
+        @contextmanager
+        def open_frozen_symbol_dataset(self, dataset_hash: str, symbol: str):
+            self.selected.append((dataset_hash, symbol))
+            with store.open_frozen_symbol_dataset(dataset_hash, symbol) as reader:
+                yield reader
+
+    source = SelectiveSource()
+    report = OfflineBacktestRunner(source).run(
+        plan=_plan_for_fixture_symbol(fixture["symbols"][0]),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+
+    assert report.status == "COMPLETED"
+    assert len(report.daily_equity) == 2
+    assert source.selected == [(dataset_hash, selected_symbol)]
+
+
 def test_runner_reuses_validated_context_once_for_internal_conditions(
     tmp_path,
     monkeypatch,
@@ -671,9 +709,32 @@ def test_runner_reuses_validated_context_once_for_internal_conditions(
     assert len(report.decisions) == 49
     assert validation_count <= len(report.decisions)
     assert latest_context is not None
+    restored = original_model_validate(latest_context.model_dump(mode="python", round_trip=True))
+    assert restored == latest_context
     before_public_call = validation_count
     evaluate_condition(latest_context.plan.entry.condition, latest_context)
     assert validation_count == before_public_call + 1
+
+
+def test_runner_uses_the_validated_internal_context_handoff(tmp_path, monkeypatch) -> None:
+    store = BacktestMarketStore(tmp_path / "trusted-context.sqlite3")
+    dataset_hash = _seed_dataset(store)
+
+    def reject_redundant_init(self, **values):
+        del self, values
+        raise AssertionError("runner repeated public context validation")
+
+    monkeypatch.setattr(EvaluationContext, "__init__", reject_redundant_init)
+
+    report = OfflineBacktestRunner(store).run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+
+    assert len(report.decisions) == 49
 
 
 def test_twenty_trading_day_latency_keeps_the_complete_ordered_report(tmp_path) -> None:
@@ -695,6 +756,126 @@ def test_twenty_trading_day_latency_keeps_the_complete_ordered_report(tmp_path) 
     assert len(report.daily_equity) == 20
     assert source.open_count == 1
     assert elapsed_seconds <= 30
+
+
+def test_long_replay_reclaims_transient_memory_at_bounded_day_intervals(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    store = BacktestMarketStore(tmp_path / "replay-memory-reclaim.sqlite3")
+    dataset_hash = _seed_twenty_trading_day_dataset(store)
+    reclaim_count = 0
+
+    def observed_reclaim() -> None:
+        nonlocal reclaim_count
+        reclaim_count += 1
+
+    monkeypatch.setattr(runner_module, "_reclaim_replay_temporaries", observed_reclaim)
+
+    report = OfflineBacktestRunner(store).run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+
+    assert len(report.daily_equity) == 20
+    assert reclaim_count == 1
+
+
+def test_report_build_streams_without_full_dump_or_recursive_normalization(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    store = BacktestMarketStore(tmp_path / "report-build.sqlite3")
+    report = OfflineBacktestRunner(store).run(
+        plan=_plan(),
+        dataset_hash=_seed_dataset(store),
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+    values = report.model_dump(
+        mode="python",
+        round_trip=True,
+        exclude={"report_hash"},
+    )
+    original = runner_module._BacktestRunReportPayload.model_dump
+    dump_count = 0
+
+    def observed_dump(self, *args, **kwargs):
+        nonlocal dump_count
+        dump_count += 1
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        runner_module._BacktestRunReportPayload,
+        "model_dump",
+        observed_dump,
+    )
+
+    def reject_recursive_normalization(value):
+        del value
+        raise AssertionError("report hashing repeated recursive normalization")
+
+    monkeypatch.setattr(runner_module, "_canonical_json", reject_recursive_normalization)
+
+    rebuilt = runner_module.BacktestRunReport.build(**values)
+
+    assert dump_count == 0
+    assert rebuilt == report
+
+
+def test_runner_hashes_each_generated_decision_only_once(tmp_path, monkeypatch) -> None:
+    store = BacktestMarketStore(tmp_path / "decision-hash-count.sqlite3")
+    dataset_hash = _seed_dataset(store)
+    original = decision_models_module._evaluation_result_digest
+    digest_count = 0
+
+    def observed_digest(payload):
+        nonlocal digest_count
+        digest_count += 1
+        return original(payload)
+
+    monkeypatch.setattr(
+        decision_models_module,
+        "_evaluation_result_digest",
+        observed_digest,
+    )
+
+    report = OfflineBacktestRunner(store).run(
+        plan=_plan(),
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+
+    assert len(report.decisions) == 49
+    assert digest_count == len(report.decisions)
+
+
+def test_runner_interns_repeated_immutable_decision_evidence(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "decision-evidence-interning.sqlite3")
+    report = OfflineBacktestRunner(store).run(
+        plan=_plan(),
+        dataset_hash=_seed_dataset(store),
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
+    )
+    rules = tuple(
+        evidence
+        for decision in report.decisions
+        for evidence in decision.snapshot.condition_evidence
+        if isinstance(evidence, RuleEvidence)
+    )
+
+    assert len(rules) > 1
+    assert len({id(evidence) for evidence in rules}) == 1
+    restored = EvaluationResult.model_validate_json(report.decisions[-1].model_dump_json())
+    assert restored == report.decisions[-1]
 
 
 def test_midrun_cancellation_and_restart_replay_from_the_frozen_beginning(tmp_path) -> None:

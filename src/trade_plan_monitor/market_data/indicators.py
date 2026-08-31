@@ -108,30 +108,41 @@ def calculate_ta_v1(
     ma200 = close.rolling(200).mean()
     rsi14 = _wilder_rsi(close)
     atr14 = _wilder_atr(high, low, close)
+    ema10_values = ema10.to_numpy(copy=False)
+    ema12_values = ema12.to_numpy(copy=False)
+    ema26_values = ema26.to_numpy(copy=False)
+    macd_values = macd.to_numpy(copy=False)
+    macd_signal_values = macd_signal.to_numpy(copy=False)
+    macd_histogram_values = macd_histogram.to_numpy(copy=False)
+    ma20_values = ma20.to_numpy(copy=False)
+    boll_upper_values = boll_upper.to_numpy(copy=False)
+    boll_lower_values = boll_lower.to_numpy(copy=False)
+    ma50_values = ma50.to_numpy(copy=False)
+    ma200_values = ma200.to_numpy(copy=False)
 
-    points = tuple(
-        IndicatorPoint(
-            bar_at=identities[index],
-            ema10_yuan=_required_float(ema10.iloc[index]),
-            ema12_yuan=_required_float(ema12.iloc[index]),
-            ema26_yuan=_required_float(ema26.iloc[index]),
-            macd_yuan=_required_float(macd.iloc[index]),
-            macd_signal_yuan=_required_float(macd_signal.iloc[index]),
-            macd_histogram_yuan=_required_float(macd_histogram.iloc[index]),
-            boll_middle_yuan=_optional_float(ma20.iloc[index]),
-            boll_upper_yuan=_optional_float(boll_upper.iloc[index]),
-            boll_lower_yuan=_optional_float(boll_lower.iloc[index]),
-            rsi14=rsi14[index],
-            atr14_yuan=atr14[index],
-            ma20_yuan=_optional_float(ma20.iloc[index]),
-            ma50_yuan=_optional_float(ma50.iloc[index]),
-            ma200_yuan=_optional_float(ma200.iloc[index]),
-        )
+    point_values = tuple(
+        {
+            "bar_at": identities[index],
+            "ema10_yuan": _required_float(ema10_values[index]),
+            "ema12_yuan": _required_float(ema12_values[index]),
+            "ema26_yuan": _required_float(ema26_values[index]),
+            "macd_yuan": _required_float(macd_values[index]),
+            "macd_signal_yuan": _required_float(macd_signal_values[index]),
+            "macd_histogram_yuan": _required_float(macd_histogram_values[index]),
+            "boll_middle_yuan": _optional_float(ma20_values[index]),
+            "boll_upper_yuan": _optional_float(boll_upper_values[index]),
+            "boll_lower_yuan": _optional_float(boll_lower_values[index]),
+            "rsi14": rsi14[index],
+            "atr14_yuan": atr14[index],
+            "ma20_yuan": _optional_float(ma20_values[index]),
+            "ma50_yuan": _optional_float(ma50_values[index]),
+            "ma200_yuan": _optional_float(ma200_values[index]),
+        }
         for index in range(len(normalized_bars))
     )
     return IndicatorSeries(
         symbol=normalized_bars[0].symbol,
-        points=points,
+        points=point_values,
     )
 
 
@@ -170,20 +181,17 @@ def _wilder_rsi(close: pd.Series) -> list[float | None]:
     if count <= _RSI_ATR_PERIOD:
         return result
 
-    differences = close.diff()
-    gains = differences.clip(lower=0)
-    losses = (-differences).clip(lower=0)
-    average_gain = float(gains.iloc[1 : _RSI_ATR_PERIOD + 1].sum()) / _RSI_ATR_PERIOD
-    average_loss = float(losses.iloc[1 : _RSI_ATR_PERIOD + 1].sum()) / _RSI_ATR_PERIOD
+    values = close.to_numpy(copy=False)
+    differences = [float(values[index] - values[index - 1]) for index in range(1, count)]
+    gains = [max(value, 0.0) for value in differences]
+    losses = [max(-value, 0.0) for value in differences]
+    average_gain = sum(gains[:_RSI_ATR_PERIOD]) / _RSI_ATR_PERIOD
+    average_loss = sum(losses[:_RSI_ATR_PERIOD]) / _RSI_ATR_PERIOD
     result[_RSI_ATR_PERIOD] = _rsi_value(average_gain, average_loss)
 
     for index in range(_RSI_ATR_PERIOD + 1, count):
-        average_gain = (
-            average_gain * (_RSI_ATR_PERIOD - 1) + float(gains.iloc[index])
-        ) / _RSI_ATR_PERIOD
-        average_loss = (
-            average_loss * (_RSI_ATR_PERIOD - 1) + float(losses.iloc[index])
-        ) / _RSI_ATR_PERIOD
+        average_gain = (average_gain * (_RSI_ATR_PERIOD - 1) + gains[index - 1]) / _RSI_ATR_PERIOD
+        average_loss = (average_loss * (_RSI_ATR_PERIOD - 1) + losses[index - 1]) / _RSI_ATR_PERIOD
         result[index] = _rsi_value(average_gain, average_loss)
     return result
 
@@ -205,13 +213,16 @@ def _wilder_atr(
     if count < _RSI_ATR_PERIOD:
         return result
 
-    true_ranges = [float(high.iloc[0] - low.iloc[0])]
+    high_values = high.to_numpy(copy=False)
+    low_values = low.to_numpy(copy=False)
+    close_values = close.to_numpy(copy=False)
+    true_ranges = [float(high_values[0] - low_values[0])]
     for index in range(1, count):
         true_ranges.append(
             max(
-                float(high.iloc[index] - low.iloc[index]),
-                abs(float(high.iloc[index] - close.iloc[index - 1])),
-                abs(float(low.iloc[index] - close.iloc[index - 1])),
+                float(high_values[index] - low_values[index]),
+                abs(float(high_values[index] - close_values[index - 1])),
+                abs(float(low_values[index] - close_values[index - 1])),
             )
         )
     average = sum(true_ranges[:_RSI_ATR_PERIOD]) / _RSI_ATR_PERIOD
@@ -223,13 +234,17 @@ def _wilder_atr(
 
 
 def _optional_float(value: object) -> float | None:
-    if pd.isna(value):
+    normalized = float(value)
+    if math.isnan(normalized):
         return None
-    return _required_float(value)
+    return _finite_float(normalized)
 
 
 def _required_float(value: object) -> float:
-    normalized = float(value)
+    return _finite_float(float(value))
+
+
+def _finite_float(normalized: float) -> float:
     if not math.isfinite(normalized):
         raise ValueError("indicator result must be finite")
     return 0.0 if normalized == 0 else normalized

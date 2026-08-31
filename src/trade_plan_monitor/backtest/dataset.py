@@ -237,6 +237,17 @@ class FrozenDatasetSource(Protocol):
     ) -> AbstractContextManager[FrozenDatasetReader]: ...
 
 
+@runtime_checkable
+class SymbolFilteredFrozenDatasetSource(Protocol):
+    """Optional optimized view over one symbol in a verified frozen dataset."""
+
+    def open_frozen_symbol_dataset(
+        self,
+        dataset_hash: str,
+        symbol: str,
+    ) -> AbstractContextManager[FrozenDatasetReader]: ...
+
+
 class DatasetFreezeResult(_DatasetValue):
     """Fail-closed verification outcome."""
 
@@ -306,5 +317,6 @@ __all__ = [
     "FrozenDatasetSource",
     "FrozenSymbolDay",
     "MarketStoreStatistics",
+    "SymbolFilteredFrozenDatasetSource",
     "exchange_for_symbol",
 ]

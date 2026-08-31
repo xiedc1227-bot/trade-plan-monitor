@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import zlib
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, date, datetime, time, timedelta
@@ -50,6 +51,14 @@ _ArtifactKind = Literal["CALENDAR", "MINUTE", "LIMIT", "DAILY"]
 _MarketValue = TypeVar("_MarketValue", bound=BaseModel)
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _MAX_MANIFEST_CACHE = 8
+_MINUTE_PAYLOAD_MAGIC = b"TPM-MINUTE-ZLIB-DICT-V1\0"
+_MAX_MINUTE_PAYLOAD_BYTES = 4_096
+_MINUTE_COMPRESSION_DICTIONARY = (
+    b'{"amount_yuan":"","bar_end":"2026-08-30T15:00:00.000000+08:00",'
+    b'"close_fen":,"high_fen":,"low_fen":,"open_fen":,"received_at":'
+    b'"2026-08-30T15:00:12.000000+08:00","symbol":"600000.SH",'
+    b'"volume_shares":}'
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS market_artifact (
@@ -126,10 +135,12 @@ class _SQLiteFrozenDatasetReader:
         connection: sqlite3.Connection,
         dataset_hash: str,
         scope: DatasetScope,
+        symbols: tuple[str, ...],
     ) -> None:
         self._connection = connection
         self._dataset_hash = dataset_hash
         self._scope = scope
+        self._symbols = symbols
         self._started = False
         self._closed = False
 
@@ -153,7 +164,7 @@ class _SQLiteFrozenDatasetReader:
         self._closed = True
 
     def _iterate_symbol_days(self) -> Iterator[FrozenSymbolDay]:
-        for symbol in self._scope.symbols:
+        for symbol in self._symbols:
             exchange = exchange_for_symbol(symbol)
             trade_date = self._scope.warmup_start
             while trade_date <= self._scope.end:
@@ -302,7 +313,13 @@ class BacktestMarketStore:
                         artifact_hash, symbol, bar_end, content_json, created_at
                     ) VALUES (?, ?, ?, ?, ?)
                     """,
-                    (artifact_hash, symbol, bar_end, content_json, now),
+                    (
+                        artifact_hash,
+                        symbol,
+                        bar_end,
+                        _encode_minute_payload(content_json),
+                        now,
+                    ),
                 )
                 head = connection.execute(
                     """
@@ -633,6 +650,26 @@ class BacktestMarketStore:
             finally:
                 reader.close()
 
+    @contextmanager
+    def open_frozen_symbol_dataset(
+        self,
+        dataset_hash: str,
+        symbol: str,
+    ) -> Iterator[FrozenDatasetReader]:
+        """Open one verified dataset while materializing only one member symbol."""
+
+        if type(symbol) is not str or not symbol:
+            raise TypeError("symbol must be a non-empty string")
+        normalized_hash = _validate_hash(dataset_hash, "dataset_hash")
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            reader = _open_frozen_reader(connection, normalized_hash, symbol=symbol)
+            try:
+                yield reader
+                connection.commit()
+            finally:
+                reader.close()
+
     def dataset_summary(self, dataset_hash: str) -> BacktestDatasetSummary:
         """Return one bounded public projection without loading manifest membership."""
 
@@ -737,7 +774,7 @@ class BacktestMarketStore:
             bars: list[MinuteBar] = []
             for reference, artifact_hash in zip(references, hashes, strict=True):
                 row = row_by_hash[artifact_hash]
-                content_json = str(row[3])
+                content_json = _decode_minute_payload(row[3])
                 bar = MinuteBar.model_validate_json(content_json)
                 if (
                     str(row[1]) != symbol
@@ -1314,6 +1351,8 @@ def _canonical_json(value: object) -> str:
 def _open_frozen_reader(
     connection: sqlite3.Connection,
     dataset_hash: str,
+    *,
+    symbol: str | None = None,
 ) -> _SQLiteFrozenDatasetReader:
     row = connection.execute(
         """
@@ -1355,7 +1394,10 @@ def _open_frozen_reader(
         scope=scope,
         expected_item_count=expected_item_count,
     )
-    return _SQLiteFrozenDatasetReader(connection, dataset_hash, scope)
+    if symbol is not None and symbol not in scope.symbols:
+        raise ValueError(f"symbol is not a member of the frozen dataset: {symbol}")
+    symbols = scope.symbols if symbol is None else (symbol,)
+    return _SQLiteFrozenDatasetReader(connection, dataset_hash, scope, symbols)
 
 
 def _verify_frozen_membership(
@@ -1649,7 +1691,7 @@ def _validated_minute_batch(
     bars: list[MinuteBar] = []
     for reference, artifact_hash in zip(references, hashes, strict=True):
         row = row_by_hash[artifact_hash]
-        bar_content = str(row[3])
+        bar_content = _decode_minute_payload(row[3])
         bar = MinuteBar.model_validate_json(bar_content)
         if (
             str(row[1]) != expected_symbol
@@ -1720,6 +1762,55 @@ def _invalid_blocker(
 ) -> str:
     identity = symbol if symbol is not None else natural_key.split(":", maxsplit=2)[1]
     return f"INVALID_{kind}:{identity}:{trade_date.isoformat()}"
+
+
+def _encode_minute_payload(payload_json: str) -> sqlite3.Binary:
+    raw = payload_json.encode("utf-8")
+    if len(raw) > _MAX_MINUTE_PAYLOAD_BYTES:
+        raise ValueError("minute artifact payload exceeds 4096 bytes")
+    compressor = zlib.compressobj(
+        level=6,
+        method=zlib.DEFLATED,
+        wbits=zlib.MAX_WBITS,
+        zdict=_MINUTE_COMPRESSION_DICTIONARY,
+    )
+    compressed = compressor.compress(raw) + compressor.flush()
+    return sqlite3.Binary(_MINUTE_PAYLOAD_MAGIC + compressed)
+
+
+def _decode_minute_payload(stored_payload: object) -> str:
+    if type(stored_payload) is str:
+        payload_json = stored_payload
+    else:
+        if isinstance(stored_payload, memoryview):
+            stored_payload = stored_payload.tobytes()
+        if not isinstance(stored_payload, bytes) or not stored_payload.startswith(
+            _MINUTE_PAYLOAD_MAGIC
+        ):
+            raise ValueError("minute artifact payload encoding is invalid")
+        compressed = stored_payload[len(_MINUTE_PAYLOAD_MAGIC) :]
+        if len(compressed) > _MAX_MINUTE_PAYLOAD_BYTES + 1_024:
+            raise ValueError("minute artifact compressed payload is oversized")
+        decompressor = zlib.decompressobj(
+            wbits=zlib.MAX_WBITS,
+            zdict=_MINUTE_COMPRESSION_DICTIONARY,
+        )
+        try:
+            raw = decompressor.decompress(compressed, _MAX_MINUTE_PAYLOAD_BYTES + 1)
+            if len(raw) > _MAX_MINUTE_PAYLOAD_BYTES or decompressor.unconsumed_tail:
+                raise ValueError("minute artifact payload is oversized")
+            raw += decompressor.flush(_MAX_MINUTE_PAYLOAD_BYTES + 1 - len(raw))
+        except zlib.error as error:
+            raise ValueError("minute artifact payload is corrupt") from error
+        if len(raw) > _MAX_MINUTE_PAYLOAD_BYTES or not decompressor.eof or decompressor.unused_data:
+            raise ValueError("minute artifact payload is invalid")
+        try:
+            payload_json = raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("minute artifact payload is not UTF-8") from error
+    if len(payload_json.encode("utf-8")) > _MAX_MINUTE_PAYLOAD_BYTES:
+        raise ValueError("minute artifact payload exceeds 4096 bytes")
+    return payload_json
 
 
 def _content_hash(value: object) -> str:

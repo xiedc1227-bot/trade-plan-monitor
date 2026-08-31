@@ -6,10 +6,11 @@ import csv
 import json
 import os
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, date, datetime
 from hashlib import sha256
 from io import StringIO
+from itertools import islice
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,7 +29,7 @@ from trade_plan_monitor.backtest.results import (
 from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.runner import RUN_FORMULA_VERSION, BacktestRunReport
 
-_MAX_RESULT_BATCH = 1_000
+_MAX_RESULT_BATCH = 100
 _MAX_EXPORT_CHUNK_BYTES = 64 * 1_024
 _V2_FILL_FIELDS = (
     "schema_version",
@@ -71,7 +72,12 @@ def persist_report(
         raise TypeError("run_input must be a BacktestRunInput or None")
     version = "v2" if run_input is not None else "v1"
     fills = tuple(BacktestFillRecord.from_value(fill, version=version) for fill in report.fills)
-    details = _detail_records(report, version=version)
+    detail_count = (
+        len(report.decisions)
+        + len(report.signals)
+        + len(report.outcomes)
+        + len(report.daily_equity)
+    )
     completed_at = report.daily_equity[-1].marked_at
     summary = _summary_for_report(report, completed_at=completed_at, run_input=run_input)
     if run_input is None:
@@ -98,15 +104,19 @@ def persist_report(
         store.record_fills(report.run_id, batch) for batch in _chunks(fills, _MAX_RESULT_BATCH)
     )
     details_created = sum(
-        store.record_details(report.run_id, batch) for batch in _chunks(details, _MAX_RESULT_BATCH)
+        store.record_details(report.run_id, batch)
+        for batch in _chunks(_detail_records(report, version=version), _MAX_RESULT_BATCH)
     )
     publication = store.verify_staged_publication(
         report.run_id,
         expected_fill_count=len(report.fills),
-        expected_detail_count=len(details),
+        expected_detail_count=detail_count,
         expected_report_hash=report.report_hash,
         expected_fill_set_hash=backtest_fill_set_hash(fills, version=version),
-        expected_detail_set_hash=backtest_detail_set_hash(details, version=version),
+        expected_detail_set_hash=backtest_detail_set_hash(
+            _detail_records(report, version=version),
+            version=version,
+        ),
     )
     store.publish_verified_publication(publication)
     return ReportPersistenceResult(
@@ -247,26 +257,25 @@ def iter_export_fills(
     """Incrementally encode verified active-v2 fill batches as stable CSV rows."""
 
     _require_export_inputs(store, cancelled)
+    if cancelled():
+        return
+    store.export_summary(run_id)
+    if cancelled():
+        return
+    yield _v2_csv_header()
     batches = store.iter_export_fill_batches(run_id, cancelled)
     try:
-        try:
-            batch = next(batches)
-        except ExportCancelled:
-            return
-        except StopIteration:
-            batch = None
-        yield _v2_csv_header()
-        while batch is not None:
-            for fill in batch:
-                if cancelled():
-                    return
-                yield _v2_fill_csv_row(fill)
+        while True:
             try:
                 batch = next(batches)
             except ExportCancelled:
                 return
             except StopIteration:
-                batch = None
+                return
+            for fill in batch:
+                if cancelled():
+                    return
+                yield _v2_fill_csv_row(fill)
     finally:
         batches.close()
 
@@ -433,65 +442,55 @@ def _detail_records(
     report: BacktestRunReport,
     *,
     version: str = "v1",
-) -> tuple[BacktestDetailRecord, ...]:
-    values: list[BacktestDetailRecord] = []
+) -> Iterator[BacktestDetailRecord]:
     for decision in report.decisions:
-        values.append(
-            BacktestDetailRecord.from_value(
+        yield BacktestDetailRecord.from_value(
+            BacktestDetailKind.DECISION,
+            decision,
+            run_id=report.run_id,
+            event_at=decision.snapshot.evaluated_at,
+            detail_id=_scoped_detail_id(
+                report.run_id,
                 BacktestDetailKind.DECISION,
-                decision,
-                run_id=report.run_id,
-                event_at=decision.snapshot.evaluated_at,
-                detail_id=_scoped_detail_id(
-                    report.run_id,
-                    BacktestDetailKind.DECISION,
-                    f"{decision.result_hash}:{decision.snapshot.evaluated_at.isoformat()}",
-                ),
-                version=version,
-            )
+                f"{decision.result_hash}:{decision.snapshot.evaluated_at.isoformat()}",
+            ),
+            version=version,
         )
     for signal in report.signals:
-        values.append(
-            BacktestDetailRecord.from_value(
+        yield BacktestDetailRecord.from_value(
+            BacktestDetailKind.SIGNAL,
+            signal,
+            detail_id=_scoped_detail_id(
+                report.run_id,
                 BacktestDetailKind.SIGNAL,
-                signal,
-                detail_id=_scoped_detail_id(
-                    report.run_id,
-                    BacktestDetailKind.SIGNAL,
-                    signal.signal_id,
-                ),
-                version=version,
-            )
+                signal.signal_id,
+            ),
+            version=version,
         )
     for outcome in report.outcomes:
-        values.append(
-            BacktestDetailRecord.from_value(
+        yield BacktestDetailRecord.from_value(
+            BacktestDetailKind.EXECUTION_OUTCOME,
+            outcome,
+            run_id=report.run_id,
+            event_at=outcome.resolved_at,
+            detail_id=_scoped_detail_id(
+                report.run_id,
                 BacktestDetailKind.EXECUTION_OUTCOME,
-                outcome,
-                run_id=report.run_id,
-                event_at=outcome.resolved_at,
-                detail_id=_scoped_detail_id(
-                    report.run_id,
-                    BacktestDetailKind.EXECUTION_OUTCOME,
-                    outcome.outcome_id,
-                ),
-                version=version,
-            )
+                outcome.outcome_id,
+            ),
+            version=version,
         )
     for snapshot in report.daily_equity:
-        values.append(
-            BacktestDetailRecord.from_value(
+        yield BacktestDetailRecord.from_value(
+            BacktestDetailKind.DAILY_EQUITY,
+            snapshot,
+            detail_id=_scoped_detail_id(
+                report.run_id,
                 BacktestDetailKind.DAILY_EQUITY,
-                snapshot,
-                detail_id=_scoped_detail_id(
-                    report.run_id,
-                    BacktestDetailKind.DAILY_EQUITY,
-                    snapshot.snapshot_id,
-                ),
-                version=version,
-            )
+                snapshot.snapshot_id,
+            ),
+            version=version,
         )
-    return tuple(values)
 
 
 def _scoped_detail_id(run_id: str, kind: BacktestDetailKind, source_id: str) -> str:
@@ -499,8 +498,10 @@ def _scoped_detail_id(run_id: str, kind: BacktestDetailKind, source_id: str) -> 
     return sha256(b"backtest-detail-identity-v1\0" + payload).hexdigest()
 
 
-def _chunks[T](values: tuple[T, ...], size: int) -> tuple[tuple[T, ...], ...]:
-    return tuple(values[index : index + size] for index in range(0, len(values), size))
+def _chunks[T](values: Iterable[T], size: int) -> Iterator[tuple[T, ...]]:
+    iterator = iter(values)
+    while batch := tuple(islice(iterator, size)):
+        yield batch
 
 
 def _atomic_write(path: Path, content: str) -> None:

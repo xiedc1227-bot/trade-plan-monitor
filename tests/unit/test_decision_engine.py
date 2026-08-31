@@ -2568,6 +2568,30 @@ def test_evidence_models_snapshot_intents_signal_and_next_step_form_one_closed_r
         result.model_copy(update={"result_hash": "0" * 64})
 
 
+def test_evaluation_result_build_hashes_the_validated_payload_once(monkeypatch) -> None:
+    context = _context()
+    original = decision_models_module._evaluation_result_digest
+    digest_count = 0
+
+    def observed_digest(payload):
+        nonlocal digest_count
+        digest_count += 1
+        return original(payload)
+
+    monkeypatch.setattr(
+        decision_models_module,
+        "_evaluation_result_digest",
+        observed_digest,
+    )
+
+    result = evaluate(context)
+
+    assert digest_count == 1
+    restored = EvaluationResult.model_validate_json(result.model_dump_json())
+    assert restored == result
+    assert digest_count == 2
+
+
 def test_rule_evidence_is_closed_bounded_and_partitions_with_dsl_evidence() -> None:
     context = _context()
     blocked_context = _with_complete_bars(context, ())

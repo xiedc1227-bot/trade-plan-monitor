@@ -149,6 +149,29 @@ def test_identical_sync_is_a_noop_and_correction_creates_an_immutable_revision(
     assert store.head_revision(f"MINUTE:{SYMBOL}:{TRADE_DATE.isoformat()}") == 2
 
 
+def test_new_minute_artifacts_use_bounded_compression_and_round_trip(tmp_path) -> None:
+    store = BacktestMarketStore(tmp_path / "compressed-market.sqlite3")
+    batch = _minute_batch()
+    _seed_complete(store)
+
+    with closing(sqlite3.connect(store.database_path)) as connection:
+        storage = connection.execute(
+            """
+            SELECT min(typeof(content_json)), max(typeof(content_json)),
+                   sum(length(content_json))
+            FROM market_minute_artifact
+            """
+        ).fetchone()
+
+    assert storage is not None
+    assert storage[:2] == ("blob", "blob")
+    raw_bytes = sum(len(bar.model_dump_json().encode("utf-8")) for bar in batch.bars)
+    assert int(storage[2]) < raw_bytes
+    frozen = store.freeze_dataset(_scope())
+    assert frozen.dataset_hash is not None
+    assert store.dataset_minutes(frozen.dataset_hash, SYMBOL, TRADE_DATE) == batch.bars
+
+
 def test_decimal_scale_only_replay_keeps_artifacts_revisions_and_dataset_hash_stable(
     tmp_path,
 ) -> None:
@@ -367,7 +390,7 @@ def test_verify_and_frozen_reads_reject_tampered_minute_content(tmp_path) -> Non
             """
         ).fetchone()
         assert row is not None
-        content = json.loads(str(row[1]))
+        content = json.loads(market_store_module._decode_minute_payload(row[1]))
         content["close_fen"] = content["high_fen"]
         connection.execute(
             "UPDATE market_minute_artifact SET content_json = ? WHERE artifact_hash = ?",

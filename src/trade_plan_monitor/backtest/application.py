@@ -46,6 +46,7 @@ from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
 from trade_plan_monitor.backtest.reporting import (
+    _chunks,
     _detail_records,
     _summary_for_report,
 )
@@ -491,14 +492,13 @@ class _BacktestWorkerOperationOwner:
             run_input=run_input,
         )
         fills = tuple(BacktestFillRecord.from_value(fill, version="v2") for fill in report.fills)
-        details = _detail_records(report, version="v2")
         self._results.record_verified_run(summary, run_input=run_input)
         for start in range(0, len(fills), 1_000):
             cancellation_token.raise_if_cancelled("RUN_FINALIZE")
             self._results.record_fills(run_input.run_id, fills[start : start + 1_000])
-        for start in range(0, len(details), 1_000):
+        for batch in _chunks(_detail_records(report, version="v2"), 100):
             cancellation_token.raise_if_cancelled("RUN_FINALIZE")
-            self._results.record_details(run_input.run_id, details[start : start + 1_000])
+            self._results.record_details(run_input.run_id, batch)
         cancellation_token.raise_if_cancelled("RUN_REPORT_HANDOFF")
         progress_callback(
             BacktestProgress(

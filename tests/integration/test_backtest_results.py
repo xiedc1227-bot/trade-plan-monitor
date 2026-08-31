@@ -213,7 +213,8 @@ def test_result_v2_completed_only_persists_canonical_input_and_shanghai_domains(
             (run_input.run_id,),
         ).fetchone()
         detail_row = connection.execute(
-            "SELECT content_domain, event_at, payload_json FROM backtest_detail WHERE run_id = ?",
+            "SELECT content_domain, event_at, payload_json, typeof(payload_json) "
+            "FROM backtest_detail WHERE run_id = ?",
             (run_input.run_id,),
         ).fetchone()
         assert connection.execute("SELECT COUNT(*) FROM backtest_plan_snapshot").fetchone() == (1,)
@@ -230,9 +231,11 @@ def test_result_v2_completed_only_persists_canonical_input_and_shanghai_domains(
         "backtest-detail-record-v2",
         "2026-08-24T15:00:00.000000+08:00",
     )
+    assert detail_row[3] == "blob"
+    assert isinstance(detail_row[2], bytes)
+    assert len(detail_row[2]) < len(detail.model_dump_json().encode("utf-8"))
     assert all(
-        "+08:00" in str(row[-1]) and "+00:00" not in str(row[-1])
-        for row in (run_row, fill_row, detail_row)
+        "+08:00" in str(row[-1]) and "+00:00" not in str(row[-1]) for row in (run_row, fill_row)
     )
 
 

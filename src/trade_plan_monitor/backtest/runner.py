@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import ctypes
+import gc
+import json
+import os
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from datetime import date, datetime, time
 from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
+from enum import Enum
 from hashlib import sha256
 from typing import Literal, Self
 from uuid import UUID
@@ -13,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from trade_plan_monitor.backtest.canonical import canonical_json
+from trade_plan_monitor.backtest.canonical import canonical_decimal, canonical_json
 from trade_plan_monitor.backtest.control import (
     BacktestCancellationResult,
     BacktestOperationCancelled,
@@ -25,6 +30,7 @@ from trade_plan_monitor.backtest.dataset import (
     DatasetManifest,
     FrozenDatasetReader,
     FrozenDatasetSource,
+    SymbolFilteredFrozenDatasetSource,
 )
 from trade_plan_monitor.backtest.execution import DeterministicExecutionEngine
 from trade_plan_monitor.backtest.models import (
@@ -48,19 +54,25 @@ from trade_plan_monitor.backtest.run_input import (
 )
 from trade_plan_monitor.decision.engine import evaluate
 from trade_plan_monitor.decision.models import (
+    ConditionEvidence,
     DailyIndicatorProvenance,
     DailyIndicatorSnapshot,
     DataHealthSnapshot,
     DataHealthStatus,
     EpisodeTransitionIntent,
     EvaluationContext,
+    EvaluationEvidence,
     EvaluationResult,
+    EvidenceFact,
     IntradayEvaluationTarget,
+    NextStep,
     OfficialCloseEvaluationTarget,
     PositionLotSnapshot,
+    PositionSummary,
     RiskStateSnapshot,
     RiskStatus,
     RiskTransitionIntent,
+    RuleEvidence,
     SignalType,
 )
 from trade_plan_monitor.domain.plan_models import TradePlan
@@ -84,6 +96,7 @@ _FIVE_MINUTE_CONTEXT_BARS = FIVE_MINUTE_CONTEXT_BARS
 _DAILY_CONTEXT_BARS = DAILY_CONTEXT_BARS
 _CALENDAR_CONTEXT_DAYS = CALENDAR_CONTEXT_DAYS
 _METRIC_DECIMAL_CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN)
+_REPLAY_MEMORY_RECLAIM_DAYS = 20
 _LIMITATIONS = (
     "UNADJUSTED_PRICES_NO_CORPORATE_ACTIONS",
     "SIMULATED_EXECUTION_NO_BROKER",
@@ -98,6 +111,113 @@ _LIMITATIONS = (
 )
 
 Evaluator = Callable[[EvaluationContext], EvaluationResult]
+
+
+def _trusted_rebind_equal[T: BaseModel](value: T, **updates: object) -> T:
+    for name, replacement in updates.items():
+        if replacement != getattr(value, name):
+            raise RuntimeError("replay interning cannot change validated decision values")
+    value.__dict__.update(updates)
+    return value
+
+
+def _intern[K, V](cache: dict[K, V], key: K, value: V) -> V:
+    existing = cache.get(key)
+    if existing is not None:
+        return existing
+    cache[key] = value
+    return value
+
+
+class _ReplayInternPool:
+    """Share equal frozen evidence subtrees within one bounded replay."""
+
+    def __init__(self) -> None:
+        self._facts: dict[tuple[object, ...], EvidenceFact] = {}
+        self._evidence: dict[tuple[object, ...], EvaluationEvidence] = {}
+        self._next_steps: dict[tuple[object, ...], NextStep] = {}
+        self._positions: dict[tuple[object, ...], PositionSummary] = {}
+
+    def fact(self, value: EvidenceFact) -> EvidenceFact:
+        return _intern(
+            self._facts,
+            (value.key, value.value, value.unit),
+            value,
+        )
+
+    def evidence(self, value: EvaluationEvidence) -> EvaluationEvidence:
+        facts = tuple(self.fact(fact) for fact in value.facts)
+        if isinstance(value, ConditionEvidence):
+            children = tuple(self.evidence(child) for child in value.children)
+            normalized = _trusted_rebind_equal(value, facts=facts, children=children)
+            key = (
+                ConditionEvidence,
+                id(value.condition),
+                value.outcome,
+                tuple(id(fact) for fact in facts),
+                value.missing_inputs,
+                tuple(id(child) for child in children),
+            )
+        elif isinstance(value, RuleEvidence):
+            normalized = _trusted_rebind_equal(value, facts=facts)
+            key = (
+                RuleEvidence,
+                value.code,
+                value.outcome,
+                tuple(id(fact) for fact in facts),
+                value.missing_inputs,
+            )
+        else:  # pragma: no cover - closed EvaluationEvidence union
+            raise TypeError("unsupported evaluation evidence")
+        return _intern(self._evidence, key, normalized)
+
+    def result(self, value: EvaluationResult) -> EvaluationResult:
+        next_step = _intern(
+            self._next_steps,
+            (
+                value.next_step.code,
+                value.next_step.not_before,
+                value.next_step.required_inputs,
+            ),
+            value.next_step,
+        )
+        condition_evidence = tuple(
+            self.evidence(evidence) for evidence in value.snapshot.condition_evidence
+        )
+        snapshot = _trusted_rebind_equal(
+            value.snapshot,
+            condition_evidence=condition_evidence,
+            next_step=next_step,
+            position=_intern(
+                self._positions,
+                tuple(
+                    getattr(value.snapshot.position, name)
+                    for name in type(value.snapshot.position).model_fields
+                ),
+                value.snapshot.position,
+            ),
+        )
+        signal_intent = value.signal_intent
+        if signal_intent is not None:
+            signal_intent = _trusted_rebind_equal(
+                signal_intent,
+                matched_conditions=tuple(
+                    self.evidence(evidence) for evidence in signal_intent.matched_conditions
+                ),
+                blockers=tuple(self.evidence(evidence) for evidence in signal_intent.blockers),
+                next_step=next_step,
+            )
+        return _trusted_rebind_equal(
+            value,
+            snapshot=snapshot,
+            signal_intent=signal_intent,
+            satisfied_conditions=tuple(
+                self.evidence(evidence) for evidence in value.satisfied_conditions
+            ),
+            unmet_conditions=tuple(self.evidence(evidence) for evidence in value.unmet_conditions),
+            blockers=tuple(self.evidence(evidence) for evidence in value.blockers),
+            next_step=next_step,
+        )
 
 
 class _BacktestValue(BaseModel):
@@ -156,12 +276,24 @@ class BacktestRunReport(_BacktestRunReportPayload):
         if "report_hash" in values:
             raise TypeError("build computes report_hash")
         payload = _BacktestRunReportPayload.model_validate(values)
-        digest = _stable_hash(
-            payload.model_dump(mode="python", round_trip=True),
+        return cls._from_validated_payload(payload)
+
+    @classmethod
+    def _build_from_validated(cls, **values: object) -> Self:
+        """Build from runner-owned values that have already crossed strict boundaries."""
+        if "report_hash" in values:
+            raise TypeError("build computes report_hash")
+        return cls._from_validated_payload(_BacktestRunReportPayload.model_construct(**values))
+
+    @classmethod
+    def _from_validated_payload(cls, payload: _BacktestRunReportPayload) -> Self:
+        digest = _stable_model_hash(
+            payload,
             domain="backtest-report-v1",
         )
-        return cls.model_validate(
-            {**payload.model_dump(mode="python", round_trip=True), "report_hash": digest}
+        return cls.model_construct(
+            **{name: getattr(payload, name) for name in _BacktestRunReportPayload.model_fields},
+            report_hash=digest,
         )
 
     def canonical_json(self) -> str:
@@ -233,7 +365,14 @@ class OfflineBacktestRunner:
         validate_operation_controls(cancellation_token, None)
         try:
             check_cancelled(cancellation_token, "RUN_DAY_TRANSITION")
-            with self._dataset_source.open_frozen_dataset(dataset_hash) as reader:
+            if isinstance(self._dataset_source, SymbolFilteredFrozenDatasetSource):
+                reader_context = self._dataset_source.open_frozen_symbol_dataset(
+                    dataset_hash,
+                    plan.symbol,
+                )
+            else:
+                reader_context = self._dataset_source.open_frozen_dataset(dataset_hash)
+            with reader_context as reader:
                 return self._run_from_reader(
                     reader=reader,
                     plan=plan,
@@ -297,6 +436,7 @@ class OfflineBacktestRunner:
         activation_origin = datetime.combine(scope.start, time(9, 0), SHANGHAI)
         risk_state: RiskStateSnapshot | None = None
         episode = None
+        intern_pool = _ReplayInternPool()
         decisions: list[EvaluationResult] = []
         signals: list[ExecutionSignal] = []
         orders: list[ExecutionOrder] = []
@@ -423,7 +563,7 @@ class OfflineBacktestRunner:
                     activation_origin=activation_origin,
                 )
                 check_cancelled(cancellation_token, "RUN_EVALUATION", last_safe_event_id)
-                result = self._evaluate_context(context)
+                result = self._evaluate_context(context, intern_pool)
                 decisions.append(result)
                 episode, risk_state = _advance_state(result, episode, risk_state)
                 if result.signal_intent is not None:
@@ -461,7 +601,7 @@ class OfflineBacktestRunner:
                 activation_origin=activation_origin,
             )
             check_cancelled(cancellation_token, "RUN_EVALUATION", last_safe_event_id)
-            official_result = self._evaluate_context(official_context)
+            official_result = self._evaluate_context(official_context, intern_pool)
             decisions.append(official_result)
             episode, risk_state = _advance_state(official_result, episode, risk_state)
             if official_result.signal_intent is not None:
@@ -484,6 +624,8 @@ class OfflineBacktestRunner:
                 )
             )
             official_history.append(official_bar)
+            if open_day_count % _REPLAY_MEMORY_RECLAIM_DAYS == 0:
+                _reclaim_replay_temporaries()
 
         if open_day_count == 0:
             raise BacktestBlockedError("NO_OPEN_TRADING_DAYS")
@@ -502,7 +644,9 @@ class OfflineBacktestRunner:
             daily_equity=tuple(daily_equity),
         )
         check_cancelled(cancellation_token, "RUN_REPORT_HANDOFF", last_safe_event_id)
-        return BacktestRunReport.build(
+        # Every nested model and scalar below was created by a strict public model
+        # boundary or derived from those values inside this replay.
+        return BacktestRunReport._build_from_validated(
             run_id=run_id,
             plan_hash=plan_hash,
             dataset_hash=dataset_hash,
@@ -573,7 +717,9 @@ class OfflineBacktestRunner:
             current_trade_date=bucket_end.date(),
             daily_bars=(provisional,),
         )
-        return EvaluationContext(
+        # The frozen reader, day guard, and aggregate constructors already validate
+        # every value below; the public EvaluationContext constructor stays strict.
+        return EvaluationContext.model_construct(
             evaluated_at=evaluated_at,
             target=IntradayEvaluationTarget(bucket_end=bucket_end),
             plan=plan,
@@ -633,7 +779,8 @@ class OfflineBacktestRunner:
             current_trade_date=official.trade_date,
             daily_bars=(provisional, official),
         )
-        return EvaluationContext(
+        # Preserve the same trusted replay handoff used by the intraday path.
+        return EvaluationContext.model_construct(
             evaluated_at=evaluated_at,
             target=OfficialCloseEvaluationTarget(trade_date=official.trade_date),
             plan=plan,
@@ -667,11 +814,15 @@ class OfflineBacktestRunner:
             manual_event_risk=manual_event_risk,
         )
 
-    def _evaluate_context(self, context: EvaluationContext) -> EvaluationResult:
+    def _evaluate_context(
+        self,
+        context: EvaluationContext,
+        intern_pool: _ReplayInternPool,
+    ) -> EvaluationResult:
         result = self._evaluator(context)
         if not isinstance(result, EvaluationResult):
             raise TypeError("evaluator must return an EvaluationResult")
-        return result
+        return intern_pool.result(result)
 
     @staticmethod
     def _validate_day_facts(
@@ -863,6 +1014,92 @@ def _canonical_json(value: object) -> str:
 
 def _stable_hash(value: object, *, domain: str) -> str:
     return sha256((domain + "\0" + _canonical_json(value)).encode("utf-8")).hexdigest()
+
+
+def _stable_model_hash(value: BaseModel, *, domain: str) -> str:
+    """Hash canonical model JSON without materializing a second complete tree."""
+
+    digest = sha256((domain + "\0").encode("utf-8"))
+    digest.update(b"{")
+    for index, name in enumerate(sorted(type(value).model_fields)):
+        if index:
+            digest.update(b",")
+        digest.update(json.dumps(name, ensure_ascii=False).encode("utf-8"))
+        digest.update(b":")
+        for fragment in _iter_stable_json(getattr(value, name)):
+            digest.update(fragment.encode("utf-8"))
+    digest.update(b"}")
+    return digest.hexdigest()
+
+
+def _iter_stable_json(value: object) -> Iterator[str]:
+    if isinstance(value, BaseModel):
+        yield json.dumps(
+            value.model_dump(mode="python", round_trip=True),
+            default=_canonical_json_default,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return
+    if isinstance(value, Mapping):
+        if any(type(key) is not str for key in value):
+            raise TypeError("canonical model mapping keys must be strings")
+        yield "{"
+        for index, key in enumerate(sorted(value)):
+            if index:
+                yield ","
+            yield json.dumps(key, ensure_ascii=False)
+            yield ":"
+            yield from _iter_stable_json(value[key])
+        yield "}"
+        return
+    if isinstance(value, tuple | list):
+        yield "["
+        for index, item in enumerate(value):
+            if index:
+                yield ","
+            yield from _iter_stable_json(item)
+        yield "]"
+        return
+    if isinstance(value, Decimal | datetime | date | Enum):
+        value = _canonical_json_default(value)
+    yield json.dumps(
+        value,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+    )
+
+
+def _canonical_json_default(value: object) -> object:
+    if isinstance(value, Decimal):
+        return canonical_decimal(value)
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("canonical datetimes must be timezone-aware")
+        return value.isoformat(timespec="microseconds")
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    raise TypeError(f"unsupported canonical value: {type(value).__name__}")
+
+
+def _reclaim_replay_temporaries() -> None:
+    """Release unreachable calculation pages at a bounded safe day boundary."""
+
+    gc.collect()
+    if os.name != "nt":
+        return
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.argtypes = []
+    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+    psapi.EmptyWorkingSet.argtypes = [ctypes.c_void_p]
+    psapi.EmptyWorkingSet.restype = ctypes.c_int
+    psapi.EmptyWorkingSet(kernel32.GetCurrentProcess())
 
 
 __all__ = [

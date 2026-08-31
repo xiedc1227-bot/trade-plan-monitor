@@ -179,39 +179,27 @@ def _canonical_decimal(value: Decimal) -> str:
     return f"{prefix}{coefficient}e{normalized_exponent}"
 
 
-def _canonical_json_value(value: object) -> object:
-    if isinstance(value, BaseModel):
-        return _canonical_json_value(value.model_dump(mode="python", round_trip=True))
-    if isinstance(value, Enum):
-        return _canonical_json_value(value.value)
-    if isinstance(value, Decimal):
-        return _canonical_decimal(value)
-    if type(value) is datetime:
-        return value.isoformat()
-    if type(value) is date:
-        return value.isoformat()
-    if isinstance(value, Mapping):
-        normalized: dict[str, object] = {}
-        for key, item in value.items():
-            if type(key) is not str:
-                raise TypeError("canonical JSON object keys must be strings")
-            normalized[key] = _canonical_json_value(item)
-        return normalized
-    if isinstance(value, (tuple, list)):
-        return [_canonical_json_value(item) for item in value]
-    if value is None or type(value) in {bool, int, float, str}:
-        return value
-    raise TypeError(f"unsupported canonical JSON value: {type(value).__name__}")
-
-
 def _canonical_json_text(value: object) -> str:
     return json.dumps(
-        _canonical_json_value(value),
+        value,
+        default=_canonical_json_default,
         ensure_ascii=False,
         allow_nan=False,
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
+def _canonical_json_default(value: object) -> object:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="python", round_trip=True)
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, Decimal):
+        return _canonical_decimal(value)
+    if type(value) in {date, datetime}:
+        return value.isoformat()
+    raise TypeError(f"unsupported canonical JSON value: {type(value).__name__}")
 
 
 def _evaluation_result_digest(payload: Mapping[str, object]) -> str:
@@ -1438,7 +1426,10 @@ class EvaluationResult(_EvaluationResultPayload):
         normalized = _EvaluationResultPayload.model_validate(payload)
         normalized_payload = normalized.model_dump(mode="python", round_trip=True)
         digest = _evaluation_result_digest(normalized_payload)
-        return cls.model_validate({**normalized_payload, "result_hash": digest})
+        return cls.model_construct(
+            **{name: getattr(normalized, name) for name in _EvaluationResultPayload.model_fields},
+            result_hash=digest,
+        )
 
     @model_validator(mode="after")
     def validate_result_hash(self) -> Self:

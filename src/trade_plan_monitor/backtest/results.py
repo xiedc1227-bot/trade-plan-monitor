@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import math
 import sqlite3
+import zlib
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -77,6 +79,31 @@ _PIN_REQUEST_HASH_DOMAIN = b"backtest-pin-request-v1\0"
 _PIN_RESPONSE_HASH_DOMAIN = b"backtest-pin-response-v1\0"
 _PIN_IDEMPOTENCY_DAYS = 14
 _MAX_EQUITY_POINTS = 2_000
+_DETAIL_PAYLOAD_MAGIC = b"TPM-DETAIL-ZLIB-DICT-V1\0"
+_DETAIL_COMPRESSION_DICTIONARY = zlib.decompress(
+    base64.b85decode(
+        "".join(
+            """
+            c-rk+ZBwI25dJTGy=XzqoB4)hG}IArfoOSKTT>$$&6EVPFvRmL|NHd-0TT1Nt9x5l<bxH+bWiuwFVpjsuhN8a!hFmoQeTo95?
+            #=MW5VI7DK|SOa`&X!b7iG}*6u6KQ#t+oA<KPPhSg6j5OM>g>5guh@Mcb4{E)!QSLxmly(b#QQvd5Wp_upy;VcYbFW7_emvm7AYdEH<o_9O
+            S^7@VsVKhs8f)}6|bb$~jCkv&tMK@hr9jJH07M}!oO5$neTKqD*4}JLFNmZUYL+Py{1@v!@V@~J78ZVqsSa7TAF21yEtXZRL1Gxxas5WQ_LXPh#m
+            ;j4{#P=IgM8792q7%%5dBRgy-^ANE@p*M?a6Eosu+9sE2@@#fu*B>!AOL^B0h6WHI3V+Q8uHAfTmaLB0M3KGzZRBW+sJXoHo~qo)`kKf;-zN1N>3C3m
+            gZnfoJ17+;WK`q0W3)ZCc=A(M7%^)KvAdHliwQegr@9qx<jffH{~~QV#eZ_1&<XF8d8{WFPsS*$EKsYx^t<cfh6|urp%v2pfvTPd;p=sS>ZW<nP)EQ8p
+            67X|FTR3d;b##RnJ8X-#g7by35;EXT@8w8dAPkJWyTa>LXN2>`%>7pD^$!xKn{cpe`g>;Q7fU-KAWAVOa)JD>6Jv=zAHl(LSM{iRpS6vkC_pSJhlyQw`Yb
+            dqVOKpvZD#8EFR@hI(Nj{AH|~uI}F9D|cgjW9s|l-lw?GQ~2WyRY;7|oeF40t?rist19^s##sU8o)l7=HK?XY;a@50B~c{$DUS#sKOvm1CfUXWlRmGcW
+            -MT{WQHTrh(V8h+L8+R$Jf`$#<#lmC$>SmwGI7bKBp0WX5Q0|d{s&i?nwk229LWcvRN*#sL#wSBvPv?kjba*3f8N>?GS1m0Pw-t{T@+SDIv9yYa<oT
+            65ASK2O1U}l6a_J4Yy}@ERMB(-2fU`1z;cYD(3jOt`|`rQNj-k;d1d_Y@r`2?N+zj>OnepnhN}p+udHT-R*Xi^LFQ~eb$!Soz{617MypLP8SyaNDu+
+            #UsomyBw7*E8_O7v#DR-PXrQZR8p?+B4C4p%d`NaML-gt*wwuh9Y|Aio^9twMZgq2D-AXIgk95cvSfZQPV|QO3=EiA;<)nut3@q5NZlR!us&Tm~)jU
+            6pDdx|+lSXNtR}UUh%QH5ahfH*}<7M~vfn!Q@9fXzP>Vv|#AKGt)PSr3r7IiuOEdy9NL&m1NvF4KC2syc0LK%7o?6nu`qf#)(tReYuiSVn#sf{
+            j?jZ6)d@N1UoAZ_gGHwdT5I`{$ss@Om`$k;s8<wI#iA7~^7;a$D%T<%nkVaN#TC7dm27TI$AQSCj$!mjnrBU{js`FhCd{Ie&}?@}}$oIVxx=G}i
+            (lg-bm$;0#M;0x484C!??|FUfU9S)oyNpAW0b_rJ|f~S=Dd@2$=eIzhJKs$#($703+_u*uiW;fTyau^oF#=)dg(d<+GV9MO5oGvxSobUv;k_?E
+            ?RvwAYS)6h*8HJP6U7+(&E^S64!GvWl^1}@O4DxD?HA^2;c5s@I7jhDVoqYMeVBwTTaZS!li7J=#K6H=b%D&?#4r$ChV8d2^-tso&tFMIR#RVw6>wt
+            qSeo7}3xV(7N>McA+VBOb<g%QpM<6KSqT;Q}|nVWJY8#Lfe?9J%_1u&m%3w|2Ab?#`%1Lk!tVz^Cp-oC912iZ5GcbY;Td<)_#v6uui$fmV+ShI#T
+            Ygn^}HEUS2hBa$gvxYTmShI#TYgn^}HEUS&EH!IbvxYTm_`hHc#Xn#rIcFuk{R^=DT2B
+            """.split()
+        )
+    )
+)
 _PUBLIC_ARTIFACT_KINDS = (
     "DAILY_EQUITY",
     "DECISION",
@@ -902,10 +929,9 @@ class BacktestResultStore:
                 connection,
                 normalized_run_id,
             )
-            actual_count, actual_set_hash, _batch_count, _maximum = _validated_fill_set_hash(
+            actual_count, actual_set_hash, _batch_count, _maximum = _validated_export_fill_set_hash(
                 connection,
                 normalized_run_id,
-                version="v2",
                 cancelled=cancelled,
             )
             if (actual_count, actual_set_hash) != (expected_count, expected_set_hash):
@@ -1947,7 +1973,7 @@ class BacktestResultStore:
                     (record.detail_id,),
                 ).fetchone()
                 if existing is not None:
-                    stored = _load_detail(str(existing[3]), str(existing[4]), str(existing[5]))
+                    stored = _load_detail(existing[3], existing[4], existing[5])
                     if (
                         str(existing[0]) != run_id
                         or str(existing[1]) != stored.kind.value
@@ -1977,7 +2003,7 @@ class BacktestResultStore:
                         _datetime_text(record.event_at, version=version),
                         content_domain,
                         content_hash,
-                        payload_json,
+                        _encode_detail_payload(payload_json),
                         now,
                     ),
                 )
@@ -2788,10 +2814,13 @@ def _load_fill_row(
 
 
 def _load_detail(
-    content_domain: str,
-    content_hash: str,
-    payload_json: str,
+    content_domain: object,
+    content_hash: object,
+    stored_payload: object,
 ) -> BacktestDetailRecord:
+    content_domain = str(content_domain)
+    content_hash = str(content_hash)
+    payload_json = _decode_detail_payload(stored_payload)
     _version_from_domain(content_domain, _DETAIL_DOMAINS)
     expected = _content_hash(_domain_bytes(content_domain), payload_json)
     if content_hash != expected:
@@ -2810,7 +2839,7 @@ def _load_detail_row(
     if len(row) != 7:
         raise RuntimeError("stored backtest detail row shape is invalid")
     version = _version_from_domain(str(row[4]), _DETAIL_DOMAINS)
-    record = _load_detail(str(row[4]), str(row[5]), str(row[6]))
+    record = _load_detail(row[4], row[5], row[6])
     if (
         record.detail_id != str(row[0])
         or record.run_id != str(row[1])
@@ -3003,6 +3032,53 @@ def _require_item_size(payload_json: str, label: str) -> None:
         raise ResultConflictError(f"{label} exceeds the 32 KiB publication limit")
 
 
+def _encode_detail_payload(payload_json: str) -> sqlite3.Binary:
+    raw = payload_json.encode("utf-8")
+    compressor = zlib.compressobj(
+        level=6,
+        method=zlib.DEFLATED,
+        wbits=zlib.MAX_WBITS,
+        zdict=_DETAIL_COMPRESSION_DICTIONARY,
+    )
+    compressed = compressor.compress(raw) + compressor.flush()
+    return sqlite3.Binary(_DETAIL_PAYLOAD_MAGIC + compressed)
+
+
+def _decode_detail_payload(stored_payload: object) -> str:
+    if type(stored_payload) is str:
+        payload_json = stored_payload
+    else:
+        if isinstance(stored_payload, memoryview):
+            stored_payload = stored_payload.tobytes()
+        if not isinstance(stored_payload, bytes) or not stored_payload.startswith(
+            _DETAIL_PAYLOAD_MAGIC
+        ):
+            raise RuntimeError("stored backtest detail payload encoding is invalid")
+        compressed = stored_payload[len(_DETAIL_PAYLOAD_MAGIC) :]
+        if len(compressed) > _MAX_ITEM_BYTES + 1_024:
+            raise RuntimeError("stored backtest detail compressed payload is oversized")
+        decompressor = zlib.decompressobj(
+            wbits=zlib.MAX_WBITS,
+            zdict=_DETAIL_COMPRESSION_DICTIONARY,
+        )
+        try:
+            raw = decompressor.decompress(compressed, _MAX_ITEM_BYTES + 1)
+            if len(raw) > _MAX_ITEM_BYTES or decompressor.unconsumed_tail:
+                raise RuntimeError("stored backtest detail payload is oversized")
+            remaining = _MAX_ITEM_BYTES + 1 - len(raw)
+            raw += decompressor.flush(remaining)
+        except zlib.error as error:
+            raise RuntimeError("stored backtest detail payload is corrupt") from error
+        if len(raw) > _MAX_ITEM_BYTES or not decompressor.eof or decompressor.unused_data:
+            raise RuntimeError("stored backtest detail payload is invalid")
+        try:
+            payload_json = raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise RuntimeError("stored backtest detail payload is not UTF-8") from error
+    _require_item_size(payload_json, "backtest detail")
+    return payload_json
+
+
 def backtest_fill_set_hash(
     records: Iterable[BacktestFillRecord],
     *,
@@ -3169,6 +3245,67 @@ def _validated_fill_set_hash(
     return count, digest.hexdigest(), batch_count, maximum
 
 
+def _validated_export_fill_set_hash(
+    connection: sqlite3.Connection,
+    run_id: str,
+    *,
+    cancelled: Callable[[], bool],
+) -> tuple[int, str, int, int]:
+    """Verify one published v2 fill set without constructing export models twice."""
+
+    digest = sha256(_domain_bytes(_FILL_SET_DOMAINS["v2"]))
+    cursor = connection.execute(
+        """
+        SELECT fill_id, run_id, filled_at, content_domain, content_hash, payload_json
+        FROM backtest_fill WHERE run_id = ? ORDER BY fill_id
+        """,
+        (run_id,),
+    )
+    count = 0
+    batch_count = 0
+    maximum = 0
+    while True:
+        if cancelled():
+            raise ExportCancelled
+        rows = cursor.fetchmany(_MAX_BATCH_SIZE)
+        if not rows:
+            break
+        batch_count += 1
+        maximum = max(maximum, len(rows))
+        for row in rows:
+            fill_id = _validate_hash(str(row[0]), "fill_id")
+            stored_run_id = str(row[1])
+            filled_at = str(row[2])
+            content_domain = str(row[3])
+            content_hash = _validate_hash(str(row[4]), "content_hash")
+            payload_json = str(row[5])
+            _require_item_size(payload_json, "backtest fill")
+            if content_domain != _FILL_DOMAINS["v2"]:
+                raise ResultConflictError("staged fill row identity is invalid")
+            if content_hash != _content_hash(
+                _domain_bytes(content_domain),
+                payload_json,
+            ):
+                raise RuntimeError("stored backtest fill failed its content hash")
+            try:
+                payload = json.loads(payload_json)
+            except json.JSONDecodeError as error:
+                raise RuntimeError("stored backtest fill payload is invalid") from error
+            if (
+                not isinstance(payload, dict)
+                or payload.get("fill_id") != fill_id
+                or payload.get("run_id") != stored_run_id
+                or stored_run_id != run_id
+                or payload.get("filled_at") != filled_at
+            ):
+                raise ResultConflictError("staged fill row identity is invalid")
+            digest.update(
+                (f'{{"contentHash":"{content_hash}","identity":"{fill_id}"}}\n').encode("ascii")
+            )
+            count += 1
+    return count, digest.hexdigest(), batch_count, maximum
+
+
 def _validated_detail_set_hash(
     connection: sqlite3.Connection,
     run_id: str,
@@ -3190,9 +3327,8 @@ def _validated_detail_set_hash(
         batch_count += 1
         maximum = max(maximum, len(rows))
         for row in rows:
-            _require_item_size(str(row[6]), "backtest detail")
             expected_domain = _domain(_DETAIL_DOMAINS, version)
-            record = _load_detail(str(row[4]), str(row[5]), str(row[6]))
+            record = _load_detail(row[4], row[5], row[6])
             if (
                 record.detail_id != str(row[0])
                 or record.run_id != str(row[1])
