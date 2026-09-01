@@ -1,8 +1,7 @@
 # T059 发布验收证据
 
-**状态：**2026-08-31 为 `PENDING FINAL USER ACCEPTANCE`。经另行授权的生产性能修复后，
-全部已批准内部离线闸门均为绿色。可选 AI 连通性为 `NOT_RUN_UNAUTHORIZED`，用户尚未执行最终
-发布验收。
+**状态：**2026-09-01 为 `ACCEPTED`。经另行授权的生产性能修复后，全部已批准内部离线闸门均为
+绿色。可选 AI 连通性继续为 `NOT_RUN_UNAUTHORIZED`，用户已于 2026-09-01 完成最终发布验收。
 
 ## 1. 决策与证据边界
 
@@ -12,10 +11,10 @@
 `tests/contract/test_ai_live.py`、`src/trade_plan_monitor/` 下的 4 个生产模块及 3 个聚焦回归文件。
 依赖、迁移、数据库 schema、API 路径、生成契约、供应商配置及任何已批准性能阈值均未改变。
 
-发布决策为 `PENDING_FINAL_USER_ACCEPTANCE`。先前的 `BLOCKED_OFFLINE_PERFORMANCE_GATE` 决策对
-当时失败的新鲜闸门有效，只有下文记录的 RED-first 修复及新的完整通过闸门取代了它。业务时间
-继续使用 `Asia/Shanghai` 与显式 `+08:00` 语义。因此 `C24` 为 4 项中的 3 项，T059 在用户明确
-验收发布前继续为进行中。
+发布决策为 `ACCEPTED`。先前的 `BLOCKED_OFFLINE_PERFORMANCE_GATE` 决策对当时失败的新鲜闸门
+有效，并由下文记录的 RED-first 修复及新的完整通过闸门取代；随后
+`PENDING_FINAL_USER_ACCEPTANCE` 在用户于 2026-09-01 明确验收发布前保持有效。业务时间继续使用
+`Asia/Shanghai` 与显式 `+08:00` 语义。`C24` 已完成 4/4 项，T059 已完成。
 
 ## 2. RED 与可选 AI live 闸门
 
@@ -116,7 +115,7 @@ no-GIL/其他解释器并发契约。
 | AI provider 边界 | 106 项离线契约通过；可选 live 连接为 `NOT_RUN_UNAUTHORIZED` |
 | 浏览器/无障碍 | 484 项单元测试、6 项允许的 Chromium E2E 及已验收 NVDA 证据 |
 | Backup/restore | 9 项新鲜已跟踪测试，加已验收 BT050 migration/restore 证据 |
-| 完整发布闸门 | 全部已批准内部闸门通过；仅剩明确的用户最终验收 |
+| 完整发布闸门 | 全部已批准内部闸门通过；用户已于 2026-09-01 验收发布，C24 四项检查全部关闭 |
 
 ## 7. 备份、回滚与运行边界
 
@@ -131,7 +130,7 @@ order path 或 live AI decision path 被验收。
 
 ## 8. 已知限制与开放决策
 
-- `PENDING_FINAL_USER_ACCEPTANCE`：全部内部闸门通过，但用户尚未验收发布。
+- `ACCEPTED`：用户已于 2026-09-01 明确确认最终发布验收；C24 四项检查全部关闭。
 - `NOT_RUN_UNAUTHORIZED`：没有调用可选 AI 连通性；未来调用需要新的精确授权和已配置 target/secret
   reference。
 - T058 验收的是 visible-block 结果，不是 provider readiness；不声称当前真实 Tushare 可用。
@@ -145,7 +144,7 @@ order path 或 live AI decision path 被验收。
 - [x] `BC01` 继续完成，并具有 live-state isolation 和 bounded-retention 证据。
 - [x] 授权 live-contract 证据为双语，可选 AI 连通性继续如实为 `NOT_RUN_UNAUTHORIZED`，且没有削弱
   确定性监控。
-- [ ] 用户确认最终验收。
+- [x] 用户已于 2026-09-01 确认最终验收。
 
 <!-- T059-CANONICAL-EVIDENCE-START -->
 ```json
@@ -187,7 +186,7 @@ order path 或 live AI decision path 被验收。
     "status": "PASSED",
     "warnings": 1
   },
-  "releaseDecision": "PENDING_FINAL_USER_ACCEPTANCE",
+  "releaseDecision": "ACCEPTED",
   "restore": {
     "passed": 9,
     "status": "PASSED"

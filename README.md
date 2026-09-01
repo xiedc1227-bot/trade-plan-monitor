@@ -8,7 +8,7 @@ not place orders.
 
 ## Product Status
 
-Tasks `T001` through `T058` and `BT001` through `BT050` are implemented and accepted. The packaged
+Tasks `T001` through `T059` and `BT001` through `BT050` are implemented and accepted. The packaged
 command can serve the built Vue SPA, REST API, and WebSocket routes on exact loopback. Until the
 application service composition is wired, that installed entry intentionally starts in read-only
 `DEGRADED` mode: the UI is available, but business API dependencies return `SERVICE_UNAVAILABLE`
@@ -20,8 +20,8 @@ Live provider checks remain separately authorized operations.
 The local backtest implementation provides isolated `sync`, `verify`, `run`, `list`, and `prune`
 commands, and its BT050 production-fake acceptance is complete. The separately authorized T059
 performance remediation now passes the unchanged 100k-export, ten-symbol/252-day, memory, storage,
-and complete offline gates. T059 is `PENDING_FINAL_USER_ACCEPTANCE`: the optional AI live probe is
-`NOT_RUN_UNAUTHORIZED`, and final user acceptance has not occurred. See
+and complete offline gates. T059 completed final user acceptance on 2026-09-01, and C24 is complete
+at 4 of 4. The optional AI live probe remains `NOT_RUN_UNAUTHORIZED`. See
 [the bilingual T059 evidence](docs/verification/release-acceptance.md). Historical sync
 availability and the accepted visible-block T058 result do not imply current live Tushare
 readiness.

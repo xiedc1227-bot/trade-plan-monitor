@@ -57,7 +57,7 @@ _REQUIRED_REPORT_TOKENS = (
     _AUTHORIZATION_ENV,
     _LIVE_SELECTOR,
     "NOT_RUN_UNAUTHORIZED",
-    "PENDING_FINAL_USER_ACCEPTANCE",
+    "ACCEPTED",
     "reminder-only",
     "local-only",
 )
@@ -82,10 +82,46 @@ _CANONICAL_EVIDENCE_PATTERN = re.compile(
     r"<!-- T059-CANONICAL-EVIDENCE-END -->",
     re.DOTALL,
 )
+_REPORT_ACCEPTANCE_MARKERS = (
+    (
+        "**Status:** `ACCEPTED` on 2026-09-01.",
+        "The release decision is `ACCEPTED`.",
+        "## 9. C24 release checklist",
+        "- [x] The user confirmed final acceptance on 2026-09-01.",
+    ),
+    (
+        "**状态：**2026-09-01 为 `ACCEPTED`。",
+        "发布决策为 `ACCEPTED`。",
+        "## 9. C24 发布清单",
+        "- [x] 用户已于 2026-09-01 确认最终验收。",
+    ),
+)
+_README_ACCEPTANCE_TOKENS = (
+    (
+        "Tasks `T001` through `T059`",
+        "T059 completed final user acceptance on 2026-09-01",
+        "C24 is complete",
+        "at 4 of 4",
+        "`NOT_RUN_UNAUTHORIZED`",
+    ),
+    (
+        "`T001`～`T059`",
+        "T059 已于 2026-09-01 完成最终验收",
+        "C24 已完成 4/4 项",
+        "`NOT_RUN_UNAUTHORIZED`",
+    ),
+)
 
 
 def _fail(code: str) -> None:
     pytest.fail(code, pytrace=False)
+
+
+def _read_utf8_preserving_newlines(path: Path) -> str:
+    try:
+        return path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        _fail("T059_RELEASE_DOCUMENT_UTF8_INVALID")
 
 
 def _require_exact_live_selector(mark_expression: str) -> None:
@@ -153,17 +189,45 @@ def _authorized_live_target(
     return config, secret_store
 
 
-def _canonical_evidence(report: str) -> dict[str, Any]:
+def _canonical_evidence(report: str) -> tuple[str, dict[str, Any]]:
     match = _CANONICAL_EVIDENCE_PATTERN.search(report)
     if match is None:
         _fail("T059_RELEASE_CANONICAL_EVIDENCE_MISSING")
+    payload_text = match.group("payload")
     try:
-        payload = json.loads(match.group("payload"))
+        payload = json.loads(payload_text)
     except json.JSONDecodeError:
         _fail("T059_RELEASE_CANONICAL_EVIDENCE_INVALID")
     if not isinstance(payload, dict):
         _fail("T059_RELEASE_CANONICAL_EVIDENCE_INVALID")
-    return payload
+    return payload_text, payload
+
+
+def _require_final_acceptance_state(
+    reports: tuple[str, str],
+    readmes: tuple[str, str],
+) -> None:
+    for report, markers in zip(reports, _REPORT_ACCEPTANCE_MARKERS, strict=True):
+        status_marker, decision_marker, checklist_heading, acceptance_item = markers
+        if status_marker not in report or decision_marker not in report:
+            _fail("T059_RELEASE_ACCEPTANCE_STATE_INVALID")
+        _, heading_separator, checklist_tail = report.partition(checklist_heading)
+        checklist, evidence_separator, _ = checklist_tail.partition(
+            "<!-- T059-CANONICAL-EVIDENCE-START -->"
+        )
+        checklist_items = [line for line in checklist.splitlines() if line.startswith("- [")]
+        if (
+            not heading_separator
+            or not evidence_separator
+            or len(checklist_items) != 4
+            or any(not item.startswith("- [x] ") for item in checklist_items)
+            or acceptance_item not in checklist_items
+        ):
+            _fail("T059_RELEASE_ACCEPTANCE_STATE_INVALID")
+
+    for readme, tokens in zip(readmes, _README_ACCEPTANCE_TOKENS, strict=True):
+        if any(token not in readme for token in tokens):
+            _fail("T059_RELEASE_ACCEPTANCE_STATE_INVALID")
 
 
 @pytest.fixture(scope="session")
@@ -200,13 +264,57 @@ def test_ai_live_authorization_is_selector_first_and_target_bound() -> None:
     assert _authorization_digest(first) != _authorization_digest(changed_endpoint)
 
 
+def test_final_acceptance_state_guard_rejects_document_regressions() -> None:
+    reports = tuple(_read_utf8_preserving_newlines(path) for path in _REPORTS)
+    readmes = tuple(_read_utf8_preserving_newlines(path) for path in _READMES)
+
+    with pytest.raises(pytest.fail.Exception, match="T059_RELEASE_ACCEPTANCE_STATE_INVALID"):
+        _require_final_acceptance_state(
+            (
+                reports[0].replace(
+                    "**Status:** `ACCEPTED` on 2026-09-01.",
+                    "**Status:** `PENDING FINAL USER ACCEPTANCE` on 2026-09-01.",
+                    1,
+                ),
+                reports[1],
+            ),
+            readmes,
+        )
+    with pytest.raises(pytest.fail.Exception, match="T059_RELEASE_ACCEPTANCE_STATE_INVALID"):
+        _require_final_acceptance_state(
+            (
+                reports[0],
+                reports[1].replace(
+                    "- [x] 用户已于 2026-09-01 确认最终验收。",
+                    "- [ ] 用户尚未确认最终验收。",
+                    1,
+                ),
+            ),
+            readmes,
+        )
+    with pytest.raises(pytest.fail.Exception, match="T059_RELEASE_ACCEPTANCE_STATE_INVALID"):
+        _require_final_acceptance_state(
+            reports,
+            (
+                readmes[0].replace(
+                    "T059 completed final user acceptance on 2026-09-01",
+                    "T059 is pending final user acceptance",
+                    1,
+                ),
+                readmes[1],
+            ),
+        )
+
+
 def test_release_acceptance_reports_and_operator_guidance_are_complete() -> None:
     for path in _REPORTS:
         if not path.is_file():
             _fail("T059_RELEASE_REPORT_MISSING")
 
-    english_report = _REPORTS[0].read_text(encoding="utf-8")
-    chinese_report = _REPORTS[1].read_text(encoding="utf-8")
+    english_report = _read_utf8_preserving_newlines(_REPORTS[0])
+    chinese_report = _read_utf8_preserving_newlines(_REPORTS[1])
+    readmes = tuple(_read_utf8_preserving_newlines(path) for path in _READMES)
+    _require_final_acceptance_state((english_report, chinese_report), readmes)
     for token in _REQUIRED_REPORT_TOKENS:
         if token not in english_report or token not in chinese_report:
             _fail("T059_RELEASE_REPORT_PARITY_MISSING")
@@ -214,16 +322,16 @@ def test_release_acceptance_reports_and_operator_guidance_are_complete() -> None
         if any(pattern.search(report) for pattern in _REPORT_SECRET_PATTERNS):
             _fail("T059_RELEASE_REPORT_SECRET_MATERIAL_DETECTED")
 
-    english_evidence = _canonical_evidence(english_report)
-    chinese_evidence = _canonical_evidence(chinese_report)
-    if english_evidence != chinese_evidence:
+    english_evidence_text, english_evidence = _canonical_evidence(english_report)
+    chinese_evidence_text, chinese_evidence = _canonical_evidence(chinese_report)
+    if english_evidence_text != chinese_evidence_text or english_evidence != chinese_evidence:
         _fail("T059_RELEASE_CANONICAL_EVIDENCE_MISMATCH")
     if (
         english_evidence.get("baseline") != _BASELINE
         or english_evidence.get("backtestAcceptanceCommit") != _BACKTEST_ACCEPTANCE_COMMIT
         or english_evidence.get("timezone") != "Asia/Shanghai"
         or english_evidence.get("aiLive") != "NOT_RUN_UNAUTHORIZED"
-        or english_evidence.get("releaseDecision") != "PENDING_FINAL_USER_ACCEPTANCE"
+        or english_evidence.get("releaseDecision") != "ACCEPTED"
     ):
         _fail("T059_RELEASE_CANONICAL_EVIDENCE_INVALID")
 
@@ -233,8 +341,7 @@ def test_release_acceptance_reports_and_operator_guidance_are_complete() -> None
     ):
         _fail("T059_RELEASE_CONFIGURED_SECRET_DETECTED")
 
-    for path in _READMES:
-        readme = path.read_text(encoding="utf-8")
+    for readme in readmes:
         for token in _REQUIRED_README_TOKENS:
             if token not in readme:
                 _fail("T059_RELEASE_README_GUIDANCE_MISSING")

@@ -1,8 +1,8 @@
 # T059 Release Acceptance Evidence
 
-**Status:** `PENDING FINAL USER ACCEPTANCE` on 2026-08-31. Every approved internal offline gate is
-green after the separately authorized production-performance remediation. Optional AI connectivity
-is `NOT_RUN_UNAUTHORIZED`, and the user has not yet performed final release acceptance.
+**Status:** `ACCEPTED` on 2026-09-01. Every approved internal offline gate is green after the
+separately authorized production-performance remediation. Optional AI connectivity remains
+`NOT_RUN_UNAUTHORIZED`, and the user performed final release acceptance on 2026-09-01.
 
 ## 1. Decision and evidence boundary
 
@@ -14,11 +14,11 @@ and regression files. They are the bilingual README pair, this bilingual report 
 focused regression files. No dependency, migration, database schema, API path, generated contract,
 provider configuration, or approved performance threshold changed.
 
-The release decision is `PENDING_FINAL_USER_ACCEPTANCE`. The earlier
-`BLOCKED_OFFLINE_PERFORMANCE_GATE` decision was valid for the failed fresh gate and is superseded only
-by the RED-first remediation and new complete passing gate recorded below. Business time remains
-`Asia/Shanghai` with explicit `+08:00` semantics. `C24` is therefore 3 of 4, and T059 remains in
-progress until the user explicitly accepts the release.
+The release decision is `ACCEPTED`. The earlier `BLOCKED_OFFLINE_PERFORMANCE_GATE` decision was valid
+for the failed fresh gate and was superseded by the RED-first remediation and new complete passing
+gate recorded below. `PENDING_FINAL_USER_ACCEPTANCE` was then valid until the user explicitly
+accepted the release on 2026-09-01. Business time remains `Asia/Shanghai` with explicit `+08:00`
+semantics. `C24` is complete at 4 of 4, and T059 is Complete.
 
 ## 2. RED and optional AI live gate
 
@@ -130,7 +130,7 @@ unpromised no-GIL/alternate-interpreter concurrency contract.
 | AI provider boundary | 106 offline contracts pass; optional live connection is `NOT_RUN_UNAUTHORIZED` |
 | Browser/accessibility | 484 unit tests, 6 allowed Chromium E2E tests, and accepted NVDA evidence |
 | Backup/restore | 9 fresh tracked tests plus accepted BT050 migration/restore evidence |
-| Complete release gate | All approved internal gates pass; only explicit final user acceptance remains |
+| Complete release gate | All approved internal gates pass; the user accepted the release on 2026-09-01, so all four C24 checks are closed |
 
 ## 7. Backup, rollback, and operating boundary
 
@@ -147,7 +147,8 @@ order path, or live AI decision path is accepted.
 
 ## 8. Known limitations and open decisions
 
-- `PENDING_FINAL_USER_ACCEPTANCE`: all internal gates pass, but the user has not accepted the release.
+- `ACCEPTED`: the user explicitly confirmed final release acceptance on 2026-09-01; all C24 checks
+  are closed.
 - `NOT_RUN_UNAUTHORIZED`: optional AI connectivity was not called; a future call needs a new exact
   authorization and configured target/secret references.
 - T058 accepted a visible-block result, not provider readiness; current real Tushare availability is
@@ -162,7 +163,7 @@ order path, or live AI decision path is accepted.
 - [x] `BC01` remains complete with live-state isolation and bounded-retention evidence.
 - [x] Authorized live-contract evidence is bilingual, and optional AI connectivity remains honestly
   `NOT_RUN_UNAUTHORIZED` without weakening deterministic monitoring.
-- [ ] The user confirms final acceptance.
+- [x] The user confirmed final acceptance on 2026-09-01.
 
 <!-- T059-CANONICAL-EVIDENCE-START -->
 ```json
@@ -204,7 +205,7 @@ order path, or live AI decision path is accepted.
     "status": "PASSED",
     "warnings": 1
   },
-  "releaseDecision": "PENDING_FINAL_USER_ACCEPTANCE",
+  "releaseDecision": "ACCEPTED",
   "restore": {
     "passed": 9,
     "status": "PASSED"

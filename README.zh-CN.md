@@ -6,11 +6,11 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 ## 产品状态
 
-`T001`～`T058` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。在应用服务组合接通之前，该安装入口会有意以只读 `DEGRADED` 模式启动：界面可以访问，但业务 API 依赖会返回 `SERVICE_UNAVAILABLE`，不会虚构实时状态。
+`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。在应用服务组合接通之前，该安装入口会有意以只读 `DEGRADED` 模式启动：界面可以访问，但业务 API 依赖会返回 `SERVICE_UNAVAILABLE`，不会虚构实时状态。
 
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 
-本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。另行授权的 T059 性能修复现已在不改变阈值的前提下通过 100k-export、ten-symbol/252-day、内存、存储及完整离线闸门。T059 为 `PENDING_FINAL_USER_ACCEPTANCE`：可选 AI live 探测为 `NOT_RUN_UNAUTHORIZED`，用户最终验收尚未发生。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
+本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。另行授权的 T059 性能修复现已在不改变阈值的前提下通过 100k-export、ten-symbol/252-day、内存、存储及完整离线闸门。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
 
 ## 安全边界
 
