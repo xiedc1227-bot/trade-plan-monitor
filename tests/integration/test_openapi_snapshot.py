@@ -16,8 +16,10 @@ GENERATOR_PATH = PROJECT_ROOT / "scripts" / "generate_frontend_types.py"
 OPENAPI_PATH = PROJECT_ROOT / "openapi.json"
 TYPESCRIPT_PATH = PROJECT_ROOT / "web" / "src" / "api" / "generated.ts"
 SPA_ENTRY_PATH = PROJECT_ROOT / "web" / "index.html"
-LOCAL_WEB_SPEC_PATH = PROJECT_ROOT / "SPEC-local-web.md"
-LOCAL_WEB_SPEC_ZH_PATH = PROJECT_ROOT / "SPEC-local-web.zh-CN.md"
+LOCAL_WEB_SPEC_PATH = PROJECT_ROOT / "docs" / "specifications" / "monitoring" / "SPEC-local-web.md"
+LOCAL_WEB_SPEC_ZH_PATH = (
+    PROJECT_ROOT / "docs" / "specifications" / "monitoring" / "SPEC-local-web.zh-CN.md"
+)
 
 APPROVED_PATHS = {
     "/api/v1/ai-provider-secrets",

@@ -301,7 +301,7 @@ python -m trade_plan_monitor backtest list --limit 20 --offset 0
 python -m trade_plan_monitor backtest prune --batch-size 1000
 ```
 
-Run summaries, assumptions, final metrics, and fill ledgers are retained long-term. Successful decision/signal/daily-equity detail is limited to the newest 100 runs and at most 90 days; failed, cancelled, and opt-in debug detail is retained for 14 days; pinned runs are exempt. Result publication first stages canonical rows in `backtest-results.sqlite3`; ordinary reads and statistics hide all staged rows. One transaction sets the internal `materialized` visibility flag only after the complete `reportHash`, expected fill/detail counts, and canonical identity/content set hashes all match. First publication persists those counts and set hashes, and every published retry must match them exactly; ordinary summary/fill/detail reads also validate each SQL identity against its hashed payload before applying any detail-kind filter. The CLI then atomically writes `backtest-report-summary-v1` JSON plus fill CSV. `materialized` is the only publication gate, not a public run status; public statuses remain `COMPLETED`, `FAILED`, or `CANCELLED`. Bounded `prune` maintenance removes unpinned abandoned staged summary/fill/detail after 14 days, while recent stages remain recoverable. Missing or corrupt files can be rebuilt from the long-lived summary/fill rows without network access, replay, or duplicate fills; pruned decision/signal/outcome/equity detail is intentionally not reconstructable. `reportHash` remains the audit identity of the original complete run and is not a file-byte hash. Pin metadata and initial lots are supported by lower-level backtest contracts, but the current CLI exposes neither pin/unpin nor initial-lot input and therefore starts each CLI run with cash only. Full minute-by-minute account snapshots and duplicate market rows are not stored. See [SPEC-backtest.md](SPEC-backtest.md) for the isolation, no-lookahead, report, and retention contracts.
+Run summaries, assumptions, final metrics, and fill ledgers are retained long-term. Successful decision/signal/daily-equity detail is limited to the newest 100 runs and at most 90 days; failed, cancelled, and opt-in debug detail is retained for 14 days; pinned runs are exempt. Result publication first stages canonical rows in `backtest-results.sqlite3`; ordinary reads and statistics hide all staged rows. One transaction sets the internal `materialized` visibility flag only after the complete `reportHash`, expected fill/detail counts, and canonical identity/content set hashes all match. First publication persists those counts and set hashes, and every published retry must match them exactly; ordinary summary/fill/detail reads also validate each SQL identity against its hashed payload before applying any detail-kind filter. The CLI then atomically writes `backtest-report-summary-v1` JSON plus fill CSV. `materialized` is the only publication gate, not a public run status; public statuses remain `COMPLETED`, `FAILED`, or `CANCELLED`. Bounded `prune` maintenance removes unpinned abandoned staged summary/fill/detail after 14 days, while recent stages remain recoverable. Missing or corrupt files can be rebuilt from the long-lived summary/fill rows without network access, replay, or duplicate fills; pruned decision/signal/outcome/equity detail is intentionally not reconstructable. `reportHash` remains the audit identity of the original complete run and is not a file-byte hash. Pin metadata and initial lots are supported by lower-level backtest contracts, but the current CLI exposes neither pin/unpin nor initial-lot input and therefore starts each CLI run with cash only. Full minute-by-minute account snapshots and duplicate market rows are not stored. See [SPEC-backtest.md](docs/specifications/backtesting/SPEC-backtest.md) for the isolation, no-lookahead, report, and retention contracts.
 
 ## AI Secrets
 
@@ -434,6 +434,7 @@ model. Remote access requires a separately designed and reviewed authentication/
 ```text
 trade-plan-monitor/
 ├── config/                   # Non-secret app references and sample plan
+├── docs/                     # Architecture, specifications, decisions, guides, evidence
 ├── src/trade_plan_monitor/
 │   ├── ai/                   # AI configuration, secrets, adapter, extraction
 │   ├── decision/             # Deterministic conditions, risk, priority, hashes
@@ -445,7 +446,6 @@ trade-plan-monitor/
 │   └── web/                  # FastAPI routes, security, packaged SPA assets
 ├── tests/                    # Unit, integration, replay, fixtures
 ├── web/                      # Vue 3 / TypeScript source and tooling
-├── SPEC-*.md                 # Canonical English module contracts
 ├── pyproject.toml
 ├── README.md
 └── README.zh-CN.md
@@ -469,20 +469,21 @@ example.
 
 Unsuffixed documents are canonical English inputs for agents and implementation workflows. The
 matching `.zh-CN.md` files are Chinese review copies and must remain semantically equivalent in
-the same change.
+the same change. The complete categorized inventory is in [docs/README.md](docs/README.md), with
+the [Chinese index](docs/README.zh-CN.md) alongside it.
 
 | Contract | English | Chinese |
 |---|---|---|
-| Capability map | [CAPABILITY-MAP.md](CAPABILITY-MAP.md) | [CAPABILITY-MAP.zh-CN.md](CAPABILITY-MAP.zh-CN.md) |
-| Plan domain | [SPEC-plan-domain.md](SPEC-plan-domain.md) | [SPEC-plan-domain.zh-CN.md](SPEC-plan-domain.zh-CN.md) |
-| AI drafting | [SPEC-ai-plan-drafting.md](SPEC-ai-plan-drafting.md) | [SPEC-ai-plan-drafting.zh-CN.md](SPEC-ai-plan-drafting.zh-CN.md) |
-| Market data | [SPEC-market-data.md](SPEC-market-data.md) | [SPEC-market-data.zh-CN.md](SPEC-market-data.zh-CN.md) |
-| Historical backtest | [SPEC-backtest.md](SPEC-backtest.md) | [SPEC-backtest.zh-CN.md](SPEC-backtest.zh-CN.md) |
-| Strategy state | [SPEC-strategy-state.md](SPEC-strategy-state.md) | [SPEC-strategy-state.zh-CN.md](SPEC-strategy-state.zh-CN.md) |
-| Decision engine | [SPEC-decision-engine.md](SPEC-decision-engine.md) | [SPEC-decision-engine.zh-CN.md](SPEC-decision-engine.zh-CN.md) |
-| Notification outbox | [SPEC-notification-outbox.md](SPEC-notification-outbox.md) | [SPEC-notification-outbox.zh-CN.md](SPEC-notification-outbox.zh-CN.md) |
-| Monitor runtime | [SPEC-monitor-runtime.md](SPEC-monitor-runtime.md) | [SPEC-monitor-runtime.zh-CN.md](SPEC-monitor-runtime.zh-CN.md) |
-| Local Web | [SPEC-local-web.md](SPEC-local-web.md) | [SPEC-local-web.zh-CN.md](SPEC-local-web.zh-CN.md) |
+| Capability map | [CAPABILITY-MAP.md](docs/architecture/CAPABILITY-MAP.md) | [CAPABILITY-MAP.zh-CN.md](docs/architecture/CAPABILITY-MAP.zh-CN.md) |
+| Plan domain | [SPEC-plan-domain.md](docs/specifications/monitoring/SPEC-plan-domain.md) | [SPEC-plan-domain.zh-CN.md](docs/specifications/monitoring/SPEC-plan-domain.zh-CN.md) |
+| AI drafting | [SPEC-ai-plan-drafting.md](docs/specifications/monitoring/SPEC-ai-plan-drafting.md) | [SPEC-ai-plan-drafting.zh-CN.md](docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md) |
+| Market data | [SPEC-market-data.md](docs/specifications/monitoring/SPEC-market-data.md) | [SPEC-market-data.zh-CN.md](docs/specifications/monitoring/SPEC-market-data.zh-CN.md) |
+| Historical backtest | [SPEC-backtest.md](docs/specifications/backtesting/SPEC-backtest.md) | [SPEC-backtest.zh-CN.md](docs/specifications/backtesting/SPEC-backtest.zh-CN.md) |
+| Strategy state | [SPEC-strategy-state.md](docs/specifications/monitoring/SPEC-strategy-state.md) | [SPEC-strategy-state.zh-CN.md](docs/specifications/monitoring/SPEC-strategy-state.zh-CN.md) |
+| Decision engine | [SPEC-decision-engine.md](docs/specifications/monitoring/SPEC-decision-engine.md) | [SPEC-decision-engine.zh-CN.md](docs/specifications/monitoring/SPEC-decision-engine.zh-CN.md) |
+| Notification outbox | [SPEC-notification-outbox.md](docs/specifications/monitoring/SPEC-notification-outbox.md) | [SPEC-notification-outbox.zh-CN.md](docs/specifications/monitoring/SPEC-notification-outbox.zh-CN.md) |
+| Monitor runtime | [SPEC-monitor-runtime.md](docs/specifications/monitoring/SPEC-monitor-runtime.md) | [SPEC-monitor-runtime.zh-CN.md](docs/specifications/monitoring/SPEC-monitor-runtime.zh-CN.md) |
+| Local Web | [SPEC-local-web.md](docs/specifications/monitoring/SPEC-local-web.md) | [SPEC-local-web.zh-CN.md](docs/specifications/monitoring/SPEC-local-web.zh-CN.md) |
 
 ## Development Workflow
 

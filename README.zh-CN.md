@@ -243,7 +243,7 @@ python -m trade_plan_monitor backtest list --limit 20 --offset 0
 python -m trade_plan_monitor backtest prune --batch-size 1000
 ```
 
-运行摘要、假设、最终指标和成交账本长期保留。成功运行的判断/信号/每日权益详情只保留最新 100 次且最多 90 天；失败、取消及按需调试详情保留 14 天；置顶运行豁免。结果发布先把规范行 staged 到 `backtest-results.sqlite3`；普通读取和统计看不到任何 staged 行。只有完整 `reportHash`、预期成交/详情数量和规范 identity/内容集合哈希都匹配时，一个事务才会设置内部 `materialized` 可见性标记。首次发布会持久化这些数量和集合哈希，已发布运行的每次重试都必须精确匹配；普通摘要/成交/详情读取还会在应用任何 detail-kind 过滤前，根据已哈希 payload 校验每个 SQL identity。随后 CLI 原子写入 `backtest-report-summary-v1` JSON 和成交 CSV。`materialized` 是唯一发布闸门，但不是公开运行状态；公开状态仍为 `COMPLETED`、`FAILED` 或 `CANCELLED`。有界 `prune` 维护会在 14 天后移除未置顶的废弃 staged 摘要/成交/详情，近期 stage 仍可恢复。文件缺失或损坏时，可以根据长期摘要/成交行重建，不联网、不重放、也不重复成交；已清理的判断/信号/结果/权益详情按设计不可重建。`reportHash` 继续作为原始完整运行的审计 identity，并不是文件字节哈希。底层回测契约支持置顶元数据和初始持仓批次，但当前 CLI 尚未暴露置顶/取消置顶或初始持仓输入，因此每次 CLI 运行都只从现金开始。不保存完整逐分钟账户快照，也不重复保存行情行。隔离、禁止未来数据、报告及保留契约详见 [SPEC-backtest.zh-CN.md](SPEC-backtest.zh-CN.md)。
+运行摘要、假设、最终指标和成交账本长期保留。成功运行的判断/信号/每日权益详情只保留最新 100 次且最多 90 天；失败、取消及按需调试详情保留 14 天；置顶运行豁免。结果发布先把规范行 staged 到 `backtest-results.sqlite3`；普通读取和统计看不到任何 staged 行。只有完整 `reportHash`、预期成交/详情数量和规范 identity/内容集合哈希都匹配时，一个事务才会设置内部 `materialized` 可见性标记。首次发布会持久化这些数量和集合哈希，已发布运行的每次重试都必须精确匹配；普通摘要/成交/详情读取还会在应用任何 detail-kind 过滤前，根据已哈希 payload 校验每个 SQL identity。随后 CLI 原子写入 `backtest-report-summary-v1` JSON 和成交 CSV。`materialized` 是唯一发布闸门，但不是公开运行状态；公开状态仍为 `COMPLETED`、`FAILED` 或 `CANCELLED`。有界 `prune` 维护会在 14 天后移除未置顶的废弃 staged 摘要/成交/详情，近期 stage 仍可恢复。文件缺失或损坏时，可以根据长期摘要/成交行重建，不联网、不重放、也不重复成交；已清理的判断/信号/结果/权益详情按设计不可重建。`reportHash` 继续作为原始完整运行的审计 identity，并不是文件字节哈希。底层回测契约支持置顶元数据和初始持仓批次，但当前 CLI 尚未暴露置顶/取消置顶或初始持仓输入，因此每次 CLI 运行都只从现金开始。不保存完整逐分钟账户快照，也不重复保存行情行。隔离、禁止未来数据、报告及保留契约详见 [SPEC-backtest.zh-CN.md](docs/specifications/backtesting/SPEC-backtest.zh-CN.md)。
 
 ## AI 密钥
 
@@ -337,6 +337,7 @@ python -c "import os; from trade_plan_monitor.state.backup import verify_sqlite_
 ```text
 trade-plan-monitor/
 ├── config/                   # 非密钥应用引用和样例计划
+├── docs/                     # 架构、规格、决策、指南和验证证据
 ├── src/trade_plan_monitor/
 │   ├── ai/                   # AI 配置、密钥、适配器和提取
 │   ├── decision/             # 确定性条件、风险、优先级和哈希
@@ -348,7 +349,6 @@ trade-plan-monitor/
 │   └── web/                  # FastAPI 路由、安全和打包 SPA 资源
 ├── tests/                    # 单元、集成、回放和夹具
 ├── web/                      # Vue 3 / TypeScript 源码与工具链
-├── SPEC-*.md                 # 英文权威模块契约
 ├── pyproject.toml
 ├── README.md
 └── README.zh-CN.md
@@ -368,20 +368,20 @@ trade-plan-monitor/
 
 ## 文档
 
-无语言后缀的文档是供智能体和实施流程使用的英文权威输入；同名 `.zh-CN.md` 文件是中文审阅副本，必须在同一次变更中保持语义等价。
+无语言后缀的文档是供智能体和实施流程使用的英文权威输入；同名 `.zh-CN.md` 文件是中文审阅副本，必须在同一次变更中保持语义等价。完整分类清单见 [docs/README.zh-CN.md](docs/README.zh-CN.md)，其[英文索引](docs/README.md)位于同一目录。
 
 | 契约 | 英文 | 中文 |
 |---|---|---|
-| 能力地图 | [CAPABILITY-MAP.md](CAPABILITY-MAP.md) | [CAPABILITY-MAP.zh-CN.md](CAPABILITY-MAP.zh-CN.md) |
-| 计划领域 | [SPEC-plan-domain.md](SPEC-plan-domain.md) | [SPEC-plan-domain.zh-CN.md](SPEC-plan-domain.zh-CN.md) |
-| AI 草稿 | [SPEC-ai-plan-drafting.md](SPEC-ai-plan-drafting.md) | [SPEC-ai-plan-drafting.zh-CN.md](SPEC-ai-plan-drafting.zh-CN.md) |
-| 行情数据 | [SPEC-market-data.md](SPEC-market-data.md) | [SPEC-market-data.zh-CN.md](SPEC-market-data.zh-CN.md) |
-| 历史回测 | [SPEC-backtest.md](SPEC-backtest.md) | [SPEC-backtest.zh-CN.md](SPEC-backtest.zh-CN.md) |
-| 策略状态 | [SPEC-strategy-state.md](SPEC-strategy-state.md) | [SPEC-strategy-state.zh-CN.md](SPEC-strategy-state.zh-CN.md) |
-| 决策引擎 | [SPEC-decision-engine.md](SPEC-decision-engine.md) | [SPEC-decision-engine.zh-CN.md](SPEC-decision-engine.zh-CN.md) |
-| 通知 Outbox | [SPEC-notification-outbox.md](SPEC-notification-outbox.md) | [SPEC-notification-outbox.zh-CN.md](SPEC-notification-outbox.zh-CN.md) |
-| 监控运行时 | [SPEC-monitor-runtime.md](SPEC-monitor-runtime.md) | [SPEC-monitor-runtime.zh-CN.md](SPEC-monitor-runtime.zh-CN.md) |
-| 本地 Web | [SPEC-local-web.md](SPEC-local-web.md) | [SPEC-local-web.zh-CN.md](SPEC-local-web.zh-CN.md) |
+| 能力地图 | [CAPABILITY-MAP.md](docs/architecture/CAPABILITY-MAP.md) | [CAPABILITY-MAP.zh-CN.md](docs/architecture/CAPABILITY-MAP.zh-CN.md) |
+| 计划领域 | [SPEC-plan-domain.md](docs/specifications/monitoring/SPEC-plan-domain.md) | [SPEC-plan-domain.zh-CN.md](docs/specifications/monitoring/SPEC-plan-domain.zh-CN.md) |
+| AI 草稿 | [SPEC-ai-plan-drafting.md](docs/specifications/monitoring/SPEC-ai-plan-drafting.md) | [SPEC-ai-plan-drafting.zh-CN.md](docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md) |
+| 行情数据 | [SPEC-market-data.md](docs/specifications/monitoring/SPEC-market-data.md) | [SPEC-market-data.zh-CN.md](docs/specifications/monitoring/SPEC-market-data.zh-CN.md) |
+| 历史回测 | [SPEC-backtest.md](docs/specifications/backtesting/SPEC-backtest.md) | [SPEC-backtest.zh-CN.md](docs/specifications/backtesting/SPEC-backtest.zh-CN.md) |
+| 策略状态 | [SPEC-strategy-state.md](docs/specifications/monitoring/SPEC-strategy-state.md) | [SPEC-strategy-state.zh-CN.md](docs/specifications/monitoring/SPEC-strategy-state.zh-CN.md) |
+| 决策引擎 | [SPEC-decision-engine.md](docs/specifications/monitoring/SPEC-decision-engine.md) | [SPEC-decision-engine.zh-CN.md](docs/specifications/monitoring/SPEC-decision-engine.zh-CN.md) |
+| 通知 Outbox | [SPEC-notification-outbox.md](docs/specifications/monitoring/SPEC-notification-outbox.md) | [SPEC-notification-outbox.zh-CN.md](docs/specifications/monitoring/SPEC-notification-outbox.zh-CN.md) |
+| 监控运行时 | [SPEC-monitor-runtime.md](docs/specifications/monitoring/SPEC-monitor-runtime.md) | [SPEC-monitor-runtime.zh-CN.md](docs/specifications/monitoring/SPEC-monitor-runtime.zh-CN.md) |
+| 本地 Web | [SPEC-local-web.md](docs/specifications/monitoring/SPEC-local-web.md) | [SPEC-local-web.zh-CN.md](docs/specifications/monitoring/SPEC-local-web.zh-CN.md) |
 
 ## 开发流程
 

@@ -298,7 +298,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 ### 已批准的回测扩展边界
 
-六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
+六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
 - 当前冻结契约精确为 37 条 REST 路径：保持不变的 24 条实时路径加精确 13 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
 - 当前 Router 基线仍是六条占位路由。扩展会增加真实或 lazy-loaded 的 `/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId` 视图，两个静态子路由必须排在动态路由之前；变更后生产路由集合精确为 10 条路径；

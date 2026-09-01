@@ -298,7 +298,7 @@ The slice performs no API call, Pinia write, router composition, provider/rule e
 
 ### Approved Backtest Extension Boundary
 
-The six-module backtest direction and this boundary were approved on 2026-08-26. The user also confirmed [`backtest-api`](SPEC-backtest-api.md) and approved [`backtest-web`](SPEC-backtest-web.md). On 2026-08-26, the user confirmed the corrected `planVersionId`, money projection, result/job consistency, versioned-compatibility, and unified China-time clauses. The following values govern the current generated contract and the separately gated remaining router work:
+The six-module backtest direction and this boundary were approved on 2026-08-26. The user also confirmed [`backtest-api`](../backtesting/SPEC-backtest-api.md) and approved [`backtest-web`](../backtesting/SPEC-backtest-web.md). On 2026-08-26, the user confirmed the corrected `planVersionId`, money projection, result/job consistency, versioned-compatibility, and unified China-time clauses. The following values govern the current generated contract and the separately gated remaining router work:
 
 - the current frozen contract is exactly 37 REST paths: the unchanged live 24 plus exactly 13 backtest resource paths, with the OpenAPI snapshot, hash, generated TypeScript, and runtime guards updated together;
 - the current router baseline remains six placeholder routes. The extension adds real or lazy-loaded `/backtests`, `/backtests/new`, `/backtests/data`, and `/backtests/:runId` views, with the two static child routes before the dynamic route; the exact post-change production route set is 10 paths;
