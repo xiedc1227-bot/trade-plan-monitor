@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -8,6 +9,8 @@ from pydantic import ValidationError
 from trade_plan_monitor.market_data.indicators import (
     TA_FORMULA_VERSION,
     IndicatorSeries,
+    _calculate_daily_ta_v1_from_prefix,
+    _calculate_daily_ta_v1_prefix,
     calculate_ta_v1,
 )
 from trade_plan_monitor.market_data.models import DailyBar
@@ -100,6 +103,40 @@ def test_ta_v1_is_repeatable_closed_and_immutable() -> None:
         first.model_copy(update={"formula_version": "ta-v2"})
     with pytest.raises(ValidationError):
         first.points[-1].model_copy(update={"rsi14": 101.0})
+
+
+@pytest.mark.parametrize("count", (20, 220, 500))
+def test_ta_v1_reuses_an_exact_prefix_without_changing_canonical_bytes(count) -> None:
+    bars = _daily_bars(count)
+    prefix = _calculate_daily_ta_v1_prefix(bars[:-1])
+
+    expected = calculate_ta_v1(bars)
+    actual = _calculate_daily_ta_v1_from_prefix(bars, prefix)
+
+    assert actual == expected
+    assert actual.model_dump_json() == expected.model_dump_json()
+    assert actual.points[:-1] == prefix.series.points
+
+    shifted_first = bars[0].model_copy(
+        update={
+            "open_fen": bars[0].open_fen + 100,
+            "high_fen": bars[0].high_fen + 100,
+            "low_fen": bars[0].low_fen + 100,
+            "close_fen": bars[0].close_fen + 100,
+        }
+    )
+    with pytest.raises(ValueError, match="prefix bars"):
+        _calculate_daily_ta_v1_from_prefix((shifted_first, *bars[1:]), prefix)
+
+    tampered_point = prefix.series.points[0].model_copy(
+        update={"ema10_yuan": prefix.series.points[0].ema10_yuan + 0.01}
+    )
+    tampered_series = prefix.series.model_copy(
+        update={"points": (tampered_point, *prefix.series.points[1:])}
+    )
+    forged_prefix = replace(prefix, series=tampered_series)
+    with pytest.raises(ValueError, match="issued"):
+        _calculate_daily_ta_v1_from_prefix(bars, forged_prefix)
 
 
 def test_ta_v1_rejects_empty_unbounded_mixed_or_nonmonotonic_input() -> None:

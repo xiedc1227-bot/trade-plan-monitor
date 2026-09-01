@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import ctypes
 import gc
 import json
-import os
 from collections import deque
 from collections.abc import Callable, Iterator, Mapping
 from datetime import date, datetime, time
@@ -85,7 +83,12 @@ from trade_plan_monitor.market_data.aggregation import (
     aggregate_five_minute_bar,
     aggregate_provisional_daily_bar,
 )
-from trade_plan_monitor.market_data.indicators import calculate_ta_v1
+from trade_plan_monitor.market_data.indicators import (
+    _calculate_daily_ta_v1_from_prefix,
+    _calculate_daily_ta_v1_prefix,
+    _DailyTaV1Prefix,
+    calculate_ta_v1,
+)
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
 from trade_plan_monitor.market_data.reconciliation import reconcile_daily_close
 
@@ -503,6 +506,7 @@ class OfflineBacktestRunner:
             daily_limit = symbol_day.daily_limit
             minutes = symbol_day.minutes
             self._validate_day_facts(trading_day, daily_limit, minutes, official_bar)
+            daily_indicator_prefix = _calculate_daily_ta_v1_prefix(tuple(official_history))
             open_day_count += 1
             day_minutes: list[MinuteBar] = []
             provisional: DailyBar | None = None
@@ -556,6 +560,7 @@ class OfflineBacktestRunner:
                     current_minutes=tuple(day_minutes),
                     five_minute_bars=tuple(complete_five_minute_bars),
                     provisional=provisional,
+                    daily_indicator_prefix=daily_indicator_prefix,
                     risk_state=risk_state,
                     episode=episode,
                     engine=engine,
@@ -594,6 +599,7 @@ class OfflineBacktestRunner:
                 five_minute_bars=tuple(complete_five_minute_bars),
                 provisional=provisional,
                 official=official_bar,
+                daily_indicator_prefix=daily_indicator_prefix,
                 risk_state=risk_state,
                 episode=episode,
                 engine=engine,
@@ -703,6 +709,7 @@ class OfflineBacktestRunner:
         current_minutes: tuple[MinuteBar, ...],
         five_minute_bars: tuple[FiveMinuteBar, ...],
         provisional: DailyBar,
+        daily_indicator_prefix: _DailyTaV1Prefix,
         risk_state: RiskStateSnapshot,
         episode,
         engine: DeterministicExecutionEngine,
@@ -731,7 +738,10 @@ class OfflineBacktestRunner:
             official_daily_bars=official_history,
             five_minute_indicators=calculate_ta_v1(five_minute_bars),
             daily_indicator_snapshot=DailyIndicatorSnapshot(
-                series=calculate_ta_v1((*official_history, provisional)),
+                series=_calculate_daily_ta_v1_from_prefix(
+                    (*official_history, provisional),
+                    daily_indicator_prefix,
+                ),
                 provenance=DailyIndicatorProvenance.PROVISIONAL,
                 source_as_of=bucket_end,
                 source_bar=provisional,
@@ -765,6 +775,7 @@ class OfflineBacktestRunner:
         five_minute_bars: tuple[FiveMinuteBar, ...],
         provisional: DailyBar,
         official: DailyBar,
+        daily_indicator_prefix: _DailyTaV1Prefix,
         risk_state: RiskStateSnapshot,
         episode,
         engine: DeterministicExecutionEngine,
@@ -792,7 +803,10 @@ class OfflineBacktestRunner:
             official_daily_bars=official_history,
             five_minute_indicators=calculate_ta_v1(five_minute_bars),
             daily_indicator_snapshot=DailyIndicatorSnapshot(
-                series=calculate_ta_v1((*official_history, official)),
+                series=_calculate_daily_ta_v1_from_prefix(
+                    (*official_history, official),
+                    daily_indicator_prefix,
+                ),
                 provenance=DailyIndicatorProvenance.OFFICIAL,
                 source_as_of=cutoff,
                 source_bar=official,
@@ -1088,18 +1102,9 @@ def _canonical_json_default(value: object) -> object:
 
 
 def _reclaim_replay_temporaries() -> None:
-    """Release unreachable calculation pages at a bounded safe day boundary."""
+    """Collect unreachable replay temporaries at a bounded safe day boundary."""
 
     gc.collect()
-    if os.name != "nt":
-        return
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    psapi = ctypes.WinDLL("psapi", use_last_error=True)
-    kernel32.GetCurrentProcess.argtypes = []
-    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
-    psapi.EmptyWorkingSet.argtypes = [ctypes.c_void_p]
-    psapi.EmptyWorkingSet.restype = ctypes.c_int
-    psapi.EmptyWorkingSet(kernel32.GetCurrentProcess())
 
 
 __all__ = [

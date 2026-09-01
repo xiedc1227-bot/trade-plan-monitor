@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from itertools import pairwise
 from typing import Annotated, Literal, Self
+from weakref import WeakSet
 
 import pandas as pd
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
@@ -74,12 +76,91 @@ class IndicatorSeries(_IndicatorValue):
     )
 
 
+_DAILY_TA_V1_PREFIX_PROOF = object()
+
+
+@dataclass(frozen=True, slots=True, weakref_slot=True, eq=False)
+class _DailyTaV1Prefix:
+    bars: tuple[DailyBar, ...]
+    series: IndicatorSeries
+    _proof: object = field(repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if self._proof is not _DAILY_TA_V1_PREFIX_PROOF:
+            raise TypeError("daily indicator prefixes must be created by this module")
+
+
+_ISSUED_DAILY_TA_V1_PREFIXES: WeakSet[_DailyTaV1Prefix] = WeakSet()
+
+
 def calculate_ta_v1(
     bars: tuple[DailyBar | FiveMinuteBar, ...],
 ) -> IndicatorSeries:
     """Calculate pandas/Wilder `ta-v1` values in yuan for one ordered series."""
 
     normalized_bars, identities = _validate_bars(bars)
+    return _calculate_ta_v1_series(normalized_bars, identities, point_prefix=())
+
+
+def _calculate_daily_ta_v1_prefix(
+    bars: tuple[DailyBar, ...],
+) -> _DailyTaV1Prefix:
+    """Create an immutable proof-bound daily indicator prefix."""
+
+    normalized_bars, identities = _validate_bars(bars)
+    if type(normalized_bars[0]) is not DailyBar:
+        raise TypeError("daily indicator prefixes require DailyBar values")
+    daily_bars = tuple(bar for bar in normalized_bars if type(bar) is DailyBar)
+    series = _calculate_ta_v1_series(daily_bars, identities, point_prefix=())
+    prefix = _DailyTaV1Prefix(
+        bars=daily_bars,
+        series=series,
+        _proof=_DAILY_TA_V1_PREFIX_PROOF,
+    )
+    _ISSUED_DAILY_TA_V1_PREFIXES.add(prefix)
+    return prefix
+
+
+def _calculate_daily_ta_v1_from_prefix(
+    bars: tuple[DailyBar, ...],
+    prefix: _DailyTaV1Prefix,
+) -> IndicatorSeries:
+    """Append one derived point while preserving an exact validated indicator prefix."""
+
+    normalized_bars, identities = _validate_bars(bars)
+    if type(normalized_bars[0]) is not DailyBar:
+        raise TypeError("daily indicator prefixes require DailyBar values")
+    if type(prefix) is not _DailyTaV1Prefix:
+        raise TypeError("prefix must be a daily ta-v1 prefix")
+    if prefix not in _ISSUED_DAILY_TA_V1_PREFIXES:
+        raise ValueError("prefix was not issued by the daily ta-v1 calculator")
+    if len(prefix.bars) + 1 != len(normalized_bars):
+        raise ValueError("prefix must cover every bar except the appended value")
+    if any(
+        current is not expected
+        for current, expected in zip(normalized_bars[:-1], prefix.bars, strict=True)
+    ):
+        raise ValueError("prefix bars must be the exact immutable indicator input")
+    if (
+        prefix.series.formula_version != TA_FORMULA_VERSION
+        or prefix.series.symbol != normalized_bars[0].symbol
+    ):
+        raise ValueError("prefix identity must match the indicator series")
+    if tuple(point.bar_at for point in prefix.series.points) != identities[:-1]:
+        raise ValueError("prefix bar identities must match the indicator input")
+    return _calculate_ta_v1_series(
+        normalized_bars,
+        identities,
+        point_prefix=prefix.series.points,
+    )
+
+
+def _calculate_ta_v1_series(
+    normalized_bars: tuple[DailyBar | FiveMinuteBar, ...],
+    identities: tuple[date | datetime, ...],
+    *,
+    point_prefix: tuple[IndicatorPoint, ...],
+) -> IndicatorSeries:
     close = pd.Series(
         [_fen_to_yuan(bar.close_fen) for bar in normalized_bars],
         dtype="float64",
@@ -138,11 +219,11 @@ def calculate_ta_v1(
             "ma50_yuan": _optional_float(ma50_values[index]),
             "ma200_yuan": _optional_float(ma200_values[index]),
         }
-        for index in range(len(normalized_bars))
+        for index in range(len(point_prefix), len(normalized_bars))
     )
     return IndicatorSeries(
         symbol=normalized_bars[0].symbol,
-        points=point_values,
+        points=(*point_prefix, *point_values),
     )
 
 

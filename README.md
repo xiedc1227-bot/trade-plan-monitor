@@ -8,16 +8,23 @@ not place orders.
 
 ## Product Status
 
-Tasks `T001` through `T057` are implemented. The packaged command can serve the built Vue SPA,
-REST API, and WebSocket routes on exact loopback. Until the application service composition is
-wired, that installed entry intentionally starts in read-only `DEGRADED` mode: the UI is
-available, but business API dependencies return `SERVICE_UNAVAILABLE` instead of inventing live
-state.
+Tasks `T001` through `T058` and `BT001` through `BT050` are implemented and accepted. The packaged
+command can serve the built Vue SPA, REST API, and WebSocket routes on exact loopback. Until the
+application service composition is wired, that installed entry intentionally starts in read-only
+`DEGRADED` mode: the UI is available, but business API dependencies return `SERVICE_UNAVAILABLE`
+instead of inventing live state.
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.
 
-The local backtest MVP now provides isolated `sync`, `verify`, `run`, `list`, and `prune` commands. Its focused suite and review-driven integrity regressions pass; the broader multi-symbol/multi-year resource and end-to-end acceptance gate remains open. Historical sync availability does not imply that the live Tushare contract gate has passed.
+The local backtest implementation provides isolated `sync`, `verify`, `run`, `list`, and `prune`
+commands, and its BT050 production-fake acceptance is complete. The separately authorized T059
+performance remediation now passes the unchanged 100k-export, ten-symbol/252-day, memory, storage,
+and complete offline gates. T059 is `PENDING_FINAL_USER_ACCEPTANCE`: the optional AI live probe is
+`NOT_RUN_UNAUTHORIZED`, and final user acceptance has not occurred. See
+[the bilingual T059 evidence](docs/verification/release-acceptance.md). Historical sync
+availability and the accepted visible-block T058 result do not imply current live Tushare
+readiness.
 
 ## Safety Boundaries
 
@@ -252,7 +259,7 @@ Frozen verification also reports stable `INVALID_<KIND>:<identity>:<date>`, `INV
 
 All backtest hashes share exact Decimal canonicalization: numerically equal scale variants such as `0.0003` and `0.00030` have the same canonical text and identity, while binary floats and fixed-point expansions over 10,000 characters fail closed. CLI yuan-to-fen parsing is also context-independent: at most two fractional digits plus trailing zeroes are accepted, oversized exponents fail before expansion, and the result cannot exceed signed 64-bit `9,223,372,036,854,775,807` fen. The backtest reuses reviewed plan hashes, normalized bars, indicators, close reconciliation, and the pure decision engine. `execution-model-v1` is backtest-only: `signalAt` equals the producing decision's `snapshot.evaluatedAt` and the source fact's `receivedAt`; only a subsequent candidate bar with `openAt >= signalAt` may fill. Discrete replay may complete the producing event before processing a next-minute bar at the same boundary, so equality is valid without filling the producing bar/bucket; production historical minute facts normally use `receivedAt == barEnd + 12s`, which keeps the ordinary path in a later minute without lookahead. A fill records `filledAt` as that execution minute's `openAt`. A zero-volume minute leaves the order pending through contiguous canonical candidates until the first later positive-volume minute; it becomes `SUSPENDED` only if replay ends without one. A missing required session minute fails as `MISSING_NEXT_MINUTE` when a later bar exposes the gap. Every `ExecutionOutcome` includes immutable `resolvedAt` plus the resolving `sourceBarId` when a bar exists; `NO_NEXT_MINUTE` alone resolves at finalization without a source bar. Fees, slippage, and partial-lot cost allocation use exact integer-rational arithmetic with explicit fen rounding, independent of the process-global Decimal context. Actual daily limits, T+1, 100-share lots, cash/position bounds, fees, and slippage are applied deterministically. It never invokes the live scheduler, notification outbox, Webhook, WebSocket, or a broker.
 
-Each evaluation uses at most 512 complete five-minute bars, 499 official daily bars before the current day, and 512 calendar-day facts. These bounds enter `run_id` and appear as `BOUNDED_ROLLING_CONTEXT_512_5M_499_DAILY_512_CALENDAR`; they are a disclosed research limitation, not proof that the still-open multi-year resource gate has passed.
+Each evaluation uses at most 512 complete five-minute bars, 499 official daily bars before the current day, and 512 calendar-day facts. These bounds enter `run_id` and appear as `BOUNDED_ROLLING_CONTEXT_512_5M_499_DAILY_512_CALENDAR`; they are a disclosed research limitation and do not themselves prove multi-year resource acceptance. That independent gate is complete through the BT050/BT008 evidence.
 
 Reports also disclose that zero-volume minutes are treated as a non-tradable proxy (`ZERO_VOLUME_MINUTE_USED_AS_NON_TRADABLE_PROXY`), fill quantity is not capped by minute volume (`FILL_QUANTITY_NOT_CAPPED_BY_MINUTE_VOLUME`), limit locks conservatively use the open or slipped price (`CONSERVATIVE_LIMIT_LOCK_FROM_OPEN_OR_SLIPPAGE`), drawdown samples daily equity (`DAILY_EQUITY_DRAWDOWN_SAMPLING`), win rate is per sell fill rather than round trip (`WIN_RATE_PER_SELL_FILL_NOT_ROUND_TRIP`), and metric division is fixed to Decimal precision 28 with `ROUND_HALF_EVEN` (`METRIC_DECIMAL_PRECISION_28_HALF_EVEN`).
 
@@ -307,6 +314,29 @@ API-key material is write-only through the secret boundary and cannot be returne
 public contract. Redirects, embedded URL credentials, query-bearing base URLs, raw model
 execution, and secret-bearing validation errors are rejected. AI output is never activated
 directly.
+
+T059 adds an optional, fail-closed connectivity probe. It is not part of ordinary tests and must
+not be run without a separately approved real-provider network operation. Review a canonical
+lowercase HTTPS base URL and exact model first, then bind authorization to the operation, normalized
+target, and model. The digest context is
+`trade-plan-monitor:t059:ai-live:test-connection:v1` and includes the three newline separators shown
+below, including the final newline:
+
+```powershell
+$env:TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL = "https://reviewed-provider.example/v1"
+$env:TRADE_PLAN_MONITOR_AI_LIVE_MODEL = "reviewed-model"
+$target = "trade-plan-monitor:t059:ai-live:test-connection:v1`n$($env:TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL.TrimEnd('/'))`n$($env:TRADE_PLAN_MONITOR_AI_LIVE_MODEL)`n"
+$targetBytes = [Text.Encoding]::UTF8.GetBytes($target)
+$env:TRADE_PLAN_MONITOR_AI_LIVE_AUTHORIZATION_SHA256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($targetBytes)).ToLowerInvariant()
+$env:AI_API_KEY = "<set-in-this-shell-only>"
+python -m pytest tests/contract/test_ai_live.py -q -m live
+Remove-Item Env:AI_API_KEY, Env:TRADE_PLAN_MONITOR_AI_LIVE_AUTHORIZATION_SHA256, Env:TRADE_PLAN_MONITOR_AI_LIVE_MODEL, Env:TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL
+```
+
+The exact selector is `python -m pytest tests/contract/test_ai_live.py -q -m live`. It uses default
+TLS verification, ignores proxy environment variables, disables redirects and retries, and emits
+only stable error codes. A pass proves bounded Chat Completions envelope connectivity only; it does
+not prove model identity, plan quality, activation safety, or trading correctness.
 
 ## Backup and Restore
 

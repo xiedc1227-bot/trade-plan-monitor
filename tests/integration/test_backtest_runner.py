@@ -48,6 +48,7 @@ from trade_plan_monitor.market_data.historical_provider import (
     HistoricalMinuteProfile,
     HistoricalOpeningSpecial,
 )
+from trade_plan_monitor.market_data.indicators import calculate_ta_v1
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 
@@ -735,6 +736,51 @@ def test_runner_uses_the_validated_internal_context_handoff(tmp_path, monkeypatc
     )
 
     assert len(report.decisions) == 49
+
+
+def test_daily_indicator_prefix_preserves_context_and_report_bytes(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    store = BacktestMarketStore(tmp_path / "daily-indicator-prefix.sqlite3")
+    dataset_hash = _seed_twenty_trading_day_dataset(store)
+    observed_context_count = 0
+
+    def observed_evaluator(context: EvaluationContext) -> EvaluationResult:
+        nonlocal observed_context_count
+        observed_context_count += 1
+        snapshot = context.daily_indicator_snapshot
+        assert snapshot is not None
+        expected = calculate_ta_v1((*context.official_daily_bars, snapshot.source_bar))
+        assert snapshot.series.model_dump_json() == expected.model_dump_json()
+        return evaluate(context)
+
+    arguments = {
+        "plan": _plan(),
+        "dataset_hash": dataset_hash,
+        "initial_cash_fen": 10_000_000,
+        "execution_config": _execution_config(),
+        "manual_event_risk": False,
+    }
+    optimized = OfflineBacktestRunner(store, evaluator=observed_evaluator).run(**arguments)
+    assert observed_context_count == 20 * 49
+
+    def fully_recalculated_daily_series(bars, prefix):
+        del prefix
+        return calculate_ta_v1(bars)
+
+    monkeypatch.setattr(
+        runner_module,
+        "_calculate_daily_ta_v1_from_prefix",
+        fully_recalculated_daily_series,
+    )
+    reference = OfflineBacktestRunner(store).run(**arguments)
+
+    assert optimized.report_hash == reference.report_hash
+    assert optimized.canonical_json() == reference.canonical_json()
+    assert tuple(item.model_dump_json() for item in optimized.decisions) == tuple(
+        item.model_dump_json() for item in reference.decisions
+    )
 
 
 def test_twenty_trading_day_latency_keeps_the_complete_ordered_report(tmp_path) -> None:

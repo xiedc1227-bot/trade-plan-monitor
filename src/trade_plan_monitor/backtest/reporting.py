@@ -263,6 +263,7 @@ def iter_export_fills(
     if cancelled():
         return
     yield _v2_csv_header()
+    encode_fill = _v2_fill_csv_encoder()
     batches = store.iter_export_fill_batches(run_id, cancelled)
     try:
         while True:
@@ -275,7 +276,7 @@ def iter_export_fills(
             for fill in batch:
                 if cancelled():
                     return
-                yield _v2_fill_csv_row(fill)
+                yield encode_fill(fill)
     finally:
         batches.close()
 
@@ -409,33 +410,37 @@ def _v2_csv_header() -> bytes:
     return _bounded_export_chunk(buffer.getvalue())
 
 
-def _v2_fill_csv_row(fill: BacktestFillRecord) -> bytes:
-    payload = fill.payload
-    fees = payload.get("fees")
-    if not isinstance(fees, dict):
-        raise ValueError("stored fill fees must be an object")
+def _v2_fill_csv_encoder() -> Callable[[BacktestFillRecord], bytes]:
     buffer = StringIO(newline="")
-    writer = csv.DictWriter(buffer, fieldnames=_V2_FILL_FIELDS, lineterminator="\n")
-    writer.writerow(
-        {
-            "schema_version": "backtest-simulated-fills-v2",
-            "run_id": fill.run_id,
-            "fill_id": fill.fill_id,
-            "filled_at": fill.filled_at.isoformat(timespec="microseconds"),
-            "side": payload["side"],
-            "symbol": payload["symbol"],
-            "bucket": payload["bucket"],
-            "quantity": payload["quantity"],
-            "price_fen": payload["price_fen"],
-            "notional_fen": payload["notional_fen"],
-            "fees_fen": fees["total_fen"],
-            "cash_delta_fen": payload["cash_delta_fen"],
-            "realized_pnl_fen": (
-                "" if payload.get("realized_pnl_fen") is None else payload["realized_pnl_fen"]
-            ),
-        }
-    )
-    return _bounded_export_chunk(buffer.getvalue())
+    writer = csv.writer(buffer, lineterminator="\n")
+
+    def encode(fill: BacktestFillRecord) -> bytes:
+        payload = fill.payload
+        fees = payload.get("fees")
+        if not isinstance(fees, dict):
+            raise ValueError("stored fill fees must be an object")
+        buffer.seek(0)
+        buffer.truncate(0)
+        writer.writerow(
+            (
+                "backtest-simulated-fills-v2",
+                fill.run_id,
+                fill.fill_id,
+                fill.filled_at.isoformat(timespec="microseconds"),
+                payload["side"],
+                payload["symbol"],
+                payload["bucket"],
+                payload["quantity"],
+                payload["price_fen"],
+                payload["notional_fen"],
+                fees["total_fen"],
+                payload["cash_delta_fen"],
+                ("" if payload.get("realized_pnl_fen") is None else payload["realized_pnl_fen"]),
+            )
+        )
+        return _bounded_export_chunk(buffer.getvalue())
+
+    return encode
 
 
 def _detail_records(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import re
 import sqlite3
 import zlib
 from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -79,6 +80,7 @@ _PIN_REQUEST_HASH_DOMAIN = b"backtest-pin-request-v1\0"
 _PIN_RESPONSE_HASH_DOMAIN = b"backtest-pin-response-v1\0"
 _PIN_IDEMPOTENCY_DAYS = 14
 _MAX_EQUITY_POINTS = 2_000
+_SHA256_HEX_PATTERN = re.compile(r"[0-9a-f]{64}")
 _DETAIL_PAYLOAD_MAGIC = b"TPM-DETAIL-ZLIB-DICT-V1\0"
 _DETAIL_COMPRESSION_DICTIONARY = zlib.decompress(
     base64.b85decode(
@@ -953,7 +955,11 @@ class BacktestResultStore:
                 if not rows:
                     break
                 batch = tuple(
-                    _load_fill_row(tuple(row), expected_run_id=normalized_run_id) for row in rows
+                    _load_preverified_export_fill_row(
+                        tuple(row),
+                        expected_run_id=normalized_run_id,
+                    )
+                    for row in rows
                 )
                 if any(
                     _datetime_text(record.filled_at, version="v2") != str(row[2])
@@ -2813,6 +2819,86 @@ def _load_fill_row(
     return record
 
 
+def _load_preverified_export_fill_row(
+    row: tuple[object, ...],
+    *,
+    expected_run_id: str,
+) -> BacktestFillRecord:
+    """Load one row after the same snapshot's complete publication proof succeeded."""
+
+    if len(row) != 6:
+        raise RuntimeError("stored backtest fill row shape is invalid")
+    fill_id = str(row[0])
+    run_id = str(row[1])
+    filled_at = str(row[2])
+    if str(row[3]) != _FILL_DOMAINS["v2"]:
+        raise RuntimeError("materialized v2 fill ledger contains a non-v2 row")
+    try:
+        stored = json.loads(str(row[5]))
+        parsed_filled_at = datetime.fromisoformat(filled_at).astimezone(_SHANGHAI)
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise RuntimeError("preverified backtest fill row is invalid") from error
+    if (
+        not isinstance(stored, dict)
+        or stored.get("fill_id") != fill_id
+        or stored.get("run_id") != run_id
+        or stored.get("filled_at") != filled_at
+        or run_id != expected_run_id
+        or not isinstance(stored.get("payload"), dict)
+    ):
+        raise RuntimeError("preverified backtest fill SQL identity is invalid")
+    return BacktestFillRecord.model_construct(
+        fill_id=fill_id,
+        run_id=run_id,
+        filled_at=parsed_filled_at,
+        payload=stored["payload"],
+    )
+
+
+def _validate_export_fill_json(
+    payload_json: str,
+    *,
+    fill_id: str,
+    run_id: str,
+    filled_at: str,
+) -> None:
+    """Validate the exact JSON-only subset of ``BacktestFillRecord`` without copying it."""
+
+    try:
+        stored = json.loads(payload_json)
+        parsed_filled_at = datetime.fromisoformat(filled_at)
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise RuntimeError("stored backtest fill payload is invalid") from error
+    if (
+        not isinstance(stored, dict)
+        or set(stored) != {"fill_id", "run_id", "filled_at", "payload"}
+        or stored.get("fill_id") != fill_id
+        or stored.get("run_id") != run_id
+        or stored.get("filled_at") != filled_at
+        or not isinstance(stored.get("payload"), dict)
+        or _datetime_text(parsed_filled_at, version="v2") != filled_at
+    ):
+        raise ResultConflictError("staged fill row identity is invalid")
+    payload = stored["payload"]
+    for name, expected in (("fill_id", fill_id), ("run_id", run_id)):
+        present = payload.get(name)
+        if present is not None and present != expected:
+            raise ResultConflictError("staged fill row identity is invalid")
+    stack = [payload]
+    while stack:
+        value = stack.pop()
+        value_type = type(value)
+        if value is None or value_type is str or value_type is bool or value_type is int:
+            continue
+        if value_type is list:
+            stack.extend(value)
+            continue
+        if value_type is dict:
+            stack.extend(value.values())
+            continue
+        raise RuntimeError("stored backtest fill payload is invalid")
+
+
 def _load_detail(
     content_domain: object,
     content_hash: object,
@@ -3273,32 +3359,26 @@ def _validated_export_fill_set_hash(
         batch_count += 1
         maximum = max(maximum, len(rows))
         for row in rows:
-            fill_id = _validate_hash(str(row[0]), "fill_id")
-            stored_run_id = str(row[1])
-            filled_at = str(row[2])
-            content_domain = str(row[3])
-            content_hash = _validate_hash(str(row[4]), "content_hash")
-            payload_json = str(row[5])
+            row_tuple = tuple(row)
+            fill_id = _validate_hash(str(row_tuple[0]), "fill_id")
+            content_domain = str(row_tuple[3])
+            content_hash = _validate_hash(str(row_tuple[4]), "content_hash")
+            payload_json = str(row_tuple[5])
             _require_item_size(payload_json, "backtest fill")
             if content_domain != _FILL_DOMAINS["v2"]:
                 raise ResultConflictError("staged fill row identity is invalid")
-            if content_hash != _content_hash(
-                _domain_bytes(content_domain),
-                payload_json,
-            ):
-                raise RuntimeError("stored backtest fill failed its content hash")
-            try:
-                payload = json.loads(payload_json)
-            except json.JSONDecodeError as error:
-                raise RuntimeError("stored backtest fill payload is invalid") from error
-            if (
-                not isinstance(payload, dict)
-                or payload.get("fill_id") != fill_id
-                or payload.get("run_id") != stored_run_id
-                or stored_run_id != run_id
-                or payload.get("filled_at") != filled_at
-            ):
+            stored_run_id = str(row_tuple[1])
+            filled_at = str(row_tuple[2])
+            if stored_run_id != run_id:
                 raise ResultConflictError("staged fill row identity is invalid")
+            if content_hash != _content_hash(_domain_bytes(content_domain), payload_json):
+                raise RuntimeError("stored backtest fill failed its content hash")
+            _validate_export_fill_json(
+                payload_json,
+                fill_id=fill_id,
+                run_id=stored_run_id,
+                filled_at=filled_at,
+            )
             digest.update(
                 (f'{{"contentHash":"{content_hash}","identity":"{fill_id}"}}\n').encode("ascii")
             )
@@ -3414,6 +3494,9 @@ def _canonical_mapping(value: object, *, version: str = "v1") -> dict[str, objec
 
 
 def _canonical_value(value: object, *, version: str) -> object:
+    value_type = type(value)
+    if value is None or value_type is str or value_type is bool or value_type is int:
+        return value
     if isinstance(value, BaseModel):
         return _canonical_value(
             value.model_dump(mode="python", round_trip=True),
@@ -3427,7 +3510,7 @@ def _canonical_value(value: object, *, version: str) -> object:
         return _datetime_text(value, version=version)
     if isinstance(value, date):
         return value.isoformat()
-    if value is None or isinstance(value, (str, bool, int)):
+    if isinstance(value, (str, bool, int)):
         return value
     if isinstance(value, float):
         if not math.isfinite(value):
@@ -3495,9 +3578,7 @@ def _first_datetime(payload: Mapping[str, object], keys: tuple[str, ...]) -> dat
 
 
 def _validate_hash(value: str, name: str) -> str:
-    if type(value) is not str or len(value) != 64:
-        raise ValueError(f"{name} must be a lowercase SHA-256 hex digest")
-    if any(character not in "0123456789abcdef" for character in value):
+    if type(value) is not str or len(value) != 64 or _SHA256_HEX_PATTERN.fullmatch(value) is None:
         raise ValueError(f"{name} must be a lowercase SHA-256 hex digest")
     return value
 

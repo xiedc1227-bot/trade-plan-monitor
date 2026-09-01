@@ -169,6 +169,9 @@ def test_active_v2_summary_and_fill_exports_are_byte_stable_shanghai_streams(
 
     assert b"".join(first_summary_chunks) == second_summary
     assert b"".join(first_fill_chunks) == second_fills
+    assert sha256(second_fills).hexdigest() == (
+        "e3375b11598517613ff5c0d7af17e0b7378355580a0ce6ced8ee703c56eb519c"
+    )
     assert first_summary_chunks and first_fill_chunks
     assert all(
         0 < len(chunk) <= 64 * 1_024 for chunk in (*first_summary_chunks, *first_fill_chunks)
@@ -181,6 +184,12 @@ def test_active_v2_summary_and_fill_exports_are_byte_stable_shanghai_streams(
     assert fill_text.count("backtest-simulated-fills-v2") == len(fills)
     assert "+08:00" in fill_text
     assert "+00:00" not in fill_text
+    exported_fills = tuple(
+        fill
+        for batch in store.iter_export_fill_batches(summary.run_id, cancelled=lambda: False)
+        for fill in batch
+    )
+    assert exported_fills == tuple(sorted(fills, key=lambda fill: (fill.filled_at, fill.fill_id)))
     assert store.statistics() == before
 
 
@@ -240,6 +249,29 @@ def test_v2_fill_export_rejects_tampering_before_the_first_fill_row(
     )
     failure = RuntimeError if surface == "payload" else ResultConflictError
     with pytest.raises(failure):
+        next(chunks)
+    chunks.close()
+
+
+def test_v2_fill_export_verifies_the_final_batch_before_the_first_fill_row(
+    tmp_path: Path,
+) -> None:
+    store = BacktestResultStore(tmp_path / "tampered-final-batch-export.sqlite3")
+    summary, fills = _materialize_v2(store, "tampered-final-batch-export", fill_count=1_001)
+    final_fill = max(fills, key=lambda fill: fill.fill_id)
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            "UPDATE backtest_fill SET filled_at = ? WHERE fill_id = ?",
+            ("2026-08-24T09:31:00.000000+08:00", final_fill.fill_id),
+        )
+        connection.commit()
+
+    chunks = reporting.iter_export_fills(store, summary.run_id, cancelled=lambda: False)
+    assert next(chunks) == (
+        b"schema_version,run_id,fill_id,filled_at,side,symbol,bucket,quantity,"
+        b"price_fen,notional_fen,fees_fen,cash_delta_fen,realized_pnl_fen\n"
+    )
+    with pytest.raises(ResultConflictError):
         next(chunks)
     chunks.close()
 
