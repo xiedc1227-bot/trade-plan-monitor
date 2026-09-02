@@ -2,7 +2,7 @@
 
 The ordinary offline suite never constructs an HTTP client for this module. A
 live probe additionally binds explicit authorization to the normalized endpoint,
-model, and connection-test operation before the API key can be materialized.
+model, and connection-test operation before the configured project key can be used.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import hmac
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -22,10 +22,16 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from trade_plan_monitor.ai.models import AIProviderConfig, SecretReference
+from trade_plan_monitor.ai.file_secrets import create_project_secret_store
+from trade_plan_monitor.ai.models import (
+    AIProviderConfig,
+    AIProviderProfile,
+    SecretReference,
+)
 from trade_plan_monitor.ai.openai_compatible import OpenAICompatibleProvider
 from trade_plan_monitor.ai.provider import AIProviderError, ProviderTestResult
-from trade_plan_monitor.ai.secrets import InMemorySecretStore
+from trade_plan_monitor.ai.secrets import InMemorySecretStore, SecretWrite
+from trade_plan_monitor.config import load_application_config
 
 _ROOT = Path(__file__).parents[2]
 _REPORTS = (
@@ -36,7 +42,7 @@ _READMES = (_ROOT / "README.md", _ROOT / "README.zh-CN.md")
 _BASE_URL_ENV = "TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL"
 _MODEL_ENV = "TRADE_PLAN_MONITOR_AI_LIVE_MODEL"
 _AUTHORIZATION_ENV = "TRADE_PLAN_MONITOR_AI_LIVE_AUTHORIZATION_SHA256"
-_SECRET_ENV = "AI_API_KEY"
+_PROJECT_CONFIG = _ROOT / "config" / "app.yaml"
 _LIVE_SELECTOR = "python -m pytest tests/contract/test_ai_live.py -q -m live"
 _AUTHORIZATION_CONTEXT = "trade-plan-monitor:t059:ai-live:test-connection:v1"
 _PROVIDER_ID = UUID("00000000-0000-4000-8000-000000000059")
@@ -63,7 +69,6 @@ _REQUIRED_REPORT_TOKENS = (
 )
 _REQUIRED_README_TOKENS = (
     "T059",
-    "AI_API_KEY",
     _BASE_URL_ENV,
     _MODEL_ENV,
     _AUTHORIZATION_ENV,
@@ -133,12 +138,11 @@ def _candidate_config(base_url: str, model: str) -> AIProviderConfig:
     try:
         config = AIProviderConfig(
             provider_id=_PROVIDER_ID,
-            display_name="T059 authorized live target",
+            display_name="T059 authorized DeepSeek target",
             base_url=base_url,
             model=model,
             secret_ref=SecretReference(
-                key="ai/provider/t059-live",
-                environment_variable=_SECRET_ENV,
+                key="ai/provider/configured-default",
             ),
             timeout_seconds=10,
             max_retries=0,
@@ -167,6 +171,7 @@ def _authorization_digest(config: AIProviderConfig) -> str:
 def _authorized_live_target(
     mark_expression: str,
     environment: Mapping[str, str],
+    secret_store_factory: Callable[[], InMemorySecretStore] | None = None,
 ) -> tuple[AIProviderConfig, InMemorySecretStore]:
     _require_exact_live_selector(mark_expression)
     base_url = environment.get(_BASE_URL_ENV)
@@ -183,7 +188,9 @@ def _authorized_live_target(
     ):
         _fail("T059_AI_LIVE_TARGET_AUTHORIZATION_UNAVAILABLE")
 
-    secret_store = InMemorySecretStore(environment=environment)
+    if secret_store_factory is None:
+        _fail("T059_AI_LIVE_SECRET_REFERENCE_UNAVAILABLE")
+    secret_store = secret_store_factory()
     if not secret_store.status(config.secret_ref).configured:
         _fail("T059_AI_LIVE_SECRET_REFERENCE_UNAVAILABLE")
     return config, secret_store
@@ -235,7 +242,18 @@ def authorized_ai_live_target(
     request: pytest.FixtureRequest,
 ) -> tuple[AIProviderConfig, InMemorySecretStore]:
     mark_expression = str(request.config.getoption("markexpr"))
-    return _authorized_live_target(mark_expression, os.environ)
+
+    def project_secret_store() -> InMemorySecretStore:
+        try:
+            settings = load_application_config(_PROJECT_CONFIG).ai
+            return create_project_secret_store(
+                config_path=_PROJECT_CONFIG,
+                settings=settings,
+            )
+        except OSError, ValidationError:
+            _fail("T059_AI_LIVE_PROJECT_CONFIGURATION_UNAVAILABLE")
+
+    return _authorized_live_target(mark_expression, os.environ, project_secret_store)
 
 
 def test_ai_live_authorization_is_selector_first_and_target_bound() -> None:
@@ -248,6 +266,13 @@ def test_ai_live_authorization_is_selector_first_and_target_bound() -> None:
         pytest.fail.Exception,
         match="T059_AI_LIVE_TARGET_AUTHORIZATION_UNAVAILABLE",
     ):
+        secret_factory_called = False
+
+        def forbidden_secret_factory() -> InMemorySecretStore:
+            nonlocal secret_factory_called
+            secret_factory_called = True
+            return InMemorySecretStore(environment={})
+
         _authorized_live_target(
             "live",
             {
@@ -255,13 +280,29 @@ def test_ai_live_authorization_is_selector_first_and_target_bound() -> None:
                 _MODEL_ENV: "model-a",
                 _AUTHORIZATION_ENV: "é" * 64,
             },
+            forbidden_secret_factory,
         )
+    assert secret_factory_called is False
 
     first = _candidate_config("https://ai.example.test/v1", "model-a")
     changed_model = first.model_copy(update={"model": "model-b"})
     changed_endpoint = first.model_copy(update={"base_url": "https://other.example.test/v1"})
     assert _authorization_digest(first) != _authorization_digest(changed_model)
     assert _authorization_digest(first) != _authorization_digest(changed_endpoint)
+
+    project_store = InMemorySecretStore(environment={})
+    project_store.replace(first.secret_ref, SecretWrite(value="project-file-test-key"))
+    authorized_config, authorized_store = _authorized_live_target(
+        "live",
+        {
+            _BASE_URL_ENV: "https://ai.example.test/v1",
+            _MODEL_ENV: "model-a",
+            _AUTHORIZATION_ENV: _authorization_digest(first),
+        },
+        lambda: project_store,
+    )
+    assert authorized_config.model == "model-a"
+    assert authorized_store is project_store
 
 
 def test_final_acceptance_state_guard_rejects_document_regressions() -> None:
@@ -335,20 +376,12 @@ def test_release_acceptance_reports_and_operator_guidance_are_complete() -> None
     ):
         _fail("T059_RELEASE_CANONICAL_EVIDENCE_INVALID")
 
-    configured_secret = os.environ.get(_SECRET_ENV)
-    if configured_secret and (
-        configured_secret in english_report or configured_secret in chinese_report
-    ):
-        _fail("T059_RELEASE_CONFIGURED_SECRET_DETECTED")
-
     for readme in readmes:
         for token in _REQUIRED_README_TOKENS:
             if token not in readme:
                 _fail("T059_RELEASE_README_GUIDANCE_MISSING")
         if any(pattern.search(readme) for pattern in _README_SECRET_PATTERNS):
             _fail("T059_RELEASE_README_SECRET_MATERIAL_DETECTED")
-        if configured_secret and configured_secret in readme:
-            _fail("T059_RELEASE_README_CONFIGURED_SECRET_DETECTED")
 
 
 @pytest.mark.live
@@ -363,7 +396,11 @@ def test_authorized_openai_compatible_connection(
             timeout=httpx.Timeout(config.timeout_seconds),
             trust_env=False,
         ) as client:
-            provider = OpenAICompatibleProvider(client=client, secret_store=secret_store)
+            provider = OpenAICompatibleProvider(
+                client=client,
+                secret_store=secret_store,
+                profile=AIProviderProfile.DEEPSEEK,
+            )
             return await provider.test_connection(config)
 
     try:

@@ -1,4 +1,5 @@
-# Copy this file to config/app.yaml for local use. Keep secret values out of YAML.
+# Copy this file to config/app.yaml for local use. Keep secret values in an ignored
+# project secret file; paths below are resolved relative to this YAML file.
 web:
   # Security boundary: the only supported listener is exact IPv4 loopback.
   host: 127.0.0.1
@@ -8,14 +9,27 @@ tushare:
   # Verified Tushare-compatible HTTPS endpoint. Never downgrade this to plain HTTP.
   api_url: https://api.quicksync.cn
   timeout_seconds: 30
-  # The runtime resolves this name from the process environment when authorized.
+  # Tushare still uses the existing process-environment adapter.
   token_ref:
     environment_variable: TUSHARE_TOKEN
 
 ai:
-  # Optional until AI-assisted drafting is explicitly enabled.
+  # DeepSeek uses an OpenAI-compatible Chat Completions endpoint with a few
+  # provider-specific request fields. All values below are non-secret and may
+  # be changed for another reviewed OpenAI-compatible service.
+  profile: DEEPSEEK
+  display_name: DeepSeek
+  base_url: https://api.deepseek.com
+  model: deepseek-v4-flash
   api_key_ref:
-    environment_variable: AI_API_KEY
+    # ../.env resolves to the ignored project-root .env after this file is copied.
+    file: ../.env
+    key: DEEPSEEK_API_KEY
+  timeout_seconds: 30
+  max_retries: 2
+  max_input_chars: 50000
+  max_output_tokens: 4096
+  temperature: 0.0
 
 # Database, backup, and webhook settings are runtime-composition inputs and are not
 # accepted by the current strict ApplicationConfiguration schema.

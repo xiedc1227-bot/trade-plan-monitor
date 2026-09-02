@@ -86,6 +86,13 @@ class AIProviderType(StrEnum):
     OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE"
 
 
+class AIProviderProfile(StrEnum):
+    """Request dialect selected by non-secret application configuration."""
+
+    DEEPSEEK = "DEEPSEEK"
+    OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE"
+
+
 class SecretReference(_AIValue):
     """Non-secret store key with an optional environment fallback name."""
 
@@ -283,6 +290,7 @@ def _validation_error_without_inputs(error: ValidationError) -> ValidationError:
 
 __all__ = [
     "AIProviderConfig",
+    "AIProviderProfile",
     "AIProviderType",
     "AIUsageSnapshot",
     "ExtractionIssue",

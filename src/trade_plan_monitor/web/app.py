@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request, Response
 
 from trade_plan_monitor.web.errors import install_error_boundary
 from trade_plan_monitor.web.lifespan import (
+    AIWebLifecycleFactory,
     BacktestLifecycleFactory,
     RuntimeLifecycleFactory,
     create_runtime_lifespan,
@@ -132,6 +133,7 @@ def create_production_app(
     read_service: MonitorReadService | None = None,
     plan_service: PlanOperationService | None = None,
     ai_service: AIOperationService | None = None,
+    ai_lifecycle_factory: AIWebLifecycleFactory | None = None,
     position_service: PositionOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
@@ -143,6 +145,15 @@ def create_production_app(
 
     if not isinstance(config_path, Path):
         raise TypeError("config_path must be a Path")
+    if ai_service is not None and ai_lifecycle_factory is not None:
+        raise ValueError("AI service and lifecycle factory are mutually exclusive")
+    if ai_service is None and ai_lifecycle_factory is None:
+        from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
+
+        def create_configured_ai_lifecycle() -> ConfiguredAIWebLifecycle:
+            return ConfiguredAIWebLifecycle(config_path=config_path)
+
+        ai_lifecycle_factory = create_configured_ai_lifecycle
     lifecycle_factory = runtime_factory or _ReadOnlyPackagedLifecycle
     if backtest_lifecycle_factory is None:
         from trade_plan_monitor.backtest.composition import (
@@ -160,6 +171,7 @@ def create_production_app(
             read_service=read_service,
             plan_service=plan_service,
             ai_service=ai_service,
+            ai_lifecycle_factory=ai_lifecycle_factory,
             position_service=position_service,
             alert_service=alert_service,
             websocket_service=websocket_service,
@@ -175,6 +187,7 @@ def create_app(
     read_service: MonitorReadService | None = None,
     plan_service: PlanOperationService | None = None,
     ai_service: AIOperationService | None = None,
+    ai_lifecycle_factory: AIWebLifecycleFactory | None = None,
     position_service: PositionOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
@@ -191,6 +204,8 @@ def create_app(
         backtest_read_service is not None or backtest_operation_service is not None
     ):
         raise ValueError("backtest services and lifecycle factory are mutually exclusive")
+    if ai_lifecycle_factory is not None and ai_service is not None:
+        raise ValueError("AI service and lifecycle factory are mutually exclusive")
 
     allowed_origin = local_http_origin(bind_host, bind_port)
     static_files = LocalSpaStaticFiles(static_directory) if static_directory is not None else None
@@ -200,6 +215,7 @@ def create_app(
         responses=_PUBLIC_ERROR_RESPONSES,
         lifespan=create_runtime_lifespan(
             runtime_factory,
+            ai_lifecycle_factory=ai_lifecycle_factory,
             backtest_lifecycle_factory=backtest_lifecycle_factory,
             bind_host=bind_host,
             bind_port=bind_port,

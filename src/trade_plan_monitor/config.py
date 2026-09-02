@@ -1,8 +1,10 @@
 """Typed, non-secret application configuration."""
 
 from collections.abc import Mapping
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Annotated, Literal, Self
+from uuid import UUID
 
 import yaml
 from pydantic import (
@@ -15,6 +17,12 @@ from pydantic import (
     ValidationError,
     field_validator,
     model_validator,
+)
+
+from trade_plan_monitor.ai.models import (
+    AIProviderConfig,
+    AIProviderProfile,
+    SecretReference,
 )
 
 EnvironmentVariableName = Annotated[
@@ -53,6 +61,17 @@ class EnvironmentSecretReference(_ConfigurationModel):
     """Reference a secret by environment-variable name without storing its value."""
 
     environment_variable: EnvironmentVariableName
+
+
+class ProjectSecretFileReference(_ConfigurationModel):
+    """Reference one named assignment in a local project secret file."""
+
+    file: str = Field(
+        min_length=1,
+        max_length=1_024,
+        pattern=r"^[^\x00-\x1f\x7f]+$",
+    )
+    key: EnvironmentVariableName
 
 
 class WebConfiguration(_ConfigurationModel):
@@ -98,9 +117,31 @@ class TushareConfiguration(_ConfigurationModel):
 
 
 class AIConfiguration(_ConfigurationModel):
-    """Optional AI secret reference; provider settings arrive in a later task."""
+    """Configurable AI transport with DeepSeek as the built-in default."""
 
-    api_key_ref: EnvironmentSecretReference | None = None
+    profile: AIProviderProfile = Field(default=AIProviderProfile.DEEPSEEK, strict=False)
+    display_name: str = Field(
+        default="DeepSeek",
+        min_length=1,
+        max_length=100,
+        pattern=r"^[^\x00-\x1f\x7f]+$",
+    )
+    base_url: AnyHttpUrl = Field(
+        default="https://api.deepseek.com",
+        validate_default=True,
+    )
+    model: str = Field(
+        default="deepseek-v4-flash",
+        min_length=1,
+        max_length=200,
+        pattern=r"^[^\s\x00-\x1f\x7f]+$",
+    )
+    api_key_ref: ProjectSecretFileReference | None = None
+    timeout_seconds: int = Field(default=30, ge=1, le=120)
+    max_retries: int = Field(default=2, ge=0, le=2)
+    max_input_chars: int = Field(default=50_000, ge=1, le=200_000)
+    max_output_tokens: int = Field(default=4_096, ge=1, le=16_384)
+    temperature: float = Field(default=0, ge=0, le=0.3)
 
     @model_validator(mode="wrap")
     @classmethod
@@ -110,6 +151,39 @@ class AIConfiguration(_ConfigurationModel):
         handler: ModelWrapValidatorHandler[Self],
     ) -> Self:
         return _validate_without_inputs(value, handler)
+
+    @field_validator("base_url")
+    @classmethod
+    def require_safe_base_url(cls, value: AnyHttpUrl) -> AnyHttpUrl:
+        if len(str(value)) > 2_048:
+            raise ValueError("base_url must not exceed 2048 characters")
+        if value.username is not None or value.password is not None:
+            raise ValueError("base_url must not contain embedded credentials")
+        if value.query is not None or value.fragment is not None:
+            raise ValueError("base_url must not contain a query or fragment")
+        if value.scheme == "http" and not _is_explicit_loopback(value.host):
+            raise ValueError("base_url must use HTTPS unless the host is loopback")
+        return value
+
+    def to_provider_config(self) -> AIProviderConfig | None:
+        """Build the existing non-secret provider contract when AI is configured."""
+
+        if self.api_key_ref is None:
+            return None
+        return AIProviderConfig(
+            provider_id=UUID("00000000-0000-4000-8000-0000000000d5"),
+            display_name=self.display_name,
+            base_url=self.base_url,
+            model=self.model,
+            secret_ref=SecretReference(
+                key="ai/provider/configured-default",
+            ),
+            timeout_seconds=self.timeout_seconds,
+            max_retries=self.max_retries,
+            max_input_chars=self.max_input_chars,
+            max_output_tokens=self.max_output_tokens,
+            temperature=self.temperature,
+        )
 
 
 class ApplicationConfiguration(_ConfigurationModel):
@@ -154,6 +228,16 @@ def _validation_error_without_inputs(error: ValidationError) -> ValidationError:
     )
 
 
+def _is_explicit_loopback(host: str) -> bool:
+    normalized = host.casefold().strip("[]")
+    if normalized == "localhost":
+        return True
+    try:
+        return ip_address(normalized).is_loopback
+    except ValueError:
+        return False
+
+
 def load_application_config(path: str | Path) -> ApplicationConfiguration:
     """Load one safe YAML document and validate the complete application schema."""
 
@@ -167,6 +251,7 @@ __all__ = [
     "AIConfiguration",
     "ApplicationConfiguration",
     "EnvironmentSecretReference",
+    "ProjectSecretFileReference",
     "TushareConfiguration",
     "WebConfiguration",
     "load_application_config",

@@ -25,11 +25,6 @@ const StockDetailRoute = createRoutePlaceholder(
   "个股详情",
   "个股视图将在后续任务中提供。",
 );
-const PlansRoute = createRoutePlaceholder(
-  "PlansRoute",
-  "计划工作台",
-  "计划视图将在后续任务中提供。",
-);
 const PlanDetailRoute = createRoutePlaceholder(
   "PlanDetailRoute",
   "计划详情",
@@ -62,7 +57,7 @@ export const routes: RouteRecordRaw[] = [
   {
     path: "/plans",
     name: "plans",
-    component: PlansRoute,
+    component: () => import("./views/PlanDraftingView.vue"),
     meta: { title: "计划工作台 · Trade Plan Monitor" },
   },
   {

@@ -87,7 +87,7 @@ describe("AppShell", () => {
   });
 
   it("renders navigation, the connection banner slot, and the route outlet", async () => {
-    const { wrapper } = await mountShell();
+    const { router, wrapper } = await mountShell();
 
     expect(wrapper.get('nav[aria-label="主要导航"]')).toBeTruthy();
     expect(wrapper.get('nav[aria-label="移动端主要导航"]')).toBeTruthy();
@@ -99,6 +99,7 @@ describe("AppShell", () => {
     expect(wrapper.get("#main-content").text()).toContain("监控总览");
 
     await wrapper.get('nav[aria-label="主要导航"] a[href="/plans"]').trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe("/plans"));
     await flushPromises();
 
     expect(wrapper.get("#main-content").text()).toContain("计划工作台");

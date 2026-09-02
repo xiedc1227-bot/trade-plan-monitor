@@ -56,8 +56,17 @@ class BacktestCommandService(Protocol):
     def prune(self, **kwargs: object) -> object: ...
 
 
+class AICommandService(Protocol):
+    """Explicit paid-network AI operations selected by the local user."""
+
+    async def test_connection(self) -> object: ...
+
+    async def extract(self, source: Path) -> object: ...
+
+
 RuntimeServiceFactory = Callable[[Path], RuntimeCommandService]
 BacktestServiceFactory = Callable[[Path, Path, Path, Path], BacktestCommandService]
+AIServiceFactory = Callable[[Path], AICommandService]
 WebAppFactory = Callable[..., AbstractContextManager[FastAPI]]
 WebServerRunner = Callable[..., object]
 ResultWriter = Callable[[object], None]
@@ -102,6 +111,12 @@ def _default_backtest_service_factory(
         results_database=results_database,
         report_directory=report_directory,
     )
+
+
+def _default_ai_service_factory(config_path: Path) -> AICommandService:
+    from trade_plan_monitor.ai.command import ConfiguredAICommandService
+
+    return ConfiguredAICommandService(config_path=config_path)
 
 
 def _loopback_host(value: str) -> str:
@@ -234,6 +249,36 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_argument(backup_parser)
     backup_parser.set_defaults(service_operation="backup")
 
+    ai_parser = commands.add_parser(
+        "ai",
+        help="test or use the configured AI provider",
+    )
+    ai_commands = ai_parser.add_subparsers(
+        dest="ai_command",
+        title="ai commands",
+        required=True,
+    )
+
+    ai_test_parser = ai_commands.add_parser(
+        "test",
+        help="make one paid provider connectivity request",
+    )
+    _add_config_argument(ai_test_parser)
+    ai_test_parser.set_defaults(ai_operation="test_connection")
+
+    ai_extract_parser = ai_commands.add_parser(
+        "extract",
+        help="extract one review-only plan draft from a UTF-8 text file",
+    )
+    _add_config_argument(ai_extract_parser)
+    ai_extract_parser.add_argument(
+        "--source",
+        type=Path,
+        required=True,
+        help="UTF-8 natural-language plan source",
+    )
+    ai_extract_parser.set_defaults(ai_operation="extract")
+
     backtest_parser = commands.add_parser(
         "backtest",
         help="synchronize and run isolated deterministic historical backtests",
@@ -322,6 +367,7 @@ def main(
     *,
     service_factory: RuntimeServiceFactory | None = None,
     backtest_service_factory: BacktestServiceFactory | None = None,
+    ai_service_factory: AIServiceFactory | None = None,
     web_app_factory: WebAppFactory | None = None,
     web_server_runner: WebServerRunner | None = None,
     result_writer: ResultWriter | None = None,
@@ -330,6 +376,15 @@ def main(
 
     parser = build_parser()
     arguments = parser.parse_args(list(argv))
+    if arguments.command == "ai":
+        factory = ai_service_factory or _default_ai_service_factory
+        service = factory(arguments.config)
+        if arguments.ai_operation == "test_connection":
+            result = asyncio.run(service.test_connection())
+        else:
+            result = asyncio.run(service.extract(arguments.source))
+        (result_writer or _write_result)(result)
+        return 0
     if arguments.command == "backtest":
         factory = backtest_service_factory or _default_backtest_service_factory
         service = factory(
@@ -418,6 +473,8 @@ def console_main() -> int:
 
 __all__ = [
     "DEFAULT_CONFIG_PATH",
+    "AICommandService",
+    "AIServiceFactory",
     "BacktestCommandService",
     "BacktestServiceFactory",
     "RuntimeCommandService",

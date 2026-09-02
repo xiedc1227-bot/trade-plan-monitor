@@ -1,0 +1,98 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { createAIPlanApi } from "../../src/api/ai";
+
+const runtime = {
+  baseUrl: "https://api.deepseek.com/",
+  configured: true,
+  displayName: "DeepSeek",
+  enabled: true,
+  maxInputChars: 50_000,
+  maxOutputTokens: 4_096,
+  model: "deepseek-v4-flash",
+  providerId: "00000000-0000-4000-8000-0000000000d5",
+  revision: 0,
+};
+
+describe("AI plan API", () => {
+  it("loads read-only file configuration and submits one idempotent extraction", async () => {
+    const requests: Array<{ init: RequestInit | undefined; url: string }> = [];
+    const fetchImplementation = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      requests.push({ init, url });
+      if (url === "/api/v1/ai-runtime") {
+        return jsonResponse(runtime);
+      }
+      if (url === "/api/v1/plan-extractions" && init?.method === "POST") {
+        return jsonResponse(
+          {
+            kind: "PLAN_EXTRACTION",
+            operationId: "00000000-0000-4000-8000-000000000111",
+            status: "QUEUED",
+            submittedAt: "2026-09-02T10:00:00+08:00",
+          },
+          202,
+        );
+      }
+      return jsonResponse({
+        assumptions: [],
+        completedAt: "2026-09-02T10:00:02+08:00",
+        draftPlanJson: null,
+        evidence: [],
+        id: "00000000-0000-4000-8000-000000000111",
+        model: null,
+        promptVersion: null,
+        providerId: runtime.providerId,
+        sourceTextSha256: null,
+        startedAt: "2026-09-02T10:00:01+08:00",
+        status: "INVALID_OUTPUT",
+        submittedAt: "2026-09-02T10:00:00+08:00",
+        unmappedText: [],
+        usage: null,
+        validationIssues: [
+          {
+            activationBlocking: true,
+            code: "AI_OUTPUT_INVALID",
+            message: "AI output did not satisfy the extraction contract.",
+            path: "draft",
+            severity: "ERROR",
+          },
+        ],
+        warnings: [],
+      });
+    }) as typeof fetch;
+    const api = createAIPlanApi(fetchImplementation);
+
+    const configured = await api.getRuntime();
+    const receipt = await api.submitExtraction(
+      {
+        expectedRevision: 0,
+        providerId: runtime.providerId,
+        sourceText: "华亚智能交易计划",
+      },
+      "plan-draft-intent-1",
+    );
+    const extraction = await api.getExtraction(receipt.operationId);
+
+    expect(configured).toEqual(runtime);
+    expect(receipt.status).toBe("QUEUED");
+    expect(extraction.status).toBe("INVALID_OUTPUT");
+    expect(requests[1]?.init?.headers).toEqual({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "Idempotency-Key": "plan-draft-intent-1",
+    });
+    expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({
+      expectedRevision: 0,
+      providerId: runtime.providerId,
+      sourceText: "华亚智能交易计划",
+    });
+  });
+});
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+    status,
+  });
+}

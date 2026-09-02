@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from trade_plan_monitor.ai.extraction import extract_plan
 from trade_plan_monitor.ai.models import (
     AIProviderConfig,
+    AIProviderProfile,
     PlanExtractionStatus,
     SecretReference,
 )
@@ -286,6 +287,50 @@ def test_extract_plan_returns_only_validated_envelope_and_untrusted_raw_content(
         "max_completion_tokens": 128,
         "stream": False,
     }
+
+
+def test_deepseek_profile_uses_current_json_chat_completion_contract() -> None:
+    config = _config(
+        base_url="https://api.deepseek.com",
+        model="deepseek-v4-flash",
+        max_output_tokens=256,
+        temperature=0,
+    )
+    prompt = "Return the structured draft as JSON only."
+    captured_body: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_body.update(json.loads(request.content))
+        return _completion_response(content='{"draft": {}}', model="deepseek-v4-flash")
+
+    async def scenario() -> RawAIResponse:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = OpenAICompatibleProvider(
+                client=client,
+                secret_store=_secret_store(config),
+                profile=AIProviderProfile.DEEPSEEK,
+            )
+            return await provider.extract_plan(
+                PlanExtractionRequest(
+                    request_id=REQUEST_ID,
+                    config=config,
+                    prompt=prompt,
+                )
+            )
+
+    result = asyncio.run(scenario())
+
+    assert result.model == "deepseek-v4-flash"
+    assert captured_body == {
+        "model": "deepseek-v4-flash",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0,
+        "max_tokens": 256,
+        "response_format": {"type": "json_object"},
+        "thinking": {"type": "disabled"},
+        "stream": False,
+    }
+    assert "max_completion_tokens" not in captured_body
 
 
 def test_connection_rejects_invalid_json_without_retrying_or_retaining_it() -> None:

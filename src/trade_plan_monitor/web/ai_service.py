@@ -1,0 +1,421 @@
+"""Read-only Web composition for one AI provider configured by project files."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+from collections.abc import Callable
+from datetime import datetime
+from pathlib import Path
+from typing import Final
+from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
+
+import httpx
+
+from trade_plan_monitor.ai.composition import (
+    ConfiguredAIProviderBinding,
+    compose_configured_ai_provider,
+)
+from trade_plan_monitor.ai.extraction import extract_plan
+from trade_plan_monitor.ai.file_secrets import create_project_secret_store
+from trade_plan_monitor.ai.models import PlanExtractionResult, PlanExtractionStatus
+from trade_plan_monitor.ai.secrets import InMemorySecretStore
+from trade_plan_monitor.config import AIConfiguration, load_application_config
+from trade_plan_monitor.domain.plan_codec import dump_plan_json
+from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+from trade_plan_monitor.web.routers.ai import (
+    AIProviderConfiguration,
+    AIProviderConfigurationCommand,
+    AIProviderPage,
+    AIProviderSecretCommand,
+    AIProviderTestCommand,
+    AIProviderView,
+    ConfiguredAIRuntimeView,
+    SecretReferenceView,
+    SecretStatusView,
+)
+from trade_plan_monitor.web.routers.plans import (
+    AIUsageView,
+    PlanExtractionCommand,
+    PlanExtractionOperationStatus,
+    PlanExtractionView,
+)
+from trade_plan_monitor.web.schemas import (
+    MutationContext,
+    OperationKind,
+    OperationReceipt,
+)
+
+_SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
+_MAX_RETAINED_OPERATIONS: Final = 1_000
+_MAX_CONCURRENT_EXTRACTIONS: Final = 1
+
+AIClientFactory = Callable[[], httpx.AsyncClient]
+
+
+class ConfiguredAIWebLifecycle:
+    """Own one immutable file-configured AI binding for a Web server lifetime."""
+
+    def __init__(
+        self,
+        *,
+        config_path: Path,
+        client_factory: AIClientFactory | None = None,
+    ) -> None:
+        if not isinstance(config_path, Path):
+            raise TypeError("config_path must be a Path")
+        self._config_path = config_path
+        self._client_factory = client_factory or _default_client
+        self._client: httpx.AsyncClient | None = None
+        self._settings: AIConfiguration | None = None
+        self._secret_store: InMemorySecretStore | None = None
+        self._binding: ConfiguredAIProviderBinding | None = None
+        self._configured_at: datetime | None = None
+        self._operations: dict[UUID, PlanExtractionView] = {}
+        self._receipts: dict[str, tuple[str, OperationReceipt]] = {}
+        self._tasks: set[asyncio.Task[None]] = set()
+        self._extraction_slots = asyncio.Semaphore(_MAX_CONCURRENT_EXTRACTIONS)
+
+    @property
+    def ai_operation_service(self) -> ConfiguredAIWebLifecycle:
+        return self
+
+    @property
+    def plan_extraction_service(self) -> ConfiguredAIWebLifecycle:
+        return self
+
+    async def start(self) -> dict[str, object]:
+        """Read configuration once and create the provider client before serving requests."""
+
+        if self._client is not None:
+            raise RuntimeError("configured AI Web lifecycle is already started")
+        settings = load_application_config(self._config_path).ai
+        client = self._client_factory()
+        if not isinstance(client, httpx.AsyncClient):
+            raise TypeError("client_factory must return an httpx.AsyncClient")
+        secret_store = create_project_secret_store(
+            config_path=self._config_path,
+            settings=settings,
+        )
+        self._settings = settings
+        self._client = client
+        self._secret_store = secret_store
+        self._binding = compose_configured_ai_provider(
+            settings=settings,
+            client=client,
+            secret_store=secret_store,
+        )
+        self._configured_at = _now()
+        return {
+            "configured": self._binding is not None,
+            "providerCount": int(self._binding is not None),
+        }
+
+    async def stop(self) -> None:
+        """Cancel unfinished extraction work and release the provider HTTP client."""
+
+        tasks = tuple(self._tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._tasks.clear()
+        client = self._client
+        self._client = None
+        self._settings = None
+        self._secret_store = None
+        self._binding = None
+        self._configured_at = None
+        if client is not None:
+            await client.aclose()
+
+    async def list_ai_providers(self, *, offset: int, limit: int) -> AIProviderPage:
+        provider = self._provider_view()
+        items = () if provider is None else (provider,)
+        return AIProviderPage(
+            items=items[offset : offset + limit],
+            offset=offset,
+            limit=limit,
+            total=len(items),
+        )
+
+    async def get_configured_ai(self) -> ConfiguredAIRuntimeView:
+        binding = self._require_binding()
+        secret_store = self._secret_store
+        if secret_store is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        config = binding.config
+        return ConfiguredAIRuntimeView(
+            provider_id=config.provider_id,
+            display_name=config.display_name,
+            base_url=config.base_url,
+            model=config.model,
+            configured=secret_store.status(config.secret_ref).configured,
+            enabled=config.enabled,
+            max_input_chars=config.max_input_chars,
+            max_output_tokens=config.max_output_tokens,
+            revision=0,
+        )
+
+    async def create_ai_provider(
+        self,
+        *,
+        command: AIProviderConfigurationCommand,
+        context: MutationContext,
+    ) -> AIProviderView:
+        del command, context
+        raise ApiError(ApiErrorCode.METHOD_NOT_ALLOWED)
+
+    async def update_ai_provider(
+        self,
+        *,
+        provider_id: str,
+        command: AIProviderConfigurationCommand,
+        context: MutationContext,
+    ) -> AIProviderView | None:
+        del provider_id, command, context
+        raise ApiError(ApiErrorCode.METHOD_NOT_ALLOWED)
+
+    async def replace_ai_provider_secret(
+        self,
+        *,
+        command: AIProviderSecretCommand,
+        context: MutationContext,
+    ) -> AIProviderView:
+        del command, context
+        raise ApiError(ApiErrorCode.METHOD_NOT_ALLOWED)
+
+    async def submit_ai_provider_test(
+        self,
+        *,
+        command: AIProviderTestCommand,
+        context: MutationContext,
+    ) -> OperationReceipt:
+        del command, context
+        raise ApiError(ApiErrorCode.METHOD_NOT_ALLOWED)
+
+    async def submit_plan_extraction(
+        self,
+        *,
+        command: PlanExtractionCommand,
+        context: MutationContext,
+    ) -> OperationReceipt:
+        binding = self._require_binding()
+        if command.provider_id != binding.config.provider_id:
+            raise ApiError(ApiErrorCode.NOT_FOUND)
+        if command.expected_revision != 0:
+            raise ApiError(ApiErrorCode.CONFLICT)
+        request_hash = _extraction_request_hash(command)
+        replay = self._receipts.get(context.idempotency_key)
+        if replay is not None:
+            previous_hash, previous_receipt = replay
+            if previous_hash != request_hash:
+                raise ApiError(ApiErrorCode.CONFLICT)
+            return previous_receipt
+        if len(self._operations) >= _MAX_RETAINED_OPERATIONS:
+            raise ApiError(ApiErrorCode.RATE_LIMITED, retry_after_seconds=60)
+
+        operation_id = uuid4()
+        submitted_at = _now()
+        receipt = OperationReceipt(
+            operation_id=operation_id,
+            kind=OperationKind.PLAN_EXTRACTION,
+            status="QUEUED",
+            submitted_at=submitted_at,
+        )
+        self._operations[operation_id] = PlanExtractionView(
+            id=operation_id,
+            provider_id=binding.config.provider_id,
+            status=PlanExtractionOperationStatus.QUEUED,
+            submitted_at=submitted_at,
+        )
+        self._receipts[context.idempotency_key] = (request_hash, receipt)
+        task = asyncio.create_task(
+            self._run_extraction(
+                operation_id=operation_id,
+                source_text=command.source_text,
+            )
+        )
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return receipt
+
+    async def get_plan_extraction(self, *, operation_id: str) -> PlanExtractionView | None:
+        try:
+            identity = UUID(operation_id)
+        except ValueError:
+            return None
+        return self._operations.get(identity)
+
+    async def _run_extraction(self, *, operation_id: UUID, source_text: str) -> None:
+        queued = self._operations[operation_id]
+        try:
+            async with self._extraction_slots:
+                started_at = _now()
+                self._operations[operation_id] = PlanExtractionView(
+                    id=operation_id,
+                    provider_id=queued.provider_id,
+                    status=PlanExtractionOperationStatus.RUNNING,
+                    submitted_at=queued.submitted_at,
+                    started_at=started_at,
+                )
+                binding = self._require_binding()
+                result = await extract_plan(
+                    request_id=operation_id,
+                    source_text=source_text,
+                    config=binding.config,
+                    provider=binding.provider,
+                )
+                self._operations[operation_id] = _completed_extraction_view(
+                    result=result,
+                    submitted_at=queued.submitted_at,
+                    started_at=started_at,
+                    completed_at=_now(),
+                )
+        except asyncio.CancelledError:
+            current = self._operations[operation_id]
+            self._operations[operation_id] = PlanExtractionView(
+                id=operation_id,
+                provider_id=queued.provider_id,
+                status=PlanExtractionOperationStatus.CANCELLED,
+                submitted_at=queued.submitted_at,
+                started_at=current.started_at,
+                completed_at=_now(),
+            )
+            raise
+        except Exception:
+            current = self._operations[operation_id]
+            self._operations[operation_id] = PlanExtractionView(
+                id=operation_id,
+                provider_id=queued.provider_id,
+                status=PlanExtractionOperationStatus.PROVIDER_ERROR,
+                submitted_at=queued.submitted_at,
+                started_at=current.started_at or _now(),
+                completed_at=_now(),
+            )
+
+    def _provider_view(self) -> AIProviderView | None:
+        binding = self._binding
+        configured_at = self._configured_at
+        secret_store = self._secret_store
+        if binding is None:
+            return None
+        if configured_at is None or secret_store is None:
+            raise RuntimeError("configured AI Web lifecycle is not started")
+        config = binding.config
+        status = secret_store.status(config.secret_ref)
+        return AIProviderView(
+            config=AIProviderConfiguration(
+                provider_id=config.provider_id,
+                display_name=config.display_name,
+                provider_type=config.provider_type,
+                base_url=config.base_url,
+                model=config.model,
+                secret_reference=SecretReferenceView(
+                    key=config.secret_ref.key,
+                    environment_variable=None,
+                ),
+                timeout_seconds=config.timeout_seconds,
+                max_retries=config.max_retries,
+                max_input_chars=config.max_input_chars,
+                max_output_tokens=config.max_output_tokens,
+                temperature=config.temperature,
+                prompt_version=config.prompt_version,
+                allow_redirects=False,
+                enabled=config.enabled,
+            ),
+            secret_status=SecretStatusView(
+                configured=status.configured,
+                source=status.source,
+                masked_value=status.masked_value,
+                generation=status.generation,
+            ),
+            revision=0,
+            created_at=configured_at,
+            updated_at=configured_at,
+        )
+
+    def _require_binding(self) -> ConfiguredAIProviderBinding:
+        if self._client is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        binding = self._binding
+        if binding is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        return binding
+
+
+def _default_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        follow_redirects=False,
+        timeout=httpx.Timeout(30),
+        trust_env=False,
+    )
+
+
+def _completed_extraction_view(
+    *,
+    result: PlanExtractionResult,
+    submitted_at: datetime,
+    started_at: datetime,
+    completed_at: datetime,
+) -> PlanExtractionView:
+    status = PlanExtractionOperationStatus(result.status.value)
+    if result.status is not PlanExtractionStatus.SUCCEEDED:
+        return PlanExtractionView(
+            id=result.request_id,
+            provider_id=result.provider_id,
+            status=status,
+            submitted_at=submitted_at,
+            started_at=started_at,
+            completed_at=completed_at,
+            validation_issues=result.validation_issues,
+        )
+    usage = None
+    if result.usage is not None:
+        usage = AIUsageView(
+            prompt_tokens=result.usage.prompt_tokens,
+            completion_tokens=result.usage.completion_tokens,
+            total_tokens=result.usage.total_tokens,
+        )
+    return PlanExtractionView(
+        id=result.request_id,
+        provider_id=result.provider_id,
+        status=status,
+        submitted_at=submitted_at,
+        started_at=started_at,
+        completed_at=completed_at,
+        source_text_sha256=result.source_text_sha256,
+        model=result.model,
+        prompt_version=result.prompt_version,
+        draft_plan_json=dump_plan_json(result.draft),
+        evidence=result.evidence,
+        assumptions=result.assumptions,
+        warnings=result.warnings,
+        unmapped_text=result.unmapped_text,
+        validation_issues=result.validation_issues,
+        usage=usage,
+    )
+
+
+def _extraction_request_hash(command: PlanExtractionCommand) -> str:
+    payload = json.dumps(
+        {
+            "expectedRevision": command.expected_revision,
+            "kind": OperationKind.PLAN_EXTRACTION.value,
+            "providerId": str(command.provider_id),
+            "sourceText": command.source_text,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _now() -> datetime:
+    return datetime.now(_SHANGHAI)
+
+
+__all__ = ["ConfiguredAIWebLifecycle"]

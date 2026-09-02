@@ -47,6 +47,12 @@ class _BacktestLifecycle:
         pass
 
 
+class _AIService:
+    """Explicit inert service keeps this packaging-only test free of project config I/O."""
+
+    pass
+
+
 def _write_distribution(directory: Path) -> None:
     assets = directory / "assets"
     assets.mkdir(parents=True)
@@ -134,6 +140,7 @@ def test_production_app_keeps_api_websocket_and_spa_routes_separate(
     events: list[str] = []
 
     with create_production_app(
+        ai_service=_AIService(),
         runtime_factory=lambda: _Lifecycle(events),
         websocket_service=_WebSocketService(),
         backtest_lifecycle_factory=_BacktestLifecycle,

@@ -92,8 +92,8 @@ The Chinese renderer uses the equivalent disclaimer `仅提醒，不会自动下
 ## Confirmed Assumptions
 
 1. “Text required” means both natural-language plan input and complete readable textual alerts.
-2. The first AI integration uses an OpenAI-compatible HTTP contract. The user can configure service name, base URL, model, timeout, retries, token limit, and secret reference.
-3. AI secrets are never written into plans, logs, or ordinary API responses; the UI displays masked status only.
+2. The first AI integration defaults to DeepSeek through its OpenAI-format HTTP contract. The user configures the request profile, service name, base URL, model, timeout, retries, token limit, and project-secret file/key reference in project files, including switching to another reviewed OpenAI-compatible service. Web loads that configuration once at startup; Web and maintenance CLI read the configured secret file directly and never require an AI Token in the process environment.
+3. AI secrets are never written into plans, logs, or ordinary API responses. The Web UI is read-only for AI configuration and displays only whether the selected project key was loaded, never its value, file path, or key name.
 4. Tushare is the only first-release market-data source. Token reference, symbol batching, pacing, capability probes, and limits for 1–10 symbols are configurable.
 5. The service listens only on the local loopback interface, so the first release has no login system. Origin/CORS restrictions, CSP, input validation, and secret protection still apply.
 6. The user records actual fills manually. Neither an alert nor its acknowledgement represents a fill.

@@ -666,6 +666,18 @@ export type BarView = {
 
 export type ConditionOutcome = "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
 
+export type ConfiguredAIRuntimeView = {
+  baseUrl: string;
+  configured: boolean;
+  displayName: string;
+  enabled: boolean;
+  maxInputChars: number;
+  maxOutputTokens: number;
+  model: string;
+  providerId: string;
+  revision?: 0;
+};
+
 export type ConnectionStatus = "CONNECTED" | "DISCONNECTED" | "UNKNOWN";
 
 export type DashboardCounts = {
@@ -1211,6 +1223,7 @@ export interface components {
     BarPage: BarPage;
     BarView: BarView;
     ConditionOutcome: ConditionOutcome;
+    ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
     ConnectionStatus: ConnectionStatus;
     DashboardCounts: DashboardCounts;
     DashboardResponse: DashboardResponse;
@@ -1623,6 +1636,79 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["AIProviderView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/ai-runtime": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ConfiguredAIRuntimeView"];
           };
         };
         "400": {

@@ -45,9 +45,27 @@ class BacktestLifecycle(Protocol):
 BacktestLifecycleFactory = Callable[[], BacktestLifecycle]
 
 
+class AIWebLifecycle(Protocol):
+    """One file-configured AI composition owned by the Web lifespan."""
+
+    @property
+    def ai_operation_service(self) -> object: ...
+
+    @property
+    def plan_extraction_service(self) -> object: ...
+
+    async def start(self) -> object: ...
+
+    async def stop(self) -> None: ...
+
+
+AIWebLifecycleFactory = Callable[[], AIWebLifecycle]
+
+
 def create_runtime_lifespan(
     runtime_factory: RuntimeLifecycleFactory | None,
     *,
+    ai_lifecycle_factory: AIWebLifecycleFactory | None = None,
     backtest_lifecycle_factory: BacktestLifecycleFactory | None = None,
     bind_host: str = LOOPBACK_HOST,
     bind_port: int = DEFAULT_WEB_PORT,
@@ -67,9 +85,26 @@ def create_runtime_lifespan(
             raise TypeError("runtime lifecycle must expose start and stop")
         backtest: BacktestLifecycle | None = None
         backtest_stop: Callable[[], object] | None = None
+        ai_lifecycle: AIWebLifecycle | None = None
+        ai_stop: Callable[[], object] | None = None
         app.state.runtime_lifecycle = runtime
         try:
             app.state.runtime_startup = await start()
+            if ai_lifecycle_factory is not None:
+                ai_lifecycle = await to_thread.run_sync(ai_lifecycle_factory)
+                ai_start = getattr(ai_lifecycle, "start", None)
+                ai_stop = getattr(ai_lifecycle, "stop", None)
+                if not callable(ai_start) or not callable(ai_stop):
+                    raise TypeError("AI Web lifecycle must expose start and stop")
+                if not hasattr(ai_lifecycle, "ai_operation_service") or not hasattr(
+                    ai_lifecycle,
+                    "plan_extraction_service",
+                ):
+                    raise TypeError("AI Web lifecycle must expose both services")
+                app.state.ai_web_lifecycle = ai_lifecycle
+                app.state.ai_startup = await ai_start()
+                app.state.ai_operation_service = ai_lifecycle.ai_operation_service
+                app.state.plan_extraction_service = ai_lifecycle.plan_extraction_service
             if backtest_lifecycle_factory is not None:
                 backtest = await to_thread.run_sync(backtest_lifecycle_factory)
                 backtest_start = getattr(backtest, "start", None)
@@ -93,10 +128,16 @@ def create_runtime_lifespan(
                     await backtest_stop()
             finally:
                 try:
-                    await stop()
+                    if ai_stop is not None:
+                        _clear_ai_service_state(app)
+                        await ai_stop()
                 finally:
-                    _clear_backtest_state(app)
-                    _clear_runtime_state(app)
+                    try:
+                        await stop()
+                    finally:
+                        _clear_backtest_state(app)
+                        _clear_ai_state(app)
+                        _clear_runtime_state(app)
 
     return runtime_lifespan
 
@@ -127,7 +168,21 @@ def _clear_backtest_state(app: FastAPI) -> None:
         delattr(app.state, "backtest_lifecycle")
 
 
+def _clear_ai_service_state(app: FastAPI) -> None:
+    for name in ("ai_operation_service", "plan_extraction_service"):
+        if hasattr(app.state, name):
+            delattr(app.state, name)
+
+
+def _clear_ai_state(app: FastAPI) -> None:
+    for name in ("ai_startup", "ai_web_lifecycle"):
+        if hasattr(app.state, name):
+            delattr(app.state, name)
+
+
 __all__ = [
+    "AIWebLifecycle",
+    "AIWebLifecycleFactory",
     "BacktestLifecycle",
     "BacktestLifecycleFactory",
     "RuntimeLifecycle",

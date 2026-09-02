@@ -6,7 +6,7 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 ## 产品状态
 
-`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。在应用服务组合接通之前，该安装入口会有意以只读 `DEGRADED` 模式启动：界面可以访问，但业务 API 依赖会返回 `SERVICE_UNAVAILABLE`，不会虚构实时状态。
+`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。尚未组合的通用监控服务仍使用只读 `DEGRADED` fallback，但 AI 草稿流程已经可以从 `/plans` 使用：启动时只加载一次项目 AI 配置，只有用户提交计划原文后才执行提取。
 
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 
@@ -18,7 +18,7 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 - 计划必须类型化、经审核、版本化，并在激活后保持不可变。AI 输出在确定性校验和用户审核通过前始终是不可信草稿。
 - 价格按整数“分”保存，数量按整数“股”保存，A 股时间戳必须是带 `Asia/Shanghai` 时区的值。
 - 行情缺失、过期、无权限或来源语义未验证时安全阻断。
-- 密钥只能是环境变量引用或只写密钥存储材料，不能成为 YAML 值、数据库列、API 响应、日志或导出内容。
+- AI 密钥保留在被 Git 忽略的项目密钥文件中，YAML 只选择文件和键名；密钥不能进入受版本控制的 YAML、数据库列、API 响应、日志或导出内容。
 - Web 监听只接受字面量 `127.0.0.1`；系统未实现登录鉴权。
 
 ## 快速开始
@@ -51,16 +51,15 @@ Pop-Location
 Copy-Item config\app.example.yaml config\app.yaml
 ```
 
-YAML 只保存非密钥供应商设置和环境变量名称。纳入版本控制的示例选择已验证的 Tushare 兼容端点 `https://api.quicksync.cn`；本地副本 `config/app.yaml` 会被 Git 忽略。仅离线启动界面时，可以不设置这两个变量。在另行授权的真实供应商运行之前，在当前进程或操作系统密钥管理器中设置占位值：
+YAML 保存非密钥供应商设置、Tushare 环境变量名称，以及 AI 项目密钥文件和键名。纳入版本控制的示例选择已验证的 Tushare 兼容端点 `https://api.quicksync.cn`，并选择 DeepSeek 的 OpenAI 格式端点 `https://api.deepseek.com` 和模型 `deepseek-v4-flash`。AI profile、显示名称、Base URL、模型、超时、重试次数、输入上限、输出上限、温度、密钥文件路径和键名都可以修改。本地副本 `config/app.yaml` 会被 Git 忽略。Tushare 仍只在使用时设置进程变量：
 
 ```powershell
 $env:TUSHARE_TOKEN = "replace-with-your-tushare-token"
-$env:AI_API_KEY = "replace-with-your-openai-compatible-api-key"
 ```
 
-[.env.example](.env.example) 是纳入版本控制的名称/模板参考；应用**不会**自动加载 `.env` 文件。绝不能把 Token 或 API Key 写入 `config/app.yaml`，也不要提交 `config/app.yaml`、`.env`、数据库、备份、密钥或构建输出。
+[.env.example](.env.example) 是纳入版本控制的项目密钥模板。使用示例 `api_key_ref` 时，把它复制为项目根目录中被忽略的 `.env`，再只替换所选键的占位值。当前工作区的本地配置使用本项目根目录中被忽略的 `.env`；其中的 `DEEPSEEK_API_KEY` 已从 `TradingAgents/.env` 复制，过程中不会打印密钥值。绝不能把 Token 或 API Key 直接写进 `config/app.yaml`，也不要提交 `config/app.yaml`、`.env`、数据库、备份、密钥或构建输出。
 
-当前只读打包 fallback 会接受配置路径，但不会解析这些供应商引用。未来注入的应用组合必须加载严格 YAML 后才能使用它们；`DEGRADED` 启动绝不证明供应商配置有效或已启用。
+Web 启动时会校验严格 YAML，相对于该 YAML 解析 AI 项目密钥文件，并为本次服务生命周期创建一份不可变 AI 客户端绑定。AI 密钥绝不从进程环境读取。通用监控的 `DEGRADED` 状态与此独立，也不能证明 Tushare 已就绪。
 
 ### 4. 启动已打包本地 Web 界面
 
@@ -68,7 +67,7 @@ $env:AI_API_KEY = "replace-with-your-openai-compatible-api-key"
 trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765
 ```
 
-在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。在当前组合检查点，应看到上文说明的只读 `DEGRADED` 状态。
+在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。监控标题仍可能显示 `DEGRADED`；打开 `/plans` 可使用独立组合的 AI 草稿流程。修改 `config/app.yaml` 或选中的项目 `.env` 后必须重启 Web。
 
 ### 5. 离线验证
 
@@ -127,7 +126,7 @@ p95 ≤ 200 毫秒。排除 ECharts 的入口/共享包必须 ≤ 150 KiB gzip�
 
 | 命令 | 用途 | 当前可用性 |
 |---|---|---|
-| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | 提供已打包 SPA、API 和 WebSocket 路由 | 可用；完成组合前业务服务保持只读/不可用 |
+| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | 提供已打包 SPA、API、WebSocket 和配置文件驱动的 AI 草稿 | 可用；未组合的通用监控服务仍保持只读/不可用 |
 | `python -m trade_plan_monitor --help` | 显示稳定的安装式命令面 | 可用 |
 | `python -m pytest -q` | 运行完整后端测试 | 可用；离线 |
 | `python -m ruff check --no-cache src tests` | 运行后端代码检查 | 可用；离线 |
@@ -245,23 +244,34 @@ python -m trade_plan_monitor backtest prune --batch-size 1000
 
 运行摘要、假设、最终指标和成交账本长期保留。成功运行的判断/信号/每日权益详情只保留最新 100 次且最多 90 天；失败、取消及按需调试详情保留 14 天；置顶运行豁免。结果发布先把规范行 staged 到 `backtest-results.sqlite3`；普通读取和统计看不到任何 staged 行。只有完整 `reportHash`、预期成交/详情数量和规范 identity/内容集合哈希都匹配时，一个事务才会设置内部 `materialized` 可见性标记。首次发布会持久化这些数量和集合哈希，已发布运行的每次重试都必须精确匹配；普通摘要/成交/详情读取还会在应用任何 detail-kind 过滤前，根据已哈希 payload 校验每个 SQL identity。随后 CLI 原子写入 `backtest-report-summary-v1` JSON 和成交 CSV。`materialized` 是唯一发布闸门，但不是公开运行状态；公开状态仍为 `COMPLETED`、`FAILED` 或 `CANCELLED`。有界 `prune` 维护会在 14 天后移除未置顶的废弃 staged 摘要/成交/详情，近期 stage 仍可恢复。文件缺失或损坏时，可以根据长期摘要/成交行重建，不联网、不重放、也不重复成交；已清理的判断/信号/结果/权益详情按设计不可重建。`reportHash` 继续作为原始完整运行的审计 identity，并不是文件字节哈希。底层回测契约支持置顶元数据和初始持仓批次，但当前 CLI 尚未暴露置顶/取消置顶或初始持仓输入，因此每次 CLI 运行都只从现金开始。不保存完整逐分钟账户快照，也不重复保存行情行。隔离、禁止未来数据、报告及保留契约详见 [SPEC-backtest.zh-CN.md](docs/specifications/backtesting/SPEC-backtest.zh-CN.md)。
 
-## AI 密钥
+## AI 配置与密钥
 
-仅在启用 AI 辅助草稿时才需要 `AI_API_KEY`。提交的 YAML 只保存环境变量名称。运行时供应商配置保存非密钥引用、模型、有界超时/重试/Token 限制和 HTTPS 基础 URL（仅显式回环主机允许明文 HTTP）。
+仅在启用 AI 辅助草稿时才需要 `DEEPSEEK_API_KEY`。YAML 只保存 `api_key_ref.file` 和 `api_key_ref.key`，真实值保留在被 Git 忽略的项目密钥文件中；相对路径以 `app.yaml` 所在目录为基准。默认 `DEEPSEEK` profile 按 DeepSeek 当前接口发送 `max_tokens`、`thinking={"type":"disabled"}` 和 JSON 输出字段。若要使用其他兼容服务，可把 `profile` 改为 `OPENAI_COMPATIBLE`，并配置经过审核的 Base URL、模型、文件和键名。运行时供应商配置保存非密钥引用、模型、有界超时/重试/Token 限制和 HTTPS 基础 URL（仅显式回环主机允许明文 HTTP）。
 
-API Key 材料通过密钥边界只写，公共契约无法返回。系统拒绝重定向、URL 内嵌账号密码、带查询参数的基础 URL、执行原始模型内容以及包含密钥的校验错误。AI 输出绝不会直接激活。
+API Key 只由后端加载，公共契约无法返回。Web 页面只显示供应商名称、模型、安全 Base URL、限制、启用状态和密钥是否已加载；没有供应商修改、Token 输入、密钥替换或连接测试控件。系统拒绝重定向、URL 内嵌账号密码、带查询参数的基础 URL、执行原始模型内容以及包含密钥的校验错误。AI 输出绝不会直接激活。
+
+Web 是主要 AI 使用方式：打开 `/plans`，粘贴原文，提交后审核经过校验的结果。后端最多同时执行一个提取，页面只轮询精确任务 ID。修改 `config/app.yaml` 或 `.env` 后必须重启 Web。CLI 保留为维护工具；下面两个命令都会向真实服务发送请求，并可能产生 Token 费用：
+
+```powershell
+# 使用 config/app.yaml 发送一次最小连通性请求。
+python -m trade_plan_monitor ai test
+
+# 读取一个 UTF-8 文本文件，返回仅供审核的结构化草稿。
+python -m trade_plan_monitor ai extract --source .\plan-source.txt
+```
+
+如需选择其他配置文件，在 `test` 或 `extract` 后增加 `--config <路径>`。命令会拒绝不存在的来源文件、目录、非法 UTF-8、超过配置字符上限的文本，以及缺失、超大、格式非法、键重复或值为空的项目密钥文件，不会把不合格结果当成有效草稿。密钥文件最大 65,536 字节，必须是严格 UTF-8，并且不会通过进程环境读取。Web 与 CLI 使用同一套文件配置和密钥读取器；两者都不提供 Web 设置编辑器，也都不使用 AI 环境变量后备。
 
 T059 增加了可选、fail-closed 的连通性探测。它不属于普通测试，未单独批准真实供应商联网操作时不得运行。先审核一个规范 lowercase HTTPS base URL 和精确 model，再把授权绑定到操作、规范化目标和 model。digest context 是 `trade-plan-monitor:t059:ai-live:test-connection:v1`，并包含下方所示的 3 个换行分隔符，包括最后一个换行：
 
 ```powershell
-$env:TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL = "https://reviewed-provider.example/v1"
-$env:TRADE_PLAN_MONITOR_AI_LIVE_MODEL = "reviewed-model"
+$env:TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL = "https://api.deepseek.com"
+$env:TRADE_PLAN_MONITOR_AI_LIVE_MODEL = "deepseek-v4-flash"
 $target = "trade-plan-monitor:t059:ai-live:test-connection:v1`n$($env:TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL.TrimEnd('/'))`n$($env:TRADE_PLAN_MONITOR_AI_LIVE_MODEL)`n"
 $targetBytes = [Text.Encoding]::UTF8.GetBytes($target)
 $env:TRADE_PLAN_MONITOR_AI_LIVE_AUTHORIZATION_SHA256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($targetBytes)).ToLowerInvariant()
-$env:AI_API_KEY = "<set-in-this-shell-only>"
 python -m pytest tests/contract/test_ai_live.py -q -m live
-Remove-Item Env:AI_API_KEY, Env:TRADE_PLAN_MONITOR_AI_LIVE_AUTHORIZATION_SHA256, Env:TRADE_PLAN_MONITOR_AI_LIVE_MODEL, Env:TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL
+Remove-Item Env:TRADE_PLAN_MONITOR_AI_LIVE_AUTHORIZATION_SHA256, Env:TRADE_PLAN_MONITOR_AI_LIVE_MODEL, Env:TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL
 ```
 
 精确 selector 是 `python -m pytest tests/contract/test_ai_live.py -q -m live`。它使用默认 TLS 校验、忽略 proxy 环境变量、禁止 redirect 和 retry，并且只输出稳定 error code。通过只能证明有界 Chat Completions envelope 连通性；不能证明 model identity、计划质量、激活安全或交易正确性。
@@ -323,7 +333,7 @@ python -c "import os; from trade_plan_monitor.state.backup import verify_sqlite_
 | 8765 端口占用 | 停止另一个本地进程，或选择 1～65535 中未占用的其他端口，同时保持主机为 `127.0.0.1`。 |
 | YAML 报告未知字段 | 重新从 `config/app.example.yaml` 开始；模式会有意拒绝不支持的节和明文密钥。 |
 | Tushare 能力为 `DENIED`/`UNVERIFIED` | 检查进程环境和账号权限，然后只运行获批的真实探测；绝不能绕过阻断。 |
-| AI 返回配置/鉴权错误 | 将密钥保留在 `AI_API_KEY`，检查非密钥供应商 URL/模型，不要把凭据放进 URL 或 YAML。 |
+| AI 返回配置/鉴权错误 | 检查 `api_key_ref.file`、`api_key_ref.key`、profile、Base URL 和模型；真实密钥只放在被忽略的项目密钥文件中，不要放进 URL 或 YAML。 |
 | 前端生成类型漂移 | 运行 `python scripts/generate_frontend_types.py --check`；只在获批 API 契约变更中重新生成。 |
 
 ## 禁止端口转发

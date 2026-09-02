@@ -4,7 +4,7 @@
 
 ## Objective
 
-Provide the single local interface for monitoring up to 10 stocks, pasting natural-language plans, configuring AI, reviewing extracted rules, activating immutable versions, inspecting live evidence/charts, maintaining manual positions, reading textual reminders, and diagnosing system health.
+Provide the single local interface for monitoring up to 10 stocks, using file-configured AI to extract pasted natural-language plans, reviewing extracted rules, activating immutable versions, inspecting live evidence/charts, maintaining manual positions, reading textual reminders, and diagnosing system health.
 
 FastAPI owns the REST/WebSocket contract and serves a Vue 3 SPA on `127.0.0.1`. The backend is authoritative for all trading conditions; the frontend only manages display state and explicit user commands.
 
@@ -114,6 +114,7 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 - Plan extraction and AI-provider testing accept only a bounded submission command and return `202` with a typed `QUEUED` receipt. The route awaits only the service's durable submission boundary; it neither calls a provider nor creates/runs extraction work and it never activates a plan. Extraction status is closed over `QUEUED`, `RUNNING`, `SUCCEEDED`, `INVALID_OUTPUT`, `PROVIDER_ERROR`, and `CANCELLED`; successful results retain exactly one activation-blocking `AI_EVIDENCE_REVIEW_REQUIRED` and expose only canonical draft JSON, bounded evidence/issues, deterministic validation results, sanitized usage, hashes, and timestamps. Raw model/provider bodies and authorization material have no response field.
 - AI-provider create/update uses the complete non-secret configuration. `PATCH` is a revision-guarded full replacement whose body `providerId` must match the path. The API revalidates it through the concrete `AIProviderConfig` class-local sanitized validator, including HTTPS/loopback URL policy and resource limits. Secret replacement accepts the existing class-local `SecretWrite` value but responses contain only `SecretStatus`-equivalent configured/source/fixed-mask/generation metadata. Service-returned configuration must match the submitted normalized configuration; extra secret or raw-provider fields fail closed.
 - Every T037 state-changing endpoint requires an `Idempotency-Key` of 1–128 allowlisted characters and an `expectedRevision`. Duplicate in-flight intent maps to 409, the same key with a different request hash maps to 422, and completed identical intent replays its canonical response. Application services must perform those checks and their audit write atomically; the routers never reconstruct repository, validation, or decision-engine behavior.
+- The production Web composition loads exactly one AI provider from `config/app.yaml` when the FastAPI lifespan starts. It reads the configured key from the bounded project-secret file with environment fallback disabled, constructs one provider client, and reuses that immutable binding until shutdown. `GET /ai-runtime` returns only provider ID, display name, base URL, model, enabled/configured flags, input/output limits, and fixed revision `0`. It has no secret value, secret path, secret key name, or Authorization field. The generic provider mutation routes remain an injected-adapter contract, but this file-configured production service returns `METHOD_NOT_ALLOWED` for create, update, secret replacement, and provider test. Configuration changes require editing the project files and restarting Web.
 
 ### T038 Position, Alert, and Diagnostic Boundary
 
@@ -135,9 +136,9 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 
 ### T041 Frozen OpenAPI and Frontend-Type Boundary
 
-OpenAPI snapshot SHA-256: `29193bc0bf91027f41ea9b74d648fa10eb3338e86753577f2db2802e92b2f71a`
+OpenAPI snapshot SHA-256: `2f6aae4abfcc574151bcd5ac4dd9c3b566df4fb071656c55f95547ae4bd77774`
 
-- The side-effect-free `create_app()` is the sole OpenAPI source. Its document contains exactly 37 approved REST paths: the unchanged 24 live paths plus exactly 13 backtest paths. It documents every stable public error status with `ErrorResponse`; FastAPI's default `HTTPValidationError`/`ValidationError` schemas are excluded because runtime validation already uses the bounded secret-free envelope.
+- The side-effect-free `create_app()` is the sole OpenAPI source. Its document contains exactly 38 approved REST paths: 25 live paths, including the read-only `GET /ai-runtime`, plus exactly 13 backtest paths. It documents every stable public error status with `ErrorResponse`; FastAPI's default `HTTPValidationError`/`ValidationError` schemas are excluded because runtime validation already uses the bounded secret-free envelope.
 - `scripts/generate_frontend_types.py` serializes `openapi.json` as sorted, indented UTF-8 with LF line endings and one final newline. It derives TypeScript component schemas, path methods, grouped parameters, request bodies, response statuses, media types, references, unions, intersections, arrays, objects, enums, and literals from that same document; API fields are never copied by hand.
 - `python scripts/generate_frontend_types.py --check` is read-only and fails when either committed generated file differs byte-for-byte. Generation fails closed on unsupported or dangling schema references, parameter locations, schema types, or invalid TypeScript identifiers rather than silently weakening a contract.
 - `web/index.html` is the stable Vite application document with one `#app` root and one external module entry. It contains no inline script or style that would violate the T040 CSP. Vite now performs a document-based application build that emits `dist/index.html`; T042 still owns the first application shell, router, and component mount, while T052 still owns installed asset discovery and production composition.
@@ -145,7 +146,7 @@ OpenAPI snapshot SHA-256: `29193bc0bf91027f41ea9b74d648fa10eb3338e86753577f2db28
 ### T042 Accessible Vue Application Shell Boundary
 
 - `main.ts` mounts the root `App.vue` only when `#app` exists, installs the one application router for that production root, and preserves the typed unmounted-component factory used by tooling tests. Importing the module creates no API client, store, socket, timer, or domain state.
-- The router declares exactly `/`, `/stocks/:symbol`, `/plans`, `/plans/:id`, `/alerts`, and `/system`. Until their approved later tasks create real views, small local placeholder components expose only labelled route headings; they contain no domain rules, API calls, or mutable shared quote state.
+- The production router declares exactly ten paths. `/plans` is a lazy-loaded real drafting view, four `/backtests...` paths are lazy-loaded real research views, and the remaining five historical routes are labelled placeholders until their approved views are connected. The route layer contains no domain rules or mutable shared quote state.
 - `AppShell` owns only landmarks, desktop and mobile navigation, the route outlet, a typed optional `connectionBanner` slot, and one local mobile-menu boolean. The banner wrapper is rendered only when supplied and uses polite status semantics; connection/health ownership remains outside the shell.
 - The skip link moves focus to the persistent `#main-content` landmark. Navigation uses native links and a native menu button with visible focus, `aria-controls`, and `aria-expanded`; Escape restores focus to the menu button, while mobile-link navigation closes the hidden menu and moves focus to main content.
 - The desktop navigation replaces the mobile disclosure at `48rem`. Shell motion is bounded to presentation-only CSS and the `prefers-reduced-motion: reduce` branch reduces animation/transition duration to `0.01ms`. T043 design tokens, API client, Pinia/store and recovery behavior, T044 stream lifecycle, later business views, T052 installed composition, T041 generated contracts, and T024 decision semantics remain unchanged.
@@ -169,6 +170,7 @@ GET /symbols/{symbol}/events
 GET /plan-versions
 GET /plan-versions/{id}
 GET /plan-extractions/{id}
+GET /ai-runtime
 GET /ai-providers
 GET /alerts
 GET /position-lots
@@ -248,11 +250,11 @@ Reconnect uses an exponential base of 1, 2, 4, 8, 16, then at most 30 seconds, c
 
 ### T045 AI Plan Workbench Boundary
 
-The T045 `PlanWorkbench` composes four setup-style Vue components through typed props and emits only. `AIProviderSelector` presents non-secret provider configuration and masked secret status, associates asynchronous test receipts with an explicit provider identity, rejects disabled-provider work, and keeps provider-test and secret-replacement pending state local and bounded. Transient secret input is cleared on provider change and before emission; it is never persisted, logged, placed in a URL, or rendered after submission.
+The T045 `PlanWorkbench` composes setup-style Vue components through typed props and emits only. `AIProviderSelector` presents the read-only `ConfiguredAIRuntimeView`: display name, model, safe base URL, input limit, enabled state, and whether a key was loaded. It has no secret input, provider create/update control, connection-test control, or browser persistence. It tells the user to edit `config/app.yaml` or the project `.env` and restart Web.
 
-`SourceTextEditor` owns one local plain-text model and emits submission or cancellation intent only. Secret and source limits follow Python Unicode code-point semantics, stop scanning at the first rejected code point, and atomically reject an over-limit edit with an accessible error instead of silently truncating it. Submission locks immediately before a `202` identity arrives, releases on an explicit failed submission transition, and exposes cancellation only for a real `QUEUED` or `RUNNING` operation.
+`PlanDraftingView` and `usePlanDrafting` own the same-origin API flow. Mounting loads `GET /api/v1/ai-runtime`; submission creates one idempotency key, sends `POST /api/v1/plan-extractions`, materializes its `QUEUED` receipt, then polls `GET /api/v1/plan-extractions/{operationId}` until a closed terminal status. Only one local submission/poll is active. Unmount aborts requests and timers. “Stop waiting” stops browser polling and explicitly says that an already accepted server task may continue; it does not claim server cancellation. Errors are fixed Chinese text and never include raw provider, key, or transport details.
 
-`ExtractionEvidence` renders decoded evidence, assumptions, warnings, unmapped text, validation issues, usage, and bounded errors only through escaped Vue text interpolation. Evidence is tied to the submitted source snapshot and hidden when stale. Material items remain unresolved until an explicit local review action; duplicate backend review identities fail closed, deterministic `AI_EVIDENCE_REVIEW_REQUIRED` is represented as a material missing-evidence item, and long unbroken copy wraps on narrow screens. T046 retains structured editing, diff, validation orchestration, and activation; T047+ business views, T052 installed composition, the T041 generated contract, and T024 decision semantics remain unchanged.
+`SourceTextEditor` owns one local plain-text model. Its limit comes from the selected runtime configuration, uses Python-compatible Unicode code-point counting, stops at the first rejected code point, and atomically rejects an over-limit edit instead of truncating it. `ExtractionEvidence` renders only validated evidence, assumptions, warnings, omissions, validation issues, usage, and bounded status through escaped Vue text interpolation. A successful canonical draft is rendered as escaped text and remains review-only; no extraction response can activate a plan. T046 retains structured editing, diff, validation orchestration, and activation.
 
 ### T046 Structured Plan Editing and Activation Boundary
 
@@ -293,16 +295,16 @@ The slice performs no API call, Pinia write, router composition, provider/rule e
 - The installed `trade-plan-monitor` console entry resolves to `trade_plan_monitor.cli:console_main`. CLI import and parser construction remain side-effect-free; the `web` branch lazily creates one production application context and imports/runs Uvicorn only after exact loopback host and bounded port parsing succeeds.
 - Vite keeps `web/index.html` as its document input and continues to emit `web/dist/index.html`. A build-only plugin replaces the ignored `src/trade_plan_monitor/web/dist` staging directory with that same completed distribution; setuptools packages only its `index.html` and local `assets/*`. Neither generated directory is tracked.
 - Production discovery uses `importlib.resources` against `trade_plan_monitor.web/dist` for the whole server lifetime. It never searches the current working directory, a repository root, `web/dist`, or another source-tree fallback. A missing directory, `index.html`, `assets/`, or concrete asset fails before Uvicorn with only `WEB_ASSETS_UNAVAILABLE` and the fixed text `Installed Web assets are unavailable.`; paths, resource exceptions, context, and causes are not exposed.
-- `create_production_app(...)` composes the discovered distribution through the existing `create_app(...)`, so the frozen 37 REST paths (the unchanged live 24 plus 13 backtest paths), `/ws/v1/monitor`, Origin/body/security-header policy, and SPA exclusion/fallback semantics do not change. The asset context remains open until the server runner exits, then FastAPI lifespan performs its owned shutdown and extracted resources are released.
-- T052 does not invent database, provider, read-model, or mutation services. An explicitly injected lifecycle and application services remain authoritative; without them the packaged command uses an I/O-free `DEGRADED` read-only lifecycle and existing endpoints fail closed with `SERVICE_UNAVAILABLE`. It adds no CDN, remote runtime asset, alternate listener, development-directory fallback, T053 operations rewrite, T054 replay fixture, T055 browser journey, T056 security matrix, generated-contract change, or T024 behavior.
+- `create_production_app(...)` composes the discovered distribution through the existing `create_app(...)`, so the frozen 38 REST paths (25 live plus 13 backtest paths), `/ws/v1/monitor`, Origin/body/security-header policy, and SPA exclusion/fallback semantics do not change. The asset context remains open until the server runner exits, then FastAPI lifespan performs its owned shutdown and extracted resources are released.
+- T052 keeps the general monitoring lifecycle in its explicit `DEGRADED` read-only fallback, but now owns the file-configured AI lifecycle. Startup order is monitoring runtime, AI, then backtest; shutdown is the exact reverse. AI startup loads `config/app.yaml` and attempts the selected ignored project-secret file once. Invalid YAML fails startup; a missing, malformed, duplicate, empty, oversized, or unreadable selected secret starts with `configured=false`, so the page cannot submit extraction. Explicitly injected test/application services remain authoritative. No environment-variable fallback, CDN, remote runtime asset, alternate listener, or development-directory fallback is added.
 
 ### Approved Backtest Extension Boundary
 
 The six-module backtest direction and this boundary were approved on 2026-08-26. The user also confirmed [`backtest-api`](../backtesting/SPEC-backtest-api.md) and approved [`backtest-web`](../backtesting/SPEC-backtest-web.md). On 2026-08-26, the user confirmed the corrected `planVersionId`, money projection, result/job consistency, versioned-compatibility, and unified China-time clauses. The following values govern the current generated contract and the separately gated remaining router work:
 
-- the current frozen contract is exactly 37 REST paths: the unchanged live 24 plus exactly 13 backtest resource paths, with the OpenAPI snapshot, hash, generated TypeScript, and runtime guards updated together;
-- the current router baseline remains six placeholder routes. The extension adds real or lazy-loaded `/backtests`, `/backtests/new`, `/backtests/data`, and `/backtests/:runId` views, with the two static child routes before the dynamic route; the exact post-change production route set is 10 paths;
-- adding four real backtest routes does not prove that the six historical placeholder routes have been wired to their existing business views;
+- the current frozen contract is exactly 38 REST paths: 25 live paths, including read-only AI runtime configuration, plus exactly 13 backtest resource paths, with the OpenAPI snapshot, hash, generated TypeScript, and runtime guards updated together;
+- the production router has exactly ten paths: one real `/plans` view, four real or lazy-loaded `/backtests...` views, and five remaining historical placeholders; the two static backtest child routes remain before the dynamic route;
+- adding the real plan and backtest routes does not prove that the five remaining historical placeholder routes have been wired to their business views;
 - all 13 added paths, four routes, generated types, runtime guards, URL datetime filters, and machine-readable Web values inherit the accepted canonical `Asia/Shanghai` contract: input `+08:00` with 0–6 fractional-second digits, fixed-six-digit output/storage, and rejection of `Z`, offsetless, overprecision, or other-offset values;
 - the first release uses bounded REST polling for durable jobs and adds no backtest WebSocket event;
 - `create_production_app(...)` remains `DEGRADED`/`SERVICE_UNAVAILABLE` without explicitly injected production services. Registering router protocols alone is not a usable product composition.
@@ -341,12 +343,10 @@ The six-module backtest direction and this boundary were approved on 2026-08-26.
 - Expandable evidence, blockers, event ID, and chart-time link.
 - Acknowledgement language explicitly states that it is not a fill.
 
-### `/system` — System and AI Settings
+### `/system` — System Health
 
 - Tushare capabilities, latency, cooldown, next poll, gaps, executor, database/WAL, backup, and delivery health.
-- AI provider/base URL/model/limits/prompt-version configuration.
-- Write-only API-key replacement, masked configured state, and bounded connection test.
-- No secret values or raw authorization errors are displayed.
+- AI configuration is not edited on this page. The `/plans` view shows the safe read-only runtime summary; project files remain authoritative.
 
 ### `/backtests`, `/backtests/new`, `/backtests/data`, and `/backtests/:runId` — Backtest Research
 
@@ -373,7 +373,7 @@ Route views are composition surfaces only.
 | `PositionLots` | Local lot forms, T+1 display, and explicit confirmation | authoritative page/prefill/operation gateway | confirmed add/close command |
 | `PlanWorkbench` | Orchestrate extraction/review/edit/activation | draft/extraction | save/activate |
 | `SourceTextEditor` | Plain-text plan input | source text | update text |
-| `AIProviderSelector` | Choose/test configured provider | providers/status | select/test |
+| `AIProviderSelector` | Show/select file-configured provider | safe runtime summary | select |
 | `ExtractionEvidence` | Evidence, uncertainty, omissions | extraction result | resolve issue |
 | `StructuredPlanEditor` | Sectioned typed draft editing | plan draft/issues | update draft |
 | `ActivationDiffDialog` | Confirm immutable version switch | before/after/issues | confirm/cancel |
@@ -437,7 +437,7 @@ Use `<script setup lang="ts">`, PascalCase SFCs, script/template/scoped-style or
 - WebSocket tests for snapshot consistency, ordering, replay, sequence gap, reconnect, and restart.
 - Vue unit tests for stores, plan workbench, AI extraction review, activation gates, watchlist, details, alerts, settings, loading/error/empty states, and keyboard interactions.
 - Chart mapping tests plus accessible table fallback.
-- Playwright end-to-end flows: configure a fake AI provider, paste a plan, extract, resolve a warning, activate, replay market data, receive one alert, acknowledge it, and verify no position change.
+- Playwright end-to-end flows: start with a fake provider in project test configuration, paste a plan, extract, resolve a warning, activate, replay market data, receive one alert, acknowledge it, and verify no position change.
 - Accessibility automation with axe plus keyboard/manual checks.
 - Browser verification at desktop, tablet, and mobile widths.
 
@@ -456,7 +456,7 @@ Use `<script setup lang="ts">`, PascalCase SFCs, script/template/scoped-style or
 - One local URL supports the complete text-plan-to-reviewed-active-plan workflow.
 - Dashboard and detail views show all 10 symbols independently and update without full-page refresh.
 - A disconnected browser recovers from a consistent snapshot and never labels stale data as live.
-- AI configuration is usable while secret values remain unreadable after submission.
+- Web uses the AI provider loaded from project configuration, shows no editing control, and never receives the secret value or its file/key reference.
 - The plan cannot activate while material omissions or validation errors remain.
 - One deterministic buy event appears as one textual reminder with evidence and disclaimer.
 - UI meets keyboard, contrast, responsive, reduced-motion, and non-color-only requirements.
@@ -468,4 +468,4 @@ None blocking. OS-level browser notifications and named chat platforms remain fu
 
 ## Review Status
 
-The base `local-web` specification and completed `T035`–`T056` implementation history remain previously approved. On 2026-08-26, the user approved the `Backtest Extension Boundary` and `backtest-web`, confirmed `backtest-api`, and then confirmed the unified `Asia/Shanghai`/`+08:00` time contract plus the remaining API/engine/results/jobs consistency corrections. The aggregate detailed-specification gate is closed. Section 15 of the bilingual implementation plan and the generated `BT009`–`BT050` task list were separately approved. The separately authorized BT033 production composition and BT034 regeneration establish the current exact 37-path OpenAPI contract while preserving the live 24 paths; the 6-placeholder router baseline remains authoritative until an approved downstream task changes it. Commit, push, dependency installation, and any network access remain separately unauthorized.
+The base `local-web` specification and completed `T035`–`T056` implementation history remain previously approved. On 2026-08-26, the user approved the `Backtest Extension Boundary` and `backtest-web`, confirmed `backtest-api`, and then confirmed the unified `Asia/Shanghai`/`+08:00` time contract plus the remaining API/engine/results/jobs consistency corrections. The aggregate detailed-specification gate is closed. Section 15 of the bilingual implementation plan and the generated `BT009`–`BT050` task list were separately approved. The current OpenAPI contract contains exactly 38 paths, including 25 live paths; the production router contains exactly ten paths, with `/plans` and four backtest paths connected to real views while five historical paths remain placeholders. Commit, push, dependency installation, and network access remain separately authorized actions.

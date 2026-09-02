@@ -10,6 +10,12 @@ const MAX_ERROR_DETAILS = 100;
 const MAX_ERROR_TEXT_CHARACTERS = 256;
 const MAX_JSON_DEPTH = 32;
 const MAX_JSON_NODES = 50_000;
+const safeTokenCountKeys = new Set([
+  "completionTokens",
+  "maxOutputTokens",
+  "promptTokens",
+  "totalTokens",
+]);
 
 const safeErrorMessages: Record<ApiErrorCode, string> = {
   BAD_REQUEST: "请求格式无效",
@@ -276,6 +282,9 @@ function isErrorDetail(value: unknown): value is ErrorDetail {
 }
 
 function isSensitiveKey(key: string): boolean {
+  if (safeTokenCountKeys.has(key)) {
+    return false;
+  }
   const normalized = key.replaceAll(/[^a-z]/gi, "").toLowerCase();
   return /(?:apikey|authorization|credential|password|secret|token)/.test(normalized);
 }

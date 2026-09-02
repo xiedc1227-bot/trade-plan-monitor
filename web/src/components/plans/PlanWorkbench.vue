@@ -2,11 +2,8 @@
 import { computed, shallowRef, watch } from "vue";
 
 import type {
-  AIProviderSecretCommand,
-  AIProviderTestCommand,
-  AIProviderView,
+  ConfiguredAIRuntimeView,
   DraftReviewIssue,
-  OperationReceipt,
   PlanExtractionCommand,
   PlanExtractionView,
 } from "../../api/generated";
@@ -14,35 +11,24 @@ import AIProviderSelector from "../ai/AIProviderSelector.vue";
 import ExtractionEvidence from "./ExtractionEvidence.vue";
 import SourceTextEditor from "./SourceTextEditor.vue";
 
-const MAX_SOURCE_CHARACTERS = 200_000;
-
 interface Props {
-  expectedRevision: number;
   extraction?: PlanExtractionView | null;
   initialProviderId?: string | null;
   initialSourceText?: string;
-  providerTesting?: boolean;
-  providerTestProviderId?: string | null;
-  providerTestReceipt?: OperationReceipt | null;
-  providers: readonly AIProviderView[];
+  providers: readonly ConfiguredAIRuntimeView[];
   submitting?: boolean;
 }
 
 interface Emits {
-  cancelExtraction: [operationId: string];
-  replaceSecret: [command: AIProviderSecretCommand];
   resolveIssue: [issue: DraftReviewIssue];
+  stopWaiting: [operationId: string];
   submitExtraction: [command: PlanExtractionCommand];
-  testProvider: [command: AIProviderTestCommand];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   extraction: null,
   initialProviderId: null,
   initialSourceText: "",
-  providerTesting: false,
-  providerTestProviderId: null,
-  providerTestReceipt: null,
   submitting: false,
 });
 const emit = defineEmits<Emits>();
@@ -66,11 +52,15 @@ const submittedSourceText = shallowRef<string | null>(null);
 const awaitingNewExtraction = shallowRef(false);
 const extractionIdAtSubmit = shallowRef<string | null>(null);
 const selectedProvider = computed(() =>
-  props.providers.find((provider) => provider.config.providerId === selectedProviderId.value),
+  props.providers.find((provider) => provider.providerId === selectedProviderId.value),
 );
 const providerEnabled = computed(
-  () => selectedProvider.value !== undefined && selectedProvider.value.config.enabled !== false,
+  () =>
+    selectedProvider.value !== undefined &&
+    selectedProvider.value.enabled &&
+    selectedProvider.value.configured,
 );
+const providerInputLimit = computed(() => selectedProvider.value?.maxInputChars ?? 200_000);
 
 const extractionBusy = computed(
   () =>
@@ -93,8 +83,9 @@ watch(
       selectedProviderId.value !== null &&
       providers.some(
         (provider) =>
-          provider.config.providerId === selectedProviderId.value &&
-          provider.config.enabled !== false,
+          provider.providerId === selectedProviderId.value &&
+          provider.enabled &&
+          provider.configured,
       )
     ) {
       return;
@@ -136,20 +127,20 @@ watch(
 );
 
 function initialProviderId(
-  providers: readonly AIProviderView[],
+  providers: readonly ConfiguredAIRuntimeView[],
   preferred: string | null,
 ): string | null {
   if (
     preferred !== null &&
     providers.some(
       (provider) =>
-        provider.config.providerId === preferred && provider.config.enabled !== false,
+        provider.providerId === preferred && provider.enabled && provider.configured,
     )
   ) {
     return preferred;
   }
   return (
-    providers.find((provider) => provider.config.enabled !== false)?.config.providerId ?? null
+    providers.find((provider) => provider.enabled && provider.configured)?.providerId ?? null
   );
 }
 
@@ -158,8 +149,9 @@ function submitExtraction(): void {
   if (
     extractionBusy.value ||
     provider === undefined ||
-    provider.config.enabled === false ||
-    exceedsUnicodeCharacterLimit(sourceText.value, MAX_SOURCE_CHARACTERS) ||
+    !provider.enabled ||
+    !provider.configured ||
+    exceedsUnicodeCharacterLimit(sourceText.value, provider.maxInputChars) ||
     sourceText.value.trim().length === 0
   ) {
     return;
@@ -169,8 +161,8 @@ function submitExtraction(): void {
   extractionIdAtSubmit.value = props.extraction?.id ?? null;
   submittedSourceText.value = submittedSource;
   emit("submitExtraction", {
-    expectedRevision: props.expectedRevision,
-    providerId: provider.config.providerId,
+    expectedRevision: provider.revision ?? 0,
+    providerId: provider.providerId,
     sourceText: submittedSource,
   });
 }
@@ -186,9 +178,9 @@ function exceedsUnicodeCharacterLimit(value: string, maximum: number): boolean {
   return false;
 }
 
-function cancelExtraction(): void {
+function stopWaiting(): void {
   if (props.extraction?.status === "QUEUED" || props.extraction?.status === "RUNNING") {
-    emit("cancelExtraction", props.extraction.id);
+    emit("stopWaiting", props.extraction.id);
   }
 }
 
@@ -206,7 +198,7 @@ function resolveIssue(issue: DraftReviewIssue): void {
     <header class="plan-workbench__header">
       <div>
         <p class="plan-workbench__eyebrow">REVIEWED DRAFT PIPELINE</p>
-        <h1 id="plan-workbench-title" class="plan-workbench__title">AI 计划提取审核</h1>
+        <h2 id="plan-workbench-title" class="plan-workbench__title">AI 计划提取审核</h2>
       </div>
       <p class="plan-workbench__boundary">草稿隔离 · 不自动启用</p>
     </header>
@@ -218,14 +210,9 @@ function resolveIssue(issue: DraftReviewIssue): void {
     <div class="plan-workbench__grid">
       <AIProviderSelector
         :disabled="extractionBusy"
-        :provider-test-provider-id="providerTestProviderId"
-        :provider-test-receipt="providerTestReceipt"
         :providers="providers"
         :selected-provider-id="selectedProviderId"
-        :testing="providerTesting"
-        @replace-secret="emit('replaceSecret', $event)"
         @select="selectedProviderId = $event"
-        @test="emit('testProvider', $event)"
       />
 
       <SourceTextEditor
@@ -233,7 +220,8 @@ function resolveIssue(issue: DraftReviewIssue): void {
         :busy="extractionBusy"
         :cancellable="extraction?.status === 'QUEUED' || extraction?.status === 'RUNNING'"
         :disabled="!providerEnabled || extractionBusy"
-        @cancel="cancelExtraction"
+        :max-chars="providerInputLimit"
+        @cancel="stopWaiting"
         @submit="submitExtraction"
       />
     </div>
@@ -264,7 +252,7 @@ function resolveIssue(issue: DraftReviewIssue): void {
       原文已在提取后修改，旧证据已停止展示；请重新提交提取后再继续审核。
     </p>
 
-    <p v-else class="plan-workbench__empty">
+    <p v-else-if="!extraction" class="plan-workbench__empty">
       尚未提交提取任务。AI 只生成待审核草稿，不会创建启用命令。
     </p>
   </section>

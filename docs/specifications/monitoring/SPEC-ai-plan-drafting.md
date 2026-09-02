@@ -6,15 +6,15 @@
 
 Convert pasted natural-language trade plans into reviewable `plan-domain` drafts through a user-configured AI service. AI performs extraction and normalization only; it cannot activate plans or participate in live decisions.
 
-The user can configure an OpenAI-compatible service, test connectivity, paste a Chinese plan, inspect field evidence, assumptions, and omissions, edit the structured result, run deterministic validation, and activate through a separate explicit action.
+The default service is DeepSeek through its OpenAI-format Chat Completions endpoint. The user can change the request profile, base URL, model, secret reference, and bounded request settings, or select another reviewed OpenAI-compatible service. The user can test connectivity, paste a Chinese plan, inspect field evidence, assumptions, and omissions, edit the structured result, run deterministic validation, and activate through a separate explicit action.
 
 ## Tech Stack
 
 - Python 3.14.x (`>=3.14,<3.15`)
 - `httpx` asynchronous HTTP client
 - Pydantic 2 for AI-output and plan-draft validation
-- Internal `AIProvider` protocol with an OpenAI-compatible adapter
-- `SecretStore` protocol backed by the operating-system credential store, with environment-variable references as a required fallback
+- Internal `AIProvider` protocol with explicit DeepSeek and generic OpenAI-compatible request profiles
+- `SecretStore` protocol populated by a bounded configured project-secret file for Web and CLI operations
 - SQLite for non-secret configuration and audit metadata only
 
 The first release uses an explicit HTTP adapter rather than a vendor AI SDK to reduce coupling.
@@ -36,6 +36,7 @@ src/trade_plan_monitor/ai/
 ├── openai_compatible.py  # Resource-bounded HTTP adapter
 ├── prompts.py            # Versioned prompt construction
 ├── extraction.py         # Draft extraction, parsing, and validation flow
+├── file_secrets.py       # Bounded project-secret file loader
 └── secrets.py            # SecretStore protocol and implementations
 tests/unit/
 └── test_ai_plan_drafting.py
@@ -53,17 +54,19 @@ class AIProvider(Protocol):
 
 Configurable non-secret fields include:
 
-- `providerId`, display name, provider type, base URL, and model;
-- secret reference and a boolean “secret configured” status;
+- `providerId`, request profile, display name, provider type, base URL, and model;
+- project-secret file/key reference and a boolean “secret configured” status;
 - timeout, maximum retries, maximum input characters, and maximum output tokens;
 - temperature fixed to 0 by default, allowed range 0–0.3;
 - prompt version and enabled status.
 
-Stable first-release bounds are: base URL at most 2,048 characters; timeout 1–120 seconds (default 30); retries 0–2 (default 2); input 1–200,000 characters (default 50,000); output 1–16,384 tokens (default 4,096); and temperature 0–0.3 (default 0). Redirects are never configurable and remain disabled. HTTP is accepted only for literal `localhost`, IPv4 loopback, or IPv6 loopback hosts; all other endpoints require HTTPS. Base URLs with credentials, query strings, or fragments are invalid.
+Stable first-release bounds are: base URL at most 2,048 characters; project-secret file path at most 1,024 characters; secret file at most 65,536 bytes; timeout 1–120 seconds (default 30); retries 0–2 (default 2); input 1–200,000 characters (default 50,000); output 1–16,384 tokens (default 4,096); and temperature 0–0.3 (default 0). Redirects are never configurable and remain disabled. HTTP is accepted only for literal `localhost`, IPv4 loopback, or IPv6 loopback hosts; all other endpoints require HTTPS. Base URLs with credentials, query strings, or fragments are invalid.
 
 ### Provider Adapter Contract
 
-The first adapter sends `POST {baseUrl}/chat/completions` with Bearer authentication. It uses `messages`, `temperature`, `max_completion_tokens`, and `stream=false`; it never sends tools and returns model content only as untrusted raw text.
+The adapter sends `POST {baseUrl}/chat/completions` with Bearer authentication, never sends tools, and returns model content only as untrusted raw text. The generic `OPENAI_COMPATIBLE` profile uses `messages`, `temperature`, `max_completion_tokens`, and `stream=false`. The default `DEEPSEEK` profile follows the current DeepSeek contract: it uses `max_tokens`, sets `thinking={"type":"disabled"}`, adds `response_format={"type":"json_object"}` for plan extraction, and keeps `stream=false`. DeepSeek defaults are `https://api.deepseek.com`, `deepseek-v4-flash`, and project-secret key `DEEPSEEK_API_KEY`. The file reference is `../.env`, resolved relative to `config/app.yaml`, so the local workspace reads its own ignored project-root secret file.
+
+Both Web and CLI resolve the configured secret path relative to the YAML file, read at most 65,536 bytes as strict UTF-8, select exactly one non-empty assignment matching `api_key_ref.key`, and load it into a process-local store created with environment fallback disabled. Missing files, directories, oversized files, invalid UTF-8, missing keys, empty values, and duplicate keys all fail closed without exposing file contents. The Web composition reads configuration once during startup, keeps it immutable for that server lifetime, and exposes extraction through `/plans`. The maintenance CLI keeps `ai test [--config PATH]` and `ai extract [--config PATH] --source FILE`; `test` sends one bounded connectivity request, while `extract` reads one strict UTF-8 regular file, enforces byte and configured character limits, validates the returned draft, and prints it without activating it.
 
 - API keys exist transiently only in the Authorization header and must contain printable ASCII characters. Requests send `Accept-Encoding: identity`.
 - Each attempt has the configured timeout and the complete operation uses at most `1 + max_retries` attempts. Transport failures, timeouts, HTTP 408, 429, and 5xx are retryable; numeric `Retry-After` and exponential delays are capped at 2 seconds. Cancellation always propagates.
@@ -80,9 +83,9 @@ class SecretStore(Protocol):
     def status(self, reference: SecretReference) -> SecretStatus: ...
 ```
 
-`SecretStatus` exposes only configured state, source (`STORE`, `ENVIRONMENT`, or `NONE`), a fixed mask, and replacement generation. A non-empty named environment variable is the required fallback when the process-local store has no replacement. The concrete store keeps runtime materialization package-private so provider composition can authenticate without widening the public management protocol. The process-local implementation supports scaffolding and deterministic tests; selecting the durable operating-system credential adapter remains an explicit open question.
+`SecretStatus` exposes only configured state, source (`STORE`, `ENVIRONMENT`, or `NONE`), a fixed mask, and replacement generation. The generic store retains its environment capability for existing integrations and isolated tests, but the configured Web and CLI compositions always construct it with an empty environment and insert only the value selected from the configured project-secret file. The concrete store keeps runtime materialization package-private so provider composition can authenticate without widening the public management protocol.
 
-The API can accept a replacement secret and write it to the secret store, but no read API returns it. Logs, errors, audit records, and plan exports contain only a secret reference and masked metadata.
+The generic injected API contract can accept a replacement secret, but the project-file production composition disables that mutation with `METHOD_NOT_ALLOWED`; no Web page sends it. No read API returns secret material. Logs, errors, audit records, and plan exports contain only non-secret status or references where the legacy injected contract requires them.
 
 ### Extraction Result
 
@@ -133,19 +136,19 @@ AI can create drafts only. Activation requires:
 
 ### T037 HTTP Adapter Boundary
 
-The local API exposes AI only through an injected `AIOperationService` and the plan extraction submission method on `PlanOperationService`. Configuration requests contain the complete non-secret `AIProviderConfig` shape in camelCase plus `expectedRevision`; `PATCH /api/v1/ai-providers/{id}` is a full revision-guarded replacement, not a partial merge. The HTTP schema calls the concrete `AIProviderConfig` class-local wrap validator and does not move sanitization to `_AIValue`. Secret replacement embeds the existing `SecretWrite` value so its own class-local wrap validator remains authoritative; no base-class validator is introduced.
+The generic local API still supports an injected `AIOperationService` and the plan extraction submission service. The production Web composition instead constructs `ConfiguredAIWebLifecycle` from `config/app.yaml`, attaches its read-only AI summary and extraction service during lifespan startup, and removes both during shutdown. `GET /api/v1/ai-runtime` exposes only provider ID, display name, safe base URL, model, configured/enabled flags, input/output limits, and revision `0`; it cannot expose the secret file path, selected key name, or value.
 
-Every provider create/update, secret replacement, provider test, and plan extraction requires `Idempotency-Key` and `expectedRevision`. The injected application service atomically owns request hashing, duplicate/replay handling, revision comparison, persistence, and audit insertion. HTTP responses expose only non-secret provider configuration, fixed masked secret status, or bounded operation receipts. Extra service fields, raw provider bodies, authorization data, and secret material fail closed before serialization.
+The project-file production service returns `METHOD_NOT_ALLOWED` for provider create/update, secret replacement, and provider test. Plan extraction requires `Idempotency-Key`, provider identity, and revision `0`; the service hashes each intent, replays only an identical key/request pair, retains at most 1,000 operation records, and runs at most one extraction concurrently. HTTP responses contain only bounded receipts and validated extraction views. Extra fields, raw provider bodies, authorization data, and secret material fail closed before serialization.
 
-`POST /api/v1/plan-extractions` and `POST /api/v1/ai-provider-tests` return `202` only after the application service durably accepts bounded work. The request handler does not call the provider, execute extraction, or activate a plan. `GET /api/v1/plan-extractions/{id}` exposes orchestration states plus validated evidence/issues and canonical draft JSON; it never exposes raw model output. `CANCELLED` is represented only by this orchestration status boundary and remains absent from the pure T017 extraction function.
+`POST /api/v1/plan-extractions` returns `202` after the in-process Web service accepts bounded work; provider I/O occurs in a background task, never in the request handler, and never activates a plan. Operation state is intentionally process-local and is discarded on restart. `GET /api/v1/plan-extractions/{id}` exposes orchestration state plus validated evidence/issues and canonical draft JSON; it never exposes raw model output. Shutdown cancels unfinished tasks, records their local `CANCELLED` state while closing, and releases the shared HTTP client.
 
 ### T045 Frontend Intake and Review Boundary
 
-The Vue `PlanWorkbench` is a thin local composition boundary with typed props and emits. It selects only enabled providers for extraction, submits revision-guarded provider-test, secret-replacement, extraction, cancellation, and issue-resolution intents, and owns no API client, Pinia state, domain rule, activation action, or persistent browser state. Provider-test receipts require an explicit provider identity and pending/settlement state so an old receipt cannot be attributed to the current provider and rapid retries cannot create duplicate durable work.
+The Vue `PlanWorkbench` is a thin local composition boundary with typed props and emits. It accepts only the read-only configured runtime view, rejects disabled or unconfigured extraction, and emits extraction, stop-waiting, and issue-resolution intents. It has no provider edit, secret input, provider test, Pinia state, domain rule, activation action, or persistent browser state.
 
-Secret input is transient, write-only, cleared when provider identity changes and before replacement is emitted, and never rendered after submission. Secret and source limits use Python-compatible Unicode code-point counting. An over-limit edit is rejected atomically, restores the previous complete valid value, exposes an accessible error, and cannot emit a silently truncated secret or plan. Whitespace-only secrets, disabled providers, oversized final commands, duplicate pending submissions, and retry-before-receipt paths fail closed.
+`PlanDraftingView` loads the one safe runtime summary, creates one idempotency key per submission, materializes the `202` receipt, and polls the exact operation ID until `SUCCEEDED`, `INVALID_OUTPUT`, `PROVIDER_ERROR`, or `CANCELLED`. Only one local submission/poll runs at once. Unmount and “stop waiting” abort browser work; stopping browser polling does not claim to cancel an accepted server operation. Error messages are fixed and cannot contain provider response or key material.
 
-The source editor treats pasted plans as untrusted plain text. It locks immediately around submission, binds evidence to the exact submitted source snapshot, releases local pending state when submission fails before a new operation identity, and exposes cancellation only for a real `QUEUED` or `RUNNING` operation. Extracted evidence, assumptions, warnings, unmapped text, validation issues, usage, and bounded errors render through Vue text interpolation only. Duplicate review identities cannot be resolved, long unbroken text wraps, and stale evidence is hidden after source changes. Structured editing, diff, validation orchestration, and activation remain T046 responsibilities.
+The source editor treats pasted plans as untrusted plain text and uses the configured input-character limit with Python-compatible Unicode code-point counting. An over-limit edit is rejected atomically and restores the previous complete value. Evidence is tied to the exact submitted source snapshot and hidden when stale. Extracted evidence, assumptions, warnings, unmapped text, validation issues, usage, errors, and canonical draft JSON render through escaped Vue text interpolation only. Structured editing, diff, validation orchestration, and activation remain T046 responsibilities.
 
 ## Code Style
 
@@ -176,7 +179,7 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 ## Testing Strategy
 
 - Test configuration bounds, URL validation, secret redaction, prompt construction, JSON parsing, and issue mapping.
-- Use a fake OpenAI-compatible service for success, standard response extensions, invalid JSON, schema mismatch, real timeout, 401/403, 429, 5xx, retry, cancellation, compressed response, and oversized output.
+- Use fake DeepSeek-profile and generic OpenAI-compatible services for request-shape validation, success, standard response extensions, invalid JSON, schema mismatch, real timeout, 401/403, 429, 5xx, retry, cancellation, compressed response, and oversized output.
 - Embed prompt-injection samples in plan text and verify they cannot alter the output contract or gain tool access.
 - Cover missing dates, ambiguous boundaries, unsupported text, and the Huaya Intelligent example plan.
 - Verify AI failure cannot affect already active monitoring plans.
@@ -184,7 +187,7 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 
 ## Threat Model and Boundaries
 
-- Trust boundaries: user text, configurable base URL, model output, provider error body, and secret input.
+- Trust boundaries: user text, file-configured base URL, model output, provider error body, and project secret file.
 - Protected assets: AI secret, plan integrity, activation authority, and spending limits.
 - Always: require HTTPS for non-loopback AI endpoints; reject embedded credentials and unsafe redirects.
 - Always: bound input, output tokens, timeout, retry count, and concurrent extractions.
@@ -195,7 +198,7 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 
 ## Success Criteria
 
-- The user can configure and test an AI service without secrets appearing in read responses.
+- The user can configure AI in project files, restart Web, and see a safe read-only summary without the secret value or its file/key reference reaching the page.
 - A Chinese plan can produce a structured draft with source evidence.
 - Unsupported or ambiguous content is visible and blocks activation until resolved.
 - Invalid or malicious model output cannot create executable rules.
@@ -204,4 +207,4 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 
 ## Open Questions
 
-Select the concrete operating-system secret-store implementation after confirming Windows Credential Manager support during scaffolding; environment-variable references remain the required fallback.
+None. Web AI settings editing is intentionally out of scope; both Web and CLI use the configured, Git-ignored project-secret file with no environment-variable fallback.

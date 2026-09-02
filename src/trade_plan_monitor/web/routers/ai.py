@@ -191,6 +191,26 @@ class AIProviderPage(ApiValue):
         return self
 
 
+class ConfiguredAIRuntimeView(ApiValue):
+    """Read-only non-secret AI settings loaded for the current Web lifetime."""
+
+    provider_id: UUID = Field(strict=False)
+    display_name: Annotated[
+        str,
+        Field(strict=True, min_length=1, max_length=100, pattern=r"^[^\x00-\x1f\x7f]+$"),
+    ]
+    base_url: AnyHttpUrl
+    model: Annotated[
+        str,
+        Field(strict=True, min_length=1, max_length=200, pattern=r"^[^\s\x00-\x1f\x7f]+$"),
+    ]
+    configured: bool = Field(strict=True)
+    enabled: bool = Field(strict=True)
+    max_input_chars: Annotated[int, Field(strict=True, ge=1, le=200_000)]
+    max_output_tokens: Annotated[int, Field(strict=True, ge=1, le=16_384)]
+    revision: Literal[0] = 0
+
+
 class AIProviderConfigurationCommand(ApiValue):
     config: AIProviderConfiguration
     expected_revision: NonNegativeRevision
@@ -211,6 +231,8 @@ class AIOperationService(Protocol):
     """Application service owning provider persistence, audit, and queued operations."""
 
     async def list_ai_providers(self, *, offset: int, limit: int) -> AIProviderPage: ...
+
+    async def get_configured_ai(self) -> ConfiguredAIRuntimeView: ...
 
     async def create_ai_provider(
         self,
@@ -253,6 +275,14 @@ AIServiceDependency = Annotated[
     AIOperationService,
     Depends(get_ai_operation_service),
 ]
+
+
+@router.get("/ai-runtime", response_model=ConfiguredAIRuntimeView)
+async def get_configured_ai(service: AIServiceDependency) -> ConfiguredAIRuntimeView:
+    return validate_api_response(
+        await service.get_configured_ai(),
+        ConfiguredAIRuntimeView,
+    )
 
 
 @router.get("/ai-providers", response_model=AIProviderPage)
@@ -360,6 +390,7 @@ def _ensure_configuration_matches(
 __all__ = [
     "AIOperationService",
     "AIProviderConfigurationCommand",
+    "ConfiguredAIRuntimeView",
     "AIProviderPage",
     "AIProviderSecretCommand",
     "AIProviderTestCommand",

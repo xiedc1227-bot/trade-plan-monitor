@@ -6,15 +6,15 @@
 
 通过用户可配置的 AI 服务，把粘贴的自然语言交易计划转换为可审核的 `plan-domain` 草稿。AI 只负责信息提取与规范化，不负责激活计划，也不参与盘中决策。
 
-用户应能配置 OpenAI-compatible 服务、测试连通性、粘贴中文计划、查看字段证据/假设/遗漏、修改结构化结果、运行确定性校验并通过独立操作激活计划。
+默认服务通过 DeepSeek 的 OpenAI 格式 Chat Completions 端点调用。用户可以修改请求 profile、Base URL、模型、密钥引用和有界请求设置，也可以选择其他经过审核的 OpenAI-compatible 服务。用户可以测试连通性、粘贴中文计划、查看字段证据/假设/遗漏、修改结构化结果、运行确定性校验并通过独立操作激活计划。
 
 ## 技术栈
 
 - Python 3.14.x（`>=3.14,<3.15`）
 - `httpx` 异步 HTTP 客户端
 - Pydantic 2：校验 AI 输出和计划草稿
-- 内部 `AIProvider` 协议及 OpenAI-compatible 适配器
-- `SecretStore` 协议：操作系统凭据库，环境变量引用作为强制后备方案
+- 内部 `AIProvider` 协议，以及明确的 DeepSeek 与通用 OpenAI-compatible 请求 profile
+- `SecretStore` 协议：Web 与 CLI 操作从有大小限制的项目密钥文件装入
 - SQLite：只保存非敏感配置和审计元数据
 
 首版不依赖厂商 AI SDK，使用显式 HTTP 适配器降低耦合。
@@ -36,6 +36,7 @@ src/trade_plan_monitor/ai/
 ├── openai_compatible.py  # 有资源上限的 HTTP 适配器
 ├── prompts.py            # 版本化提示词构造
 ├── extraction.py         # 草稿提取、解析和校验流程
+├── file_secrets.py       # 有大小限制的项目密钥文件读取器
 └── secrets.py            # SecretStore 协议和实现
 tests/unit/
 └── test_ai_plan_drafting.py
@@ -53,17 +54,19 @@ class AIProvider(Protocol):
 
 可配置的非敏感字段包括：
 
-- `providerId`、显示名称、服务类型、Base URL 和模型；
-- 密钥引用以及“是否已配置密钥”状态；
+- `providerId`、请求 profile、显示名称、服务类型、Base URL 和模型；
+- 项目密钥文件/键名引用以及“是否已配置密钥”状态；
 - 超时、最大重试次数、最大输入字符、最大输出 Token；
 - 温度默认固定为 0，允许范围 0～0.3；
 - 提示词版本和启用状态。
 
-首版稳定范围为：Base URL 最长 2,048 个字符；超时 1～120 秒（默认 30）；重试 0～2 次（默认 2）；输入 1～200,000 个字符（默认 50,000）；输出 1～16,384 Token（默认 4,096）；温度 0～0.3（默认 0）。重定向不可配置且始终禁用。只有字面值 `localhost`、IPv4 回环地址或 IPv6 回环地址可使用 HTTP，其他地址必须使用 HTTPS。包含账号密码、查询字符串或片段的 Base URL 无效。
+首版稳定范围为：Base URL 最长 2,048 个字符；项目密钥文件路径最长 1,024 个字符；密钥文件最大 65,536 字节；超时 1～120 秒（默认 30）；重试 0～2 次（默认 2）；输入 1～200,000 个字符（默认 50,000）；输出 1～16,384 Token（默认 4,096）；温度 0～0.3（默认 0）。重定向不可配置且始终禁用。只有字面值 `localhost`、IPv4 回环地址或 IPv6 回环地址可使用 HTTP，其他地址必须使用 HTTPS。包含账号密码、查询字符串或片段的 Base URL 无效。
 
 ### 服务适配器契约
 
-首个适配器使用 Bearer 鉴权发送 `POST {baseUrl}/chat/completions`。请求字段为 `messages`、`temperature`、`max_completion_tokens` 和 `stream=false`；绝不发送工具，只把模型内容作为不可信原始文本返回。
+适配器使用 Bearer 鉴权发送 `POST {baseUrl}/chat/completions`，绝不发送工具，只把模型内容作为不可信原始文本返回。通用 `OPENAI_COMPATIBLE` profile 使用 `messages`、`temperature`、`max_completion_tokens` 和 `stream=false`。默认 `DEEPSEEK` profile 遵循 DeepSeek 当前契约：使用 `max_tokens`，设置 `thinking={"type":"disabled"}`，提取计划时增加 `response_format={"type":"json_object"}`，并保持 `stream=false`。DeepSeek 默认值为 `https://api.deepseek.com`、`deepseek-v4-flash` 和项目密钥键 `DEEPSEEK_API_KEY`。文件引用为 `../.env`，相对于 `config/app.yaml` 解析，因此本地工作区读取本项目根目录中被 Git 忽略的密钥文件。
+
+Web 与 CLI 都相对于 YAML 文件解析密钥路径，最多读取 65,536 字节并按严格 UTF-8 解码，只选择一个与 `api_key_ref.key` 精确匹配且非空的赋值，然后放入禁用环境变量后备的进程内密钥库。文件缺失、路径是目录、文件超大、UTF-8 非法、键缺失、值为空或键重复都会安全失败，错误不包含文件内容。Web 组合在启动时只读取一次配置，并在该次服务生命周期内保持不变，通过 `/plans` 提供提取。维护用途的 CLI 保留 `ai test [--config 路径]` 和 `ai extract [--config 路径] --source 文件`；`test` 发送一次有边界的连通性请求，`extract` 读取严格 UTF-8 普通文件、检查字节数和配置字符上限、校验返回草稿并输出，但不会激活计划。
 
 - API Key 只短暂存在于 Authorization Header，并且必须全部为可打印 ASCII 字符。请求发送 `Accept-Encoding: identity`。
 - 每次尝试使用配置的超时，完整操作最多执行 `1 + max_retries` 次。传输故障、超时、HTTP 408、429 和 5xx 可重试；数字型 `Retry-After` 和指数退避均封顶 2 秒。取消操作始终向外传播。
@@ -80,9 +83,9 @@ class SecretStore(Protocol):
     def status(self, reference: SecretReference) -> SecretStatus: ...
 ```
 
-`SecretStatus` 只暴露是否已配置、来源（`STORE`、`ENVIRONMENT` 或 `NONE`）、固定掩码和替换代数。当进程内密钥库没有替换值时，非空的指定环境变量是强制后备方案。具体密钥库把运行时物化能力保持为包内私有，使供应商组装能够鉴权而不扩大公共管理协议。进程内实现用于脚手架和确定性测试；持久化操作系统凭据适配器的选择仍是明确的待确认事项。
+`SecretStatus` 只暴露是否已配置、来源（`STORE`、`ENVIRONMENT` 或 `NONE`）、固定掩码和替换代数。通用密钥库为了现有集成和隔离测试仍保留环境变量能力，但配置文件驱动的 Web 与 CLI 组合始终以空环境创建密钥库，只插入项目密钥文件中选定的值。具体密钥库把运行时物化能力保持为包内私有，使供应商组装能够鉴权而不扩大公共管理协议。
 
-API 可以接收新的密钥并写入密钥库，但任何读取接口都不能返回密钥。日志、错误、审计和计划导出只保留密钥引用与脱敏元数据。
+通用注入式 API 契约可以接收新密钥，但项目配置文件驱动的生产组合对该变更返回 `METHOD_NOT_ALLOWED`，Web 页面也不会发送该请求。任何读取接口都不能返回密钥。日志、错误、审计和计划导出只保留非敏感状态，或旧注入式契约确实需要的引用。
 
 ### 提取结果
 
@@ -133,19 +136,19 @@ AI 只能创建草稿。激活必须满足：
 
 ### T037 HTTP 适配器边界
 
-本地 API 只通过注入的 `AIOperationService` 以及 `PlanOperationService` 上的计划提取提交方法暴露 AI。配置请求使用 camelCase 携带完整的不含密钥 `AIProviderConfig` 形状和 `expectedRevision`；`PATCH /api/v1/ai-providers/{id}` 是带修订保护的完整替换，而不是局部合并。HTTP Schema 调用具体 `AIProviderConfig` 的 class-local wrap validator，不把脱敏移动到 `_AIValue`。密钥替换嵌入现有 `SecretWrite` 值，使其自身 class-local wrap validator 保持权威；不引入基类校验器。
+通用本地 API 仍支持注入 `AIOperationService` 和计划提取提交服务。生产 Web 组合改为根据 `config/app.yaml` 构造 `ConfiguredAIWebLifecycle`，在 lifespan 启动时挂接只读 AI 摘要和提取服务，并在关闭时移除。`GET /api/v1/ai-runtime` 只暴露供应商 ID、显示名、安全 Base URL、模型、已配置/启用状态、输入/输出上限和修订号 `0`；不能暴露密钥文件路径、选中的键名或密钥值。
 
-每个供应商创建/更新、密钥替换、供应商测试和计划提取都要求 `Idempotency-Key` 与 `expectedRevision`。注入的应用服务原子负责请求 hash、重复/回放处理、修订比较、持久化和审计写入。HTTP 响应只暴露不含密钥的供应商配置、固定掩码密钥状态或有界操作回执。额外服务字段、供应商原始响应体、授权数据和密钥材料都会在序列化前封闭失败。
+项目配置文件驱动的生产服务对供应商创建/更新、密钥替换和供应商测试返回 `METHOD_NOT_ALLOWED`。计划提取要求 `Idempotency-Key`、供应商 identity 和修订号 `0`；服务为每个意图计算 hash，只回放 Key 与请求都相同的记录，最多保留 1,000 条任务记录，并且最多同时运行一个提取。HTTP 响应只包含有界回执和经过校验的提取视图。额外字段、供应商原始响应体、授权数据和密钥材料都会在序列化前封闭失败。
 
-`POST /api/v1/plan-extractions` 和 `POST /api/v1/ai-provider-tests` 只在应用服务持久接受有界工作后返回 `202`。请求处理器不调用供应商、不执行提取，也不启用计划。`GET /api/v1/plan-extractions/{id}` 暴露编排状态、经过校验的证据/问题和规范草稿 JSON；绝不暴露模型原始输出。`CANCELLED` 只由这一编排状态边界表示，仍不会出现在纯 T017 提取函数中。
+`POST /api/v1/plan-extractions` 在进程内 Web 服务接收有界工作后返回 `202`；供应商 I/O 在后台任务执行，不在请求处理器中执行，也绝不启用计划。任务状态按设计只存在于当前进程，重启后丢弃。`GET /api/v1/plan-extractions/{id}` 暴露编排状态、经过校验的证据/问题和规范草稿 JSON；绝不暴露模型原始输出。关闭时会取消未完成任务，在关闭过程中记录局部 `CANCELLED` 状态，并释放共享 HTTP 客户端。
 
 ### T045 前端录入与审核边界
 
-Vue `PlanWorkbench` 是使用强类型 props/emits 的薄局部组合边界。它只选择已启用供应商用于提取，发出带修订保护的供应商测试、密钥替换、提取、取消和问题处理意图，不拥有 API 客户端、Pinia 状态、领域规则、激活操作或持久浏览器状态。供应商测试回执必须携带明确供应商 identity 和 pending/结算状态，因此旧回执不会归属到当前供应商，快速重试也不会创建重复持久工作。
+Vue `PlanWorkbench` 是使用强类型 props/emits 的薄局部组合边界。它只接收只读运行配置，拒绝对已禁用或未配置密钥的供应商执行提取，并发出提取、停止等待和问题处理意图。它没有供应商修改、密钥输入、供应商测试、Pinia 状态、领域规则、激活操作或持久浏览器状态。
 
-密钥输入是临时、只写的，在供应商 identity 改变时以及发出替换前清空，并且提交后绝不渲染。密钥和原文上限使用与 Python 一致的 Unicode code point 计数。超限编辑会被原子拒绝、恢复上一个完整合法值、暴露无障碍错误，并且不能发出被静默截断的密钥或计划。全空白密钥、禁用供应商、最终命令超限、重复 pending 提交和回执前重试均封闭失败。
+`PlanDraftingView` 读取唯一的安全运行摘要，每次提交生成一个幂等 Key，显示 `202` 回执，并轮询精确任务 ID，直到 `SUCCEEDED`、`INVALID_OUTPUT`、`PROVIDER_ERROR` 或 `CANCELLED`。局部同时只运行一组提交/轮询。卸载和“停止等待”会中止浏览器工作；停止浏览器轮询不代表服务端已接收任务被取消。错误文案固定，不能包含供应商响应或密钥材料。
 
-原文编辑器把粘贴计划视为不可信纯文本。它在提交时立即锁定，把证据绑定到精确的已提交原文快照，在获得新 operation identity 前提交失败时释放局部 pending，并且只对真实 `QUEUED` 或 `RUNNING` 操作暴露取消。提取证据、假设、警告、未映射文本、校验问题、用量和有界错误只通过 Vue 文本插值渲染。重复审核 identity 无法处理，连续长文本会断行，原文改变后隐藏过期证据。结构化编辑、差异、校验编排和激活仍属于 T046。
+原文编辑器把粘贴计划视为不可信纯文本，并使用配置中的输入字符上限，按与 Python 一致的 Unicode code point 计数。超限编辑被原子拒绝，并恢复上一个完整值。证据绑定到精确的已提交原文快照，过期时隐藏。提取证据、假设、警告、未映射文本、校验问题、用量、错误和规范草稿 JSON 都只通过已转义的 Vue 文本插值渲染。结构化编辑、差异、校验编排和激活仍属于 T046。
 
 ## 代码风格
 
@@ -176,7 +179,7 @@ async def extract_plan(
 ## 测试策略
 
 - 测试配置范围、URL 校验、密钥脱敏、提示词构造、JSON 解析和问题映射。
-- 使用假的 OpenAI-compatible 服务覆盖成功、标准响应扩展、非法 JSON、Schema 不匹配、真实超时、401/403、429、5xx、重试、取消、压缩响应和超大输出。
+- 使用假的 DeepSeek profile 和通用 OpenAI-compatible 服务，覆盖请求格式校验、成功、标准响应扩展、非法 JSON、Schema 不匹配、真实超时、401/403、429、5xx、重试、取消、压缩响应和超大输出。
 - 在计划文本中加入提示词注入样例，验证其不能改变输出契约或获得工具权限。
 - 覆盖缺少日期、边界含糊、存在不支持文本以及华亚智能示例计划。
 - 验证 AI 故障不会影响已经激活的监控计划。
@@ -184,7 +187,7 @@ async def extract_plan(
 
 ## 威胁模型与边界
 
-- 信任边界：用户文本、可配置 Base URL、模型输出、服务错误体和密钥输入。
+- 信任边界：用户文本、文件配置的 Base URL、模型输出、服务错误体和项目密钥文件。
 - 保护资产：AI 密钥、计划完整性、激活权限和费用上限。
 - 始终：非本机 AI 地址必须使用 HTTPS；拒绝内嵌账号密码和不安全重定向。
 - 始终：限制输入、输出 Token、超时、重试和并发提取数量。
@@ -195,7 +198,7 @@ async def extract_plan(
 
 ## 验收标准
 
-- 用户能够配置和测试 AI 服务，且读取响应中不出现密钥。
+- 用户可以在项目文件中配置 AI，重启 Web 后看到安全的只读摘要；密钥值以及其文件/键引用都不会到达页面。
 - 中文计划能够生成带原文证据的结构化草稿。
 - 不支持或含糊内容明确展示，并在处理前阻止激活。
 - 非法或恶意模型输出不能形成可执行规则。
@@ -204,4 +207,4 @@ async def extract_plan(
 
 ## 待确认事项
 
-操作系统密钥库的具体实现，在脚手架阶段确认 Windows Credential Manager 支持后确定；环境变量引用始终作为后备方案。
+无。Web AI 设置编辑明确不在范围内；Web 与 CLI 都只使用配置的、被 Git 忽略的项目密钥文件，不使用环境变量后备。

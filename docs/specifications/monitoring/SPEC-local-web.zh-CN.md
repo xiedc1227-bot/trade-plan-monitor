@@ -4,7 +4,7 @@
 
 ## 目标
 
-提供唯一的本地操作界面，用于监控最多 10 只股票、粘贴自然语言交易计划、配置 AI、审核提取规则、启用不可变计划版本、查看实时证据与图表、维护人工持仓、阅读文本提醒，以及诊断系统健康状态。
+提供唯一的本地操作界面，用于监控最多 10 只股票、使用配置文件指定的 AI 提取粘贴的自然语言交易计划、审核提取规则、启用不可变计划版本、查看实时证据与图表、维护人工持仓、阅读文本提醒，以及诊断系统健康状态。
 
 FastAPI 负责 REST 和 WebSocket 契约，并在 `127.0.0.1` 提供 Vue 3 单页应用。所有交易条件以后端为唯一权威来源；前端只管理展示状态和用户明确发出的命令。
 
@@ -114,6 +114,7 @@ web/src/
 - 计划提取和 AI 供应商测试只接受有界提交命令，并返回带强类型 `QUEUED` 回执的 `202`。路由只等待服务的持久提交边界；既不调用供应商，也不创建或运行提取工作，并且绝不启用计划。提取状态封闭为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`INVALID_OUTPUT`、`PROVIDER_ERROR` 和 `CANCELLED`；成功结果保留恰好一个阻断启用的 `AI_EVIDENCE_REVIEW_REQUIRED`，并且只暴露规范草稿 JSON、有界证据/问题、确定性校验结果、脱敏用量、hash 和时间戳。供应商/模型原始响应体和授权材料没有任何响应字段。
 - AI 供应商创建/更新使用完整的不含密钥配置。`PATCH` 是带修订保护的完整替换，其正文 `providerId` 必须与路径一致。API 通过具体 `AIProviderConfig` 的 class-local 脱敏校验器重新校验配置，包括 HTTPS/回环 URL 策略和资源限制。密钥替换接收现有 class-local `SecretWrite` 值，但响应只包含等价于 `SecretStatus` 的已配置状态、来源、固定掩码和代数元数据。服务返回的配置必须与提交的规范化配置一致；额外密钥或供应商原始字段会封闭失败。
 - 每个 T037 状态变更端点都要求 1～128 个白名单字符组成的 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同意图回放其规范响应。应用服务必须原子完成这些检查与审计写入；路由绝不重建仓储、校验或决策引擎行为。
+- 生产 Web 组合在 FastAPI lifespan 启动时，从 `config/app.yaml` 精确加载一个 AI 供应商。它在禁用环境变量后备的情况下，从有大小限制的项目密钥文件读取指定键，构造一个供应商客户端，并在关闭前复用这份不可变绑定。`GET /ai-runtime` 只返回供应商 ID、显示名、Base URL、模型、启用/已配置状态、输入/输出上限和固定修订号 `0`；没有密钥值、密钥路径、密钥键名或 Authorization 字段。通用供应商变更路由仍是注入式适配器契约，但配置文件驱动的生产服务对创建、更新、密钥替换和供应商测试统一返回 `METHOD_NOT_ALLOWED`。修改配置后必须重启 Web。
 
 ### T038 持仓、提醒与诊断边界
 
@@ -135,9 +136,9 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`29193bc0bf91027f41ea9b74d648fa10eb3338e86753577f2db2802e92b2f71a`
+OpenAPI 快照 SHA-256：`2f6aae4abfcc574151bcd5ac4dd9c3b566df4fb071656c55f95547ae4bd77774`
 
-- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 37 个已批准 REST 路径：保持不变的 24 个实时路径加精确 13 个回测路径。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
+- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 38 个已批准 REST 路径：25 个实时路径（包含只读 `GET /ai-runtime`）加精确 13 个回测路径。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
 - `python scripts/generate_frontend_types.py --check` 是只读检查，只要任一已提交生成文件存在逐字节差异就失败。生成过程遇到不支持或悬空的 Schema 引用、参数位置、Schema 类型或非法 TypeScript 标识符时会封闭失败，而不是静默弱化契约。
 - `web/index.html` 是稳定的 Vite 应用文档，包含一个 `#app` 根节点和一个外部模块入口，不含违反 T040 CSP 的内联脚本或样式。Vite 现在执行会生成 `dist/index.html` 的文档式应用构建；T042 仍负责首个应用外壳、路由和组件挂载，T052 仍负责已安装资源发现及生产组合。
@@ -145,7 +146,7 @@ OpenAPI 快照 SHA-256：`29193bc0bf91027f41ea9b74d648fa10eb3338e86753577f2db280
 ### T042 无障碍 Vue 应用外壳边界
 
 - `main.ts` 只在 `#app` 存在时挂载根 `App.vue`，为该生产根安装唯一应用路由，并保留工具链测试使用的强类型未挂载组件工厂。导入模块不会创建 API 客户端、store、Socket、定时器或领域状态。
-- 路由精确声明 `/`、`/stocks/:symbol`、`/plans`、`/plans/:id`、`/alerts` 和 `/system`。在已批准的后续任务创建真实视图前，小型局部占位组件只暴露带标签的路由标题；其中不含领域规则、API 调用或可变共享行情状态。
+- 生产路由精确声明十条路径。`/plans` 是延迟加载的真实草稿视图，四条 `/backtests...` 路径是延迟加载的真实研究视图，其余五条历史路由在获批视图接通前仍为带标签占位页。路由层不包含领域规则或可变共享行情状态。
 - `AppShell` 只负责 landmark、桌面端与移动端导航、路由出口、一个强类型可选 `connectionBanner` 插槽，以及一个局部移动菜单布尔值。只有提供插槽时才渲染横幅包装器，并使用礼貌级状态语义；连接与健康状态所有权仍位于外壳之外。
 - 跳转链接把焦点移到持久的 `#main-content` landmark。导航使用原生链接和原生菜单按钮，具备清晰焦点、`aria-controls` 与 `aria-expanded`；Escape 把焦点恢复到菜单按钮，而移动端链接导航会关闭隐藏菜单并把焦点移到主内容。
 - 桌面导航在 `48rem` 替代移动端 disclosure。外壳动态效果仅限展示 CSS，`prefers-reduced-motion: reduce` 分支把动画/过渡时长缩短到 `0.01ms`。T043 设计变量、API 客户端、Pinia/store 与恢复行为，T044 流生命周期，后续业务视图、T052 已安装组合、T041 生成契约和 T024 判断语义均保持不变。
@@ -169,6 +170,7 @@ GET /symbols/{symbol}/events
 GET /plan-versions
 GET /plan-versions/{id}
 GET /plan-extractions/{id}
+GET /ai-runtime
 GET /ai-providers
 GET /alerts
 GET /position-lots
@@ -248,11 +250,11 @@ T044 浏览器生命周期由 `AppShell` 挂载通过单个 `useMonitorStream` �
 
 ### T045 AI 计划工作台边界
 
-T045 `PlanWorkbench` 只通过强类型 props/emits 组合四个 setup 风格 Vue 组件。`AIProviderSelector` 展示不含密钥的供应商配置和脱敏密钥状态，把异步测试回执与明确供应商 identity 关联，拒绝对禁用供应商执行工作，并把供应商测试和密钥替换 pending 状态保持为局部且有界。临时密钥输入会在供应商改变及发出命令前清空；绝不持久化、记录日志、放入 URL 或在提交后渲染。
+T045 `PlanWorkbench` 只通过强类型 props/emits 组合 setup 风格 Vue 组件。`AIProviderSelector` 展示只读 `ConfiguredAIRuntimeView`：显示名、模型、安全 Base URL、输入上限、启用状态和密钥是否已加载。页面没有密钥输入、供应商创建/修改、连接测试或浏览器持久化功能。页面明确提示用户修改 `config/app.yaml` 或项目 `.env` 后重启 Web。
 
-`SourceTextEditor` 拥有一个局部纯文本模型，只发出提交或取消意图。密钥和原文上限遵循 Python Unicode code point 语义，在第一个被拒绝的 code point 处停止扫描，并通过无障碍错误原子拒绝超限编辑，而不是静默截断。提交在取得 `202` identity 前立即锁定，在明确的提交失败转换时释放，并且只对真实 `QUEUED` 或 `RUNNING` 操作暴露取消。
+`PlanDraftingView` 与 `usePlanDrafting` 负责同源 API 流程。挂载时读取 `GET /api/v1/ai-runtime`；提交时生成一个幂等 Key，调用 `POST /api/v1/plan-extractions`，把 `QUEUED` 回执显示为当前任务，然后轮询 `GET /api/v1/plan-extractions/{operationId}`，直到进入封闭的终态。局部同时只运行一组提交/轮询。卸载会中止请求和计时器。“停止等待”只停止浏览器轮询，并明确说明服务端已经接收的任务可能继续；它不会谎称服务端任务已取消。错误使用固定中文文本，不包含供应商、密钥或传输原始详情。
 
-`ExtractionEvidence` 只通过已转义的 Vue 文本插值渲染解码后的证据、假设、警告、未映射文本、校验问题、用量和有界错误。证据绑定到已提交原文快照，并在过期时隐藏。重大项目在明确局部审核操作前保持未解决；重复的后端审核 identity 封闭失败，确定性的 `AI_EVIDENCE_REVIEW_REQUIRED` 表示为重大缺失证据项目，连续长文本会在窄屏断行。T046 继续负责结构化编辑、差异、校验编排和激活；T047+ 业务视图、T052 已安装组合、T041 生成契约和 T024 判断语义保持不变。
+`SourceTextEditor` 拥有一个局部纯文本模型。上限来自选中的运行配置，按与 Python 一致的 Unicode code point 计数，在第一个被拒绝的 code point 处停止扫描，并原子拒绝超限编辑而不截断。`ExtractionEvidence` 只通过已转义的 Vue 文本插值渲染经过校验的证据、假设、警告、遗漏、校验问题、用量和有界状态。成功的规范草稿也只作为转义文本显示并保持待审核；任何提取响应都不能启用计划。T046 继续负责结构化编辑、差异、校验编排和启用。
 
 ### T046 结构化计划编辑与激活边界
 
@@ -293,16 +295,16 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 安装后的 `trade-plan-monitor` 控制台入口解析到 `trade_plan_monitor.cli:console_main`。CLI 导入和解析器构造继续保持无副作用；`web` 分支只有在精确回环主机和有界端口解析成功后，才惰性创建一个生产应用上下文并导入/运行 Uvicorn。
 - Vite 继续以 `web/index.html` 为文档输入，并继续生成 `web/dist/index.html`。仅构建时启用的插件会用同一份完整 distribution 替换被忽略的 `src/trade_plan_monitor/web/dist` 暂存目录；setuptools 只打包其中的 `index.html` 和本地 `assets/*`。两个生成目录都不纳入版本控制。
 - 生产资源发现通过 `importlib.resources` 在整个服务生命周期内访问 `trade_plan_monitor.web/dist`。它绝不搜索当前工作目录、仓库根目录、`web/dist` 或其他源码树 fallback。缺少目录、`index.html`、`assets/` 或实际资源时，会在 Uvicorn 启动前只以 `WEB_ASSETS_UNAVAILABLE` 和固定文案 `Installed Web assets are unavailable.` 失败；绝不暴露路径、资源异常、context 或 cause。
-- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 37 个 REST 路径（保持不变的 24 个实时路径加 13 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
-- T052 不虚构数据库、供应商、只读模型或变更服务。明确注入的生命周期和应用服务继续保持权威；未注入时，打包命令使用无 I/O 的 `DEGRADED` 只读生命周期，既有端点以 `SERVICE_UNAVAILABLE` 封闭失败。该任务不增加 CDN、运行时远程资源、备用监听器、开发目录 fallback、T053 运维重写、T054 回放夹具、T055 浏览器流程、T056 安全矩阵、生成契约变更或 T024 行为。
+- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 38 个 REST 路径（25 个实时路径加 13 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
+- T052 的通用监控生命周期仍使用明确的 `DEGRADED` 只读 fallback，但现在负责配置文件驱动的 AI 生命周期。启动顺序是监控运行时、AI、回测，关闭严格反向执行。AI 启动时只读取一次 `config/app.yaml`，并尝试读取选中的、被忽略的项目密钥文件。YAML 非法会导致启动失败；选中的密钥文件缺失、格式非法、键重复、值为空、超大或不可读时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加环境变量后备、CDN、远程运行资源、备用监听器或开发目录 fallback。
 
 ### 已批准的回测扩展边界
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
-- 当前冻结契约精确为 37 条 REST 路径：保持不变的 24 条实时路径加精确 13 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
-- 当前 Router 基线仍是六条占位路由。扩展会增加真实或 lazy-loaded 的 `/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId` 视图，两个静态子路由必须排在动态路由之前；变更后生产路由集合精确为 10 条路径；
-- 增加四条真实回测路由不能证明六条历史占位路由已经接入其现有业务视图；
+- 当前冻结契约精确为 38 条 REST 路径：25 条实时路径（包含只读 AI 运行配置）加精确 13 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
+- 生产 Router 精确包含十条路径：一条真实 `/plans` 视图、四条真实或延迟加载的 `/backtests...` 视图，以及五条剩余历史占位路由；两个静态回测子路由继续排在动态路由之前；
+- 增加真实计划与回测路由不能证明五条剩余历史占位路由已经接入业务视图；
 - 新增的 13 条路径、四条路由、生成类型、运行时保护、URL 日期时间筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：输入使用 `+08:00` 和 0～6 位小数秒，输出/存储固定六位，并拒绝 `Z`、无偏移、超精度或其他偏移；
 - 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
 - 未显式注入生产服务时，`create_production_app(...)` 继续处于 `DEGRADED`/`SERVICE_UNAVAILABLE`。仅注册 Router Protocol 不等于产品可用组合。
@@ -341,12 +343,10 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 展开查看证据、阻断条件、事件 ID 和图表时间链接。
 - 确认文案必须明确说明“确认提醒不代表成交”。
 
-### `/system` — 系统与 AI 设置
+### `/system` — 系统健康
 
 - Tushare 能力、延迟、冷却、下次轮询、缺口、线程池、数据库和 WAL、备份及投递健康状态。
-- AI 供应商、基础 URL、模型、限制和提示词版本配置。
-- 只写 API 密钥替换、已配置状态掩码和有界连接测试。
-- 不展示密钥值或原始授权错误。
+- 此页面不修改 AI 配置。`/plans` 只显示安全的只读运行摘要，项目配置文件始终是权威来源。
 
 ### `/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId` — 回测研究
 
@@ -373,7 +373,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 | `PositionLots` | 局部批次表单、T+1 展示和显式确认 | 权威分页/预填/操作网关 | 已确认的增加或关闭命令 |
 | `PlanWorkbench` | 编排提取、审核、编辑和启用 | 草稿与提取结果 | 保存或启用 |
 | `SourceTextEditor` | 纯文本计划输入 | 原文 | 更新文本 |
-| `AIProviderSelector` | 选择或测试已配置供应商 | 供应商与状态 | 选择或测试 |
+| `AIProviderSelector` | 显示或选择配置文件中的供应商 | 安全运行摘要 | 选择 |
 | `ExtractionEvidence` | 展示证据、不确定性和遗漏 | 提取结果 | 解决问题 |
 | `StructuredPlanEditor` | 分区编辑强类型草稿 | 计划草稿与问题 | 更新草稿 |
 | `ActivationDiffDialog` | 确认不可变版本切换 | 变更前后内容与问题 | 确认或取消 |
@@ -437,7 +437,7 @@ const emit = defineEmits<Emits>()
 - WebSocket 测试覆盖快照一致性、顺序、回放、序号缺口、重连和重启。
 - Vue 单元测试覆盖 store、计划工作台、AI 提取审核、启用闸门、自选表、详情、提醒、设置、加载、错误、空状态及键盘交互。
 - 图表映射测试及无障碍表格替代视图测试。
-- Playwright 端到端流程：配置模拟 AI 供应商、粘贴计划、提取、解决警告、启用、回放行情、接收一条提醒、确认提醒，并验证持仓未变化。
+- Playwright 端到端流程：使用项目测试配置中的模拟 AI 供应商启动、粘贴计划、提取、解决警告、启用、回放行情、接收一条提醒、确认提醒，并验证持仓未变化。
 - 使用 axe 执行无障碍自动化测试，并补充键盘和人工检查。
 - 在桌面、平板和移动端宽度下进行浏览器验证。
 
@@ -456,7 +456,7 @@ const emit = defineEmits<Emits>()
 - 一个本地 URL 支持从粘贴文本计划、审核到启用计划的完整流程。
 - 监控总览和详情页独立展示全部 10 只股票，并在不刷新整页的情况下更新。
 - 浏览器断连后从一致快照恢复，且绝不把陈旧数据显示为实时。
-- AI 配置可正常使用，密钥提交后保持不可读取。
+- Web 使用项目配置加载的 AI 供应商，不显示修改控件，也绝不接收密钥值或其文件/键引用。
 - 存在重大遗漏或验证错误时，计划不得启用。
 - 一个确定性买入事件只生成一条带证据和免责声明的文本提醒。
 - 界面满足键盘操作、对比度、响应式、减少动态效果和非纯颜色表达等要求。
@@ -468,4 +468,4 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。经单独授权的 BT033 生产组合与 BT034 再生建立了当前精确 37 路径 OpenAPI 契约，同时保留 24 条实时路径；6 条占位 Router 基线在获批下游任务改变前继续作为权威状态。提交、推送、依赖安装和任何联网访问继续分别未获授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。当前 OpenAPI 契约精确包含 38 条路径，其中 25 条为实时路径；生产 Router 精确包含 10 条路径，其中 `/plans` 和四条回测路径是真实视图，其余五条仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。

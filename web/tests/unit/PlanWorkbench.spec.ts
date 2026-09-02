@@ -2,68 +2,41 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
-  AIProviderSecretCommand,
-  AIProviderView,
-  OperationReceipt,
+  ConfiguredAIRuntimeView,
   PlanExtractionCommand,
   PlanExtractionView,
 } from "../../src/api/generated";
 import PlanWorkbench from "../../src/components/plans/PlanWorkbench.vue";
 
-const firstProvider: AIProviderView = {
-  config: {
-    baseUrl: "https://ai.example.test/v1",
-    displayName: "审阅模型",
-    model: "review-model-v1",
-    providerId: "00000000-0000-0000-0000-000000000001",
-    secretReference: { key: "ai/provider/review" },
-  },
-  createdAt: "2026-08-24T10:00:00+08:00",
-  revision: 3,
-  secretStatus: {
-    configured: true,
-    generation: 2,
-    maskedValue: "********",
-    source: "STORE",
-  },
-  updatedAt: "2026-08-24T10:10:00+08:00",
+const firstProvider: ConfiguredAIRuntimeView = {
+  baseUrl: "https://ai.example.test/v1",
+  configured: true,
+  displayName: "审阅模型",
+  enabled: true,
+  maxInputChars: 200_000,
+  maxOutputTokens: 4_096,
+  model: "review-model-v1",
+  providerId: "00000000-0000-0000-0000-000000000001",
+  revision: 0,
 };
 
-const secondProvider: AIProviderView = {
-  config: {
-    baseUrl: "http://127.0.0.1:11434/v1",
-    displayName: "本地模型",
-    model: "local-review-model",
-    providerId: "00000000-0000-0000-0000-000000000002",
-    secretReference: { key: "ai/provider/local" },
-  },
-  createdAt: "2026-08-24T10:00:00+08:00",
-  revision: 4,
-  secretStatus: {
-    configured: false,
-    generation: 0,
-    maskedValue: null,
-    source: "NONE",
-  },
-  updatedAt: "2026-08-24T10:15:00+08:00",
+const secondProvider: ConfiguredAIRuntimeView = {
+  baseUrl: "http://127.0.0.1:11434/v1",
+  configured: false,
+  displayName: "本地模型",
+  enabled: true,
+  maxInputChars: 200_000,
+  maxOutputTokens: 4_096,
+  model: "local-review-model",
+  providerId: "00000000-0000-0000-0000-000000000002",
+  revision: 0,
 };
 
-const disabledProvider: AIProviderView = {
+const disabledProvider: ConfiguredAIRuntimeView = {
   ...firstProvider,
-  config: {
-    ...firstProvider.config,
-    displayName: "已停用模型",
-    enabled: false,
-    providerId: "00000000-0000-0000-0000-000000000003",
-  },
-  revision: 8,
-};
-
-const queuedProviderTest: OperationReceipt = {
-  kind: "AI_PROVIDER_TEST",
-  operationId: "00000000-0000-0000-0000-000000000101",
-  status: "QUEUED",
-  submittedAt: "2026-08-24T10:20:00+08:00",
+  displayName: "已停用模型",
+  enabled: false,
+  providerId: "00000000-0000-0000-0000-000000000003",
 };
 
 function extraction(
@@ -72,7 +45,7 @@ function extraction(
 ): PlanExtractionView {
   return {
     id: "00000000-0000-0000-0000-000000000201",
-    providerId: firstProvider.config.providerId,
+    providerId: firstProvider.providerId,
     status,
     submittedAt: "2026-08-24T10:30:00+08:00",
     ...overrides,
@@ -140,8 +113,7 @@ function mountWorkbench(
 ) {
   return mount(PlanWorkbench, {
     props: {
-      expectedRevision: 3,
-      initialProviderId: firstProvider.config.providerId,
+      initialProviderId: firstProvider.providerId,
       initialSourceText: "华亚智能交易计划",
       providers: [firstProvider, secondProvider],
       ...props,
@@ -150,138 +122,36 @@ function mountWorkbench(
 }
 
 describe("PlanWorkbench", () => {
-  it("selects a configured provider and emits a revision-guarded connection test", async () => {
-    const wrapper = mountWorkbench({
-      providerTestProviderId: firstProvider.config.providerId,
-      providerTestReceipt: queuedProviderTest,
-    });
+  it("shows file-configured provider metadata without any Web configuration control", async () => {
+    const wrapper = mountWorkbench();
     const providerSelect = wrapper.get<HTMLSelectElement>("#ai-provider");
 
-    expect(providerSelect.element.value).toBe(firstProvider.config.providerId);
-    expect(wrapper.text()).toContain("********");
+    expect(providerSelect.element.value).toBe(firstProvider.providerId);
+    expect(wrapper.text()).toContain("已配置");
     expect(wrapper.text()).not.toContain("ai/provider/review");
-    expect(wrapper.text()).toContain("连接测试已排队");
-    expect(wrapper.get('[data-testid="test-provider"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("配置文件只读");
+    expect(wrapper.find("#provider-secret").exists()).toBe(false);
+    expect(wrapper.find('[data-testid="replace-secret"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="test-provider"]').exists()).toBe(false);
 
-    await providerSelect.setValue(secondProvider.config.providerId);
-    expect(wrapper.text()).not.toContain(queuedProviderTest.operationId);
-    await wrapper.get('[data-testid="test-provider"]').trigger("click");
-    await wrapper.get('[data-testid="test-provider"]').trigger("click");
-
-    expect(wrapper.emitted("testProvider")).toEqual([
-      [{ expectedRevision: 4, providerId: secondProvider.config.providerId }],
-    ]);
-  });
-
-  it("releases local provider-test pending state when submission settles without a receipt", async () => {
-    const wrapper = mountWorkbench();
-    const testButton = wrapper.get('[data-testid="test-provider"]');
-
-    await testButton.trigger("click");
-    expect(testButton.attributes("disabled")).toBeDefined();
-    await wrapper.setProps({ providerTesting: true });
-    await wrapper.setProps({ providerTesting: false });
-
-    expect(testButton.attributes("disabled")).toBeUndefined();
+    await providerSelect.setValue(secondProvider.providerId);
+    expect(wrapper.text()).toContain("local-review-model");
   });
 
   it("never defaults to or submits work for a disabled provider", async () => {
     const wrapper = mountWorkbench({
-      initialProviderId: disabledProvider.config.providerId,
+      initialProviderId: disabledProvider.providerId,
       providers: [disabledProvider, firstProvider],
     });
     const providerSelect = wrapper.get<HTMLSelectElement>("#ai-provider");
 
-    expect(providerSelect.element.value).toBe(firstProvider.config.providerId);
-    await providerSelect.setValue(disabledProvider.config.providerId);
+    expect(providerSelect.element.value).toBe(firstProvider.providerId);
+    await providerSelect.setValue(disabledProvider.providerId);
 
     expect(wrapper.text()).toContain("已禁用");
-    expect(wrapper.get('[data-testid="test-provider"]').attributes("disabled")).toBeDefined();
     expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.disabled).toBe(true);
     await wrapper.get('[data-testid="source-editor"]').trigger("submit");
     expect(wrapper.emitted("submitExtraction")).toBeUndefined();
-  });
-
-  it("emits a write-only secret replacement and immediately clears secret form state", async () => {
-    const wrapper = mountWorkbench();
-    const secret = "sk-sensitive-never-render";
-    const input = wrapper.get<HTMLInputElement>("#provider-secret");
-
-    expect(input.attributes("autocomplete")).toBe("off");
-    await input.setValue(secret);
-    await wrapper.get('[data-testid="replace-secret"]').trigger("submit");
-
-    expect(wrapper.emitted("replaceSecret")).toEqual([
-      [
-        {
-          expectedRevision: 3,
-          providerId: firstProvider.config.providerId,
-          secret: { value: secret },
-        },
-      ],
-    ]);
-    expect(input.element.value).toBe("");
-    expect(wrapper.text()).not.toContain(secret);
-    expect(wrapper.html()).not.toContain(secret);
-  });
-
-  it("bounds transient secret input to the backend SecretWrite limit", async () => {
-    const wrapper = mountWorkbench();
-    const input = wrapper.get<HTMLInputElement>("#provider-secret");
-
-    expect(input.attributes("maxlength")).toBeUndefined();
-    await input.setValue("x".repeat(8_193));
-    expect(input.element.value).toBe("");
-    expect(wrapper.get('[role="alert"]').text()).toContain("密钥不能超过 8192 个字符");
-    await wrapper.get('[data-testid="replace-secret"]').trigger("submit");
-
-    expect(wrapper.emitted("replaceSecret")).toBeUndefined();
-  });
-
-  it("atomically rejects an astral secret above the backend code-point limit", async () => {
-    const wrapper = mountWorkbench();
-    const input = wrapper.get<HTMLInputElement>("#provider-secret");
-
-    await input.setValue("😀".repeat(8_193));
-
-    expect(input.element.value).toBe("");
-    expect(wrapper.get('[role="alert"]').text()).toContain("密钥不能超过 8192 个字符");
-    await wrapper.get('[data-testid="replace-secret"]').trigger("submit");
-    expect(wrapper.emitted("replaceSecret")).toBeUndefined();
-  });
-
-  it("counts astral secret characters with the backend Unicode code-point semantics", async () => {
-    const wrapper = mountWorkbench();
-    const validAstralSecret = "😀".repeat(4_097);
-
-    await wrapper.get<HTMLInputElement>("#provider-secret").setValue(validAstralSecret);
-    await wrapper.get('[data-testid="replace-secret"]').trigger("submit");
-
-    const command = wrapper.emitted("replaceSecret")?.[0]?.[0] as
-      | AIProviderSecretCommand
-      | undefined;
-    expect(command?.secret.value).toBe(validAstralSecret);
-  });
-
-  it("clears a pending secret when the selected provider identity changes", async () => {
-    const wrapper = mountWorkbench();
-    const input = wrapper.get<HTMLInputElement>("#provider-secret");
-
-    await input.setValue("secret-intended-for-provider-a");
-    await wrapper.get<HTMLSelectElement>("#ai-provider").setValue(secondProvider.config.providerId);
-
-    expect(input.element.value).toBe("");
-    await wrapper.get('[data-testid="replace-secret"]').trigger("submit");
-    expect(wrapper.emitted("replaceSecret")).toBeUndefined();
-  });
-
-  it("rejects an all-whitespace secret at the final emit boundary", async () => {
-    const wrapper = mountWorkbench();
-
-    await wrapper.get<HTMLInputElement>("#provider-secret").setValue("   \t");
-    await wrapper.get('[data-testid="replace-secret"]').trigger("submit");
-
-    expect(wrapper.emitted("replaceSecret")).toBeUndefined();
   });
 
   it("submits pasted Chinese source for extraction without exposing an activation action", async () => {
@@ -294,8 +164,8 @@ describe("PlanWorkbench", () => {
     expect(wrapper.emitted("submitExtraction")).toEqual([
       [
         {
-          expectedRevision: 3,
-          providerId: firstProvider.config.providerId,
+          expectedRevision: 0,
+          providerId: firstProvider.providerId,
           sourceText: source,
         },
       ],
@@ -310,7 +180,7 @@ describe("PlanWorkbench", () => {
     expect(wrapper.get('[role="status"]').text()).toContain("提取任务已排队");
     expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.disabled).toBe(true);
     await wrapper.get('[data-testid="stop-waiting"]').trigger("click");
-    expect(wrapper.emitted("cancelExtraction")).toEqual([
+    expect(wrapper.emitted("stopWaiting")).toEqual([
       ["00000000-0000-0000-0000-000000000201"],
     ]);
 
@@ -520,12 +390,13 @@ describe("PlanWorkbench", () => {
 
     expect(wrapper.get('[role="alert"]').text()).toContain("AI 供应商暂时不可用");
     expect(wrapper.text()).not.toContain("Authorization");
+    expect(wrapper.text()).not.toContain("尚未提交提取任务");
     await wrapper.get('[data-testid="retry-extraction"]').trigger("click");
     expect(wrapper.emitted("submitExtraction")).toEqual([
       [
         {
-          expectedRevision: 3,
-          providerId: firstProvider.config.providerId,
+          expectedRevision: 0,
+          providerId: firstProvider.providerId,
           sourceText: "华亚智能交易计划",
         },
       ],
@@ -619,10 +490,8 @@ describe("PlanWorkbench", () => {
     const wrapper = mountWorkbench();
 
     expect(wrapper.get('label[for="ai-provider"]')).toBeTruthy();
-    expect(wrapper.get('label[for="provider-secret"]')).toBeTruthy();
     expect(wrapper.get('label[for="plan-source-text"]')).toBeTruthy();
     expect(wrapper.get("#ai-provider").element.tagName).toBe("SELECT");
-    expect(wrapper.get("#provider-secret").element.tagName).toBe("INPUT");
     expect(wrapper.get("#plan-source-text").element.tagName).toBe("TEXTAREA");
     expect(wrapper.findAll("button").every((button) => button.element.tagName === "BUTTON")).toBe(
       true,

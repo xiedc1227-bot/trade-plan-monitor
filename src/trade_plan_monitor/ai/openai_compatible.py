@@ -2,6 +2,8 @@
 
 The HTTP shape and streaming behavior follow the current official contracts:
 https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+https://api-docs.deepseek.com/api/create-chat-completion/
+https://api-docs.deepseek.com/guides/json_mode/
 https://www.python-httpx.org/async/#streaming-responses
 https://www.python-httpx.org/advanced/timeouts/
 """
@@ -16,7 +18,11 @@ from typing import Annotated, Any, Literal, Protocol
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints, ValidationError
 
-from trade_plan_monitor.ai.models import AIProviderConfig, SecretReference
+from trade_plan_monitor.ai.models import (
+    AIProviderConfig,
+    AIProviderProfile,
+    SecretReference,
+)
 from trade_plan_monitor.ai.provider import (
     AIProviderError,
     AIProviderErrorCode,
@@ -95,10 +101,14 @@ class OpenAICompatibleProvider:
         *,
         client: httpx.AsyncClient,
         secret_store: _SecretMaterializer,
+        profile: AIProviderProfile = AIProviderProfile.OPENAI_COMPATIBLE,
         sleep: _Sleep = asyncio.sleep,
     ) -> None:
+        if not isinstance(profile, AIProviderProfile):
+            raise TypeError("profile must be an AIProviderProfile")
         self._client = client
         self._secret_store = secret_store
+        self._profile = profile
         self._sleep = sleep
 
     async def test_connection(self, config: AIProviderConfig) -> ProviderTestResult:
@@ -152,9 +162,15 @@ class OpenAICompatibleProvider:
             "model": config.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": config.temperature,
-            "max_completion_tokens": max_completion_tokens,
             "stream": False,
         }
+        if self._profile is AIProviderProfile.DEEPSEEK:
+            payload["max_tokens"] = max_completion_tokens
+            payload["thinking"] = {"type": "disabled"}
+            if operation is AIProviderOperation.EXTRACT_PLAN:
+                payload["response_format"] = {"type": "json_object"}
+        else:
+            payload["max_completion_tokens"] = max_completion_tokens
         max_attempts = config.max_retries + 1
         for attempt in range(1, max_attempts + 1):
             failure: _AttemptFailure | None = None

@@ -3,7 +3,7 @@ import type { RouteComponent, RouteRecordRaw } from "vue-router";
 
 import { routes } from "../../src/router";
 
-const historicalPlaceholderPaths = [
+const historicalPaths = [
   "/",
   "/stocks/:symbol",
   "/plans",
@@ -11,6 +11,8 @@ const historicalPlaceholderPaths = [
   "/alerts",
   "/system",
 ] as const;
+
+const remainingPlaceholderPaths = historicalPaths.filter((path) => path !== "/plans");
 
 const backtestPaths = [
   "/backtests",
@@ -31,13 +33,14 @@ describe("backtest production routes", () => {
   it("expands the exact six-route placeholder surface to exactly ten routes", () => {
     expect(routes).toHaveLength(10);
     expect(routes.map((route) => route.path)).toEqual([
-      ...historicalPlaceholderPaths,
+      ...historicalPaths,
       ...backtestPaths,
     ]);
 
-    for (const path of historicalPlaceholderPaths) {
+    for (const path of remainingPlaceholderPaths) {
       expect(typeof routeAt(path).component).not.toBe("function");
     }
+    expect(typeof routeAt("/plans").component).toBe("function");
   });
 
   it("keeps the three static backtest routes before the dynamic run route", () => {

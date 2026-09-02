@@ -22,6 +22,7 @@ LOCAL_WEB_SPEC_ZH_PATH = (
 )
 
 APPROVED_PATHS = {
+    "/api/v1/ai-runtime",
     "/api/v1/ai-provider-secrets",
     "/api/v1/ai-provider-tests",
     "/api/v1/ai-providers",

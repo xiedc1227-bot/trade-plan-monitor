@@ -335,7 +335,20 @@ class ActivePlanView(ApiValue):
         return self
 
 
-class PlanOperationService(Protocol):
+class PlanExtractionService(Protocol):
+    """Application-service contract for review-only configured AI operations."""
+
+    async def submit_plan_extraction(
+        self,
+        *,
+        command: PlanExtractionCommand,
+        context: MutationContext,
+    ) -> OperationReceipt: ...
+
+    async def get_plan_extraction(self, *, operation_id: str) -> PlanExtractionView | None: ...
+
+
+class PlanOperationService(PlanExtractionService, Protocol):
     """Application-service contract for atomic idempotency, revision, and audit work."""
 
     async def list_plan_versions(
@@ -364,15 +377,6 @@ class PlanOperationService(Protocol):
         context: MutationContext,
     ) -> PlanVersionView: ...
 
-    async def submit_plan_extraction(
-        self,
-        *,
-        command: PlanExtractionCommand,
-        context: MutationContext,
-    ) -> OperationReceipt: ...
-
-    async def get_plan_extraction(self, *, operation_id: str) -> PlanExtractionView | None: ...
-
     async def activate_plan(
         self,
         *,
@@ -398,6 +402,21 @@ def get_plan_operation_service(request: Request) -> PlanOperationService:
 PlanServiceDependency = Annotated[
     PlanOperationService,
     Depends(get_plan_operation_service),
+]
+
+
+def get_plan_extraction_service(request: Request) -> PlanExtractionService:
+    service = getattr(request.app.state, "plan_extraction_service", None)
+    if service is None:
+        service = getattr(request.app.state, "plan_operation_service", None)
+    if service is None:
+        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+    return cast(PlanExtractionService, service)
+
+
+PlanExtractionServiceDependency = Annotated[
+    PlanExtractionService,
+    Depends(get_plan_extraction_service),
 ]
 
 
@@ -518,7 +537,7 @@ async def import_plan(
 async def submit_plan_extraction(
     command: PlanExtractionCommand,
     context: MutationContextDependency,
-    service: PlanServiceDependency,
+    service: PlanExtractionServiceDependency,
 ) -> OperationReceipt:
     receipt = validate_api_response(
         await service.submit_plan_extraction(command=command, context=context),
@@ -532,7 +551,7 @@ async def submit_plan_extraction(
 @router.get("/plan-extractions/{operation_id}", response_model=PlanExtractionView)
 async def get_plan_extraction(
     operation_id: ResourceIdPath,
-    service: PlanServiceDependency,
+    service: PlanExtractionServiceDependency,
 ) -> PlanExtractionView:
     value = await service.get_plan_extraction(operation_id=str(operation_id))
     if value is None:
@@ -604,6 +623,7 @@ __all__ = [
     "PlanDeactivationCommand",
     "PlanDraftCommand",
     "PlanExtractionCommand",
+    "PlanExtractionService",
     "PlanExtractionView",
     "PlanImportCommand",
     "PlanOperationService",
