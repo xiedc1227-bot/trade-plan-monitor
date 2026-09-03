@@ -28,9 +28,16 @@ from trade_plan_monitor.backtest.dataset import (
     DatasetManifest,
     FrozenDatasetReader,
     FrozenDatasetSource,
+    FrozenMarketIndexDatasetReader,
     SymbolFilteredFrozenDatasetSource,
 )
 from trade_plan_monitor.backtest.execution import DeterministicExecutionEngine
+from trade_plan_monitor.backtest.index_data import (
+    BacktestReferenceMarketResult,
+    MarketIndexReplaySeries,
+    build_backtest_index_requirement,
+    build_reference_market_result,
+)
 from trade_plan_monitor.backtest.models import (
     EquitySnapshot,
     ExecutionBar,
@@ -95,6 +102,7 @@ from trade_plan_monitor.market_data.reconciliation import reconcile_daily_close
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 RUN_FORMULA_VERSION = RUN_FORMULA_V1
 _REPORT_SCHEMA_VERSION = "backtest-report-v1"
+_INDEX_REPORT_SCHEMA_VERSION = "backtest-report-v2"
 _FIVE_MINUTE_CONTEXT_BARS = FIVE_MINUTE_CONTEXT_BARS
 _DAILY_CONTEXT_BARS = DAILY_CONTEXT_BARS
 _CALENDAR_CONTEXT_DAYS = CALENDAR_CONTEXT_DAYS
@@ -160,6 +168,7 @@ class _ReplayInternPool:
                 tuple(id(fact) for fact in facts),
                 value.missing_inputs,
                 tuple(id(child) for child in children),
+                value.index_evidence,
             )
         elif isinstance(value, RuleEvidence):
             normalized = _trusted_rebind_equal(value, facts=facts)
@@ -248,7 +257,7 @@ class BacktestMetrics(_BacktestValue):
 
 
 class _BacktestRunReportPayload(_BacktestValue):
-    schema_version: Literal["backtest-report-v1"] = _REPORT_SCHEMA_VERSION
+    schema_version: Literal["backtest-report-v1", "backtest-report-v2"] = _REPORT_SCHEMA_VERSION
     run_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     status: Literal["COMPLETED"] = "COMPLETED"
     plan_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -267,6 +276,18 @@ class _BacktestRunReportPayload(_BacktestValue):
     final_positions: tuple[PositionSnapshot, ...]
     metrics: BacktestMetrics
     limitations: tuple[str, ...] = _LIMITATIONS
+    reference_market: BacktestReferenceMarketResult | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+
+    @model_validator(mode="after")
+    def validate_schema_version(self) -> Self:
+        if (self.schema_version == _INDEX_REPORT_SCHEMA_VERSION) != (
+            self.reference_market is not None
+        ):
+            raise ValueError("report schema version must match reference-market content")
+        return self
 
 
 class BacktestRunReport(_BacktestRunReportPayload):
@@ -292,7 +313,12 @@ class BacktestRunReport(_BacktestRunReportPayload):
     def _from_validated_payload(cls, payload: _BacktestRunReportPayload) -> Self:
         digest = _stable_model_hash(
             payload,
-            domain="backtest-report-v1",
+            domain=payload.schema_version,
+            exclude_fields=(
+                frozenset({"reference_market"})
+                if payload.schema_version == _REPORT_SCHEMA_VERSION
+                else frozenset()
+            ),
         )
         return cls.model_construct(
             **{name: getattr(payload, name) for name in _BacktestRunReportPayload.model_fields},
@@ -304,13 +330,14 @@ class BacktestRunReport(_BacktestRunReportPayload):
 
     @model_validator(mode="after")
     def validate_report_hash(self) -> Self:
-        expected = _stable_hash(
-            self.model_dump(
-                mode="python",
-                round_trip=True,
-                exclude={"report_hash"},
+        expected = _stable_model_hash(
+            self,
+            domain=self.schema_version,
+            exclude_fields=(
+                frozenset({"report_hash", "reference_market"})
+                if self.schema_version == _REPORT_SCHEMA_VERSION
+                else frozenset({"report_hash"})
             ),
-            domain="backtest-report-v1",
         )
         if self.report_hash != expected:
             raise ValueError("report_hash must match the canonical report")
@@ -411,7 +438,37 @@ class OfflineBacktestRunner:
         scope = reader.scope
         if plan.symbol not in scope.symbols:
             raise BacktestBlockedError(f"PLAN_SYMBOL_NOT_IN_DATASET:{plan.symbol}")
-        manifest = DatasetManifest(dataset_hash=dataset_hash, scope=scope, items=())
+        index_requirement = build_backtest_index_requirement(plan)
+        index_series: MarketIndexReplaySeries | None = None
+        index_bars = ()
+        index_official_open_dates: tuple[date, ...] = ()
+        reference_market: BacktestReferenceMarketResult | None = None
+        if index_requirement.required:
+            if not isinstance(reader, FrozenMarketIndexDatasetReader):
+                raise BacktestBlockedError("MISSING_REFERENCE_MARKET_DATASET")
+            manifest = reader.manifest
+            if manifest.dataset_hash != dataset_hash:
+                raise BacktestBlockedError("DATASET_READER_IDENTITY_MISMATCH")
+            binding = index_requirement.binding
+            if binding is None:  # pragma: no cover - requirement model guards this
+                raise BacktestBlockedError("MISSING_REFERENCE_MARKET_BINDING")
+            index_bars = reader.market_index_bars(binding.index_code)
+            index_official_open_dates = tuple(
+                sorted(
+                    {
+                        item.trade_date
+                        for item in manifest.items
+                        if item.kind == "DAILY" and item.symbol == plan.symbol
+                    }
+                )
+            )
+            index_series = MarketIndexReplaySeries(
+                index_code=binding.index_code,
+                bars=index_bars,
+                dataset_revision=reader.dataset_revision,
+            )
+        else:
+            manifest = DatasetManifest(dataset_hash=dataset_hash, scope=scope, items=())
         run_input = BacktestRunInput.create(
             plan=plan,
             manifest=manifest,
@@ -421,6 +478,20 @@ class OfflineBacktestRunner:
             manual_event_risk=manual_event_risk,
             plan_version_id=plan_version_id,
         )
+        if index_requirement.required:
+            if run_input.market_index_data_hash is None:  # pragma: no cover - v3 guard
+                raise BacktestBlockedError("MISSING_INDEX_DATA_HASH")
+            reference_market = build_reference_market_result(
+                plan=plan,
+                dataset_hash=dataset_hash,
+                market_data_hash=run_input.market_index_data_hash,
+                event_start=scope.start,
+                dataset_warmup_start=scope.warmup_start,
+                official_open_dates=index_official_open_dates,
+                bars=index_bars,
+            )
+            if reference_market.blockers:
+                raise BacktestBlockedError(*reference_market.blockers)
         position_lots = run_input.derive_position_lots()
         plan_hash = run_input.plan_sha256
         run_id = run_input.run_id
@@ -566,6 +637,8 @@ class OfflineBacktestRunner:
                     engine=engine,
                     manual_event_risk=manual_event_risk,
                     activation_origin=activation_origin,
+                    index_series=index_series,
+                    index_requests=index_requirement.fact_requests,
                 )
                 check_cancelled(cancellation_token, "RUN_EVALUATION", last_safe_event_id)
                 result = self._evaluate_context(context, intern_pool)
@@ -605,6 +678,8 @@ class OfflineBacktestRunner:
                 engine=engine,
                 manual_event_risk=manual_event_risk,
                 activation_origin=activation_origin,
+                index_series=index_series,
+                index_requests=index_requirement.fact_requests,
             )
             check_cancelled(cancellation_token, "RUN_EVALUATION", last_safe_event_id)
             official_result = self._evaluate_context(official_context, intern_pool)
@@ -650,9 +725,25 @@ class OfflineBacktestRunner:
             daily_equity=tuple(daily_equity),
         )
         check_cancelled(cancellation_token, "RUN_REPORT_HANDOFF", last_safe_event_id)
+        if reference_market is not None:
+            reference_market = build_reference_market_result(
+                plan=plan,
+                dataset_hash=dataset_hash,
+                market_data_hash=reference_market.market_index_data_hash,
+                event_start=scope.start,
+                dataset_warmup_start=scope.warmup_start,
+                official_open_dates=index_official_open_dates,
+                bars=index_bars,
+                decisions=tuple(decisions),
+            )
         # Every nested model and scalar below was created by a strict public model
         # boundary or derived from those values inside this replay.
         return BacktestRunReport._build_from_validated(
+            schema_version=(
+                _INDEX_REPORT_SCHEMA_VERSION
+                if reference_market is not None
+                else _REPORT_SCHEMA_VERSION
+            ),
             run_id=run_id,
             plan_hash=plan_hash,
             dataset_hash=dataset_hash,
@@ -669,6 +760,7 @@ class OfflineBacktestRunner:
             daily_equity=tuple(daily_equity),
             final_positions=engine.position_snapshots,
             metrics=metrics,
+            reference_market=reference_market,
         )
 
     @staticmethod
@@ -715,6 +807,8 @@ class OfflineBacktestRunner:
         engine: DeterministicExecutionEngine,
         manual_event_risk: bool,
         activation_origin: datetime,
+        index_series: MarketIndexReplaySeries | None,
+        index_requests: tuple,
     ) -> EvaluationContext:
         bucket_end = five_minute_bars[-1].bar_end
         evaluated_at = current_minutes[-1].received_at
@@ -761,6 +855,15 @@ class OfflineBacktestRunner:
             low_zone_episode=episode,
             risk_state=risk_state,
             manual_event_risk=manual_event_risk,
+            reference_market_snapshot=(
+                None
+                if index_series is None
+                else index_series.snapshot(
+                    decision_cutoff=bucket_end,
+                    requests=index_requests,
+                    observed_no_later_than=evaluated_at,
+                )
+            ),
         )
 
     def _official_context(
@@ -781,6 +884,8 @@ class OfflineBacktestRunner:
         engine: DeterministicExecutionEngine,
         manual_event_risk: bool,
         activation_origin: datetime,
+        index_series: MarketIndexReplaySeries | None,
+        index_requests: tuple,
     ) -> EvaluationContext:
         cutoff = datetime.combine(official.trade_date, time(15, 0), SHANGHAI)
         evaluated_at = official.received_at
@@ -826,6 +931,15 @@ class OfflineBacktestRunner:
             low_zone_episode=episode,
             risk_state=risk_state,
             manual_event_risk=manual_event_risk,
+            reference_market_snapshot=(
+                None
+                if index_series is None
+                else index_series.snapshot(
+                    decision_cutoff=cutoff,
+                    requests=index_requests,
+                    observed_no_later_than=evaluated_at,
+                )
+            ),
         )
 
     def _evaluate_context(
@@ -1030,12 +1144,20 @@ def _stable_hash(value: object, *, domain: str) -> str:
     return sha256((domain + "\0" + _canonical_json(value)).encode("utf-8")).hexdigest()
 
 
-def _stable_model_hash(value: BaseModel, *, domain: str) -> str:
+def _stable_model_hash(
+    value: BaseModel,
+    *,
+    domain: str,
+    exclude_fields: frozenset[str] = frozenset(),
+) -> str:
     """Hash canonical model JSON without materializing a second complete tree."""
 
     digest = sha256((domain + "\0").encode("utf-8"))
     digest.update(b"{")
-    for index, name in enumerate(sorted(type(value).model_fields)):
+    field_names = tuple(
+        name for name in sorted(type(value).model_fields) if name not in exclude_fields
+    )
+    for index, name in enumerate(field_names):
         if index:
             digest.update(b",")
         digest.update(json.dumps(name, ensure_ascii=False).encode("utf-8"))

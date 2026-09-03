@@ -114,7 +114,7 @@ class AIProviderConfig(_AIValue):
     max_input_chars: int = Field(default=50_000, ge=1, le=200_000)
     max_output_tokens: int = Field(default=4_096, ge=1, le=16_384)
     temperature: float = Field(default=0, ge=0, le=0.3)
-    prompt_version: PromptVersion = "plan-extract-v1"
+    prompt_version: PromptVersion = "plan-extract-v2"
     allow_redirects: Literal[False] = False
     enabled: bool = True
 

@@ -7,8 +7,11 @@ import type { ViteDevServer } from "vite";
 
 import type {
   BacktestDatasetPage,
+  BacktestDetailPage,
   BacktestEquitySeries,
   BacktestJobView,
+  BacktestMarketIndexSeriesView,
+  BacktestReferenceMarketCoverageView,
   BacktestRunPage,
   BacktestRunSummaryView,
   BacktestRunView,
@@ -20,7 +23,9 @@ const axePath = require.resolve("axe-core/axe.min.js");
 const RUN_ID = "a".repeat(64);
 const DATASET_HASH = "d".repeat(64);
 const JOB_ID = "e2e-run-job-001";
+const PLAN_VERSION_ID = "123e4567-e89b-42d3-a456-426614174000";
 const TIME = "2026-08-30T10:00:00.000000+08:00";
+const INDEX_TIME = "2026-08-28T15:00:00.000000+08:00";
 const ROUTES = [
   { heading: "回测运行记录", path: "/backtests", readyTestId: "run-detail-link" },
   { heading: "创建回测", path: "/backtests/new", readyTestId: "submit-backtest-run" },
@@ -47,6 +52,7 @@ const dashboard: DashboardResponse = {
     stale: 0,
   },
   dataAgeSeconds: 0,
+  marketIndexes: [],
   observedAt: TIME,
   sequence: 1,
   symbols: [],
@@ -132,7 +138,8 @@ const runView: BacktestRunView = {
   },
   pinned: false,
   planHash: "e".repeat(64),
-  planVersionId: "123e4567-e89b-42d3-a456-426614174000",
+  planVersionId: PLAN_VERSION_ID,
+  referenceMarket: null,
   reportHash: "f".repeat(64),
   revision: 0,
   runId: RUN_ID,
@@ -150,7 +157,7 @@ const runSummary: BacktestRunSummaryView = {
   metrics: runView.metrics,
   pinned: runView.pinned,
   planHash: runView.planHash,
-  planVersionId: runView.planVersionId,
+  planVersionId: PLAN_VERSION_ID,
   reportHash: runView.reportHash,
   revision: runView.revision,
   runId: runView.runId,
@@ -198,7 +205,7 @@ const datasetPage: BacktestDatasetPage = {
       },
       createdAt: TIME,
       datasetHash: DATASET_HASH,
-      schemaVersion: "backtest-dataset-v1",
+      schemaVersion: "backtest-dataset-v2",
       scope: {
         adjustmentPolicy: "NONE",
         end: "2026-08-28",
@@ -233,6 +240,158 @@ const equitySeries: BacktestEquitySeries = {
       unrealizedPnlFen: "110000",
     },
   ],
+};
+
+const referenceMarketCoverage: BacktestReferenceMarketCoverageView = {
+  availableFiveMinuteCount: 0,
+  availableOfficialDayCount: 22,
+  binding: {
+    board: "SZSE_MAIN",
+    displayName: "深证成指",
+    indexCode: "399001.SZ",
+    mappingVersion: "board-index-map-v1",
+    selection: "AUTO_BOARD",
+  },
+  blockers: [],
+  conditionPaths: ["entry.conditions.all[0]"],
+  coverageStatus: "AVAILABLE",
+  datasetHash: DATASET_HASH,
+  formulaDefinitionHash: "2".repeat(64),
+  indexRequirementHash: "3".repeat(64),
+  marketIndexDataHash: "4".repeat(64),
+  planVersionId: PLAN_VERSION_ID,
+  required: true,
+  requiredFiveMinuteCount: 0,
+  requiredOfficialDayCount: 21,
+  warmupEnd: "2026-08-28",
+  warmupStart: "2026-07-01",
+};
+
+const conditionSummary = {
+  applicableBranchCount: 1,
+  conditionType: "INDEX_CLOSE_GTE_MA" as const,
+  formulaId: "SMA" as const,
+  missingCount: 0,
+  parameters: { period: 20 },
+  planPath: "entry.conditions.all[0]",
+  satisfiedCount: 1,
+  unsatisfiedCount: 0,
+};
+
+const marketIndexSeries: BacktestMarketIndexSeriesView = {
+  conditionSummaries: [conditionSummary],
+  healthTimeline: [{ dataAt: INDEX_TIME, health: "LIVE", issues: [] }],
+  items: [
+    {
+      closePoints: "10000.5",
+      dataAt: INDEX_TIME,
+      health: "LIVE",
+      indicatorFacts: [
+        {
+          formulaDefinitionHash: "2".repeat(64),
+          formulaId: "SMA",
+          period: 20,
+          sourceBarHash: "5".repeat(64),
+          unit: "POINTS",
+          value: "9999.5",
+        },
+      ],
+      issues: [],
+      snapshotHash: "6".repeat(64),
+      tradeDate: "2026-08-28",
+    },
+  ],
+  referenceMarket: {
+    binding: referenceMarketCoverage.binding,
+    blockers: [],
+    conditionPaths: referenceMarketCoverage.conditionPaths,
+    conditionSummaries: [conditionSummary],
+    coverageStatus: "AVAILABLE",
+    datasetHash: DATASET_HASH,
+    formulaDefinitionHash: referenceMarketCoverage.formulaDefinitionHash,
+    indexRequirementHash: referenceMarketCoverage.indexRequirementHash,
+    marketIndexDataHash: referenceMarketCoverage.marketIndexDataHash!,
+    required: true,
+    warmupStart: referenceMarketCoverage.warmupStart,
+  },
+  runId: RUN_ID,
+};
+
+const decisionDetails: BacktestDetailPage = {
+  availability: "AVAILABLE",
+  filters: { kind: "DECISION" },
+  hasMore: false,
+  highWatermark: "decision.watermark_001",
+  items: [
+    {
+      decision: {
+        dataAgeSeconds: 0,
+        dataHealth: {
+          dataAgeSeconds: 0,
+          fresh: true,
+          latestBarEnd: TIME,
+          requiredDataComplete: true,
+          status: "LIVE",
+        },
+        episodeLowFen: null,
+        episodeStatus: null,
+        evaluatedAt: TIME,
+        evidence: [],
+        marketDataAt: TIME,
+        nextStep: { code: "WAIT_FOR_COMPLETE_BAR", notBefore: null, requiredInputs: [] },
+        planHash: runView.planHash,
+        planId: "plan-001",
+        planVersion: 1,
+        position: {
+          coreQuantity: 0,
+          sellableCoreQuantity: 0,
+          sellableTacticalQuantity: 0,
+          tacticalQuantity: 0,
+          totalQuantity: 0,
+        },
+        priceFen: "100000",
+        referenceMarket: {
+          dataAt: INDEX_TIME,
+          evidence: [
+            {
+              actualValue: "10000.5",
+              comparisonValue: "9999.5",
+              conditionType: "INDEX_CLOSE_GTE_MA",
+              dataCutoff: INDEX_TIME,
+              decisionCutoff: TIME,
+              formulaDefinitionHash: referenceMarketCoverage.formulaDefinitionHash,
+              formulaId: "SMA",
+              indexCode: "399001.SZ",
+              mappingVersion: "board-index-map-v1",
+              missingInputs: [],
+              outcome: "SATISFIED",
+              parameters: [{ key: "period", unit: "BARS", value: 20 }],
+              planPath: "entry.conditions.all[0]",
+              snapshotHash: "6".repeat(64),
+              unit: "POINTS",
+            },
+          ],
+          health: "LIVE",
+          indexCode: "399001.SZ",
+          snapshotHash: "6".repeat(64),
+        },
+        resultHash: "7".repeat(64),
+        riskBreachTradeDate: null,
+        riskStatus: "CLEAR",
+        signalType: "BUY_CORE_READY",
+        symbol: "000001.SZ",
+        zone: "LOW_BUY",
+      },
+      detailId: "detail-decision-001",
+      eventAt: TIME,
+      kind: "DECISION",
+      resultHash: "7".repeat(64),
+      runId: RUN_ID,
+    },
+  ],
+  kind: "DECISION",
+  limit: 100,
+  nextCursor: null,
 };
 
 test.beforeAll(async () => {
@@ -376,6 +535,12 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
         await fulfillJson(route, datasetPage);
       } else if (key === `GET /api/v1/backtest-runs/${RUN_ID}/equity-series`) {
         await fulfillJson(route, equitySeries);
+      } else if (key === `GET /api/v1/backtest-runs/${RUN_ID}/market-index-series`) {
+        await fulfillJson(route, marketIndexSeries);
+      } else if (key === `GET /api/v1/backtest-runs/${RUN_ID}/details`) {
+        await fulfillJson(route, decisionDetails);
+      } else if (key === `GET /api/v1/backtest-datasets/${DATASET_HASH}/reference-market-coverage`) {
+        await fulfillJson(route, referenceMarketCoverage);
       } else if (key === `GET /api/v1/backtest-runs/${RUN_ID}`) {
         await fulfillJson(route, runView);
       } else if (key === `GET /api/v1/backtest-jobs/${JOB_ID}`) {
@@ -469,6 +634,12 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   await expectNoSeriousAxeViolations(page);
 
   await openRoute(page, ROUTES[1]);
+  await page.locator("#plan-version-id").fill(PLAN_VERSION_ID);
+  await page.locator("#dataset-hash").fill(DATASET_HASH);
+  await expect(page.getByTestId("reference-market-coverage")).toContainText("深证成指");
+  await expect(page.getByTestId("reference-market-coverage")).toContainText(
+    "entry.conditions.all[0]",
+  );
   await page.getByTestId("submit-backtest-run").focus();
   const reducedMotionSeconds = await page.getByTestId("submit-backtest-run").evaluate((element) =>
     Math.max(
@@ -498,6 +669,20 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   await expect(page.getByTestId("result-tab-summary")).toHaveAttribute("aria-current", "page");
   await page.getByTestId("export-summary-json").focus();
   await expect(page.getByTestId("export-summary-json")).toBeFocused();
+  await expectNoSeriousAxeViolations(page);
+
+  await page.getByTestId("result-tab-market-index").click();
+  await expect(page.getByRole("heading", { name: "共用指数数据" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "计划指数条件结果" })).toBeVisible();
+  await expect(page.getByText("entry.conditions.all[0]", { exact: true })).toBeVisible();
+  await page.locator('button[data-trade-date="2026-08-28"]').click();
+  await expect(page).toHaveURL((url) =>
+    url.searchParams.get("tab") === "details" && url.searchParams.get("kind") === "DECISION",
+  );
+  await expect(page.getByTestId("backtest-detail-row")).toContainText("399001.SZ");
+  await expect(page.getByTestId("backtest-detail-row")).toContainText(
+    "entry.conditions.all[0]",
+  );
   await expectNoSeriousAxeViolations(page);
 
   expectChromiumProject(testInfo);

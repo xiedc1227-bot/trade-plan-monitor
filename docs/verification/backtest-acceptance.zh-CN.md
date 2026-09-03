@@ -28,6 +28,26 @@
 
 两个新增功能节点合并运行结果为 `2 passed`；固定验收文件共收集八个节点。
 
+## 2026-09-02 板块指数扩展证据
+
+已批准的 `market-index-context` 设计现已在监控和回测中完成离线实现。封闭的 `board-index-map-v1` 只映射五个已批准板块，无法分类的股票不会回退而是直接拒绝。共用快照测试证明同一指数/截止时间/请求集合只获取一次并以不可变形式发布；判断测试证明两份计划可以基于同一快照得到不同最终结果，且没有指数叶子的计划在指数数据缺失或阻断时保持原有判断。
+
+Schema v2 增加自动参考市场绑定和六种允许的条件叶子，使用准确范围、三值 `MISSING_INPUT` 行为、确定性路径证据和新哈希域。既有 Schema v1 计划/结果黄金值保持不变。生成式 AI Schema 的变化独立版本化为 `plan-extract-v2`；逐字节相同的 v1 提示词仍可使用，其 SHA-256 为 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`，v2 固定为 `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`。
+
+回测数据集 v2 冻结规范化指数 artifact 和准确成员关系，不重写 v1 数据集。运行 v3 复用共用快照/公式计算器，持久化逐决策参考市场证据，并在保持 summary-v2 与 fills-v2 字节兼容的同时发布 summary-v3 导出证据。运行前覆盖端点和已完成运行的指数序列端点均以后端为权威且有界，并纳入冻结的 41 路径 OpenAPI 契约；其 SHA-256 为 `18ce84db8156ad5c4db94a193157e6509b46ab4a03bfdc1ea2b2dceb88fe9d0c`。
+
+验证过程未提供供应商凭据，也没有外部流量：
+
+- 最终缓存身份和正式收盘批处理修复后的快照/运行时受影响聚焦回归：`54 passed`；
+- 完整非 live 后端集合：`2,104 passed, 1 skipped`；最终工作树上的八个长时验收节点在 `2,598.17 s` 内全部通过，其余分区为 `2,096 passed, 1 skipped, 4 deselected`；
+- AI 提示词兼容/版本回归：`72 passed`；
+- 冻结 OpenAPI 快照回归：`13 passed`、共 `41` 条路径，生成 TypeScript 无漂移；
+- 前端单元套件：`30` 个文件、`497 passed`；
+- 隔离 Chromium：`7 passed`，包括后端解析的运行前覆盖、冻结参考指数页签、准确计划路径和持久化逐决策证据；
+- Ruff、`compileall`、OpenAPI/生成 TypeScript 漂移检查、Vue/TypeScript 类型检查、Vite 生产构建和空白检查通过。
+
+真实板块指数供应商能力刻意保持 `UNVERIFIED`。没有调用 Tushare 或其他供应商端点；准确盘中/日线接口、账户对五个指数代码的权限、时间戳/字段语义、限额和最长历史均不在本次授权范围内。离线实现只提供严格供应商协议和确定性 fake，不能解释为真实服务已经就绪。
+
 ## 后端资源与性能证据
 
 `BT050-RESOURCE` 使用已批准固定夹具且绝不联网。
@@ -121,11 +141,18 @@ INP 为零表示观察事件低于 Chromium PerformanceEventTiming 报告下限�
 
 迁移授权把重新计算的源 fingerprint 与已验证备份事实绑定；确定性测试 backup SHA-256 事实为 `dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd`，源 fingerprint 不匹配会被拒绝。恢复检查 `PRAGMA integrity_check = ok` 和 WAL sentinel。因此回滚是经过验证的文件恢复，而不是反向或猜测 SQL。既有 v1 bytes 与承载 identity 的 rows 保持不变。
 
+板块指数启动兼容性新增两个聚焦节点：
+
+- `MARKET-INDEX-SCHEMA-EXPANSION` — `tests/integration/test_backtest_migrations.py::test_exact_pre_index_market_schema_expands_without_rewriting_v1_data`
+- `MARKET-INDEX-PARTIAL-FAIL-CLOSED` — `tests/integration/test_backtest_migrations.py::test_partial_market_index_extension_still_fails_without_mutation`
+
+板块指数结构扩展完成后，全部 `37` 个迁移测试以及排除独立重型验收文件的完整非 live 后端套件分别以 `37 passed` 和 `2098 passed, 1 skipped, 4 deselected` 通过。现有六表 `data/backtest-market.sqlite3` 的副本也成功完成启动扩展，`PRAGMA integrity_check = ok`，三张新增指数表均为空；该检查没有修改原数据库。
+
 ## P19～P27 证据映射与检查点决定
 
 | 能力 | 证据 |
 |---|---|
-| P19 兼容/迁移 | MIGRATION-ROLLBACK、MIGRATION-IDENTITY、BACKUP-RESTORE |
+| P19 兼容/迁移 | MIGRATION-ROLLBACK、MIGRATION-IDENTITY、BACKUP-RESTORE、MARKET-INDEX-SCHEMA-EXPANSION、MARKET-INDEX-PARTIAL-FAIL-CLOSED |
 | P20 上海时间 identity/input | 既有 run-input/time 金样与完整后端闸门 |
 | P21 回放/发布 | BT050-TWO-SYMBOL、REPLAY-RESTART、容量/功能测量 |
 | P22 查询/导出/保留 | BT-QUERY-LARGE、BT-EXPORT-100K、RETENTION-BOUND、WAL-SNAPSHOT、EXPORT-BOUNDS |

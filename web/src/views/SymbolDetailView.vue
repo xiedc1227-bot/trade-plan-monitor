@@ -5,12 +5,15 @@ import type {
   BarView,
   DataHealthStatus,
   EvidenceFactView,
+  MarketIndexBarView,
   PositionLotPage,
   PositionPrefillView,
   SymbolDetailResponse,
   SymbolEventView,
 } from "../api/generated";
 import EpisodeTimeline from "../components/symbol/EpisodeTimeline.vue";
+import MarketIndexChart from "../components/market-index/MarketIndexChart.vue";
+import ReferenceMarketPanel from "../components/market-index/ReferenceMarketPanel.vue";
 import PositionLots from "../components/symbol/PositionLots.vue";
 import PriceChart from "../components/symbol/PriceChart.vue";
 import type { ChartRange } from "../components/symbol/PriceChart.vue";
@@ -23,6 +26,7 @@ interface Props {
   error?: string | null;
   events: readonly SymbolEventView[];
   loading?: boolean;
+  indexBars?: readonly MarketIndexBarView[];
   positionAsOfTradeDate?: string | null;
   positionMaximumQuantity?: number | null;
   positionOperations?: PositionOperations | null;
@@ -39,6 +43,7 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
+  indexBars: () => [],
   positionAsOfTradeDate: null,
   positionMaximumQuantity: null,
   positionOperations: null,
@@ -48,6 +53,12 @@ const props = withDefaults(defineProps<Props>(), {
 });
 const emit = defineEmits<Emits>();
 const selectedAt = shallowRef<string | null>(null);
+const referenceMarket = computed(
+  () => props.detail?.referenceMarket ?? props.detail?.summary.referenceMarket ?? null,
+);
+const indexConditionEvidence = computed(
+  () => props.detail?.indexConditionEvidence ?? [],
+);
 const { series } = useChartSeries({
   bars: () => props.bars,
   decision: () => props.detail?.summary.decision ?? null,
@@ -210,6 +221,18 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
     </p>
 
     <template v-if="detail !== null">
+      <ReferenceMarketPanel
+        v-if="referenceMarket"
+        :reference="referenceMarket"
+        :evidence="indexConditionEvidence"
+      />
+      <section v-else class="symbol-detail__panel" aria-labelledby="reference-market-none-title">
+        <h2 id="reference-market-none-title">参考指数数据</h2>
+        <p>Schema v1 计划未配置参考指数；原有判断保持不变。</p>
+      </section>
+
+      <MarketIndexChart v-if="referenceMarket" :bars="indexBars" />
+
       <PriceChart :series="series" :stale="visiblyStale" @range-change="forwardRange" />
 
       <details class="symbol-detail__panel" open>

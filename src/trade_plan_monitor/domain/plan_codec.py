@@ -225,7 +225,10 @@ def load_plan_yaml(document: str | bytes) -> TradePlan:
 def _plan_json_data(plan: TradePlan) -> dict[str, object]:
     if not isinstance(plan, TradePlan):
         raise TypeError("plan must be a TradePlan")
-    return plan.model_dump(mode="json")
+    data = plan.model_dump(mode="json")
+    if plan.schema_version == 1:
+        data.pop("reference_market", None)
+    return data
 
 
 def dump_plan_json(plan: TradePlan) -> str:

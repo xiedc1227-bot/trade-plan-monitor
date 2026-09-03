@@ -1,7 +1,7 @@
 # Proposal: Shared Board-Index Data with Plan-Owned Usage
 
-> Status: **APPROVED DESIGN — IMPLEMENTATION NOT AUTHORIZED**
-> Approval date: `2026-09-02`. Module specifications may now be written. Code, API, database, plan-schema, commit, and deployment changes still require separate authorization.
+> Status: **APPROVED — IMPLEMENTATION AUTHORIZED**
+> Approval date: `2026-09-02`. A later request on the same date authorized paired module specifications, code/API/schema/document changes, and offline verification. Commit, push, dependency installation, deployment, and real provider network calls remain unauthorized.
 
 ## Objective
 
@@ -267,7 +267,7 @@ Live storage may deduplicate snapshots across stocks. Every persisted decision s
 
 ## Approved Web API Direction
 
-These names and boundaries are approved design inputs for module specifications. They are not implemented endpoints and may change only through an explicit specification review that preserves the accepted architecture.
+These names and boundaries were approved design inputs for module specifications and were implemented through the separately authorized `2026-09-02` offline change. They may change only through an explicit specification review that preserves the accepted architecture.
 
 ### Shared monitoring data
 
@@ -545,4 +545,4 @@ The user approved all five decisions on `2026-09-02`:
 4. **D4 — BSE:** `.BJ` stocks use BSE 50 `899050.BJ`.
 5. **D5 — Scope:** Phase 1 covers board-index data. Industry indices remain a separately reviewed capability.
 
-The next authorized documentation step is to write module specifications. This approval does not authorize implementation, commit, push, dependency installation, deployment, or a real provider network call.
+The paired module specifications and offline implementation were separately authorized on `2026-09-02`. Commit, push, dependency installation, deployment, and a real provider network call remain unauthorized.

@@ -107,7 +107,7 @@ class AIProviderConfiguration(ApiValue):
     prompt_version: Annotated[
         str,
         Field(strict=True, min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$"),
-    ] = "plan-extract-v1"
+    ] = "plan-extract-v2"
     allow_redirects: Literal[False] = False
     enabled: bool = Field(default=True, strict=True)
 

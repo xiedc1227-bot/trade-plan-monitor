@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import AbstractContextManager
 from datetime import date, datetime
+from hashlib import sha256
 from typing import Literal, Protocol, Self, runtime_checkable
 
 from pydantic import (
@@ -24,10 +25,25 @@ from trade_plan_monitor.market_data.models import (
     MinuteBar,
     TradingDay,
 )
+from trade_plan_monitor.market_index.canonical import (
+    FORMULA_DEFINITION_HASH,
+)
+from trade_plan_monitor.market_index.canonical import (
+    canonical_json as canonical_index_json,
+)
+from trade_plan_monitor.market_index.identity import (
+    MAPPING_VERSION,
+    Board,
+    MarketIndexCode,
+    resolve_board_reference,
+)
+from trade_plan_monitor.market_index.models import MarketIndexBar
 
+from .index_data import IndexArtifactMembership, market_index_data_hash
 from .time import SHANGHAI, format_shanghai_datetime
 
 DATASET_SCHEMA_VERSION = "backtest-dataset-v1"
+INDEX_DATASET_SCHEMA_VERSION = "backtest-dataset-v2"
 MAX_BACKTEST_YEARS = 5
 MAX_WARMUP_YEARS = 2
 MAX_DATASET_BLOCKERS = 100
@@ -100,13 +116,152 @@ class DatasetItem(_DatasetValue):
     trade_date: date
 
 
+class DatasetReferenceMarketBinding(_DatasetValue):
+    """One stock symbol's exact derived board-index binding in a v2 manifest."""
+
+    symbol: AShareSymbol
+    selection: Literal["AUTO_BOARD"] = "AUTO_BOARD"
+    mapping_version: Literal["board-index-map-v1"] = MAPPING_VERSION
+    index_code: MarketIndexCode
+    display_name: str = Field(min_length=1, max_length=32)
+    board: Board
+
+    @classmethod
+    def from_symbol(cls, symbol: str) -> Self:
+        resolved = resolve_board_reference(symbol)
+        return cls(
+            symbol=resolved.symbol,
+            index_code=resolved.index_code,
+            display_name=resolved.display_name,
+            board=resolved.board,
+        )
+
+    @model_validator(mode="after")
+    def validate_derived_identity(self) -> Self:
+        resolved = resolve_board_reference(self.symbol)
+        if (
+            self.index_code is not resolved.index_code
+            or self.display_name != resolved.display_name
+            or self.board is not resolved.board
+            or self.mapping_version != resolved.mapping_version
+        ):
+            raise ValueError("dataset reference-market binding must be derived from symbol")
+        return self
+
+
 class DatasetManifest(_DatasetValue):
     """Stable manifest whose canonical bytes define ``dataset_hash``."""
 
     dataset_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    schema_version: Literal["backtest-dataset-v1"] = DATASET_SCHEMA_VERSION
+    schema_version: Literal["backtest-dataset-v1", "backtest-dataset-v2"] = DATASET_SCHEMA_VERSION
     scope: DatasetScope
     items: tuple[DatasetItem, ...]
+    reference_market_bindings: tuple[DatasetReferenceMarketBinding, ...] = Field(
+        default=(),
+        exclude_if=lambda value: not value,
+    )
+    index_items: tuple[IndexArtifactMembership, ...] = Field(
+        default=(),
+        exclude_if=lambda value: not value,
+    )
+    market_index_data_hash: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        exclude_if=lambda value: value is None,
+    )
+    formula_definition_hash: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        exclude_if=lambda value: value is None,
+    )
+
+    @classmethod
+    def build_v2(
+        cls,
+        *,
+        scope: DatasetScope,
+        stock_items: tuple[DatasetItem, ...],
+        index_items: tuple[IndexArtifactMembership, ...],
+    ) -> Self:
+        if not isinstance(scope, DatasetScope):
+            raise TypeError("scope must be a DatasetScope")
+        if type(stock_items) is not tuple or any(
+            type(item) is not DatasetItem for item in stock_items
+        ):
+            raise TypeError("stock_items must be an exact tuple of DatasetItem")
+        if type(index_items) is not tuple or any(
+            type(item) is not IndexArtifactMembership for item in index_items
+        ):
+            raise TypeError("index_items must be an exact tuple of IndexArtifactMembership")
+        bindings = tuple(
+            DatasetReferenceMarketBinding.from_symbol(symbol) for symbol in scope.symbols
+        )
+        ordered_stock = tuple(sorted(stock_items, key=lambda item: item.natural_key))
+        ordered_index = tuple(sorted(index_items, key=lambda item: item.natural_key))
+        index_hash = market_index_data_hash(ordered_index)
+        identity = {
+            "schema_version": INDEX_DATASET_SCHEMA_VERSION,
+            "scope": scope,
+            "items": ordered_stock,
+            "reference_market_bindings": bindings,
+            "index_items": ordered_index,
+            "market_index_data_hash": index_hash,
+            "formula_definition_hash": FORMULA_DEFINITION_HASH,
+        }
+        dataset_hash = sha256(canonical_index_json(identity).encode("utf-8")).hexdigest()
+        return cls(
+            dataset_hash=dataset_hash,
+            schema_version=INDEX_DATASET_SCHEMA_VERSION,
+            scope=scope,
+            items=ordered_stock,
+            reference_market_bindings=bindings,
+            index_items=ordered_index,
+            market_index_data_hash=index_hash,
+            formula_definition_hash=FORMULA_DEFINITION_HASH,
+        )
+
+    @model_validator(mode="after")
+    def validate_versioned_shape(self) -> Self:
+        if self.items != tuple(sorted(self.items, key=lambda item: item.natural_key)):
+            raise ValueError("dataset stock items must use canonical order")
+        if self.schema_version == DATASET_SCHEMA_VERSION:
+            if (
+                self.reference_market_bindings
+                or self.index_items
+                or self.market_index_data_hash is not None
+                or self.formula_definition_hash is not None
+            ):
+                raise ValueError("backtest-dataset-v1 forbids index identity fields")
+            return self
+        expected_bindings = tuple(
+            DatasetReferenceMarketBinding.from_symbol(symbol) for symbol in self.scope.symbols
+        )
+        if self.reference_market_bindings != expected_bindings:
+            raise ValueError("v2 dataset bindings must match every stock symbol")
+        if self.index_items != tuple(sorted(self.index_items, key=lambda item: item.natural_key)):
+            raise ValueError("v2 dataset index items must use canonical order")
+        if len({item.natural_key for item in self.index_items}) != len(self.index_items):
+            raise ValueError("v2 dataset index item identities must be unique")
+        allowed_codes = {binding.index_code for binding in expected_bindings}
+        if any(item.index_code not in allowed_codes for item in self.index_items):
+            raise ValueError("v2 dataset cannot contain an unrelated index")
+        if self.market_index_data_hash != market_index_data_hash(self.index_items):
+            raise ValueError("v2 dataset market_index_data_hash mismatch")
+        if self.formula_definition_hash != FORMULA_DEFINITION_HASH:
+            raise ValueError("v2 dataset formula_definition_hash mismatch")
+        identity = {
+            "schema_version": INDEX_DATASET_SCHEMA_VERSION,
+            "scope": self.scope,
+            "items": self.items,
+            "reference_market_bindings": self.reference_market_bindings,
+            "index_items": self.index_items,
+            "market_index_data_hash": self.market_index_data_hash,
+            "formula_definition_hash": self.formula_definition_hash,
+        }
+        expected_hash = sha256(canonical_index_json(identity).encode("utf-8")).hexdigest()
+        if self.dataset_hash != expected_hash:
+            raise ValueError("v2 dataset_hash must match its exact canonical membership")
+        return self
 
 
 class BacktestDatasetScopeSummary(_DatasetValue):
@@ -149,7 +304,7 @@ class BacktestDatasetSummary(_DatasetValue):
     """Public dataset catalog value that never carries manifest membership."""
 
     dataset_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    schema_version: Literal["backtest-dataset-v1"] = DATASET_SCHEMA_VERSION
+    schema_version: Literal["backtest-dataset-v1", "backtest-dataset-v2"] = DATASET_SCHEMA_VERSION
     scope: BacktestDatasetScopeSummary
     coverage: BacktestDatasetCoverage
     created_at: datetime
@@ -225,6 +380,22 @@ class FrozenDatasetReader(Protocol):
     def scope(self) -> DatasetScope: ...
 
     def __iter__(self) -> Iterator[FrozenSymbolDay]: ...
+
+
+@runtime_checkable
+class FrozenMarketIndexDatasetReader(FrozenDatasetReader, Protocol):
+    """Extended v2 reader exposing only immutable frozen index membership."""
+
+    @property
+    def manifest(self) -> DatasetManifest: ...
+
+    @property
+    def dataset_revision(self) -> int: ...
+
+    def market_index_bars(
+        self,
+        index_code: MarketIndexCode,
+    ) -> tuple[MarketIndexBar, ...]: ...
 
 
 @runtime_checkable
@@ -306,14 +477,17 @@ __all__ = [
     "BacktestDatasetScopeSummary",
     "BacktestDatasetSummary",
     "DATASET_SCHEMA_VERSION",
+    "INDEX_DATASET_SCHEMA_VERSION",
     "MAX_DATASET_BLOCKERS",
     "MAX_BACKTEST_YEARS",
     "MAX_WARMUP_YEARS",
     "DatasetFreezeResult",
     "DatasetItem",
     "DatasetManifest",
+    "DatasetReferenceMarketBinding",
     "DatasetScope",
     "FrozenDatasetReader",
+    "FrozenMarketIndexDatasetReader",
     "FrozenDatasetSource",
     "FrozenSymbolDay",
     "MarketStoreStatistics",

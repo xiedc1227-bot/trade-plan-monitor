@@ -338,6 +338,32 @@ def test_real_production_composition_starts_and_stops_one_coordinator(
     assert calls == {"start": 1, "shutdown": 1}
 
 
+def test_production_coverage_keeps_stock_only_plan_not_required(tmp_path) -> None:
+    market_database = tmp_path / "market.sqlite3"
+    composition = create_backtest_composition_factory(
+        config_path=Path("config/app.yaml"),
+        plan_snapshot_reader=_PlanSnapshotReader(),
+        market_database=market_database,
+        results_database=tmp_path / "results.sqlite3",
+        cursor_key_path=tmp_path / "cursor.key",
+    )()
+    dataset_hash = _insert_empty_dataset(market_database)
+
+    coverage = asyncio.run(
+        composition.read_service.get_reference_market_coverage(
+            dataset_hash=dataset_hash,
+            plan_version_id=_PLAN_VERSION_ID,
+        )
+    )
+
+    assert coverage.required is False
+    assert coverage.coverage_status == "NOT_REQUIRED"
+    assert coverage.condition_paths == ()
+    assert coverage.blockers == ()
+    assert coverage.binding.index_code.value == "399001.SZ"
+    asyncio.run(composition.stop())
+
+
 @pytest.mark.skipif(os.name != "nt", reason="requires Windows file security APIs")
 def test_cursor_key_uses_one_protected_owner_only_windows_acl(tmp_path) -> None:
     cursor_key_path = tmp_path / "cursor.key"

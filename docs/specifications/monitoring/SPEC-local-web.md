@@ -59,11 +59,12 @@ src/trade_plan_monitor/web/
     ├── ai.py
     ├── positions.py
     ├── alerts.py
+    ├── market_indexes.py
     └── health.py
 web/src/
 ├── api/
 ├── assets/
-├── components/{common,dashboard,symbol,plans,ai,alerts,health}/
+├── components/{common,dashboard,symbol,market-index,plans,ai,alerts,health}/
 ├── composables/
 ├── layouts/
 ├── stores/
@@ -136,9 +137,9 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 
 ### T041 Frozen OpenAPI and Frontend-Type Boundary
 
-OpenAPI snapshot SHA-256: `2f6aae4abfcc574151bcd5ac4dd9c3b566df4fb071656c55f95547ae4bd77774`
+OpenAPI snapshot SHA-256: `18ce84db8156ad5c4db94a193157e6509b46ab4a03bfdc1ea2b2dceb88fe9d0c`
 
-- The side-effect-free `create_app()` is the sole OpenAPI source. Its document contains exactly 38 approved REST paths: 25 live paths, including the read-only `GET /ai-runtime`, plus exactly 13 backtest paths. It documents every stable public error status with `ErrorResponse`; FastAPI's default `HTTPValidationError`/`ValidationError` schemas are excluded because runtime validation already uses the bounded secret-free envelope.
+- The side-effect-free `create_app()` is the sole OpenAPI source. Its document contains exactly 41 approved REST paths: 26 live paths, including read-only `GET /ai-runtime` and `GET /market-indexes/{indexCode}/bars`, plus exactly 15 backtest paths, including reference-market coverage and frozen index-series reads. It documents every stable public error status with `ErrorResponse`; FastAPI's default `HTTPValidationError`/`ValidationError` schemas are excluded because runtime validation already uses the bounded secret-free envelope.
 - `scripts/generate_frontend_types.py` serializes `openapi.json` as sorted, indented UTF-8 with LF line endings and one final newline. It derives TypeScript component schemas, path methods, grouped parameters, request bodies, response statuses, media types, references, unions, intersections, arrays, objects, enums, and literals from that same document; API fields are never copied by hand.
 - `python scripts/generate_frontend_types.py --check` is read-only and fails when either committed generated file differs byte-for-byte. Generation fails closed on unsupported or dangling schema references, parameter locations, schema types, or invalid TypeScript identifiers rather than silently weakening a contract.
 - `web/index.html` is the stable Vite application document with one `#app` root and one external module entry. It contains no inline script or style that would violate the T040 CSP. Vite now performs a document-based application build that emits `dist/index.html`; T042 still owns the first application shell, router, and component mount, while T052 still owns installed asset discovery and production composition.
@@ -167,6 +168,7 @@ GET /symbols
 GET /symbols/{symbol}
 GET /symbols/{symbol}/bars
 GET /symbols/{symbol}/events
+GET /market-indexes/{indexCode}/bars
 GET /plan-versions
 GET /plan-versions/{id}
 GET /plan-extractions/{id}
@@ -216,6 +218,7 @@ The browser loads an authoritative REST dashboard snapshot and its sequence befo
 - `position.updated`
 - `ai.provider.updated`
 - `system.health.updated`
+- `market.index.updated`
 
 Every committed event uses one strict versioned camelCase envelope:
 
@@ -238,7 +241,7 @@ Every committed event uses one strict versioned camelCase envelope:
 
 The payload is a bounded invalidation hint containing `entityId` plus only the applicable `symbol`, `revision` in `0..2^63-1`, uppercase `status`, or lowercase SHA-256 `resultHash`; clients refetch authoritative REST state instead of treating the event as a state replacement. The injected `MonitorReadService` that owns dashboard snapshot assembly must read its state and `monitor_sequence` in the same Unit of Work so its returned `sequence` is the exact high-water mark for that snapshot. T039 enforces that transport contract and the sequenced stream; constructing the default production read-service composition remains explicitly deferred to T052 and cannot be replaced by an independently sampled sequence.
 
-Schema version 1 closes each non-null payload field set and its identity rules: snapshot uses `entityId`, `symbol`, and `resultHash`; symbol health uses `entityId`, `symbol`, `revision`, and `status`; both require `aggregateId == entityId == symbol`. Alert creation/acknowledgement use `entityId`, `symbol`, and `revision`; both require canonical UUID `aggregateId == entityId`, creation additionally requires `eventId == aggregateId` and revision `0`, and acknowledgement requires revision `1`. Extraction uses `entityId`, `revision`, and `status`; activation uses plan-version `entityId`, `symbol`, and positive `revision` with `aggregateId == symbol`; deactivation uses `entityId`, `symbol`, and positive `revision` with all three identities equal. Position uses `entityId`, `symbol`, and `OPEN`/`CLOSED` `status`; AI-provider uses `entityId` and `revision`; system health uses `entityId` and `status`; these entity-owned types require `aggregateId == entityId`. Missing required fields and any non-applicable non-null field are rejected before persistence.
+Schema version 1 closes each non-null payload field set and its identity rules: snapshot uses `entityId`, `symbol`, and `resultHash`; symbol health uses `entityId`, `symbol`, `revision`, and `status`; both require `aggregateId == entityId == symbol`. Alert creation/acknowledgement use `entityId`, `symbol`, and `revision`; both require canonical UUID `aggregateId == entityId`, creation additionally requires `eventId == aggregateId` and revision `0`, and acknowledgement requires revision `1`. Extraction uses `entityId`, `revision`, and `status`; activation uses plan-version `entityId`, `symbol`, and positive `revision` with `aggregateId == symbol`; deactivation uses `entityId`, `symbol`, and positive `revision` with all three identities equal. Position uses `entityId`, `symbol`, and `OPEN`/`CLOSED` `status`; AI-provider uses `entityId` and `revision`; system health uses `entityId` and `status`; market-index invalidation uses exactly `entityId`, positive `revision`, and `status`. These entity-owned types require `aggregateId == entityId`. Missing required fields and any non-applicable non-null field are rejected before persistence.
 
 `monitor_event` is the sole append-only replay source and `monitor_sequence` is the sole global high-water domain. State mutation and its event append share one transaction. Event UUID is the idempotency identity: the same ID and semantics returns the original sequence, while different semantics fail closed. The sequence never resets when retained rows are removed. The default replay window is 7 days, each page is at most 1,000 events, and the server validates the complete `(after, high_water]` range before sending any page so a later gap cannot leak an earlier partial page.
 
@@ -295,17 +298,17 @@ The slice performs no API call, Pinia write, router composition, provider/rule e
 - The installed `trade-plan-monitor` console entry resolves to `trade_plan_monitor.cli:console_main`. CLI import and parser construction remain side-effect-free; the `web` branch lazily creates one production application context and imports/runs Uvicorn only after exact loopback host and bounded port parsing succeeds.
 - Vite keeps `web/index.html` as its document input and continues to emit `web/dist/index.html`. A build-only plugin replaces the ignored `src/trade_plan_monitor/web/dist` staging directory with that same completed distribution; setuptools packages only its `index.html` and local `assets/*`. Neither generated directory is tracked.
 - Production discovery uses `importlib.resources` against `trade_plan_monitor.web/dist` for the whole server lifetime. It never searches the current working directory, a repository root, `web/dist`, or another source-tree fallback. A missing directory, `index.html`, `assets/`, or concrete asset fails before Uvicorn with only `WEB_ASSETS_UNAVAILABLE` and the fixed text `Installed Web assets are unavailable.`; paths, resource exceptions, context, and causes are not exposed.
-- `create_production_app(...)` composes the discovered distribution through the existing `create_app(...)`, so the frozen 38 REST paths (25 live plus 13 backtest paths), `/ws/v1/monitor`, Origin/body/security-header policy, and SPA exclusion/fallback semantics do not change. The asset context remains open until the server runner exits, then FastAPI lifespan performs its owned shutdown and extracted resources are released.
+- `create_production_app(...)` composes the discovered distribution through the existing `create_app(...)`, so the frozen 41 REST paths (26 live plus 15 backtest paths), `/ws/v1/monitor`, Origin/body/security-header policy, and SPA exclusion/fallback semantics do not change. The asset context remains open until the server runner exits, then FastAPI lifespan performs its owned shutdown and extracted resources are released.
 - T052 keeps the general monitoring lifecycle in its explicit `DEGRADED` read-only fallback, but now owns the file-configured AI lifecycle. Startup order is monitoring runtime, AI, then backtest; shutdown is the exact reverse. AI startup loads `config/app.yaml` and attempts the selected ignored project-secret file once. Invalid YAML fails startup; a missing, malformed, duplicate, empty, oversized, or unreadable selected secret starts with `configured=false`, so the page cannot submit extraction. Explicitly injected test/application services remain authoritative. No environment-variable fallback, CDN, remote runtime asset, alternate listener, or development-directory fallback is added.
 
 ### Approved Backtest Extension Boundary
 
 The six-module backtest direction and this boundary were approved on 2026-08-26. The user also confirmed [`backtest-api`](../backtesting/SPEC-backtest-api.md) and approved [`backtest-web`](../backtesting/SPEC-backtest-web.md). On 2026-08-26, the user confirmed the corrected `planVersionId`, money projection, result/job consistency, versioned-compatibility, and unified China-time clauses. The following values govern the current generated contract and the separately gated remaining router work:
 
-- the current frozen contract is exactly 38 REST paths: 25 live paths, including read-only AI runtime configuration, plus exactly 13 backtest resource paths, with the OpenAPI snapshot, hash, generated TypeScript, and runtime guards updated together;
+- the current frozen contract is exactly 41 REST paths: 26 live paths, including read-only AI runtime configuration and board-index history, plus exactly 15 backtest resource paths, with the OpenAPI snapshot, hash, generated TypeScript, and runtime guards updated together;
 - the production router has exactly ten paths: one real `/plans` view, four real or lazy-loaded `/backtests...` views, and five remaining historical placeholders; the two static backtest child routes remain before the dynamic route;
 - adding the real plan and backtest routes does not prove that the five remaining historical placeholder routes have been wired to their business views;
-- all 13 added paths, four routes, generated types, runtime guards, URL datetime filters, and machine-readable Web values inherit the accepted canonical `Asia/Shanghai` contract: input `+08:00` with 0–6 fractional-second digits, fixed-six-digit output/storage, and rejection of `Z`, offsetless, overprecision, or other-offset values;
+- all 15 backtest paths, four routes, generated types, runtime guards, URL datetime/date filters, and machine-readable Web values inherit the accepted canonical `Asia/Shanghai` contract: datetime input uses `+08:00` with 0–6 fractional-second digits, date input uses canonical `YYYY-MM-DD`, output/storage remains fixed-six-digit where datetime applies, and `Z`, offsetless, overprecision, other-offset, or invalid calendar values are rejected;
 - the first release uses bounded REST polling for durable jobs and adds no backtest WebSocket event;
 - `create_production_app(...)` remains `DEGRADED`/`SERVICE_UNAVAILABLE` without explicitly injected production services. Registering router protocols alone is not a usable product composition.
 
@@ -468,4 +471,4 @@ None blocking. OS-level browser notifications and named chat platforms remain fu
 
 ## Review Status
 
-The base `local-web` specification and completed `T035`–`T056` implementation history remain previously approved. On 2026-08-26, the user approved the `Backtest Extension Boundary` and `backtest-web`, confirmed `backtest-api`, and then confirmed the unified `Asia/Shanghai`/`+08:00` time contract plus the remaining API/engine/results/jobs consistency corrections. The aggregate detailed-specification gate is closed. Section 15 of the bilingual implementation plan and the generated `BT009`–`BT050` task list were separately approved. The current OpenAPI contract contains exactly 38 paths, including 25 live paths; the production router contains exactly ten paths, with `/plans` and four backtest paths connected to real views while five historical paths remain placeholders. Commit, push, dependency installation, and network access remain separately authorized actions.
+The base `local-web` specification and completed `T035`–`T056` implementation history remain previously approved. On 2026-08-26, the user approved the `Backtest Extension Boundary` and `backtest-web`, confirmed `backtest-api`, and then confirmed the unified `Asia/Shanghai`/`+08:00` time contract plus the remaining API/engine/results/jobs consistency corrections. The aggregate detailed-specification gate is closed. Section 15 of the bilingual implementation plan and the generated `BT009`–`BT050` task list were separately approved. The board-index extension was approved and authorized for offline implementation on 2026-09-02. The current OpenAPI contract contains exactly 41 paths, including 26 live paths and 15 backtest paths; the production router contains exactly ten paths, with `/plans` and four backtest paths connected to real views while five historical paths remain placeholders. Commit, push, dependency installation, and network access remain separately authorized actions.

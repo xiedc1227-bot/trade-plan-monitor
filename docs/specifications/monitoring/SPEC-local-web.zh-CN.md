@@ -59,11 +59,12 @@ src/trade_plan_monitor/web/
     ├── ai.py
     ├── positions.py
     ├── alerts.py
+    ├── market_indexes.py
     └── health.py
 web/src/
 ├── api/
 ├── assets/
-├── components/{common,dashboard,symbol,plans,ai,alerts,health}/
+├── components/{common,dashboard,symbol,market-index,plans,ai,alerts,health}/
 ├── composables/
 ├── layouts/
 ├── stores/
@@ -136,9 +137,9 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`2f6aae4abfcc574151bcd5ac4dd9c3b566df4fb071656c55f95547ae4bd77774`
+OpenAPI 快照 SHA-256：`18ce84db8156ad5c4db94a193157e6509b46ab4a03bfdc1ea2b2dceb88fe9d0c`
 
-- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 38 个已批准 REST 路径：25 个实时路径（包含只读 `GET /ai-runtime`）加精确 13 个回测路径。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
+- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 41 个已批准 REST 路径：26 个实时路径（包含只读 `GET /ai-runtime` 和 `GET /market-indexes/{indexCode}/bars`）加精确 15 个回测路径，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
 - `python scripts/generate_frontend_types.py --check` 是只读检查，只要任一已提交生成文件存在逐字节差异就失败。生成过程遇到不支持或悬空的 Schema 引用、参数位置、Schema 类型或非法 TypeScript 标识符时会封闭失败，而不是静默弱化契约。
 - `web/index.html` 是稳定的 Vite 应用文档，包含一个 `#app` 根节点和一个外部模块入口，不含违反 T040 CSP 的内联脚本或样式。Vite 现在执行会生成 `dist/index.html` 的文档式应用构建；T042 仍负责首个应用外壳、路由和组件挂载，T052 仍负责已安装资源发现及生产组合。
@@ -167,6 +168,7 @@ GET /symbols
 GET /symbols/{symbol}
 GET /symbols/{symbol}/bars
 GET /symbols/{symbol}/events
+GET /market-indexes/{indexCode}/bars
 GET /plan-versions
 GET /plan-versions/{id}
 GET /plan-extractions/{id}
@@ -216,6 +218,7 @@ OpenAPI 作为规范快照纳入版本控制并用于生成 TypeScript 组件与
 - `position.updated`
 - `ai.provider.updated`
 - `system.health.updated`
+- `market.index.updated`
 
 每个已提交事件使用一个严格、带版本、camelCase 的 envelope：
 
@@ -238,7 +241,7 @@ OpenAPI 作为规范快照纳入版本控制并用于生成 TypeScript 组件与
 
 载荷是有界失效提示，包含 `entityId`，以及仅在适用时出现的 `symbol`、位于 `0..2^63-1` 的 `revision`、大写 `status` 或小写 SHA-256 `resultHash`；客户端重新读取权威 REST 状态，不能把事件当成状态替代。负责组装总览快照的注入式 `MonitorReadService` 必须在同一个工作单元内读取状态和 `monitor_sequence`，因此返回的 `sequence` 是该快照的准确高水位。T039 强制该传输契约和带序号事件流；默认生产读取服务组合仍明确延后到 T052，且不得用独立采样的序号代替。
 
-Schema 版本 1 封闭每种事件的非空载荷字段集合及 identity 规则：快照使用 `entityId`、`symbol` 和 `resultHash`；股票健康使用 `entityId`、`symbol`、`revision` 和 `status`；两者都要求 `aggregateId == entityId == symbol`。提醒创建/确认使用 `entityId`、`symbol` 和 `revision`；两者都要求规范 UUID `aggregateId == entityId`，创建还要求 `eventId == aggregateId` 且 revision 为 `0`，确认要求 revision 为 `1`。提取使用 `entityId`、`revision` 和 `status`；激活使用计划版本 `entityId`、`symbol` 和正数 `revision`，且 `aggregateId == symbol`；停用使用 `entityId`、`symbol` 和正数 `revision`，且三个 identity 相等。持仓使用 `entityId`、`symbol` 和 `OPEN`/`CLOSED` `status`；AI 供应商使用 `entityId` 和 `revision`；系统健康使用 `entityId` 和 `status`；这些实体自有类型要求 `aggregateId == entityId`。持久化前会拒绝缺少必需字段或包含任何不适用非空字段的事件。
+Schema 版本 1 封闭每种事件的非空载荷字段集合及 identity 规则：快照使用 `entityId`、`symbol` 和 `resultHash`；股票健康使用 `entityId`、`symbol`、`revision` 和 `status`；两者都要求 `aggregateId == entityId == symbol`。提醒创建/确认使用 `entityId`、`symbol` 和 `revision`；两者都要求规范 UUID `aggregateId == entityId`，创建还要求 `eventId == aggregateId` 且 revision 为 `0`，确认要求 revision 为 `1`。提取使用 `entityId`、`revision` 和 `status`；激活使用计划版本 `entityId`、`symbol` 和正数 `revision`，且 `aggregateId == symbol`；停用使用 `entityId`、`symbol` 和正数 `revision`，且三个 identity 相等。持仓使用 `entityId`、`symbol` 和 `OPEN`/`CLOSED` `status`；AI 供应商使用 `entityId` 和 `revision`；系统健康使用 `entityId` 和 `status`；板块指数失效通知精确使用 `entityId`、正数 `revision` 和 `status`。这些实体自有类型要求 `aggregateId == entityId`。持久化前会拒绝缺少必需字段或包含任何不适用非空字段的事件。
 
 `monitor_event` 是唯一追加式回放来源，`monitor_sequence` 是唯一全局高水位域。状态变更和对应事件追加共享一个事务。事件 UUID 是幂等 identity：相同 ID 及语义返回原序号，语义不同则封闭失败。删除保留期内的行绝不重置序号。默认回放窗口为 7 天，每页最多 1,000 个事件；服务端在发送任何分页前校验完整 `(after, high_water]` 范围，因此页外缺口不能先泄漏部分旧页。
 
@@ -295,17 +298,17 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 安装后的 `trade-plan-monitor` 控制台入口解析到 `trade_plan_monitor.cli:console_main`。CLI 导入和解析器构造继续保持无副作用；`web` 分支只有在精确回环主机和有界端口解析成功后，才惰性创建一个生产应用上下文并导入/运行 Uvicorn。
 - Vite 继续以 `web/index.html` 为文档输入，并继续生成 `web/dist/index.html`。仅构建时启用的插件会用同一份完整 distribution 替换被忽略的 `src/trade_plan_monitor/web/dist` 暂存目录；setuptools 只打包其中的 `index.html` 和本地 `assets/*`。两个生成目录都不纳入版本控制。
 - 生产资源发现通过 `importlib.resources` 在整个服务生命周期内访问 `trade_plan_monitor.web/dist`。它绝不搜索当前工作目录、仓库根目录、`web/dist` 或其他源码树 fallback。缺少目录、`index.html`、`assets/` 或实际资源时，会在 Uvicorn 启动前只以 `WEB_ASSETS_UNAVAILABLE` 和固定文案 `Installed Web assets are unavailable.` 失败；绝不暴露路径、资源异常、context 或 cause。
-- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 38 个 REST 路径（25 个实时路径加 13 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
+- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 41 个 REST 路径（26 个实时路径加 15 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
 - T052 的通用监控生命周期仍使用明确的 `DEGRADED` 只读 fallback，但现在负责配置文件驱动的 AI 生命周期。启动顺序是监控运行时、AI、回测，关闭严格反向执行。AI 启动时只读取一次 `config/app.yaml`，并尝试读取选中的、被忽略的项目密钥文件。YAML 非法会导致启动失败；选中的密钥文件缺失、格式非法、键重复、值为空、超大或不可读时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加环境变量后备、CDN、远程运行资源、备用监听器或开发目录 fallback。
 
 ### 已批准的回测扩展边界
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
-- 当前冻结契约精确为 38 条 REST 路径：25 条实时路径（包含只读 AI 运行配置）加精确 13 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
+- 当前冻结契约精确为 41 条 REST 路径：26 条实时路径（包含只读 AI 运行配置和板块指数历史）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
 - 生产 Router 精确包含十条路径：一条真实 `/plans` 视图、四条真实或延迟加载的 `/backtests...` 视图，以及五条剩余历史占位路由；两个静态回测子路由继续排在动态路由之前；
 - 增加真实计划与回测路由不能证明五条剩余历史占位路由已经接入业务视图；
-- 新增的 13 条路径、四条路由、生成类型、运行时保护、URL 日期时间筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：输入使用 `+08:00` 和 0～6 位小数秒，输出/存储固定六位，并拒绝 `Z`、无偏移、超精度或其他偏移；
+- 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
 - 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
 - 未显式注入生产服务时，`create_production_app(...)` 继续处于 `DEGRADED`/`SERVICE_UNAVAILABLE`。仅注册 Router Protocol 不等于产品可用组合。
 
@@ -468,4 +471,4 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。当前 OpenAPI 契约精确包含 38 条路径，其中 25 条为实时路径；生产 Router 精确包含 10 条路径，其中 `/plans` 和四条回测路径是真实视图，其余五条仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。当前 OpenAPI 契约精确包含 41 条路径，其中 26 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，其中 `/plans` 和四条回测路径是真实视图，其余五条仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。

@@ -59,7 +59,7 @@ Rejected because no authoritative industry-classification source, classification
 - API and Web designs must not expose a shared field that implies one automatic market conclusion or trade effect.
 - Plan Schema v2, path-level evidence, formula identities, historical coverage, and hashes add implementation work, but they make monitoring and replay auditable.
 - A plan with no index condition continues its original behavior when index data is missing. A plan that uses index data receives `MISSING_INPUT` only on affected paths.
-- Module specifications may now be written in the dependency order recorded in the approved proposal. Implementation remains separately authorized.
+- Module specifications and offline implementation were separately authorized on `2026-09-02` in the recorded dependency order.
 
 ## Security and Operational Effects
 
@@ -77,4 +77,4 @@ Schema v1 plans remain readable and executable with `referenceMarket=null`. Sche
 
 The user explicitly approved the complete bilingual board-index proposal on `2026-09-02`, including D1–D5 and assumptions A1–A8. This ADR is therefore `Accepted` with decision date `2026-09-02`.
 
-The approval authorizes module-specification writing only. Code implementation, schema/API mutation, commit, push, dependency installation, deployment, and real provider network calls remain unauthorized until separately requested.
+A later request on `2026-09-02` authorized paired module specifications, code/schema/API/document changes, and offline verification. Commit, push, dependency installation, deployment, and real provider network calls remain unauthorized.

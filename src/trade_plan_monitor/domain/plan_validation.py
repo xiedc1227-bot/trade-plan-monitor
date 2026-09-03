@@ -16,6 +16,7 @@ from trade_plan_monitor.domain.plan_models import (
     PriceZone,
     TradePlan,
 )
+from trade_plan_monitor.market_index.identity import resolve_board_reference
 
 IssueCode = Annotated[
     str,
@@ -66,6 +67,7 @@ class MarketEvidence(StrEnum):
     OFFICIAL_DAILY_BARS = "OFFICIAL_DAILY_BARS"
     TRADING_CALENDAR = "TRADING_CALENDAR"
     DAILY_PRICE_LIMITS = "DAILY_PRICE_LIMITS"
+    BOARD_INDEX_DATA = "BOARD_INDEX_DATA"
 
 
 ALL_MARKET_EVIDENCE: frozenset[MarketEvidence] = frozenset(MarketEvidence)
@@ -166,6 +168,12 @@ _CONDITION_EVIDENCE: dict[str, frozenset[MarketEvidence]] = {
             MarketEvidence.DAILY_INDICATORS,
         }
     ),
+    "INDEX_CLOSE_GTE_MA": frozenset({MarketEvidence.BOARD_INDEX_DATA}),
+    "INDEX_CLOSE_LTE_MA": frozenset({MarketEvidence.BOARD_INDEX_DATA}),
+    "INDEX_MA_NON_DECREASING": frozenset({MarketEvidence.BOARD_INDEX_DATA}),
+    "INDEX_MA_NON_INCREASING": frozenset({MarketEvidence.BOARD_INDEX_DATA}),
+    "INDEX_RETURN_GTE": frozenset({MarketEvidence.BOARD_INDEX_DATA}),
+    "INDEX_RETURN_LTE": frozenset({MarketEvidence.BOARD_INDEX_DATA}),
 }
 
 
@@ -445,6 +453,32 @@ def validate_trade_plan(
     return PlanValidationResult(issues=tuple(issues))
 
 
+def migrate_trade_plan_to_schema_v2(
+    plan: TradePlan,
+    *,
+    new_version: int,
+) -> TradePlan:
+    """Explicitly create a new immutable Schema v2 plan with a derived binding."""
+
+    if not isinstance(plan, TradePlan):
+        raise TypeError("plan must be a TradePlan")
+    if plan.schema_version != 1:
+        raise ValueError("only a Schema v1 plan can be migrated to Schema v2")
+    if isinstance(new_version, bool) or not isinstance(new_version, int):
+        raise TypeError("new_version must be an integer")
+    if new_version <= plan.version:
+        raise ValueError("Schema migration requires a new immutable version")
+    payload = plan.model_dump(mode="python")
+    payload.update(
+        {
+            "schema_version": 2,
+            "version": new_version,
+            "reference_market": resolve_board_reference(plan.symbol).binding,
+        }
+    )
+    return TradePlan.model_validate(payload)
+
+
 __all__ = [
     "ALL_MARKET_EVIDENCE",
     "DraftReviewIssue",
@@ -454,5 +488,6 @@ __all__ = [
     "ValidationIssue",
     "ValidationSeverity",
     "price_zone_owners",
+    "migrate_trade_plan_to_schema_v2",
     "validate_trade_plan",
 ]

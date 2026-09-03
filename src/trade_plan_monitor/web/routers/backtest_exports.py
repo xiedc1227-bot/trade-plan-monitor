@@ -27,8 +27,8 @@ _EXPORT_MEDIA_TYPES = {
     "FILLS_CSV": "text/csv; charset=utf-8",
 }
 _EXPORT_SCHEMA_VERSIONS = {
-    "SUMMARY_JSON": "backtest-report-summary-v2",
-    "FILLS_CSV": "backtest-simulated-fills-v2",
+    "SUMMARY_JSON": frozenset({"backtest-report-summary-v2", "backtest-report-summary-v3"}),
+    "FILLS_CSV": frozenset({"backtest-simulated-fills-v2"}),
 }
 _EXPORT_FILENAME_SUFFIXES = {
     "SUMMARY_JSON": "summary.json",
@@ -133,7 +133,7 @@ def _matches_request(
         type(prepared) is PreparedBacktestExport
         and prepared.run_id == run_id
         and prepared.export_kind == export_kind
-        and prepared.schema_version == _EXPORT_SCHEMA_VERSIONS[export_kind]
+        and prepared.schema_version in _EXPORT_SCHEMA_VERSIONS[export_kind]
         and isinstance(prepared.chunks, Iterator)
         and iter(prepared.chunks) is prepared.chunks
     )

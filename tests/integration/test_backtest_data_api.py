@@ -17,6 +17,7 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestDatasetVerificationCommand,
     BacktestDatasetView,
     BacktestDataSyncCommand,
+    BacktestReferenceMarketCoverageView,
 )
 from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.routers import backtest_data
@@ -120,6 +121,7 @@ class _FakeReadService:
         self.item = _dataset() if item is None else item
         self.list_calls: list[tuple[BacktestDatasetFiltersView, int, str | None]] = []
         self.get_calls: list[str] = []
+        self.coverage_calls: list[tuple[str, str]] = []
         self.page_override: object | None = None
 
     async def list_datasets(
@@ -152,6 +154,40 @@ class _FakeReadService:
     async def get_dataset(self, *, dataset_hash: str) -> object | None:
         self.get_calls.append(dataset_hash)
         return None if self.item is _MISSING else self.item
+
+    async def get_reference_market_coverage(
+        self,
+        *,
+        dataset_hash: str,
+        plan_version_id: str,
+    ) -> object:
+        self.coverage_calls.append((dataset_hash, plan_version_id))
+        return BacktestReferenceMarketCoverageView.model_validate(
+            {
+                "planVersionId": plan_version_id,
+                "datasetHash": dataset_hash,
+                "binding": {
+                    "selection": "AUTO_BOARD",
+                    "mappingVersion": "board-index-map-v1",
+                    "indexCode": "000001.SH",
+                    "displayName": "上证指数",
+                    "board": "SSE_MAIN",
+                },
+                "required": True,
+                "conditionPaths": ["entry.condition"],
+                "requiredFiveMinuteCount": 0,
+                "availableFiveMinuteCount": 0,
+                "requiredOfficialDayCount": 20,
+                "availableOfficialDayCount": 22,
+                "warmupStart": "2026-07-01",
+                "warmupEnd": "2026-08-01",
+                "coverageStatus": "AVAILABLE",
+                "blockers": [],
+                "marketIndexDataHash": "c" * 64,
+                "indexRequirementHash": "d" * 64,
+                "formulaDefinitionHash": "e" * 64,
+            }
+        )
 
 
 class _FakeOperationService:
@@ -236,6 +272,22 @@ def test_submit_data_sync_requires_literal_network_authorization() -> None:
     assert response.headers["Location"] == f"/api/v1/backtest-jobs/{_JOB_ID}"
     assert response.headers["Retry-After"] == "2"
     assert response.json() == _receipt_payload(kind="DATA_SYNC")
+
+
+def test_reference_market_coverage_is_plan_specific_and_read_only() -> None:
+    service = _FakeReadService()
+    client = _client(read_service=service)
+
+    response = client.get(
+        f"/api/v1/backtest-datasets/{_DATASET_HASH}/reference-market-coverage",
+        params={"planVersionId": "4c623c8c-ca26-4cd8-8cb2-08cd5e61be93"},
+    )
+
+    assert response.status_code == 200
+    assert service.coverage_calls == [(_DATASET_HASH, "4c623c8c-ca26-4cd8-8cb2-08cd5e61be93")]
+    assert response.json()["conditionPaths"] == ["entry.condition"]
+    assert response.json()["requiredFiveMinuteCount"] == 0
+    assert response.json()["coverageStatus"] == "AVAILABLE"
 
 
 @pytest.mark.parametrize("authorization", [_MISSING, False, "true", 1])

@@ -5,6 +5,7 @@ import { isNavigationFailure, useRouter } from "vue-router";
 import type { BacktestJobReceipt } from "../api/generated";
 import type { BacktestApi } from "../api/backtests";
 import BacktestRunForm from "../components/backtests/BacktestRunForm.vue";
+import BacktestReferenceMarketCoveragePanel from "../components/backtests/BacktestReferenceMarketCoveragePanel.vue";
 import { useBacktestRunForm } from "../composables/useBacktestRunForm";
 
 interface Props {
@@ -69,6 +70,12 @@ onBeforeUnmount(() => {
       @submit="form.submit"
       @update-field="form.updateField"
       @update-lot="form.updateLot"
+    />
+
+    <BacktestReferenceMarketCoveragePanel
+      :coverage="form.referenceMarketCoverage.value"
+      :error="form.referenceMarketCoverageError.value"
+      :state="form.referenceMarketCoverageState.value"
     />
 
     <section

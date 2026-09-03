@@ -58,7 +58,7 @@
             "type": "string"
           },
           "promptVersion": {
-            "default": "plan-extract-v1",
+            "default": "plan-extract-v2",
             "maxLength": 64,
             "minLength": 1,
             "pattern": "^[a-z0-9][a-z0-9._-]*$",
@@ -1116,6 +1116,16 @@
             ],
             "title": "Pricefen"
           },
+          "referenceMarket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestDecisionReferenceMarketView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "resultHash": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Resulthash",
@@ -1689,7 +1699,10 @@
             "type": "string"
           },
           "schemaVersion": {
-            "const": "backtest-dataset-v1",
+            "enum": [
+              "backtest-dataset-v1",
+              "backtest-dataset-v2"
+            ],
             "title": "Schemaversion",
             "type": "string"
           },
@@ -1769,6 +1782,61 @@
           "children"
         ],
         "title": "BacktestDecisionEvidenceView",
+        "type": "object"
+      },
+      "BacktestDecisionReferenceMarketView": {
+        "additionalProperties": false,
+        "description": "Compact immutable index identity and exact path evidence for one decision.",
+        "properties": {
+          "dataAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataat"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/IndexConditionEvidenceView"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "health": {
+            "$ref": "#/components/schemas/MarketIndexHealth"
+          },
+          "indexCode": {
+            "$ref": "#/components/schemas/MarketIndexCode"
+          },
+          "snapshotHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshothash"
+          }
+        },
+        "required": [
+          "indexCode",
+          "snapshotHash",
+          "dataAt",
+          "health",
+          "evidence"
+        ],
+        "title": "BacktestDecisionReferenceMarketView",
         "type": "object"
       },
       "BacktestDecisionView": {
@@ -2654,6 +2722,155 @@
         "title": "BacktestFormulaVersionsView",
         "type": "object"
       },
+      "BacktestIndexConditionSummaryView": {
+        "additionalProperties": false,
+        "description": "Server-counted outcomes for one exact plan-owned index leaf path.",
+        "properties": {
+          "applicableBranchCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Applicablebranchcount",
+            "type": "integer"
+          },
+          "conditionType": {
+            "enum": [
+              "INDEX_CLOSE_GTE_MA",
+              "INDEX_CLOSE_LTE_MA",
+              "INDEX_MA_NON_DECREASING",
+              "INDEX_MA_NON_INCREASING",
+              "INDEX_RETURN_GTE",
+              "INDEX_RETURN_LTE"
+            ],
+            "title": "Conditiontype",
+            "type": "string"
+          },
+          "formulaId": {
+            "enum": [
+              "SMA",
+              "SMA_LOOKBACK",
+              "RETURN"
+            ],
+            "title": "Formulaid",
+            "type": "string"
+          },
+          "missingCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Missingcount",
+            "type": "integer"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestIndexMaParametersView"
+              },
+              {
+                "$ref": "#/components/schemas/BacktestIndexMaLookbackParametersView"
+              },
+              {
+                "$ref": "#/components/schemas/BacktestIndexReturnParametersView"
+              }
+            ],
+            "title": "Parameters"
+          },
+          "planPath": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Planpath",
+            "type": "string"
+          },
+          "satisfiedCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Satisfiedcount",
+            "type": "integer"
+          },
+          "unsatisfiedCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Unsatisfiedcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "planPath",
+          "conditionType",
+          "parameters",
+          "formulaId",
+          "satisfiedCount",
+          "unsatisfiedCount",
+          "missingCount",
+          "applicableBranchCount"
+        ],
+        "title": "BacktestIndexConditionSummaryView",
+        "type": "object"
+      },
+      "BacktestIndexMaLookbackParametersView": {
+        "additionalProperties": false,
+        "properties": {
+          "lookback": {
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Lookback",
+            "type": "integer"
+          },
+          "period": {
+            "maximum": 250.0,
+            "minimum": 2.0,
+            "title": "Period",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "period",
+          "lookback"
+        ],
+        "title": "BacktestIndexMaLookbackParametersView",
+        "type": "object"
+      },
+      "BacktestIndexMaParametersView": {
+        "additionalProperties": false,
+        "properties": {
+          "period": {
+            "maximum": 250.0,
+            "minimum": 2.0,
+            "title": "Period",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "period"
+        ],
+        "title": "BacktestIndexMaParametersView",
+        "type": "object"
+      },
+      "BacktestIndexReturnParametersView": {
+        "additionalProperties": false,
+        "properties": {
+          "thresholdRatio": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Thresholdratio",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/ReturnWindow"
+          },
+          "windowSize": {
+            "maximum": 250.0,
+            "minimum": 1.0,
+            "title": "Windowsize",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window",
+          "windowSize",
+          "thresholdRatio"
+        ],
+        "title": "BacktestIndexReturnParametersView",
+        "type": "object"
+      },
       "BacktestInitialLotInput": {
         "additionalProperties": false,
         "description": "Caller-stable initial holding without a run-bound lot identity.",
@@ -3258,6 +3475,166 @@
         "title": "BacktestJobView",
         "type": "object"
       },
+      "BacktestMarketIndexHealthPointView": {
+        "additionalProperties": false,
+        "properties": {
+          "dataAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Dataat",
+            "type": "string"
+          },
+          "health": {
+            "$ref": "#/components/schemas/MarketIndexHealth"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexIssueCode"
+            },
+            "maxItems": 16,
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataAt",
+          "health",
+          "issues"
+        ],
+        "title": "BacktestMarketIndexHealthPointView",
+        "type": "object"
+      },
+      "BacktestMarketIndexPointView": {
+        "additionalProperties": false,
+        "description": "One exact official-daily display point and its server-computed facts.",
+        "properties": {
+          "closePoints": {
+            "maxLength": 4096,
+            "pattern": "^(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+            "title": "Closepoints",
+            "type": "string"
+          },
+          "dataAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Dataat",
+            "type": "string"
+          },
+          "health": {
+            "$ref": "#/components/schemas/MarketIndexHealth"
+          },
+          "indicatorFacts": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "RETURN": "#/components/schemas/ReturnIndicatorFactView",
+                  "SMA": "#/components/schemas/SmaIndicatorFactView",
+                  "SMA_LOOKBACK": "#/components/schemas/SmaLookbackIndicatorFactView"
+                },
+                "propertyName": "formulaId"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SmaIndicatorFactView"
+                },
+                {
+                  "$ref": "#/components/schemas/SmaLookbackIndicatorFactView"
+                },
+                {
+                  "$ref": "#/components/schemas/ReturnIndicatorFactView"
+                }
+              ]
+            },
+            "maxItems": 50,
+            "title": "Indicatorfacts",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexIssueCode"
+            },
+            "maxItems": 16,
+            "title": "Issues",
+            "type": "array"
+          },
+          "snapshotHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshothash",
+            "type": "string"
+          },
+          "tradeDate": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Tradedate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tradeDate",
+          "dataAt",
+          "closePoints",
+          "snapshotHash",
+          "indicatorFacts",
+          "health",
+          "issues"
+        ],
+        "title": "BacktestMarketIndexPointView",
+        "type": "object"
+      },
+      "BacktestMarketIndexSeriesView": {
+        "additionalProperties": false,
+        "description": "Bounded reference-index series that never synthesizes an old run's data.",
+        "properties": {
+          "conditionSummaries": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestIndexConditionSummaryView"
+            },
+            "maxItems": 50,
+            "title": "Conditionsummaries",
+            "type": "array"
+          },
+          "healthTimeline": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestMarketIndexHealthPointView"
+            },
+            "maxItems": 512,
+            "title": "Healthtimeline",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestMarketIndexPointView"
+            },
+            "maxItems": 512,
+            "title": "Items",
+            "type": "array"
+          },
+          "referenceMarket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestReferenceMarketView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "referenceMarket",
+          "items",
+          "healthTimeline",
+          "conditionSummaries"
+        ],
+        "title": "BacktestMarketIndexSeriesView",
+        "type": "object"
+      },
       "BacktestMetricsView": {
         "additionalProperties": false,
         "description": "Exact completed-run metrics with all money represented as FenText.",
@@ -3456,6 +3833,266 @@
           "sellableTacticalQuantity"
         ],
         "title": "BacktestPositionSummaryView",
+        "type": "object"
+      },
+      "BacktestReferenceMarketBindingView": {
+        "additionalProperties": false,
+        "properties": {
+          "board": {
+            "$ref": "#/components/schemas/Board"
+          },
+          "displayName": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Displayname",
+            "type": "string"
+          },
+          "indexCode": {
+            "$ref": "#/components/schemas/MarketIndexCode"
+          },
+          "mappingVersion": {
+            "const": "board-index-map-v1",
+            "title": "Mappingversion",
+            "type": "string"
+          },
+          "selection": {
+            "const": "AUTO_BOARD",
+            "title": "Selection",
+            "type": "string"
+          }
+        },
+        "required": [
+          "selection",
+          "mappingVersion",
+          "indexCode",
+          "displayName",
+          "board"
+        ],
+        "title": "BacktestReferenceMarketBindingView",
+        "type": "object"
+      },
+      "BacktestReferenceMarketCoverageView": {
+        "additionalProperties": false,
+        "description": "Server-resolved plan/dataset coverage shown before run submission.",
+        "properties": {
+          "availableFiveMinuteCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Availablefiveminutecount",
+            "type": "integer"
+          },
+          "availableOfficialDayCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Availableofficialdaycount",
+            "type": "integer"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/BacktestReferenceMarketBindingView"
+          },
+          "blockers": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Z][A-Z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "conditionPaths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Conditionpaths",
+            "type": "array"
+          },
+          "coverageStatus": {
+            "enum": [
+              "AVAILABLE",
+              "BLOCKED",
+              "NOT_REQUIRED"
+            ],
+            "title": "Coveragestatus",
+            "type": "string"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "formulaDefinitionHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Formuladefinitionhash",
+            "type": "string"
+          },
+          "indexRequirementHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Indexrequirementhash",
+            "type": "string"
+          },
+          "marketIndexDataHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketindexdatahash"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "requiredFiveMinuteCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Requiredfiveminutecount",
+            "type": "integer"
+          },
+          "requiredOfficialDayCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Requiredofficialdaycount",
+            "type": "integer"
+          },
+          "warmupEnd": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Warmupend",
+            "type": "string"
+          },
+          "warmupStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Warmupstart",
+            "type": "string"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "datasetHash",
+          "binding",
+          "required",
+          "conditionPaths",
+          "requiredFiveMinuteCount",
+          "availableFiveMinuteCount",
+          "requiredOfficialDayCount",
+          "availableOfficialDayCount",
+          "warmupStart",
+          "warmupEnd",
+          "coverageStatus",
+          "blockers",
+          "marketIndexDataHash",
+          "indexRequirementHash",
+          "formulaDefinitionHash"
+        ],
+        "title": "BacktestReferenceMarketCoverageView",
+        "type": "object"
+      },
+      "BacktestReferenceMarketView": {
+        "additionalProperties": false,
+        "description": "Exact server-authored coverage and condition summary for one run.",
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/BacktestReferenceMarketBindingView"
+          },
+          "blockers": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Z][A-Z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "conditionPaths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Conditionpaths",
+            "type": "array"
+          },
+          "conditionSummaries": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestIndexConditionSummaryView"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Conditionsummaries",
+            "type": "array"
+          },
+          "coverageStatus": {
+            "enum": [
+              "AVAILABLE",
+              "BLOCKED",
+              "EXPIRED",
+              "NOT_RECORDED"
+            ],
+            "title": "Coveragestatus",
+            "type": "string"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "formulaDefinitionHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Formuladefinitionhash",
+            "type": "string"
+          },
+          "indexRequirementHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Indexrequirementhash",
+            "type": "string"
+          },
+          "marketIndexDataHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Marketindexdatahash",
+            "type": "string"
+          },
+          "required": {
+            "const": true,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "warmupStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Warmupstart",
+            "type": "string"
+          }
+        },
+        "required": [
+          "binding",
+          "required",
+          "conditionPaths",
+          "warmupStart",
+          "coverageStatus",
+          "blockers",
+          "marketIndexDataHash",
+          "indexRequirementHash",
+          "formulaDefinitionHash",
+          "datasetHash",
+          "conditionSummaries"
+        ],
+        "title": "BacktestReferenceMarketView",
         "type": "object"
       },
       "BacktestResultAvailabilityView": {
@@ -4027,6 +4664,16 @@
             ],
             "title": "Planversionid"
           },
+          "referenceMarket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestReferenceMarketView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "reportHash": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Reporthash",
@@ -4333,6 +4980,18 @@
         "title": "BarView",
         "type": "object"
       },
+      "Board": {
+        "description": "Closed board identities supported by the Phase-1 mapping.",
+        "enum": [
+          "SSE_MAIN",
+          "SZSE_MAIN",
+          "CHINEXT",
+          "STAR_MARKET",
+          "BSE"
+        ],
+        "title": "Board",
+        "type": "string"
+      },
       "ConditionOutcome": {
         "description": "Three-valued outcome that distinguishes false from unavailable facts.",
         "enum": [
@@ -4487,6 +5146,14 @@
             ],
             "title": "Dataageseconds"
           },
+          "marketIndexes": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexSnapshotView"
+            },
+            "maxItems": 5,
+            "title": "Marketindexes",
+            "type": "array"
+          },
           "observedAt": {
             "format": "date-time",
             "title": "Observedat",
@@ -4512,7 +5179,8 @@
           "observedAt",
           "connectionStatus",
           "dataAgeSeconds",
-          "counts"
+          "counts",
+          "marketIndexes"
         ],
         "title": "DashboardResponse",
         "type": "object"
@@ -5100,7 +5768,8 @@
           "BOOLEAN",
           "DATE",
           "DATETIME",
-          "CODE"
+          "CODE",
+          "POINTS"
         ],
         "title": "EvidenceUnit",
         "type": "string"
@@ -5223,6 +5892,191 @@
         "title": "FieldEvidence",
         "type": "object"
       },
+      "IndexConditionEvidenceView": {
+        "additionalProperties": false,
+        "description": "Exact server projection of one plan path's index interpretation.",
+        "properties": {
+          "actualValue": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actualvalue"
+          },
+          "comparisonValue": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparisonvalue"
+          },
+          "conditionType": {
+            "enum": [
+              "INDEX_CLOSE_GTE_MA",
+              "INDEX_CLOSE_LTE_MA",
+              "INDEX_MA_NON_DECREASING",
+              "INDEX_MA_NON_INCREASING",
+              "INDEX_RETURN_GTE",
+              "INDEX_RETURN_LTE"
+            ],
+            "title": "Conditiontype",
+            "type": "string"
+          },
+          "dataCutoff": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datacutoff"
+          },
+          "decisionCutoff": {
+            "format": "date-time",
+            "title": "Decisioncutoff",
+            "type": "string"
+          },
+          "formulaDefinitionHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formuladefinitionhash"
+          },
+          "formulaId": {
+            "enum": [
+              "SMA",
+              "SMA_LOOKBACK",
+              "RETURN"
+            ],
+            "title": "Formulaid",
+            "type": "string"
+          },
+          "indexCode": {
+            "$ref": "#/components/schemas/MarketIndexCode"
+          },
+          "mappingVersion": {
+            "const": "board-index-map-v1",
+            "title": "Mappingversion",
+            "type": "string"
+          },
+          "missingInputs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MissingInputCode"
+            },
+            "maxItems": 7,
+            "title": "Missinginputs",
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ConditionOutcome"
+          },
+          "parameters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EvidenceFactView"
+            },
+            "maxItems": 8,
+            "title": "Parameters",
+            "type": "array"
+          },
+          "planPath": {
+            "maxLength": 256,
+            "minLength": 15,
+            "pattern": "^(?:entry|reduction|risk|blockers)\\.condition(?:\\.conditions\\[[0-9]+\\])*$",
+            "title": "Planpath",
+            "type": "string"
+          },
+          "snapshotHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshothash"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/MarketIndexFactUnit"
+          }
+        },
+        "required": [
+          "planPath",
+          "conditionType",
+          "indexCode",
+          "mappingVersion",
+          "snapshotHash",
+          "decisionCutoff",
+          "dataCutoff",
+          "formulaId",
+          "formulaDefinitionHash",
+          "actualValue",
+          "comparisonValue",
+          "unit",
+          "outcome"
+        ],
+        "title": "IndexConditionEvidenceView",
+        "type": "object"
+      },
+      "IndexConditionProgressView": {
+        "additionalProperties": false,
+        "properties": {
+          "missing": {
+            "minimum": 0.0,
+            "title": "Missing",
+            "type": "integer"
+          },
+          "satisfied": {
+            "minimum": 0.0,
+            "title": "Satisfied",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "unsatisfied": {
+            "minimum": 0.0,
+            "title": "Unsatisfied",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "satisfied",
+          "unsatisfied",
+          "missing",
+          "total"
+        ],
+        "title": "IndexConditionProgressView",
+        "type": "object"
+      },
       "IntradayDiagnosticIdentityView": {
         "additionalProperties": false,
         "properties": {
@@ -5264,6 +6118,366 @@
         "title": "IntradayDiagnosticIdentityView",
         "type": "object"
       },
+      "MarketIndexBarPage": {
+        "additionalProperties": false,
+        "properties": {
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexBarView"
+            },
+            "maxItems": 2000,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 2000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 3,
+                "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "snapshotHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshothash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "limit",
+          "nextCursor",
+          "hasMore",
+          "snapshotHash"
+        ],
+        "title": "MarketIndexBarPage",
+        "type": "object"
+      },
+      "MarketIndexBarView": {
+        "additionalProperties": false,
+        "description": "One already validated history point; it has no plan interpretation.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "barAt": {
+            "format": "date-time",
+            "title": "Barat",
+            "type": "string"
+          },
+          "closePoints": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Closepoints",
+            "type": "string"
+          },
+          "highPoints": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Highpoints",
+            "type": "string"
+          },
+          "indexCode": {
+            "$ref": "#/components/schemas/MarketIndexCode"
+          },
+          "interval": {
+            "$ref": "#/components/schemas/MarketIndexInterval"
+          },
+          "lowPoints": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Lowpoints",
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "openPoints": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Openpoints",
+            "type": "string"
+          },
+          "providerRevision": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Providerrevision",
+            "type": "integer"
+          },
+          "sourceKind": {
+            "$ref": "#/components/schemas/MarketIndexSourceKind"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
+          }
+        },
+        "required": [
+          "indexCode",
+          "interval",
+          "barAt",
+          "openPoints",
+          "highPoints",
+          "lowPoints",
+          "closePoints",
+          "volume",
+          "amount",
+          "observedAt",
+          "sourceKind",
+          "providerRevision"
+        ],
+        "title": "MarketIndexBarView",
+        "type": "object"
+      },
+      "MarketIndexCode": {
+        "description": "Closed provider-independent index codes approved for Phase 1.",
+        "enum": [
+          "000001.SH",
+          "399001.SZ",
+          "399006.SZ",
+          "000688.SH",
+          "899050.BJ"
+        ],
+        "title": "MarketIndexCode",
+        "type": "string"
+      },
+      "MarketIndexFactUnit": {
+        "enum": [
+          "POINTS",
+          "RATIO"
+        ],
+        "title": "MarketIndexFactUnit",
+        "type": "string"
+      },
+      "MarketIndexHealth": {
+        "enum": [
+          "LIVE",
+          "STALE",
+          "GAPPED",
+          "BLOCKED"
+        ],
+        "title": "MarketIndexHealth",
+        "type": "string"
+      },
+      "MarketIndexInterval": {
+        "enum": [
+          "FIVE_MINUTE",
+          "OFFICIAL_DAILY"
+        ],
+        "title": "MarketIndexInterval",
+        "type": "string"
+      },
+      "MarketIndexIssueCode": {
+        "enum": [
+          "MISSING_FIVE_MINUTE_BAR",
+          "MISSING_OFFICIAL_DAILY_BAR",
+          "INSUFFICIENT_HISTORY",
+          "STALE_DATA",
+          "DUPLICATE_IDENTITY",
+          "GAPPED_SERIES",
+          "INDEX_IDENTITY_MISMATCH",
+          "FUTURE_DATA",
+          "INVALID_TIMESTAMP",
+          "NONCANONICAL_DECIMAL",
+          "INVALID_OHLC",
+          "FORMULA_MISMATCH",
+          "PROVIDER_UNAVAILABLE"
+        ],
+        "title": "MarketIndexIssueCode",
+        "type": "string"
+      },
+      "MarketIndexSnapshotView": {
+        "additionalProperties": false,
+        "description": "Plan-neutral projection of one shared board-index snapshot.",
+        "properties": {
+          "board": {
+            "$ref": "#/components/schemas/Board"
+          },
+          "closePoints": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closepoints"
+          },
+          "completedBucketAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedbucketat"
+          },
+          "displayName": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Displayname",
+            "type": "string"
+          },
+          "health": {
+            "$ref": "#/components/schemas/MarketIndexHealth"
+          },
+          "indexCode": {
+            "$ref": "#/components/schemas/MarketIndexCode"
+          },
+          "indicatorFacts": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "RETURN": "#/components/schemas/ReturnIndicatorFactView",
+                  "SMA": "#/components/schemas/SmaIndicatorFactView",
+                  "SMA_LOOKBACK": "#/components/schemas/SmaLookbackIndicatorFactView"
+                },
+                "propertyName": "formulaId"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SmaIndicatorFactView"
+                },
+                {
+                  "$ref": "#/components/schemas/SmaLookbackIndicatorFactView"
+                },
+                {
+                  "$ref": "#/components/schemas/ReturnIndicatorFactView"
+                }
+              ]
+            },
+            "maxItems": 50,
+            "title": "Indicatorfacts",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexIssueCode"
+            },
+            "maxItems": 16,
+            "title": "Issues",
+            "type": "array"
+          },
+          "mappedSymbolCount": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Mappedsymbolcount",
+            "type": "integer"
+          },
+          "mappingVersion": {
+            "const": "board-index-map-v1",
+            "title": "Mappingversion",
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "priorClosePoints": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priorclosepoints"
+          },
+          "revision": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sessionChangeRatio": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionchangeratio"
+          },
+          "snapshotHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshothash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "indexCode",
+          "displayName",
+          "board",
+          "closePoints",
+          "priorClosePoints",
+          "sessionChangeRatio",
+          "completedBucketAt",
+          "observedAt",
+          "health",
+          "issues",
+          "indicatorFacts",
+          "mappedSymbolCount",
+          "mappingVersion",
+          "revision",
+          "snapshotHash"
+        ],
+        "title": "MarketIndexSnapshotView",
+        "type": "object"
+      },
+      "MarketIndexSourceKind": {
+        "enum": [
+          "PROVISIONAL",
+          "OFFICIAL"
+        ],
+        "title": "MarketIndexSourceKind",
+        "type": "string"
+      },
       "MissingInputCode": {
         "description": "Closed reasons why a condition cannot be evaluated safely.",
         "enum": [
@@ -5281,7 +6495,14 @@
           "OFFICIAL_DAILY_CLOSE",
           "TRADING_CALENDAR",
           "DAILY_LIMIT",
-          "MANUAL_EVENT_RISK"
+          "MANUAL_EVENT_RISK",
+          "INDEX_SNAPSHOT",
+          "INDEX_IDENTITY",
+          "INDEX_CUTOFF",
+          "INDEX_HEALTH",
+          "INDEX_FACT",
+          "INDEX_HISTORY",
+          "INDEX_FORMULA"
         ],
         "title": "MissingInputCode",
         "type": "string"
@@ -6256,6 +7477,68 @@
         "title": "ProviderHealthView",
         "type": "object"
       },
+      "ReturnIndicatorFactView": {
+        "additionalProperties": false,
+        "properties": {
+          "formulaDefinitionHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Formuladefinitionhash",
+            "type": "string"
+          },
+          "formulaId": {
+            "const": "RETURN",
+            "title": "Formulaid",
+            "type": "string"
+          },
+          "sourceBarHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcebarhash",
+            "type": "string"
+          },
+          "unit": {
+            "const": "RATIO",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/ReturnWindow"
+          },
+          "windowSize": {
+            "maximum": 250.0,
+            "minimum": 1.0,
+            "title": "Windowsize",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "formulaId",
+          "window",
+          "windowSize",
+          "value",
+          "unit",
+          "sourceBarHash",
+          "formulaDefinitionHash"
+        ],
+        "title": "ReturnIndicatorFactView",
+        "type": "object"
+      },
+      "ReturnWindow": {
+        "enum": [
+          "FIVE_MINUTE_BUCKETS",
+          "OFFICIAL_OPEN_DAYS"
+        ],
+        "title": "ReturnWindow",
+        "type": "string"
+      },
       "ReviewIssueKind": {
         "description": "Closed provenance-review issue kinds accepted from the AI boundary.",
         "enum": [
@@ -6601,9 +7884,131 @@
         "title": "SignalType",
         "type": "string"
       },
+      "SmaIndicatorFactView": {
+        "additionalProperties": false,
+        "properties": {
+          "formulaDefinitionHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Formuladefinitionhash",
+            "type": "string"
+          },
+          "formulaId": {
+            "const": "SMA",
+            "title": "Formulaid",
+            "type": "string"
+          },
+          "period": {
+            "maximum": 250.0,
+            "minimum": 2.0,
+            "title": "Period",
+            "type": "integer"
+          },
+          "sourceBarHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcebarhash",
+            "type": "string"
+          },
+          "unit": {
+            "const": "POINTS",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formulaId",
+          "period",
+          "value",
+          "unit",
+          "sourceBarHash",
+          "formulaDefinitionHash"
+        ],
+        "title": "SmaIndicatorFactView",
+        "type": "object"
+      },
+      "SmaLookbackIndicatorFactView": {
+        "additionalProperties": false,
+        "properties": {
+          "comparisonValue": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Comparisonvalue",
+            "type": "string"
+          },
+          "formulaDefinitionHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Formuladefinitionhash",
+            "type": "string"
+          },
+          "formulaId": {
+            "const": "SMA_LOOKBACK",
+            "title": "Formulaid",
+            "type": "string"
+          },
+          "lookback": {
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Lookback",
+            "type": "integer"
+          },
+          "period": {
+            "maximum": 250.0,
+            "minimum": 2.0,
+            "title": "Period",
+            "type": "integer"
+          },
+          "sourceBarHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcebarhash",
+            "type": "string"
+          },
+          "unit": {
+            "const": "POINTS",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formulaId",
+          "period",
+          "lookback",
+          "value",
+          "comparisonValue",
+          "unit",
+          "sourceBarHash",
+          "formulaDefinitionHash"
+        ],
+        "title": "SmaLookbackIndicatorFactView",
+        "type": "object"
+      },
       "SymbolDetailResponse": {
         "additionalProperties": false,
         "properties": {
+          "indexConditionEvidence": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IndexConditionEvidenceView"
+            },
+            "maxItems": 50,
+            "title": "Indexconditionevidence",
+            "type": "array"
+          },
           "positionLots": {
             "default": [],
             "items": {
@@ -6612,6 +8017,16 @@
             "maxItems": 200,
             "title": "Positionlots",
             "type": "array"
+          },
+          "referenceMarket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SymbolReferenceMarketView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "summary": {
             "$ref": "#/components/schemas/SymbolSummaryView"
@@ -6916,6 +8331,82 @@
         "title": "SymbolPage",
         "type": "object"
       },
+      "SymbolReferenceMarketView": {
+        "additionalProperties": false,
+        "description": "Plan-specific reference to shared data and server-authored progress only.",
+        "properties": {
+          "board": {
+            "$ref": "#/components/schemas/Board"
+          },
+          "conditionProgress": {
+            "$ref": "#/components/schemas/IndexConditionProgressView"
+          },
+          "dataAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataat"
+          },
+          "displayName": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Displayname",
+            "type": "string"
+          },
+          "health": {
+            "$ref": "#/components/schemas/MarketIndexHealth"
+          },
+          "indexCode": {
+            "$ref": "#/components/schemas/MarketIndexCode"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexIssueCode"
+            },
+            "maxItems": 16,
+            "title": "Issues",
+            "type": "array"
+          },
+          "mappingVersion": {
+            "const": "board-index-map-v1",
+            "title": "Mappingversion",
+            "type": "string"
+          },
+          "snapshotHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshothash"
+          }
+        },
+        "required": [
+          "indexCode",
+          "displayName",
+          "board",
+          "mappingVersion",
+          "snapshotHash",
+          "dataAt",
+          "health",
+          "issues",
+          "conditionProgress"
+        ],
+        "title": "SymbolReferenceMarketView",
+        "type": "object"
+      },
       "SymbolSummaryView": {
         "additionalProperties": false,
         "properties": {
@@ -6936,6 +8427,16 @@
             "format": "date-time",
             "title": "Observedat",
             "type": "string"
+          },
+          "referenceMarket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SymbolReferenceMarketView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "riskDistanceFen": {
             "anyOf": [
@@ -9289,6 +10790,162 @@
         ]
       }
     },
+    "/api/v1/backtest-datasets/{dataset_hash}/reference-market-coverage": {
+      "get": {
+        "operationId": "get_backtest_reference_market_coverage_api_v1_backtest_datasets__dataset_hash__reference_market_coverage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_hash",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Dataset Hash",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "planVersionId",
+            "required": true,
+            "schema": {
+              "maxLength": 36,
+              "minLength": 36,
+              "title": "Planversionid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestReferenceMarketCoverageView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Backtest Reference Market Coverage",
+        "tags": [
+          "backtest-data"
+        ]
+      }
+    },
     "/api/v1/backtest-job-cancellations": {
       "post": {
         "operationId": "request_backtest_job_cancellation_api_v1_backtest_job_cancellations_post",
@@ -11303,6 +12960,197 @@
         ]
       }
     },
+    "/api/v1/backtest-runs/{run_id}/market-index-series": {
+      "get": {
+        "operationId": "get_backtest_market_index_series_api_v1_backtest_runs__run_id__market_index_series_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startOn",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Starton"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endOn",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Endon"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 512,
+              "maximum": 512,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestMarketIndexSeriesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Backtest Market Index Series",
+        "tags": [
+          "backtest-results"
+        ]
+      }
+    },
     "/api/v1/dashboard": {
       "get": {
         "operationId": "get_dashboard_api_v1_dashboard_get",
@@ -11860,6 +13708,205 @@
         "summary": "Get Symbol Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/market-indexes/{indexCode}/bars": {
+      "get": {
+        "operationId": "list_market_index_bars_api_v1_market_indexes__indexCode__bars_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "indexCode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MarketIndexCode"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MarketIndexInterval"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startAt",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Startat",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endAt",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Endat",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": true,
+            "schema": {
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketIndexBarPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Market Index Bars",
+        "tags": [
+          "market-indexes"
         ]
       }
     },

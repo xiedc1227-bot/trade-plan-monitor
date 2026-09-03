@@ -21,9 +21,11 @@ import BacktestDetailTable from "../components/backtests/BacktestDetailTable.vue
 import BacktestEquityTable from "../components/backtests/BacktestEquityTable.vue";
 import BacktestFillTable from "../components/backtests/BacktestFillTable.vue";
 import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
+import BacktestMarketIndexPanel from "../components/backtests/BacktestMarketIndexPanel.vue";
 import BacktestMetricsSummary from "../components/backtests/BacktestMetricsSummary.vue";
 import BacktestResultActions from "../components/backtests/BacktestResultActions.vue";
 import { useBacktestJob } from "../composables/useBacktestJob";
+import { useBacktestMarketIndexSeries } from "../composables/useMarketIndexSeries";
 import {
   detailAvailability,
   useBacktestResults,
@@ -62,6 +64,7 @@ const RESULT_TABS = new Set<BacktestResultTab>([
   "fills",
   "details",
   "equity",
+  "market-index",
 ]);
 const DETAIL_KIND_OPTIONS: readonly BacktestDetailKind[] = [
   "DECISION",
@@ -200,6 +203,26 @@ const results = useBacktestResults({
   runId,
   selectedTab,
 });
+const marketIndexRequest = computed(() =>
+  resultsEnabled.value &&
+  results.summaryState.value === "READY" &&
+  selectedTab.value === "market-index" &&
+  runId.value !== null
+    ? { limit: 512, runId: runId.value }
+    : null,
+);
+const marketIndexSeries = useBacktestMarketIndexSeries({
+  loader: ({ runId: requestedRunId, ...query }, signal) =>
+    api.getMarketIndexSeries(requestedRunId, query, { signal }),
+  query: marketIndexRequest,
+});
+
+async function openIndexDecisionDate(_tradeDate: string): Promise<void> {
+  await router.push({
+    path: route.path,
+    query: resultQuery("details", "DECISION"),
+  });
+}
 
 const activePage = computed<ReadonlyResultPageFrame | null>(() =>
   selectedTab.value === "fills"
@@ -507,6 +530,13 @@ onBeforeUnmount(() => {
         >
           权益序列
         </RouterLink>
+        <RouterLink
+          data-testid="result-tab-market-index"
+          :to="{ path: route.path, query: resultQuery('market-index') }"
+          :aria-current="selectedTab === 'market-index' ? 'page' : undefined"
+        >
+          参考指数
+        </RouterLink>
       </nav>
 
       <BacktestMetricsSummary
@@ -628,6 +658,42 @@ onBeforeUnmount(() => {
           v-else-if="results.detailState.value === 'READY' && results.detailPage.value !== null"
           :items="results.detailPage.value.items"
           :kind="selectedDetailKind"
+        />
+      </section>
+
+      <section
+        v-else-if="selectedTab === 'market-index'"
+        class="run-detail-view__resource"
+        aria-labelledby="market-index-title"
+      >
+        <div class="run-detail-view__resource-heading">
+          <div>
+            <h3 id="market-index-title">冻结参考指数</h3>
+            <p>共用指数数据与本计划条件结果分区展示；不提供整次运行的大盘强弱结论。</p>
+          </div>
+        </div>
+        <p
+          v-if="marketIndexSeries.status.value === 'LOADING'"
+          class="run-detail-view__state"
+          data-testid="market-index-resource-state"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          正在读取冻结参考指数…
+        </p>
+        <div
+          v-else-if="marketIndexSeries.status.value === 'ERROR'"
+          class="run-detail-view__error"
+          data-testid="market-index-resource-error"
+          role="alert"
+        >
+          {{ marketIndexSeries.error.value }}
+        </div>
+        <BacktestMarketIndexPanel
+          v-else-if="marketIndexSeries.series.value !== null"
+          :series="marketIndexSeries.series.value"
+          @select-date="openIndexDecisionDate"
         />
       </section>
 

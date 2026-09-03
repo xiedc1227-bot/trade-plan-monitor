@@ -52,6 +52,7 @@ from trade_plan_monitor.domain.plan_models import (
     PriceInZoneCondition,
     TradePlan,
 )
+from trade_plan_monitor.domain.plan_validation import migrate_trade_plan_to_schema_v2
 from trade_plan_monitor.market_data.aggregation import (
     FiveMinuteBar,
     expected_five_minute_ends,
@@ -69,7 +70,16 @@ from trade_plan_monitor.market_data.reconciliation import (
 )
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.market_index.models import (
+    MarketIndexBar,
+    MarketIndexInterval,
+    MarketIndexSourceKind,
+)
+from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
+from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
 from trade_plan_monitor.runtime.health import SymbolHealthErrorCode, SymbolHealthTracker
+from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexService
 from trade_plan_monitor.runtime.recovery import (
     RecoveryErrorCode,
     RecoveryMode,
@@ -1261,6 +1271,273 @@ def test_intraday_service_fetches_outside_transaction_and_assembles_exact_contex
         assert session.scalar(select(func.count()).select_from(FiveMinuteBarRow)) == 1
         assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+
+
+def test_intraday_service_injects_one_validated_reference_snapshot(
+    runtime_engine: Engine,
+) -> None:
+    original = _runtime_plan()
+    migrated = migrate_trade_plan_to_schema_v2(original, new_version=2)
+    plan_payload = migrated.model_dump(mode="python", round_trip=True)
+    plan_payload["entry"] = {
+        "condition": {
+            "type": "INDEX_CLOSE_GTE_MA",
+            "index_role": "BOARD_REFERENCE",
+            "period": 2,
+        }
+    }
+    plan = TradePlan.model_validate(plan_payload)
+    bucket_end = _at(9, 35)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    fetched = [
+        _bar(plan.symbol, minute_end) for minute_end in expected_five_minute_ends(bucket_end)
+    ]
+
+    def index_bar(
+        interval: MarketIndexInterval,
+        bar_at: datetime,
+    ) -> MarketIndexBar:
+        return MarketIndexBar(
+            index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+            interval=interval,
+            bar_at=bar_at,
+            open_points=Decimal("100"),
+            high_points=Decimal("100"),
+            low_points=Decimal("100"),
+            close_points=Decimal("100"),
+            observed_at=(
+                evaluated_at
+                if interval is MarketIndexInterval.FIVE_MINUTE
+                else bar_at + timedelta(minutes=1)
+            ),
+            source_kind=(
+                MarketIndexSourceKind.PROVISIONAL
+                if interval is MarketIndexInterval.FIVE_MINUTE
+                else MarketIndexSourceKind.OFFICIAL
+            ),
+            provider_revision=1,
+        )
+
+    class IndexProvider:
+        def __init__(self) -> None:
+            self.call_count = 0
+
+        async def acquire_index_data(
+            self,
+            *,
+            index_code: MarketIndexCode,
+            decision_cutoff: datetime,
+            five_minute_bar_count: int,
+            official_daily_bar_count: int,
+        ) -> MarketIndexProviderBatch:
+            self.call_count += 1
+            assert index_code is MarketIndexCode.SHENZHEN_COMPONENT
+            assert decision_cutoff == bucket_end
+            assert (five_minute_bar_count, official_daily_bar_count) == (1, 2)
+            return MarketIndexProviderBatch(
+                index_code=index_code,
+                five_minute_bars=(index_bar(MarketIndexInterval.FIVE_MINUTE, bucket_end),),
+                official_daily_bars=tuple(
+                    index_bar(
+                        MarketIndexInterval.OFFICIAL_DAILY,
+                        datetime(2026, 8, day, 15, 0, tzinfo=SHANGHAI),
+                    )
+                    for day in (22, 23)
+                ),
+                content_revision=1,
+                observed_at=evaluated_at,
+            )
+
+    provider = IndexProvider()
+    captured: list[EvaluationContext] = []
+
+    async def fetch_minutes(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        return fetched
+
+    def evaluator(context: EvaluationContext) -> EvaluationResult:
+        captured.append(context)
+        return evaluate(context)
+
+    tracker = {"active": 0}
+    service = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=evaluated_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        evaluator=evaluator,
+        committed_event_publisher=lambda _event: None,
+        market_index_service=RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider)),
+    )
+
+    result = asyncio.run(
+        service.run_intraday(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+
+    assert result.status is IntradayCycleStatus.COMMITTED
+    assert provider.call_count == 1
+    assert len(captured) == 1
+    snapshot = captured[0].reference_market_snapshot
+    assert snapshot is not None
+    assert snapshot.index_code is MarketIndexCode.SHENZHEN_COMPONENT
+    assert snapshot.snapshot_hash
+
+
+def test_intraday_batch_unions_requirements_and_shares_one_snapshot_across_plans(
+    runtime_engine: Engine,
+) -> None:
+    original = _runtime_plan()
+    migrated = migrate_trade_plan_to_schema_v2(original, new_version=2)
+    first_payload = migrated.model_dump(mode="python", round_trip=True)
+    first_payload["entry"] = {
+        "condition": {
+            "type": "INDEX_CLOSE_GTE_MA",
+            "index_role": "BOARD_REFERENCE",
+            "period": 2,
+        }
+    }
+    first_plan = TradePlan.model_validate(first_payload)
+    second_payload = migrated.model_dump(mode="python", round_trip=True)
+    second_payload.update(
+        {
+            "plan_id": "runtime-index-batch-second",
+            "symbol": "000002.SZ",
+            "name": "Runtime Index Batch Second",
+            "entry": {
+                "condition": {
+                    "type": "INDEX_CLOSE_LTE_MA",
+                    "index_role": "BOARD_REFERENCE",
+                    "period": 3,
+                }
+            },
+        }
+    )
+    second_plan = TradePlan.model_validate(second_payload)
+    plans = (first_plan, second_plan)
+    bucket_end = _at(9, 40)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+
+    def index_bar(
+        interval: MarketIndexInterval,
+        bar_at: datetime,
+        close: str,
+    ) -> MarketIndexBar:
+        value = Decimal(close)
+        return MarketIndexBar(
+            index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+            interval=interval,
+            bar_at=bar_at,
+            open_points=value,
+            high_points=value,
+            low_points=value,
+            close_points=value,
+            observed_at=(
+                evaluated_at
+                if interval is MarketIndexInterval.FIVE_MINUTE
+                else bar_at + timedelta(minutes=1)
+            ),
+            source_kind=(
+                MarketIndexSourceKind.PROVISIONAL
+                if interval is MarketIndexInterval.FIVE_MINUTE
+                else MarketIndexSourceKind.OFFICIAL
+            ),
+            provider_revision=1,
+        )
+
+    class IndexProvider:
+        def __init__(self) -> None:
+            self.calls: list[tuple[int, int]] = []
+
+        async def acquire_index_data(
+            self,
+            *,
+            index_code: MarketIndexCode,
+            decision_cutoff: datetime,
+            five_minute_bar_count: int,
+            official_daily_bar_count: int,
+        ) -> MarketIndexProviderBatch:
+            assert index_code is MarketIndexCode.SHENZHEN_COMPONENT
+            assert decision_cutoff == bucket_end
+            self.calls.append((five_minute_bar_count, official_daily_bar_count))
+            return MarketIndexProviderBatch(
+                index_code=index_code,
+                five_minute_bars=(index_bar(MarketIndexInterval.FIVE_MINUTE, bucket_end, "100"),),
+                official_daily_bars=tuple(
+                    index_bar(
+                        MarketIndexInterval.OFFICIAL_DAILY,
+                        datetime(2026, 8, day, 15, 0, tzinfo=SHANGHAI),
+                        "90",
+                    )
+                    for day in (21, 22, 23)
+                ),
+                content_revision=1,
+                observed_at=evaluated_at,
+            )
+
+    provider = IndexProvider()
+    captured: list[EvaluationContext] = []
+
+    async def fetch_minutes(symbol: str, target: datetime) -> list[MinuteBar]:
+        return [
+            MinuteBar(
+                symbol=symbol,
+                bar_end=minute_end,
+                open_fen=6400,
+                high_fen=6410,
+                low_fen=6390,
+                close_fen=6405,
+                volume_shares=1_000,
+                amount_yuan=Decimal("64000"),
+                received_at=minute_end + timedelta(seconds=12),
+            )
+            for minute_end in expected_minute_ends(target.date(), is_open=True)
+            if minute_end <= target
+        ]
+
+    def evaluator(context: EvaluationContext) -> EvaluationResult:
+        captured.append(context)
+        return evaluate(context)
+
+    tracker = {"active": 0}
+    results = asyncio.run(
+        RuntimeEvaluationService(
+            fetch_minutes=fetch_minutes,
+            unit_of_work_factory=_runtime_uow_factory(
+                runtime_engine,
+                tracker,
+                now=evaluated_at + timedelta(seconds=1),
+            ),
+            context_builder=_runtime_context,
+            evaluator=evaluator,
+            committed_event_publisher=lambda _event: None,
+            market_index_service=RuntimeMarketIndexService(
+                MarketIndexSnapshotCoordinator(provider)
+            ),
+        ).run_intraday_batch(
+            plans=plans,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+
+    assert provider.calls == [(1, 3)]
+    assert len(results) == len(captured) == 2
+    assert all(result.status is IntradayCycleStatus.COMMITTED for result in results)
+    snapshots = tuple(context.reference_market_snapshot for context in captured)
+    snapshot = snapshots[0]
+    assert snapshot is not None
+    assert snapshot is snapshots[1]
+    assert len(snapshot.fact_requests) == 2
+    assert {context.plan_hash for context in captured} == {
+        plan_sha256(first_plan),
+        plan_sha256(second_plan),
+    }
 
 
 def test_intraday_service_latest_quote_cannot_hide_gapped_current_day_context(

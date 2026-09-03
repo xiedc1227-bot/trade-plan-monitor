@@ -45,8 +45,15 @@ import type {
   BacktestFillView,
   BacktestFormulaVersionsView,
   BacktestInitialLotInput,
+  BacktestIndexConditionSummaryView,
   BacktestNextStepView,
+  BacktestMarketIndexHealthPointView,
+  BacktestMarketIndexPointView,
+  BacktestMarketIndexSeriesView,
   BacktestPositionSummaryView,
+  BacktestReferenceMarketBindingView,
+  BacktestReferenceMarketCoverageView,
+  BacktestReferenceMarketView,
   BacktestSignalView,
   paths,
 } from "./generated";
@@ -73,6 +80,9 @@ export type BacktestFillListQuery = NonNullable<
 >;
 export type BacktestDetailListQuery =
   paths["/api/v1/backtest-runs/{run_id}/details"]["get"]["parameters"]["query"];
+export type BacktestMarketIndexSeriesQuery = NonNullable<
+  paths["/api/v1/backtest-runs/{run_id}/market-index-series"]["get"]["parameters"]["query"]
+>;
 
 export interface BacktestRequestOptions {
   readonly signal?: AbortSignal;
@@ -95,6 +105,11 @@ export interface BacktestApi {
     datasetHash: string,
     options?: BacktestRequestOptions,
   ): Promise<BacktestDatasetView>;
+  getReferenceMarketCoverage(
+    datasetHash: string,
+    planVersionId: string,
+    options?: BacktestRequestOptions,
+  ): Promise<BacktestReferenceMarketCoverageView>;
   getJob(jobId: string, options?: BacktestRequestOptions): Promise<BacktestJobView>;
   listDatasets(
     query?: BacktestDatasetListQuery,
@@ -109,6 +124,11 @@ export interface BacktestApi {
     runId: string,
     options?: BacktestRequestOptions,
   ): Promise<BacktestEquitySeries>;
+  getMarketIndexSeries(
+    runId: string,
+    query?: BacktestMarketIndexSeriesQuery,
+    options?: BacktestRequestOptions,
+  ): Promise<BacktestMarketIndexSeriesView>;
   listDetails(
     runId: string,
     query: BacktestDetailListQuery,
@@ -208,6 +228,30 @@ const dataHealthStatuses = new Set([
   "BLOCKED",
   "CLOSE_PENDING",
 ] as const);
+const marketIndexHealthStatuses = new Set(["LIVE", "STALE", "GAPPED", "BLOCKED"] as const);
+const marketIndexIssueCodes = new Set([
+  "MISSING_FIVE_MINUTE_BAR",
+  "MISSING_OFFICIAL_DAILY_BAR",
+  "INSUFFICIENT_HISTORY",
+  "STALE_DATA",
+  "DUPLICATE_IDENTITY",
+  "GAPPED_SERIES",
+  "INDEX_IDENTITY_MISMATCH",
+  "FUTURE_DATA",
+  "INVALID_TIMESTAMP",
+  "NONCANONICAL_DECIMAL",
+  "INVALID_OHLC",
+  "FORMULA_MISMATCH",
+  "PROVIDER_UNAVAILABLE",
+] as const);
+const indexConditionTypes = new Set([
+  "INDEX_CLOSE_GTE_MA",
+  "INDEX_CLOSE_LTE_MA",
+  "INDEX_MA_NON_DECREASING",
+  "INDEX_MA_NON_INCREASING",
+  "INDEX_RETURN_GTE",
+  "INDEX_RETURN_LTE",
+] as const);
 const decisionZones = new Set([
   "LOW_BUY",
   "OBSERVATION",
@@ -262,6 +306,13 @@ const missingInputCodes = new Set([
   "TRADING_CALENDAR",
   "DAILY_LIMIT",
   "MANUAL_EVENT_RISK",
+  "INDEX_SNAPSHOT",
+  "INDEX_IDENTITY",
+  "INDEX_CUTOFF",
+  "INDEX_HEALTH",
+  "INDEX_FACT",
+  "INDEX_HISTORY",
+  "INDEX_FORMULA",
 ] as const);
 const evidenceKinds = new Set(["CONDITION", "RULE"] as const);
 const conditionOutcomes = new Set(["SATISFIED", "UNSATISFIED", "MISSING_INPUT"] as const);
@@ -276,6 +327,7 @@ const evidenceUnits = new Set([
   "DATE",
   "DATETIME",
   "CODE",
+  "POINTS",
 ] as const);
 const allowedPhases = {
   BACKTEST_RUN: new Set([
@@ -530,6 +582,7 @@ const runViewKeys = exactKeys<BacktestRunView>()([
   "formulaVersions",
   "initialCashFen",
   "limitations",
+  "referenceMarket",
 ]);
 const runFilterKeys = exactKeys<BacktestRunFiltersView>()([
   "completedFrom",
@@ -661,6 +714,7 @@ const authoritativeDecisionKeys = exactKeys<BacktestAuthoritativeDecisionView>()
   "planVersion",
   "position",
   "priceFen",
+  "referenceMarket",
   "resultHash",
   "riskBreachTradeDate",
   "riskStatus",
@@ -668,6 +722,9 @@ const authoritativeDecisionKeys = exactKeys<BacktestAuthoritativeDecisionView>()
   "symbol",
   "zone",
 ]);
+const authoritativeDecisionWithoutReferenceMarketKeys = authoritativeDecisionKeys.filter(
+  (key) => key !== "referenceMarket",
+);
 const dataHealthKeys = exactKeys<BacktestDataHealthView>()([
   "dataAgeSeconds",
   "fresh",
@@ -696,6 +753,99 @@ const evidenceKeys = exactKeys<BacktestDecisionEvidenceView>()([
   "outcome",
 ]);
 const factKeys = exactKeys<BacktestEvidenceFactView>()(["key", "unit", "value"]);
+const referenceMarketBindingKeys = exactKeys<BacktestReferenceMarketBindingView>()([
+  "board",
+  "displayName",
+  "indexCode",
+  "mappingVersion",
+  "selection",
+]);
+const referenceMarketCoverageKeys = exactKeys<BacktestReferenceMarketCoverageView>()([
+  "availableFiveMinuteCount",
+  "availableOfficialDayCount",
+  "binding",
+  "blockers",
+  "conditionPaths",
+  "coverageStatus",
+  "datasetHash",
+  "formulaDefinitionHash",
+  "indexRequirementHash",
+  "marketIndexDataHash",
+  "planVersionId",
+  "required",
+  "requiredFiveMinuteCount",
+  "requiredOfficialDayCount",
+  "warmupEnd",
+  "warmupStart",
+]);
+const referenceMarketKeys = exactKeys<BacktestReferenceMarketView>()([
+  "binding",
+  "blockers",
+  "conditionPaths",
+  "conditionSummaries",
+  "coverageStatus",
+  "datasetHash",
+  "formulaDefinitionHash",
+  "indexRequirementHash",
+  "marketIndexDataHash",
+  "required",
+  "warmupStart",
+]);
+const indexConditionSummaryKeys = exactKeys<BacktestIndexConditionSummaryView>()([
+  "applicableBranchCount",
+  "conditionType",
+  "formulaId",
+  "missingCount",
+  "parameters",
+  "planPath",
+  "satisfiedCount",
+  "unsatisfiedCount",
+]);
+const marketIndexPointKeys = exactKeys<BacktestMarketIndexPointView>()([
+  "closePoints",
+  "dataAt",
+  "health",
+  "indicatorFacts",
+  "issues",
+  "snapshotHash",
+  "tradeDate",
+]);
+const marketIndexHealthPointKeys = exactKeys<BacktestMarketIndexHealthPointView>()([
+  "dataAt",
+  "health",
+  "issues",
+]);
+const marketIndexSeriesKeys = exactKeys<BacktestMarketIndexSeriesView>()([
+  "conditionSummaries",
+  "healthTimeline",
+  "items",
+  "referenceMarket",
+  "runId",
+]);
+const decisionReferenceMarketKeys = [
+  "dataAt",
+  "evidence",
+  "health",
+  "indexCode",
+  "snapshotHash",
+] as const;
+const indexConditionEvidenceKeys = [
+  "actualValue",
+  "comparisonValue",
+  "conditionType",
+  "dataCutoff",
+  "decisionCutoff",
+  "formulaDefinitionHash",
+  "formulaId",
+  "indexCode",
+  "mappingVersion",
+  "missingInputs",
+  "outcome",
+  "parameters",
+  "planPath",
+  "snapshotHash",
+  "unit",
+] as const;
 
 export function buildBacktestExportHref(
   runId: string,
@@ -739,6 +889,38 @@ export function createBacktestApi(
       );
       return validateResponse(status, () => {
         if (status !== 200 || !isDataset(body) || body.datasetHash !== datasetHash) {
+          throw invalidResponse(status);
+        }
+        return body;
+      });
+    },
+
+    async getReferenceMarketCoverage(
+      datasetHash: string,
+      planVersionId: string,
+      options?: BacktestRequestOptions,
+    ) {
+      const normalizedPlanVersionId = normalizeUuid(planVersionId);
+      if (!isSha256(datasetHash) || normalizedPlanVersionId === null) {
+        throw invalidRequest();
+      }
+      const search = new URLSearchParams();
+      appendQuery(search, "planVersionId", normalizedPlanVersionId);
+      const { body, status } = await requestJson(
+        fetchImplementation,
+        withQuery(
+          `/api/v1/backtest-datasets/${datasetHash}/reference-market-coverage`,
+          search,
+        ),
+        requestInit("GET", options),
+      );
+      return validateResponse(status, () => {
+        if (
+          status !== 200 ||
+          !isReferenceMarketCoverage(body) ||
+          body.datasetHash !== datasetHash ||
+          body.planVersionId !== normalizedPlanVersionId
+        ) {
           throw invalidResponse(status);
         }
         return body;
@@ -826,6 +1008,40 @@ export function createBacktestApi(
           status !== 200 ||
           !isEquitySeries(body) ||
           !body.items.every((item) => item.runId === runId)
+        ) {
+          throw invalidResponse(status);
+        }
+        return body;
+      });
+    },
+
+    async getMarketIndexSeries(
+      runId: string,
+      query: BacktestMarketIndexSeriesQuery = {},
+      options?: BacktestRequestOptions,
+    ) {
+      if (!isSha256(runId)) throw invalidRequest();
+      const normalized = normalizeMarketIndexSeriesQuery(query);
+      const { body, status } = await requestJson(
+        fetchImplementation,
+        withQuery(
+          `/api/v1/backtest-runs/${runId}/market-index-series`,
+          marketIndexSeriesSearch(normalized),
+        ),
+        requestInit("GET", options),
+      );
+      return validateResponse(status, () => {
+        if (
+          status !== 200 ||
+          !isMarketIndexSeries(body) ||
+          body.runId !== runId ||
+          body.items.length > (normalized.limit ?? 512) ||
+          (normalized.startOn !== undefined &&
+            normalized.startOn !== null &&
+            body.items.some((item) => item.tradeDate < normalized.startOn!)) ||
+          (normalized.endOn !== undefined &&
+            normalized.endOn !== null &&
+            body.items.some((item) => item.tradeDate > normalized.endOn!))
         ) {
           throw invalidResponse(status);
         }
@@ -1275,7 +1491,8 @@ function isDataset(value: unknown): value is BacktestDatasetView {
     isRecord(value) &&
     hasExactKeys(value, datasetKeys) &&
     isSha256(value.datasetHash) &&
-    value.schemaVersion === "backtest-dataset-v1" &&
+    (value.schemaVersion === "backtest-dataset-v1" ||
+      value.schemaVersion === "backtest-dataset-v2") &&
     isDatasetScope(value.scope) &&
     isDatasetCoverage(value.coverage) &&
     value.coverage.symbolCount === value.scope.symbols.length &&
@@ -1283,6 +1500,290 @@ function isDataset(value: unknown): value is BacktestDatasetView {
     isResponseTime(value.verifiedAt) &&
     timeKey(value.createdAt) <= timeKey(value.verifiedAt) &&
     isBoundedItem(value)
+  );
+}
+
+function isReferenceMarketBinding(
+  value: unknown,
+): value is BacktestReferenceMarketBindingView {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, referenceMarketBindingKeys) ||
+    value.selection !== "AUTO_BOARD" ||
+    value.mappingVersion !== "board-index-map-v1"
+  ) {
+    return false;
+  }
+  const identities: Record<string, readonly [string, string]> = {
+    "000001.SH": ["SSE_MAIN", "上证指数"],
+    "000688.SH": ["STAR_MARKET", "科创50"],
+    "399001.SZ": ["SZSE_MAIN", "深证成指"],
+    "399006.SZ": ["CHINEXT", "创业板指"],
+    "899050.BJ": ["BSE", "北证50"],
+  };
+  const identity = typeof value.indexCode === "string" ? identities[value.indexCode] : undefined;
+  return identity !== undefined && value.board === identity[0] && value.displayName === identity[1];
+}
+
+function isReferenceMarketCoverage(
+  value: unknown,
+): value is BacktestReferenceMarketCoverageView {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, referenceMarketCoverageKeys) ||
+    !isCanonicalUuid(value.planVersionId) ||
+    !isSha256(value.datasetHash) ||
+    !isReferenceMarketBinding(value.binding) ||
+    typeof value.required !== "boolean" ||
+    !isOrderedPlanPaths(value.conditionPaths) ||
+    !isNonnegativeSafeInteger(value.requiredFiveMinuteCount) ||
+    !isNonnegativeSafeInteger(value.availableFiveMinuteCount) ||
+    !isNonnegativeSafeInteger(value.requiredOfficialDayCount) ||
+    !isNonnegativeSafeInteger(value.availableOfficialDayCount) ||
+    !isCalendarDate(value.warmupStart) ||
+    !isCalendarDate(value.warmupEnd) ||
+    value.warmupStart > value.warmupEnd ||
+    !(value.coverageStatus === "AVAILABLE" ||
+      value.coverageStatus === "BLOCKED" ||
+      value.coverageStatus === "NOT_REQUIRED") ||
+    !isBlockers(value.blockers) ||
+    !isNullableSha256(value.marketIndexDataHash) ||
+    !isSha256(value.indexRequirementHash) ||
+    !isSha256(value.formulaDefinitionHash) ||
+    value.required !== (value.conditionPaths.length > 0)
+  ) {
+    return false;
+  }
+  if (!value.required) {
+    return (
+      value.coverageStatus === "NOT_REQUIRED" &&
+      value.blockers.length === 0 &&
+      value.requiredFiveMinuteCount === 0 &&
+      value.requiredOfficialDayCount === 0
+    );
+  }
+  if (value.coverageStatus === "NOT_REQUIRED") return false;
+  if ((value.coverageStatus === "AVAILABLE") !== (value.blockers.length === 0)) return false;
+  return value.coverageStatus !== "AVAILABLE" || value.marketIndexDataHash !== null;
+}
+
+function isReferenceMarket(value: unknown): value is BacktestReferenceMarketView {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, referenceMarketKeys) ||
+    !isReferenceMarketBinding(value.binding) ||
+    value.required !== true ||
+    !isOrderedPlanPaths(value.conditionPaths) ||
+    value.conditionPaths.length === 0 ||
+    !isCalendarDate(value.warmupStart) ||
+    !(value.coverageStatus === "AVAILABLE" ||
+      value.coverageStatus === "BLOCKED" ||
+      value.coverageStatus === "EXPIRED" ||
+      value.coverageStatus === "NOT_RECORDED") ||
+    !isBlockers(value.blockers) ||
+    !isSha256(value.marketIndexDataHash) ||
+    !isSha256(value.indexRequirementHash) ||
+    !isSha256(value.formulaDefinitionHash) ||
+    !isSha256(value.datasetHash) ||
+    !Array.isArray(value.conditionSummaries) ||
+    value.conditionSummaries.length === 0 ||
+    value.conditionSummaries.length > 50 ||
+    !value.conditionSummaries.every(isIndexConditionSummary)
+  ) {
+    return false;
+  }
+  if (!sameStrings(value.conditionPaths, value.conditionSummaries.map((item) => item.planPath))) {
+    return false;
+  }
+  return (value.coverageStatus === "AVAILABLE") === (value.blockers.length === 0);
+}
+
+function isIndexConditionSummary(
+  value: unknown,
+): value is BacktestIndexConditionSummaryView {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, indexConditionSummaryKeys) ||
+    !isPlanPath(value.planPath) ||
+    !(typeof value.conditionType === "string" && indexConditionTypes.has(value.conditionType as never)) ||
+    !isNonnegativeSafeInteger(value.applicableBranchCount) ||
+    !isNonnegativeSafeInteger(value.satisfiedCount) ||
+    !isNonnegativeSafeInteger(value.unsatisfiedCount) ||
+    !isNonnegativeSafeInteger(value.missingCount) ||
+    value.applicableBranchCount !==
+      value.satisfiedCount + value.unsatisfiedCount + value.missingCount ||
+    !isRecord(value.parameters)
+  ) {
+    return false;
+  }
+  if (
+    value.conditionType === "INDEX_CLOSE_GTE_MA" ||
+    value.conditionType === "INDEX_CLOSE_LTE_MA"
+  ) {
+    return (
+      value.formulaId === "SMA" &&
+      hasExactKeys(value.parameters, ["period"]) &&
+      isIntegerBetween(value.parameters.period, 2, 250)
+    );
+  }
+  if (
+    value.conditionType === "INDEX_MA_NON_DECREASING" ||
+    value.conditionType === "INDEX_MA_NON_INCREASING"
+  ) {
+    return (
+      value.formulaId === "SMA_LOOKBACK" &&
+      hasExactKeys(value.parameters, ["lookback", "period"]) &&
+      isIntegerBetween(value.parameters.period, 2, 250) &&
+      isIntegerBetween(value.parameters.lookback, 1, 60)
+    );
+  }
+  return (
+    value.formulaId === "RETURN" &&
+    hasExactKeys(value.parameters, ["thresholdRatio", "window", "windowSize"]) &&
+    isDecimalText(value.parameters.thresholdRatio) &&
+    (value.parameters.window === "FIVE_MINUTE_BUCKETS" ||
+      value.parameters.window === "OFFICIAL_OPEN_DAYS") &&
+    isIntegerBetween(value.parameters.windowSize, 1, 250)
+  );
+}
+
+function isMarketIndexSeries(value: unknown): value is BacktestMarketIndexSeriesView {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, marketIndexSeriesKeys) ||
+    !isSha256(value.runId) ||
+    !(value.referenceMarket === null || isReferenceMarket(value.referenceMarket)) ||
+    !Array.isArray(value.items) ||
+    value.items.length > 512 ||
+    !value.items.every(isMarketIndexPoint) ||
+    !Array.isArray(value.healthTimeline) ||
+    value.healthTimeline.length > 512 ||
+    !value.healthTimeline.every(isMarketIndexHealthPoint) ||
+    !Array.isArray(value.conditionSummaries) ||
+    value.conditionSummaries.length > 50 ||
+    !value.conditionSummaries.every(isIndexConditionSummary)
+  ) {
+    return false;
+  }
+  if (value.referenceMarket === null) {
+    return (
+      value.items.length === 0 &&
+      value.healthTimeline.length === 0 &&
+      value.conditionSummaries.length === 0
+    );
+  }
+  const itemPositions = value.items.map((item) => `${item.tradeDate}\0${item.dataAt}`);
+  const healthPositions = value.healthTimeline.map((item) => item.dataAt);
+  return (
+    isAscendingUnique(itemPositions) &&
+    isAscendingUnique(healthPositions) &&
+    JSON.stringify(value.conditionSummaries) ===
+      JSON.stringify(value.referenceMarket.conditionSummaries) &&
+    isBoundedPage(value)
+  );
+}
+
+function isMarketIndexPoint(value: unknown): value is BacktestMarketIndexPointView {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, marketIndexPointKeys) &&
+    isCalendarDate(value.tradeDate) &&
+    isResponseTime(value.dataAt) &&
+    value.dataAt.slice(0, 10) === value.tradeDate &&
+    isDecimalText(value.closePoints) &&
+    compareDecimal(value.closePoints, "0") > 0 &&
+    isSha256(value.snapshotHash) &&
+    Array.isArray(value.indicatorFacts) &&
+    value.indicatorFacts.length <= 50 &&
+    value.indicatorFacts.every(isMarketIndexIndicatorFact) &&
+    isMarketIndexHealth(value.health) &&
+    isMarketIndexIssues(value.issues, value.health)
+  );
+}
+
+function isMarketIndexHealthPoint(
+  value: unknown,
+): value is BacktestMarketIndexHealthPointView {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, marketIndexHealthPointKeys) &&
+    isResponseTime(value.dataAt) &&
+    isMarketIndexHealth(value.health) &&
+    isMarketIndexIssues(value.issues, value.health)
+  );
+}
+
+function isMarketIndexIndicatorFact(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !isSha256(value.sourceBarHash) ||
+    !isSha256(value.formulaDefinitionHash) ||
+    !isDecimalText(value.value)
+  ) {
+    return false;
+  }
+  if (value.formulaId === "SMA") {
+    return (
+      hasExactKeys(value, [
+        "formulaDefinitionHash",
+        "formulaId",
+        "period",
+        "sourceBarHash",
+        "unit",
+        "value",
+      ]) &&
+      value.unit === "POINTS" &&
+      isIntegerBetween(value.period, 2, 250)
+    );
+  }
+  if (value.formulaId === "SMA_LOOKBACK") {
+    return (
+      hasExactKeys(value, [
+        "comparisonValue",
+        "formulaDefinitionHash",
+        "formulaId",
+        "lookback",
+        "period",
+        "sourceBarHash",
+        "unit",
+        "value",
+      ]) &&
+      value.unit === "POINTS" &&
+      isDecimalText(value.comparisonValue) &&
+      isIntegerBetween(value.period, 2, 250) &&
+      isIntegerBetween(value.lookback, 1, 60)
+    );
+  }
+  return (
+    value.formulaId === "RETURN" &&
+    hasExactKeys(value, [
+      "formulaDefinitionHash",
+      "formulaId",
+      "sourceBarHash",
+      "unit",
+      "value",
+      "window",
+      "windowSize",
+    ]) &&
+    value.unit === "RATIO" &&
+    (value.window === "FIVE_MINUTE_BUCKETS" || value.window === "OFFICIAL_OPEN_DAYS") &&
+    isIntegerBetween(value.windowSize, 1, 250)
+  );
+}
+
+function isMarketIndexHealth(value: unknown): boolean {
+  return typeof value === "string" && marketIndexHealthStatuses.has(value as never);
+}
+
+function isMarketIndexIssues(value: unknown, health: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length <= 16 &&
+    value.every(
+      (item) => typeof item === "string" && marketIndexIssueCodes.has(item as never),
+    ) &&
+    new Set(value).size === value.length &&
+    ((health === "LIVE" && value.length === 0) || (health !== "LIVE" && value.length > 0))
   );
 }
 
@@ -1550,6 +2051,7 @@ function isRun(value: unknown): value is BacktestRunView {
     !isRunCoverage(value.coverage) ||
     !isAssumptions(value.assumptions) ||
     !isFormulaVersions(value.formulaVersions) ||
+    !(value.referenceMarket === null || isReferenceMarket(value.referenceMarket)) ||
     !Array.isArray(value.limitations) ||
     value.limitations.length > 32 ||
     !value.limitations.every(isStableToken) ||
@@ -1963,7 +2465,8 @@ function isAuthoritativeDecision(
 ): value is BacktestAuthoritativeDecisionView {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, authoritativeDecisionKeys) ||
+    !(hasExactKeys(value, authoritativeDecisionKeys) ||
+      hasExactKeys(value, authoritativeDecisionWithoutReferenceMarketKeys)) ||
     !isAShareSymbol(value.symbol) ||
     !isSha256(value.resultHash) ||
     !(typeof value.planId === "string" && value.planId.length >= 1 && value.planId.length <= 128) ||
@@ -1986,6 +2489,12 @@ function isAuthoritativeDecision(
     value.evidence.length > 50 ||
     !value.evidence.every((item) => isDecisionEvidence(item)) ||
     !isNextStep(value.nextStep)
+  ) {
+    return false;
+  }
+  if (
+    Object.hasOwn(value, "referenceMarket") &&
+    !(value.referenceMarket === null || isDecisionReferenceMarket(value.referenceMarket))
   ) {
     return false;
   }
@@ -2026,6 +2535,74 @@ function isAuthoritativeDecision(
   return !(
     actionableSignalTypes.has(value.signalType as never) && value.dataHealth.status !== "LIVE"
   );
+}
+
+function isDecisionReferenceMarket(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, decisionReferenceMarketKeys) ||
+    !isMarketIndexCode(value.indexCode) ||
+    !isNullableSha256(value.snapshotHash) ||
+    !isNullableResponseTime(value.dataAt) ||
+    !isMarketIndexHealth(value.health) ||
+    !Array.isArray(value.evidence) ||
+    value.evidence.length < 1 ||
+    value.evidence.length > 50 ||
+    !value.evidence.every((item) => isIndexConditionEvidence(item, value.indexCode))
+  ) {
+    return false;
+  }
+  const paths = value.evidence.map((item) => (item as Record<string, unknown>).planPath as string);
+  if (!isSortedUnique(paths)) return false;
+  return (
+    value.health !== "LIVE" ||
+    (value.snapshotHash !== null &&
+      value.dataAt !== null &&
+      value.evidence.every(
+        (item) => (item as Record<string, unknown>).snapshotHash === value.snapshotHash,
+      ))
+  );
+}
+
+function isIndexConditionEvidence(value: unknown, indexCode: unknown): boolean {
+  if (
+    !isMarketIndexCode(indexCode) ||
+    !isRecord(value) ||
+    !hasExactKeys(value, indexConditionEvidenceKeys) ||
+    !isPlanPath(value.planPath) ||
+    !(typeof value.conditionType === "string" && indexConditionTypes.has(value.conditionType as never)) ||
+    value.indexCode !== indexCode ||
+    value.mappingVersion !== "board-index-map-v1" ||
+    !isNullableSha256(value.snapshotHash) ||
+    !isResponseTime(value.decisionCutoff) ||
+    !isNullableResponseTime(value.dataCutoff) ||
+    !(value.formulaId === "SMA" || value.formulaId === "SMA_LOOKBACK" || value.formulaId === "RETURN") ||
+    !isNullableSha256(value.formulaDefinitionHash) ||
+    !Array.isArray(value.parameters) ||
+    value.parameters.length > 8 ||
+    !Array.isArray(value.missingInputs) ||
+    value.missingInputs.length > 7 ||
+    !value.missingInputs.every(
+      (item) => typeof item === "string" && missingInputCodes.has(item as never),
+    ) ||
+    !(value.unit === "POINTS" || value.unit === "RATIO") ||
+    !(value.outcome === "SATISFIED" ||
+      value.outcome === "UNSATISFIED" ||
+      value.outcome === "MISSING_INPUT")
+  ) {
+    return false;
+  }
+  const missing = value.outcome === "MISSING_INPUT";
+  return missing
+    ? value.missingInputs.length > 0 &&
+        value.actualValue === null &&
+        value.comparisonValue === null
+    : value.missingInputs.length === 0 &&
+        isDecimalText(value.actualValue) &&
+        isDecimalText(value.comparisonValue) &&
+        value.snapshotHash !== null &&
+        value.dataCutoff !== null &&
+        value.formulaDefinitionHash !== null;
 }
 
 function isPosition(value: unknown): value is BacktestPositionSummaryView {
@@ -2142,7 +2719,9 @@ function isEvidenceFact(value: unknown): value is BacktestEvidenceFactView {
   if (value.unit === "FEN" || value.unit === "BARS" || value.unit === "COUNT") {
     return typeof value.value === "number" && Number.isSafeInteger(value.value);
   }
-  if (value.unit === "RATIO" || value.unit === "YUAN") return isDecimalText(value.value);
+  if (value.unit === "RATIO" || value.unit === "YUAN" || value.unit === "POINTS") {
+    return isDecimalText(value.value);
+  }
   return (
     value.unit === "SHARES" &&
     ((typeof value.value === "number" && Number.isSafeInteger(value.value)) ||
@@ -2288,6 +2867,26 @@ function normalizeResultPageQuery(query: BacktestFillListQuery): BacktestFillLis
   return { ...query };
 }
 
+function normalizeMarketIndexSeriesQuery(
+  query: BacktestMarketIndexSeriesQuery,
+): BacktestMarketIndexSeriesQuery {
+  if (
+    !isRecord(query) ||
+    !hasOnlyKeys(query, ["endOn", "limit", "startOn"]) ||
+    !(query.startOn == null || isCalendarDate(query.startOn)) ||
+    !(query.endOn == null || isCalendarDate(query.endOn)) ||
+    !(query.limit === undefined || isIntegerBetween(query.limit, 1, 512)) ||
+    (query.startOn != null && query.endOn != null && query.startOn > query.endOn)
+  ) {
+    throw invalidRequest();
+  }
+  return {
+    ...(query.startOn == null ? {} : { startOn: query.startOn }),
+    ...(query.endOn == null ? {} : { endOn: query.endOn }),
+    ...(query.limit === undefined ? {} : { limit: query.limit }),
+  };
+}
+
 function normalizeDetailQuery(query: BacktestDetailListQuery): BacktestDetailListQuery {
   if (
     !isRecord(query) ||
@@ -2317,6 +2916,14 @@ function detailSearch(query: BacktestDetailListQuery): URLSearchParams {
   appendQuery(search, "kind", query.kind);
   appendQuery(search, "limit", query.limit);
   appendQuery(search, "cursor", query.cursor);
+  return search;
+}
+
+function marketIndexSeriesSearch(query: BacktestMarketIndexSeriesQuery): URLSearchParams {
+  const search = new URLSearchParams();
+  appendQuery(search, "startOn", query.startOn);
+  appendQuery(search, "endOn", query.endOn);
+  appendQuery(search, "limit", query.limit);
   return search;
 }
 
@@ -2621,6 +3228,15 @@ function isPositiveSafeInteger(value: unknown): value is number {
   return isNonnegativeSafeInteger(value) && value > 0;
 }
 
+function isIntegerBetween(value: unknown, minimum: number, maximum: number): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= minimum &&
+    value <= maximum
+  );
+}
+
 function isPositiveBoardLot(value: unknown): value is number {
   return isPositiveSafeInteger(value) && value % 100 === 0;
 }
@@ -2676,6 +3292,34 @@ function isNullableStableCode(value: unknown): value is string | null {
 
 function isAShareSymbol(value: unknown): value is string {
   return typeof value === "string" && /^[0-9]{6}\.(?:SH|SZ)$/.test(value);
+}
+
+function isMarketIndexCode(value: unknown): value is string {
+  return (
+    value === "000001.SH" ||
+    value === "399001.SZ" ||
+    value === "399006.SZ" ||
+    value === "000688.SH" ||
+    value === "899050.BJ"
+  );
+}
+
+function isPlanPath(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length >= 1 &&
+    value.length <= 512 &&
+    /^(?:entry|reduction|risk|blockers)(?:\.[a-z][A-Za-z0-9]*|\[[0-9]+\])+$/.test(value)
+  );
+}
+
+function isOrderedPlanPaths(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= 50 &&
+    value.every(isPlanPath) &&
+    isSortedUnique(value)
+  );
 }
 
 function isArtifactAvailability(

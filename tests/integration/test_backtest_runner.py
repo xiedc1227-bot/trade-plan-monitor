@@ -21,7 +21,11 @@ from trade_plan_monitor.backtest.control import BacktestCancellationResult, Canc
 from trade_plan_monitor.backtest.dataset import DatasetScope
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
-from trade_plan_monitor.backtest.reporting import persist_report, write_report_files
+from trade_plan_monitor.backtest.reporting import (
+    iter_export_summary,
+    persist_report,
+    write_report_files,
+)
 from trade_plan_monitor.backtest.results import BacktestDetailKind, BacktestResultStore
 from trade_plan_monitor.backtest.run_input import BacktestInitialLotInput, BacktestRunInput
 from trade_plan_monitor.backtest.runner import OfflineBacktestRunner
@@ -43,6 +47,7 @@ from trade_plan_monitor.decision.models import (
 )
 from trade_plan_monitor.domain.plan_codec import load_plan_yaml
 from trade_plan_monitor.domain.plan_models import PriceInZoneCondition, TradePlan
+from trade_plan_monitor.domain.plan_validation import migrate_trade_plan_to_schema_v2
 from trade_plan_monitor.market_data.historical_provider import (
     HistoricalMinuteBatch,
     HistoricalMinuteProfile,
@@ -51,6 +56,11 @@ from trade_plan_monitor.market_data.historical_provider import (
 from trade_plan_monitor.market_data.indicators import calculate_ta_v1
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
+from trade_plan_monitor.market_index.models import (
+    MarketIndexBar,
+    MarketIndexInterval,
+    MarketIndexSourceKind,
+)
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 SYMBOL = "600000.SH"
@@ -202,6 +212,74 @@ def _seed_dataset(store: BacktestMarketStore) -> str:
             historical_profile=PROFILE,
         )
     )
+    assert frozen.ready is True
+    assert frozen.dataset_hash is not None
+    return frozen.dataset_hash
+
+
+def _plan_with_index_condition() -> TradePlan:
+    plan = migrate_trade_plan_to_schema_v2(_plan(), new_version=2)
+    payload = plan.model_dump(mode="python", round_trip=True)
+    payload["entry"] = {
+        "condition": {
+            "type": "INDEX_CLOSE_GTE_MA",
+            "index_role": "BOARD_REFERENCE",
+            "period": 2,
+        }
+    }
+    return TradePlan.model_validate(payload)
+
+
+def _seed_index_dataset(store: BacktestMarketStore) -> str:
+    stock_dataset_hash = _seed_dataset(store)
+    scope = store.dataset_manifest(stock_dataset_hash).scope
+    prior_dates: list[date] = []
+    cursor = scope.start - timedelta(days=1)
+    while len(prior_dates) < 2:
+        if cursor.weekday() < 5:
+            prior_dates.append(cursor)
+        cursor -= timedelta(days=1)
+    prior_dates.reverse()
+    official_bars = tuple(
+        MarketIndexBar(
+            index_code="000001.SH",
+            interval=MarketIndexInterval.OFFICIAL_DAILY,
+            bar_at=datetime.combine(trade_date, time(15, 0), SHANGHAI),
+            open_points=Decimal(close),
+            high_points=Decimal(close),
+            low_points=Decimal(close),
+            close_points=Decimal(close),
+            volume=Decimal("0"),
+            amount=Decimal("0"),
+            observed_at=datetime.combine(trade_date, time(15, 0), SHANGHAI),
+            source_kind=MarketIndexSourceKind.OFFICIAL,
+            provider_revision=1,
+        )
+        for trade_date, close in (
+            (prior_dates[0], "100"),
+            (prior_dates[1], "101"),
+            (scope.start, "102"),
+        )
+    )
+    five_minute_bars = tuple(
+        MarketIndexBar(
+            index_code="000001.SH",
+            interval=MarketIndexInterval.FIVE_MINUTE,
+            bar_at=bar_at,
+            open_points=Decimal("102"),
+            high_points=Decimal("102"),
+            low_points=Decimal("102"),
+            close_points=Decimal("102"),
+            volume=Decimal("0"),
+            amount=Decimal("0"),
+            observed_at=bar_at,
+            source_kind=MarketIndexSourceKind.PROVISIONAL,
+            provider_revision=1,
+        )
+        for bar_at in expected_minute_ends(scope.start, is_open=True)[4::5]
+    )
+    store.record_index_bars(official_bars + five_minute_bars)
+    frozen = store.freeze_dataset_v2(scope)
     assert frozen.ready is True
     assert frozen.dataset_hash is not None
     return frozen.dataset_hash
@@ -1315,6 +1393,115 @@ def test_two_execution_configs_can_persist_shared_decisions(tmp_path) -> None:
     persist_report(result_store, second)
 
     assert result_store.statistics().run_count == 2
+
+
+def test_index_plan_replays_frozen_v2_series_and_persists_path_summaries(
+    tmp_path: Path,
+) -> None:
+    market_store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    dataset_hash = _seed_index_dataset(market_store)
+
+    plan = _plan_with_index_condition()
+    execution_config = _execution_config()
+    report = OfflineBacktestRunner(market_store).run(
+        plan=plan,
+        dataset_hash=dataset_hash,
+        initial_cash_fen=10_000_000,
+        execution_config=execution_config,
+        manual_event_risk=False,
+    )
+
+    assert report.schema_version == "backtest-report-v2"
+    assert report.reference_market is not None
+    assert report.reference_market.coverage_status == "AVAILABLE"
+    assert report.reference_market.required_five_minute_count == 0
+    assert report.reference_market.required_official_day_count == 2
+    assert report.reference_market.condition_paths == ("entry.condition",)
+    summary = report.reference_market.condition_summaries[0]
+    assert summary.plan_path == "entry.condition"
+    assert summary.applicable_branch_count > 0
+    assert summary.satisfied_count == summary.applicable_branch_count
+    evidence = tuple(
+        item.index_evidence
+        for decision in report.decisions
+        for item in decision.snapshot.condition_evidence
+        if isinstance(item, ConditionEvidence) and item.index_evidence is not None
+    )
+    assert evidence
+    assert {item.plan_path for item in evidence} == {"entry.condition"}
+    assert all(item.snapshot_hash is not None for item in evidence)
+    assert all(item.data_cutoff <= item.decision_cutoff for item in evidence)
+    decisions_with_index = tuple(
+        (decision, item)
+        for decision in report.decisions
+        for item in decision.snapshot.condition_evidence
+        if isinstance(item, ConditionEvidence) and item.index_evidence is not None
+    )
+    assert len(decisions_with_index) > 1
+    assert all(
+        decision.snapshot.reference_market is not None
+        and item.index_evidence is not None
+        and decision.snapshot.reference_market.snapshot_hash == item.index_evidence.snapshot_hash
+        and decision.snapshot.reference_market.data_at == item.index_evidence.data_cutoff
+        and item.index_evidence.data_cutoff == item.index_evidence.decision_cutoff
+        for decision, item in decisions_with_index
+    )
+    first_condition = decisions_with_index[0][1]
+    second_index_evidence = decisions_with_index[1][1].index_evidence
+    assert first_condition.index_evidence is not None
+    assert second_index_evidence is not None
+    assert first_condition.index_evidence.snapshot_hash != second_index_evidence.snapshot_hash
+    same_shape_later_cutoff = ConditionEvidence(
+        condition=first_condition.condition,
+        outcome=first_condition.outcome,
+        facts=first_condition.facts,
+        missing_inputs=first_condition.missing_inputs,
+        children=first_condition.children,
+        index_evidence=second_index_evidence,
+    )
+    intern_pool = runner_module._ReplayInternPool()
+    assert intern_pool.evidence(first_condition) is not intern_pool.evidence(
+        same_shape_later_cutoff
+    )
+    from trade_plan_monitor.backtest.composition import _decision_projection
+
+    decision_with_index = next(
+        decision
+        for decision in report.decisions
+        if any(
+            isinstance(item, ConditionEvidence) and item.index_evidence is not None
+            for item in decision.snapshot.condition_evidence
+        )
+    )
+    reference_projection = _decision_projection(decision_with_index)["referenceMarket"]
+    assert isinstance(reference_projection, dict)
+    assert reference_projection["health"] == "LIVE"
+    assert reference_projection["snapshotHash"] == evidence[0].snapshot_hash
+
+    run_input = BacktestRunInput.create(
+        plan=plan,
+        manifest=market_store.dataset_manifest(dataset_hash),
+        initial_cash_fen=10_000_000,
+        initial_lots=(),
+        execution_config=execution_config,
+        manual_event_risk=False,
+    )
+    result_store = BacktestResultStore(tmp_path / "index-results.sqlite3")
+    persist_report(result_store, report, run_input=run_input)
+    export = json.loads(
+        b"".join(
+            iter_export_summary(
+                result_store,
+                report.run_id,
+                cancelled=lambda: False,
+            )
+        )
+    )
+    assert export["schemaVersion"] == "backtest-report-summary-v3"
+    exported_reference = export["decisionReferenceMarkets"][0]
+    assert exported_reference["referenceMarket"]["indexCode"] == "000001.SH"
+    assert exported_reference["referenceMarket"]["evidence"][0]["planPath"] == ("entry.condition")
+    assert exported_reference["referenceMarket"]["evidence"][0]["formulaDefinitionHash"]
 
 
 def test_interrupted_detail_persistence_stays_hidden_and_resumes(

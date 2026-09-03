@@ -972,6 +972,60 @@ class BacktestResultStore:
             if yielded != expected_count:
                 raise RuntimeError("materialized v2 fill ledger changed during export")
 
+    def iter_export_decision_batches(
+        self,
+        run_id: str,
+        cancelled: Callable[[], bool],
+    ) -> Iterator[tuple[BacktestDetailRecord, ...]]:
+        """Yield published v2 decisions after verifying the complete detail set."""
+
+        normalized_run_id = _validate_hash(run_id, "run_id")
+        if not callable(cancelled):
+            raise TypeError("cancelled must be callable")
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            expected_count, expected_set_hash = _active_v2_detail_export_metadata(
+                connection,
+                normalized_run_id,
+            )
+            actual_count, actual_set_hash, _batch_count, _maximum = _validated_detail_set_hash(
+                connection,
+                normalized_run_id,
+                version="v2",
+                cancelled=cancelled,
+            )
+            if (actual_count, actual_set_hash) != (expected_count, expected_set_hash):
+                raise RuntimeError("materialized v2 detail set failed publication verification")
+            cursor = connection.execute(
+                """
+                SELECT detail_id, run_id, kind, event_at, content_domain,
+                       content_hash, payload_json
+                FROM backtest_detail
+                WHERE run_id = ?
+                ORDER BY event_at, detail_id
+                """,
+                (normalized_run_id,),
+            )
+            while True:
+                if cancelled():
+                    raise ExportCancelled
+                rows = cursor.fetchmany(_MAX_BATCH_SIZE)
+                if not rows:
+                    break
+                batch = tuple(
+                    record
+                    for row in rows
+                    if (
+                        record := _load_detail_row(
+                            tuple(row),
+                            expected_run_id=normalized_run_id,
+                        )
+                    ).kind
+                    is BacktestDetailKind.DECISION
+                )
+                if batch:
+                    yield batch
+
     def result_run_high_water(self) -> int:
         """Capture the immutable publication-membership fence for one traversal."""
 
@@ -2152,6 +2206,32 @@ def _active_v2_export_metadata(
     if fill_count != record.fill_count:
         raise RuntimeError("active v2 run fill count is inconsistent")
     return record.summary, fill_count, fill_set_hash
+
+
+def _active_v2_detail_export_metadata(
+    connection: sqlite3.Connection,
+    run_id: str,
+) -> tuple[int, str]:
+    _active_v2_export_metadata(connection, run_id)
+    publication = connection.execute(
+        """
+        SELECT publication_detail_count, publication_detail_set_hash,
+               publication_detail_set_domain
+        FROM backtest_run WHERE run_id = ?
+        """,
+        (run_id,),
+    ).fetchone()
+    if (
+        publication is None
+        or publication[0] is None
+        or publication[1] is None
+        or str(publication[2]) != _DETAIL_SET_DOMAINS["v2"]
+    ):
+        raise RuntimeError("active v2 run is missing detail publication metadata")
+    return (
+        int(publication[0]),
+        _validate_hash(str(publication[1]), "publication_detail_set_hash"),
+    )
 
 
 def _load_run_query_row(
@@ -3391,6 +3471,7 @@ def _validated_detail_set_hash(
     run_id: str,
     *,
     version: str,
+    cancelled: Callable[[], bool] | None = None,
 ) -> tuple[int, str, int, int]:
     digest = sha256(_domain_bytes(_domain(_DETAIL_SET_DOMAINS, version)))
     cursor = connection.execute(
@@ -3403,7 +3484,12 @@ def _validated_detail_set_hash(
     count = 0
     batch_count = 0
     maximum = 0
-    while rows := cursor.fetchmany(_MAX_BATCH_SIZE):
+    while True:
+        if cancelled is not None and cancelled():
+            raise ExportCancelled
+        rows = cursor.fetchmany(_MAX_BATCH_SIZE)
+        if not rows:
+            break
         batch_count += 1
         maximum = max(maximum, len(rows))
         for row in rows:

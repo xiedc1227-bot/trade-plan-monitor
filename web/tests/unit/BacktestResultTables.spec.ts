@@ -312,6 +312,43 @@ describe("backtest result tables", () => {
     expect(wrapper.get("time").attributes("datetime")).toBe(TIME);
   });
 
+  it("renders the persisted decision-time index identity and exact plan-path evidence", () => {
+    const item = decisionDetail();
+    item.decision.referenceMarket = {
+      dataAt: TIME,
+      evidence: [
+        {
+          actualValue: "10000.5",
+          comparisonValue: "9999.5",
+          conditionType: "INDEX_CLOSE_GTE_MA",
+          dataCutoff: TIME,
+          decisionCutoff: TIME,
+          formulaDefinitionHash: "1".repeat(64),
+          formulaId: "SMA",
+          indexCode: "399001.SZ",
+          mappingVersion: "board-index-map-v1",
+          missingInputs: [],
+          outcome: "SATISFIED",
+          parameters: [{ key: "period", unit: "COUNT", value: 20 }],
+          planPath: "entry.conditions.all[0]",
+          snapshotHash: "2".repeat(64),
+          unit: "POINTS",
+        },
+      ],
+      health: "LIVE",
+      indexCode: "399001.SZ",
+      snapshotHash: "2".repeat(64),
+    };
+    const wrapper = mount(BacktestDetailTable, { props: { items: [item], kind: "DECISION" } });
+
+    const row = wrapper.get('[data-testid="backtest-detail-row"]');
+    expect(row.text()).toContain("399001.SZ");
+    expect(row.text()).toContain("entry.conditions.all[0]");
+    expect(row.text()).toContain("SATISFIED");
+    expect(row.text()).toContain("10000.5");
+    expect(row.text()).toContain("9999.5");
+  });
+
   it("caps a discriminated detail page at 100 DOM rows", () => {
     const wrapper = mount(BacktestDetailTable, {
       props: {

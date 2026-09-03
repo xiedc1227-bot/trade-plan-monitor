@@ -5,6 +5,7 @@ import type {
   ConnectionStatus,
   DashboardCounts,
   DashboardResponse,
+  MarketIndexSnapshotView,
   SymbolSummaryView,
 } from "../api/generated";
 
@@ -21,6 +22,7 @@ const monitorEventTypes = [
   "position.updated",
   "ai.provider.updated",
   "system.health.updated",
+  "market.index.updated",
 ] as const;
 const monitorEventTypeSet = new Set<string>(monitorEventTypes);
 
@@ -104,6 +106,9 @@ export const useMonitorStore = defineStore("monitor", () => {
   const symbolsByIdState = shallowRef<Readonly<Record<string, SymbolSummaryView>>>(
     Object.freeze({}),
   );
+  const marketIndexesState = shallowRef<readonly MarketIndexSnapshotView[]>(
+    Object.freeze([]),
+  );
   const recoveryIntentState = shallowRef<SnapshotRecoveryIntent | null>(null);
   const lastInvalidationState = shallowRef<MonitorInvalidation | null>(null);
 
@@ -129,6 +134,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     }
     const normalized = normalizeSymbols(snapshot.symbols ?? []);
     const counts = freezeClone(snapshot.counts);
+    const marketIndexes = normalizeMarketIndexes(snapshot.marketIndexes);
 
     sequenceState.value = snapshot.sequence;
     connectionStatusState.value = snapshot.connectionStatus;
@@ -137,6 +143,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     observedAtState.value = snapshot.observedAt;
     symbolIdsState.value = normalized.ids;
     symbolsByIdState.value = normalized.byId;
+    marketIndexesState.value = marketIndexes;
     recoveryIntentState.value = null;
     lastInvalidationState.value = null;
     hasSnapshotState.value = true;
@@ -211,6 +218,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     dataAgeSeconds: readonly(dataAgeSecondsState),
     hasSnapshot: readonly(hasSnapshotState),
     lastInvalidation: readonly(lastInvalidationState),
+    marketIndexes: readonly(marketIndexesState),
     observedAt: readonly(observedAtState),
     recoveryIntent: readonly(recoveryIntentState),
     requestSnapshotRecovery,
@@ -247,6 +255,19 @@ function normalizeSymbols(symbols: readonly SymbolSummaryView[]): {
   };
 }
 
+function normalizeMarketIndexes(
+  indexes: readonly MarketIndexSnapshotView[],
+): readonly MarketIndexSnapshotView[] {
+  if (indexes.length > 5) {
+    throw new RangeError("snapshot cannot contain more than five market indexes");
+  }
+  const identities = indexes.map((item) => item.indexCode);
+  if (new Set(identities).size !== identities.length) {
+    throw new RangeError("snapshot contains a duplicate market index");
+  }
+  return Object.freeze(indexes.map((item) => freezeClone(item)));
+}
+
 function freezeClone<Value>(value: Value): Value {
   return deepFreeze(structuredClone(value));
 }
@@ -272,6 +293,7 @@ const payloadFields: Record<MonitorEventType, readonly string[]> = {
   "symbol.health.updated": ["entityId", "revision", "status", "symbol"],
   "symbol.snapshot.updated": ["entityId", "resultHash", "symbol"],
   "system.health.updated": ["entityId", "status"],
+  "market.index.updated": ["entityId", "revision", "status"],
 };
 
 const symbolAggregateEvents = new Set<MonitorEventType>([
@@ -291,6 +313,7 @@ const entityAggregateEvents = new Set<MonitorEventType>([
   "symbol.health.updated",
   "symbol.snapshot.updated",
   "system.health.updated",
+  "market.index.updated",
 ]);
 
 function isMonitorEventEnvelope(value: unknown): boolean {
@@ -351,7 +374,8 @@ function isMonitorEventEnvelope(value: unknown): boolean {
   if (
     (type === "symbol.health.updated" ||
       type === "plan.activated" ||
-      type === "plan.deactivated") &&
+      type === "plan.deactivated" ||
+      type === "market.index.updated") &&
     payload.revision === 0
   ) {
     return false;

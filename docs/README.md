@@ -13,11 +13,15 @@ This directory contains the project's design, specification, decision, operating
 - [Plan domain](specifications/monitoring/SPEC-plan-domain.md) ([Chinese](specifications/monitoring/SPEC-plan-domain.zh-CN.md))
 - [AI plan drafting](specifications/monitoring/SPEC-ai-plan-drafting.md) ([Chinese](specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md))
 - [Market data](specifications/monitoring/SPEC-market-data.md) ([Chinese](specifications/monitoring/SPEC-market-data.zh-CN.md))
+- [Board-index identity](specifications/monitoring/SPEC-index-identity.md) ([Chinese](specifications/monitoring/SPEC-index-identity.zh-CN.md))
+- [Shared board-index data](specifications/monitoring/SPEC-index-data.md) ([Chinese](specifications/monitoring/SPEC-index-data.zh-CN.md))
+- [Plan-owned index conditions](specifications/monitoring/SPEC-plan-index-conditions.md) ([Chinese](specifications/monitoring/SPEC-plan-index-conditions.zh-CN.md))
 - [Strategy state](specifications/monitoring/SPEC-strategy-state.md) ([Chinese](specifications/monitoring/SPEC-strategy-state.zh-CN.md))
 - [Decision engine](specifications/monitoring/SPEC-decision-engine.md) ([Chinese](specifications/monitoring/SPEC-decision-engine.zh-CN.md))
 - [Notification outbox](specifications/monitoring/SPEC-notification-outbox.md) ([Chinese](specifications/monitoring/SPEC-notification-outbox.zh-CN.md))
 - [Monitor runtime](specifications/monitoring/SPEC-monitor-runtime.md) ([Chinese](specifications/monitoring/SPEC-monitor-runtime.zh-CN.md))
 - [Local Web application](specifications/monitoring/SPEC-local-web.md) ([Chinese](specifications/monitoring/SPEC-local-web.zh-CN.md))
+- [Monitoring index views](specifications/monitoring/SPEC-monitor-index-view.md) ([Chinese](specifications/monitoring/SPEC-monitor-index-view.zh-CN.md))
 
 ## Backtesting Specifications
 
@@ -28,11 +32,18 @@ This directory contains the project's design, specification, decision, operating
 - [Durable jobs](specifications/backtesting/SPEC-backtest-jobs.md) ([Chinese](specifications/backtesting/SPEC-backtest-jobs.zh-CN.md))
 - [REST API](specifications/backtesting/SPEC-backtest-api.md) ([Chinese](specifications/backtesting/SPEC-backtest-api.zh-CN.md))
 - [Web workflows](specifications/backtesting/SPEC-backtest-web.md) ([Chinese](specifications/backtesting/SPEC-backtest-web.zh-CN.md))
+- [Backtest index data](specifications/backtesting/SPEC-backtest-index-data.md) ([Chinese](specifications/backtesting/SPEC-backtest-index-data.zh-CN.md))
+- [Backtest index views](specifications/backtesting/SPEC-backtest-index-view.md) ([Chinese](specifications/backtesting/SPEC-backtest-index-view.zh-CN.md))
 
 ## Architecture Decisions
 
 - [ADR 0001: Isolate durable backtest jobs from deterministic results](decisions/0001-isolate-backtest-jobs-from-results.md) ([Chinese](decisions/0001-isolate-backtest-jobs-from-results.zh-CN.md))
 - [ADR 0002: Use Asia/Shanghai for all backtest time](decisions/0002-use-asia-shanghai-for-backtest-time.md) ([Chinese](decisions/0002-use-asia-shanghai-for-backtest-time.zh-CN.md))
+- [ADR 0003: Share board-index data and let plans own usage](decisions/0003-share-board-index-data-and-let-plans-own-usage.md) ([Chinese](decisions/0003-share-board-index-data-and-let-plans-own-usage.zh-CN.md))
+
+## Approved Proposals
+
+- [Shared board-index data with plan-owned usage](proposals/PROPOSAL-market-index-context.md) ([Chinese](proposals/PROPOSAL-market-index-context.zh-CN.md))
 
 ## Guides
 

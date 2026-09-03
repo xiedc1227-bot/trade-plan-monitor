@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import date
 from typing import Annotated, Protocol, cast
 
 from fastapi import APIRouter, Depends, Path, Query, Request
@@ -13,6 +14,8 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestEquitySeries,
     BacktestFillFiltersView,
     BacktestFillPage,
+    BacktestMarketIndexPointView,
+    BacktestMarketIndexSeriesView,
     BacktestPublicDetailKind,
 )
 from trade_plan_monitor.web.errors import ApiError
@@ -59,6 +62,15 @@ class BacktestResultReadService(Protocol):
 
     async def get_equity_series(self, *, run_id: str) -> BacktestEquitySeries: ...
 
+    async def get_market_index_series(
+        self,
+        *,
+        run_id: str,
+        start_on: date | None,
+        end_on: date | None,
+        limit: int,
+    ) -> BacktestMarketIndexSeriesView: ...
+
 
 def get_backtest_result_read_service(request: Request) -> BacktestResultReadService:
     service = getattr(request.app.state, "backtest_read_service", None)
@@ -85,9 +97,17 @@ def require_equity_query(request: Request) -> None:
     _require_closed_query(request, allowed=frozenset())
 
 
+def require_market_index_series_query(request: Request) -> None:
+    _require_closed_query(request, allowed=frozenset({"startOn", "endOn", "limit"}))
+
+
 FillQueryDependency = Annotated[None, Depends(require_fill_query)]
 DetailQueryDependency = Annotated[None, Depends(require_detail_query)]
 EquityQueryDependency = Annotated[None, Depends(require_equity_query)]
+MarketIndexSeriesQueryDependency = Annotated[
+    None,
+    Depends(require_market_index_series_query),
+]
 
 
 @router.get("/backtest-runs/{run_id}/fills", response_model=BacktestFillPage)
@@ -156,6 +176,59 @@ async def get_backtest_equity_series(
     return series
 
 
+@router.get(
+    "/backtest-runs/{run_id}/market-index-series",
+    response_model=BacktestMarketIndexSeriesView,
+)
+async def get_backtest_market_index_series(
+    run_id: RunIdPath,
+    _query: MarketIndexSeriesQueryDependency,
+    service: BacktestResultReadServiceDependency,
+    start_on: Annotated[date | None, Query(alias="startOn")] = None,
+    end_on: Annotated[date | None, Query(alias="endOn")] = None,
+    limit: Annotated[int, Query(ge=1, le=512)] = 512,
+) -> BacktestMarketIndexSeriesView:
+    if start_on is not None and end_on is not None and start_on > end_on:
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+    series = validate_api_response(
+        await service.get_market_index_series(
+            run_id=run_id,
+            start_on=start_on,
+            end_on=end_on,
+            limit=limit,
+        ),
+        BacktestMarketIndexSeriesView,
+    )
+    if series.run_id != run_id or len(series.items) > limit:
+        raise RuntimeError("backtest index service returned a mismatched series")
+    if start_on is not None and any(item.trade_date < start_on for item in series.items):
+        raise RuntimeError("backtest index service ignored startOn")
+    if end_on is not None and any(item.trade_date > end_on for item in series.items):
+        raise RuntimeError("backtest index service ignored endOn")
+    return series
+
+
+def downsample_market_index_points(
+    points: tuple[BacktestMarketIndexPointView, ...],
+    *,
+    limit: int,
+) -> tuple[BacktestMarketIndexPointView, ...]:
+    """Reduce display points deterministically while preserving both ends when possible."""
+
+    if type(points) is not tuple or any(
+        type(point) is not BacktestMarketIndexPointView for point in points
+    ):
+        raise TypeError("points must be an exact tuple of BacktestMarketIndexPointView")
+    if type(limit) is not int or not 1 <= limit <= 512:
+        raise ValueError("limit must be between 1 and 512")
+    if len(points) <= limit:
+        return points
+    if limit == 1:
+        return points[:1]
+    last = len(points) - 1
+    return tuple(points[index * last // (limit - 1)] for index in range(limit))
+
+
 def _require_closed_query(request: Request, *, allowed: frozenset[str]) -> None:
     names = tuple(name for name, _value in request.query_params.multi_items())
     counts = Counter(names)
@@ -165,6 +238,7 @@ def _require_closed_query(request: Request, *, allowed: frozenset[str]) -> None:
 
 __all__ = [
     "BacktestResultReadService",
+    "downsample_market_index_points",
     "get_backtest_result_read_service",
     "router",
 ]

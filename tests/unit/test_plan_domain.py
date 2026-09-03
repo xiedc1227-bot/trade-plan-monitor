@@ -447,7 +447,7 @@ def test_condition_composition_supports_only_all_and_any() -> None:
     )
 
 
-def test_condition_json_schema_exposes_only_the_twenty_one_allowlisted_tags() -> None:
+def test_condition_json_schema_exposes_only_the_twenty_seven_allowlisted_tags() -> None:
     schema = TradePlan.model_json_schema()
     definitions = schema["$defs"]
     mapping = definitions["EntryPolicy"]["properties"]["condition"]["discriminator"]["mapping"]
@@ -458,6 +458,12 @@ def test_condition_json_schema_exposes_only_the_twenty_one_allowlisted_tags() ->
         "CLOSE_IN_BAR_LOWER_HALF",
         "CONSECUTIVE_CLOSES_BELOW_LEVEL",
         "DISTANCE_FROM_LIMIT_DOWN_GTE",
+        "INDEX_CLOSE_GTE_MA",
+        "INDEX_CLOSE_LTE_MA",
+        "INDEX_MA_NON_DECREASING",
+        "INDEX_MA_NON_INCREASING",
+        "INDEX_RETURN_GTE",
+        "INDEX_RETURN_LTE",
         "LOWER_BAND_HITS_LTE",
         "MACD_HIST_IMPROVEMENT_GTE",
         "MANUAL_EVENT_RISK_CLEAR",

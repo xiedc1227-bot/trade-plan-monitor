@@ -25,10 +25,16 @@ from trade_plan_monitor.backtest.cursor_key_security import (
     create_cursor_key_file,
     read_cursor_key_file,
 )
+from trade_plan_monitor.backtest.dataset import FrozenMarketIndexDatasetReader
 from trade_plan_monitor.backtest.dataset_service import (
     BacktestDatasetFilters,
     BacktestDatasetService,
     DatasetNotFoundError,
+)
+from trade_plan_monitor.backtest.index_data import (
+    MarketIndexReplaySeries,
+    build_backtest_index_requirement,
+    build_reference_market_result,
 )
 from trade_plan_monitor.backtest.jobs import (
     BacktestDatasetScopeRequest,
@@ -54,6 +60,9 @@ from trade_plan_monitor.backtest.jobs.repository import (
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
 from trade_plan_monitor.backtest.pagination import HmacCursorSigner, InvalidCursorError
+from trade_plan_monitor.backtest.reference_projection import (
+    project_decision_reference_market,
+)
 from trade_plan_monitor.backtest.reporting import iter_export_fills, iter_export_summary
 from trade_plan_monitor.backtest.result_service import (
     BacktestDetailFilters,
@@ -87,6 +96,11 @@ from trade_plan_monitor.decision.models import (
 )
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
+from trade_plan_monitor.market_index.identity import resolve_board_reference
+from trade_plan_monitor.market_index.models import (
+    MarketIndexIndicatorFact,
+    MarketIndexInterval,
+)
 from trade_plan_monitor.web.backtest_export import (
     BacktestExportKind,
     PreparedBacktestExport,
@@ -117,6 +131,10 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestJobPage,
     BacktestJobReceipt,
     BacktestJobView,
+    BacktestMarketIndexPointView,
+    BacktestMarketIndexSeriesView,
+    BacktestReferenceMarketCoverageView,
+    BacktestReferenceMarketView,
     BacktestRunCommand,
     BacktestRunFiltersView,
     BacktestRunPage,
@@ -130,6 +148,7 @@ from trade_plan_monitor.web.routers.backtest_jobs import (
     BacktestJobCancellationCommand,
     BacktestJobCancellationOutcome,
 )
+from trade_plan_monitor.web.routers.backtest_results import downsample_market_index_points
 from trade_plan_monitor.web.routers.backtest_runs import (
     BacktestRunPinCommand,
     BacktestRunSubmissionOutcome,
@@ -604,6 +623,119 @@ class _ProductionBacktestService:
             return None
         return _dataset_view(value)
 
+    async def get_reference_market_coverage(
+        self,
+        *,
+        dataset_hash: str,
+        plan_version_id: str,
+    ) -> BacktestReferenceMarketCoverageView:
+        if self._plan_snapshot_reader is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        value = await self._plan_snapshot_reader.get_plan_version(
+            version_id=plan_version_id,
+        )
+        if value is None:
+            raise ApiError(ApiErrorCode.NOT_FOUND)
+        try:
+            snapshot = validate_api_response(value, PlanVersionView)
+        except ValidationError:
+            raise RuntimeError("plan snapshot reader returned an invalid version") from None
+        if str(snapshot.id) != plan_version_id:
+            raise RuntimeError("plan snapshot reader returned a mismatched version")
+        plan = load_plan_json(snapshot.plan_json)
+        try:
+            manifest = await _run_sync(
+                self._market_store.dataset_manifest,
+                dataset_hash,
+            )
+        except KeyError:
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        if plan.symbol not in manifest.scope.symbols:
+            raise ApiError(ApiErrorCode.CONFLICT)
+        requirement = build_backtest_index_requirement(plan)
+        resolved = resolve_board_reference(plan.symbol)
+        binding = {
+            "selection": "AUTO_BOARD",
+            "mappingVersion": resolved.mapping_version,
+            "indexCode": resolved.index_code.value,
+            "displayName": resolved.display_name,
+            "board": resolved.board.value,
+        }
+        common = {
+            "planVersionId": plan_version_id,
+            "datasetHash": dataset_hash,
+            "binding": binding,
+            "conditionPaths": list(requirement.condition_paths),
+            "requiredFiveMinuteCount": requirement.required_five_minute_count,
+            "requiredOfficialDayCount": requirement.required_official_day_count,
+            "warmupStart": manifest.scope.warmup_start.isoformat(),
+            "warmupEnd": manifest.scope.start.isoformat(),
+            "indexRequirementHash": requirement.index_requirement_hash,
+            "formulaDefinitionHash": requirement.formula_definition_hash,
+        }
+        if not requirement.required:
+            return BacktestReferenceMarketCoverageView.model_validate(
+                common
+                | {
+                    "required": False,
+                    "availableFiveMinuteCount": 0,
+                    "availableOfficialDayCount": 0,
+                    "coverageStatus": "NOT_REQUIRED",
+                    "blockers": [],
+                    "marketIndexDataHash": manifest.market_index_data_hash,
+                }
+            )
+        if manifest.schema_version != "backtest-dataset-v2":
+            return BacktestReferenceMarketCoverageView.model_validate(
+                common
+                | {
+                    "required": True,
+                    "availableFiveMinuteCount": 0,
+                    "availableOfficialDayCount": 0,
+                    "coverageStatus": "BLOCKED",
+                    "blockers": ["MISSING_REFERENCE_MARKET_DATASET"],
+                    "marketIndexDataHash": None,
+                }
+            )
+        if manifest.market_index_data_hash is None:  # pragma: no cover - manifest guard
+            raise RuntimeError("v2 dataset is missing its market-index data hash")
+        _revision, bars = await _run_sync(
+            _read_frozen_market_index_membership,
+            self._market_store,
+            dataset_hash,
+            resolved.index_code,
+        )
+        result = build_reference_market_result(
+            plan=plan,
+            dataset_hash=dataset_hash,
+            market_data_hash=manifest.market_index_data_hash,
+            event_start=manifest.scope.start,
+            dataset_warmup_start=manifest.scope.warmup_start,
+            official_open_dates=tuple(
+                sorted(
+                    {
+                        item.trade_date
+                        for item in manifest.items
+                        if item.kind == "DAILY" and item.symbol == plan.symbol
+                    }
+                )
+            ),
+            bars=bars,
+        )
+        return BacktestReferenceMarketCoverageView.model_validate(
+            common
+            | {
+                "required": True,
+                "availableFiveMinuteCount": result.available_five_minute_count,
+                "availableOfficialDayCount": result.available_official_day_count,
+                "warmupStart": result.warmup_start.isoformat(),
+                "warmupEnd": result.warmup_end.isoformat(),
+                "coverageStatus": result.coverage_status,
+                "blockers": list(result.blockers),
+                "marketIndexDataHash": result.market_index_data_hash,
+            }
+        )
+
     async def list_jobs(
         self,
         *,
@@ -837,6 +969,95 @@ class _ProductionBacktestService:
             }
         )
 
+    async def get_market_index_series(
+        self,
+        *,
+        run_id: str,
+        start_on: date | None,
+        end_on: date | None,
+        limit: int,
+    ) -> BacktestMarketIndexSeriesView:
+        try:
+            record = await _run_sync(self._results.get_run, run_id)
+        except BacktestResultNotFoundError:
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        reference = _reference_market_view(record)
+        if reference is None:
+            return BacktestMarketIndexSeriesView.model_validate(
+                {
+                    "runId": run_id,
+                    "referenceMarket": None,
+                    "items": [],
+                    "healthTimeline": [],
+                    "conditionSummaries": [],
+                }
+            )
+        run_input = await _run_sync(self._result_store.get_run_input, run_id)
+        if run_input is None:
+            raise RuntimeError("index-bearing run is missing its immutable input")
+        requirement = build_backtest_index_requirement(run_input.plan_snapshot)
+        if not requirement.required or requirement.binding is None:
+            raise RuntimeError("stored reference-market identity contradicts the run input")
+        dataset_revision, bars = await _run_sync(
+            _read_frozen_market_index_membership,
+            self._market_store,
+            run_input.dataset_hash,
+            requirement.binding.index_code,
+        )
+        replay = MarketIndexReplaySeries(
+            index_code=requirement.binding.index_code,
+            bars=bars,
+            dataset_revision=dataset_revision,
+        )
+        official = tuple(
+            bar
+            for bar in bars
+            if bar.interval is MarketIndexInterval.OFFICIAL_DAILY
+            and (start_on is None or bar.bar_at.date() >= start_on)
+            and (end_on is None or bar.bar_at.date() <= end_on)
+        )
+        points: list[BacktestMarketIndexPointView] = []
+        for bar in official:
+            snapshot = replay.snapshot(
+                decision_cutoff=bar.bar_at,
+                requests=requirement.fact_requests,
+                observed_no_later_than=bar.observed_at,
+            )
+            points.append(
+                BacktestMarketIndexPointView.model_validate(
+                    {
+                        "tradeDate": bar.bar_at.date().isoformat(),
+                        "dataAt": format_shanghai_datetime(bar.bar_at),
+                        "closePoints": canonical_decimal(bar.close_points),
+                        "snapshotHash": snapshot.snapshot_hash,
+                        "indicatorFacts": [
+                            _market_index_fact_view(fact) for fact in snapshot.indicator_facts
+                        ],
+                        "health": snapshot.health.value,
+                        "issues": [issue.value for issue in snapshot.issues],
+                    }
+                )
+            )
+        selected = downsample_market_index_points(tuple(points), limit=limit)
+        return BacktestMarketIndexSeriesView.model_validate(
+            {
+                "runId": run_id,
+                "referenceMarket": reference.canonical_payload(),
+                "items": [item.canonical_payload() for item in selected],
+                "healthTimeline": [
+                    {
+                        "dataAt": format_shanghai_datetime(item.data_at),
+                        "health": item.health.value,
+                        "issues": [issue.value for issue in item.issues],
+                    }
+                    for item in selected
+                ],
+                "conditionSummaries": [
+                    item.canonical_payload() for item in reference.condition_summaries
+                ],
+            }
+        )
+
     async def prepare_export(
         self,
         *,
@@ -849,7 +1070,11 @@ class _ProductionBacktestService:
             return None
         if export_kind == "SUMMARY_JSON":
             chunks = iter_export_summary(self._result_store, run_id, cancelled)
-            schema_version = "backtest-report-summary-v2"
+            schema_version = (
+                "backtest-report-summary-v3"
+                if _reference_market_view(record) is not None
+                else "backtest-report-summary-v2"
+            )
         else:
             chunks = iter_export_fills(self._result_store, run_id, cancelled)
             schema_version = "backtest-simulated-fills-v2"
@@ -1057,6 +1282,67 @@ def _job_position_text(value: DomainBacktestJobView) -> tuple[str, str]:
     return format_shanghai_datetime(value.created_at), value.job_id
 
 
+def _reference_market_view(
+    record: BacktestRunRecord,
+) -> BacktestReferenceMarketView | None:
+    raw = record.summary.assumptions.get("referenceMarket")
+    if raw is None:
+        return None
+    public = _public_value(raw)
+    if not isinstance(public, dict):
+        raise RuntimeError("verified reference-market result is invalid")
+    keys = (
+        "binding",
+        "required",
+        "conditionPaths",
+        "warmupStart",
+        "coverageStatus",
+        "blockers",
+        "marketIndexDataHash",
+        "indexRequirementHash",
+        "formulaDefinitionHash",
+        "datasetHash",
+        "conditionSummaries",
+    )
+    try:
+        payload = {key: public[key] for key in keys}
+    except KeyError:
+        raise RuntimeError("verified reference-market result is incomplete") from None
+    return BacktestReferenceMarketView.model_validate(payload)
+
+
+def _read_frozen_market_index_membership(
+    market_store: object,
+    dataset_hash: str,
+    index_code: object,
+) -> tuple[int, tuple[object, ...]]:
+    open_dataset = getattr(market_store, "open_frozen_dataset", None)
+    if not callable(open_dataset):
+        raise RuntimeError("market store cannot open a frozen dataset")
+    with open_dataset(dataset_hash) as reader:
+        if not isinstance(reader, FrozenMarketIndexDatasetReader):
+            raise RuntimeError("index-bearing run references a stock-only dataset")
+        return reader.dataset_revision, reader.market_index_bars(index_code)
+
+
+def _market_index_fact_view(fact: MarketIndexIndicatorFact) -> dict[str, object]:
+    if type(fact) is not MarketIndexIndicatorFact:
+        raise TypeError("fact must be an exact MarketIndexIndicatorFact")
+    request = _public_value(fact.request)
+    if not isinstance(request, dict):  # pragma: no cover - model boundary
+        raise TypeError("market-index fact request must be an object")
+    payload = dict(request)
+    payload.update(
+        value=canonical_decimal(fact.value),
+        unit=fact.unit.value,
+        sourceBarHash=fact.source_bar_hash,
+        formulaDefinitionHash=fact.formula_definition_hash,
+    )
+    if fact.comparison_value is not None:
+        payload["comparisonValue"] = canonical_decimal(fact.comparison_value)
+    return payload
+
+
 def _run_summary_view(record: BacktestRunRecord) -> BacktestRunSummaryView:
     summary = record.summary
     if len(summary.symbols) != 1:
@@ -1127,11 +1413,19 @@ def _run_view(record: BacktestRunRecord, run_input: BacktestRunInput) -> Backtes
         },
         "formulaVersions": {
             "runFormulaVersion": run_input.run_formula_version,
-            "reportSchemaVersion": "backtest-report-v1",
+            "reportSchemaVersion": summary.formula_versions.get(
+                "report",
+                "backtest-report-v1",
+            ),
             "executionFormulaVersion": execution.formula_version,
             "metricFormulaVersion": "backtest-metrics-v1",
         },
         "limitations": sorted(set(limitations)),
+        "referenceMarket": (
+            None
+            if (reference_market := _reference_market_view(record)) is None
+            else reference_market.canonical_payload()
+        ),
     }
     return BacktestRunView.model_validate(payload)
 
@@ -1238,6 +1532,7 @@ def _decision_projection(result: EvaluationResult) -> dict[str, object]:
     episode = snapshot.episode
     risk = snapshot.risk
     health = snapshot.data_health
+    reference_market = project_decision_reference_market(result)
     return {
         "symbol": snapshot.symbol,
         "resultHash": result.result_hash,
@@ -1278,13 +1573,14 @@ def _decision_projection(result: EvaluationResult) -> dict[str, object]:
             _evidence_view(item).canonical_payload() for item in snapshot.condition_evidence
         ],
         "nextStep": _public_value(snapshot.next_step),
+        "referenceMarket": reference_market,
     }
 
 
 def _evidence_view(value: ConditionEvidence | RuleEvidence) -> BacktestDecisionEvidenceView:
     if isinstance(value, ConditionEvidence):
         code = value.condition.type
-        children = tuple(_evidence_view(child).canonical_payload() for child in value.children)
+        children = tuple(_evidence_view(child) for child in value.children)
         kind = "CONDITION"
     else:
         code = value.code.value

@@ -67,14 +67,49 @@ _MARKET_COLUMN_CONTRACTS: dict[str, dict[str, _ColumnContract]] = {
         "symbol": ("TEXT", False, None, 0),
         "trade_date": ("TEXT", True, None, 0),
     },
+    "market_index_artifact": {
+        "artifact_hash": ("TEXT", False, None, 1),
+        "natural_key": ("TEXT", True, None, 0),
+        "index_code": ("TEXT", True, None, 0),
+        "interval": ("TEXT", True, None, 0),
+        "bar_at": ("TEXT", True, None, 0),
+        "provider_revision": ("INTEGER", True, None, 0),
+        "content_json": ("TEXT", True, None, 0),
+        "created_at": ("TEXT", True, None, 0),
+    },
+    "market_index_head": {
+        "natural_key": ("TEXT", False, None, 1),
+        "artifact_hash": ("TEXT", True, None, 0),
+        "index_code": ("TEXT", True, None, 0),
+        "interval": ("TEXT", True, None, 0),
+        "bar_at": ("TEXT", True, None, 0),
+        "revision": ("INTEGER", True, None, 0),
+        "updated_at": ("TEXT", True, None, 0),
+    },
+    "market_dataset_index_item": {
+        "dataset_hash": ("TEXT", True, None, 1),
+        "natural_key": ("TEXT", True, None, 2),
+        "artifact_hash": ("TEXT", True, None, 0),
+        "index_code": ("TEXT", True, None, 0),
+        "interval": ("TEXT", True, None, 0),
+        "bar_at": ("TEXT", True, None, 0),
+        "provider_revision": ("INTEGER", True, None, 0),
+    },
 }
 _MARKET_TABLES = frozenset(_MARKET_COLUMN_CONTRACTS)
+_MARKET_INDEX_EXTENSION_TABLES = (
+    "market_index_artifact",
+    "market_index_head",
+    "market_dataset_index_item",
+)
 _MARKET_METADATA_COLUMNS = (
     ("market_artifact", "created_at"),
     ("market_head", "updated_at"),
     ("market_minute_artifact", "created_at"),
     ("market_minute_head", "updated_at"),
     ("market_dataset", "created_at"),
+    ("market_index_artifact", "created_at"),
+    ("market_index_head", "updated_at"),
 )
 _RESULT_COLUMN_CONTRACTS: dict[str, dict[str, _ColumnContract]] = {
     "backtest_run": {
@@ -182,6 +217,39 @@ _MARKET_FOREIGN_KEY_CONTRACTS: dict[str, frozenset[_ForeignKeyContract]] = {
             ),
         }
     ),
+    "market_index_artifact": frozenset(),
+    "market_index_head": frozenset(
+        {
+            (
+                "artifact_hash",
+                "market_index_artifact",
+                "artifact_hash",
+                "NO ACTION",
+                "RESTRICT",
+                "NONE",
+            )
+        }
+    ),
+    "market_dataset_index_item": frozenset(
+        {
+            (
+                "dataset_hash",
+                "market_dataset",
+                "dataset_hash",
+                "NO ACTION",
+                "RESTRICT",
+                "NONE",
+            ),
+            (
+                "artifact_hash",
+                "market_index_artifact",
+                "artifact_hash",
+                "NO ACTION",
+                "RESTRICT",
+                "NONE",
+            ),
+        }
+    ),
 }
 _RESULT_FOREIGN_KEY_CONTRACTS: dict[str, frozenset[_ForeignKeyContract]] = {
     "backtest_run": frozenset(),
@@ -266,6 +334,44 @@ _MARKET_TABLE_SQL_CONTRACTS = {
             kind TEXT NOT NULL CHECK (kind IN ('CALENDAR', 'MINUTE', 'LIMIT', 'DAILY')),
             symbol TEXT,
             trade_date TEXT NOT NULL,
+            PRIMARY KEY (dataset_hash, natural_key)
+        )
+    """,
+    "market_index_artifact": """
+        CREATE TABLE market_index_artifact (
+            artifact_hash TEXT PRIMARY KEY,
+            natural_key TEXT NOT NULL,
+            index_code TEXT NOT NULL,
+            interval TEXT NOT NULL CHECK (interval IN ('FIVE_MINUTE', 'OFFICIAL_DAILY')),
+            bar_at TEXT NOT NULL,
+            provider_revision INTEGER NOT NULL CHECK (provider_revision >= 1),
+            content_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """,
+    "market_index_head": """
+        CREATE TABLE market_index_head (
+            natural_key TEXT PRIMARY KEY,
+            artifact_hash TEXT NOT NULL
+                REFERENCES market_index_artifact (artifact_hash) ON DELETE RESTRICT,
+            index_code TEXT NOT NULL,
+            interval TEXT NOT NULL CHECK (interval IN ('FIVE_MINUTE', 'OFFICIAL_DAILY')),
+            bar_at TEXT NOT NULL,
+            revision INTEGER NOT NULL CHECK (revision >= 1),
+            updated_at TEXT NOT NULL
+        )
+    """,
+    "market_dataset_index_item": """
+        CREATE TABLE market_dataset_index_item (
+            dataset_hash TEXT NOT NULL
+                REFERENCES market_dataset (dataset_hash) ON DELETE RESTRICT,
+            natural_key TEXT NOT NULL,
+            artifact_hash TEXT NOT NULL
+                REFERENCES market_index_artifact (artifact_hash) ON DELETE RESTRICT,
+            index_code TEXT NOT NULL,
+            interval TEXT NOT NULL CHECK (interval IN ('FIVE_MINUTE', 'OFFICIAL_DAILY')),
+            bar_at TEXT NOT NULL,
+            provider_revision INTEGER NOT NULL CHECK (provider_revision >= 1),
             PRIMARY KEY (dataset_hash, natural_key)
         )
     """,
@@ -573,7 +679,38 @@ _MARKET_INDEX_CONTRACTS: dict[str, _IndexContract] = {
             ("trade_date", False, "BINARY"),
         ),
     ),
+    "ix_market_index_artifact_identity": (
+        "market_index_artifact",
+        (
+            ("natural_key", False, "BINARY"),
+            ("provider_revision", False, "BINARY"),
+        ),
+    ),
+    "ix_market_index_head_code_time": (
+        "market_index_head",
+        (
+            ("index_code", False, "BINARY"),
+            ("bar_at", False, "BINARY"),
+            ("interval", False, "BINARY"),
+        ),
+    ),
+    "ix_market_dataset_index_item_lookup": (
+        "market_dataset_index_item",
+        (
+            ("dataset_hash", False, "BINARY"),
+            ("index_code", False, "BINARY"),
+            ("bar_at", False, "BINARY"),
+            ("interval", False, "BINARY"),
+        ),
+    ),
 }
+_MARKET_INDEX_EXTENSION_INDEXES = frozenset(
+    {
+        "ix_market_index_artifact_identity",
+        "ix_market_index_head_code_time",
+        "ix_market_dataset_index_item_lookup",
+    }
+)
 _RESULT_INDEX_CONTRACTS: dict[str, _IndexContract] = {
     "ix_backtest_run_retention": (
         "backtest_run",
@@ -1536,6 +1673,33 @@ def create_backtest_job_schema(connection: sqlite3.Connection) -> None:
     )
 
 
+def create_market_index_schema(connection: sqlite3.Connection) -> None:
+    """Transactionally expand one exact pre-index market schema with empty index tables."""
+
+    if not isinstance(connection, sqlite3.Connection):
+        raise TypeError("connection must be a sqlite3.Connection")
+    table_names = frozenset(
+        str(row[0])
+        for row in connection.execute("SELECT name FROM sqlite_schema WHERE type = 'table'")
+    )
+    present = table_names & frozenset(_MARKET_INDEX_EXTENSION_TABLES)
+    if present:
+        raise MigrationPreflightError("PARTIAL_MARKET_INDEX_SCHEMA")
+    if not _is_supported_pre_index_market_schema(connection, table_names):
+        raise MigrationPreflightError("MARKET_INDEX_SCHEMA_EXPANSION_SOURCE_CHANGED")
+    for table in _MARKET_INDEX_EXTENSION_TABLES:
+        connection.execute(_MARKET_TABLE_SQL_CONTRACTS[table])
+    for statement in (
+        "CREATE INDEX ix_market_index_artifact_identity "
+        "ON market_index_artifact (natural_key, provider_revision)",
+        "CREATE INDEX ix_market_index_head_code_time "
+        "ON market_index_head (index_code, bar_at, interval)",
+        "CREATE INDEX ix_market_dataset_index_item_lookup "
+        "ON market_dataset_index_item (dataset_hash, index_code, bar_at, interval)",
+    ):
+        connection.execute(statement)
+
+
 def _result_v1_content_hash(connection: sqlite3.Connection) -> str:
     digest = sha256()
     for query in (
@@ -1654,9 +1818,10 @@ def _inspect_market(
         index_contracts=_MARKET_INDEX_CONTRACTS,
         trigger_sql_contracts={},
     )
+    pre_index_current = _is_supported_pre_index_market_schema(connection, table_names)
     state = (
         DatabaseState.CURRENT
-        if current
+        if current or pre_index_current
         else DatabaseState.LEGACY
         if present
         else DatabaseState.UNKNOWN
@@ -1666,6 +1831,8 @@ def _inspect_market(
         reasons.append("LEGACY_SCHEMA")
     elif state == DatabaseState.UNKNOWN:
         reasons.append("UNRECOGNIZED_SCHEMA")
+    elif pre_index_current:
+        reasons.append("MISSING_MARKET_INDEX_SCHEMA")
     dataset_hashes: tuple[bytes, ...] = ()
     if "market_dataset" in table_names and "dataset_hash" in _table_columns(
         connection, "market_dataset"
@@ -1694,6 +1861,38 @@ def _inspect_market(
         "migration_reasons": tuple(reasons),
         "requires_schema_migration": state != DatabaseState.CURRENT,
     }
+
+
+def _is_supported_pre_index_market_schema(
+    connection: sqlite3.Connection,
+    table_names: frozenset[str],
+) -> bool:
+    extension_tables = frozenset(_MARKET_INDEX_EXTENSION_TABLES)
+    return _has_required_schema(
+        connection,
+        table_names,
+        column_contracts={
+            name: contract
+            for name, contract in _MARKET_COLUMN_CONTRACTS.items()
+            if name not in extension_tables
+        },
+        foreign_key_contracts={
+            name: contract
+            for name, contract in _MARKET_FOREIGN_KEY_CONTRACTS.items()
+            if name not in extension_tables
+        },
+        table_sql_contracts={
+            name: contract
+            for name, contract in _MARKET_TABLE_SQL_CONTRACTS.items()
+            if name not in extension_tables
+        },
+        index_contracts={
+            name: contract
+            for name, contract in _MARKET_INDEX_CONTRACTS.items()
+            if name not in _MARKET_INDEX_EXTENSION_INDEXES
+        },
+        trigger_sql_contracts={},
+    )
 
 
 def _inspect_results(
@@ -2154,6 +2353,7 @@ __all__ = [
     "VerifiedBackupFacts",
     "assert_source_unchanged",
     "authorize_migration",
+    "create_market_index_schema",
     "inspect_market_database",
     "inspect_result_database",
     "migrate_market_metadata",

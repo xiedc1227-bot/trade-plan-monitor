@@ -26,6 +26,12 @@ at 4 of 4. The optional AI live probe remains `NOT_RUN_UNAUTHORIZED`. See
 availability and the accepted visible-block T058 result do not imply current live Tushare
 readiness.
 
+The approved board-index extension is implemented for monitoring and backtesting. Version
+`board-index-map-v1` derives one fixed board reference from each validated A-share symbol;
+immutable data snapshots are shared by index and cutoff, while each Schema v2 plan independently
+evaluates only its own index conditions. The UI separates shared index facts from plan-specific
+condition outcomes, and historical Schema v1 plans/results remain unchanged.
+
 ## Safety Boundaries
 
 - The live system is monitoring and reminder software, not a broker, order router, or investment
@@ -35,6 +41,8 @@ readiness.
 - Prices are stored as integer fen, quantities as integer shares, and A-share timestamps as
   timezone-aware `Asia/Shanghai` values.
 - Missing, stale, unauthorized, or semantically unverified market data fails closed.
+- Board-index data never creates a global market-strength opinion or hidden trading rule. A plan
+  with no index condition keeps its original decision when reference-index data is absent.
 - AI secrets stay in ignored project secret files selected by a non-secret YAML file/key
   reference; secrets never enter tracked YAML, database columns, API responses, logs, or exports.
 - The Web listener accepts only the literal `127.0.0.1`; authentication is not implemented.
@@ -127,7 +135,8 @@ build without contacting a live provider.
 The real-browser gate uses deterministic fake REST contracts and must not receive a provider
 token. It covers `/backtests`, `/backtests/new`, `/backtests/data`, and
 `/backtests/:runId` in Chromium without contacting Tushare, AI, Webhook, or any other
-external service:
+external service. The result journey includes server-resolved reference-market coverage, the
+frozen index resource, exact plan paths, and navigation to persisted decision evidence:
 
 ```powershell
 Push-Location web

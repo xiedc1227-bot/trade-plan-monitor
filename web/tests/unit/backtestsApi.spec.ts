@@ -402,7 +402,7 @@ describe("backtest API jobs and datasets", () => {
     ],
     ["dataset chronology", { ...dataset(), createdAt: "2026-08-28T10:02:00.000000+08:00" }],
     ["dataset response time", { ...dataset(), verifiedAt: "2026-08-28T10:01:00+08:00" }],
-    ["dataset schema", { ...dataset(), schemaVersion: "backtest-dataset-v2" }],
+    ["dataset schema", { ...dataset(), schemaVersion: "backtest-dataset-v3" }],
     [
       "dataset profile",
       { ...dataset(), scope: { ...scope(), historicalProfile: "OTHER" } },
@@ -697,6 +697,93 @@ function runView(runId = HASH) {
     },
     initialCashFen: "100000",
     limitations: ["HISTORICAL_SIMULATION", "NO_MARKET_IMPACT"],
+    referenceMarket: null,
+  };
+}
+
+function referenceMarketCoverage() {
+  return {
+    availableFiveMinuteCount: 0,
+    availableOfficialDayCount: 22,
+    binding: {
+      board: "SZSE_MAIN" as const,
+      displayName: "深证成指",
+      indexCode: "399001.SZ" as const,
+      mappingVersion: "board-index-map-v1" as const,
+      selection: "AUTO_BOARD" as const,
+    },
+    blockers: [] as string[],
+    conditionPaths: ["entry.conditions.all[0]"],
+    coverageStatus: "AVAILABLE" as const,
+    datasetHash: DATASET_HASH,
+    formulaDefinitionHash: CONFIG_HASH,
+    indexRequirementHash: PLAN_HASH,
+    marketIndexDataHash: REPORT_HASH,
+    planVersionId: PLAN_VERSION_ID,
+    required: true,
+    requiredFiveMinuteCount: 0,
+    requiredOfficialDayCount: 21,
+    warmupEnd: "2026-08-02",
+    warmupStart: "2026-07-01",
+  };
+}
+
+function indexConditionSummary() {
+  return {
+    applicableBranchCount: 2,
+    conditionType: "INDEX_CLOSE_GTE_MA" as const,
+    formulaId: "SMA" as const,
+    missingCount: 0,
+    parameters: { period: 20 },
+    planPath: "entry.conditions.all[0]",
+    satisfiedCount: 1,
+    unsatisfiedCount: 1,
+  };
+}
+
+function referenceMarket() {
+  const coverageView = referenceMarketCoverage();
+  return {
+    binding: coverageView.binding,
+    blockers: coverageView.blockers,
+    conditionPaths: coverageView.conditionPaths,
+    conditionSummaries: [indexConditionSummary()],
+    coverageStatus: "AVAILABLE" as const,
+    datasetHash: DATASET_HASH,
+    formulaDefinitionHash: CONFIG_HASH,
+    indexRequirementHash: PLAN_HASH,
+    marketIndexDataHash: REPORT_HASH,
+    required: true as const,
+    warmupStart: "2026-07-01",
+  };
+}
+
+function marketIndexSeries() {
+  return {
+    conditionSummaries: [indexConditionSummary()],
+    healthTimeline: [{ dataAt: TIME, health: "LIVE" as const, issues: [] }],
+    items: [
+      {
+        closePoints: "10000.5",
+        dataAt: TIME,
+        health: "LIVE" as const,
+        indicatorFacts: [
+          {
+            formulaDefinitionHash: CONFIG_HASH,
+            formulaId: "SMA" as const,
+            period: 20,
+            sourceBarHash: RESULT_HASH,
+            unit: "POINTS" as const,
+            value: "9999.5",
+          },
+        ],
+        issues: [],
+        snapshotHash: HASH,
+        tradeDate: "2026-08-28",
+      },
+    ],
+    referenceMarket: referenceMarket(),
+    runId: HASH,
   };
 }
 
@@ -891,6 +978,30 @@ function runReceipt() {
 }
 
 describe("backtest API runs results and export", () => {
+  it("loads server-authored reference-market coverage and frozen run series", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(referenceMarketCoverage()))
+      .mockResolvedValueOnce(jsonResponse(marketIndexSeries()));
+    const api = createBacktestApi(fetchImplementation);
+
+    const preview = await api.getReferenceMarketCoverage(DATASET_HASH, PLAN_VERSION_ID);
+    const series = await api.getMarketIndexSeries(HASH, {
+      endOn: "2026-08-31",
+      limit: 120,
+      startOn: "2026-08-01",
+    });
+
+    expect(fetchImplementation.mock.calls.map((call) => call[0])).toEqual([
+      `/api/v1/backtest-datasets/${DATASET_HASH}/reference-market-coverage?planVersionId=${PLAN_VERSION_ID}`,
+      `/api/v1/backtest-runs/${HASH}/market-index-series?startOn=2026-08-01&endOn=2026-08-31&limit=120`,
+    ]);
+    expect(preview.conditionPaths).toEqual(["entry.conditions.all[0]"]);
+    expect(series.conditionSummaries[0]?.satisfiedCount).toBe(1);
+    expect(Object.isFrozen(preview.binding)).toBe(true);
+    expect(Object.isFrozen(series.items[0]?.indicatorFacts)).toBe(true);
+  });
+
   it("uses generated run/result routes, canonical Shanghai queries, and deep freezing", async () => {
     const pinnedRun = { ...runView(), pinned: true, revision: 3 };
     const fetchImplementation = vi

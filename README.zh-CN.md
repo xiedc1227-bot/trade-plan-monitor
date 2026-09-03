@@ -12,12 +12,15 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。另行授权的 T059 性能修复现已在不改变阈值的前提下通过 100k-export、ten-symbol/252-day、内存、存储及完整离线闸门。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
 
+已批准的板块指数扩展现已在监控与回测中实现。`board-index-map-v1` 根据每个已校验的 A 股代码推导固定板块参考；相同指数和截止时间共用不可变数据快照，每个 Schema v2 计划只独立计算自身指数条件。界面把共用指数事实与计划条件结果分区展示，历史 Schema v1 计划和结果保持不变。
+
 ## 安全边界
 
 - 实时系统是监控和提醒软件，不是券商、订单路由或投资顾问。每条可操作提醒都包含“仅提醒，不会自动下单”；只有隔离的离线 `BACKTEST` 模式可以生成明确标注的模拟研究成交。
 - 计划必须类型化、经审核、版本化，并在激活后保持不可变。AI 输出在确定性校验和用户审核通过前始终是不可信草稿。
 - 价格按整数“分”保存，数量按整数“股”保存，A 股时间戳必须是带 `Asia/Shanghai` 时区的值。
 - 行情缺失、过期、无权限或来源语义未验证时安全阻断。
+- 板块指数数据不会生成统一大盘强弱观点或隐藏交易规则。没有指数条件的计划在参考指数数据缺失时保持原有判断。
 - AI 密钥保留在被 Git 忽略的项目密钥文件中，YAML 只选择文件和键名；密钥不能进入受版本控制的 YAML、数据库列、API 响应、日志或导出内容。
 - Web 监听只接受字面量 `127.0.0.1`；系统未实现登录鉴权。
 
@@ -87,7 +90,7 @@ Pop-Location
 
 真实浏览器闸门使用确定性假 REST 契约，运行时不得提供供应商令牌。它在 Chromium 中覆盖
 `/backtests`、`/backtests/new`、`/backtests/data` 与
-`/backtests/:runId`，且不联系 Tushare、AI、Webhook 或任何其他外部服务：
+`/backtests/:runId`，且不联系 Tushare、AI、Webhook 或任何其他外部服务。结果链路覆盖后端解析的参考市场覆盖、冻结指数资源、准确计划路径，以及跳转到持久化逐决策证据：
 
 ```powershell
 Push-Location web

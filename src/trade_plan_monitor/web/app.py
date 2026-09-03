@@ -38,6 +38,8 @@ from trade_plan_monitor.web.routers.backtest_runs import router as backtest_runs
 from trade_plan_monitor.web.routers.dashboard import MonitorReadService
 from trade_plan_monitor.web.routers.dashboard import router as dashboard_router
 from trade_plan_monitor.web.routers.health import router as health_router
+from trade_plan_monitor.web.routers.market_indexes import MarketIndexReadService
+from trade_plan_monitor.web.routers.market_indexes import router as market_indexes_router
 from trade_plan_monitor.web.routers.plans import PlanOperationService
 from trade_plan_monitor.web.routers.plans import router as plans_router
 from trade_plan_monitor.web.routers.positions import PositionOperationService
@@ -137,6 +139,7 @@ def create_production_app(
     position_service: PositionOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
+    market_index_read_service: MarketIndexReadService | None = None,
     backtest_lifecycle_factory: BacktestLifecycleFactory | None = None,
     bind_host: str = LOOPBACK_HOST,
     bind_port: int = DEFAULT_WEB_PORT,
@@ -175,6 +178,7 @@ def create_production_app(
             position_service=position_service,
             alert_service=alert_service,
             websocket_service=websocket_service,
+            market_index_read_service=market_index_read_service,
             bind_host=bind_host,
             bind_port=bind_port,
             static_directory=static_directory,
@@ -191,6 +195,7 @@ def create_app(
     position_service: PositionOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
+    market_index_read_service: MarketIndexReadService | None = None,
     backtest_read_service: object | None = None,
     backtest_operation_service: object | None = None,
     backtest_lifecycle_factory: BacktestLifecycleFactory | None = None,
@@ -235,6 +240,8 @@ def create_app(
         app.state.alert_operation_service = alert_service
     if websocket_service is not None:
         app.state.monitor_websocket_service = websocket_service
+    if market_index_read_service is not None:
+        app.state.market_index_read_service = market_index_read_service
     if backtest_read_service is not None:
         app.state.backtest_read_service = backtest_read_service
     if backtest_operation_service is not None:
@@ -247,6 +254,7 @@ def create_app(
     app.include_router(positions_router)
     app.include_router(alerts_router)
     app.include_router(websocket_router)
+    app.include_router(market_indexes_router)
     app.include_router(backtest_data_router)
     app.include_router(backtest_jobs_router)
     app.include_router(backtest_runs_router)

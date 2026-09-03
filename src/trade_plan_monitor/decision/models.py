@@ -41,6 +41,13 @@ from trade_plan_monitor.market_data.models import (
     TradingDay,
 )
 from trade_plan_monitor.market_data.reconciliation import CloseReconciliationIntent
+from trade_plan_monitor.market_index.canonical import validate_market_index_snapshot_integrity
+from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.market_index.models import (
+    MarketIndexFactUnit,
+    MarketIndexHealth,
+    MarketIndexSnapshot,
+)
 
 Sha256Hex = Annotated[
     str,
@@ -90,6 +97,26 @@ PositiveVersion = Annotated[int, Field(strict=True, gt=0)]
 StrictBoolean = Annotated[bool, Field(strict=True)]
 FiniteDecimal = Annotated[Decimal, Field(strict=True, allow_inf_nan=False)]
 EvidenceScalar = bool | int | Decimal | datetime | date | EvidenceCode
+IndexPlanPath = Annotated[
+    str,
+    StringConstraints(
+        strict=True,
+        min_length=15,
+        max_length=256,
+        pattern=(
+            r"^(?:entry|reduction|risk|blockers)\.condition"
+            r"(?:\.conditions\[[0-9]+\])*$"
+        ),
+    ),
+]
+IndexConditionType = Literal[
+    "INDEX_CLOSE_GTE_MA",
+    "INDEX_CLOSE_LTE_MA",
+    "INDEX_MA_NON_DECREASING",
+    "INDEX_MA_NON_INCREASING",
+    "INDEX_RETURN_GTE",
+    "INDEX_RETURN_LTE",
+]
 _MAX_MARKET_BARS = 10_000
 _MAX_DAILY_BARS = 500
 _MAX_CURRENT_DAY_MINUTES = 240
@@ -228,6 +255,7 @@ class EvidenceUnit(StrEnum):
     DATE = "DATE"
     DATETIME = "DATETIME"
     CODE = "CODE"
+    POINTS = "POINTS"
 
 
 class MissingInputCode(StrEnum):
@@ -248,6 +276,13 @@ class MissingInputCode(StrEnum):
     TRADING_CALENDAR = "TRADING_CALENDAR"
     DAILY_LIMIT = "DAILY_LIMIT"
     MANUAL_EVENT_RISK = "MANUAL_EVENT_RISK"
+    INDEX_SNAPSHOT = "INDEX_SNAPSHOT"
+    INDEX_IDENTITY = "INDEX_IDENTITY"
+    INDEX_CUTOFF = "INDEX_CUTOFF"
+    INDEX_HEALTH = "INDEX_HEALTH"
+    INDEX_FACT = "INDEX_FACT"
+    INDEX_HISTORY = "INDEX_HISTORY"
+    INDEX_FORMULA = "INDEX_FORMULA"
 
 
 class EvidenceFact(_DecisionValue):
@@ -272,13 +307,77 @@ class EvidenceFact(_DecisionValue):
         if self.unit is EvidenceUnit.DATETIME:
             if value_type is not datetime or self.value.utcoffset() != timedelta(hours=8):
                 raise ValueError("DATETIME evidence requires an Asia/Shanghai timestamp")
-        if self.unit in {EvidenceUnit.RATIO, EvidenceUnit.YUAN} and value_type is not Decimal:
+        if (
+            self.unit in {EvidenceUnit.RATIO, EvidenceUnit.YUAN, EvidenceUnit.POINTS}
+            and value_type is not Decimal
+        ):
             raise ValueError("decimal evidence unit requires a Decimal value")
         if self.unit in {EvidenceUnit.FEN, EvidenceUnit.BARS, EvidenceUnit.COUNT}:
             if value_type is not int:
                 raise ValueError("integer evidence unit requires a strict integer")
         if self.unit is EvidenceUnit.SHARES and value_type not in {int, Decimal}:
             raise ValueError("SHARES evidence requires an integer or Decimal value")
+        return self
+
+
+class IndexConditionEvidence(_DecisionValue):
+    """Path-addressed plan-specific interpretation of one shared index fact."""
+
+    plan_path: IndexPlanPath
+    condition_type: IndexConditionType
+    index_code: MarketIndexCode
+    mapping_version: Literal["board-index-map-v1"] = "board-index-map-v1"
+    snapshot_hash: Sha256Hex | None = None
+    decision_cutoff: ShanghaiDatetime
+    data_cutoff: ShanghaiDatetime | None = None
+    formula_id: Literal["SMA", "SMA_LOOKBACK", "RETURN"]
+    formula_definition_hash: Sha256Hex | None = None
+    parameters: tuple[EvidenceFact, ...] = Field(default=(), max_length=8)
+    actual_value: FiniteDecimal | None = None
+    comparison_value: FiniteDecimal | None = None
+    unit: MarketIndexFactUnit
+    outcome: ConditionOutcome
+    missing_inputs: tuple[MissingInputCode, ...] = Field(
+        default=(),
+        max_length=7,
+    )
+
+    @model_validator(mode="after")
+    def validate_index_evidence_shape(self) -> Self:
+        if len({item.key for item in self.parameters}) != len(self.parameters):
+            raise ValueError("index evidence parameter keys must be unique")
+        if len(set(self.missing_inputs)) != len(self.missing_inputs):
+            raise ValueError("index evidence missing inputs must be unique")
+        allowed_missing = {
+            MissingInputCode.INDEX_SNAPSHOT,
+            MissingInputCode.INDEX_IDENTITY,
+            MissingInputCode.INDEX_CUTOFF,
+            MissingInputCode.INDEX_HEALTH,
+            MissingInputCode.INDEX_FACT,
+            MissingInputCode.INDEX_HISTORY,
+            MissingInputCode.INDEX_FORMULA,
+        }
+        if any(item not in allowed_missing for item in self.missing_inputs):
+            raise ValueError("index evidence contains a non-index missing-input code")
+        if self.outcome is ConditionOutcome.MISSING_INPUT:
+            if not self.missing_inputs:
+                raise ValueError("missing index evidence requires an exact missing code")
+            if self.actual_value is not None or self.comparison_value is not None:
+                raise ValueError("missing index evidence cannot guess comparison values")
+            return self
+        if self.missing_inputs:
+            raise ValueError("known index evidence cannot contain missing-input codes")
+        if self.actual_value is None or self.comparison_value is None:
+            raise ValueError("known index evidence requires both compared values")
+        if any(
+            value is None
+            for value in (
+                self.snapshot_hash,
+                self.data_cutoff,
+                self.formula_definition_hash,
+            )
+        ):
+            raise ValueError("known index evidence requires complete snapshot identity")
         return self
 
 
@@ -299,6 +398,10 @@ class ConditionEvidence(_DecisionValue):
         default=(),
         max_length=_MAX_CONDITION_VALUES,
     )
+    index_evidence: IndexConditionEvidence | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def validate_evidence_shape(self) -> Self:
@@ -315,6 +418,16 @@ class ConditionEvidence(_DecisionValue):
         is_all = isinstance(self.condition, AllCondition)
         is_any = isinstance(self.condition, AnyCondition)
         is_composite = is_all or is_any
+        is_index = self.condition.type.startswith("INDEX_")
+        if is_index != (self.index_evidence is not None):
+            raise ValueError("only an index leaf requires index condition evidence")
+        if self.index_evidence is not None:
+            if self.index_evidence.condition_type != self.condition.type:
+                raise ValueError("index evidence condition type must match its leaf")
+            if self.index_evidence.outcome is not self.outcome:
+                raise ValueError("index evidence outcome must match its leaf")
+            if self.index_evidence.missing_inputs != self.missing_inputs:
+                raise ValueError("index evidence missing codes must match its leaf")
         if is_composite:
             expected_conditions = self.condition.conditions
             if len(self.children) != len(expected_conditions):
@@ -685,6 +798,10 @@ class EvaluationContext(_DecisionValue):
     low_zone_episode: LowZoneEpisodeSnapshot | None
     risk_state: RiskStateSnapshot
     manual_event_risk: StrictBoolean | None
+    reference_market_snapshot: MarketIndexSnapshot | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @property
     def trade_date(self) -> date:
@@ -758,6 +875,8 @@ class EvaluationContext(_DecisionValue):
         )
         if not semantic_validation.can_save:
             raise ValueError("plan must pass cross-field semantic validation")
+        if self.reference_market_snapshot is not None:
+            validate_market_index_snapshot_integrity(self.reference_market_snapshot)
         if self.plan_active != (self.activated_at is not None):
             raise ValueError("active plan fact requires exactly one activation timestamp")
         if self.activated_at is not None and self.activated_at > self.evaluated_at:
@@ -1069,6 +1188,26 @@ class NextStep(_DecisionValue):
         return self
 
 
+class DecisionReferenceMarketSnapshot(_DecisionValue):
+    """Compact index context persisted exactly with one authoritative decision."""
+
+    index_code: MarketIndexCode
+    snapshot_hash: Sha256Hex
+    data_at: ShanghaiDatetime | None
+    health: MarketIndexHealth
+
+    @classmethod
+    def from_snapshot(cls, snapshot: MarketIndexSnapshot) -> Self:
+        if type(snapshot) is not MarketIndexSnapshot:
+            raise TypeError("snapshot must be an exact MarketIndexSnapshot")
+        return cls(
+            index_code=snapshot.index_code,
+            snapshot_hash=snapshot.snapshot_hash,
+            data_at=snapshot.completed_bucket_at,
+            health=snapshot.health,
+        )
+
+
 class SymbolDecisionSnapshot(_DecisionValue):
     """The single authoritative display snapshot returned for one symbol."""
 
@@ -1088,6 +1227,10 @@ class SymbolDecisionSnapshot(_DecisionValue):
     condition_evidence: tuple[EvaluationEvidence, ...] = Field(
         default=(),
         max_length=_MAX_CONDITION_VALUES,
+    )
+    reference_market: DecisionReferenceMarketSnapshot | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
     )
     next_step: NextStep
 
@@ -1125,6 +1268,12 @@ class SymbolDecisionSnapshot(_DecisionValue):
                 raise ValueError("snapshot data age must match evaluation time")
         if self.market_data_at is not None and self.market_data_at > self.evaluated_at:
             raise ValueError("snapshot market data cannot be from the future")
+        if (
+            self.reference_market is not None
+            and self.reference_market.data_at is not None
+            and self.reference_market.data_at > self.evaluated_at
+        ):
+            raise ValueError("snapshot reference-market data cannot be from the future")
         return self
 
 
@@ -1468,6 +1617,7 @@ __all__ = [
     "EvidenceUnit",
     "IntradayEvaluationIdentity",
     "IntradayEvaluationTarget",
+    "IndexConditionEvidence",
     "LowZoneEpisodeSnapshot",
     "MissingInputCode",
     "NextStep",

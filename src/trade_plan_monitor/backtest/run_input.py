@@ -17,14 +17,21 @@ from pydantic import (
 )
 
 from trade_plan_monitor.backtest.canonical import canonical_json
-from trade_plan_monitor.backtest.dataset import DatasetManifest
+from trade_plan_monitor.backtest.dataset import (
+    INDEX_DATASET_SCHEMA_VERSION,
+    DatasetManifest,
+)
+from trade_plan_monitor.backtest.index_data import build_backtest_index_requirement
 from trade_plan_monitor.backtest.models import ExecutionConfig, PositionLot
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import PositionBucket, TradePlan
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+from trade_plan_monitor.market_index.canonical import FORMULA_DEFINITION_HASH
+from trade_plan_monitor.market_index.identity import ReferenceMarketBinding
 
 RUN_FORMULA_V1 = "backtest-run-v1"
 RUN_FORMULA_V2 = "backtest-run-v2"
+RUN_FORMULA_V3 = "backtest-run-v3"
 RUN_INPUT_SCHEMA_VERSION = "backtest-run-input-v1"
 FIVE_MINUTE_CONTEXT_BARS = 512
 DAILY_CONTEXT_BARS = 499
@@ -32,7 +39,7 @@ CALENDAR_CONTEXT_DAYS = 512
 MAX_INITIAL_LOTS = 200
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
-_RunFormulaVersion = Literal["backtest-run-v1", "backtest-run-v2"]
+_RunFormulaVersion = Literal["backtest-run-v1", "backtest-run-v2", "backtest-run-v3"]
 _Sha256Hex = Annotated[
     str,
     StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$"),
@@ -93,6 +100,22 @@ class BacktestRunInput(_RunInputValue):
     context_bounds: _BacktestContextBounds = Field(default_factory=_BacktestContextBounds)
     execution_config: ExecutionConfig
     manual_event_risk: bool
+    reference_market_binding: ReferenceMarketBinding | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    market_index_data_hash: _Sha256Hex | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    index_requirement_hash: _Sha256Hex | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    formula_definition_hash: _Sha256Hex | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @classmethod
     def create(
@@ -120,7 +143,39 @@ class BacktestRunInput(_RunInputValue):
             raise TypeError("manual_event_risk must be an explicit bool")
         if plan_version_id is not None and not isinstance(plan_version_id, UUID):
             raise TypeError("plan_version_id must be a UUID or None")
-        formula_version = RUN_FORMULA_V2 if initial_lots else RUN_FORMULA_V1
+        requirement = build_backtest_index_requirement(plan)
+        formula_version = (
+            RUN_FORMULA_V3
+            if requirement.required
+            else RUN_FORMULA_V2
+            if initial_lots
+            else RUN_FORMULA_V1
+        )
+        index_identity: dict[str, object] = {}
+        if requirement.required:
+            if manifest.schema_version != INDEX_DATASET_SCHEMA_VERSION:
+                raise ValueError("index-bearing plan requires backtest-dataset-v2")
+            binding = next(
+                (item for item in manifest.reference_market_bindings if item.symbol == plan.symbol),
+                None,
+            )
+            if binding is None or plan.reference_market is None:
+                raise ValueError("dataset is missing the plan's reference-market binding")
+            stored_binding = ReferenceMarketBinding(
+                selection=binding.selection,
+                mapping_version=binding.mapping_version,
+                index_code=binding.index_code,
+            )
+            if stored_binding != plan.reference_market:
+                raise ValueError("dataset reference-market binding does not match plan")
+            if manifest.market_index_data_hash is None or manifest.formula_definition_hash is None:
+                raise ValueError("index-bearing dataset is missing immutable hash identity")
+            index_identity = {
+                "reference_market_binding": stored_binding,
+                "market_index_data_hash": manifest.market_index_data_hash,
+                "index_requirement_hash": requirement.index_requirement_hash,
+                "formula_definition_hash": manifest.formula_definition_hash,
+            }
         return cls(
             run_formula_version=formula_version,
             plan_snapshot=plan,
@@ -134,6 +189,7 @@ class BacktestRunInput(_RunInputValue):
             indicator_formula_version=plan.monitoring.indicator_formula_version,
             execution_config=execution_config,
             manual_event_risk=manual_event_risk,
+            **index_identity,
         )
 
     @field_validator("initial_lots")
@@ -164,9 +220,33 @@ class BacktestRunInput(_RunInputValue):
             != self.plan_snapshot.monitoring.indicator_formula_version
         ):
             raise ValueError("indicator formula version must match the plan snapshot")
-        expected_formula = RUN_FORMULA_V2 if self.initial_lots else RUN_FORMULA_V1
+        requirement = build_backtest_index_requirement(self.plan_snapshot)
+        expected_formula = (
+            RUN_FORMULA_V3
+            if requirement.required
+            else RUN_FORMULA_V2
+            if self.initial_lots
+            else RUN_FORMULA_V1
+        )
         if self.run_formula_version != expected_formula:
             raise ValueError("run formula version must match the normalized initial-lot shape")
+        index_fields = (
+            self.reference_market_binding,
+            self.market_index_data_hash,
+            self.index_requirement_hash,
+            self.formula_definition_hash,
+        )
+        if requirement.required:
+            if any(value is None for value in index_fields):
+                raise ValueError("backtest-run-v3 requires complete index hash identity")
+            if self.reference_market_binding != self.plan_snapshot.reference_market:
+                raise ValueError("run reference-market binding must match plan")
+            if self.index_requirement_hash != requirement.index_requirement_hash:
+                raise ValueError("run index_requirement_hash must match plan paths")
+            if self.formula_definition_hash != FORMULA_DEFINITION_HASH:
+                raise ValueError("run formula_definition_hash must match approved formulas")
+        elif any(value is not None for value in index_fields):
+            raise ValueError("stock-only run formulas forbid index hash identity")
         if self.start > self.end:
             raise ValueError("dataset start cannot be after end")
 
@@ -214,6 +294,15 @@ class BacktestRunInput(_RunInputValue):
             "execution_config": self.execution_config.model_dump(mode="python", round_trip=True),
             "manual_event_risk": self.manual_event_risk,
         }
+        if self.run_formula_version == RUN_FORMULA_V3:
+            preimage.update(
+                {
+                    "reference_market_binding": self.reference_market_binding,
+                    "market_index_data_hash": self.market_index_data_hash,
+                    "index_requirement_hash": self.index_requirement_hash,
+                    "formula_definition_hash": self.formula_definition_hash,
+                }
+            )
         return sha256(
             (self.run_formula_version + "\0" + canonical_json(preimage)).encode("utf-8")
         ).hexdigest()
@@ -244,6 +333,7 @@ __all__ = [
     "MAX_SAFE_INTEGER",
     "RUN_FORMULA_V1",
     "RUN_FORMULA_V2",
+    "RUN_FORMULA_V3",
     "RUN_INPUT_SCHEMA_VERSION",
     "BacktestInitialLotInput",
     "BacktestRunInput",

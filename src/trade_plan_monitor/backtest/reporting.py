@@ -15,6 +15,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from trade_plan_monitor.backtest.reference_projection import (
+    project_decision_reference_market,
+)
 from trade_plan_monitor.backtest.results import (
     BacktestDetailKind,
     BacktestDetailRecord,
@@ -28,6 +31,8 @@ from trade_plan_monitor.backtest.results import (
 )
 from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.runner import RUN_FORMULA_VERSION, BacktestRunReport
+from trade_plan_monitor.backtest.time import SHANGHAI, format_shanghai_datetime
+from trade_plan_monitor.decision.models import EvaluationResult
 
 _MAX_RESULT_BATCH = 100
 _MAX_EXPORT_CHUNK_BYTES = 64 * 1_024
@@ -149,6 +154,18 @@ def _summary_for_report(
         "manualEventRisk": report.manual_event_risk,
         "reportHash": report.report_hash,
     }
+    if report.reference_market is not None:
+        assumptions["referenceMarket"] = report.reference_market.model_dump(
+            mode="python",
+            round_trip=True,
+        )
+    formula_versions = {
+        "execution": report.execution_config.formula_version,
+        "indicator": "ta-v1",
+        "runner": (RUN_FORMULA_VERSION if run_input is None else run_input.run_formula_version),
+    }
+    if report.reference_market is not None:
+        formula_versions["report"] = report.schema_version
     return BacktestRunSummary(
         run_id=report.run_id,
         plan_sha256=report.plan_hash,
@@ -170,11 +187,7 @@ def _summary_for_report(
             "start": report.start,
         },
         assumptions=assumptions,
-        formula_versions={
-            "execution": report.execution_config.formula_version,
-            "indicator": "ta-v1",
-            "runner": (RUN_FORMULA_VERSION if run_input is None else run_input.run_formula_version),
-        },
+        formula_versions=formula_versions,
         final_metrics=report.metrics.model_dump(mode="python", round_trip=True),
     )
 
@@ -217,8 +230,13 @@ def iter_export_summary(
     report_hash = summary.assumptions.get("reportHash")
     if not isinstance(report_hash, str):
         raise ValueError("summary assumptions must include reportHash")
+    reference_market = summary.assumptions.get("referenceMarket")
     payload = {
-        "schemaVersion": "backtest-report-summary-v2",
+        "schemaVersion": (
+            "backtest-report-summary-v3"
+            if isinstance(reference_market, dict)
+            else "backtest-report-summary-v2"
+        ),
         "runId": summary.run_id,
         "reportHash": report_hash,
         "status": summary.status.value,
@@ -234,12 +252,31 @@ def iter_export_summary(
         "finalMetrics": summary.final_metrics,
         "blockers": summary.blockers,
     }
+    if isinstance(reference_market, dict):
+        payload["referenceMarket"] = reference_market
+        decision_count = summary.coverage.get("decisionCount")
+        if type(decision_count) is not int or decision_count < 0:
+            raise ValueError("summary coverage must include decisionCount")
     encoder = json.JSONEncoder(
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
         default=_json_default,
     )
+    if isinstance(reference_market, dict):
+        decision_references = _iter_decision_reference_exports(
+            store,
+            run_id,
+            cancelled=cancelled,
+        )
+        yield from _iter_json_object_with_array(
+            payload,
+            array_key="decisionReferenceMarkets",
+            items=decision_references,
+            encoder=encoder,
+            cancelled=cancelled,
+        )
+        return
     for fragment in encoder.iterencode(payload):
         if cancelled():
             return
@@ -247,6 +284,81 @@ def iter_export_summary(
     if cancelled():
         return
     yield b"\n"
+
+
+def _iter_decision_reference_exports(
+    store: BacktestResultStore,
+    run_id: str,
+    *,
+    cancelled: Callable[[], bool],
+) -> Iterator[dict[str, object]]:
+    batches = store.iter_export_decision_batches(run_id, cancelled)
+    try:
+        while True:
+            try:
+                batch = next(batches)
+            except ExportCancelled:
+                return
+            except StopIteration:
+                break
+            for record in batch:
+                if cancelled():
+                    return
+                result = EvaluationResult.model_validate_json(
+                    json.dumps(record.payload, ensure_ascii=False, separators=(",", ":"))
+                )
+                projected = project_decision_reference_market(result)
+                if projected is None:
+                    continue
+                yield {
+                    "evaluatedAt": format_shanghai_datetime(
+                        result.snapshot.evaluated_at.astimezone(SHANGHAI)
+                    ),
+                    "referenceMarket": projected,
+                    "resultHash": result.result_hash,
+                }
+    finally:
+        batches.close()
+
+
+def _iter_json_object_with_array(
+    payload: dict[str, object],
+    *,
+    array_key: str,
+    items: Iterator[dict[str, object]],
+    encoder: json.JSONEncoder,
+    cancelled: Callable[[], bool],
+) -> Iterator[bytes]:
+    yield b"{"
+    first_key = True
+    for key in sorted((*payload, array_key)):
+        if cancelled():
+            return
+        if not first_key:
+            yield b","
+        first_key = False
+        yield _bounded_export_chunk(encoder.encode(key))
+        yield b":"
+        if key != array_key:
+            for fragment in encoder.iterencode(payload[key]):
+                if cancelled():
+                    return
+                yield _bounded_export_chunk(fragment)
+            continue
+        yield b"["
+        first_item = True
+        for item in items:
+            if cancelled():
+                return
+            if not first_item:
+                yield b","
+            first_item = False
+            for fragment in encoder.iterencode(item):
+                if cancelled():
+                    return
+                yield _bounded_export_chunk(fragment)
+        yield b"]"
+    yield b"}\n"
 
 
 def iter_export_fills(

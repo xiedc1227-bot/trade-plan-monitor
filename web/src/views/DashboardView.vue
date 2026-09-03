@@ -5,11 +5,13 @@ import type {
   ActionableSignalType,
   ConnectionStatus,
   DashboardCounts,
+  MarketIndexSnapshotView,
   SignalType,
   SymbolSummaryView,
 } from "../api/generated";
 import WatchlistTable from "../components/dashboard/WatchlistTable.vue";
 import WatchlistToolbar from "../components/dashboard/WatchlistToolbar.vue";
+import MarketIndexDataStrip from "../components/market-index/MarketIndexDataStrip.vue";
 import type {
   SortDirection,
   WatchlistFilter,
@@ -23,6 +25,7 @@ interface Props {
   dataAgeSeconds: number | null;
   error?: string | null;
   loading?: boolean;
+  marketIndexes?: readonly MarketIndexSnapshotView[];
   observedAt: string | null;
   symbols: readonly SymbolSummaryView[];
 }
@@ -34,6 +37,7 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
+  marketIndexes: () => [],
 });
 const emit = defineEmits<Emits>();
 defineSlots<{
@@ -197,6 +201,8 @@ function compareText(left: string, right: string): number {
       <span>快照时间 {{ observedAt ?? "未知" }}</span>
       <span v-if="connectionStatus !== 'CONNECTED'">当前数据不得视为实时</span>
     </section>
+
+    <MarketIndexDataStrip :indexes="marketIndexes" />
 
     <p v-if="error" class="dashboard-view__error" role="alert">{{ error }}</p>
     <p v-if="loading" class="dashboard-view__loading" role="status" aria-live="polite">

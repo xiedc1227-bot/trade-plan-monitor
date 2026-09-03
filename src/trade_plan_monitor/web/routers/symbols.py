@@ -14,9 +14,11 @@ from trade_plan_monitor.decision.models import PositionBucket, SignalType
 from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.routers.dashboard import (
+    IndexConditionEvidenceView,
     ReadModel,
     ReadServiceDependency,
     Sha256Hex,
+    SymbolReferenceMarketView,
     SymbolSummaryView,
     validate_read_response,
 )
@@ -68,6 +70,11 @@ class PositionLotView(ReadModel):
 class SymbolDetailResponse(ReadModel):
     summary: SymbolSummaryView
     position_lots: tuple[PositionLotView, ...] = Field(default=(), max_length=200)
+    reference_market: SymbolReferenceMarketView | None = None
+    index_condition_evidence: tuple[IndexConditionEvidenceView, ...] = Field(
+        default=(),
+        max_length=50,
+    )
 
     @model_validator(mode="after")
     def validate_positions(self) -> SymbolDetailResponse:
@@ -87,6 +94,19 @@ class SymbolDetailResponse(ReadModel):
             position.sellable_tactical_quantity
         ):
             raise ValueError("sellable tactical lots must match the authoritative position summary")
+        if self.reference_market != self.summary.reference_market:
+            raise ValueError("detail and summary reference-market projections must match")
+        paths = tuple(item.plan_path for item in self.index_condition_evidence)
+        if paths != tuple(sorted(paths)) or len(set(paths)) != len(paths):
+            raise ValueError("index condition evidence must be unique and sorted by planPath")
+        if self.reference_market is None and self.index_condition_evidence:
+            raise ValueError("index evidence requires a reference-market projection")
+        if self.reference_market is not None and any(
+            item.index_code is not self.reference_market.index_code
+            or item.mapping_version != self.reference_market.mapping_version
+            for item in self.index_condition_evidence
+        ):
+            raise ValueError("index evidence identity must match the reference market")
         return self
 
 

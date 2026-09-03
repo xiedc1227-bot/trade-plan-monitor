@@ -1,8 +1,9 @@
-import { onBeforeUnmount, onMounted, readonly, shallowRef } from "vue";
+import { onBeforeUnmount, onMounted, readonly, shallowRef, watch } from "vue";
 
 import type {
   BacktestInitialLotInput,
   BacktestJobReceipt,
+  BacktestReferenceMarketCoverageView,
   BacktestRunCommand,
 } from "../api/generated";
 import { createBacktestApi, type BacktestApi } from "../api/backtests";
@@ -22,6 +23,11 @@ export type BacktestRunSubmissionState =
   | "ACCEPTED"
   | "CONFLICT"
   | "UNCERTAIN"
+  | "FAILED";
+export type BacktestReferenceMarketCoverageState =
+  | "IDLE"
+  | "LOADING"
+  | "READY"
   | "FAILED";
 
 export type BacktestRunDraftField =
@@ -142,11 +148,62 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
   const submissionState = shallowRef<BacktestRunSubmissionState>("IDLE");
   const submissionErrorMessage = shallowRef<string | null>(null);
   const acceptedReceipt = shallowRef<BacktestJobReceipt | null>(null);
+  const referenceMarketCoverage = shallowRef<BacktestReferenceMarketCoverageView | null>(null);
+  const referenceMarketCoverageState = shallowRef<BacktestReferenceMarketCoverageState>("IDLE");
+  const referenceMarketCoverageError = shallowRef<string | null>(null);
 
   let lotSequence = 0;
   let mounted = false;
   let submissionController: AbortController | null = null;
   let submissionIntent: SubmissionIntent | null = null;
+  let coverageController: AbortController | null = null;
+  let coverageGeneration = 0;
+
+  function clearReferenceMarketCoverage(): void {
+    coverageGeneration += 1;
+    coverageController?.abort();
+    coverageController = null;
+    referenceMarketCoverage.value = null;
+    referenceMarketCoverageError.value = null;
+    referenceMarketCoverageState.value = "IDLE";
+  }
+
+  async function loadReferenceMarketCoverage(): Promise<void> {
+    const planVersionId = normalizeRfc4122Uuid(draft.value.planVersionId);
+    const datasetHash = draft.value.datasetHash;
+    clearReferenceMarketCoverage();
+    if (!mounted || planVersionId === null || !DATASET_HASH_PATTERN.test(datasetHash)) return;
+    const requestGeneration = coverageGeneration;
+    const controller = new AbortController();
+    coverageController = controller;
+    referenceMarketCoverageState.value = "LOADING";
+    try {
+      const response = await api.getReferenceMarketCoverage(datasetHash, planVersionId, {
+        signal: controller.signal,
+      });
+      if (
+        !mounted ||
+        controller.signal.aborted ||
+        requestGeneration !== coverageGeneration
+      ) {
+        return;
+      }
+      referenceMarketCoverage.value = deepFreeze(structuredClone(response));
+      referenceMarketCoverageState.value = "READY";
+    } catch {
+      if (
+        !mounted ||
+        controller.signal.aborted ||
+        requestGeneration !== coverageGeneration
+      ) {
+        return;
+      }
+      referenceMarketCoverageError.value = "参考指数覆盖暂不可用；提交仍由服务端重新校验";
+      referenceMarketCoverageState.value = "FAILED";
+    } finally {
+      if (coverageController === controller) coverageController = null;
+    }
+  }
 
   function clearErrors(): void {
     if (Object.keys(errors.value).length > 0) errors.value = Object.freeze({});
@@ -434,10 +491,18 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     mounted = true;
   });
 
+  watch(
+    [() => draft.value.planVersionId, () => draft.value.datasetHash],
+    () => {
+      void loadReferenceMarketCoverage();
+    },
+  );
+
   onBeforeUnmount(() => {
     mounted = false;
     submissionController?.abort();
     submissionController = null;
+    clearReferenceMarketCoverage();
   });
 
   return {
@@ -447,6 +512,9 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     errorRevision: readonly(errorRevision),
     errors: readonly(errors),
     removeLot,
+    referenceMarketCoverage: readonly(referenceMarketCoverage),
+    referenceMarketCoverageError: readonly(referenceMarketCoverageError),
+    referenceMarketCoverageState: readonly(referenceMarketCoverageState),
     retrySubmission,
     submissionErrorMessage: readonly(submissionErrorMessage),
     submissionState: readonly(submissionState),

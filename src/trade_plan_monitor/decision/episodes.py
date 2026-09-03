@@ -590,10 +590,12 @@ def _evaluate_active_episode(
     entry_evidence = _evaluate_validated_condition(
         derived_context.plan.entry.condition,
         derived_context,
+        plan_path="entry.condition",
     )
     blocker_evidence = _evaluate_validated_condition(
         derived_context.plan.blockers.condition,
         derived_context,
+        plan_path="blockers.condition",
     )
     bucket = _candidate_bucket(derived_context)
     availability_evidence = _evaluate_validated_condition(

@@ -31,6 +31,12 @@
 | `local-web` | 面向实时视图的共享仅回环 FastAPI/Vue 平台、同源安全、OpenAPI 生成、应用壳和设计 Token | 全部实时模块 |
 | `backtest-api` | 数据集、任务、运行、结果、计划快照、幂等、分页和生成式前端契约的增量类型化 REST 资源 | `backtest-data`、`backtest-jobs`、`backtest-results`、`plan-domain`、`local-web` |
 | `backtest-web` | 覆盖历史数据、运行提交、进度/取消、分页历史和结果检查的 Vue 回测工作台 | `backtest-api`、`local-web` |
+| `index-identity` | 封闭板块指数身份、已校验股票板块分类和带版本的 `board-index-map-v1` 映射 | 无 |
+| `index-data` | 已校验实时/历史板块指数 K 线、可复用事实、健康状态、不可变共用截止时间快照和哈希 | `index-identity` |
+| `plan-index-conditions` | 明确的 Plan Schema v2 绑定、六种允许的指数叶子、计划路径校验和纯证据判断 | `index-identity`、`index-data`、`plan-domain`、`decision-engine` |
+| `monitor-index-view` | 在监控 API、失效通知和 Vue 视图中分开共用指数事实与计划专属条件进度/证据 | `plan-index-conditions`、`monitor-runtime`、`local-web` |
+| `backtest-index-data` | 版本化指数 artifact、动态计划预热、覆盖、数据集/运行身份和禁止未来数据的回放快照 | `plan-index-conditions`、`backtest-data`、`backtest-engine` |
+| `backtest-index-view` | 回测绑定、序列、路径级摘要、准确判断证据、导出和 Vue 展示 | `backtest-index-data`、`backtest-results`、`backtest-api`、`backtest-web` |
 
 ## 构建顺序
 
@@ -55,11 +61,17 @@ market-data ──→ backtest-data ──→ backtest-engine ──→ backtest
                                                               └──→ backtest-api ──→ backtest-web
                                                                        ▲                 ▲
                                                                        └──── local-web ──┘
+
+index-identity ──→ index-data ──→ plan-index-conditions
+                                         ├──→ monitor-index-view
+                                         └──→ backtest-index-data ──→ backtest-index-view
 ```
 
 `plan-domain` 通过后，`ai-plan-drafting`、`market-data` 和 `strategy-state` 可以分别规格化和实现。实盘决策链路不会调用 AI。`backtest` 复用纯决策契约，但执行期间与实时存储、调度器、通知和网络保持隔离。
 
 已批准的回测模块构建顺序为 `backtest-data` → `backtest-engine` → `backtest-results` → `backtest-jobs` → `backtest-api` → `backtest-web`。稳定 `backtest` ID 保留为文档总览和目标 CLI 兼容契约，不会被重命名或复用。当前直接 CLI MVP 在获批任务把适配器迁移到 `backtest-jobs` 前继续作为基线，但不能成为第二条编排路径。现有已验证代码映射到前三个模块；此次拆分不授权重写正常工作的确定性逻辑。`backtest-jobs` 负责原子任务/结果 Unit of Work 并调用结果事务参与者；`backtest-results` 绝不导入任务协调器。
+
+`2026-09-02` 获批的板块指数构建顺序为 `index-identity` → `index-data` → `plan-index-conditions` →（`monitor-index-view`、`backtest-index-data`）→ `backtest-index-view`。共用快照只包含数据事实；每个条件结果和交易影响继续由一份 Schema v2 计划中的准确路径负责。Schema v1 计划和历史结果保持不可变，第一阶段不包含行业指数。
 
 ## AI 信任边界
 
@@ -110,4 +122,4 @@ AI 输出不能直接激活计划、写 SQL、执行代码、调用券商或绕�
 
 ## 审核状态
 
-原能力地图已于 2026-08-18 经用户确认。隔离的“混合同步/离线回测”范围、`SPEC-backtest.md` 和有界保留策略已于 2026-08-25 获批。用户于 2026-08-26 批准六模块回测拆分、英文权威/中文审阅的文档规则和推荐的单计划/单股票 Web 范围，随后确认详细规格集合及 `local-web` Backtest Extension Boundary。双语跨模块一致性审计修正了 UUID/CLI 查找 identity、精确 `FenText` 输出、统一 `Asia/Shanghai`/`+08:00` 时间契约、旧结果复用、增量导出、item 发布大小及取消/置顶幂等条款，且不改变已批准模块边界。用户已于 2026-08-26 明确确认中国时区选择及其余修正契约；聚合详细规格集合现按修正内容获批。双语实施计划第 15 节已于 2026-08-26 获批。该批准仅授权生成双语 `BT009`～`BT050` 任务清单。生成后的任务清单仍需单独明确批准；实现、提交、推送、依赖安装和任何联网访问仍未获授权。本地 CLI MVP 与完整性回归仍是实现基线，开放的 `BC01` 验收工作继续保留。任何回测任务都不重编号或完成 `T058` 或 `T059`。
+原能力地图已于 2026-08-18 经用户确认。隔离的“混合同步/离线回测”范围、`SPEC-backtest.md` 和有界保留策略已于 2026-08-25 获批。用户于 2026-08-26 批准六模块回测拆分、英文权威/中文审阅规则和修正后的详细规格集合。用户于 `2026-09-02` 批准 ADR 0003 和双语板块指数提案，随后明确授权六个板块指数模块规格、实施和离线验证。提交、推送、安装依赖、部署以及真实 DeepSeek/Tushare/供应商网络访问仍未授权。现有 Schema v1 计划、历史结果和比 `origin/main` 超前的两个本地提交继续作为受保护基线。

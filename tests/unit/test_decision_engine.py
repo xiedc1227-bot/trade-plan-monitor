@@ -39,6 +39,7 @@ from trade_plan_monitor.decision.models import (
     EvaluationResult,
     EvidenceFact,
     EvidenceUnit,
+    IndexConditionEvidence,
     IntradayEvaluationIdentity,
     IntradayEvaluationTarget,
     LowZoneEpisodeSnapshot,
@@ -71,6 +72,12 @@ from trade_plan_monitor.domain.plan_models import (
     ConditionNode,
     ConsecutiveClosesBelowLevelCondition,
     DistanceFromLimitDownGteCondition,
+    IndexCloseGteMaCondition,
+    IndexCloseLteMaCondition,
+    IndexMaNonDecreasingCondition,
+    IndexMaNonIncreasingCondition,
+    IndexReturnGteCondition,
+    IndexReturnLteCondition,
     LowerBandHitsLteCondition,
     MacdHistImprovementGteCondition,
     ManualEventRiskClearCondition,
@@ -88,10 +95,37 @@ from trade_plan_monitor.domain.plan_models import (
     VolumeToMedianLteCondition,
     VolumeToPreviousLteCondition,
 )
+from trade_plan_monitor.domain.plan_validation import migrate_trade_plan_to_schema_v2
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar, aggregate_five_minute_bar
 from trade_plan_monitor.market_data.indicators import IndicatorPoint, IndicatorSeries
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
 from trade_plan_monitor.market_data.reconciliation import reconcile_daily_close
+from trade_plan_monitor.market_index.canonical import (
+    FORMULA_DEFINITION_HASH,
+    market_index_bar_set_hash,
+    market_index_request_set_hash,
+    market_index_snapshot_hash,
+)
+from trade_plan_monitor.market_index.formulas import calculate_requested_facts
+from trade_plan_monitor.market_index.identity import (
+    MAPPING_VERSION,
+    MarketIndexCode,
+    identity_for_index_code,
+)
+from trade_plan_monitor.market_index.models import (
+    MarketIndexBar,
+    MarketIndexFactRequest,
+    MarketIndexHealth,
+    MarketIndexInterval,
+    MarketIndexIssueCode,
+    MarketIndexSnapshot,
+    MarketIndexSourceKind,
+    ReturnFactRequest,
+    ReturnWindow,
+    SmaFactRequest,
+    SmaLookbackFactRequest,
+)
+from trade_plan_monitor.market_index.requirements import union_fact_requests
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 SYMBOL = "003043.SZ"
@@ -763,6 +797,399 @@ def _context() -> EvaluationContext:
         risk_state=_risk_clear(plan_hash),
         manual_event_risk=False,
     )
+
+
+def _index_bar(
+    *,
+    index_code: MarketIndexCode,
+    interval: MarketIndexInterval,
+    bar_at: datetime,
+    close_points: Decimal,
+    observed_at: datetime,
+) -> MarketIndexBar:
+    return MarketIndexBar(
+        index_code=index_code,
+        interval=interval,
+        bar_at=bar_at,
+        open_points=close_points,
+        high_points=close_points,
+        low_points=close_points,
+        close_points=close_points,
+        observed_at=observed_at,
+        source_kind=(
+            MarketIndexSourceKind.PROVISIONAL
+            if interval is MarketIndexInterval.FIVE_MINUTE
+            else MarketIndexSourceKind.OFFICIAL
+        ),
+        provider_revision=1,
+    )
+
+
+def _reference_market_snapshot(
+    context: EvaluationContext,
+    *,
+    index_code: MarketIndexCode = MarketIndexCode.SHENZHEN_COMPONENT,
+    decision_cutoff: datetime | None = None,
+    health: MarketIndexHealth = MarketIndexHealth.LIVE,
+    issues: tuple[MarketIndexIssueCode, ...] = (),
+    requests: tuple[MarketIndexFactRequest, ...] | None = None,
+) -> MarketIndexSnapshot:
+    cutoff = context.target_cutoff if decision_cutoff is None else decision_cutoff
+    five_minute_bars = tuple(
+        _index_bar(
+            index_code=index_code,
+            interval=MarketIndexInterval.FIVE_MINUTE,
+            bar_at=cutoff - timedelta(minutes=offset),
+            close_points=close,
+            observed_at=context.evaluated_at,
+        )
+        for offset, close in (
+            (10, Decimal("80")),
+            (5, Decimal("90")),
+            (0, Decimal("100")),
+        )
+    )
+    official_daily_bars = tuple(
+        _index_bar(
+            index_code=index_code,
+            interval=MarketIndexInterval.OFFICIAL_DAILY,
+            bar_at=datetime(2026, 8, day, 15, 0, tzinfo=SHANGHAI),
+            close_points=Decimal("100"),
+            observed_at=datetime(2026, 8, day, 15, 1, tzinfo=SHANGHAI),
+        )
+        for day in (4, 5, 6)
+    )
+    selected_requests = (
+        union_fact_requests(
+            (SmaFactRequest(period=2),),
+            (SmaLookbackFactRequest(period=2, lookback=1),),
+            (
+                ReturnFactRequest(
+                    window=ReturnWindow.FIVE_MINUTE_BUCKETS,
+                    window_size=2,
+                ),
+                ReturnFactRequest(
+                    window=ReturnWindow.OFFICIAL_OPEN_DAYS,
+                    window_size=2,
+                ),
+            ),
+        )
+        if requests is None
+        else union_fact_requests(requests)
+    )
+    facts = (
+        calculate_requested_facts(
+            index_code=index_code,
+            five_minute_bars=five_minute_bars,
+            official_daily_bars=official_daily_bars,
+            requests=selected_requests,
+            input_cutoff=cutoff,
+        )
+        if health is MarketIndexHealth.LIVE
+        else ()
+    )
+    board, display_name = identity_for_index_code(index_code)
+    bars = five_minute_bars + official_daily_bars
+    payload: dict[str, object] = {
+        "index_code": index_code,
+        "display_name": display_name,
+        "board": board,
+        "decision_cutoff": cutoff,
+        "latest_completed_five_minute": five_minute_bars[-1],
+        "five_minute_bars": five_minute_bars,
+        "official_daily_bars": official_daily_bars,
+        "prior_official_close_points": official_daily_bars[-1].close_points,
+        "fact_requests": selected_requests,
+        "indicator_facts": facts,
+        "health": health,
+        "issues": issues,
+        "completed_bucket_at": cutoff,
+        "observed_at": context.evaluated_at,
+        "mapping_version": MAPPING_VERSION,
+        "revision": 1,
+        "bar_set_hash": market_index_bar_set_hash(bars),
+        "request_set_hash": market_index_request_set_hash(selected_requests),
+        "formula_definition_hash": FORMULA_DEFINITION_HASH,
+    }
+    return MarketIndexSnapshot(
+        **payload,
+        snapshot_hash=market_index_snapshot_hash(payload),
+    )
+
+
+def _context_with_v2_condition(
+    context: EvaluationContext,
+    *,
+    policy: str,
+    condition: dict[str, object],
+    snapshot: MarketIndexSnapshot | None,
+) -> EvaluationContext:
+    migrated = migrate_trade_plan_to_schema_v2(context.plan, new_version=2)
+    plan_payload = migrated.model_dump(mode="python", round_trip=True)
+    plan_payload[policy] = {"condition": condition}
+    plan = type(migrated).model_validate(plan_payload)
+    plan_hash = plan_sha256(plan)
+    episode = (
+        None
+        if context.low_zone_episode is None
+        else context.low_zone_episode.model_copy(update={"plan_hash": plan_hash})
+    )
+    risk = context.risk_state.model_copy(update={"plan_hash": plan_hash})
+    return context.model_copy(
+        update={
+            "plan": plan,
+            "plan_hash": plan_hash,
+            "low_zone_episode": episode,
+            "risk_state": risk,
+            "reference_market_snapshot": snapshot,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        {"type": "INDEX_CLOSE_GTE_MA", "index_role": "BOARD_REFERENCE", "period": 2},
+        {"type": "INDEX_CLOSE_LTE_MA", "index_role": "BOARD_REFERENCE", "period": 2},
+        {
+            "type": "INDEX_MA_NON_DECREASING",
+            "index_role": "BOARD_REFERENCE",
+            "period": 2,
+            "lookback": 1,
+        },
+        {
+            "type": "INDEX_MA_NON_INCREASING",
+            "index_role": "BOARD_REFERENCE",
+            "period": 2,
+            "lookback": 1,
+        },
+        {
+            "type": "INDEX_RETURN_GTE",
+            "index_role": "BOARD_REFERENCE",
+            "window": "FIVE_MINUTE_BUCKETS",
+            "window_size": 2,
+            "threshold_ratio": Decimal("0.25"),
+        },
+        {
+            "type": "INDEX_RETURN_LTE",
+            "index_role": "BOARD_REFERENCE",
+            "window": "OFFICIAL_OPEN_DAYS",
+            "window_size": 2,
+            "threshold_ratio": Decimal("0"),
+        },
+    ],
+)
+def test_all_six_index_conditions_include_equality_and_exact_evidence(
+    condition: dict[str, object],
+) -> None:
+    base = _context()
+    snapshot = _reference_market_snapshot(base)
+    context = _context_with_v2_condition(
+        base,
+        policy="entry",
+        condition=condition,
+        snapshot=snapshot,
+    )
+
+    evidence = evaluate_condition(
+        context.plan.entry.condition,
+        context,
+        plan_path="entry.condition",
+    )
+
+    assert evidence.outcome is ConditionOutcome.SATISFIED
+    assert isinstance(evidence.index_evidence, IndexConditionEvidence)
+    assert evidence.index_evidence.plan_path == "entry.condition"
+    assert evidence.index_evidence.condition_type == condition["type"]
+    assert evidence.index_evidence.snapshot_hash == snapshot.snapshot_hash
+    assert evidence.index_evidence.actual_value == evidence.index_evidence.comparison_value
+    assert not evidence.index_evidence.missing_inputs
+
+
+@pytest.mark.parametrize("policy", ["entry", "reduction", "risk", "blockers"])
+def test_nested_index_evidence_uses_exact_paths_under_every_policy_root(policy: str) -> None:
+    base = _context()
+    snapshot = _reference_market_snapshot(base)
+    tree = {
+        "type": "ALL",
+        "conditions": [
+            {"type": "NON_DECREASING_CLOSE"},
+            {
+                "type": "ANY",
+                "conditions": [
+                    {
+                        "type": "INDEX_CLOSE_GTE_MA",
+                        "index_role": "BOARD_REFERENCE",
+                        "period": 2,
+                    }
+                ],
+            },
+        ],
+    }
+    context = _context_with_v2_condition(
+        base,
+        policy=policy,
+        condition=tree,
+        snapshot=snapshot,
+    )
+    root = getattr(context.plan, policy).condition
+
+    evidence = evaluate_condition(
+        root,
+        context,
+        plan_path=f"{policy}.condition",
+    )
+
+    index_evidence = evidence.children[1].children[0].index_evidence
+    assert index_evidence is not None
+    assert index_evidence.plan_path == f"{policy}.condition.conditions[1].conditions[0]"
+
+
+@pytest.mark.parametrize(
+    ("snapshot_kind", "expected_missing"),
+    [
+        ("ABSENT", (MissingInputCode.INDEX_SNAPSHOT,)),
+        (
+            "GAPPED",
+            (MissingInputCode.INDEX_HEALTH, MissingInputCode.INDEX_HISTORY),
+        ),
+        ("IDENTITY", (MissingInputCode.INDEX_IDENTITY,)),
+        ("CUTOFF", (MissingInputCode.INDEX_CUTOFF,)),
+        ("FACT", (MissingInputCode.INDEX_FACT,)),
+        (
+            "FORMULA",
+            (MissingInputCode.INDEX_HEALTH, MissingInputCode.INDEX_FORMULA),
+        ),
+    ],
+)
+def test_index_failures_are_path_local_missing_input(
+    snapshot_kind: str,
+    expected_missing: tuple[MissingInputCode, ...],
+) -> None:
+    base = _context()
+    if snapshot_kind == "ABSENT":
+        snapshot = None
+    elif snapshot_kind == "GAPPED":
+        snapshot = _reference_market_snapshot(
+            base,
+            health=MarketIndexHealth.GAPPED,
+            issues=(MarketIndexIssueCode.GAPPED_SERIES,),
+        )
+    elif snapshot_kind == "IDENTITY":
+        snapshot = _reference_market_snapshot(base, index_code=MarketIndexCode.STAR_50)
+    elif snapshot_kind == "CUTOFF":
+        snapshot = _reference_market_snapshot(
+            base,
+            decision_cutoff=base.target_cutoff - timedelta(minutes=5),
+        )
+    elif snapshot_kind == "FACT":
+        snapshot = _reference_market_snapshot(
+            base,
+            requests=(
+                ReturnFactRequest(
+                    window=ReturnWindow.OFFICIAL_OPEN_DAYS,
+                    window_size=2,
+                ),
+            ),
+        )
+    else:
+        snapshot = _reference_market_snapshot(
+            base,
+            health=MarketIndexHealth.BLOCKED,
+            issues=(MarketIndexIssueCode.FORMULA_MISMATCH,),
+        )
+    condition = {
+        "type": "INDEX_CLOSE_GTE_MA",
+        "index_role": "BOARD_REFERENCE",
+        "period": 2,
+    }
+    context = _context_with_v2_condition(
+        base,
+        policy="entry",
+        condition=condition,
+        snapshot=snapshot,
+    )
+
+    evidence = evaluate_condition(
+        context.plan.entry.condition,
+        context,
+        plan_path="entry.condition",
+    )
+
+    assert evidence.outcome is ConditionOutcome.MISSING_INPUT
+    assert evidence.missing_inputs == expected_missing
+    assert evidence.index_evidence is not None
+    assert evidence.index_evidence.plan_path == "entry.condition"
+    assert evidence.index_evidence.actual_value is None
+    assert evidence.index_evidence.comparison_value is None
+
+
+def test_two_plans_reach_different_final_results_from_the_same_snapshot() -> None:
+    base = _context()
+    snapshot = _reference_market_snapshot(base)
+    satisfied_context = _context_with_v2_condition(
+        base,
+        policy="entry",
+        condition={
+            "type": "INDEX_CLOSE_GTE_MA",
+            "index_role": "BOARD_REFERENCE",
+            "period": 2,
+        },
+        snapshot=snapshot,
+    )
+    unsatisfied_context = _context_with_v2_condition(
+        base,
+        policy="entry",
+        condition={
+            "type": "INDEX_RETURN_GTE",
+            "index_role": "BOARD_REFERENCE",
+            "window": "OFFICIAL_OPEN_DAYS",
+            "window_size": 2,
+            "threshold_ratio": Decimal("0.1"),
+        },
+        snapshot=snapshot,
+    )
+
+    satisfied = evaluate(satisfied_context)
+    unsatisfied = evaluate(unsatisfied_context)
+
+    assert satisfied_context.reference_market_snapshot is snapshot
+    assert unsatisfied_context.reference_market_snapshot is snapshot
+    assert satisfied.snapshot.reference_market is not None
+    assert satisfied.snapshot.reference_market.index_code is snapshot.index_code
+    assert satisfied.snapshot.reference_market.snapshot_hash == snapshot.snapshot_hash
+    assert satisfied.snapshot.reference_market.data_at == snapshot.completed_bucket_at
+    assert satisfied.snapshot.reference_market.health is snapshot.health
+    assert satisfied.snapshot.signal_type is not unsatisfied.snapshot.signal_type
+    assert satisfied.result_hash != unsatisfied.result_hash
+
+
+def test_plan_without_index_condition_ignores_absent_or_blocked_index_data() -> None:
+    base = _context()
+    original_condition = base.plan.entry.condition.model_dump(
+        mode="python",
+        round_trip=True,
+    )
+    without_snapshot = _context_with_v2_condition(
+        base,
+        policy="entry",
+        condition=original_condition,
+        snapshot=None,
+    )
+    blocked = _reference_market_snapshot(
+        base,
+        health=MarketIndexHealth.BLOCKED,
+        issues=(MarketIndexIssueCode.PROVIDER_UNAVAILABLE,),
+    )
+    with_blocked_snapshot = without_snapshot.model_copy(
+        update={"reference_market_snapshot": blocked}
+    )
+
+    absent_result = evaluate(without_snapshot)
+    blocked_result = evaluate(with_blocked_snapshot)
+
+    assert absent_result == blocked_result
+    assert "index_evidence" not in canonical_result_json(evaluate(base))
 
 
 def _replace_latest_bar(
@@ -1800,6 +2227,12 @@ def test_condition_registry_is_closed_read_only_and_covers_every_typed_condition
         ManualEventRiskClearCondition,
         DistanceFromLimitDownGteCondition,
         LowerBandHitsLteCondition,
+        IndexCloseGteMaCondition,
+        IndexCloseLteMaCondition,
+        IndexMaNonDecreasingCondition,
+        IndexMaNonIncreasingCondition,
+        IndexReturnGteCondition,
+        IndexReturnLteCondition,
         AllCondition,
         AnyCondition,
     }

@@ -26,7 +26,7 @@ export type BacktestResultRequestState =
   | "EMPTY"
   | "UNAVAILABLE"
   | "FAILED";
-export type BacktestResultTab = "summary" | "fills" | "details" | "equity";
+export type BacktestResultTab = "summary" | "fills" | "details" | "equity" | "market-index";
 export type BacktestDetailKind = BacktestDetailPage["kind"];
 
 export interface UseBacktestResultsOptions {

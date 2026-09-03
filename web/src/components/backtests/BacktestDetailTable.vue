@@ -48,6 +48,7 @@ function optional(value: string | number | null): string | number {
           <th scope="col">价格（元）</th>
           <th scope="col">风险状态</th>
           <th scope="col">下一步</th>
+          <th scope="col">参考指数条件证据</th>
         </tr>
       </thead>
       <thead v-else-if="kind === 'SIGNAL'">
@@ -88,6 +89,29 @@ function optional(value: string | number | null): string | number {
             <td>{{ item.decision.priceFen === null ? "—" : formatFenAsYuan(item.decision.priceFen) }}</td>
             <td>{{ item.decision.riskStatus }}</td>
             <td>{{ item.decision.nextStep.code }}</td>
+            <td class="detail-table__evidence">
+              <span v-if="item.decision.referenceMarket == null">—</span>
+              <template v-else>
+                <p>
+                  <code>{{ item.decision.referenceMarket.indexCode }}</code> ·
+                  {{ item.decision.referenceMarket.health }} ·
+                  <time v-if="item.decision.referenceMarket.dataAt !== null" :datetime="item.decision.referenceMarket.dataAt">
+                    {{ visibleShanghaiTime(item.decision.referenceMarket.dataAt) }}
+                  </time>
+                </p>
+                <ul>
+                  <li v-for="evidence in item.decision.referenceMarket.evidence" :key="evidence.planPath">
+                    <code>{{ evidence.planPath }}</code> ·
+                    <code>{{ evidence.conditionType }}</code> · {{ evidence.outcome }}；
+                    实际 {{ optional(evidence.actualValue) }} / 对比 {{ optional(evidence.comparisonValue) }} {{ evidence.unit }}；
+                    数据截止 {{ optional(evidence.dataCutoff) }}
+                    <span v-if="(evidence.missingInputs ?? []).length > 0">
+                      ；缺失 {{ (evidence.missingInputs ?? []).join("、") }}
+                    </span>
+                  </li>
+                </ul>
+              </template>
+            </td>
           </tr>
           <tr
             v-else-if="item.kind === 'SIGNAL'"
@@ -156,6 +180,16 @@ function optional(value: string | number | null): string | number {
 
 .detail-table td {
   font-family: var(--font-numeric);
+}
+
+.detail-table td.detail-table__evidence {
+  min-width: 34rem;
+  white-space: normal;
+}
+
+.detail-table__evidence p,
+.detail-table__evidence ul {
+  margin-block: 0 var(--space-2);
 }
 
 .detail-table__scroll:focus-visible {

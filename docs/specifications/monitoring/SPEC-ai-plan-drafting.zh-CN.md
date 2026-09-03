@@ -122,7 +122,7 @@ class PlanExtractionResult(BaseModel):
 - 把用户计划明确包裹为不可信数据；
 - 不包含密钥、实时持仓或无关报告。
 
-提示词使用不可变版本号，例如 `plan-extract-v1`。修改提示词时必须创建新版本并更新黄金样例。包含生成 Schema 和规范 `GOLDEN_PLAN_SOURCE` 的完整 `plan-extract-v1` 提示词由 SHA-256 `1b42865ce7dda121b64a62e15faa1213dd2be55cf654277f0801cd9c29d0dd22` 锁定；模板或 Schema 的任何变化都必须创建新版本并更新黄金值。
+提示词使用不可变版本号。提示词或生成 Schema 发生变化时必须创建新版本并更新黄金样例。兼容用 `plan-extract-v1` 通过投影 Schema v1 计划契约逐字节保留；配合规范 `GOLDEN_PLAN_SOURCE` 时，其 SHA-256 固定为 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`。默认 `plan-extract-v2` 暴露增量 Schema v2 契约和六种已批准板块指数叶子，对应哈希为 `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`。显式历史 v1 配置仍可重放，未指定版本的配置选择 v2。以后任何模板或 Schema 变化都必须再次创建新版本并更新黄金值。
 
 ### 审核与激活边界
 

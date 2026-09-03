@@ -82,6 +82,7 @@ class _DashboardService:
                 normal=0,
             ),
             symbols=(),
+            market_indexes=(),
         )
 
 

@@ -31,6 +31,12 @@
 | `local-web` | Shared loopback-only FastAPI/Vue platform for live views, same-origin security, OpenAPI generation, application shell, and design tokens | All live modules |
 | `backtest-api` | Additive typed REST resources for datasets, jobs, runs, results, plan snapshots, idempotency, pagination, and generated frontend contracts | `backtest-data`, `backtest-jobs`, `backtest-results`, `plan-domain`, `local-web` |
 | `backtest-web` | Vue backtest workbench for historical-data coverage, run submission, progress/cancellation, paginated history, and result inspection | `backtest-api`, `local-web` |
+| `index-identity` | Closed board-index identities, validated stock-board classification, and versioned `board-index-map-v1` mapping | None |
+| `index-data` | Validated live/historical board-index bars, reusable facts, health, immutable shared cutoff snapshots, and hashes | `index-identity` |
+| `plan-index-conditions` | Explicit Plan Schema v2 binding, six allowlisted index leaves, plan-path validation, and pure evidence evaluation | `index-identity`, `index-data`, `plan-domain`, `decision-engine` |
+| `monitor-index-view` | Separate shared index facts and plan-specific condition progress/evidence in monitoring APIs, invalidation, and Vue views | `plan-index-conditions`, `monitor-runtime`, `local-web` |
+| `backtest-index-data` | Versioned index artifacts, dynamic plan warm-up, coverage, dataset/run identity, and no-lookahead replay snapshots | `plan-index-conditions`, `backtest-data`, `backtest-engine` |
+| `backtest-index-view` | Backtest binding, series, path-level summaries, exact decision evidence, export, and Vue presentation | `backtest-index-data`, `backtest-results`, `backtest-api`, `backtest-web` |
 
 ## Build Order
 
@@ -55,11 +61,17 @@ market-data ──→ backtest-data ──→ backtest-engine ──→ backtest
                                                               └──→ backtest-api ──→ backtest-web
                                                                        ▲                 ▲
                                                                        └──── local-web ──┘
+
+index-identity ──→ index-data ──→ plan-index-conditions
+                                         ├──→ monitor-index-view
+                                         └──→ backtest-index-data ──→ backtest-index-view
 ```
 
 After `plan-domain` is approved, `ai-plan-drafting`, `market-data`, and `strategy-state` can be specified and implemented independently. The live decision path never calls AI. `backtest` reuses the pure decision contracts but remains storage-, scheduler-, notification-, and network-isolated during execution.
 
 The approved backtest-module build order is `backtest-data` → `backtest-engine` → `backtest-results` → `backtest-jobs` → `backtest-api` → `backtest-web`. The stable `backtest` id is retained as the documentation umbrella and target CLI compatibility contract rather than being renamed or reused. The current direct CLI MVP remains a baseline until an approved task migrates its adapters to `backtest-jobs`; it is not a second orchestration path. Existing verified code is mapped into the first three modules; this decomposition does not authorize a rewrite of working deterministic logic. `backtest-jobs` owns the atomic job/result Unit of Work and calls result transaction participants; `backtest-results` never imports the job coordinator.
+
+The board-index build order approved on `2026-09-02` is `index-identity` → `index-data` → `plan-index-conditions` → (`monitor-index-view`, `backtest-index-data`) → `backtest-index-view`. Shared snapshots contain data facts only; every condition outcome and trade effect remains owned by an exact path in one Schema v2 plan. Schema v1 plans and historical results remain immutable, and Phase 1 contains no industry index.
 
 ## AI Trust Boundary
 
@@ -112,4 +124,4 @@ The Chinese renderer uses the equivalent disclaimer `仅提醒，不会自动下
 
 ## Review Status
 
-The original capability map was approved by the user on 2026-08-18. The isolated hybrid-sync/offline-backtest scope, `SPEC-backtest.md`, and bounded retention policy were approved on 2026-08-25. On 2026-08-26, the user approved the six-module backtest decomposition, English-canonical/Chinese-review documentation rule, and recommended single-plan/single-symbol Web scope, then confirmed the detailed specification set and the `local-web` Backtest Extension Boundary. A bilingual cross-module consistency pass corrected UUID/CLI lookup identity, exact `FenText` output, the single `Asia/Shanghai`/`+08:00` time contract, legacy-result reuse, incremental export, item-size publication, and cancellation/pin idempotency clauses without changing the approved module boundaries. On 2026-08-26, the user explicitly confirmed both the China-time choice and the remaining corrected contracts; the aggregate detailed-specification set is approved as corrected. Section 15 of the bilingual implementation plan was approved on 2026-08-26. That approval authorizes only generating the bilingual `BT009`–`BT050` task list. The generated task list still requires separate explicit approval; implementation, commit, push, dependency installation, and any network access remain unauthorized. The local CLI MVP and integrity regressions remain the implementation baseline, while open `BC01` acceptance work remains visible. No backtest task renumbers or satisfies `T058` or `T059`.
+The original capability map was approved by the user on 2026-08-18. The isolated hybrid-sync/offline-backtest scope, `SPEC-backtest.md`, and bounded retention policy were approved on 2026-08-25. On 2026-08-26, the user approved the six-module backtest decomposition, English-canonical/Chinese-review documentation rule, and corrected detailed specification set. On `2026-09-02`, the user approved ADR 0003 and the bilingual board-index proposal, then explicitly authorized the six board-index module specifications, implementation, and offline verification. Commit, push, dependency installation, deployment, and real DeepSeek/Tushare/provider network access remain unauthorized. Existing Schema v1 plans, historical results, and the two local commits ahead of `origin/main` remain protected baselines.

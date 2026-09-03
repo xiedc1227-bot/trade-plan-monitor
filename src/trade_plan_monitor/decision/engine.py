@@ -13,6 +13,7 @@ from trade_plan_monitor.decision.models import (
     ConditionEvidence,
     ConditionOutcome,
     DataHealthStatus,
+    DecisionReferenceMarketSnapshot,
     DecisionZone,
     EpisodeStatus,
     EpisodeTransitionAction,
@@ -46,6 +47,7 @@ from trade_plan_monitor.decision.risk import (
     evaluate_pressure_reduction,
 )
 from trade_plan_monitor.domain.plan_models import PriceZone
+from trade_plan_monitor.market_index.requirements import iter_plan_index_conditions
 
 _ENTRY_DATA_CODES = frozenset(
     {
@@ -125,6 +127,17 @@ def _market_facts(
     ):
         return None, None
     return context.target_cutoff, reconciliation.official_bar.close_fen
+
+
+def _reference_market_facts(
+    context: EvaluationContext,
+) -> DecisionReferenceMarketSnapshot | None:
+    if not iter_plan_index_conditions(context.plan):
+        return None
+    snapshot = context.reference_market_snapshot
+    if snapshot is None:
+        return None
+    return DecisionReferenceMarketSnapshot.from_snapshot(snapshot)
 
 
 def _identity(
@@ -349,6 +362,7 @@ def _inactive_result(context: EvaluationContext) -> EvaluationResult:
         risk=context.risk_state,
         data_health=context.data_health,
         condition_evidence=(evidence,),
+        reference_market=_reference_market_facts(context),
         next_step=next_step,
     )
     return EvaluationResult.build(
@@ -457,6 +471,7 @@ def _official_result(context: EvaluationContext) -> EvaluationResult:
         risk=risk,
         data_health=context.data_health,
         condition_evidence=evidence,
+        reference_market=_reference_market_facts(context),
         next_step=next_step,
     )
     return EvaluationResult.build(
@@ -654,6 +669,7 @@ def _intraday_result(context: EvaluationContext) -> EvaluationResult:
         risk=context.risk_state,
         data_health=context.data_health,
         condition_evidence=evidence,
+        reference_market=_reference_market_facts(context),
         next_step=next_step,
     )
     return EvaluationResult.build(

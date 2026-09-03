@@ -8,6 +8,7 @@ import type {
   SymbolSummaryView,
 } from "../../api/generated";
 import ConditionProgress from "./ConditionProgress.vue";
+import IndexConditionProgress from "../market-index/IndexConditionProgress.vue";
 import type { WatchlistViewMode } from "./WatchlistToolbar.vue";
 
 interface Props {
@@ -81,6 +82,8 @@ function isBlocked(signal: SignalType): boolean {
           <th class="watchlist-table__cell" scope="col">股票</th>
           <th class="watchlist-table__cell" scope="col">价格 / 区间</th>
           <th class="watchlist-table__cell" scope="col">条件进度</th>
+          <th class="watchlist-table__cell" scope="col">参考指数</th>
+          <th class="watchlist-table__cell" scope="col">计划指数条件</th>
           <th class="watchlist-table__cell" scope="col">信号</th>
           <th class="watchlist-table__cell" scope="col">持仓</th>
           <th class="watchlist-table__cell" scope="col">风险距离</th>
@@ -115,6 +118,21 @@ function isBlocked(signal: SignalType): boolean {
               :satisfied-count="row.satisfiedConditionCount"
               :total-count="row.totalConditionCount"
             />
+          </td>
+          <td class="watchlist-table__cell">
+            <template v-if="row.referenceMarket">
+              <strong>{{ row.referenceMarket.displayName }}</strong>
+              <span>{{ row.referenceMarket.indexCode }}</span>
+              <span>{{ row.referenceMarket.health }}</span>
+            </template>
+            <span v-else>未迁移（Schema v1）</span>
+          </td>
+          <td class="watchlist-table__cell">
+            <IndexConditionProgress
+              v-if="row.referenceMarket"
+              :progress="row.referenceMarket.conditionProgress"
+            />
+            <span v-else>计划未使用</span>
           </td>
           <td class="watchlist-table__cell">
             <span :data-signal="row.decision.signalType">

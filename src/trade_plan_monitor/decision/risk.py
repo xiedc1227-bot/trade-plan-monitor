@@ -455,16 +455,26 @@ def _evaluate_reduction_node(
     condition: ConditionNode,
     context: EvaluationContext,
     touch_evidence: PressureTouchEvidence,
+    plan_path: str,
 ) -> ConditionEvidence:
     if isinstance(condition, ConsecutiveClosesBelowLevelCondition):
         return _evaluate_after_touch_consecutive(condition, context, touch_evidence)
     if isinstance(condition, (AllCondition, AnyCondition)):
         children = tuple(
-            _evaluate_reduction_node(child, context, touch_evidence)
-            for child in condition.conditions
+            _evaluate_reduction_node(
+                child,
+                context,
+                touch_evidence,
+                f"{plan_path}.conditions[{index}]",
+            )
+            for index, child in enumerate(condition.conditions)
         )
         return _logical_evidence(condition, children)
-    return _evaluate_validated_condition(condition, context)
+    return _evaluate_validated_condition(
+        condition,
+        context,
+        plan_path=plan_path,
+    )
 
 
 def _target_tactical_lot(context: EvaluationContext) -> PositionLotSnapshot | None:
@@ -791,7 +801,11 @@ def evaluate_official_close_risk(
     if type(context) is not EvaluationContext:
         raise TypeError("context must be an EvaluationContext")
 
-    risk_evidence = _evaluate_validated_condition(context.plan.risk.condition, context)
+    risk_evidence = _evaluate_validated_condition(
+        context.plan.risk.condition,
+        context,
+        plan_path="risk.condition",
+    )
     if not context.plan_active:
         return _unchanged_official_risk(context, risk_evidence)
     official_bar = _official_bar(context)
@@ -951,6 +965,7 @@ def evaluate_pressure_reduction(context: EvaluationContext) -> PressureReduction
         context.plan.reduction.condition,
         context,
         touch_evidence,
+        "reduction.condition",
     )
     if (
         touch_evidence.outcome is not ConditionOutcome.SATISFIED

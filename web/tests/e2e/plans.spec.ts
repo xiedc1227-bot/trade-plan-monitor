@@ -23,6 +23,7 @@ const dashboard: DashboardResponse = {
   connectionStatus: "CONNECTED",
   counts: { actionable: 0, blocked: 0, lowZoneWatch: 0, normal: 0, risk: 0, stale: 0 },
   dataAgeSeconds: 0,
+  marketIndexes: [],
   observedAt: TIME,
   sequence: 1,
   symbols: [],

@@ -28,6 +28,26 @@ Status: PASS
 
 The two new functional nodes passed together as `2 passed`; the fixed acceptance file contains eight collected nodes.
 
+## 2026-09-02 board-index extension evidence
+
+The approved `market-index-context` design is implemented offline across monitoring and backtesting. The closed `board-index-map-v1` maps only the five approved boards and rejects unclassifiable symbols without fallback. Shared snapshot tests prove that one index/cutoff/request set is acquired once and published immutably; decision tests prove that two plans can produce different final outcomes from the same snapshot and that a plan with no index leaf is unchanged when index data is absent or blocked.
+
+Schema v2 adds the automatic reference-market binding and six allowlisted condition leaves with exact bounds, three-valued `MISSING_INPUT` behavior, deterministic path evidence, and new hash domains. Existing Schema v1 plan/result goldens remain unchanged. The generated AI schema change is separately versioned as `plan-extract-v2`; the byte-identical v1 prompt remains available at SHA-256 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`, and v2 is locked at `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`.
+
+Backtest dataset v2 freezes normalized index artifacts and exact membership without rewriting v1 datasets. Run v3 reuses the shared snapshot/formula evaluator, persists per-decision reference-market evidence, and publishes summary-v3 export evidence while summary-v2 and fills-v2 bytes remain compatible. The pre-run coverage endpoint and completed-run index-series endpoint are server-authoritative, bounded, and represented in the frozen 41-path OpenAPI contract with SHA-256 `18ce84db8156ad5c4db94a193157e6509b46ab4a03bfdc1ea2b2dceb88fe9d0c`.
+
+Verification completed without provider credentials or external traffic:
+
+- affected snapshot/runtime focused regression after the final cache-identity and official-close batching fixes: `54 passed`;
+- complete non-live backend collection: `2,104 passed, 1 skipped`; the final working tree passed all eight long-running acceptance nodes in `2,598.17 s`, and the remaining partition passed as `2,096 passed, 1 skipped, 4 deselected`;
+- AI prompt compatibility/version regression: `72 passed`;
+- frozen OpenAPI snapshot regression: `13 passed` across `41` paths, and generated TypeScript has no drift;
+- frontend unit suite: `30` files and `497 passed`;
+- isolated Chromium: `7 passed`, including server-resolved pre-run coverage, the frozen reference-index tab, exact plan paths, and persisted decision evidence;
+- Ruff, `compileall`, OpenAPI/generated-TypeScript drift check, Vue/TypeScript type-check, production Vite build, and whitespace check passed.
+
+Real board-index provider capability is intentionally `UNVERIFIED`. No Tushare or other provider endpoint was called; exact intraday/daily interfaces, account entitlement for all five index codes, timestamp/field semantics, quotas, and maximum history remain outside this authorization. The offline implementation exposes strict provider protocols and deterministic fakes and must not be interpreted as live readiness.
+
 ## Backend resource and performance evidence
 
 `BT050-RESOURCE` uses the approved fixed fixtures and never calls the network.
@@ -121,11 +141,18 @@ The following exact nodes were rerun together and passed as `12 passed`:
 
 Migration authorization binds a recomputed source fingerprint to verified backup facts; the deterministic test backup SHA-256 fact is `dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd`, and a mismatched source fingerprint is rejected. Restore checks `PRAGMA integrity_check = ok` and the WAL sentinel. Rollback is therefore a verified file restore, not reverse or guessed SQL. Existing v1 bytes and identity-bearing rows remain unchanged.
 
+Board-index startup compatibility adds two focused nodes:
+
+- `MARKET-INDEX-SCHEMA-EXPANSION` — `tests/integration/test_backtest_migrations.py::test_exact_pre_index_market_schema_expands_without_rewriting_v1_data`
+- `MARKET-INDEX-PARTIAL-FAIL-CLOSED` — `tests/integration/test_backtest_migrations.py::test_partial_market_index_extension_still_fails_without_mutation`
+
+After the board-index schema extension, all `37` migration tests and the complete non-live backend suite excluding the separate heavy acceptance file passed as `37 passed` and `2098 passed, 1 skipped, 4 deselected`, respectively. A copy of the existing six-table `data/backtest-market.sqlite3` also completed the startup expansion with `PRAGMA integrity_check = ok`; all three new index tables were empty and the original database was not modified by this check.
+
 ## P19–P27 evidence map and checkpoint decisions
 
 | Capability | Evidence |
 |---|---|
-| P19 compatibility/migration | MIGRATION-ROLLBACK, MIGRATION-IDENTITY, BACKUP-RESTORE |
+| P19 compatibility/migration | MIGRATION-ROLLBACK, MIGRATION-IDENTITY, BACKUP-RESTORE, MARKET-INDEX-SCHEMA-EXPANSION, MARKET-INDEX-PARTIAL-FAIL-CLOSED |
 | P20 Shanghai identity/input | existing run-input/time goldens plus the complete backend gate |
 | P21 replay/publication | BT050-TWO-SYMBOL, REPLAY-RESTART, capacity/functional measurements |
 | P22 query/export/retention | BT-QUERY-LARGE, BT-EXPORT-100K, RETENTION-BOUND, WAL-SNAPSHOT, EXPORT-BOUNDS |

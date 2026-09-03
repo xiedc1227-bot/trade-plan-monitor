@@ -136,6 +136,21 @@ def test_export_route_streams_exact_active_v2_headers_and_body(
     assert cancelled()
 
 
+def test_export_route_accepts_the_additive_index_summary_v3_domain() -> None:
+    body = _SUMMARY.replace(b"summary-v2", b"summary-v3")
+    service = _FakeExportService(
+        _prepared(
+            schema_version="backtest-report-summary-v3",
+            chunks=iter((body,)),
+        )
+    )
+
+    response = _client(service=service).get(f"/api/v1/backtest-runs/{_RUN_ID}/exports/SUMMARY_JSON")
+
+    assert response.status_code == 200
+    assert response.content == body
+
+
 @pytest.mark.parametrize(
     ("run_id", "export_kind", "params"),
     [

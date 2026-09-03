@@ -89,6 +89,7 @@ class MonitorEventType(StrEnum):
     POSITION_UPDATED = "position.updated"
     AI_PROVIDER_UPDATED = "ai.provider.updated"
     SYSTEM_HEALTH_UPDATED = "system.health.updated"
+    MARKET_INDEX_UPDATED = "market.index.updated"
 
 
 class MonitorEventPayload(_EventValue):
@@ -114,6 +115,7 @@ _EVENT_PAYLOAD_FIELDS = {
     MonitorEventType.POSITION_UPDATED: frozenset({"entity_id", "symbol", "status"}),
     MonitorEventType.AI_PROVIDER_UPDATED: frozenset({"entity_id", "revision"}),
     MonitorEventType.SYSTEM_HEALTH_UPDATED: frozenset({"entity_id", "status"}),
+    MonitorEventType.MARKET_INDEX_UPDATED: frozenset({"entity_id", "revision", "status"}),
 }
 
 _SYMBOL_AGGREGATE_EVENTS = frozenset(
@@ -135,6 +137,7 @@ _ENTITY_AGGREGATE_EVENTS = frozenset(
         MonitorEventType.POSITION_UPDATED,
         MonitorEventType.AI_PROVIDER_UPDATED,
         MonitorEventType.SYSTEM_HEALTH_UPDATED,
+        MonitorEventType.MARKET_INDEX_UPDATED,
     }
 )
 
@@ -188,6 +191,7 @@ class MonitorEventDraft(_EventValue):
                 MonitorEventType.SYMBOL_HEALTH_UPDATED,
                 MonitorEventType.PLAN_ACTIVATED,
                 MonitorEventType.PLAN_DEACTIVATED,
+                MonitorEventType.MARKET_INDEX_UPDATED,
             }
             and self.payload.revision == 0
         ):

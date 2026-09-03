@@ -141,6 +141,18 @@ def _market_identity_snapshot(path: Path) -> tuple[tuple[object, ...], ...]:
         return tuple(tuple(connection.execute(query)) for query in queries)
 
 
+def _remove_market_index_extension(path: Path) -> None:
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(
+            """
+            DROP TABLE market_dataset_index_item;
+            DROP TABLE market_index_head;
+            DROP TABLE market_index_artifact;
+            """
+        )
+        connection.commit()
+
+
 def _seed_legacy_results(path: Path, *, status: str = "COMPLETED") -> None:
     sql = (_FIXTURE_DIRECTORY / "legacy_results_v1.sql").read_text(encoding="utf-8")
     with closing(sqlite3.connect(path)) as connection:
@@ -352,6 +364,68 @@ def test_partial_market_schema_fails_before_any_sqlite_mutation(tmp_path: Path) 
     assert _database_state(path) == before
     assert isinstance(error, MigrationPreflightError)
     assert error.code == "LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION"
+
+
+def test_exact_pre_index_market_schema_expands_without_rewriting_v1_data(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "pre-index-market.sqlite3"
+    store = BacktestMarketStore(path)
+    _, dataset_hash = _seed_frozen_market_dataset(store)
+    before = _market_identity_snapshot(path)
+    _remove_market_index_extension(path)
+
+    inventory = inspect_market_database(path)
+    assert inventory.database_state is DatabaseState.CURRENT
+    assert inventory.migration_reasons == ("MISSING_MARKET_INDEX_SCHEMA",)
+    assert inventory.requires_schema_migration is False
+
+    reopened = BacktestMarketStore(path)
+
+    assert _market_identity_snapshot(path) == before
+    assert reopened.dataset_manifest(dataset_hash).dataset_hash == dataset_hash
+    assert reopened.migration_inventory.migration_reasons == ()
+    migrated = inspect_market_database(path)
+    assert migrated.database_state is DatabaseState.CURRENT
+    assert migrated.migration_reasons == ()
+    with closing(sqlite3.connect(path)) as connection:
+        for table in (
+            "market_index_artifact",
+            "market_index_head",
+            "market_dataset_index_item",
+        ):
+            assert connection.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone() == (0,)
+
+
+def test_partial_market_index_extension_still_fails_without_mutation(tmp_path: Path) -> None:
+    path = tmp_path / "partial-index-extension.sqlite3"
+    BacktestMarketStore(path)
+    _remove_market_index_extension(path)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute(
+            """
+            CREATE TABLE market_index_artifact (
+                artifact_hash TEXT PRIMARY KEY,
+                natural_key TEXT NOT NULL,
+                index_code TEXT NOT NULL,
+                interval TEXT NOT NULL CHECK (interval IN ('FIVE_MINUTE', 'OFFICIAL_DAILY')),
+                bar_at TEXT NOT NULL,
+                provider_revision INTEGER NOT NULL CHECK (provider_revision >= 1),
+                content_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.commit()
+    before = _database_state(path)
+
+    with pytest.raises(
+        MigrationPreflightError,
+        match="LEGACY_SCHEMA_REQUIRES_VERIFIED_MIGRATION",
+    ):
+        BacktestMarketStore(path)
+
+    assert _database_state(path) == before
 
 
 def test_partial_result_schema_fails_before_any_sqlite_mutation(tmp_path: Path) -> None:

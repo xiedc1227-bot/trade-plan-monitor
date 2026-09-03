@@ -38,10 +38,25 @@ from trade_plan_monitor.decision.models import (
     EvidenceCode,
     EvidenceKey,
     EvidenceUnit,
+    IndexConditionType,
     MissingInputCode,
     NextStepCode,
     RiskStatus,
     SignalType,
+)
+from trade_plan_monitor.market_index.identity import (
+    Board,
+    MarketIndexCode,
+    identity_for_index_code,
+)
+from trade_plan_monitor.market_index.models import (
+    MarketIndexHealth,
+    MarketIndexIssueCode,
+    ReturnWindow,
+)
+from trade_plan_monitor.web.routers.dashboard import (
+    IndexConditionEvidenceView,
+    MarketIndexIndicatorFactView,
 )
 
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
@@ -516,7 +531,7 @@ class BacktestDatasetView(_BacktestApiInput):
     """Public dataset projection without manifest membership or provider payloads."""
 
     dataset_hash: Sha256Hex
-    schema_version: Literal["backtest-dataset-v1"]
+    schema_version: Literal["backtest-dataset-v1", "backtest-dataset-v2"]
     scope: BacktestDatasetScopeView
     coverage: BacktestDatasetCoverageView
     created_at: ShanghaiDatetime
@@ -989,6 +1004,280 @@ class BacktestRunCoverageView(_BacktestApiInput):
         return self
 
 
+class BacktestIndexMaParametersView(_BacktestApiInput):
+    period: Annotated[int, Field(strict=True, ge=2, le=250)]
+
+
+class BacktestIndexMaLookbackParametersView(BacktestIndexMaParametersView):
+    lookback: Annotated[int, Field(strict=True, ge=1, le=60)]
+
+
+class BacktestIndexReturnParametersView(_BacktestApiInput):
+    window: Annotated[ReturnWindow, Field(strict=False)]
+    window_size: Annotated[int, Field(strict=True, ge=1, le=250)]
+    threshold_ratio: DecimalText
+
+
+BacktestIndexConditionParametersView = (
+    BacktestIndexMaParametersView
+    | BacktestIndexMaLookbackParametersView
+    | BacktestIndexReturnParametersView
+)
+
+
+class BacktestIndexConditionSummaryView(_BacktestApiInput):
+    """Server-counted outcomes for one exact plan-owned index leaf path."""
+
+    plan_path: Annotated[str, Field(strict=True, min_length=1, max_length=256)]
+    condition_type: IndexConditionType
+    parameters: BacktestIndexConditionParametersView
+    formula_id: Literal["SMA", "SMA_LOOKBACK", "RETURN"]
+    satisfied_count: JavaScriptSafeInteger
+    unsatisfied_count: JavaScriptSafeInteger
+    missing_count: JavaScriptSafeInteger
+    applicable_branch_count: JavaScriptSafeInteger
+
+    @model_validator(mode="after")
+    def validate_formula_and_counts(self) -> Self:
+        close_types = {"INDEX_CLOSE_GTE_MA", "INDEX_CLOSE_LTE_MA"}
+        trend_types = {
+            "INDEX_MA_NON_DECREASING",
+            "INDEX_MA_NON_INCREASING",
+        }
+        if self.condition_type in close_types:
+            valid_parameters = type(self.parameters) is BacktestIndexMaParametersView
+            expected_formula = "SMA"
+        elif self.condition_type in trend_types:
+            valid_parameters = isinstance(
+                self.parameters,
+                BacktestIndexMaLookbackParametersView,
+            )
+            expected_formula = "SMA_LOOKBACK"
+        else:
+            valid_parameters = isinstance(
+                self.parameters,
+                BacktestIndexReturnParametersView,
+            )
+            expected_formula = "RETURN"
+        if not valid_parameters or self.formula_id != expected_formula:
+            raise ValueError("index condition parameters and formula must match its type")
+        if (
+            self.satisfied_count + self.unsatisfied_count + self.missing_count
+            != self.applicable_branch_count
+        ):
+            raise ValueError("index condition counts must sum to applicableBranchCount")
+        return self
+
+
+class BacktestReferenceMarketBindingView(_BacktestApiInput):
+    selection: Literal["AUTO_BOARD"]
+    mapping_version: Literal["board-index-map-v1"]
+    index_code: Annotated[MarketIndexCode, Field(strict=False)]
+    display_name: Annotated[str, Field(strict=True, min_length=1, max_length=32)]
+    board: Annotated[Board, Field(strict=False)]
+
+    @model_validator(mode="after")
+    def validate_derived_identity(self) -> Self:
+        board, display_name = identity_for_index_code(self.index_code)
+        if self.board is not board or self.display_name != display_name:
+            raise ValueError("reference-market binding identity is inconsistent")
+        return self
+
+
+class BacktestReferenceMarketCoverageView(_BacktestApiInput):
+    """Server-resolved plan/dataset coverage shown before run submission."""
+
+    plan_version_id: Rfc4122Uuid
+    dataset_hash: Sha256Hex
+    binding: BacktestReferenceMarketBindingView
+    required: bool = Field(strict=True)
+    condition_paths: Annotated[tuple[str, ...], Field(max_length=50)]
+    required_five_minute_count: JavaScriptSafeInteger
+    available_five_minute_count: JavaScriptSafeInteger
+    required_official_day_count: JavaScriptSafeInteger
+    available_official_day_count: JavaScriptSafeInteger
+    warmup_start: ApiDate
+    warmup_end: ApiDate
+    coverage_status: Literal["AVAILABLE", "BLOCKED", "NOT_REQUIRED"]
+    blockers: Annotated[tuple[StableBlockerCode, ...], Field(max_length=100)]
+    market_index_data_hash: Sha256Hex | None
+    index_requirement_hash: Sha256Hex
+    formula_definition_hash: Sha256Hex
+
+    @field_validator("condition_paths", "blockers", mode="before")
+    @classmethod
+    def require_coverage_arrays(
+        cls,
+        value: object,
+        info: ValidationInfo,
+    ) -> tuple[object, ...]:
+        return _require_json_array(value, field_name=info.field_name)
+
+    @model_validator(mode="after")
+    def validate_coverage(self) -> Self:
+        if self.condition_paths != tuple(sorted(set(self.condition_paths))):
+            raise ValueError("conditionPaths must be ordered and unique")
+        if self.blockers != tuple(sorted(set(self.blockers))):
+            raise ValueError("blockers must be ordered and unique")
+        if self.warmup_end < self.warmup_start:
+            raise ValueError("warmupEnd cannot precede warmupStart")
+        if self.required != bool(self.condition_paths):
+            raise ValueError("required must match conditionPaths")
+        if not self.required:
+            if (
+                self.coverage_status != "NOT_REQUIRED"
+                or self.blockers
+                or self.required_five_minute_count
+                or self.required_official_day_count
+            ):
+                raise ValueError("unused reference market cannot block a run")
+            return self
+        if self.coverage_status == "NOT_REQUIRED":
+            raise ValueError("required reference market needs a coverage result")
+        if (self.coverage_status == "AVAILABLE") != (not self.blockers):
+            raise ValueError("coverage status must agree with blockers")
+        if self.coverage_status == "AVAILABLE" and self.market_index_data_hash is None:
+            raise ValueError("available reference market needs a data hash")
+        return self
+
+
+class BacktestReferenceMarketView(_BacktestApiInput):
+    """Exact server-authored coverage and condition summary for one run."""
+
+    binding: BacktestReferenceMarketBindingView
+    required: Literal[True]
+    condition_paths: Annotated[tuple[str, ...], Field(min_length=1, max_length=50)]
+    warmup_start: ApiDate
+    coverage_status: Literal["AVAILABLE", "BLOCKED", "EXPIRED", "NOT_RECORDED"]
+    blockers: Annotated[tuple[StableBlockerCode, ...], Field(max_length=100)]
+    market_index_data_hash: Sha256Hex
+    index_requirement_hash: Sha256Hex
+    formula_definition_hash: Sha256Hex
+    dataset_hash: Sha256Hex
+    condition_summaries: Annotated[
+        tuple[BacktestIndexConditionSummaryView, ...],
+        Field(min_length=1, max_length=50),
+    ]
+
+    @field_validator("condition_paths", "blockers", mode="before")
+    @classmethod
+    def require_array(cls, value: object, info: ValidationInfo) -> tuple[object, ...]:
+        return _require_json_array(value, field_name=info.field_name)
+
+    @field_validator("condition_summaries", mode="before")
+    @classmethod
+    def require_summary_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="conditionSummaries")
+
+    @model_validator(mode="after")
+    def validate_reference_market(self) -> Self:
+        if self.condition_paths != tuple(sorted(set(self.condition_paths))):
+            raise ValueError("conditionPaths must be ordered and unique")
+        if self.blockers != tuple(sorted(set(self.blockers))):
+            raise ValueError("blockers must be ordered and unique")
+        summary_paths = tuple(item.plan_path for item in self.condition_summaries)
+        if summary_paths != self.condition_paths:
+            raise ValueError("condition summaries must match every ordered plan path")
+        if (self.coverage_status == "AVAILABLE") != (not self.blockers):
+            raise ValueError("coverage status must agree with blockers")
+        return self
+
+
+class BacktestMarketIndexPointView(_BacktestApiInput):
+    """One exact official-daily display point and its server-computed facts."""
+
+    trade_date: ApiDate
+    data_at: ShanghaiDatetime
+    close_points: DecimalText
+    snapshot_hash: Sha256Hex
+    indicator_facts: Annotated[tuple[MarketIndexIndicatorFactView, ...], Field(max_length=50)]
+    health: Annotated[MarketIndexHealth, Field(strict=False)]
+    issues: Annotated[
+        tuple[Annotated[MarketIndexIssueCode, Field(strict=False)], ...],
+        Field(max_length=16),
+    ]
+
+    @field_validator("indicator_facts", "issues", mode="before")
+    @classmethod
+    def require_point_arrays(cls, value: object, info: ValidationInfo) -> tuple[object, ...]:
+        return _require_json_array(value, field_name=info.field_name)
+
+    @model_validator(mode="after")
+    def validate_point(self) -> Self:
+        if self.data_at.date() != self.trade_date:
+            raise ValueError("index point dataAt must fall on tradeDate")
+        if tuple(dict.fromkeys(self.issues)) != self.issues:
+            raise ValueError("index point issues must be unique")
+        if self.health is MarketIndexHealth.LIVE and self.issues:
+            raise ValueError("LIVE index point cannot contain issues")
+        if self.health is not MarketIndexHealth.LIVE and not self.issues:
+            raise ValueError("non-LIVE index point requires an issue")
+        return self
+
+
+class BacktestMarketIndexHealthPointView(_BacktestApiInput):
+    data_at: ShanghaiDatetime
+    health: Annotated[MarketIndexHealth, Field(strict=False)]
+    issues: Annotated[
+        tuple[Annotated[MarketIndexIssueCode, Field(strict=False)], ...],
+        Field(max_length=16),
+    ]
+
+    @field_validator("issues", mode="before")
+    @classmethod
+    def require_issue_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="issues")
+
+    @model_validator(mode="after")
+    def validate_health(self) -> Self:
+        if tuple(dict.fromkeys(self.issues)) != self.issues:
+            raise ValueError("health issues must be unique")
+        if self.health is MarketIndexHealth.LIVE and self.issues:
+            raise ValueError("LIVE health cannot contain issues")
+        if self.health is not MarketIndexHealth.LIVE and not self.issues:
+            raise ValueError("non-LIVE health requires an issue")
+        return self
+
+
+class BacktestMarketIndexSeriesView(_BacktestApiInput):
+    """Bounded reference-index series that never synthesizes an old run's data."""
+
+    run_id: Sha256Hex
+    reference_market: BacktestReferenceMarketView | None
+    items: Annotated[tuple[BacktestMarketIndexPointView, ...], Field(max_length=512)]
+    health_timeline: Annotated[
+        tuple[BacktestMarketIndexHealthPointView, ...],
+        Field(max_length=512),
+    ]
+    condition_summaries: Annotated[
+        tuple[BacktestIndexConditionSummaryView, ...],
+        Field(max_length=50),
+    ]
+
+    @field_validator("items", "health_timeline", "condition_summaries", mode="before")
+    @classmethod
+    def require_series_arrays(cls, value: object, info: ValidationInfo) -> tuple[object, ...]:
+        return _require_json_array(value, field_name=info.field_name)
+
+    @model_validator(mode="after")
+    def validate_series(self) -> Self:
+        if self.reference_market is None:
+            if self.items or self.health_timeline or self.condition_summaries:
+                raise ValueError("no-index run series must remain explicitly empty")
+            return self
+        if self.condition_summaries != self.reference_market.condition_summaries:
+            raise ValueError("series condition summaries must match the run identity")
+        positions = tuple((item.trade_date, item.data_at) for item in self.items)
+        if positions != tuple(sorted(set(positions))):
+            raise ValueError("index display points must be ordered and unique")
+        health_positions = tuple(item.data_at for item in self.health_timeline)
+        if health_positions != tuple(sorted(set(health_positions))):
+            raise ValueError("index health timeline must be ordered and unique")
+        if len(self.model_dump_json().encode("utf-8")) >= MAX_RESULT_PAGE_BYTES:
+            raise ValueError("encoded index series must be smaller than 4 MiB")
+        return self
+
+
 class BacktestRunSummaryView(_BacktestApiInput):
     """Public run summary that can exist only after completed publication."""
 
@@ -1026,6 +1315,7 @@ class BacktestRunView(BacktestRunSummaryView):
     assumptions: BacktestAssumptionsView
     formula_versions: BacktestFormulaVersionsView
     limitations: Annotated[tuple[StableToken, ...], Field(max_length=32)]
+    reference_market: BacktestReferenceMarketView | None = None
 
     @field_validator("limitations", mode="before")
     @classmethod
@@ -1192,6 +1482,37 @@ class BacktestNextStepView(_BacktestApiInput):
         return self
 
 
+class BacktestDecisionReferenceMarketView(_BacktestApiInput):
+    """Compact immutable index identity and exact path evidence for one decision."""
+
+    index_code: Annotated[MarketIndexCode, Field(strict=False)]
+    snapshot_hash: Sha256Hex | None
+    data_at: ShanghaiDatetime | None
+    health: Annotated[MarketIndexHealth, Field(strict=False)]
+    evidence: Annotated[tuple[IndexConditionEvidenceView, ...], Field(min_length=1, max_length=50)]
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def require_evidence_array(cls, value: object) -> tuple[object, ...]:
+        return _require_json_array(value, field_name="evidence")
+
+    @model_validator(mode="after")
+    def validate_reference(self) -> Self:
+        paths = tuple(item.plan_path for item in self.evidence)
+        if paths != tuple(sorted(set(paths))):
+            raise ValueError("decision index evidence must be path-ordered and unique")
+        if any(item.index_code is not self.index_code for item in self.evidence):
+            raise ValueError("decision index evidence must share one index identity")
+        if self.health is MarketIndexHealth.LIVE:
+            if (
+                self.snapshot_hash is None
+                or self.data_at is None
+                or any(item.snapshot_hash != self.snapshot_hash for item in self.evidence)
+            ):
+                raise ValueError("LIVE decision index evidence needs complete snapshot identity")
+        return self
+
+
 class BacktestAuthoritativeDecisionView(_BacktestApiInput):
     """Live-decision-equivalent projection with FenText money only for backtests."""
 
@@ -1214,6 +1535,7 @@ class BacktestAuthoritativeDecisionView(_BacktestApiInput):
     data_health: BacktestDataHealthView
     evidence: Annotated[tuple[BacktestDecisionEvidenceView, ...], Field(max_length=MAX_EVIDENCE)]
     next_step: BacktestNextStepView
+    reference_market: BacktestDecisionReferenceMarketView | None = None
 
     @field_validator("evidence", mode="before")
     @classmethod
@@ -1720,6 +2042,7 @@ __all__ = [
     "BacktestAuthoritativeDecisionView",
     "BacktestDataSyncCommand",
     "BacktestDataSyncJobResultView",
+    "BacktestDecisionReferenceMarketView",
     "BacktestDecisionView",
     "BacktestDatasetCoverageView",
     "BacktestDatasetFiltersView",
@@ -1743,12 +2066,15 @@ __all__ = [
     "BacktestFillView",
     "BacktestFormulaVersionsView",
     "BacktestInitialLotInput",
+    "BacktestIndexConditionSummaryView",
     "BacktestJobFiltersView",
     "BacktestJobPage",
     "BacktestJobProgressView",
     "BacktestJobReceipt",
     "BacktestJobResultView",
     "BacktestJobView",
+    "BacktestMarketIndexPointView",
+    "BacktestMarketIndexSeriesView",
     "BacktestMetricsView",
     "BacktestResultAvailabilityView",
     "BacktestRunCommand",
@@ -1758,6 +2084,8 @@ __all__ = [
     "BacktestRunPage",
     "BacktestRunSummaryView",
     "BacktestRunView",
+    "BacktestReferenceMarketBindingView",
+    "BacktestReferenceMarketView",
     "BacktestSignalView",
     "DecimalText",
     "FenText",

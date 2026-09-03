@@ -1238,6 +1238,7 @@ def test_run_summary_and_view_are_completed_only_closed_contracts() -> None:
         "assumptions",
         "formula_versions",
         "limitations",
+        "reference_market",
     }
     for update in (
         {"status": "FAILED"},
@@ -1338,7 +1339,7 @@ def test_backtest_decision_preserves_live_field_parity_but_serializes_fen_text()
     assert decision.price_fen == "1234"
     assert set(BacktestAuthoritativeDecisionView.model_fields) == set(
         AuthoritativeDecisionView.model_fields
-    )
+    ) | {"reference_market"}
     for backtest_model, live_model in (
         (BacktestEvidenceFactView, EvidenceFactView),
         (BacktestDecisionEvidenceView, DecisionEvidenceView),

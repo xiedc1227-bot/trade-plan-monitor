@@ -175,6 +175,7 @@ export type BacktestAuthoritativeDecisionView = {
   planVersion: number;
   position: components["schemas"]["BacktestPositionSummaryView"];
   priceFen: (string) | (null);
+  referenceMarket?: (components["schemas"]["BacktestDecisionReferenceMarketView"]) | (null);
   resultHash: string;
   riskBreachTradeDate: (string) | (null);
   riskStatus: components["schemas"]["RiskStatus"];
@@ -268,7 +269,7 @@ export type BacktestDatasetView = {
   coverage: components["schemas"]["BacktestDatasetCoverageView"];
   createdAt: string;
   datasetHash: string;
-  schemaVersion: "backtest-dataset-v1";
+  schemaVersion: "backtest-dataset-v1" | "backtest-dataset-v2";
   scope: components["schemas"]["BacktestDatasetScopeView"];
   verifiedAt: string;
 };
@@ -280,6 +281,14 @@ export type BacktestDecisionEvidenceView = {
   kind: "CONDITION" | "RULE";
   missingInputs: Array<components["schemas"]["MissingInputCode"]>;
   outcome: components["schemas"]["ConditionOutcome"];
+};
+
+export type BacktestDecisionReferenceMarketView = {
+  dataAt: (string) | (null);
+  evidence: Array<components["schemas"]["IndexConditionEvidenceView"]>;
+  health: components["schemas"]["MarketIndexHealth"];
+  indexCode: components["schemas"]["MarketIndexCode"];
+  snapshotHash: (string) | (null);
 };
 
 export type BacktestDecisionView = {
@@ -420,6 +429,32 @@ export type BacktestFormulaVersionsView = {
   runFormulaVersion: string;
 };
 
+export type BacktestIndexConditionSummaryView = {
+  applicableBranchCount: number;
+  conditionType: "INDEX_CLOSE_GTE_MA" | "INDEX_CLOSE_LTE_MA" | "INDEX_MA_NON_DECREASING" | "INDEX_MA_NON_INCREASING" | "INDEX_RETURN_GTE" | "INDEX_RETURN_LTE";
+  formulaId: "SMA" | "SMA_LOOKBACK" | "RETURN";
+  missingCount: number;
+  parameters: (components["schemas"]["BacktestIndexMaParametersView"]) | (components["schemas"]["BacktestIndexMaLookbackParametersView"]) | (components["schemas"]["BacktestIndexReturnParametersView"]);
+  planPath: string;
+  satisfiedCount: number;
+  unsatisfiedCount: number;
+};
+
+export type BacktestIndexMaLookbackParametersView = {
+  lookback: number;
+  period: number;
+};
+
+export type BacktestIndexMaParametersView = {
+  period: number;
+};
+
+export type BacktestIndexReturnParametersView = {
+  thresholdRatio: string;
+  window: components["schemas"]["ReturnWindow"];
+  windowSize: number;
+};
+
 export type BacktestInitialLotInput = {
   acquiredTradeDate: string;
   bucket: "CORE" | "TACTICAL";
@@ -493,6 +528,30 @@ export type BacktestJobView = {
   updatedAt: string;
 };
 
+export type BacktestMarketIndexHealthPointView = {
+  dataAt: string;
+  health: components["schemas"]["MarketIndexHealth"];
+  issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
+};
+
+export type BacktestMarketIndexPointView = {
+  closePoints: string;
+  dataAt: string;
+  health: components["schemas"]["MarketIndexHealth"];
+  indicatorFacts: Array<(components["schemas"]["SmaIndicatorFactView"]) | (components["schemas"]["SmaLookbackIndicatorFactView"]) | (components["schemas"]["ReturnIndicatorFactView"])>;
+  issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
+  snapshotHash: string;
+  tradeDate: string;
+};
+
+export type BacktestMarketIndexSeriesView = {
+  conditionSummaries: Array<components["schemas"]["BacktestIndexConditionSummaryView"]>;
+  healthTimeline: Array<components["schemas"]["BacktestMarketIndexHealthPointView"]>;
+  items: Array<components["schemas"]["BacktestMarketIndexPointView"]>;
+  referenceMarket: (components["schemas"]["BacktestReferenceMarketView"]) | (null);
+  runId: string;
+};
+
 export type BacktestMetricsView = {
   blockedCount: number;
   finalCashFen: string;
@@ -523,6 +582,47 @@ export type BacktestPositionSummaryView = {
   sellableTacticalQuantity: number;
   tacticalQuantity: number;
   totalQuantity: number;
+};
+
+export type BacktestReferenceMarketBindingView = {
+  board: components["schemas"]["Board"];
+  displayName: string;
+  indexCode: components["schemas"]["MarketIndexCode"];
+  mappingVersion: "board-index-map-v1";
+  selection: "AUTO_BOARD";
+};
+
+export type BacktestReferenceMarketCoverageView = {
+  availableFiveMinuteCount: number;
+  availableOfficialDayCount: number;
+  binding: components["schemas"]["BacktestReferenceMarketBindingView"];
+  blockers: Array<string>;
+  conditionPaths: Array<string>;
+  coverageStatus: "AVAILABLE" | "BLOCKED" | "NOT_REQUIRED";
+  datasetHash: string;
+  formulaDefinitionHash: string;
+  indexRequirementHash: string;
+  marketIndexDataHash: (string) | (null);
+  planVersionId: string;
+  required: boolean;
+  requiredFiveMinuteCount: number;
+  requiredOfficialDayCount: number;
+  warmupEnd: string;
+  warmupStart: string;
+};
+
+export type BacktestReferenceMarketView = {
+  binding: components["schemas"]["BacktestReferenceMarketBindingView"];
+  blockers: Array<string>;
+  conditionPaths: Array<string>;
+  conditionSummaries: Array<components["schemas"]["BacktestIndexConditionSummaryView"]>;
+  coverageStatus: "AVAILABLE" | "BLOCKED" | "EXPIRED" | "NOT_RECORDED";
+  datasetHash: string;
+  formulaDefinitionHash: string;
+  indexRequirementHash: string;
+  marketIndexDataHash: string;
+  required: true;
+  warmupStart: string;
 };
 
 export type BacktestResultAvailabilityView = {
@@ -617,6 +717,7 @@ export type BacktestRunView = {
   pinned: boolean;
   planHash: string;
   planVersionId: (string) | (null);
+  referenceMarket?: (components["schemas"]["BacktestReferenceMarketView"]) | (null);
   reportHash: string;
   revision: number;
   runId: string;
@@ -664,6 +765,8 @@ export type BarView = {
   volumeShares: number;
 };
 
+export type Board = "SSE_MAIN" | "SZSE_MAIN" | "CHINEXT" | "STAR_MARKET" | "BSE";
+
 export type ConditionOutcome = "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
 
 export type ConfiguredAIRuntimeView = {
@@ -693,6 +796,7 @@ export type DashboardResponse = {
   connectionStatus: components["schemas"]["ConnectionStatus"];
   counts: components["schemas"]["DashboardCounts"];
   dataAgeSeconds: (number) | (null);
+  marketIndexes: Array<components["schemas"]["MarketIndexSnapshotView"]>;
   observedAt: string;
   sequence: number;
   symbols?: Array<components["schemas"]["SymbolSummaryView"]>;
@@ -790,7 +894,7 @@ export type EvidenceFactView = {
 
 export type EvidenceKind = "CONDITION" | "RULE";
 
-export type EvidenceUnit = "FEN" | "SHARES" | "RATIO" | "BARS" | "YUAN" | "COUNT" | "BOOLEAN" | "DATE" | "DATETIME" | "CODE";
+export type EvidenceUnit = "FEN" | "SHARES" | "RATIO" | "BARS" | "YUAN" | "COUNT" | "BOOLEAN" | "DATE" | "DATETIME" | "CODE" | "POINTS";
 
 export type ExecutionStatus = "FILLED" | "UNFILLED" | "IGNORED";
 
@@ -813,6 +917,31 @@ export type FieldEvidence = {
   start?: (number) | (null);
 };
 
+export type IndexConditionEvidenceView = {
+  actualValue: (string) | (null);
+  comparisonValue: (string) | (null);
+  conditionType: "INDEX_CLOSE_GTE_MA" | "INDEX_CLOSE_LTE_MA" | "INDEX_MA_NON_DECREASING" | "INDEX_MA_NON_INCREASING" | "INDEX_RETURN_GTE" | "INDEX_RETURN_LTE";
+  dataCutoff: (string) | (null);
+  decisionCutoff: string;
+  formulaDefinitionHash: (string) | (null);
+  formulaId: "SMA" | "SMA_LOOKBACK" | "RETURN";
+  indexCode: components["schemas"]["MarketIndexCode"];
+  mappingVersion: "board-index-map-v1";
+  missingInputs?: Array<components["schemas"]["MissingInputCode"]>;
+  outcome: components["schemas"]["ConditionOutcome"];
+  parameters?: Array<components["schemas"]["EvidenceFactView"]>;
+  planPath: string;
+  snapshotHash: (string) | (null);
+  unit: components["schemas"]["MarketIndexFactUnit"];
+};
+
+export type IndexConditionProgressView = {
+  missing: number;
+  satisfied: number;
+  total: number;
+  unsatisfied: number;
+};
+
 export type IntradayDiagnosticIdentityView = {
   bucketEnd: string;
   formulaVersion: "ta-v1";
@@ -821,7 +950,60 @@ export type IntradayDiagnosticIdentityView = {
   symbol: string;
 };
 
-export type MissingInputCode = "COMPLETE_MINUTE_BAR" | "PREVIOUS_MINUTE_BAR" | "COMPLETE_5M_BAR" | "PREVIOUS_5M_BAR" | "COMPLETE_5M_BAR_WINDOW" | "ROLLING_VOLUME_WINDOW" | "SESSION_BARS" | "DAILY_INDICATORS" | "PROVISIONAL_DAILY_BAR" | "FIVE_MINUTE_INDICATORS" | "INDICATOR_VALUE" | "OFFICIAL_DAILY_CLOSE" | "TRADING_CALENDAR" | "DAILY_LIMIT" | "MANUAL_EVENT_RISK";
+export type MarketIndexBarPage = {
+  hasMore: boolean;
+  items?: Array<components["schemas"]["MarketIndexBarView"]>;
+  limit: number;
+  nextCursor: (string) | (null);
+  snapshotHash: string;
+};
+
+export type MarketIndexBarView = {
+  amount: (string) | (null);
+  barAt: string;
+  closePoints: string;
+  highPoints: string;
+  indexCode: components["schemas"]["MarketIndexCode"];
+  interval: components["schemas"]["MarketIndexInterval"];
+  lowPoints: string;
+  observedAt: string;
+  openPoints: string;
+  providerRevision: number;
+  sourceKind: components["schemas"]["MarketIndexSourceKind"];
+  volume: (string) | (null);
+};
+
+export type MarketIndexCode = "000001.SH" | "399001.SZ" | "399006.SZ" | "000688.SH" | "899050.BJ";
+
+export type MarketIndexFactUnit = "POINTS" | "RATIO";
+
+export type MarketIndexHealth = "LIVE" | "STALE" | "GAPPED" | "BLOCKED";
+
+export type MarketIndexInterval = "FIVE_MINUTE" | "OFFICIAL_DAILY";
+
+export type MarketIndexIssueCode = "MISSING_FIVE_MINUTE_BAR" | "MISSING_OFFICIAL_DAILY_BAR" | "INSUFFICIENT_HISTORY" | "STALE_DATA" | "DUPLICATE_IDENTITY" | "GAPPED_SERIES" | "INDEX_IDENTITY_MISMATCH" | "FUTURE_DATA" | "INVALID_TIMESTAMP" | "NONCANONICAL_DECIMAL" | "INVALID_OHLC" | "FORMULA_MISMATCH" | "PROVIDER_UNAVAILABLE";
+
+export type MarketIndexSnapshotView = {
+  board: components["schemas"]["Board"];
+  closePoints: (string) | (null);
+  completedBucketAt: (string) | (null);
+  displayName: string;
+  health: components["schemas"]["MarketIndexHealth"];
+  indexCode: components["schemas"]["MarketIndexCode"];
+  indicatorFacts: Array<(components["schemas"]["SmaIndicatorFactView"]) | (components["schemas"]["SmaLookbackIndicatorFactView"]) | (components["schemas"]["ReturnIndicatorFactView"])>;
+  issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
+  mappedSymbolCount: number;
+  mappingVersion: "board-index-map-v1";
+  observedAt: string;
+  priorClosePoints: (string) | (null);
+  revision: number;
+  sessionChangeRatio: (string) | (null);
+  snapshotHash: string;
+};
+
+export type MarketIndexSourceKind = "PROVISIONAL" | "OFFICIAL";
+
+export type MissingInputCode = "COMPLETE_MINUTE_BAR" | "PREVIOUS_MINUTE_BAR" | "COMPLETE_5M_BAR" | "PREVIOUS_5M_BAR" | "COMPLETE_5M_BAR_WINDOW" | "ROLLING_VOLUME_WINDOW" | "SESSION_BARS" | "DAILY_INDICATORS" | "PROVISIONAL_DAILY_BAR" | "FIVE_MINUTE_INDICATORS" | "INDICATOR_VALUE" | "OFFICIAL_DAILY_CLOSE" | "TRADING_CALENDAR" | "DAILY_LIMIT" | "MANUAL_EVENT_RISK" | "INDEX_SNAPSHOT" | "INDEX_IDENTITY" | "INDEX_CUTOFF" | "INDEX_HEALTH" | "INDEX_FACT" | "INDEX_HISTORY" | "INDEX_FORMULA";
 
 export type NextStepCode = "WAIT_FOR_COMPLETE_BAR" | "WAIT_FOR_REQUIRED_DATA" | "WATCH_LOW_ZONE" | "WATCH_PRESSURE" | "REVIEW_BLOCKER" | "WAIT_FOR_OFFICIAL_CLOSE" | "WAIT_FOR_NEXT_TRADING_DAY" | "WAIT_FOR_SETTLEMENT" | "RECORD_CONFIRMED_FILL";
 
@@ -989,6 +1171,18 @@ export type ProviderHealthView = {
   status: components["schemas"]["ProviderCapabilityStatus"];
 };
 
+export type ReturnIndicatorFactView = {
+  formulaDefinitionHash: string;
+  formulaId: "RETURN";
+  sourceBarHash: string;
+  unit: "RATIO";
+  value: string;
+  window: components["schemas"]["ReturnWindow"];
+  windowSize: number;
+};
+
+export type ReturnWindow = "FIVE_MINUTE_BUCKETS" | "OFFICIAL_OPEN_DAYS";
+
 export type ReviewIssueKind = "ASSUMPTION" | "WARNING" | "UNMAPPED_TEXT" | "MISSING_EVIDENCE";
 
 export type RiskStatus = "CLEAR" | "BREACHED_PENDING_CONFIRMATION" | "EXIT_PENDING_SETTLEMENT";
@@ -1042,8 +1236,30 @@ export type SecretWrite = {
 
 export type SignalType = "WAIT" | "LOW_ZONE_WATCH" | "BLOCKED_DATA" | "BLOCKED_RISK" | "BUY_CORE_READY" | "BUY_TACTICAL_READY" | "PRESSURE_REDUCE_READY" | "RISK_BREACH" | "RISK_RECOVERED" | "RISK_EXIT_READY" | "RISK_EXIT_PENDING_SETTLEMENT";
 
+export type SmaIndicatorFactView = {
+  formulaDefinitionHash: string;
+  formulaId: "SMA";
+  period: number;
+  sourceBarHash: string;
+  unit: "POINTS";
+  value: string;
+};
+
+export type SmaLookbackIndicatorFactView = {
+  comparisonValue: string;
+  formulaDefinitionHash: string;
+  formulaId: "SMA_LOOKBACK";
+  lookback: number;
+  period: number;
+  sourceBarHash: string;
+  unit: "POINTS";
+  value: string;
+};
+
 export type SymbolDetailResponse = {
+  indexConditionEvidence?: Array<components["schemas"]["IndexConditionEvidenceView"]>;
   positionLots?: Array<components["schemas"]["trade_plan_monitor__web__routers__symbols__PositionLotView"]>;
+  referenceMarket?: (components["schemas"]["SymbolReferenceMarketView"]) | (null);
   summary: components["schemas"]["SymbolSummaryView"];
 };
 
@@ -1093,11 +1309,24 @@ export type SymbolPage = {
   total: number;
 };
 
+export type SymbolReferenceMarketView = {
+  board: components["schemas"]["Board"];
+  conditionProgress: components["schemas"]["IndexConditionProgressView"];
+  dataAt: (string) | (null);
+  displayName: string;
+  health: components["schemas"]["MarketIndexHealth"];
+  indexCode: components["schemas"]["MarketIndexCode"];
+  issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
+  mappingVersion: "board-index-map-v1";
+  snapshotHash: (string) | (null);
+};
+
 export type SymbolSummaryView = {
   connected: boolean;
   decision: components["schemas"]["AuthoritativeDecisionView"];
   name: string;
   observedAt: string;
+  referenceMarket?: (components["schemas"]["SymbolReferenceMarketView"]) | (null);
   riskDistanceFen: (number) | (null);
   satisfiedConditionCount: number;
   symbol: string;
@@ -1182,6 +1411,7 @@ export interface components {
     BacktestDatasetVerificationJobResultView: BacktestDatasetVerificationJobResultView;
     BacktestDatasetView: BacktestDatasetView;
     BacktestDecisionEvidenceView: BacktestDecisionEvidenceView;
+    BacktestDecisionReferenceMarketView: BacktestDecisionReferenceMarketView;
     BacktestDecisionView: BacktestDecisionView;
     BacktestDetailFiltersView: BacktestDetailFiltersView;
     BacktestDetailPage: BacktestDetailPage;
@@ -1198,6 +1428,10 @@ export interface components {
     BacktestFillPage: BacktestFillPage;
     BacktestFillView: BacktestFillView;
     BacktestFormulaVersionsView: BacktestFormulaVersionsView;
+    BacktestIndexConditionSummaryView: BacktestIndexConditionSummaryView;
+    BacktestIndexMaLookbackParametersView: BacktestIndexMaLookbackParametersView;
+    BacktestIndexMaParametersView: BacktestIndexMaParametersView;
+    BacktestIndexReturnParametersView: BacktestIndexReturnParametersView;
     BacktestInitialLotInput: BacktestInitialLotInput;
     BacktestJobCancellationCommand: BacktestJobCancellationCommand;
     BacktestJobFiltersView: BacktestJobFiltersView;
@@ -1206,9 +1440,15 @@ export interface components {
     BacktestJobReceipt: BacktestJobReceipt;
     BacktestJobResultView: BacktestJobResultView;
     BacktestJobView: BacktestJobView;
+    BacktestMarketIndexHealthPointView: BacktestMarketIndexHealthPointView;
+    BacktestMarketIndexPointView: BacktestMarketIndexPointView;
+    BacktestMarketIndexSeriesView: BacktestMarketIndexSeriesView;
     BacktestMetricsView: BacktestMetricsView;
     BacktestNextStepView: BacktestNextStepView;
     BacktestPositionSummaryView: BacktestPositionSummaryView;
+    BacktestReferenceMarketBindingView: BacktestReferenceMarketBindingView;
+    BacktestReferenceMarketCoverageView: BacktestReferenceMarketCoverageView;
+    BacktestReferenceMarketView: BacktestReferenceMarketView;
     BacktestResultAvailabilityView: BacktestResultAvailabilityView;
     BacktestRunCommand: BacktestRunCommand;
     BacktestRunCoverageView: BacktestRunCoverageView;
@@ -1222,6 +1462,7 @@ export interface components {
     BarInterval: BarInterval;
     BarPage: BarPage;
     BarView: BarView;
+    Board: Board;
     ConditionOutcome: ConditionOutcome;
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
     ConnectionStatus: ConnectionStatus;
@@ -1248,7 +1489,18 @@ export interface components {
     ExecutorHealthView: ExecutorHealthView;
     ExtractionIssue: ExtractionIssue;
     FieldEvidence: FieldEvidence;
+    IndexConditionEvidenceView: IndexConditionEvidenceView;
+    IndexConditionProgressView: IndexConditionProgressView;
     IntradayDiagnosticIdentityView: IntradayDiagnosticIdentityView;
+    MarketIndexBarPage: MarketIndexBarPage;
+    MarketIndexBarView: MarketIndexBarView;
+    MarketIndexCode: MarketIndexCode;
+    MarketIndexFactUnit: MarketIndexFactUnit;
+    MarketIndexHealth: MarketIndexHealth;
+    MarketIndexInterval: MarketIndexInterval;
+    MarketIndexIssueCode: MarketIndexIssueCode;
+    MarketIndexSnapshotView: MarketIndexSnapshotView;
+    MarketIndexSourceKind: MarketIndexSourceKind;
     MissingInputCode: MissingInputCode;
     NextStepCode: NextStepCode;
     NextStepView: NextStepView;
@@ -1275,6 +1527,8 @@ export interface components {
     PositionSummaryView: PositionSummaryView;
     ProviderCapabilityStatus: ProviderCapabilityStatus;
     ProviderHealthView: ProviderHealthView;
+    ReturnIndicatorFactView: ReturnIndicatorFactView;
+    ReturnWindow: ReturnWindow;
     ReviewIssueKind: ReviewIssueKind;
     RiskStatus: RiskStatus;
     RuntimeGapView: RuntimeGapView;
@@ -1286,6 +1540,8 @@ export interface components {
     SecretStatusView: SecretStatusView;
     SecretWrite: SecretWrite;
     SignalType: SignalType;
+    SmaIndicatorFactView: SmaIndicatorFactView;
+    SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
     SymbolDetailResponse: SymbolDetailResponse;
     SymbolEventPage: SymbolEventPage;
     SymbolEventType: SymbolEventType;
@@ -1293,6 +1549,7 @@ export interface components {
     SymbolHealthErrorCode: SymbolHealthErrorCode;
     SymbolHealthResponse: SymbolHealthResponse;
     SymbolPage: SymbolPage;
+    SymbolReferenceMarketView: SymbolReferenceMarketView;
     SymbolSummaryView: SymbolSummaryView;
     UnfilledReason: UnfilledReason;
     UnmappedText: UnmappedText;
@@ -2243,6 +2500,83 @@ export interface paths {
       };
     };
   };
+  "/api/v1/backtest-datasets/{dataset_hash}/reference-market-coverage": {
+    get: {
+      parameters: {
+        query: {
+          planVersionId: string;
+        };
+        header?: never;
+        path: {
+          dataset_hash: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestReferenceMarketCoverageView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
   "/api/v1/backtest-job-cancellations": {
     post: {
       parameters: {
@@ -3106,6 +3440,85 @@ export interface paths {
       };
     };
   };
+  "/api/v1/backtest-runs/{run_id}/market-index-series": {
+    get: {
+      parameters: {
+        query?: {
+          endOn?: (string) | (null);
+          limit?: number;
+          startOn?: (string) | (null);
+        };
+        header?: never;
+        path: {
+          run_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestMarketIndexSeriesView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
   "/api/v1/dashboard": {
     get: {
       parameters: {
@@ -3346,6 +3759,87 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["SymbolHealthResponse"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/market-indexes/{indexCode}/bars": {
+    get: {
+      parameters: {
+        query: {
+          cursor?: (string) | (null);
+          endAt: string;
+          interval: components["schemas"]["MarketIndexInterval"];
+          limit: number;
+          startAt: string;
+        };
+        header?: never;
+        path: {
+          indexCode: components["schemas"]["MarketIndexCode"];
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["MarketIndexBarPage"];
           };
         };
         "400": {

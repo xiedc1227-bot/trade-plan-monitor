@@ -7,19 +7,83 @@ https://docs.pydantic.dev/latest/concepts/json_schema/
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from typing import Final
 
 from trade_plan_monitor.ai.models import PlanExtractionOutput
 
-PLAN_EXTRACTION_PROMPT_VERSION: Final = "plan-extract-v1"
+PLAN_EXTRACTION_PROMPT_VERSION: Final = "plan-extract-v2"
+PLAN_EXTRACTION_PROMPT_V1: Final = "plan-extract-v1"
 MAX_SOURCE_TEXT_CHARS: Final = 150_000
 
-_OUTPUT_SCHEMA = json.dumps(
-    PlanExtractionOutput.model_json_schema(),
-    ensure_ascii=False,
-    sort_keys=True,
-    separators=(",", ":"),
-)
+
+def _schema_v1_from_current() -> dict[str, object]:
+    """Project the frozen Schema-v1 AI contract from the additive plan schema."""
+
+    schema = deepcopy(PlanExtractionOutput.model_json_schema())
+    definitions = schema["$defs"]
+    removed_definitions = {
+        "IndexCloseGteMaCondition",
+        "IndexCloseLteMaCondition",
+        "IndexMaNonDecreasingCondition",
+        "IndexMaNonIncreasingCondition",
+        "IndexReturnGteCondition",
+        "IndexReturnLteCondition",
+        "MarketIndexCode",
+        "ReferenceMarketBinding",
+        "ReturnWindow",
+    }
+    removed_references = {f"#/$defs/{name}" for name in removed_definitions}
+    for name in removed_definitions:
+        definitions.pop(name, None)
+
+    plan = definitions["TradePlanDraft"]
+    properties = plan["properties"]
+    properties["schema_version"] = {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer",
+    }
+    properties.pop("reference_market", None)
+
+    def remove_v2_references(value: object) -> None:
+        if isinstance(value, dict):
+            if isinstance(value.get("oneOf"), list):
+                value["oneOf"] = [
+                    item
+                    for item in value["oneOf"]
+                    if not isinstance(item, dict) or item.get("$ref") not in removed_references
+                ]
+            if isinstance(value.get("mapping"), dict):
+                value["mapping"] = {
+                    key: reference
+                    for key, reference in value["mapping"].items()
+                    if reference not in removed_references
+                }
+            for child in value.values():
+                remove_v2_references(child)
+        elif isinstance(value, list):
+            for child in value:
+                remove_v2_references(child)
+
+    remove_v2_references(schema)
+    return schema
+
+
+def _render_schema(schema: dict[str, object]) -> str:
+    return json.dumps(
+        schema,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+_OUTPUT_SCHEMAS = {
+    PLAN_EXTRACTION_PROMPT_V1: _render_schema(_schema_v1_from_current()),
+    PLAN_EXTRACTION_PROMPT_VERSION: _render_schema(PlanExtractionOutput.model_json_schema()),
+}
 
 
 def build_plan_extraction_prompt(
@@ -29,7 +93,7 @@ def build_plan_extraction_prompt(
 ) -> str:
     """Return the stable prompt with user text isolated as untrusted JSON data."""
 
-    if prompt_version != PLAN_EXTRACTION_PROMPT_VERSION:
+    if prompt_version not in _OUTPUT_SCHEMAS:
         raise ValueError(f"unsupported prompt version: {prompt_version}")
     if not isinstance(source_text, str):
         raise TypeError("source_text must be a string")
@@ -53,7 +117,7 @@ def build_plan_extraction_prompt(
     )
 
     return (
-        f"Prompt version: {PLAN_EXTRACTION_PROMPT_VERSION}\n"
+        f"Prompt version: {prompt_version}\n"
         "You extract a review-only A-share trade-plan draft. You cannot activate, "
         "save, execute, monitor, or place orders.\n"
         "Rules:\n"
@@ -73,7 +137,7 @@ def build_plan_extraction_prompt(
         "8. Evidence remains activation-blocking until trusted user review; never claim "
         "that model-generated evidence is already verified.\n"
         "JSON Schema (the condition enums are the complete allowlist):\n"
-        f"{_OUTPUT_SCHEMA}\n"
+        f"{_OUTPUT_SCHEMAS[prompt_version]}\n"
         "UNTRUSTED_PLAN_DATA_START\n"
         f"{untrusted_json}\n"
         "UNTRUSTED_PLAN_DATA_END"
@@ -82,6 +146,7 @@ def build_plan_extraction_prompt(
 
 __all__ = [
     "MAX_SOURCE_TEXT_CHARS",
+    "PLAN_EXTRACTION_PROMPT_V1",
     "PLAN_EXTRACTION_PROMPT_VERSION",
     "build_plan_extraction_prompt",
 ]

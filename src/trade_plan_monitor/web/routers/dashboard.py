@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
-from typing import TYPE_CHECKING, Annotated, Protocol, Self, cast
+from typing import TYPE_CHECKING, Annotated, Literal, Protocol, Self, cast
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -20,12 +21,25 @@ from trade_plan_monitor.decision.models import (
     EvidenceKey,
     EvidenceScalar,
     EvidenceUnit,
+    IndexConditionType,
+    IndexPlanPath,
     MissingInputCode,
     NextStepCode,
     RiskStatus,
     SignalType,
 )
 from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
+from trade_plan_monitor.market_index.identity import (
+    Board,
+    MarketIndexCode,
+    identity_for_index_code,
+)
+from trade_plan_monitor.market_index.models import (
+    MarketIndexFactUnit,
+    MarketIndexHealth,
+    MarketIndexIssueCode,
+    ReturnWindow,
+)
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 
 if TYPE_CHECKING:
@@ -110,6 +124,177 @@ Sha256Hex = Annotated[
 ]
 NonNegativeInteger = Annotated[int, Field(strict=True, ge=0)]
 PositiveFen = Annotated[int, Field(strict=True, gt=0)]
+FiniteDecimal = Annotated[Decimal, Field(strict=True, allow_inf_nan=False)]
+
+
+class SmaIndicatorFactView(ReadModel):
+    formula_id: Literal["SMA"]
+    period: Annotated[int, Field(strict=True, ge=2, le=250)]
+    value: FiniteDecimal
+    unit: Literal[MarketIndexFactUnit.POINTS]
+    source_bar_hash: Sha256Hex
+    formula_definition_hash: Sha256Hex
+
+
+class SmaLookbackIndicatorFactView(ReadModel):
+    formula_id: Literal["SMA_LOOKBACK"]
+    period: Annotated[int, Field(strict=True, ge=2, le=250)]
+    lookback: Annotated[int, Field(strict=True, ge=1, le=60)]
+    value: FiniteDecimal
+    comparison_value: FiniteDecimal
+    unit: Literal[MarketIndexFactUnit.POINTS]
+    source_bar_hash: Sha256Hex
+    formula_definition_hash: Sha256Hex
+
+
+class ReturnIndicatorFactView(ReadModel):
+    formula_id: Literal["RETURN"]
+    window: ReturnWindow
+    window_size: Annotated[int, Field(strict=True, ge=1, le=250)]
+    value: FiniteDecimal
+    unit: Literal[MarketIndexFactUnit.RATIO]
+    source_bar_hash: Sha256Hex
+    formula_definition_hash: Sha256Hex
+
+
+MarketIndexIndicatorFactView = Annotated[
+    SmaIndicatorFactView | SmaLookbackIndicatorFactView | ReturnIndicatorFactView,
+    Field(discriminator="formula_id"),
+]
+
+
+class MarketIndexSnapshotView(ReadModel):
+    """Plan-neutral projection of one shared board-index snapshot."""
+
+    index_code: MarketIndexCode
+    display_name: Annotated[str, Field(strict=True, min_length=1, max_length=32)]
+    board: Board
+    close_points: FiniteDecimal | None
+    prior_close_points: FiniteDecimal | None
+    session_change_ratio: FiniteDecimal | None
+    completed_bucket_at: ShanghaiDatetime | None
+    observed_at: ShanghaiDatetime
+    health: MarketIndexHealth
+    issues: tuple[MarketIndexIssueCode, ...] = Field(max_length=16)
+    indicator_facts: tuple[MarketIndexIndicatorFactView, ...] = Field(
+        max_length=50,
+    )
+    mapped_symbol_count: Annotated[int, Field(strict=True, ge=0, le=_MAX_SYMBOLS)]
+    mapping_version: Literal["board-index-map-v1"]
+    revision: Annotated[int, Field(strict=True, ge=1, le=2_147_483_647)]
+    snapshot_hash: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_snapshot_projection(self) -> Self:
+        expected_board, expected_name = identity_for_index_code(self.index_code)
+        if self.board is not expected_board or self.display_name != expected_name:
+            raise ValueError("market-index projection identity is inconsistent")
+        values = (
+            self.close_points,
+            self.prior_close_points,
+            self.session_change_ratio,
+            self.completed_bucket_at,
+        )
+        if any(value is None for value in values) and any(value is not None for value in values):
+            raise ValueError("market-index headline facts must appear together")
+        if self.health is MarketIndexHealth.LIVE and any(value is None for value in values):
+            raise ValueError("LIVE market-index projection requires headline facts")
+        if self.completed_bucket_at is not None and self.observed_at < self.completed_bucket_at:
+            raise ValueError("market-index observation cannot precede its completed bucket")
+        if tuple(dict.fromkeys(self.issues)) != self.issues:
+            raise ValueError("market-index issues must be unique")
+        identities = tuple(
+            fact.model_dump(mode="json", exclude={"value", "comparison_value"})
+            for fact in self.indicator_facts
+        )
+        if len({repr(identity) for identity in identities}) != len(identities):
+            raise ValueError("market-index indicator facts must be unique")
+        return self
+
+
+class IndexConditionProgressView(ReadModel):
+    satisfied: NonNegativeInteger
+    unsatisfied: NonNegativeInteger
+    missing: NonNegativeInteger
+    total: NonNegativeInteger
+
+    @model_validator(mode="after")
+    def validate_total(self) -> Self:
+        if self.satisfied + self.unsatisfied + self.missing != self.total:
+            raise ValueError("condition progress counts must sum to total")
+        return self
+
+
+class SymbolReferenceMarketView(ReadModel):
+    """Plan-specific reference to shared data and server-authored progress only."""
+
+    index_code: MarketIndexCode
+    display_name: Annotated[str, Field(strict=True, min_length=1, max_length=32)]
+    board: Board
+    mapping_version: Literal["board-index-map-v1"]
+    snapshot_hash: Sha256Hex | None
+    data_at: ShanghaiDatetime | None
+    health: MarketIndexHealth
+    issues: tuple[MarketIndexIssueCode, ...] = Field(max_length=16)
+    condition_progress: IndexConditionProgressView
+
+    @model_validator(mode="after")
+    def validate_reference(self) -> Self:
+        expected_board, expected_name = identity_for_index_code(self.index_code)
+        if self.board is not expected_board or self.display_name != expected_name:
+            raise ValueError("reference-market projection identity is inconsistent")
+        if (self.snapshot_hash is None) != (self.data_at is None):
+            raise ValueError("reference-market snapshot hash and cutoff must appear together")
+        if tuple(dict.fromkeys(self.issues)) != self.issues:
+            raise ValueError("reference-market issues must be unique")
+        return self
+
+
+class IndexConditionEvidenceView(ReadModel):
+    """Exact server projection of one plan path's index interpretation."""
+
+    plan_path: IndexPlanPath
+    condition_type: IndexConditionType
+    index_code: MarketIndexCode
+    mapping_version: Literal["board-index-map-v1"]
+    snapshot_hash: Sha256Hex | None
+    decision_cutoff: ShanghaiDatetime
+    data_cutoff: ShanghaiDatetime | None
+    formula_id: Literal["SMA", "SMA_LOOKBACK", "RETURN"]
+    formula_definition_hash: Sha256Hex | None
+    parameters: tuple[EvidenceFactView, ...] = Field(default=(), max_length=8)
+    actual_value: FiniteDecimal | None
+    comparison_value: FiniteDecimal | None
+    unit: MarketIndexFactUnit
+    outcome: ConditionOutcome
+    missing_inputs: tuple[MissingInputCode, ...] = Field(default=(), max_length=7)
+
+    @model_validator(mode="after")
+    def validate_index_evidence(self) -> Self:
+        if len({parameter.key for parameter in self.parameters}) != len(self.parameters):
+            raise ValueError("index evidence parameters must be unique")
+        if len(set(self.missing_inputs)) != len(self.missing_inputs):
+            raise ValueError("index evidence missing inputs must be unique")
+        if self.outcome is ConditionOutcome.MISSING_INPUT:
+            if not self.missing_inputs:
+                raise ValueError("missing index evidence requires missing inputs")
+            if self.actual_value is not None or self.comparison_value is not None:
+                raise ValueError("missing index evidence cannot contain comparison values")
+        else:
+            if self.missing_inputs:
+                raise ValueError("known index evidence cannot contain missing inputs")
+            if any(
+                value is None
+                for value in (
+                    self.snapshot_hash,
+                    self.data_cutoff,
+                    self.formula_definition_hash,
+                    self.actual_value,
+                    self.comparison_value,
+                )
+            ):
+                raise ValueError("known index evidence requires complete identity and values")
+        return self
 
 
 class EvidenceFactView(ReadModel):
@@ -278,6 +463,7 @@ class SymbolSummaryView(ReadModel):
     satisfied_condition_count: NonNegativeInteger
     total_condition_count: NonNegativeInteger
     decision: AuthoritativeDecisionView
+    reference_market: SymbolReferenceMarketView | None = None
 
     @model_validator(mode="after")
     def validate_summary(self) -> Self:
@@ -310,6 +496,7 @@ class DashboardResponse(ReadModel):
     data_age_seconds: NonNegativeInteger | None
     counts: DashboardCounts
     symbols: tuple[SymbolSummaryView, ...] = Field(default=(), max_length=_MAX_SYMBOLS)
+    market_indexes: tuple[MarketIndexSnapshotView, ...] = Field(max_length=5)
 
     @model_validator(mode="after")
     def validate_dashboard(self) -> Self:
@@ -322,6 +509,13 @@ class DashboardResponse(ReadModel):
             symbol.decision.data_health.status is DataHealthStatus.LIVE for symbol in self.symbols
         ):
             raise ValueError("disconnected dashboard cannot contain LIVE symbols")
+        index_codes = tuple(item.index_code for item in self.market_indexes)
+        if len(set(index_codes)) != len(index_codes):
+            raise ValueError("dashboard market-index identities must be unique")
+        if index_codes != tuple(sorted(index_codes, key=str)):
+            raise ValueError("dashboard market indexes must be sorted by indexCode")
+        if any(item.observed_at > self.observed_at for item in self.market_indexes):
+            raise ValueError("market-index observation cannot follow dashboard observation")
         return self
 
 
@@ -383,9 +577,13 @@ async def get_dashboard(
 __all__ = [
     "AuthoritativeDecisionView",
     "DashboardResponse",
+    "IndexConditionEvidenceView",
+    "IndexConditionProgressView",
+    "MarketIndexSnapshotView",
     "MonitorReadService",
     "ReadModel",
     "ReadServiceDependency",
+    "SymbolReferenceMarketView",
     "SymbolSummaryView",
     "get_monitor_read_service",
     "router",

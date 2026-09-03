@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from datetime import date, timedelta
 from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
@@ -15,6 +16,7 @@ from trade_plan_monitor.decision.models import (
     EvaluationContext,
     EvidenceFact,
     EvidenceUnit,
+    IndexConditionEvidence,
     IntradayEvaluationTarget,
     MissingInputCode,
     OfficialCloseEvaluationTarget,
@@ -27,6 +29,12 @@ from trade_plan_monitor.domain.plan_models import (
     ConditionNode,
     ConsecutiveClosesBelowLevelCondition,
     DistanceFromLimitDownGteCondition,
+    IndexCloseGteMaCondition,
+    IndexCloseLteMaCondition,
+    IndexMaNonDecreasingCondition,
+    IndexMaNonIncreasingCondition,
+    IndexReturnGteCondition,
+    IndexReturnLteCondition,
     LowerBandHitsLteCondition,
     MacdHistImprovementGteCondition,
     ManualEventRiskClearCondition,
@@ -47,6 +55,15 @@ from trade_plan_monitor.domain.plan_models import (
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
 from trade_plan_monitor.market_data.indicators import IndicatorPoint
 from trade_plan_monitor.market_data.models import DailyBar, MinuteBar
+from trade_plan_monitor.market_index.models import (
+    MarketIndexFactRequest,
+    MarketIndexFactUnit,
+    MarketIndexHealth,
+    MarketIndexIssueCode,
+    ReturnFactRequest,
+    SmaFactRequest,
+    SmaLookbackFactRequest,
+)
 
 _MAX_CONDITION_DEPTH = 4
 _MAX_CONDITION_LEAVES = 50
@@ -63,6 +80,7 @@ def _result(
     *facts: EvidenceFact,
     missing_inputs: tuple[MissingInputCode, ...] = (),
     children: tuple[ConditionEvidence, ...] = (),
+    index_evidence: IndexConditionEvidence | None = None,
 ) -> ConditionEvidence:
     return ConditionEvidence(
         condition=condition,
@@ -70,6 +88,7 @@ def _result(
         facts=facts,
         missing_inputs=missing_inputs,
         children=children,
+        index_evidence=index_evidence,
     )
 
 
@@ -88,6 +107,264 @@ def _missing(
 
 def _outcome(value: bool) -> ConditionOutcome:
     return ConditionOutcome.SATISFIED if value else ConditionOutcome.UNSATISFIED
+
+
+IndexCondition = (
+    IndexCloseGteMaCondition
+    | IndexCloseLteMaCondition
+    | IndexMaNonDecreasingCondition
+    | IndexMaNonIncreasingCondition
+    | IndexReturnGteCondition
+    | IndexReturnLteCondition
+)
+_INDEX_CONDITION_CLASSES = (
+    IndexCloseGteMaCondition,
+    IndexCloseLteMaCondition,
+    IndexMaNonDecreasingCondition,
+    IndexMaNonIncreasingCondition,
+    IndexReturnGteCondition,
+    IndexReturnLteCondition,
+)
+_INDEX_HISTORY_ISSUES = frozenset(
+    {
+        MarketIndexIssueCode.MISSING_FIVE_MINUTE_BAR,
+        MarketIndexIssueCode.MISSING_OFFICIAL_DAILY_BAR,
+        MarketIndexIssueCode.INSUFFICIENT_HISTORY,
+        MarketIndexIssueCode.GAPPED_SERIES,
+    }
+)
+
+
+def _index_request(condition: IndexCondition) -> MarketIndexFactRequest:
+    if isinstance(condition, (IndexCloseGteMaCondition, IndexCloseLteMaCondition)):
+        return SmaFactRequest(period=condition.period)
+    if isinstance(
+        condition,
+        (IndexMaNonDecreasingCondition, IndexMaNonIncreasingCondition),
+    ):
+        return SmaLookbackFactRequest(
+            period=condition.period,
+            lookback=condition.lookback,
+        )
+    return ReturnFactRequest(
+        window=condition.window,
+        window_size=condition.window_size,
+    )
+
+
+def _index_parameters(condition: IndexCondition) -> tuple[EvidenceFact, ...]:
+    parameters = [
+        _fact("index_role", condition.index_role, EvidenceUnit.CODE),
+    ]
+    if isinstance(
+        condition,
+        (
+            IndexCloseGteMaCondition,
+            IndexCloseLteMaCondition,
+            IndexMaNonDecreasingCondition,
+            IndexMaNonIncreasingCondition,
+        ),
+    ):
+        parameters.append(_fact("period", condition.period, EvidenceUnit.BARS))
+    if isinstance(condition, (IndexMaNonDecreasingCondition, IndexMaNonIncreasingCondition)):
+        parameters.append(_fact("lookback", condition.lookback, EvidenceUnit.BARS))
+    if isinstance(condition, (IndexReturnGteCondition, IndexReturnLteCondition)):
+        parameters.extend(
+            (
+                _fact("window", condition.window.value, EvidenceUnit.CODE),
+                _fact("window_size", condition.window_size, EvidenceUnit.BARS),
+                _fact(
+                    "threshold_ratio",
+                    condition.threshold_ratio,
+                    EvidenceUnit.RATIO,
+                ),
+            )
+        )
+    return tuple(parameters)
+
+
+def _index_unit(condition: IndexCondition) -> MarketIndexFactUnit:
+    if isinstance(condition, (IndexReturnGteCondition, IndexReturnLteCondition)):
+        return MarketIndexFactUnit.RATIO
+    return MarketIndexFactUnit.POINTS
+
+
+def _missing_index(
+    condition: IndexCondition,
+    context: EvaluationContext,
+    plan_path: str,
+    missing_inputs: tuple[MissingInputCode, ...],
+) -> ConditionEvidence:
+    binding = context.plan.reference_market
+    if binding is None:  # pragma: no cover - Schema v1 rejects index leaves
+        raise ValueError("index condition requires a Schema v2 reference binding")
+    snapshot = context.reference_market_snapshot
+    request = _index_request(condition)
+    index_evidence = IndexConditionEvidence(
+        plan_path=plan_path,
+        condition_type=condition.type,
+        index_code=binding.index_code,
+        snapshot_hash=None if snapshot is None else snapshot.snapshot_hash,
+        decision_cutoff=context.target_cutoff,
+        data_cutoff=None if snapshot is None else snapshot.completed_bucket_at,
+        formula_id=request.formula_id,
+        formula_definition_hash=(None if snapshot is None else snapshot.formula_definition_hash),
+        parameters=_index_parameters(condition),
+        actual_value=None,
+        comparison_value=None,
+        unit=_index_unit(condition),
+        outcome=ConditionOutcome.MISSING_INPUT,
+        missing_inputs=missing_inputs,
+    )
+    return _result(
+        condition,
+        ConditionOutcome.MISSING_INPUT,
+        missing_inputs=missing_inputs,
+        index_evidence=index_evidence,
+    )
+
+
+def _evaluate_index(
+    condition: IndexCondition,
+    context: EvaluationContext,
+    plan_path: str,
+) -> ConditionEvidence:
+    binding = context.plan.reference_market
+    if binding is None:
+        return _missing_index(
+            condition,
+            context,
+            plan_path,
+            (MissingInputCode.INDEX_IDENTITY,),
+        )
+    snapshot = context.reference_market_snapshot
+    if snapshot is None:
+        return _missing_index(
+            condition,
+            context,
+            plan_path,
+            (MissingInputCode.INDEX_SNAPSHOT,),
+        )
+    if (
+        snapshot.index_code is not binding.index_code
+        or snapshot.mapping_version != binding.mapping_version
+    ):
+        return _missing_index(
+            condition,
+            context,
+            plan_path,
+            (MissingInputCode.INDEX_IDENTITY,),
+        )
+    if (
+        snapshot.decision_cutoff != context.target_cutoff
+        or snapshot.completed_bucket_at is None
+        or snapshot.completed_bucket_at > context.target_cutoff
+        or snapshot.observed_at > context.evaluated_at
+    ):
+        return _missing_index(
+            condition,
+            context,
+            plan_path,
+            (MissingInputCode.INDEX_CUTOFF,),
+        )
+    if snapshot.health is not MarketIndexHealth.LIVE:
+        missing = [MissingInputCode.INDEX_HEALTH]
+        if any(issue in _INDEX_HISTORY_ISSUES for issue in snapshot.issues):
+            missing.append(MissingInputCode.INDEX_HISTORY)
+        if MarketIndexIssueCode.FORMULA_MISMATCH in snapshot.issues:
+            missing.append(MissingInputCode.INDEX_FORMULA)
+        return _missing_index(condition, context, plan_path, tuple(missing))
+
+    request = _index_request(condition)
+    matches = tuple(fact for fact in snapshot.indicator_facts if fact.request == request)
+    if request not in snapshot.fact_requests or len(matches) != 1:
+        return _missing_index(
+            condition,
+            context,
+            plan_path,
+            (MissingInputCode.INDEX_FACT,),
+        )
+    fact = matches[0]
+    if (
+        fact.formula_definition_hash != snapshot.formula_definition_hash
+        or fact.input_cutoff != snapshot.decision_cutoff
+        or fact.health is not MarketIndexHealth.LIVE
+    ):
+        return _missing_index(
+            condition,
+            context,
+            plan_path,
+            (MissingInputCode.INDEX_FORMULA,),
+        )
+
+    if isinstance(condition, (IndexCloseGteMaCondition, IndexCloseLteMaCondition)):
+        latest = snapshot.latest_completed_five_minute
+        if latest is None:  # pragma: no cover - LIVE snapshot invariant
+            return _missing_index(
+                condition,
+                context,
+                plan_path,
+                (MissingInputCode.INDEX_FACT,),
+            )
+        actual_value = latest.close_points
+        comparison_value = fact.value
+        satisfied = (
+            actual_value >= comparison_value
+            if isinstance(condition, IndexCloseGteMaCondition)
+            else actual_value <= comparison_value
+        )
+    elif isinstance(
+        condition,
+        (IndexMaNonDecreasingCondition, IndexMaNonIncreasingCondition),
+    ):
+        if fact.comparison_value is None:  # pragma: no cover - fact model invariant
+            return _missing_index(
+                condition,
+                context,
+                plan_path,
+                (MissingInputCode.INDEX_FACT,),
+            )
+        actual_value = fact.value
+        comparison_value = fact.comparison_value
+        satisfied = (
+            actual_value >= comparison_value
+            if isinstance(condition, IndexMaNonDecreasingCondition)
+            else actual_value <= comparison_value
+        )
+    else:
+        actual_value = fact.value
+        comparison_value = condition.threshold_ratio
+        satisfied = (
+            actual_value >= comparison_value
+            if isinstance(condition, IndexReturnGteCondition)
+            else actual_value <= comparison_value
+        )
+
+    outcome = _outcome(satisfied)
+    unit = _index_unit(condition)
+    evidence_unit = EvidenceUnit.RATIO if unit is MarketIndexFactUnit.RATIO else EvidenceUnit.POINTS
+    index_evidence = IndexConditionEvidence(
+        plan_path=plan_path,
+        condition_type=condition.type,
+        index_code=binding.index_code,
+        snapshot_hash=snapshot.snapshot_hash,
+        decision_cutoff=context.target_cutoff,
+        data_cutoff=snapshot.completed_bucket_at,
+        formula_id=request.formula_id,
+        formula_definition_hash=snapshot.formula_definition_hash,
+        parameters=_index_parameters(condition),
+        actual_value=actual_value,
+        comparison_value=comparison_value,
+        unit=unit,
+        outcome=outcome,
+    )
+    return _result(
+        condition,
+        outcome,
+        _fact("actual_value", actual_value, evidence_unit),
+        _fact("comparison_value", comparison_value, evidence_unit),
+        index_evidence=index_evidence,
+    )
 
 
 def _latest_bar(context: EvaluationContext) -> FiveMinuteBar | None:
@@ -938,8 +1215,16 @@ def _evaluate_lower_band_hits(
 def _evaluate_all(
     condition: AllCondition,
     context: EvaluationContext,
+    plan_path: str | None = None,
 ) -> ConditionEvidence:
-    children = tuple(_evaluate(child, context) for child in condition.conditions)
+    children = tuple(
+        _evaluate(
+            child,
+            context,
+            None if plan_path is None else f"{plan_path}.conditions[{index}]",
+        )
+        for index, child in enumerate(condition.conditions)
+    )
     if any(child.outcome is ConditionOutcome.UNSATISFIED for child in children):
         outcome = ConditionOutcome.UNSATISFIED
     elif any(child.outcome is ConditionOutcome.MISSING_INPUT for child in children):
@@ -952,8 +1237,16 @@ def _evaluate_all(
 def _evaluate_any(
     condition: AnyCondition,
     context: EvaluationContext,
+    plan_path: str | None = None,
 ) -> ConditionEvidence:
-    children = tuple(_evaluate(child, context) for child in condition.conditions)
+    children = tuple(
+        _evaluate(
+            child,
+            context,
+            None if plan_path is None else f"{plan_path}.conditions[{index}]",
+        )
+        for index, child in enumerate(condition.conditions)
+    )
     if any(child.outcome is ConditionOutcome.SATISFIED for child in children):
         outcome = ConditionOutcome.SATISFIED
     elif any(child.outcome is ConditionOutcome.MISSING_INPUT for child in children):
@@ -1055,6 +1348,12 @@ _MUTABLE_EVALUATORS: dict[type[object], ConditionEvaluator] = {
         ConditionEvaluator,
         _evaluate_lower_band_hits,
     ),
+    IndexCloseGteMaCondition: cast(ConditionEvaluator, _evaluate_index),
+    IndexCloseLteMaCondition: cast(ConditionEvaluator, _evaluate_index),
+    IndexMaNonDecreasingCondition: cast(ConditionEvaluator, _evaluate_index),
+    IndexMaNonIncreasingCondition: cast(ConditionEvaluator, _evaluate_index),
+    IndexReturnGteCondition: cast(ConditionEvaluator, _evaluate_index),
+    IndexReturnLteCondition: cast(ConditionEvaluator, _evaluate_index),
     AllCondition: cast(ConditionEvaluator, _evaluate_all),
     AnyCondition: cast(ConditionEvaluator, _evaluate_any),
 }
@@ -1085,16 +1384,56 @@ def _validate_condition_tree(condition: ConditionNode) -> None:
 def _evaluate(
     condition: ConditionNode,
     context: EvaluationContext,
+    plan_path: str | None,
 ) -> ConditionEvidence:
+    if isinstance(condition, AllCondition):
+        return _evaluate_all(condition, context, plan_path)
+    if isinstance(condition, AnyCondition):
+        return _evaluate_any(condition, context, plan_path)
+    if isinstance(condition, _INDEX_CONDITION_CLASSES):
+        if plan_path is None:
+            raise ValueError("index condition evaluation requires its exact plan path")
+        return _evaluate_index(condition, context, plan_path)
     evaluator = CONDITION_EVALUATORS.get(type(condition))
     if evaluator is None:
         raise TypeError(f"unsupported condition class: {type(condition).__name__}")
     return evaluator(condition, context)
 
 
+def _tree_contains_index(condition: ConditionNode) -> bool:
+    stack = [condition]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, _INDEX_CONDITION_CLASSES):
+            return True
+        if isinstance(node, (AllCondition, AnyCondition)):
+            stack.extend(node.conditions)
+    return False
+
+
+def _condition_at_path(context: EvaluationContext, plan_path: str) -> ConditionNode:
+    match = re.fullmatch(
+        r"(entry|reduction|risk|blockers)\.condition((?:\.conditions\[[0-9]+\])*)",
+        plan_path,
+    )
+    if match is None:
+        raise ValueError("index condition plan path is invalid")
+    node = getattr(context.plan, match.group(1)).condition
+    for child_match in re.finditer(r"\.conditions\[([0-9]+)\]", match.group(2)):
+        if not isinstance(node, (AllCondition, AnyCondition)):
+            raise ValueError("index condition plan path crosses a leaf")
+        index = int(child_match.group(1))
+        if index >= len(node.conditions):
+            raise ValueError("index condition plan path is out of bounds")
+        node = node.conditions[index]
+    return node
+
+
 def _evaluate_validated_condition(
     condition: ConditionNode,
     context: EvaluationContext,
+    *,
+    plan_path: str | None = None,
 ) -> ConditionEvidence:
     """Evaluate trusted immutable decision values without repeat serialization."""
 
@@ -1103,12 +1442,19 @@ def _evaluate_validated_condition(
     if type(condition) not in CONDITION_EVALUATORS:
         raise TypeError("condition must be one exact allowlisted condition class")
     _validate_condition_tree(condition)
-    return _evaluate(condition, context)
+    if _tree_contains_index(condition):
+        if plan_path is None:
+            raise ValueError("index condition tree requires its exact plan path")
+        if _condition_at_path(context, plan_path) != condition:
+            raise ValueError("index condition plan path does not identify the evaluated tree")
+    return _evaluate(condition, context, plan_path)
 
 
 def evaluate_condition(
     condition: ConditionNode,
     context: EvaluationContext,
+    *,
+    plan_path: str | None = None,
 ) -> ConditionEvidence:
     """Evaluate one validated condition tree without I/O or state mutation."""
 
@@ -1124,7 +1470,11 @@ def evaluate_condition(
     validated_condition = condition_type.model_validate(
         condition.model_dump(mode="python", round_trip=True)
     )
-    return _evaluate_validated_condition(validated_condition, validated_context)
+    return _evaluate_validated_condition(
+        validated_condition,
+        validated_context,
+        plan_path=plan_path,
+    )
 
 
 __all__ = [

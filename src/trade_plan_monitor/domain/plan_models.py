@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from datetime import date
 from decimal import Decimal
@@ -10,12 +11,19 @@ from typing import Annotated, Literal, Self
 from pydantic import (
     AwareDatetime,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StringConstraints,
     field_validator,
     model_validator,
 )
+
+from trade_plan_monitor.market_index.identity import (
+    ReferenceMarketBinding,
+    validate_reference_market_binding,
+)
+from trade_plan_monitor.market_index.models import ReturnWindow
 
 PlanId = Annotated[
     str,
@@ -50,6 +58,9 @@ PositiveIndicatorDelta = Annotated[
     Decimal,
     Field(gt=Decimal("0"), le=Decimal("100"), allow_inf_nan=False),
 ]
+IndexSmaPeriod = Annotated[int, Field(strict=True, ge=2, le=250)]
+IndexSmaLookback = Annotated[int, Field(strict=True, ge=1, le=60)]
+IndexReturnWindowSize = Annotated[int, Field(strict=True, ge=1, le=250)]
 PlanZone = Literal["LOW_BUY", "PRESSURE"]
 PlanIndicator = Literal["EMA10", "MA20", "MA50", "MA200", "BOLL_MIDDLE"]
 PressureLevel = Literal["PRESSURE_REFERENCE"]
@@ -57,6 +68,26 @@ RiskLevel = Literal["RISK_LINE"]
 PositionBucket = Literal["CORE", "TACTICAL"]
 _MAX_CONDITION_DEPTH = 4
 _MAX_CONDITION_LEAVES = 50
+_CANONICAL_RATIO_PATTERN = re.compile(r"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$")
+
+
+def _canonical_threshold_ratio(value: object) -> Decimal:
+    if type(value) not in {str, Decimal}:
+        raise ValueError("threshold_ratio must be a canonical decimal string or Decimal")
+    text = str(value)
+    if _CANONICAL_RATIO_PATTERN.fullmatch(text) is None or text == "-0":
+        raise ValueError("threshold_ratio must use canonical non-exponent decimal text")
+    parsed = Decimal(text)
+    if not parsed.is_finite():
+        raise ValueError("threshold_ratio must be finite")
+    return parsed
+
+
+CanonicalThresholdRatio = Annotated[
+    Decimal,
+    BeforeValidator(_canonical_threshold_ratio),
+    Field(strict=True, ge=Decimal("-1"), le=Decimal("10"), allow_inf_nan=False),
+]
 
 
 class _DomainValue(BaseModel):
@@ -283,6 +314,60 @@ class LowerBandHitsLteCondition(_DomainValue):
         return self
 
 
+class IndexCloseGteMaCondition(_DomainValue):
+    """Require the completed reference-index close at or above one SMA."""
+
+    type: Literal["INDEX_CLOSE_GTE_MA"] = "INDEX_CLOSE_GTE_MA"
+    index_role: Literal["BOARD_REFERENCE"]
+    period: IndexSmaPeriod
+
+
+class IndexCloseLteMaCondition(_DomainValue):
+    """Require the completed reference-index close at or below one SMA."""
+
+    type: Literal["INDEX_CLOSE_LTE_MA"] = "INDEX_CLOSE_LTE_MA"
+    index_role: Literal["BOARD_REFERENCE"]
+    period: IndexSmaPeriod
+
+
+class IndexMaNonDecreasingCondition(_DomainValue):
+    """Require one reference-index SMA not to decline across a lookback."""
+
+    type: Literal["INDEX_MA_NON_DECREASING"] = "INDEX_MA_NON_DECREASING"
+    index_role: Literal["BOARD_REFERENCE"]
+    period: IndexSmaPeriod
+    lookback: IndexSmaLookback
+
+
+class IndexMaNonIncreasingCondition(_DomainValue):
+    """Require one reference-index SMA not to rise across a lookback."""
+
+    type: Literal["INDEX_MA_NON_INCREASING"] = "INDEX_MA_NON_INCREASING"
+    index_role: Literal["BOARD_REFERENCE"]
+    period: IndexSmaPeriod
+    lookback: IndexSmaLookback
+
+
+class IndexReturnGteCondition(_DomainValue):
+    """Require a reference-index return at or above an exact threshold."""
+
+    type: Literal["INDEX_RETURN_GTE"] = "INDEX_RETURN_GTE"
+    index_role: Literal["BOARD_REFERENCE"]
+    window: ReturnWindow
+    window_size: IndexReturnWindowSize
+    threshold_ratio: CanonicalThresholdRatio
+
+
+class IndexReturnLteCondition(_DomainValue):
+    """Require a reference-index return at or below an exact threshold."""
+
+    type: Literal["INDEX_RETURN_LTE"] = "INDEX_RETURN_LTE"
+    index_role: Literal["BOARD_REFERENCE"]
+    window: ReturnWindow
+    window_size: IndexReturnWindowSize
+    threshold_ratio: CanonicalThresholdRatio
+
+
 class AllCondition(_DomainValue):
     """Require every child condition to be true."""
 
@@ -323,6 +408,12 @@ ConditionNode = Annotated[
     | ManualEventRiskClearCondition
     | DistanceFromLimitDownGteCondition
     | LowerBandHitsLteCondition
+    | IndexCloseGteMaCondition
+    | IndexCloseLteMaCondition
+    | IndexMaNonDecreasingCondition
+    | IndexMaNonIncreasingCondition
+    | IndexReturnGteCondition
+    | IndexReturnLteCondition
     | AllCondition
     | AnyCondition,
     Field(discriminator="type"),
@@ -375,6 +466,25 @@ def _count_condition_leaves(root: object) -> int:
     return leaf_count
 
 
+def _contains_index_condition(root: object) -> bool:
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        tag, children = _condition_tag_and_children(node)
+        if isinstance(tag, str) and tag.startswith("INDEX_"):
+            return True
+        if (
+            tag in {"ALL", "ANY"}
+            and isinstance(children, Sequence)
+            and not isinstance(
+                children,
+                (str, bytes),
+            )
+        ):
+            stack.extend(children)
+    return False
+
+
 class _ConditionPolicy(_DomainValue):
     """Validate one policy condition tree before recursive model construction."""
 
@@ -413,7 +523,7 @@ class MonitoringPolicy(_DomainValue):
 class TradePlan(_DomainValue):
     """One immutable, validated version of an executable trade plan."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     plan_id: PlanId
     version: PositiveVersion
     symbol: AShareSymbol
@@ -428,6 +538,32 @@ class TradePlan(_DomainValue):
     risk: RiskPolicy
     blockers: BlockerPolicy
     monitoring: MonitoringPolicy
+    reference_market: ReferenceMarketBinding | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_schema_version_boundaries(cls, data: object) -> object:
+        if not isinstance(data, Mapping):
+            return data
+        schema_version = data.get("schema_version", 1)
+        roots: list[object] = []
+        for policy_name in ("entry", "reduction", "risk", "blockers"):
+            policy = data.get(policy_name)
+            if isinstance(policy, Mapping):
+                roots.append(policy.get("condition"))
+            else:
+                roots.append(getattr(policy, "condition", None))
+        if schema_version == 1:
+            if "reference_market" in data:
+                raise ValueError("Schema v1 forbids reference_market")
+            if any(_contains_index_condition(root) for root in roots if root is not None):
+                raise ValueError("Schema v1 forbids market-index conditions")
+        elif schema_version == 2 and data.get("reference_market") is None:
+            raise ValueError("Schema v2 requires reference_market")
+        return data
 
     @model_validator(mode="before")
     @classmethod
@@ -451,6 +587,17 @@ class TradePlan(_DomainValue):
                 )
         return data
 
+    @model_validator(mode="after")
+    def validate_reference_market_identity(self) -> Self:
+        if self.schema_version == 1:
+            if self.reference_market is not None:  # pragma: no cover - before guard
+                raise ValueError("Schema v1 forbids reference_market")
+            return self
+        if self.reference_market is None:  # pragma: no cover - before guard
+            raise ValueError("Schema v2 requires reference_market")
+        validate_reference_market_binding(self.symbol, self.reference_market)
+        return self
+
 
 __all__ = [
     "AShareSymbol",
@@ -465,6 +612,12 @@ __all__ = [
     "DateRangeActivation",
     "DistanceFromLimitDownGteCondition",
     "EntryPolicy",
+    "IndexCloseGteMaCondition",
+    "IndexCloseLteMaCondition",
+    "IndexMaNonDecreasingCondition",
+    "IndexMaNonIncreasingCondition",
+    "IndexReturnGteCondition",
+    "IndexReturnLteCondition",
     "LowerBandHitsLteCondition",
     "MacdHistImprovementGteCondition",
     "ManualActivation",

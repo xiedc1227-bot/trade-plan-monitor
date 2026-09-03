@@ -25,6 +25,7 @@ from trade_plan_monitor.backtest.control import (
 )
 from trade_plan_monitor.backtest.dataset import (
     DATASET_SCHEMA_VERSION,
+    INDEX_DATASET_SCHEMA_VERSION,
     BacktestDatasetCoverage,
     BacktestDatasetScopeSummary,
     BacktestDatasetSummary,
@@ -37,8 +38,12 @@ from trade_plan_monitor.backtest.dataset import (
     MarketStoreStatistics,
     exchange_for_symbol,
 )
+from trade_plan_monitor.backtest.index_data import IndexArtifactMembership
 from trade_plan_monitor.backtest.migration import (
+    DatabaseState,
     MigrationInventory,
+    MigrationPreflightError,
+    create_market_index_schema,
     inspect_market_database,
     require_safe_store_initialization,
 )
@@ -46,6 +51,12 @@ from trade_plan_monitor.backtest.storage_guard import reject_incompatible_databa
 from trade_plan_monitor.backtest.time import shanghai_now_text
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteBatch
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
+from trade_plan_monitor.market_index.canonical import market_index_bar_set_hash
+from trade_plan_monitor.market_index.identity import (
+    MarketIndexCode,
+    resolve_board_reference,
+)
+from trade_plan_monitor.market_index.models import MarketIndexBar, MarketIndexInterval
 
 _ArtifactKind = Literal["CALENDAR", "MINUTE", "LIMIT", "DAILY"]
 _MarketValue = TypeVar("_MarketValue", bound=BaseModel)
@@ -124,6 +135,46 @@ CREATE TABLE IF NOT EXISTS market_dataset_item (
 );
 CREATE INDEX IF NOT EXISTS ix_market_dataset_item_lookup
     ON market_dataset_item (dataset_hash, kind, symbol, trade_date);
+
+CREATE TABLE IF NOT EXISTS market_index_artifact (
+    artifact_hash TEXT PRIMARY KEY,
+    natural_key TEXT NOT NULL,
+    index_code TEXT NOT NULL,
+    interval TEXT NOT NULL CHECK (interval IN ('FIVE_MINUTE', 'OFFICIAL_DAILY')),
+    bar_at TEXT NOT NULL,
+    provider_revision INTEGER NOT NULL CHECK (provider_revision >= 1),
+    content_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_market_index_artifact_identity
+    ON market_index_artifact (natural_key, provider_revision);
+
+CREATE TABLE IF NOT EXISTS market_index_head (
+    natural_key TEXT PRIMARY KEY,
+    artifact_hash TEXT NOT NULL
+        REFERENCES market_index_artifact (artifact_hash) ON DELETE RESTRICT,
+    index_code TEXT NOT NULL,
+    interval TEXT NOT NULL CHECK (interval IN ('FIVE_MINUTE', 'OFFICIAL_DAILY')),
+    bar_at TEXT NOT NULL,
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_market_index_head_code_time
+    ON market_index_head (index_code, bar_at, interval);
+
+CREATE TABLE IF NOT EXISTS market_dataset_index_item (
+    dataset_hash TEXT NOT NULL REFERENCES market_dataset (dataset_hash) ON DELETE RESTRICT,
+    natural_key TEXT NOT NULL,
+    artifact_hash TEXT NOT NULL
+        REFERENCES market_index_artifact (artifact_hash) ON DELETE RESTRICT,
+    index_code TEXT NOT NULL,
+    interval TEXT NOT NULL CHECK (interval IN ('FIVE_MINUTE', 'OFFICIAL_DAILY')),
+    bar_at TEXT NOT NULL,
+    provider_revision INTEGER NOT NULL CHECK (provider_revision >= 1),
+    PRIMARY KEY (dataset_hash, natural_key)
+);
+CREATE INDEX IF NOT EXISTS ix_market_dataset_index_item_lookup
+    ON market_dataset_index_item (dataset_hash, index_code, bar_at, interval);
 """
 
 
@@ -222,6 +273,58 @@ class _SQLiteFrozenDatasetReader:
                 trade_date += timedelta(days=1)
 
 
+class _SQLiteFrozenMarketIndexDatasetReader(_SQLiteFrozenDatasetReader):
+    """V2-only extension that leaves the legacy reader surface unchanged."""
+
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        dataset_hash: str,
+        scope: DatasetScope,
+        symbols: tuple[str, ...],
+        manifest: DatasetManifest,
+        dataset_revision: int,
+    ) -> None:
+        super().__init__(connection, dataset_hash, scope, symbols)
+        self._manifest = manifest
+        self._dataset_revision = dataset_revision
+
+    @property
+    def manifest(self) -> DatasetManifest:
+        return self._manifest
+
+    @property
+    def dataset_revision(self) -> int:
+        return self._dataset_revision
+
+    def market_index_bars(
+        self,
+        index_code: MarketIndexCode,
+    ) -> tuple[MarketIndexBar, ...]:
+        if not isinstance(index_code, MarketIndexCode):
+            raise TypeError("index_code must be a MarketIndexCode")
+        rows = self._connection.execute(
+            """
+            SELECT a.artifact_hash, a.natural_key, a.content_json
+            FROM market_dataset_index_item AS i
+            JOIN market_index_artifact AS a ON a.artifact_hash = i.artifact_hash
+            WHERE i.dataset_hash = ? AND i.index_code = ?
+            ORDER BY i.bar_at, i.interval
+            """,
+            (self._dataset_hash, index_code.value),
+        ).fetchall()
+        bars = tuple(_validated_index_artifact_row(row) for row in rows)
+        expected = tuple(
+            sorted(
+                (item for item in self._manifest.index_items if item.index_code is index_code),
+                key=lambda item: (item.bar_at, item.interval.value),
+            )
+        )
+        if tuple(IndexArtifactMembership.from_bar(bar) for bar in bars) != expected:
+            raise RuntimeError("frozen index membership does not match its manifest")
+        return bars
+
+
 class BacktestMarketStore:
     """Persist shared market revisions and freeze exact reproducible datasets."""
 
@@ -233,6 +336,7 @@ class BacktestMarketStore:
         if type(busy_timeout_ms) is not int or not 1 <= busy_timeout_ms <= 60_000:
             raise ValueError("busy_timeout_ms must be between 1 and 60000")
         self._path = Path(database_path).expanduser().resolve()
+        self._busy_timeout_ms = busy_timeout_ms
         if self._path.exists() and not self._path.is_file():
             raise ValueError("database_path must point to a file")
         self._migration_inventory = inspect_market_database(self._path)
@@ -244,9 +348,17 @@ class BacktestMarketStore:
         )
         require_safe_store_initialization(self._migration_inventory)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._busy_timeout_ms = busy_timeout_ms
         self._manifest_cache: dict[str, DatasetManifest] = {}
         self._manifest_item_cache: dict[str, dict[str, DatasetItem]] = {}
+        if "MISSING_MARKET_INDEX_SCHEMA" in self._migration_inventory.migration_reasons:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                create_market_index_schema(connection)
+                connection.commit()
+            expanded = inspect_market_database(self._path)
+            if expanded.database_state is not DatabaseState.CURRENT or expanded.migration_reasons:
+                raise MigrationPreflightError("MARKET_INDEX_SCHEMA_INITIALIZATION_FAILED")
+            self._migration_inventory = expanded
         self._initialize()
 
     @property
@@ -398,6 +510,148 @@ class BacktestMarketStore:
 
     def record_daily_bars(self, values: Iterable[DailyBar]) -> tuple[str, ...]:
         return self._record_many("DAILY", values)
+
+    def record_index_bars(
+        self,
+        bars: tuple[MarketIndexBar, ...],
+    ) -> tuple[str, ...]:
+        """Append validated index corrections and advance only their natural heads."""
+
+        if type(bars) is not tuple or any(type(bar) is not MarketIndexBar for bar in bars):
+            raise TypeError("bars must be an exact tuple of MarketIndexBar")
+        memberships = tuple(IndexArtifactMembership.from_bar(bar) for bar in bars)
+        if len({item.natural_key for item in memberships}) != len(memberships):
+            raise ValueError("one index batch cannot repeat a natural identity")
+        now = shanghai_now_text()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            for bar, membership in zip(bars, memberships, strict=True):
+                content_json = _canonical_json(bar.model_dump(mode="python", round_trip=True))
+                head = connection.execute(
+                    """
+                    SELECT artifact_hash, revision
+                    FROM market_index_head
+                    WHERE natural_key = ?
+                    """,
+                    (membership.natural_key,),
+                ).fetchone()
+                if head is not None and str(head[0]) == membership.artifact_hash:
+                    if int(head[1]) != bar.provider_revision:
+                        raise ValueError("index duplicate revision does not match its head")
+                    continue
+                expected_revision = 1 if head is None else int(head[1]) + 1
+                if bar.provider_revision != expected_revision:
+                    raise ValueError("index correction provider_revision must be append-only")
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO market_index_artifact (
+                        artifact_hash, natural_key, index_code, interval, bar_at,
+                        provider_revision, content_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        membership.artifact_hash,
+                        membership.natural_key,
+                        bar.index_code.value,
+                        bar.interval.value,
+                        bar.bar_at.isoformat(timespec="microseconds"),
+                        bar.provider_revision,
+                        content_json,
+                        now,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO market_index_head (
+                        natural_key, artifact_hash, index_code, interval,
+                        bar_at, revision, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(natural_key) DO UPDATE SET
+                        artifact_hash = excluded.artifact_hash,
+                        index_code = excluded.index_code,
+                        interval = excluded.interval,
+                        bar_at = excluded.bar_at,
+                        revision = excluded.revision,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        membership.natural_key,
+                        membership.artifact_hash,
+                        bar.index_code.value,
+                        bar.interval.value,
+                        bar.bar_at.isoformat(timespec="microseconds"),
+                        expected_revision,
+                        now,
+                    ),
+                )
+            connection.commit()
+        return tuple(item.artifact_hash for item in memberships)
+
+    def index_head_revision(self, natural_key: str) -> int | None:
+        normalized_key = self._validate_natural_key(natural_key)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT revision FROM market_index_head WHERE natural_key = ?",
+                (normalized_key,),
+            ).fetchone()
+        return None if row is None else int(row[0])
+
+    def current_index_bars(
+        self,
+        *,
+        index_codes: tuple[MarketIndexCode, ...],
+        start_on: date,
+        end_on: date,
+    ) -> tuple[MarketIndexBar, ...]:
+        """Read current normalized heads for a bounded set of derived indices."""
+
+        if (
+            type(index_codes) is not tuple
+            or not 1 <= len(index_codes) <= 5
+            or any(not isinstance(code, MarketIndexCode) for code in index_codes)
+            or len(set(index_codes)) != len(index_codes)
+        ):
+            raise ValueError("index_codes must contain one to five unique approved codes")
+        if type(start_on) is not date or type(end_on) is not date or start_on > end_on:
+            raise ValueError("index date range is invalid")
+        placeholders = ",".join("?" for _ in index_codes)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT a.artifact_hash, a.natural_key, a.content_json
+                FROM market_index_head AS h
+                JOIN market_index_artifact AS a
+                  ON a.artifact_hash = h.artifact_hash
+                WHERE h.index_code IN ({placeholders})
+                  AND substr(h.bar_at, 1, 10) >= ?
+                  AND substr(h.bar_at, 1, 10) <= ?
+                ORDER BY h.index_code, h.bar_at, h.interval
+                """,
+                (
+                    *(code.value for code in index_codes),
+                    start_on.isoformat(),
+                    end_on.isoformat(),
+                ),
+            ).fetchall()
+        return tuple(_validated_index_artifact_row(row) for row in rows)
+
+    def index_bar_revisions(self, natural_key: str) -> tuple[MarketIndexBar, ...]:
+        """Read every immutable correction for one exact index natural identity."""
+
+        normalized_key = self._validate_natural_key(natural_key)
+        if not normalized_key.startswith(("INDEX_5M:", "INDEX_DAILY:")):
+            raise ValueError("natural_key must identify an index bar")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT artifact_hash, natural_key, content_json
+                FROM market_index_artifact
+                WHERE natural_key = ?
+                ORDER BY provider_revision
+                """,
+                (normalized_key,),
+            ).fetchall()
+        return tuple(_validated_index_artifact_row(row) for row in rows)
 
     def statistics(self) -> MarketStoreStatistics:
         with self._connect() as connection:
@@ -630,6 +884,107 @@ class BacktestMarketStore:
                 raise RuntimeError("stored dataset manifest does not match its frozen identity")
             connection.commit()
         return DatasetFreezeResult(ready=True, dataset_hash=dataset_hash, blockers=())
+
+    def freeze_dataset_v2(
+        self,
+        scope: DatasetScope,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        progress_callback: BacktestProgressCallback | None = None,
+    ) -> DatasetFreezeResult:
+        """Extend a verified stock snapshot with exact current derived-index revisions."""
+
+        stock_result = self.freeze_dataset(
+            scope,
+            cancellation_token=cancellation_token,
+            progress_callback=progress_callback,
+        )
+        if not stock_result.ready or stock_result.dataset_hash is None:
+            return stock_result
+        stock_manifest = self.dataset_manifest(stock_result.dataset_hash)
+        index_codes = tuple(
+            sorted(
+                {resolve_board_reference(symbol).index_code for symbol in scope.symbols},
+                key=lambda code: code.value,
+            )
+        )
+        bars = self.current_index_bars(
+            index_codes=index_codes,
+            start_on=scope.warmup_start,
+            end_on=scope.end,
+        )
+        index_items = tuple(
+            sorted(
+                (IndexArtifactMembership.from_bar(bar) for bar in bars),
+                key=lambda item: item.natural_key,
+            )
+        )
+        manifest = DatasetManifest.build_v2(
+            scope=scope,
+            stock_items=stock_manifest.items,
+            index_items=index_items,
+        )
+        manifest_json = _canonical_json(manifest.model_dump(mode="python", round_trip=True))
+        check_cancelled(cancellation_token, "FREEZE_PUBLISH")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            for item in index_items:
+                head = connection.execute(
+                    """
+                    SELECT artifact_hash FROM market_index_head
+                    WHERE natural_key = ?
+                    """,
+                    (item.natural_key,),
+                ).fetchone()
+                if head is None or str(head[0]) != item.artifact_hash:
+                    raise RuntimeError("index head changed before immutable dataset publication")
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO market_dataset (dataset_hash, manifest_json, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (manifest.dataset_hash, manifest_json, shanghai_now_text()),
+            )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO market_dataset_item (
+                    dataset_hash, natural_key, artifact_hash, kind, symbol, trade_date
+                )
+                SELECT ?, natural_key, artifact_hash, kind, symbol, trade_date
+                FROM market_dataset_item
+                WHERE dataset_hash = ?
+                """,
+                (manifest.dataset_hash, stock_manifest.dataset_hash),
+            )
+            connection.executemany(
+                """
+                INSERT OR IGNORE INTO market_dataset_index_item (
+                    dataset_hash, natural_key, artifact_hash, index_code,
+                    interval, bar_at, provider_revision
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                tuple(
+                    (
+                        manifest.dataset_hash,
+                        item.natural_key,
+                        item.artifact_hash,
+                        item.index_code.value,
+                        item.interval.value,
+                        item.bar_at.isoformat(timespec="microseconds"),
+                        item.provider_revision,
+                    )
+                    for item in index_items
+                ),
+            )
+            loaded = self._load_manifest(connection, manifest.dataset_hash)
+            if loaded != manifest:
+                raise RuntimeError("stored v2 dataset does not match its frozen identity")
+            connection.commit()
+        return DatasetFreezeResult(
+            ready=True,
+            dataset_hash=manifest.dataset_hash,
+            blockers=(),
+        )
 
     def dataset_manifest(self, dataset_hash: str) -> DatasetManifest:
         normalized_hash = _validate_hash(dataset_hash, "dataset_hash")
@@ -1093,7 +1448,10 @@ class BacktestMarketStore:
         ordered_items = tuple(sorted(manifest.items, key=lambda item: item.natural_key))
         if manifest.items != ordered_items:
             raise RuntimeError("stored dataset manifest items are not canonical")
-        if _content_hash(_dataset_identity(manifest.scope, ordered_items)) != dataset_hash:
+        if (
+            manifest.schema_version == DATASET_SCHEMA_VERSION
+            and _content_hash(_dataset_identity(manifest.scope, ordered_items)) != dataset_hash
+        ):
             raise RuntimeError("stored dataset manifest failed its content hash")
         rows = connection.execute(
             """
@@ -1116,6 +1474,29 @@ class BacktestMarketStore:
         )
         if stored_items != ordered_items:
             raise RuntimeError("stored dataset membership does not match its manifest")
+        index_rows = connection.execute(
+            """
+            SELECT natural_key, artifact_hash, index_code, interval,
+                   bar_at, provider_revision
+            FROM market_dataset_index_item
+            WHERE dataset_hash = ?
+            ORDER BY natural_key
+            """,
+            (dataset_hash,),
+        ).fetchall()
+        stored_index_items = tuple(
+            IndexArtifactMembership(
+                natural_key=str(item[0]),
+                artifact_hash=str(item[1]),
+                index_code=MarketIndexCode(str(item[2])),
+                interval=MarketIndexInterval(str(item[3])),
+                bar_at=datetime.fromisoformat(str(item[4])),
+                provider_revision=int(item[5]),
+            )
+            for item in index_rows
+        )
+        if stored_index_items != manifest.index_items:
+            raise RuntimeError("stored index membership does not match its manifest")
         if (
             dataset_hash not in self._manifest_cache
             and len(self._manifest_cache) >= _MAX_MANIFEST_CACHE
@@ -1355,48 +1736,40 @@ def _open_frozen_reader(
     symbol: str | None = None,
 ) -> _SQLiteFrozenDatasetReader:
     row = connection.execute(
-        """
-        SELECT json_extract(manifest_json, '$.dataset_hash'),
-               json_extract(manifest_json, '$.schema_version'),
-               json_extract(manifest_json, '$.scope'),
-               json_array_length(manifest_json, '$.items')
-        FROM market_dataset
-        WHERE dataset_hash = ?
-        """,
+        "SELECT manifest_json, rowid FROM market_dataset WHERE dataset_hash = ?",
         (dataset_hash,),
     ).fetchone()
     if row is None:
         raise KeyError(f"unknown dataset_hash: {dataset_hash}")
-    root_fields = frozenset(
-        str(item[0])
-        for item in connection.execute(
-            """
-            SELECT manifest_field.key
-            FROM market_dataset AS dataset,
-                 json_each(dataset.manifest_json) AS manifest_field
-            WHERE dataset.dataset_hash = ?
-            """,
-            (dataset_hash,),
-        )
-    )
-    if root_fields != {"dataset_hash", "schema_version", "scope", "items"}:
-        raise RuntimeError("stored dataset manifest fields are invalid")
-    if str(row[0]) != dataset_hash or str(row[1]) != DATASET_SCHEMA_VERSION:
-        raise RuntimeError("stored dataset manifest identity is invalid")
     try:
-        scope = DatasetScope.model_validate_json(str(row[2]))
-        expected_item_count = int(row[3])
+        manifest = DatasetManifest.model_validate_json(str(row[0]))
+        dataset_revision = int(row[1])
     except (TypeError, ValueError) as error:
         raise RuntimeError("stored dataset manifest is invalid") from error
+    if manifest.dataset_hash != dataset_hash:
+        raise RuntimeError("stored dataset manifest identity is invalid")
+    if not 1 <= dataset_revision <= 2_147_483_647:
+        raise RuntimeError("stored dataset revision is invalid")
+    scope = manifest.scope
     _verify_frozen_membership(
         connection,
         dataset_hash=dataset_hash,
         scope=scope,
-        expected_item_count=expected_item_count,
+        expected_item_count=len(manifest.items),
+        schema_version=manifest.schema_version,
     )
     if symbol is not None and symbol not in scope.symbols:
         raise ValueError(f"symbol is not a member of the frozen dataset: {symbol}")
     symbols = scope.symbols if symbol is None else (symbol,)
+    if manifest.schema_version == INDEX_DATASET_SCHEMA_VERSION:
+        return _SQLiteFrozenMarketIndexDatasetReader(
+            connection,
+            dataset_hash,
+            scope,
+            symbols,
+            manifest,
+            dataset_revision,
+        )
     return _SQLiteFrozenDatasetReader(connection, dataset_hash, scope, symbols)
 
 
@@ -1406,6 +1779,7 @@ def _verify_frozen_membership(
     dataset_hash: str,
     scope: DatasetScope,
     expected_item_count: int,
+    schema_version: str,
 ) -> None:
     manifest_items = connection.execute(
         """
@@ -1460,7 +1834,7 @@ def _verify_frozen_membership(
     digest.update(b',"scope":')
     digest.update(_canonical_json(scope.model_dump(mode="python", round_trip=True)).encode("utf-8"))
     digest.update(b"}")
-    if digest.hexdigest() != dataset_hash:
+    if schema_version == DATASET_SCHEMA_VERSION and digest.hexdigest() != dataset_hash:
         raise RuntimeError("stored dataset manifest failed its content hash")
 
 
@@ -1496,7 +1870,8 @@ def _dataset_summary_from_row(row: tuple[object, ...]) -> BacktestDatasetSummary
     if len(row) != 9:
         raise RuntimeError("stored dataset summary row shape is invalid")
     dataset_hash = _validate_hash(str(row[0]), "stored dataset_hash")
-    if str(row[1]) != DATASET_SCHEMA_VERSION:
+    schema_version = str(row[1])
+    if schema_version not in {DATASET_SCHEMA_VERSION, INDEX_DATASET_SCHEMA_VERSION}:
         raise RuntimeError("stored dataset schema version is invalid")
     try:
         stored_scope = DatasetScope.model_validate_json(str(row[2]))
@@ -1521,6 +1896,7 @@ def _dataset_summary_from_row(row: tuple[object, ...]) -> BacktestDatasetSummary
         )
         return BacktestDatasetSummary(
             dataset_hash=dataset_hash,
+            schema_version=schema_version,
             scope=scope,
             coverage=coverage,
             created_at=created_at,
@@ -1604,6 +1980,24 @@ def _validated_market_artifact(
     if artifact_hash != expected_hash:
         raise RuntimeError("market artifact failed its content hash")
     return content_json
+
+
+def _validated_index_artifact_row(row: tuple[object, ...]) -> MarketIndexBar:
+    if len(row) != 3:
+        raise RuntimeError("index artifact row shape is invalid")
+    artifact_hash, natural_key, content_json = (str(value) for value in row)
+    try:
+        bar = MarketIndexBar.model_validate_json(content_json)
+        membership = IndexArtifactMembership.from_bar(bar)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("stored index artifact content is invalid") from error
+    if (
+        membership.natural_key != natural_key
+        or membership.artifact_hash != artifact_hash
+        or market_index_bar_set_hash((bar,)) != artifact_hash
+    ):
+        raise RuntimeError("stored index artifact failed its content identity")
+    return bar
 
 
 def _validate_dataset_item_row(row: tuple[object, ...], expected: DatasetItem) -> None:

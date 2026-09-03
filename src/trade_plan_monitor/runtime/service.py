@@ -50,6 +50,7 @@ from trade_plan_monitor.market_data.reconciliation import (
     reconcile_daily_close,
 )
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
+from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
 from trade_plan_monitor.runtime.clock import Clock, SystemClock, _canonical_shanghai
@@ -58,6 +59,7 @@ from trade_plan_monitor.runtime.health import (
     RuntimeHealthSnapshot,
     RuntimeServiceStatus,
 )
+from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexService
 from trade_plan_monitor.runtime.scheduler import MarketDeadline
 from trade_plan_monitor.state.events import (
     MonitorEvent,
@@ -382,6 +384,7 @@ class RuntimeEvaluationService:
         committed_event_publisher: CommittedEventPublisher,
         evaluator: Evaluator = evaluate,
         event_id_factory: EventIdFactory = uuid4,
+        market_index_service: RuntimeMarketIndexService | None = None,
     ) -> None:
         dependencies = (
             fetch_minutes,
@@ -397,6 +400,11 @@ class RuntimeEvaluationService:
             raise TypeError("official fetch and context builder must be configured together")
         if official_observed_at is not None and not callable(official_observed_at):
             raise TypeError("official_observed_at must be callable")
+        if market_index_service is not None and not isinstance(
+            market_index_service,
+            RuntimeMarketIndexService,
+        ):
+            raise TypeError("market_index_service must be a RuntimeMarketIndexService")
         system_clock = SystemClock()
         self._fetch_minutes = fetch_minutes
         self._fetch_official_daily = fetch_official_daily
@@ -409,6 +417,7 @@ class RuntimeEvaluationService:
         self._publisher = committed_event_publisher
         self._evaluator = evaluator
         self._event_id_factory = event_id_factory
+        self._market_index_service = market_index_service
         self._official_serial = asyncio.Lock()
 
     async def run_intraday(
@@ -419,6 +428,72 @@ class RuntimeEvaluationService:
         evaluated_at: datetime,
     ) -> IntradayCycleResult:
         """Run one intraday target without provider or publisher work in a transaction."""
+
+        reference_market_snapshot = None
+        if self._market_index_service is not None:
+            prepared = await self._market_index_service.prepare(
+                plans=(plan,),
+                decision_cutoff=bucket_end,
+                observed_no_later_than=evaluated_at,
+            )
+            reference_market_snapshot = prepared.snapshot_for_plan(plan)
+        return await self._run_intraday_with_snapshot(
+            plan=plan,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+            reference_market_snapshot=reference_market_snapshot,
+        )
+
+    async def run_intraday_batch(
+        self,
+        *,
+        plans: tuple[TradePlan, ...],
+        bucket_end: datetime,
+        evaluated_at: datetime,
+    ) -> tuple[IntradayCycleResult, ...]:
+        """Union index needs, then evaluate an active-plan batch without cancellation."""
+
+        if type(plans) is not tuple or any(not isinstance(plan, TradePlan) for plan in plans):
+            raise TypeError("plans must be a tuple of TradePlan values")
+        if len(plans) > 10:
+            raise ValueError("runtime supports at most 10 active plans")
+        prepared = (
+            None
+            if self._market_index_service is None
+            else await self._market_index_service.prepare(
+                plans=plans,
+                decision_cutoff=bucket_end,
+                observed_no_later_than=evaluated_at,
+            )
+        )
+        results = await asyncio.gather(
+            *(
+                self._run_intraday_with_snapshot(
+                    plan=plan,
+                    bucket_end=bucket_end,
+                    evaluated_at=evaluated_at,
+                    reference_market_snapshot=(
+                        None if prepared is None else prepared.snapshot_for_plan(plan)
+                    ),
+                )
+                for plan in plans
+            ),
+            return_exceptions=True,
+        )
+        first_error = next((item for item in results if isinstance(item, BaseException)), None)
+        if first_error is not None:
+            raise first_error
+        return tuple(item for item in results if isinstance(item, IntradayCycleResult))
+
+    async def _run_intraday_with_snapshot(
+        self,
+        *,
+        plan: TradePlan,
+        bucket_end: datetime,
+        evaluated_at: datetime,
+        reference_market_snapshot: MarketIndexSnapshot | None,
+    ) -> IntradayCycleResult:
+        """Evaluate one plan using an already shared reference-index snapshot."""
 
         if not isinstance(plan, TradePlan):
             raise TypeError("plan must be a TradePlan")
@@ -463,7 +538,17 @@ class RuntimeEvaluationService:
             provenance=DailyIndicatorProvenance.PROVISIONAL,
         )
         context = self._context_builder(plan, facts)
-        self._validate_context(plan=plan, facts=facts, context=context)
+        if not isinstance(context, EvaluationContext):
+            raise TypeError("context_builder must return an EvaluationContext")
+        context = context.model_copy(
+            update={"reference_market_snapshot": reference_market_snapshot}
+        )
+        self._validate_context(
+            plan=plan,
+            facts=facts,
+            context=context,
+            reference_market_snapshot=reference_market_snapshot,
+        )
         result = self._evaluator(context)
         self._validate_result(plan=plan, facts=facts, result=result)
 
@@ -529,6 +614,58 @@ class RuntimeEvaluationService:
         pending_date, _resume = _close_pending_payload(health.gap_json)
         return pending_date
 
+    async def run_official_close_batch(
+        self,
+        *,
+        plans: tuple[TradePlan, ...],
+        trade_date: date,
+        evaluated_at: datetime,
+        close_attempt: int,
+    ) -> tuple[OfficialCloseCycleResult, ...]:
+        """Union index needs, then serialize official-close evaluation for a plan batch."""
+
+        if type(plans) is not tuple or any(not isinstance(plan, TradePlan) for plan in plans):
+            raise TypeError("plans must be a tuple of TradePlan values")
+        if len(plans) > 10:
+            raise ValueError("runtime supports at most 10 active plans")
+        if isinstance(trade_date, datetime) or not isinstance(trade_date, date):
+            raise TypeError("trade_date must be a date")
+        if type(close_attempt) is not int or close_attempt < 1:
+            raise ValueError("close_attempt must be a positive integer")
+        canonical_evaluated_at = _SHANGHAI_DATETIME.validate_python(
+            evaluated_at,
+            strict=True,
+        )
+        cutoff = datetime.combine(
+            trade_date,
+            time(15, 0),
+            canonical_evaluated_at.tzinfo,
+        )
+        prepared = (
+            None
+            if self._market_index_service is None
+            else await self._market_index_service.prepare(
+                plans=plans,
+                decision_cutoff=cutoff,
+                observed_no_later_than=canonical_evaluated_at,
+            )
+        )
+        results: list[OfficialCloseCycleResult] = []
+        async with self._official_serial:
+            for plan in plans:
+                results.append(
+                    await self._run_official_close_unlocked(
+                        plan=plan,
+                        trade_date=trade_date,
+                        evaluated_at=canonical_evaluated_at,
+                        close_attempt=close_attempt,
+                        reference_market_snapshot=(
+                            None if prepared is None else prepared.snapshot_for_plan(plan)
+                        ),
+                    )
+                )
+        return tuple(results)
+
     async def run_official_close(
         self,
         *,
@@ -539,12 +676,22 @@ class RuntimeEvaluationService:
     ) -> OfficialCloseCycleResult:
         """Reconcile one official date without provider or publisher I/O in a transaction."""
 
+        reference_market_snapshot = None
+        if self._market_index_service is not None:
+            cutoff = datetime.combine(trade_date, time(15, 0), evaluated_at.tzinfo)
+            prepared = await self._market_index_service.prepare(
+                plans=(plan,),
+                decision_cutoff=cutoff,
+                observed_no_later_than=evaluated_at,
+            )
+            reference_market_snapshot = prepared.snapshot_for_plan(plan)
         async with self._official_serial:
             return await self._run_official_close_unlocked(
                 plan=plan,
                 trade_date=trade_date,
                 evaluated_at=evaluated_at,
                 close_attempt=close_attempt,
+                reference_market_snapshot=reference_market_snapshot,
             )
 
     async def _run_official_close_unlocked(
@@ -554,6 +701,7 @@ class RuntimeEvaluationService:
         trade_date: date,
         evaluated_at: datetime,
         close_attempt: int,
+        reference_market_snapshot: MarketIndexSnapshot | None,
     ) -> OfficialCloseCycleResult:
         """Own the serialized official-close workflow for one runtime instance."""
 
@@ -686,7 +834,17 @@ class RuntimeEvaluationService:
             provenance=DailyIndicatorProvenance.OFFICIAL,
         )
         context = self._official_context_builder(plan, facts)
-        self._validate_official_context(plan=plan, facts=facts, context=context)
+        if not isinstance(context, EvaluationContext):
+            raise TypeError("official_context_builder must return an EvaluationContext")
+        context = context.model_copy(
+            update={"reference_market_snapshot": reference_market_snapshot}
+        )
+        self._validate_official_context(
+            plan=plan,
+            facts=facts,
+            context=context,
+            reference_market_snapshot=reference_market_snapshot,
+        )
         result = self._evaluator(context)
         self._validate_official_result(plan=plan, facts=facts, result=result)
 
@@ -949,11 +1107,14 @@ class RuntimeEvaluationService:
         plan: TradePlan,
         facts: IntradayMarketFacts,
         context: object,
+        reference_market_snapshot: MarketIndexSnapshot | None,
     ) -> None:
         if not isinstance(context, EvaluationContext):
             raise TypeError("context_builder must return an EvaluationContext")
         if context.plan != plan or context.plan_hash != plan_sha256(plan):
             raise ValueError("evaluation context must match the requested plan")
+        if context.reference_market_snapshot != reference_market_snapshot:
+            raise ValueError("evaluation context must retain the shared market-index snapshot")
         if not isinstance(context.target, IntradayEvaluationTarget):
             raise ValueError("intraday runtime requires an intraday evaluation target")
         if (
@@ -1005,11 +1166,14 @@ class RuntimeEvaluationService:
         plan: TradePlan,
         facts: OfficialCloseMarketFacts,
         context: object,
+        reference_market_snapshot: MarketIndexSnapshot | None,
     ) -> None:
         if not isinstance(context, EvaluationContext):
             raise TypeError("official_context_builder must return an EvaluationContext")
         if context.plan != plan or context.plan_hash != plan_sha256(plan):
             raise ValueError("official evaluation context must match the requested plan")
+        if context.reference_market_snapshot != reference_market_snapshot:
+            raise ValueError("official context must retain the shared market-index snapshot")
         if not isinstance(context.target, OfficialCloseEvaluationTarget):
             raise ValueError("official runtime requires an official-close target")
         if (

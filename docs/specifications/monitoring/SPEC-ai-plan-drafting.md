@@ -122,7 +122,7 @@ The prompt contains:
 - an explicit wrapper marking the user's plan as untrusted data;
 - no secrets, live positions, or unrelated reports.
 
-Prompts use immutable version identifiers such as `plan-extract-v1`. A prompt change creates a new version and updates golden fixtures. The complete `plan-extract-v1` prompt, including its generated schema and canonical `GOLDEN_PLAN_SOURCE`, is locked by SHA-256 `1b42865ce7dda121b64a62e15faa1213dd2be55cf654277f0801cd9c29d0dd22`; any template or schema change requires a new version and golden value.
+Prompts use immutable version identifiers. A prompt or generated-schema change creates a new version and updates golden fixtures. The compatibility `plan-extract-v1` prompt is preserved byte-for-byte by projecting the Schema v1 plan contract; with canonical `GOLDEN_PLAN_SOURCE` it is locked by SHA-256 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`. The default `plan-extract-v2` prompt exposes the additive Schema v2 contract and six approved board-index leaves; its corresponding hash is `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`. Explicit historical v1 configurations remain replayable, while configurations that omit the version select v2. Any later template or schema change requires another version and golden value.
 
 ### Review and Activation Boundary
 

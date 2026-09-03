@@ -20,6 +20,7 @@ const snapshot: DashboardResponse = {
     stale: 0,
   },
   dataAgeSeconds: 2,
+  marketIndexes: [],
   observedAt: "2026-08-24T10:30:00+08:00",
   sequence: 7,
   symbols: [

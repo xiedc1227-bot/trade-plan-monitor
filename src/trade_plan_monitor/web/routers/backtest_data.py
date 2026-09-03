@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol, cast
 
@@ -16,6 +17,7 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestDataSyncCommand,
     BacktestJobKind,
     BacktestJobReceipt,
+    BacktestReferenceMarketCoverageView,
 )
 from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.schemas import (
@@ -66,6 +68,10 @@ CursorQuery = Annotated[
     str | None,
     Query(min_length=3, max_length=512, pattern=_CURSOR_PATTERN),
 ]
+PlanVersionIdQuery = Annotated[
+    str,
+    Query(alias="planVersionId", min_length=36, max_length=36),
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +95,13 @@ class BacktestDataReadService(Protocol):
     ) -> BacktestDatasetPage: ...
 
     async def get_dataset(self, *, dataset_hash: str) -> BacktestDatasetView | None: ...
+
+    async def get_reference_market_coverage(
+        self,
+        *,
+        dataset_hash: str,
+        plan_version_id: str,
+    ) -> BacktestReferenceMarketCoverageView: ...
 
 
 class BacktestDataOperationService(Protocol):
@@ -130,6 +143,19 @@ BacktestDataReadServiceDependency = Annotated[
 BacktestDataOperationServiceDependency = Annotated[
     BacktestDataOperationService,
     Depends(get_backtest_data_operation_service),
+]
+
+
+def require_reference_market_coverage_query(request: Request) -> None:
+    names = tuple(name for name, _value in request.query_params.multi_items())
+    counts = Counter(names)
+    if counts != {"planVersionId": 1}:
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+
+
+ReferenceMarketCoverageQueryDependency = Annotated[
+    None,
+    Depends(require_reference_market_coverage_query),
 ]
 
 
@@ -210,6 +236,28 @@ async def get_backtest_dataset(
     if dataset.dataset_hash != dataset_hash:
         raise RuntimeError("backtest dataset service returned a mismatched dataset")
     return dataset
+
+
+@router.get(
+    "/backtest-datasets/{dataset_hash}/reference-market-coverage",
+    response_model=BacktestReferenceMarketCoverageView,
+)
+async def get_backtest_reference_market_coverage(
+    dataset_hash: DatasetHashPath,
+    _query: ReferenceMarketCoverageQueryDependency,
+    service: BacktestDataReadServiceDependency,
+    plan_version_id: PlanVersionIdQuery,
+) -> BacktestReferenceMarketCoverageView:
+    coverage = validate_api_response(
+        await service.get_reference_market_coverage(
+            dataset_hash=dataset_hash,
+            plan_version_id=plan_version_id,
+        ),
+        BacktestReferenceMarketCoverageView,
+    )
+    if coverage.dataset_hash != dataset_hash or str(coverage.plan_version_id) != plan_version_id:
+        raise RuntimeError("backtest coverage service returned mismatched identity")
+    return coverage
 
 
 def _submission_response(

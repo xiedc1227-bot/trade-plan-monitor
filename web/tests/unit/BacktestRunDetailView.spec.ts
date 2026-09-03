@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   BacktestJobView,
+  BacktestMarketIndexSeriesView,
   BacktestRunView,
 } from "../../src/api/generated";
 import type { BacktestApi } from "../../src/api/backtests";
@@ -138,6 +139,8 @@ function apiWith(overrides: Partial<BacktestApi> = {}): BacktestApi {
     cancelJob: unused,
     getDataset: unused,
     getEquitySeries: unused,
+    getMarketIndexSeries: unused,
+    getReferenceMarketCoverage: unused,
     getJob: unused,
     getRun: unused,
     listDatasets: unused,
@@ -151,6 +154,56 @@ function apiWith(overrides: Partial<BacktestApi> = {}): BacktestApi {
     verifyDataset: unused,
     ...overrides,
   } as BacktestApi;
+}
+
+function marketIndexSeries(): BacktestMarketIndexSeriesView {
+  const summary = {
+    applicableBranchCount: 2,
+    conditionType: "INDEX_CLOSE_GTE_MA" as const,
+    formulaId: "SMA" as const,
+    missingCount: 0,
+    parameters: { period: 20 },
+    planPath: "entry.conditions.all[0]",
+    satisfiedCount: 1,
+    unsatisfiedCount: 1,
+  };
+  return {
+    conditionSummaries: [summary],
+    healthTimeline: [
+      { dataAt: COMPLETED_AT, health: "LIVE", issues: [] },
+    ],
+    items: [
+      {
+        closePoints: "10000.5",
+        dataAt: COMPLETED_AT,
+        health: "LIVE",
+        indicatorFacts: [],
+        issues: [],
+        snapshotHash: "2".repeat(64),
+        tradeDate: "2026-08-29",
+      },
+    ],
+    referenceMarket: {
+      binding: {
+        board: "SZSE_MAIN",
+        displayName: "深证成指",
+        indexCode: "399001.SZ",
+        mappingVersion: "board-index-map-v1",
+        selection: "AUTO_BOARD",
+      },
+      blockers: [],
+      conditionPaths: ["entry.conditions.all[0]"],
+      conditionSummaries: [summary],
+      coverageStatus: "AVAILABLE",
+      datasetHash: "d".repeat(64),
+      formulaDefinitionHash: "3".repeat(64),
+      indexRequirementHash: "4".repeat(64),
+      marketIndexDataHash: "5".repeat(64),
+      required: true,
+      warmupStart: "2026-07-01",
+    },
+    runId: RUN_ID,
+  };
 }
 
 function deferred<Value>() {
@@ -193,6 +246,31 @@ afterEach(() => {
 });
 
 describe("BacktestRunDetailView", () => {
+  it("loads the reference-index resource only for its URL tab and navigates a date to decisions", async () => {
+    const getRun = vi.fn<BacktestApi["getRun"]>().mockResolvedValue(run());
+    const getMarketIndexSeries = vi
+      .fn<BacktestApi["getMarketIndexSeries"]>()
+      .mockResolvedValue(marketIndexSeries());
+    const { router, wrapper } = await mountDetail({
+      api: apiWith({ getMarketIndexSeries, getRun }),
+      url: `/backtests/${RUN_ID}?tab=market-index`,
+    });
+
+    expect(wrapper.get('[data-testid="result-tab-market-index"]').attributes("aria-current")).toBe("page");
+    expect(getMarketIndexSeries).toHaveBeenCalledWith(
+      RUN_ID,
+      { limit: 512 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(wrapper.text()).toContain("共用指数数据");
+    expect(wrapper.text()).toContain("计划指数条件结果");
+
+    await wrapper.get('button[data-trade-date="2026-08-29"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.query).toEqual({ kind: "DECISION", tab: "details" });
+    wrapper.unmount();
+  });
+
   it("loads only the materialized summary for a no-job deep link and renders exact facts", async () => {
     const getRun = vi.fn<BacktestApi["getRun"]>().mockResolvedValue(run());
     const getJob = vi.fn<BacktestApi["getJob"]>();

@@ -13,11 +13,15 @@
 - [计划领域](specifications/monitoring/SPEC-plan-domain.zh-CN.md)（[英文](specifications/monitoring/SPEC-plan-domain.md)）
 - [AI 计划草稿](specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md)（[英文](specifications/monitoring/SPEC-ai-plan-drafting.md)）
 - [行情数据](specifications/monitoring/SPEC-market-data.zh-CN.md)（[英文](specifications/monitoring/SPEC-market-data.md)）
+- [板块指数身份](specifications/monitoring/SPEC-index-identity.zh-CN.md)（[英文](specifications/monitoring/SPEC-index-identity.md)）
+- [共用板块指数数据](specifications/monitoring/SPEC-index-data.zh-CN.md)（[英文](specifications/monitoring/SPEC-index-data.md)）
+- [计划负责的指数条件](specifications/monitoring/SPEC-plan-index-conditions.zh-CN.md)（[英文](specifications/monitoring/SPEC-plan-index-conditions.md)）
 - [策略状态](specifications/monitoring/SPEC-strategy-state.zh-CN.md)（[英文](specifications/monitoring/SPEC-strategy-state.md)）
 - [决策引擎](specifications/monitoring/SPEC-decision-engine.zh-CN.md)（[英文](specifications/monitoring/SPEC-decision-engine.md)）
 - [通知 Outbox](specifications/monitoring/SPEC-notification-outbox.zh-CN.md)（[英文](specifications/monitoring/SPEC-notification-outbox.md)）
 - [监控运行时](specifications/monitoring/SPEC-monitor-runtime.zh-CN.md)（[英文](specifications/monitoring/SPEC-monitor-runtime.md)）
 - [本地 Web 应用](specifications/monitoring/SPEC-local-web.zh-CN.md)（[英文](specifications/monitoring/SPEC-local-web.md)）
+- [监控指数视图](specifications/monitoring/SPEC-monitor-index-view.zh-CN.md)（[英文](specifications/monitoring/SPEC-monitor-index-view.md)）
 
 ## 回测规格
 
@@ -28,11 +32,18 @@
 - [持久任务](specifications/backtesting/SPEC-backtest-jobs.zh-CN.md)（[英文](specifications/backtesting/SPEC-backtest-jobs.md)）
 - [REST API](specifications/backtesting/SPEC-backtest-api.zh-CN.md)（[英文](specifications/backtesting/SPEC-backtest-api.md)）
 - [Web 工作流](specifications/backtesting/SPEC-backtest-web.zh-CN.md)（[英文](specifications/backtesting/SPEC-backtest-web.md)）
+- [回测指数数据](specifications/backtesting/SPEC-backtest-index-data.zh-CN.md)（[英文](specifications/backtesting/SPEC-backtest-index-data.md)）
+- [回测指数视图](specifications/backtesting/SPEC-backtest-index-view.zh-CN.md)（[英文](specifications/backtesting/SPEC-backtest-index-view.md)）
 
 ## 架构决策
 
 - [ADR 0001：隔离持久化回测任务与确定性结果](decisions/0001-isolate-backtest-jobs-from-results.zh-CN.md)（[英文](decisions/0001-isolate-backtest-jobs-from-results.md)）
 - [ADR 0002：所有回测时间统一使用 Asia/Shanghai](decisions/0002-use-asia-shanghai-for-backtest-time.zh-CN.md)（[英文](decisions/0002-use-asia-shanghai-for-backtest-time.md)）
+- [ADR 0003：共用板块指数数据，使用方式由交易计划决定](decisions/0003-share-board-index-data-and-let-plans-own-usage.zh-CN.md)（[英文](decisions/0003-share-board-index-data-and-let-plans-own-usage.md)）
+
+## 已批准提案
+
+- [共用板块指数数据，使用方式由计划决定](proposals/PROPOSAL-market-index-context.zh-CN.md)（[英文](proposals/PROPOSAL-market-index-context.md)）
 
 ## 指南
 

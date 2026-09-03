@@ -2,7 +2,11 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
 
-import type { BacktestJobReceipt, BacktestRunCommand } from "../../src/api/generated";
+import type {
+  BacktestJobReceipt,
+  BacktestReferenceMarketCoverageView,
+  BacktestRunCommand,
+} from "../../src/api/generated";
 import type { BacktestApi, BacktestMutationResponse } from "../../src/api/backtests";
 import { ApiClientError } from "../../src/api/transport";
 import BacktestNewView from "../../src/views/BacktestNewView.vue";
@@ -44,6 +48,8 @@ function apiWith(overrides: Partial<BacktestApi> = {}): BacktestApi {
     cancelJob: unused,
     getDataset: unused,
     getEquitySeries: unused,
+    getMarketIndexSeries: unused,
+    getReferenceMarketCoverage: unused,
     getJob: unused,
     getRun: unused,
     listDatasets: unused,
@@ -57,6 +63,36 @@ function apiWith(overrides: Partial<BacktestApi> = {}): BacktestApi {
     verifyDataset: unused,
     ...overrides,
   } as BacktestApi;
+}
+
+function referenceMarketCoverage(
+  overrides: Partial<BacktestReferenceMarketCoverageView> = {},
+): BacktestReferenceMarketCoverageView {
+  return {
+    availableFiveMinuteCount: 0,
+    availableOfficialDayCount: 22,
+    binding: {
+      board: "SZSE_MAIN",
+      displayName: "深证成指",
+      indexCode: "399001.SZ",
+      mappingVersion: "board-index-map-v1",
+      selection: "AUTO_BOARD",
+    },
+    blockers: [],
+    conditionPaths: ["entry.conditions.all[0]"],
+    coverageStatus: "AVAILABLE",
+    datasetHash: DATASET_HASH,
+    formulaDefinitionHash: "c".repeat(64),
+    indexRequirementHash: "d".repeat(64),
+    marketIndexDataHash: "e".repeat(64),
+    planVersionId: PLAN_VERSION_ID,
+    required: true,
+    requiredFiveMinuteCount: 0,
+    requiredOfficialDayCount: 21,
+    warmupEnd: "2026-08-28",
+    warmupStart: "2026-07-01",
+    ...overrides,
+  };
 }
 
 function deferred<Value>() {
@@ -118,6 +154,83 @@ async function submit(wrapper: VueWrapper): Promise<void> {
 }
 
 describe("BacktestNewView", () => {
+  it("previews only backend-resolved index binding, paths, warm-up, and coverage", async () => {
+    const getReferenceMarketCoverage = vi
+      .fn<BacktestApi["getReferenceMarketCoverage"]>()
+      .mockResolvedValue(referenceMarketCoverage());
+    const { wrapper } = await mountNewView({
+      api: apiWith({ getReferenceMarketCoverage }),
+    });
+
+    await wrapper.get<HTMLInputElement>("#plan-version-id").setValue(PLAN_VERSION_ID);
+    expect(getReferenceMarketCoverage).not.toHaveBeenCalled();
+    await wrapper.get<HTMLInputElement>("#dataset-hash").setValue(DATASET_HASH);
+    await flushPromises();
+
+    expect(getReferenceMarketCoverage).toHaveBeenCalledWith(
+      DATASET_HASH,
+      PLAN_VERSION_ID,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    const panel = wrapper.get('[data-testid="reference-market-coverage"]');
+    expect(panel.text()).toContain("深证成指");
+    expect(panel.text()).toContain("board-index-map-v1");
+    expect(panel.text()).toContain("entry.conditions.all[0]");
+    expect(panel.text()).toContain("2026-07-01");
+    expect(panel.text()).toContain("21 / 22");
+    expect(panel.text()).not.toMatch(/强势|弱势|允许买入|禁止买入/);
+    wrapper.unmount();
+  });
+
+  it("aborts a stale coverage preview and shows the newest no-index result without blocking submit", async () => {
+    const first = deferred<BacktestReferenceMarketCoverageView>();
+    const secondHash = "f".repeat(64);
+    const getReferenceMarketCoverage = vi
+      .fn<BacktestApi["getReferenceMarketCoverage"]>()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(
+        referenceMarketCoverage({
+          availableOfficialDayCount: 0,
+          blockers: [],
+          conditionPaths: [],
+          coverageStatus: "NOT_REQUIRED",
+          datasetHash: secondHash,
+          marketIndexDataHash: null,
+          required: false,
+          requiredOfficialDayCount: 0,
+        }),
+      );
+    const submitRun = vi.fn<BacktestApi["submitRun"]>().mockResolvedValue(mutation(receipt({ datasetHash: secondHash })));
+    const { wrapper } = await mountNewView({
+      api: apiWith({ getReferenceMarketCoverage, submitRun }),
+    });
+    await wrapper.get<HTMLInputElement>("#plan-version-id").setValue(PLAN_VERSION_ID);
+    await wrapper.get<HTMLInputElement>("#dataset-hash").setValue(DATASET_HASH);
+    await flushPromises();
+    const firstSignal = getReferenceMarketCoverage.mock.calls[0]?.[2]?.signal;
+    await wrapper.get<HTMLInputElement>("#dataset-hash").setValue(secondHash);
+    await flushPromises();
+
+    expect(firstSignal?.aborted).toBe(true);
+    expect(wrapper.get('[data-testid="reference-market-coverage"]').text()).toContain(
+      "计划未使用指数条件",
+    );
+    first.resolve(referenceMarketCoverage());
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("entry.conditions.all[0]");
+
+    await wrapper.get<HTMLInputElement>("#initial-cash-fen").setValue("10000000");
+    await wrapper.get<HTMLInputElement>("#commission-rate").setValue("0.0003");
+    await wrapper.get<HTMLInputElement>("#minimum-commission-fen").setValue("500");
+    await wrapper.get<HTMLInputElement>("#stamp-duty-rate").setValue("0.001");
+    await wrapper.get<HTMLInputElement>("#transfer-fee-rate").setValue("0.00001");
+    await wrapper.get<HTMLInputElement>("#buy-slippage-bps").setValue("2.5");
+    await wrapper.get<HTMLInputElement>("#sell-slippage-bps").setValue("3.75");
+    await submit(wrapper);
+    expect(submitRun).toHaveBeenCalledOnce();
+    wrapper.unmount();
+  });
+
   it("submits one exact generated command without decimal float conversion", async () => {
     const submitRun = vi.fn().mockResolvedValue(mutation(receipt()));
     const { wrapper } = await mountNewView({

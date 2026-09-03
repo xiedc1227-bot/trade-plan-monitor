@@ -223,6 +223,7 @@ def _dashboard_payload() -> dict[str, object]:
             "normal": 0,
         },
         "symbols": [_symbol_summary_payload()],
+        "marketIndexes": [],
     }
 
 
@@ -735,7 +736,9 @@ def test_dashboard_returns_authoritative_decision_evidence_and_data_age() -> Non
         "dataAgeSeconds",
         "counts",
         "symbols",
+        "marketIndexes",
     }
+    assert payload["marketIndexes"] == []
     assert payload["connectionStatus"] == "CONNECTED"
     decision = payload["symbols"][0]["decision"]
     assert decision["resultHash"] == "a" * 64
