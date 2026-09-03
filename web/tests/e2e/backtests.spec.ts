@@ -16,6 +16,7 @@ import type {
   BacktestRunSummaryView,
   BacktestRunView,
   DashboardResponse,
+  PlanVersionPage,
 } from "../../src/api/generated";
 
 const require = createRequire(import.meta.url);
@@ -56,6 +57,25 @@ const dashboard: DashboardResponse = {
   observedAt: TIME,
   sequence: 1,
   symbols: [],
+};
+
+const planVersionPage: PlanVersionPage = {
+  items: [
+    {
+      canActivate: true,
+      createdAt: TIME,
+      id: PLAN_VERSION_ID,
+      planHash: "e".repeat(64),
+      planId: "e2e-backtest-plan",
+      revision: 0,
+      status: "DRAFT",
+      symbol: "000001.SZ",
+      version: 1,
+    },
+  ],
+  limit: 20,
+  offset: 0,
+  total: 1,
 };
 
 interface BrowserAudit {
@@ -529,6 +549,9 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
     try {
       if (key === "GET /api/v1/dashboard") {
         await fulfillJson(route, dashboard);
+      } else if (key === "GET /api/v1/plan-versions") {
+        expect(url.searchParams.get("canActivate")).toBe("true");
+        await fulfillJson(route, planVersionPage);
       } else if (key === "GET /api/v1/backtest-runs") {
         await fulfillJson(route, runPage);
       } else if (key === "GET /api/v1/backtest-datasets") {
@@ -634,7 +657,7 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   await expectNoSeriousAxeViolations(page);
 
   await openRoute(page, ROUTES[1]);
-  await page.locator("#plan-version-id").fill(PLAN_VERSION_ID);
+  await page.locator("#plan-version-id").selectOption(PLAN_VERSION_ID);
   await page.locator("#dataset-hash").fill(DATASET_HASH);
   await expect(page.getByTestId("reference-market-coverage")).toContainText("深证成指");
   await expect(page.getByTestId("reference-market-coverage")).toContainText(

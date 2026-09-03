@@ -5,7 +5,11 @@ import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { BacktestJobView, BacktestRunSummaryView } from "../../src/api/generated";
+import type {
+  BacktestJobView,
+  BacktestRunSummaryView,
+  PlanVersionPage,
+} from "../../src/api/generated";
 import BacktestJobStatus from "../../src/components/backtests/BacktestJobStatus.vue";
 import BacktestRunForm from "../../src/components/backtests/BacktestRunForm.vue";
 import BacktestRunTable from "../../src/components/backtests/BacktestRunTable.vue";
@@ -13,6 +17,12 @@ import type { BacktestRunDraft } from "../../src/composables/useBacktestRunForm"
 
 const TIME = "2026-08-30T10:00:00.000000+08:00";
 const RUN_ID = "a".repeat(64);
+const EMPTY_PLAN_PAGE: PlanVersionPage = {
+  items: [],
+  limit: 20,
+  offset: 0,
+  total: 0,
+};
 
 function draft(): BacktestRunDraft {
   return Object.freeze({
@@ -114,6 +124,30 @@ afterEach(() => {
 });
 
 describe("BT048 cross-slice accessibility", () => {
+  it("keeps an unavailable required plan selector focusable from the error summary", async () => {
+    const wrapper = mount(BacktestRunForm, {
+      attachTo: document.body,
+      props: {
+        draft: draft(),
+        errorRevision: 0,
+        errors: Object.freeze({ planVersionId: "请选择计划版本" }),
+        planVersionError: null,
+        planVersionPage: EMPTY_PLAN_PAGE,
+        planVersionState: "EMPTY",
+        selectedPlanVersion: null,
+        submissionState: "IDLE",
+      },
+    });
+    await wrapper.setProps({ errorRevision: 1 });
+    await nextTick();
+
+    const selector = wrapper.get<HTMLSelectElement>("#plan-version-id");
+    expect(selector.attributes("disabled")).toBeUndefined();
+    await wrapper.get('[data-testid="run-form-error-summary"] a').trigger("click");
+    expect(document.activeElement).toBe(selector.element);
+    wrapper.unmount();
+  });
+
   it("links every form error to its field and moves focus only on explicit activation", async () => {
     const wrapper = mount(BacktestRunForm, {
       attachTo: document.body,
@@ -124,6 +158,10 @@ describe("BT048 cross-slice accessibility", () => {
           initialCashFen: "初始现金无效",
           "initialLots.lot-draft-1.quantity": "数量无效",
         }),
+        planVersionError: null,
+        planVersionPage: EMPTY_PLAN_PAGE,
+        planVersionState: "EMPTY",
+        selectedPlanVersion: null,
         submissionState: "IDLE",
       },
     });

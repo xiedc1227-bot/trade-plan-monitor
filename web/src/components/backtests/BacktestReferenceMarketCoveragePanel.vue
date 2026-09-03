@@ -22,7 +22,7 @@ defineProps<Props>();
       <p class="coverage-panel__eyebrow">SERVER-RESOLVED REFERENCE MARKET</p>
       <h2 id="reference-market-coverage-title">参考指数覆盖预览</h2>
     </div>
-    <p v-if="state === 'IDLE'" role="status">填写规范的计划版本 ID 与数据集哈希后由后端解析。</p>
+    <p v-if="state === 'IDLE'" role="status">选择计划版本并填写规范数据集哈希后由后端解析。</p>
     <p v-else-if="state === 'LOADING'" role="status" aria-live="polite" aria-busy="true">
       正在校验参考指数覆盖…
     </p>

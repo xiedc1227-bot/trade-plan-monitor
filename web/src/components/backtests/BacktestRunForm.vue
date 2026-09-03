@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, useTemplateRef, watch } from "vue";
 
+import type { PlanVersionPage, PlanVersionSummary } from "../../api/generated";
+import type { BacktestPlanVersionState } from "../../composables/useBacktestPlanVersions";
 import type {
   BacktestInitialLotDraftField,
   BacktestRunDraft,
@@ -9,17 +11,26 @@ import type {
   BacktestRunSubmissionState,
 } from "../../composables/useBacktestRunForm";
 import BacktestInitialLotsEditor from "./BacktestInitialLotsEditor.vue";
+import BacktestPlanVersionSelector from "./BacktestPlanVersionSelector.vue";
 
 interface Props {
   draft: BacktestRunDraft;
   errorRevision: number;
   errors: BacktestRunFormErrors;
+  planVersionError: string | null;
+  planVersionPage: PlanVersionPage | null;
+  planVersionState: BacktestPlanVersionState;
+  selectedPlanVersion: PlanVersionSummary | null;
   submissionState: BacktestRunSubmissionState;
 }
 
 interface Emits {
   addLot: [];
+  nextPlanVersionPage: [];
+  previousPlanVersionPage: [];
   removeLot: [draftId: string];
+  retryPlanVersions: [];
+  selectPlanVersion: [versionId: string];
   submit: [];
   updateField: [field: BacktestRunDraftField, value: string];
   updateLot: [draftId: string, field: BacktestInitialLotDraftField, value: string];
@@ -30,7 +41,6 @@ const emit = defineEmits<Emits>();
 const errorSummary = useTemplateRef<HTMLDivElement>("errorSummary");
 
 const fieldDefinitions = [
-  { id: "plan-version-id", field: "planVersionId", label: "计划版本 ID", help: "RFC 4122 UUID", inputmode: "text" },
   { id: "dataset-hash", field: "datasetHash", label: "数据集哈希", help: "64 位小写 SHA-256", inputmode: "text" },
   { id: "initial-cash-fen", field: "initialCashFen", label: "初始现金（分）", help: "正整数分", inputmode: "numeric" },
   { id: "commission-rate", field: "commissionRate", label: "佣金率", help: "0 到 1 的规范十进制字符串", inputmode: "decimal" },
@@ -40,7 +50,7 @@ const fieldDefinitions = [
   { id: "buy-slippage-bps", field: "buySlippageBps", label: "买入滑点（bps）", help: "0 到 10000 的规范十进制字符串", inputmode: "decimal" },
   { id: "sell-slippage-bps", field: "sellSlippageBps", label: "卖出滑点（bps）", help: "0 到 10000 的规范十进制字符串", inputmode: "decimal" },
 ] as const satisfies readonly {
-  readonly field: Exclude<BacktestRunDraftField, "eventRiskAssumption">;
+  readonly field: Exclude<BacktestRunDraftField, "eventRiskAssumption" | "planVersionId">;
   readonly help: string;
   readonly id: string;
   readonly inputmode: "decimal" | "numeric" | "text";
@@ -68,6 +78,7 @@ function inputValue(event: Event): string {
 }
 
 function errorTargetId(field: string): string {
+  if (field === "planVersionId") return "plan-version-id";
   const definition = fieldDefinitions.find((candidate) => candidate.field === field);
   if (definition !== undefined) return definition.id;
   if (field === "eventRiskAssumption") return "event-risk-assumption";
@@ -127,6 +138,20 @@ function focusErrorField(field: string, event: MouseEvent): void {
     </div>
 
     <form class="run-form__grid" @submit.prevent="emit('submit')">
+      <BacktestPlanVersionSelector
+        :disabled="editingDisabled()"
+        :error="planVersionError"
+        :field-error="errors.planVersionId"
+        :page="planVersionPage"
+        :selected-id="draft.planVersionId"
+        :selected-version="selectedPlanVersion"
+        :state="planVersionState"
+        @next-page="emit('nextPlanVersionPage')"
+        @previous-page="emit('previousPlanVersionPage')"
+        @retry="emit('retryPlanVersions')"
+        @select="emit('selectPlanVersion', $event)"
+      />
+
       <div v-for="definition in fieldDefinitions" :key="definition.field" class="run-form__field">
         <label :for="definition.id">
           {{ definition.label }}
@@ -137,7 +162,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
           :disabled="editingDisabled()"
           :aria-invalid="errors[definition.field] === undefined ? undefined : 'true'"
           :aria-describedby="errors[definition.field] === undefined ? `${definition.id}-help` : `${definition.id}-help ${definition.id}-error`"
-          :autocomplete="definition.field === 'planVersionId' || definition.field === 'datasetHash' ? 'off' : undefined"
+          :autocomplete="definition.field === 'datasetHash' ? 'off' : undefined"
           :inputmode="definition.inputmode"
           @input="emit('updateField', definition.field, inputValue($event))"
         />

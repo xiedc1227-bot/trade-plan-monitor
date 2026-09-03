@@ -59,6 +59,7 @@ Route View 继续作为薄组合面。
 | `BacktestRunFilters` | 编辑 URL 驱动的运行过滤条件 |
 | `BacktestRunTable` | 渲染只读摘要和原生导航 |
 | `BacktestRunForm` | 编辑类型化运行输入并发出明确提交意图 |
+| `BacktestPlanVersionSelector` | 渲染后端允许的不可变计划版本分页，并发出选择/翻页意图 |
 | `DatasetScopeForm` | 编辑股票/日期/预热范围及明确联网意图 |
 | `DatasetCoveragePanel` | 渲染后端生成的覆盖与阻断事实 |
 | `BacktestJobStatus` | 渲染阶段/进度/失败并发出取消意图 |
@@ -68,6 +69,7 @@ Route View 继续作为薄组合面。
 | `BacktestFillTable` | 渲染一页服务端分页模拟成交 |
 | `BacktestDetailTable` | 渲染一页可判别判断/信号/执行 outcome |
 | `useBacktestRuns` | 负责过滤、cursor 请求、generation guard 和只读状态 |
+| `useBacktestPlanVersions` | 负责合格计划版本请求、分页、中止、选择和只读状态 |
 | `useBacktestRunForm` | 负责本地草稿、精确值解析、校验提示和幂等提交 |
 | `useBacktestJob` | 负责一个有界轮询循环、取消、可见性和清理 |
 | `useBacktestResults` | 负责独立分页摘要/权益/成交/详情请求 |
@@ -83,6 +85,8 @@ Route View 继续作为薄组合面。
 `web/src/api/backtests.ts` 消费生成类型，对每个闭合回测 Schema 和跨字段判别关系执行有界运行时校验，深度冻结已接纳记录，并公开类型化 Method 而不是原始 `fetch`。每个 JSON 响应继续低于共享 4 MiB 限制。其日期时间保护复用共享严格上海时间 Parser：输入必须携带 `+08:00` 和 0～6 位小数秒，接纳值在构造 URL/请求前规范化，每个响应必须精确使用 `YYYY-MM-DDTHH:MM:SS.ffffff+08:00`；`Z`、无偏移、超精度和其他偏移均封闭失败。`buildBacktestExportHref` 只接受已校验 `runId` 加 `SUMMARY_JSON|FILLS_CSV`，并返回对应同源 API URL。导出使用原生 `<a>`/浏览器导航，让浏览器把服务端 `Content-Disposition` 响应流式落盘；绝不把文件 Fetch 为完整 `Blob`、使用 File System Access API、接受路径或暴露路径。可选预检只读取运行摘要/availability，绝不下载导出内容。
 
 表单值保留精确后端契约。金额使用明确元/分标签输入，并且不经过二进制浮点运算转换；公开分值输入必须不超过 `9007199254740991`。费用/费率继续使用 `0..1` 范围内的规范十进制字符串，滑点继续使用 `0..<10000` 范围内的规范十进制字符串。`BacktestInitialLotInput` 行公开稳定 `lotKey`，最多 200 行，并在校验前保留精确字符串草稿。每个输出 `FenText` 都从 String 或 `BigInt` 格式化，绝不经过 `Number`，因此超过 JavaScript 安全整数范围的值仍保持精确。浏览器可以提前拒绝非法形状，但绝不计算计划资格、持仓上限、交易日历、T+1、成交、指标或数据完整性。
+
+`/backtests/new` 只从服务端分页的 `GET /plan-versions?canActivate=true&offset=<n>&limit=20` 获取真实不可变选项。页面按返回的摘要 identity 展示并翻页，不会合并多个状态查询，也不会在浏览器中过滤不完整页面。合格但未启用的版本仍可选择；只有用户明确提交准确 `planVersionId` 时，后端才重新校验资格。应用服务在返回已接受的运行回执前，把所选版本的规范计划快照及哈希持久化到耐久任务输入。之后的计划编辑会创建其他版本，不能改写该冻结输入、旧结果或既有运行哈希。幂等重放使用已经持久化的绑定，不会重新读取较新的计划。浏览器在此流程中不会缓存或提交 `planJson`，并提供固定、不泄密的加载、空、失败、重试和分页状态。
 
 URL 日期时间筛选、服务端回显筛选、表格、图表标签和 `<time datetime>` 值都保留规范中国时间。可见文本使用 `zh-CN` 和 `timeZone: "Asia/Shanghai"`；即使视觉上省略小数秒，机器可读 `datetime` 仍保留固定六位 `+08:00` 值。回测代码绝不对契约值调用 `Date.toISOString()`，也绝不通过主机/浏览器时区转换。
 

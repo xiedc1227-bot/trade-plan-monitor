@@ -6,8 +6,11 @@ import type {
   BacktestJobReceipt,
   BacktestReferenceMarketCoverageView,
   BacktestRunCommand,
+  PlanVersionPage,
+  PlanVersionSummary,
 } from "../../src/api/generated";
 import type { BacktestApi, BacktestMutationResponse } from "../../src/api/backtests";
+import type { PlanApi } from "../../src/api/plans";
 import { ApiClientError } from "../../src/api/transport";
 import BacktestNewView from "../../src/views/BacktestNewView.vue";
 
@@ -15,6 +18,36 @@ const PLAN_VERSION_ID = "123e4567-e89b-42d3-a456-426614174000";
 const DATASET_HASH = "a".repeat(64);
 const RUN_ID = "b".repeat(64);
 const JOB_ID = "backtest-job-001";
+const SECOND_PLAN_VERSION_ID = "223e4567-e89b-42d3-a456-426614174000";
+
+function planSummary(
+  overrides: Partial<PlanVersionSummary> = {},
+): PlanVersionSummary {
+  return {
+    canActivate: true,
+    createdAt: "2026-08-29T09:30:00.000000+08:00",
+    id: PLAN_VERSION_ID,
+    planHash: "c".repeat(64),
+    planId: "huaya-smart",
+    revision: 0,
+    status: "DRAFT",
+    symbol: "003043.SZ",
+    version: 1,
+    ...overrides,
+  };
+}
+
+function planPage(
+  overrides: Partial<PlanVersionPage> = {},
+): PlanVersionPage {
+  return {
+    items: [planSummary()],
+    limit: 20,
+    offset: 0,
+    total: 1,
+    ...overrides,
+  };
+}
 
 function receipt(
   overrides: Partial<BacktestJobReceipt> = {},
@@ -65,6 +98,20 @@ function apiWith(overrides: Partial<BacktestApi> = {}): BacktestApi {
   } as BacktestApi;
 }
 
+function planApiWith(overrides: Partial<PlanApi> = {}): PlanApi {
+  const unused = vi.fn(() => Promise.reject(new Error("unexpected plan API call")));
+  return {
+    activatePlan: unused,
+    deactivatePlan: unused,
+    getPlanActivationState: unused,
+    getPlanVersion: unused,
+    importPlan: unused,
+    listPlanVersions: vi.fn().mockResolvedValue(planPage()),
+    savePlanDraft: unused,
+    ...overrides,
+  } as PlanApi;
+}
+
 function referenceMarketCoverage(
   overrides: Partial<BacktestReferenceMarketCoverageView> = {},
 ): BacktestReferenceMarketCoverageView {
@@ -107,6 +154,7 @@ async function mountNewView(options: {
   api?: BacktestApi;
   beforeRunNavigation?: () => false | Promise<false | void> | void;
   createIdempotencyKey?: () => string;
+  planApi?: PlanApi;
 } = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -127,6 +175,7 @@ async function mountNewView(options: {
     global: { plugins: [router] },
     props: {
       api: options.api ?? apiWith(),
+      planApi: options.planApi ?? planApiWith(),
       ...(options.createIdempotencyKey === undefined
         ? {}
         : { createIdempotencyKey: options.createIdempotencyKey }),
@@ -137,7 +186,7 @@ async function mountNewView(options: {
 }
 
 async function fillValidBase(wrapper: VueWrapper): Promise<void> {
-  await wrapper.get<HTMLInputElement>("#plan-version-id").setValue(PLAN_VERSION_ID);
+  await wrapper.get<HTMLSelectElement>("#plan-version-id").setValue(PLAN_VERSION_ID);
   await wrapper.get<HTMLInputElement>("#dataset-hash").setValue(DATASET_HASH);
   await wrapper.get<HTMLInputElement>("#initial-cash-fen").setValue("10000000");
   await wrapper.get<HTMLInputElement>("#commission-rate").setValue("0.0003");
@@ -154,6 +203,82 @@ async function submit(wrapper: VueWrapper): Promise<void> {
 }
 
 describe("BacktestNewView", () => {
+  it("loads backend-approved immutable plan versions and selects one exact identity", async () => {
+    const listPlanVersions = vi.fn<PlanApi["listPlanVersions"]>().mockResolvedValue(
+      planPage(),
+    );
+    const { wrapper } = await mountNewView({
+      planApi: planApiWith({ listPlanVersions }),
+    });
+
+    expect(listPlanVersions).toHaveBeenCalledWith(
+      { canActivate: true, limit: 20, offset: 0 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    const selector = wrapper.get<HTMLSelectElement>("#plan-version-id");
+    expect(selector.element.tagName).toBe("SELECT");
+    expect(selector.text()).toContain("003043.SZ");
+    expect(selector.text()).toContain("v1");
+    expect(selector.text()).toContain("DRAFT");
+    expect(wrapper.text()).toContain("后端判定可用于回测");
+    expect(wrapper.text()).toContain("提交时冻结");
+
+    await selector.setValue(PLAN_VERSION_ID);
+    expect(selector.element.value).toBe(PLAN_VERSION_ID);
+    wrapper.unmount();
+  });
+
+  it("pages eligible plan versions through authoritative server filters", async () => {
+    const listPlanVersions = vi
+      .fn<PlanApi["listPlanVersions"]>()
+      .mockResolvedValueOnce(planPage({ total: 21 }))
+      .mockResolvedValueOnce(
+        planPage({
+          items: [
+            planSummary({
+              id: SECOND_PLAN_VERSION_ID,
+              planId: "second-plan",
+              symbol: "600000.SH",
+              version: 4,
+            }),
+          ],
+          offset: 20,
+          total: 21,
+        }),
+      );
+    const { wrapper } = await mountNewView({
+      planApi: planApiWith({ listPlanVersions }),
+    });
+
+    await wrapper.get('[data-testid="next-plan-version-page"]').trigger("click");
+    await flushPromises();
+
+    expect(listPlanVersions).toHaveBeenNthCalledWith(
+      2,
+      { canActivate: true, limit: 20, offset: 20 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(wrapper.get("#plan-version-id").text()).toContain("600000.SH");
+    expect(wrapper.get('[data-testid="plan-version-page-number"]').text()).toContain("2 / 2");
+    wrapper.unmount();
+  });
+
+  it("fails plan loading safely without exposing transport details", async () => {
+    const listPlanVersions = vi
+      .fn<PlanApi["listPlanVersions"]>()
+      .mockRejectedValue(new Error("Authorization: Bearer must-not-render"));
+    const { wrapper } = await mountNewView({
+      planApi: planApiWith({ listPlanVersions }),
+    });
+
+    expect(wrapper.get('[data-testid="plan-version-status"]').text()).toContain(
+      "计划版本暂不可用",
+    );
+    expect(wrapper.text()).not.toContain("Authorization");
+    expect(wrapper.text()).not.toContain("must-not-render");
+    wrapper.unmount();
+  });
+
   it("previews only backend-resolved index binding, paths, warm-up, and coverage", async () => {
     const getReferenceMarketCoverage = vi
       .fn<BacktestApi["getReferenceMarketCoverage"]>()
@@ -162,7 +287,7 @@ describe("BacktestNewView", () => {
       api: apiWith({ getReferenceMarketCoverage }),
     });
 
-    await wrapper.get<HTMLInputElement>("#plan-version-id").setValue(PLAN_VERSION_ID);
+    await wrapper.get<HTMLSelectElement>("#plan-version-id").setValue(PLAN_VERSION_ID);
     expect(getReferenceMarketCoverage).not.toHaveBeenCalled();
     await wrapper.get<HTMLInputElement>("#dataset-hash").setValue(DATASET_HASH);
     await flushPromises();
@@ -204,7 +329,7 @@ describe("BacktestNewView", () => {
     const { wrapper } = await mountNewView({
       api: apiWith({ getReferenceMarketCoverage, submitRun }),
     });
-    await wrapper.get<HTMLInputElement>("#plan-version-id").setValue(PLAN_VERSION_ID);
+    await wrapper.get<HTMLSelectElement>("#plan-version-id").setValue(PLAN_VERSION_ID);
     await wrapper.get<HTMLInputElement>("#dataset-hash").setValue(DATASET_HASH);
     await flushPromises();
     const firstSignal = getReferenceMarketCoverage.mock.calls[0]?.[2]?.signal;
@@ -292,7 +417,7 @@ describe("BacktestNewView", () => {
   it("uses field-appropriate mobile input modes", async () => {
     const { wrapper } = await mountNewView();
 
-    expect(wrapper.get("#plan-version-id").attributes("inputmode")).toBe("text");
+    expect(wrapper.get("#plan-version-id").element.tagName).toBe("SELECT");
     expect(wrapper.get("#dataset-hash").attributes("inputmode")).toBe("text");
     expect(wrapper.get("#initial-cash-fen").attributes("inputmode")).toBe("numeric");
     expect(wrapper.get("#commission-rate").attributes("inputmode")).toBe("decimal");

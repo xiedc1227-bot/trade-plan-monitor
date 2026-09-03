@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sqlite3
 from datetime import date
@@ -29,7 +30,11 @@ from trade_plan_monitor.backtest.cursor_key_security import (
 from trade_plan_monitor.backtest.dataset import DatasetManifest, DatasetScope
 from trade_plan_monitor.backtest.jobs import BacktestJobCoordinator
 from trade_plan_monitor.backtest.results import BacktestResultStore
-from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_yaml
+from trade_plan_monitor.domain.plan_codec import (
+    dump_plan_json,
+    load_plan_json,
+    load_plan_yaml,
+)
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
 from trade_plan_monitor.web.app import create_app
@@ -681,6 +686,66 @@ def test_production_factory_is_lazy_and_run_replay_reuses_one_plan_snapshot(tmp_
     assert market_database.is_file()
     assert results_database.is_file()
     assert len(cursor_key_path.read_bytes()) == 32
+
+
+def test_run_submission_freezes_plan_before_receipt_and_later_versions_do_not_rewrite_it(
+    tmp_path,
+) -> None:
+    reader = _PlanSnapshotReader()
+    market_database = tmp_path / "market.sqlite3"
+    results_database = tmp_path / "results.sqlite3"
+    composition = create_backtest_composition_factory(
+        config_path=Path("config/app.yaml"),
+        plan_snapshot_reader=reader,
+        market_database=market_database,
+        results_database=results_database,
+        cursor_key_path=tmp_path / "cursor.key",
+    )()
+    dataset_hash = _insert_empty_dataset(market_database)
+    context = MutationContext(
+        idempotency_key="frozen-plan-intent",
+        request_id="9" * 32,
+    )
+    original_payload = dict(reader._payload)
+
+    async def scenario() -> tuple[object, object]:
+        first = await composition.operation_service.submit_run(
+            command=_run_command(dataset_hash),
+            context=context,
+        )
+        successor_plan = load_plan_json(str(reader._payload["planJson"])).model_copy(
+            update={"name": "华亚智能后续修改版", "version": 2}
+        )
+        reader._payload = {
+            **reader._payload,
+            "id": "58d27696-bffc-49b2-89f8-c34ec20f9806",
+            "planHash": plan_sha256(successor_plan),
+            "planJson": dump_plan_json(successor_plan),
+            "version": successor_plan.version,
+        }
+        replay = await composition.operation_service.submit_run(
+            command=_run_command(dataset_hash),
+            context=context,
+        )
+        await composition.stop()
+        return first, replay
+
+    first, replay = asyncio.run(scenario())
+    with sqlite3.connect(results_database) as connection:
+        request_json = str(
+            connection.execute(
+                "SELECT request_json FROM backtest_job WHERE job_id = ?",
+                (first.receipt.job_id,),
+            ).fetchone()[0]
+        )
+    frozen_input = json.loads(request_json)["runInput"]
+
+    assert replay == first
+    assert reader.calls == [_PLAN_VERSION_ID]
+    assert frozen_input["plan_version_id"] == _PLAN_VERSION_ID
+    assert frozen_input["plan_sha256"] == original_payload["planHash"]
+    assert frozen_input["plan_snapshot"] == json.loads(str(original_payload["planJson"]))
+    assert frozen_input["plan_snapshot"] != json.loads(str(reader._payload["planJson"]))
 
 
 def test_run_submission_accepts_a_verified_multi_symbol_dataset_containing_plan_symbol(

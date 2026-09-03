@@ -193,6 +193,8 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 已批准的回测设计采用混合流程：经明确授权的 `backtest sync` 把 `stk_mins`、`trade_cal`、`stk_limit` 和不复权 `daily` 事实增量下载到 `backtest-market.sqlite3`；本地校验冻结精确 `dataset_hash`；每次正式运行随后完全离线读取该冻结数据集，并且只把结果资产写入 `backtest-results.sqlite3`。
 
+`/backtests/new` 页面会列出后端当前标记为 `canActivate=true` 的真实不可变计划版本，包括合格但未启用的草稿。用户选择一个准确版本；提交时后端会重新校验，并在返回已接受回执前持久化其规范计划快照。之后保存更新版本不能改变已排队任务、旧结果或其既有哈希。
+
 行情库和结果库路径必须解析为不同文件。创建数据表前，每个存储都会拒绝既有实时监控数据库或另一个回测存储域，防止错误路径配置修改无关状态。
 
 历史行按内容去重并由多次运行复用。供应商修订生成不可变修订和新数据集哈希，不能改变旧结果。历史适配器默认使用 `UNVERIFIED`；CLI 组合显式选择版本化配置 `TUSHARE_STK_MINS_241_END_V1`，把 09:30 来源行保留为不参与策略的 `opening_special`，并把其余结束标签行映射为恰好 240 个规范交易分钟。该证据绝不能完成实时任务 `T058`。

@@ -4,13 +4,16 @@ import { isNavigationFailure, useRouter } from "vue-router";
 
 import type { BacktestJobReceipt } from "../api/generated";
 import type { BacktestApi } from "../api/backtests";
+import type { PlanApi } from "../api/plans";
 import BacktestRunForm from "../components/backtests/BacktestRunForm.vue";
 import BacktestReferenceMarketCoveragePanel from "../components/backtests/BacktestReferenceMarketCoveragePanel.vue";
+import { useBacktestPlanVersions } from "../composables/useBacktestPlanVersions";
 import { useBacktestRunForm } from "../composables/useBacktestRunForm";
 
 interface Props {
   api?: BacktestApi;
   createIdempotencyKey?: () => string;
+  planApi?: PlanApi;
 }
 
 const props = defineProps<Props>();
@@ -34,6 +37,14 @@ const form = useBacktestRunForm({
     : { createIdempotencyKey: props.createIdempotencyKey }),
   onAccepted: navigateToAcceptedRun,
 });
+const plans = useBacktestPlanVersions({
+  ...(props.planApi === undefined ? {} : { api: props.planApi }),
+});
+
+function selectPlanVersion(versionId: string): void {
+  const selected = plans.selectVersion(versionId);
+  form.updateField("planVersionId", selected?.id ?? "");
+}
 
 onMounted(() => {
   document.title = "创建回测 · Trade Plan Monitor";
@@ -64,9 +75,17 @@ onBeforeUnmount(() => {
       :draft="form.draft.value"
       :error-revision="form.errorRevision.value"
       :errors="form.errors.value"
+      :plan-version-error="plans.errorMessage.value"
+      :plan-version-page="plans.page.value"
+      :plan-version-state="plans.state.value"
+      :selected-plan-version="plans.selectedVersion.value"
       :submission-state="form.submissionState.value"
       @add-lot="form.addLot"
+      @next-plan-version-page="plans.nextPage"
+      @previous-plan-version-page="plans.previousPage"
       @remove-lot="form.removeLot"
+      @retry-plan-versions="plans.retry"
+      @select-plan-version="selectPlanVersion"
       @submit="form.submit"
       @update-field="form.updateField"
       @update-lot="form.updateLot"

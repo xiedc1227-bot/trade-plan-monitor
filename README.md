@@ -272,6 +272,8 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 The approved backtest design uses a hybrid workflow: an explicitly authorized `backtest sync` incrementally downloads `stk_mins`, `trade_cal`, `stk_limit`, and unadjusted `daily` facts into `backtest-market.sqlite3`; local verification freezes an exact `dataset_hash`; every formal run then reads that frozen dataset fully offline and writes only result artifacts to `backtest-results.sqlite3`.
 
+The `/backtests/new` page lists real immutable plan versions that the backend currently marks `canActivate=true`, including eligible inactive drafts. The user selects one exact version; submission revalidates it and persists its canonical plan snapshot before the accepted receipt is returned. Saving a newer version later cannot change the queued job, an older result, or its established hashes.
+
 Market and result paths must resolve to different files. Before creating tables, each store rejects an existing live-monitor database or the other backtest storage domain, preventing a misconfigured path from mutating unrelated state.
 
 Historical rows are content-deduplicated and reused across runs. Provider corrections create immutable revisions and a new dataset hash instead of changing an old result. The historical adapter defaults to `UNVERIFIED`; the CLI composition explicitly selects versioned profile `TUSHARE_STK_MINS_241_END_V1`, preserves the 09:30 source row as non-strategy `opening_special`, and maps the remaining end-labeled rows to exactly 240 canonical trading minutes. This evidence never completes live task `T058`.

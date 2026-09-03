@@ -59,6 +59,7 @@ Route views remain thin composition surfaces.
 | `BacktestRunFilters` | Edit URL-backed run filters |
 | `BacktestRunTable` | Render read-only summaries and native navigation |
 | `BacktestRunForm` | Edit typed run input and emit explicit submit intent |
+| `BacktestPlanVersionSelector` | Render backend-approved immutable plan-version pages and emit selection/paging intent |
 | `DatasetScopeForm` | Edit symbols/date/warm-up scope and explicit network intent |
 | `DatasetCoveragePanel` | Render backend-authored coverage and blocker facts |
 | `BacktestJobStatus` | Render phase/progress/failure and emit cancel intent |
@@ -68,6 +69,7 @@ Route views remain thin composition surfaces.
 | `BacktestFillTable` | Render one server-paginated simulated-fill page |
 | `BacktestDetailTable` | Render one discriminated decision/signal/execution-outcome page |
 | `useBacktestRuns` | Own filters, cursor requests, generation guards, and readonly state |
+| `useBacktestPlanVersions` | Own eligible plan-version requests, paging, cancellation, selection, and readonly state |
 | `useBacktestRunForm` | Own local draft, exact value parsing, validation hints, and idempotent submission |
 | `useBacktestJob` | Own one bounded polling loop, cancellation, visibility, and cleanup |
 | `useBacktestResults` | Own independently paginated summary/equity/fill/detail requests |
@@ -83,6 +85,8 @@ Backtest state does not enter the existing real-time `monitor` Pinia store. The 
 `web/src/api/backtests.ts` consumes generated types, performs bounded runtime validation of every closed backtest schema and cross-field discriminator, deep-freezes accepted records, and exposes typed methods rather than raw `fetch`. Every JSON response stays below the shared 4 MiB limit. Its datetime guard reuses the shared strict Shanghai parser: inputs must carry `+08:00` with 0–6 fractional-second digits, accepted values normalize before URL/request construction, and every response must use exact `YYYY-MM-DDTHH:MM:SS.ffffff+08:00`; `Z`, offsetless, overprecision, and other-offset values fail closed. `buildBacktestExportHref` accepts only validated `runId` plus `SUMMARY_JSON|FILLS_CSV` and returns the corresponding same-origin API URL. Export uses a native `<a>`/browser navigation so the browser streams the server's `Content-Disposition` response to disk; it never fetches the file into a whole `Blob`, uses the File System Access API, accepts a path, or reveals a path. Optional preflight reads only the run summary/availability and never downloads export content.
 
 Form values preserve exact backend contracts. Money is entered with explicit yuan/fen labels and converted without binary-float arithmetic; public fen input must remain at most `9007199254740991`. Fees/rates remain canonical decimal strings in `0..1`, and slippage remains a canonical decimal string in `0..<10000`. `BacktestInitialLotInput` rows expose stable `lotKey`, are capped at 200, and retain exact string drafts until validated. Every output `FenText` is formatted from its string or `BigInt`, never through `Number`, so values above JavaScript safe-integer range remain exact. The browser may reject invalid shape early but never computes plan eligibility, position caps, trading calendars, T+1, fills, metrics, or data completeness.
+
+`/backtests/new` obtains real immutable choices only from server-paginated `GET /plan-versions?canActivate=true&offset=<n>&limit=20`. It renders the returned summary identity and pages without combining status queries or filtering an incomplete page in the browser. An eligible inactive version remains selectable; the backend revalidates eligibility when the user explicitly submits the exact `planVersionId`. Before returning the accepted run receipt, the application service persists the selected version's canonical plan snapshot and hash inside the durable job input. Later plan edits create other versions and cannot rewrite that frozen input, an old result, or an existing run hash. Idempotent replay uses the already persisted binding and does not re-read a newer plan. The browser never caches or submits `planJson` for this flow and exposes fixed secret-safe loading, empty, failure, retry, and paging states.
 
 URL datetime filters, server-echoed filters, tables, chart labels, and `<time datetime>` values preserve canonical China time. Visible text uses `zh-CN` with `timeZone: "Asia/Shanghai"`; the machine-readable `datetime` keeps the fixed-six-digit `+08:00` value even when fractional seconds are omitted visually. Backtest code never calls `Date.toISOString()` for a contract value and never converts through the host/browser timezone.
 
