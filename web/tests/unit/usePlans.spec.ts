@@ -126,6 +126,43 @@ describe("usePlans", () => {
     wrapper.unmount();
   });
 
+  it("loads a direct plan-version route even when the version is outside the current list page", async () => {
+    const directVersion: PlanVersionView = {
+      ...version,
+      id: "00000000-0000-4000-8000-000000000499",
+      planHash: "c".repeat(64),
+      planId: "direct-route-plan",
+      symbol: "600000.SH",
+      version: 9,
+    };
+    const directState: ActivePlanView = {
+      ...inactiveState,
+      changedAt: "2026-09-03T10:10:00.000000+08:00",
+      symbol: directVersion.symbol,
+    };
+    const getPlanVersion = vi.fn(async (id: string) =>
+      id === directVersion.id ? directVersion : version,
+    );
+    const api = apiWith({
+      getPlanActivationState: vi.fn(async (symbol: string) =>
+        symbol === directVersion.symbol ? directState : inactiveState,
+      ),
+      getPlanVersion,
+      listPlanVersions: vi.fn().mockResolvedValue(page),
+    });
+    const { plans, wrapper } = mountPlans(api, [], directVersion.id);
+    await flushPromises();
+
+    expect(getPlanVersion).toHaveBeenCalledWith(
+      directVersion.id,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(plans.selectedPlanId.value).toBe(directVersion.id);
+    expect(plans.selectedPlan.value).toEqual(directVersion);
+    expect(plans.activeState.value).toEqual(directState);
+    wrapper.unmount();
+  });
+
   it("imports into an empty repository only after a missing target state proves revision zero", async () => {
     const listPlanVersions = vi
       .fn()
@@ -680,12 +717,20 @@ describe("usePlans", () => {
   });
 });
 
-function mountPlans(api: PlanApi, keys: string[] = []) {
+function mountPlans(
+  api: PlanApi,
+  keys: string[] = [],
+  initialPlanVersionId?: string,
+) {
   let plans: ReturnType<typeof usePlans> | undefined;
   const nextKey = vi.fn(() => keys.shift() ?? "fallback-plan-key");
   const Harness = defineComponent({
     setup() {
-      plans = usePlans({ api, createIdempotencyKey: nextKey });
+      plans = usePlans({
+        api,
+        createIdempotencyKey: nextKey,
+        ...(initialPlanVersionId === undefined ? {} : { initialPlanVersionId }),
+      });
       return () => h("div");
     },
   });

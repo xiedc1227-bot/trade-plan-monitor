@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { watch } from "vue";
+
 import type { AIPlanApi } from "../api/ai";
 import type { PlanApi } from "../api/plans";
 import PlanImportForm from "../components/plans/PlanImportForm.vue";
 import PlanWorkbench from "../components/plans/PlanWorkbench.vue";
+import type { PlanExportIntent } from "../components/plans/StructuredPlanEditor.vue";
 import { usePlanDrafting } from "../composables/usePlanDrafting";
 import { usePlans } from "../composables/usePlans";
 import PlansView from "./PlansView.vue";
@@ -12,6 +15,7 @@ interface Props {
   createIdempotencyKey?: () => string;
   createPlanIdempotencyKey?: () => string;
   planApi?: PlanApi;
+  planVersionId?: string;
   pollIntervalMs?: number;
 }
 
@@ -28,7 +32,33 @@ const plans = usePlans({
   ...(props.createPlanIdempotencyKey === undefined
     ? {}
     : { createIdempotencyKey: props.createPlanIdempotencyKey }),
+  ...(props.planVersionId === undefined ? {} : { initialPlanVersionId: props.planVersionId }),
 });
+
+watch(
+  () => props.planVersionId,
+  (planVersionId, previousPlanVersionId) => {
+    if (planVersionId !== previousPlanVersionId) {
+      void plans.openPlan(planVersionId ?? null);
+    }
+  },
+);
+
+function exportPlan(intent: PlanExportIntent): void {
+  if (typeof URL.createObjectURL !== "function") return;
+  const extension = intent.format === "JSON" ? "json" : "yaml";
+  const mimeType =
+    intent.format === "JSON" ? "application/json;charset=utf-8" : "application/yaml;charset=utf-8";
+  const objectUrl = URL.createObjectURL(new Blob([intent.planJson], { type: mimeType }));
+  const anchor = document.createElement("a");
+  anchor.download = `trade-plan-${intent.planVersionId}.${extension}`;
+  anchor.href = objectUrl;
+  anchor.hidden = true;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
 </script>
 
 <template>
@@ -110,6 +140,7 @@ const plans = usePlans({
         :versions="plans.versions.value"
         @activate-plan="plans.activatePlan"
         @deactivate-plan="plans.deactivatePlan"
+        @export-plan="exportPlan"
         @import-plan="plans.importPlan"
         @save-draft="plans.saveDraft"
         @select-plan="plans.selectPlan"

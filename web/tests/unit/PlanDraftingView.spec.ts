@@ -1,5 +1,5 @@
 import { flushPromises, mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   ActivePlanView,
@@ -147,6 +147,11 @@ function planApiWith(overrides: Partial<PlanApi> = {}): PlanApi {
 }
 
 describe("PlanDraftingView", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("loads the file-configured AI runtime and completes the Web extraction flow", async () => {
     const getRuntime = vi.fn().mockResolvedValue(runtime);
     const submitExtraction = vi.fn().mockResolvedValue(receipt);
@@ -264,6 +269,43 @@ describe("PlanDraftingView", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(wrapper.text()).toContain("v1 · 003043.SZ");
+    wrapper.unmount();
+  });
+
+  it("downloads the canonical server document using the selected portable format", async () => {
+    const createObjectURL = vi.fn((_blob: Blob) => "blob:plan-export");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    const downloads: { download: string; href: string }[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push({ download: this.download, href: this.href });
+    });
+    const wrapper = mount(PlanDraftingView, {
+      props: {
+        api: apiWith({ getRuntime: vi.fn().mockResolvedValue(runtime) }),
+        planApi: planApiWith({
+          getPlanActivationState: vi.fn().mockResolvedValue(inactiveState),
+          listPlanVersions: vi.fn().mockResolvedValue(planPage),
+        }),
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get<HTMLSelectElement>("#plan-export-format").setValue("YAML");
+    await wrapper.get('[data-testid="export-plan"]').trigger("click");
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const call = createObjectURL.mock.calls[0];
+    if (call === undefined) throw new Error("plan export did not create a download blob");
+    const [blob] = call;
+    expect(blob.type).toBe("application/yaml;charset=utf-8");
+    expect(await blob.text()).toBe(planVersion.planJson);
+    expect(downloads).toEqual([
+      { download: `trade-plan-${PLAN_VERSION_ID}.yaml`, href: "blob:plan-export" },
+    ]);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:plan-export");
     wrapper.unmount();
   });
 

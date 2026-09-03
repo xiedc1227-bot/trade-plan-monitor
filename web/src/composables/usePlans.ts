@@ -31,6 +31,7 @@ interface PendingMutationIntent {
 export interface UsePlansOptions {
   readonly api?: PlanApi;
   readonly createIdempotencyKey?: () => string;
+  readonly initialPlanVersionId?: string;
 }
 
 export interface UsePlansResult {
@@ -46,6 +47,7 @@ export interface UsePlansResult {
   activatePlan(command: PlanActivationCommand): Promise<boolean>;
   deactivatePlan(command: PlanDeactivationCommand): Promise<boolean>;
   importPlan(command: PlanImportCommand): Promise<boolean>;
+  openPlan(planVersionId: string | null): Promise<boolean>;
   refresh(): Promise<boolean>;
   saveDraft(command: PlanDraftCommand): Promise<boolean>;
   selectPlan(planVersionId: string): Promise<boolean>;
@@ -84,20 +86,27 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
       );
       if (!isCurrentRead(controller, generation)) return false;
       page.value = freezePage(result);
-      selectedPlanId.value = chooseSelection(page.value.items ?? [], preferredPlanId);
+      selectedPlanId.value =
+        preferredPlanId ?? chooseSelection(page.value.items ?? [], null);
       selectedPlan.value = null;
       activePlan.value = null;
-      const selected = selectedSummary();
-      if (selected === null) {
+      const selectedPlanVersionId = selectedPlanId.value;
+      if (selectedPlanVersionId === null) {
         activeState.value = null;
         return true;
       }
-      const [detail, state] = await Promise.all([
-        api.getPlanVersion(selected.id, { signal: controller.signal }),
-        api.getPlanActivationState(selected.symbol, { signal: controller.signal }),
-      ]);
+      const detail = await api.getPlanVersion(selectedPlanVersionId, {
+        signal: controller.signal,
+      });
       if (!isCurrentRead(controller, generation)) return false;
-      if (detail.symbol !== selected.symbol) throw new Error("plan detail identity mismatch");
+      const summary = page.value.items?.find((item) => item.id === selectedPlanVersionId);
+      if (summary !== undefined && detail.symbol !== summary.symbol) {
+        throw new Error("plan detail identity mismatch");
+      }
+      const state = await api.getPlanActivationState(detail.symbol, {
+        signal: controller.signal,
+      });
+      if (!isCurrentRead(controller, generation)) return false;
       const currentActivePlan = await loadActivePlan(state, detail, controller.signal);
       if (!isCurrentRead(controller, generation)) return false;
       selectedPlan.value = freezeVersion(detail);
@@ -155,6 +164,10 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
       if (isCurrentRead(controller, generation)) loading.value = false;
       if (readController === controller) readController = null;
     }
+  }
+
+  async function openPlan(planVersionId: string | null): Promise<boolean> {
+    return refresh(planVersionId);
   }
 
   async function saveDraft(command: PlanDraftCommand): Promise<boolean> {
@@ -301,10 +314,6 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     );
   }
 
-  function selectedSummary(): PlanVersionSummary | null {
-    return versions.value.find((item) => item.id === selectedPlanId.value) ?? null;
-  }
-
   function authoritativeMutationRevision(): number | null {
     const loadedPage = page.value;
     if (loadedPage === null) {
@@ -354,7 +363,7 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     return freezeVersion(current);
   }
 
-  onMounted(() => refresh());
+  onMounted(() => refresh(options.initialPlanVersionId ?? null));
   onBeforeUnmount(() => {
     readController?.abort();
     mutationController?.abort();
@@ -373,6 +382,7 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     activatePlan,
     deactivatePlan,
     importPlan,
+    openPlan,
     refresh: () => refresh(),
     saveDraft,
     selectPlan,

@@ -344,6 +344,19 @@ describe("PlansView", () => {
     expect(wrapper.get('[data-testid="request-activation"]').attributes("disabled")).toBeDefined();
   });
 
+  it("keeps a directly loaded plan selected when it is outside the current summary page", () => {
+    const wrapper = mountView({
+      activePlan: null,
+      activeState: null,
+      selectedPlan: candidateVersion,
+      selectedPlanId: candidateVersion.id,
+      versions: [activeVersion],
+    });
+
+    expect(wrapper.get<HTMLInputElement>("#plan-name").element.value).toBe("华亚智能审核方案");
+    expect(wrapper.text()).toContain("DRAFT · v2");
+  });
+
   it("requires explicit discard confirmation before switching a dirty editor", async () => {
     const wrapper = mountView();
     const name = wrapper.get<HTMLInputElement>("#plan-name");

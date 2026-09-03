@@ -112,11 +112,11 @@ watch(
       selectedPlanSnapshot.value = props.selectedPlan;
     }
     const preferred = props.selectedPlanId;
-    if (preferred !== null && props.versions.some((plan) => plan.id === preferred)) {
+    if (preferred !== null && isAvailableSelection(preferred)) {
       requestSelection(preferred, false);
       return;
     }
-    if (!props.versions.some((plan) => plan.id === selectedId.value)) {
+    if (!isAvailableSelection(selectedId.value)) {
       const fallback = initialSelection();
       if (fallback !== null) {
         requestSelection(fallback, false);
@@ -126,6 +126,9 @@ watch(
 );
 
 function initialSelection(): string | null {
+  if (props.selectedPlan?.id === props.selectedPlanId) {
+    return props.selectedPlanId;
+  }
   if (
     props.selectedPlanId !== null &&
     props.versions.some((plan) => plan.id === props.selectedPlanId)
@@ -140,10 +143,7 @@ function selectPlan(planVersionId: string): void {
 }
 
 function requestSelection(planVersionId: string, shouldEmit: boolean): void {
-  if (
-    !props.versions.some((plan) => plan.id === planVersionId) ||
-    planVersionId === selectedId.value
-  ) {
+  if (!isAvailableSelection(planVersionId) || planVersionId === selectedId.value) {
     return;
   }
   if (editorDirty.value) {
@@ -153,6 +153,14 @@ function requestSelection(planVersionId: string, shouldEmit: boolean): void {
     return;
   }
   applySelection(planVersionId, shouldEmit);
+}
+
+function isAvailableSelection(planVersionId: string | null): boolean {
+  return (
+    planVersionId !== null &&
+    (props.selectedPlan?.id === planVersionId ||
+      props.versions.some((plan) => plan.id === planVersionId))
+  );
 }
 
 function applySelection(planVersionId: string, shouldEmit: boolean): void {

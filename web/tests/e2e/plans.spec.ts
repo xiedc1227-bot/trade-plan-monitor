@@ -23,6 +23,7 @@ const OPERATION_ID = "00000000-0000-4000-8000-000000000201";
 const TIME = "2026-09-02T09:00:00.000000+08:00";
 const PLAN_VERSION_ID = "00000000-0000-4000-8000-000000000402";
 const CROSS_SYMBOL_PLAN_VERSION_ID = "00000000-0000-4000-8000-000000000403";
+const SAVED_PLAN_VERSION_ID = "00000000-0000-4000-8000-000000000404";
 const CROSS_SYMBOL = "600000.SH";
 
 const planDocument = JSON.stringify({
@@ -171,7 +172,7 @@ test.afterAll(async () => {
   await server.close();
 });
 
-test("runs the read-only file-configured AI plan flow in isolated Chromium", async ({ page }) => {
+test("runs the configured AI and persisted plan workbench flow in isolated Chromium", async ({ page }) => {
   const consoleFailures: string[] = [];
   const externalRequests: string[] = [];
   const failedResponses: string[] = [];
@@ -180,6 +181,7 @@ test("runs the read-only file-configured AI plan flow in isolated Chromium", asy
   let idempotencyKey: string | null = null;
   const importCommands: unknown[] = [];
   const importIdempotencyKeys: string[] = [];
+  const savedDraftCommands: unknown[] = [];
   let persistedVersions: PlanVersionView[] = [];
 
   page.on("console", (message) => {
@@ -252,6 +254,27 @@ test("runs the read-only file-configured AI plan flow in isolated Chromium", asy
         ...persistedVersions.filter((plan) => plan.id !== persisted.id),
       ];
       body = persisted;
+    } else if (key === "POST /api/v1/plan-drafts") {
+      const command = request.postDataJSON() as {
+        planJson?: unknown;
+        reviewIssues?: unknown;
+        sourceText?: unknown;
+      };
+      savedDraftCommands.push(command);
+      const saved = {
+        ...persistedPlan,
+        id: SAVED_PLAN_VERSION_ID,
+        planHash: "c".repeat(64),
+        planJson: String(command.planJson ?? ""),
+        reviewIssues: command.reviewIssues as [],
+        sourceText: String(command.sourceText ?? ""),
+        version: 2,
+      };
+      persistedVersions = [
+        saved,
+        ...persistedVersions.filter((plan) => plan.id !== saved.id),
+      ];
+      body = saved;
     } else if (key === "POST /api/v1/plan-extractions") {
       submittedBody = request.postDataJSON();
       idempotencyKey = request.headers()["idempotency-key"] ?? null;
@@ -302,7 +325,31 @@ test("runs the read-only file-configured AI plan flow in isolated Chromium", asy
     symbol: persistedPlan.symbol,
   });
 
-  await page.reload();
+  await page.goto(`${baseUrl}/plans/${PLAN_VERSION_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "计划工作台" })).toBeVisible();
+  await expect(page.locator("#plan-name")).toHaveValue("华亚智能审核方案");
+  await page.locator("#plan-name").fill("华亚智能浏览器保存方案");
+  await page.getByTestId("save-draft").click();
+  await expect(page.locator("#plan-name")).toHaveValue("华亚智能浏览器保存方案");
+  expect(savedDraftCommands).toHaveLength(1);
+  expect(savedDraftCommands[0]).toMatchObject({
+    basePlanVersionId: PLAN_VERSION_ID,
+    expectedRevision: 0,
+    sourceText: planDocument,
+  });
+  expect(JSON.parse((savedDraftCommands[0] as { planJson: string }).planJson)).toMatchObject({
+    name: "华亚智能浏览器保存方案",
+  });
+
+  await page.goto(`${baseUrl}/plans/${SAVED_PLAN_VERSION_ID}`);
+  await expect(page.locator("#plan-name")).toHaveValue("华亚智能浏览器保存方案");
+  await page.locator("#plan-export-format").selectOption("YAML");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("export-plan").click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(`trade-plan-${SAVED_PLAN_VERSION_ID}.yaml`);
+
+  await page.goto(`${baseUrl}/plans`);
   await expect(page.getByText("v1 · 003043.SZ")).toBeVisible();
   const crossSymbolImportForm = page.getByTestId("plan-import-form");
   await crossSymbolImportForm.getByLabel("计划文档").fill(crossSymbolPlan.planJson);
@@ -334,6 +381,7 @@ test("runs the read-only file-configured AI plan flow in isolated Chromium", asy
       "POST /api/v1/plan-extractions",
       `GET /api/v1/plan-extractions/${OPERATION_ID}`,
       "POST /api/v1/plan-imports",
+      "POST /api/v1/plan-drafts",
       `GET /api/v1/plan-activation-states/${persistedPlan.symbol}`,
       `GET /api/v1/plan-activation-states/${CROSS_SYMBOL}`,
     ]),
