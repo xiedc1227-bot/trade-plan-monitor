@@ -12,7 +12,7 @@ const historicalPaths = [
   "/system",
 ] as const;
 
-const remainingPlaceholderPaths = ["/stocks/:symbol", "/alerts"] as const;
+const remainingPlaceholderPaths = ["/alerts"] as const;
 
 const backtestPaths = [
   "/backtests",
@@ -30,7 +30,7 @@ function routeAt(path: string): RouteRecordRaw {
 }
 
 describe("backtest production routes", () => {
-  it("expands the exact six-route placeholder surface to exactly ten routes", () => {
+  it("keeps the exact ten-route surface with stock detail wired and alerts still placeholder", () => {
     expect(routes).toHaveLength(10);
     expect(routes.map((route) => route.path)).toEqual([
       ...historicalPaths,
@@ -40,7 +40,7 @@ describe("backtest production routes", () => {
     for (const path of remainingPlaceholderPaths) {
       expect(typeof routeAt(path).component).not.toBe("function");
     }
-    for (const path of ["/", "/plans", "/plans/:id", "/system"]) {
+    for (const path of ["/", "/stocks/:symbol", "/plans", "/plans/:id", "/system"]) {
       expect(typeof routeAt(path).component).toBe("function");
     }
   });

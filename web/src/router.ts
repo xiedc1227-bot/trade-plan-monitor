@@ -16,11 +16,7 @@ function createRoutePlaceholder(name: string, title: string, description: string
 }
 
 const DashboardRoute = () => import("./views/DashboardRouteView.vue");
-const StockDetailRoute = createRoutePlaceholder(
-  "StockDetailRoute",
-  "个股详情",
-  "个股视图将在后续任务中提供。",
-);
+const StockDetailRoute = () => import("./views/SymbolDetailRouteView.vue");
 const PlanWorkbenchRoute = () => import("./views/PlanDraftingView.vue");
 const AlertsRoute = createRoutePlaceholder(
   "AlertsRoute",
@@ -40,6 +36,9 @@ export const routes: RouteRecordRaw[] = [
     path: "/stocks/:symbol",
     name: "stock-detail",
     component: StockDetailRoute,
+    props: (route) => ({
+      symbol: typeof route.params.symbol === "string" ? route.params.symbol : "",
+    }),
     meta: { title: "个股详情 · Trade Plan Monitor" },
   },
   {
