@@ -312,7 +312,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 - 当没有显式运行时/应用服务时，`create_production_app(...)` 使用惰性的 `create_monitor_composition_factory(config_path, database_path)`。工厂只在 FastAPI lifespan 内调用；它打开并迁移生产计划生命周期使用的同一个 monitor SQLite，构造真实的 `RuntimeLifecycleService`，暴露以后端为权威来源的 `RuntimeHealthSnapshot`，并管理基于数据库的 `CommittedMonitorEventStream`。明确注入的运行时和应用服务继续保持权威，并阻止默认组合构造。
 - 默认组合会在任何密钥或供应商请求前检查获批的实时前置条件。由于实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
-- 真实组合不会捏造缺失的权威投影。尚无持久投影的总览、股票、持仓、提醒和实时板块指数读取继续以稳定的 `SERVICE_UNAVAILABLE` 封闭失败；WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
+- 真实组合不会捏造缺失的权威投影。尚无持久投影的总览、股票、提醒和实时板块指数读取继续以稳定的 `SERVICE_UNAVAILABLE` 封闭失败；WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。持仓可用性由 WEBF09 单独定义。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
 - 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储或组合错误不得被静默转换成健康响应；只有已知未验证的实时前置条件会产生有界的 `DEGRADED` 状态。
 
 ### WEBF06 监控总览路由边界
@@ -322,13 +322,20 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 在权威快照存在前，路由展示既有加载状态而不是空自选表。选择已渲染股票只会向 `/stocks/:symbol` 发出路由导航意图；它不会修改监控状态，也不会构造详情响应。
 - 本边界不新增 REST 路径、OpenAPI 字段、生成 TypeScript 类型、Schema 迁移、Schema v1 数据变更、历史回测结果变更或 hash 变更。它不暴露 token，也不执行真实供应商请求。
 
+### WEBF09 个股持仓批次生产边界
+
+- 默认监控组合在与运行时相同的 SQLite 工作单元工厂上注入一个 `PersistentPositionOperationService`。它实现既有 T038 `GET /api/v1/position-lots`、`POST /api/v1/position-lots` 和 `POST /api/v1/position-lot-closures` 契约；不改变 REST 路径、字段、OpenAPI 快照或生成 TypeScript 契约。
+- 后端是持仓策略的唯一权威。读取返回包含未平与已耗尽批次的有界稳定分页，并且只根据已存交易所日历派生 `sellableQuantity`。已知休市日权威投影为可卖数量零并拒绝减仓；日历行缺失时返回 `SERVICE_UNAVAILABLE`，而不是伪造零。建仓解析该股票的已启用不可变计划，并执行其整手大小和最大数量；减仓执行已存开市交易日、T+1、剩余数量、整手及乐观 revision。幂等占用/完成、批次变更、审计日志和已提交事件处于同一事务。
+- `/stocks/:symbol` 通过严格的生成类型适配器，按后端详情快照的精确观察交易日加载权威批次分页。Vue 只负责输入形状检查、显式确认、请求/revision 绑定、陈旧 generation 防护、安全错误文案、焦点恢复和回执到分页核对。变更拥有的刷新会使更早的待完成路由读取失效；同一语义命令的不确定重试会保留幂等键，直至权威核对或确定性拒绝，编辑命令则创建新意图。Vue 绝不判断最大持仓、剩余数量、可卖性、交易日历或 T+1 资格；即使展示的 `sellableQuantity=0` 或分页已达到计划上限，也不会阻止把请求提交给后端。
+- 本切片不读取 token 或请求供应商，也不改变 Schema v1 行、迁移、历史回测结果、既有 hash、判断优先级或提醒确认行为。计划或日历缺失/不一致时，通过后端错误边界封闭失败。
+
 ### 已批准的回测扩展边界
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
 - 当前冻结契约精确为 42 条 REST 路径：27 条实时路径（包含只读 AI 运行配置、板块指数历史和权威计划启用状态）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
-- 生产 Router 精确包含十条路径：真实 `/`、`/plans`、`/plans/:id` 和 `/system` 视图、四条真实或延迟加载的 `/backtests...` 视图，以及两条剩余历史占位路由（`/stocks/:symbol` 和 `/alerts`）；两个静态回测子路由继续排在动态路由之前；
-- 增加真实总览、计划、系统和回测路由不能证明两条剩余历史占位路由已经接入业务视图；
+- 生产 Router 精确包含十条路径：真实 `/`、`/stocks/:symbol`、`/plans`、`/plans/:id` 和 `/system` 视图、四条真实或延迟加载的 `/backtests...` 视图，以及一条剩余历史占位路由（`/alerts`）；两个静态回测子路由继续排在动态路由之前；
+- 增加真实总览、个股详情、计划、系统和回测路由不能证明剩余历史 `/alerts` 占位路由已经接入业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
 - 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
 - `create_production_app(...)` 使用 WEBF05 惰性的真实监控组合：实时前置条件仍未验证时，后端健康诚实保持为 `DEGRADED`/只读，没有权威投影的读取继续为 `SERVICE_UNAVAILABLE`。其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
@@ -406,7 +413,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 `monitor` Pinia store 管理规范化快照和事件状态，通过只读视图及明确的 `applySnapshot`、`applyEvent` 和恢复操作修改。路由内计划与持仓表单保持局部状态。`useMonitorStream`、`useSymbolFilters`、`useChartSeries` 和 `usePositions` 封装生命周期或派生逻辑。ECharts 实例和大型不可变序列使用 shallow ref。组件使用强类型 props 和 emits，绝不直接修改共享记录。
 
-`SymbolDetailView` 只是 T049 的组合表面。`PositionLots` 管理带标签的原生控件、由提醒拥有的预填字段、确认对话框状态和焦点恢复。`usePositions` 接受 maybe-reactive 股票/日期/分页/上限/预填输入和注入的普通函数操作网关；它暴露 shallow-readonly 权威状态及显式变更方法。提醒可以预填表单但不能提交，提醒确认不能创建或减少批次，每条命令都绑定已复核批次 revision 和新的幂等键。只有建仓/减仓回执与随后刷新的权威分页一致时才报告成功。冲突刷新使用原始变更上下文，generation 闸门阻止较旧响应覆盖较新分页，不完整分页不能用于推断最大持仓总量。浏览器可以实施输入形状、整手展示保护及不超过后端 `sellableQuantity` 的数量保护，但绝不计算交易日历或 T+1 资格。T050 提醒视图、生产 API/store/router 组合、安装后资源发现和 T024 判断行为均不属于该边界。
+`SymbolDetailView` 只是 T049 的组合表面。`PositionLots` 管理带标签的原生控件、由提醒拥有的预填字段、确认对话框状态和焦点恢复。`usePositions` 接受 maybe-reactive 股票/日期/分页/预填输入和注入的普通函数操作网关；它暴露 shallow-readonly 权威状态及显式变更方法。提醒可以预填表单但不能提交，提醒确认不能创建或减少批次，每条新语义命令都绑定已复核批次 revision 和新的幂等键；相同命令的不确定重试会复用该键，直至权威核对或确定性拒绝。只有建仓/减仓回执与随后刷新的权威分页一致时才报告成功。冲突刷新使用原始变更上下文，generation 闸门阻止较旧响应覆盖较新分页，不完整分页不能用于推断任何持仓策略限制。浏览器只能实施输入形状、正数 100 股整手数量、确认和响应 identity；它绝不根据最大持仓、剩余数量、后端 `sellableQuantity`、交易日历或 T+1 资格阻止命令。T050 提醒视图、安装后资源发现和 T024 判断行为均不属于该边界；WEBF09 提供生产 API/router 组合。
 
 ## 视觉与无障碍方向
 
@@ -493,4 +500,4 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到既有以后端为权威来源的总览快照和共用指数投影，但不改变其契约。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，其中 `/`、`/plans`、`/plans/:id`、`/system` 和四条回测路径是真实视图，`/stocks/:symbol` 与 `/alerts` 仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到既有以后端为权威来源的总览快照和共用指数投影，但不改变其契约。WEBF09 组合既有持仓 API 和真实个股详情路由，同时把所有 T+1 与持仓策略判断保留在后端。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，其中 `/`、`/stocks/:symbol`、`/plans`、`/plans/:id`、`/system` 和四条回测路径是真实视图，只有 `/alerts` 仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。

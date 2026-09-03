@@ -44,6 +44,7 @@ from trade_plan_monitor.state.models import PlanVersionStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.plan_service import _reject_incompatible_database
+from trade_plan_monitor.web.position_service import PersistentPositionOperationService
 from trade_plan_monitor.web.websocket import CommittedMonitorEventStream
 
 _RUNNER_SHUTDOWN_SECONDS = 5.0
@@ -157,12 +158,16 @@ class MonitorWebComposition:
 
         snapshot = self._runtime.health()
         runner = self._runner_task
-        runner_failed = not self._stopping and not self._stopped and (
-            self._runner_failed
-            or (
-                runner is not None
-                and runner.done()
-                and snapshot.status is RuntimeServiceStatus.RUNNING
+        runner_failed = (
+            not self._stopping
+            and not self._stopped
+            and (
+                self._runner_failed
+                or (
+                    runner is not None
+                    and runner.done()
+                    and snapshot.status is RuntimeServiceStatus.RUNNING
+                )
             )
         )
         if not runner_failed:
@@ -492,6 +497,9 @@ def create_monitor_composition(
         runtime=runtime,
         read_service=read_service,
         websocket_service=CommittedMonitorEventStream(
+            unit_of_work_factory=state.unit_of_work_factory,
+        ),
+        position_service=PersistentPositionOperationService(
             unit_of_work_factory=state.unit_of_work_factory,
         ),
     )

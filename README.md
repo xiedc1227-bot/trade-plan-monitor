@@ -14,7 +14,7 @@ uses a lazy real monitoring composition: it opens and migrates the shared monito
 backend `RuntimeHealthSnapshot`, and owns the committed event stream. Because live minute
 `SourceTimeLabel` semantics and the live board-index provider remain unverified, startup honestly
 reports read-only `DEGRADED` with `nextPollAt=null` before any token or provider request and creates
-no scheduler run task. Dashboard, symbol, position, alert, and live-index reads without an
+no scheduler run task. Dashboard, symbol, alert, and live-index reads without an
 authoritative persisted projection remain `SERVICE_UNAVAILABLE`; no generic lifecycle placeholder
 or fabricated empty decision state is used. Its `/plans` workflow is usable: startup loads the
 project AI configuration once and injects one backend-authoritative persistent plan service over
@@ -25,6 +25,10 @@ inactive draft, and activation still requires a separate user confirmation plus 
 WEBF06 connects `/` to the existing backend-authoritative dashboard snapshot: it renders stock
 decisions and shared board-index facts separately from plan-specific index progress, and retains an
 honest loading state until a snapshot exists. It adds no browser-side trading rules or provider call.
+WEBF09 connects the stock-detail position panel to the existing position REST contract and a
+persistent service over the shared monitor database. The backend alone applies active-plan maximums,
+stored-calendar T+1, remaining quantity, board-lot, and revision rules; the browser performs input
+shape checks and explicit confirmation but never predicts whether a position command is eligible.
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.
@@ -468,7 +472,7 @@ approved receiver and secret-handling procedure exist.
 |---|---|
 | `WEB_ASSETS_UNAVAILABLE` | The installed distribution lacks a complete Vite build. Run `npm install --include=optional --no-package-lock` and `npm run build` before building/reinstalling the Python package; do not add a cwd fallback. |
 | `Cannot find native binding` from Rolldown | npm omitted Vite's platform-specific optional package. Run `npm install --include=optional --no-package-lock`, then retry `npm run build`. |
-| UI shows `DEGRADED` or a general monitoring API returns `SERVICE_UNAVAILABLE` | Expected while live minute `SourceTimeLabel` semantics or the live board-index provider is unverified, or when an authoritative projection is unavailable. The backend keeps health read-only and does not schedule actionable monitoring; the separately composed plan workflow remains available. |
+| UI shows `DEGRADED` or a general monitoring API returns `SERVICE_UNAVAILABLE` | Expected while live minute `SourceTimeLabel` semantics or the live board-index provider is unverified, or when an authoritative projection is unavailable. The backend keeps health read-only and does not schedule actionable monitoring; the separately composed plan and persistent position workflows remain available when their stored plan/calendar prerequisites exist. |
 | `runtime service factory is not configured` | `validate`, `monitor`, `replay`, or `backup` was invoked before application service composition is wired. |
 | Host validation rejects the listener | Use the exact literal `127.0.0.1`; `localhost`, `::1`, `0.0.0.0`, hostnames, and LAN addresses are intentionally rejected. |
 | Port 8765 is busy | Stop the other local process or choose another unused port from 1–65535, keeping host `127.0.0.1`. |

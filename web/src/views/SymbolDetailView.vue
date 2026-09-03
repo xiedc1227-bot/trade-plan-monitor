@@ -28,7 +28,6 @@ interface Props {
   loading?: boolean;
   indexBars?: readonly MarketIndexBarView[];
   positionAsOfTradeDate?: string | null;
-  positionMaximumQuantity?: number | null;
   positionOperations?: PositionOperations | null;
   positionPage?: PositionLotPage | null;
   positionPrefill?: PositionPrefillView | null;
@@ -45,7 +44,6 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false,
   indexBars: () => [],
   positionAsOfTradeDate: null,
-  positionMaximumQuantity: null,
   positionOperations: null,
   positionPage: null,
   positionPrefill: null,
@@ -339,7 +337,6 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
         :symbol="detail.summary.symbol"
         :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
         :initial-page="positionPage"
-        :maximum-quantity="positionMaximumQuantity"
         :operations="positionOperations"
         :prefill="positionPrefill"
         :summary-lots="detail.positionLots ?? []"

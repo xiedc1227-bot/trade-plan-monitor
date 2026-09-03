@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from contextlib import closing
 from datetime import UTC, datetime
 from functools import partial
-from hashlib import sha256
-from http import HTTPStatus
 from pathlib import Path
 from typing import Protocol, cast
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from anyio import to_thread
-from pydantic import BaseModel, ValidationError
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -34,7 +30,7 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
-from trade_plan_monitor.state.models import IdempotencyStatus, PlanVersionStatus
+from trade_plan_monitor.state.models import PlanVersionStatus
 from trade_plan_monitor.state.repositories import (
     DuplicatePlanVersionError,
     IdempotencyInProgressError,
@@ -47,6 +43,7 @@ from trade_plan_monitor.state.repositories import (
 )
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+from trade_plan_monitor.web.idempotency import claim_replay, complete_replay, operation_hash
 from trade_plan_monitor.web.routers.plans import (
     MAX_SAFE_INTEGER,
     ActivePlanView,
@@ -268,7 +265,7 @@ class PersistentPlanWebLifecycle:
         context: MutationContext,
         **kwargs: object,
     ) -> ResultT:
-        request_hash = _operation_hash(operation, command)
+        request_hash = operation_hash(operation, command)
         try:
             return await self._run(
                 function,
@@ -363,7 +360,7 @@ class PersistentPlanWebLifecycle:
         review_issues: tuple[DraftReviewIssue, ...],
     ) -> PlanVersionView:
         with self._unit_of_work() as work:
-            replay = _claim_replay(
+            replay = claim_replay(
                 work,
                 context=context,
                 request_hash=request_hash,
@@ -397,7 +394,7 @@ class PersistentPlanWebLifecycle:
             if details is None:
                 raise RepositoryError("Saved plan version could not be reloaded")
             result = _plan_version_view(details)
-            _complete_replay(
+            complete_replay(
                 work,
                 context=context,
                 request_hash=request_hash,
@@ -414,7 +411,7 @@ class PersistentPlanWebLifecycle:
         command: PlanActivationCommand,
     ) -> ActivePlanView:
         with self._unit_of_work() as work:
-            replay = _claim_replay(
+            replay = claim_replay(
                 work,
                 context=context,
                 request_hash=request_hash,
@@ -446,7 +443,7 @@ class PersistentPlanWebLifecycle:
             if state is None:
                 raise RepositoryError("Activated plan state could not be reloaded")
             result = _active_plan_view(state)
-            _complete_replay(
+            complete_replay(
                 work,
                 context=context,
                 request_hash=request_hash,
@@ -463,7 +460,7 @@ class PersistentPlanWebLifecycle:
         command: PlanDeactivationCommand,
     ) -> ActivePlanView:
         with self._unit_of_work() as work:
-            replay = _claim_replay(
+            replay = claim_replay(
                 work,
                 context=context,
                 request_hash=request_hash,
@@ -479,7 +476,7 @@ class PersistentPlanWebLifecycle:
             if state is None:
                 raise RepositoryError("Deactivated plan state could not be reloaded")
             result = _active_plan_view(state)
-            _complete_replay(
+            complete_replay(
                 work,
                 context=context,
                 request_hash=request_hash,
@@ -575,59 +572,6 @@ def _active_plan_view(record: object) -> ActivePlanView:
         revision=state.revision,
         changed_at=_shanghai_datetime(state.changed_at),
     )
-
-
-def _claim_replay[ModelT: BaseModel](
-    work: SqlAlchemyUnitOfWork,
-    *,
-    context: MutationContext,
-    request_hash: str,
-    model_type: type[ModelT],
-) -> ModelT | None:
-    claim = work.idempotency.claim(context.idempotency_key, request_hash)
-    if claim.status != IdempotencyStatus.COMPLETED:
-        return None
-    if claim.response_code != int(HTTPStatus.OK) or claim.response_json is None:
-        raise RuntimeError("persisted idempotency response is invalid")
-    try:
-        return model_type.model_validate_json(claim.response_json)
-    except TypeError, ValueError, ValidationError:
-        raise RuntimeError("persisted idempotency response is invalid") from None
-
-
-def _complete_replay(
-    work: SqlAlchemyUnitOfWork,
-    *,
-    context: MutationContext,
-    request_hash: str,
-    response: PlanVersionView | ActivePlanView,
-) -> None:
-    work.idempotency.complete(
-        context.idempotency_key,
-        request_hash,
-        response_code=int(HTTPStatus.OK),
-        response=cast(
-            Mapping[str, object],
-            response.model_dump(mode="json", by_alias=True),
-        ),
-    )
-
-
-def _operation_hash(operation: str, command: object) -> str:
-    model_dump = getattr(command, "model_dump", None)
-    if not callable(model_dump):
-        raise TypeError("command must be an API value")
-    payload = {
-        "command": model_dump(mode="json", by_alias=True),
-        "operation": operation,
-    }
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return sha256(encoded).hexdigest()
 
 
 def _require_web_safe_plan(plan: TradePlan) -> None:

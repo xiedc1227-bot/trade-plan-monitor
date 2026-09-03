@@ -154,13 +154,11 @@ enableAutoUnmount(afterEach);
 describe("usePositions", () => {
   it("accepts reactive inputs, submits an explicit creation, then refreshes authoritative lots", async () => {
     const pageSource = shallowRef<PositionLotPage | null>(page);
-    const maximumQuantity = shallowRef<number | null>(500);
     const operations = positionOperations();
     const positions = usePositions({
       asOfTradeDate,
       createIdempotencyKey: () => "position-create-test",
       initialPage: pageSource,
-      maximumQuantity,
       operations,
       prefill: null,
       summaryLots: [],
@@ -204,8 +202,6 @@ describe("usePositions", () => {
       }),
     );
 
-    maximumQuantity.value = 100;
-    await nextTick();
     expect(
       positions.validateCreation({
         acquiredTradeDate: asOfTradeDate,
@@ -214,7 +210,7 @@ describe("usePositions", () => {
         quantity: 100,
         relatedAlertId: null,
       }),
-    ).toContain("建仓后总数量不能超过计划上限 100 股");
+    ).toEqual([]);
   });
 
   it("refreshes on a 409 without leaking the rejected error", async () => {
@@ -227,7 +223,6 @@ describe("usePositions", () => {
       asOfTradeDate,
       createIdempotencyKey: () => "position-close-test",
       initialPage: page,
-      maximumQuantity: 500,
       operations,
       prefill: null,
       summaryLots: [],
@@ -252,7 +247,9 @@ describe("usePositions", () => {
     });
     expect(operations.listPositions).toHaveBeenCalledTimes(1);
     expect(positions.page.value).toEqual(refreshedPage);
-    expect(positions.error.value).toBe("持仓已发生变化，请核对最新批次后重试");
+    expect(positions.error.value).toBe(
+      "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
+    );
     expect(positions.error.value).not.toContain("secret");
   });
 
@@ -266,7 +263,6 @@ describe("usePositions", () => {
     const positions = usePositions({
       asOfTradeDate,
       initialPage: page,
-      maximumQuantity: 500,
       operations,
       prefill: null,
       summaryLots: [],
@@ -302,7 +298,6 @@ describe("usePositions", () => {
     const positions = usePositions({
       asOfTradeDate,
       initialPage: page,
-      maximumQuantity: 500,
       operations,
       prefill: null,
       summaryLots: [],
@@ -334,7 +329,6 @@ describe("usePositions", () => {
     const positions = usePositions({
       asOfTradeDate,
       initialPage: page,
-      maximumQuantity: 500,
       operations,
       prefill: null,
       summaryLots: [],
@@ -356,6 +350,53 @@ describe("usePositions", () => {
     expect(positions.error.value).not.toContain("secret");
   });
 
+  it("reuses the same idempotency key when an identical mutation outcome is unknown", async () => {
+    const createdLot: PositionLot = {
+      ...tacticalLot,
+      bucket: "CORE",
+      costFen: 6_600,
+      lotId: "00000000-0000-4000-8000-000000000014",
+      relatedAlertId: null,
+    };
+    const createPosition = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("connection ended after commit"))
+      .mockResolvedValueOnce(createdLot);
+    const listPositions = vi.fn(async () => ({
+      ...page,
+      items: [...(page.items ?? []), createdLot],
+      total: page.total + 1,
+    }));
+    const createIdempotencyKey = vi
+      .fn()
+      .mockReturnValueOnce("position-unknown-1")
+      .mockReturnValueOnce("position-unknown-2");
+    const positions = usePositions({
+      asOfTradeDate,
+      createIdempotencyKey,
+      initialPage: page,
+      operations: positionOperations({ createPosition, listPositions }),
+      prefill: null,
+      summaryLots: [],
+      symbol,
+    });
+    const draft = {
+      acquiredTradeDate: asOfTradeDate,
+      bucket: "CORE" as const,
+      costFen: 6_600,
+      quantity: 100,
+      relatedAlertId: null,
+    };
+
+    expect(await positions.recordPosition(draft)).toBe(false);
+    expect(await positions.recordPosition(draft)).toBe(true);
+    expect(createIdempotencyKey).toHaveBeenCalledTimes(1);
+    expect(createPosition.mock.calls.map(([request]) => request.idempotencyKey)).toEqual([
+      "position-unknown-1",
+      "position-unknown-1",
+    ]);
+  });
+
   it("rejects a creation receipt that does not match the submitted command", async () => {
     const operations = positionOperations({
       createPosition: vi.fn(async () => ({
@@ -369,7 +410,6 @@ describe("usePositions", () => {
     const positions = usePositions({
       asOfTradeDate,
       initialPage: page,
-      maximumQuantity: 500,
       operations,
       prefill: null,
       summaryLots: [],
@@ -403,7 +443,6 @@ describe("usePositions", () => {
     const positions = usePositions({
       asOfTradeDate,
       initialPage: page,
-      maximumQuantity: 500,
       operations,
       prefill: null,
       summaryLots: [],
@@ -452,7 +491,6 @@ describe("usePositions", () => {
     const positions = usePositions({
       asOfTradeDate,
       initialPage: { ...page, items: [largeLot, tacticalLot] },
-      maximumQuantity: 500,
       operations,
       prefill: null,
       summaryLots: [],
@@ -489,7 +527,6 @@ describe("usePositions", () => {
     const positions = usePositions({
       asOfTradeDate,
       initialPage: page,
-      maximumQuantity: 500,
       operations: positionOperations({ listPositions }),
       prefill: null,
       summaryLots: [],
@@ -505,12 +542,11 @@ describe("usePositions", () => {
     expect(positions.page.value).toEqual(refreshedPage);
   });
 
-  it("does not calculate a maximum from an incomplete position page", () => {
+  it("never calculates a maximum from an incomplete position page", () => {
     const incompletePage: PositionLotPage = { ...page, total: page.total + 1 };
     const positions = usePositions({
       asOfTradeDate,
       initialPage: incompletePage,
-      maximumQuantity: 500,
       operations: positionOperations(),
       prefill: null,
       summaryLots: [],
@@ -525,7 +561,36 @@ describe("usePositions", () => {
         quantity: 100,
         relatedAlertId: null,
       }),
-    ).toContain("当前持仓批次未完整加载，不能可靠校验计划上限");
+    ).toEqual([]);
+  });
+
+  it("submits reduction policy conflicts to the backend authority", async () => {
+    const operations = positionOperations({
+      closePosition: vi.fn(async () => {
+        throw Object.assign(new Error("backend policy detail"), { status: 409 });
+      }),
+    });
+    const positions = usePositions({
+      asOfTradeDate,
+      initialPage: page,
+      operations,
+      prefill: null,
+      summaryLots: [],
+      symbol,
+    });
+    const draft = {
+      expectedRevision: tacticalLot.revision,
+      lotId: tacticalLot.lotId,
+      quantity: 200,
+    };
+
+    expect(positions.validateReduction(draft)).toEqual([]);
+    expect(await positions.reducePosition(draft)).toBe(false);
+    expect(operations.closePosition).toHaveBeenCalledTimes(1);
+    expect(positions.error.value).toBe(
+      "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
+    );
+    expect(positions.error.value).not.toContain("backend policy detail");
   });
 
   it("keeps the stronger error and clears stale lots when a 409 refresh fails", async () => {
@@ -540,7 +605,6 @@ describe("usePositions", () => {
     const positions = usePositions({
       asOfTradeDate,
       initialPage: page,
-      maximumQuantity: 500,
       operations,
       prefill: null,
       summaryLots: [],
@@ -563,13 +627,12 @@ describe("usePositions", () => {
 });
 
 describe("PositionLots", () => {
-  it("renders core/tactical lots and displays board-lot, maximum, and T+1 guards", async () => {
+  it("renders backend T+1 facts while leaving position policy to the backend", async () => {
     const operations = positionOperations();
     const wrapper = mount(PositionLots, {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 200,
         operations,
         prefill: null,
         summaryLots: [],
@@ -580,7 +643,7 @@ describe("PositionLots", () => {
     expect(wrapper.text()).toContain("底仓");
     expect(wrapper.text()).toContain("机动仓");
     expect(wrapper.text()).toContain("T+1 / 当前日期不可卖");
-    expect(wrapper.get(`[data-testid="reduce-${tacticalLot.lotId}"]`).attributes()).toHaveProperty(
+    expect(wrapper.get(`[data-testid="reduce-${tacticalLot.lotId}"]`).attributes()).not.toHaveProperty(
       "disabled",
     );
 
@@ -590,8 +653,12 @@ describe("PositionLots", () => {
     expect(operations.createPosition).not.toHaveBeenCalled();
 
     await wrapper.get('input[name="createQuantity"]').setValue("100");
+    await wrapper.get('input[name="createCostFen"]').setValue("6600");
     await wrapper.get('[data-testid="position-create-form"]').trigger("submit");
-    expect(wrapper.get('[data-testid="create-errors"]').text()).toContain("计划上限 200 股");
+    expect(wrapper.get('[data-testid="position-confirmation"]').attributes()).toHaveProperty(
+      "open",
+    );
+    expect(wrapper.text()).not.toContain("计划上限");
     expect(operations.createPosition).not.toHaveBeenCalled();
   });
 
@@ -601,7 +668,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: buyPrefill,
         summaryLots: [],
@@ -635,13 +701,12 @@ describe("PositionLots", () => {
     expect(operations.listPositions).toHaveBeenCalledTimes(1);
   });
 
-  it("requires a separate reduction review and submits only sellable shares", async () => {
+  it("requires a separate reduction review and submits a revision-bound command", async () => {
     const operations = positionOperations();
     const wrapper = mount(PositionLots, {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: null,
         summaryLots: [],
@@ -676,7 +741,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: closePrefill,
         summaryLots: [],
@@ -712,7 +776,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: null,
         summaryLots: [],
@@ -738,7 +801,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: buyPrefill,
         summaryLots: [],
@@ -767,7 +829,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: buyPrefill,
         summaryLots: [],
@@ -794,7 +855,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: buyPrefill,
         summaryLots: [],
@@ -822,7 +882,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: null,
         summaryLots: [],
@@ -848,7 +907,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: null,
-        maximumQuantity: 500,
         operations: positionOperations(),
         prefill: closePrefill,
         summaryLots: [],
@@ -867,7 +925,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: null,
         summaryLots: [],
@@ -898,7 +955,6 @@ describe("PositionLots", () => {
       props: {
         asOfTradeDate,
         initialPage: page,
-        maximumQuantity: 500,
         operations,
         prefill: null,
         summaryLots: [],
@@ -915,7 +971,7 @@ describe("PositionLots", () => {
     await wrapper.get('[data-testid="position-reduction-form"]').trigger("submit");
     await wrapper.get('[data-testid="confirm-position"]').trigger("click");
     await flushPromises();
-    expect(document.activeElement).toBe(wrapper.get("#position-lots-title").element);
+    expect(document.activeElement).toBe(trigger.element);
   });
 });
 
@@ -951,7 +1007,6 @@ describe("SymbolDetailView position composition", () => {
         detail,
         events: [],
         positionAsOfTradeDate: asOfTradeDate,
-        positionMaximumQuantity: 500,
         positionOperations: operations,
         positionPage: page,
         positionPrefill: buyPrefill,

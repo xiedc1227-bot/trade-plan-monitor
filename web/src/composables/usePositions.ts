@@ -46,6 +46,11 @@ interface PositionContext {
   symbol: string;
 }
 
+interface RetainedMutationIntent {
+  identity: string;
+  key: string;
+}
+
 export interface PositionOperations {
   closePosition(
     request: PositionMutationRequest<PositionLotClosureCommand>,
@@ -72,7 +77,6 @@ interface UsePositionsOptions {
   asOfTradeDate: MaybeRefOrGetter<string>;
   createIdempotencyKey?: () => string;
   initialPage: MaybeRefOrGetter<PositionLotPage | null>;
-  maximumQuantity: MaybeRefOrGetter<number | null>;
   operations: MaybeRefOrGetter<PositionOperations | null>;
   prefill: MaybeRefOrGetter<PositionPrefillView | null>;
   summaryLots: MaybeRefOrGetter<readonly PositionSummaryLot[]>;
@@ -95,6 +99,9 @@ interface UsePositionsResult {
 const boardLot = 100;
 const pageLimit = 100;
 const idempotencyKeyPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const deterministicClientRejectionStatuses = new Set([
+  400, 401, 403, 404, 405, 409, 413, 422, 429,
+]);
 
 export function usePositions(options: UsePositionsOptions): UsePositionsResult {
   const symbol = toRef(options.symbol);
@@ -106,6 +113,7 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
   const busy = shallowRef(false);
   const error = shallowRef<string | null>(null);
   let pageGeneration = 0;
+  let retainedMutationIntent: RetainedMutationIntent | null = null;
 
   watch(
     [symbol, asOfTradeDate, initialPage],
@@ -199,25 +207,6 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
     if (!Number.isSafeInteger(draft.costFen) || draft.costFen <= 0) {
       issues.push("成本价必须是正整数分");
     }
-    const maximum = toValue(options.maximumQuantity);
-    if (maximum !== null && Number.isSafeInteger(maximum) && maximum >= 0) {
-      if (page.value === null && toValue(options.operations) !== null) {
-        issues.push("请先刷新权威持仓后再建仓");
-      } else if (page.value !== null) {
-        const items = page.value.items ?? [];
-        if (page.value.offset !== 0 || items.length !== page.value.total) {
-          issues.push("当前持仓批次未完整加载，不能可靠校验计划上限");
-        } else {
-          const currentQuantity = items.reduce(
-            (total, lot) => total + lot.remainingQuantity,
-            0,
-          );
-          if (isBoardLot(draft.quantity) && currentQuantity + draft.quantity > maximum) {
-            issues.push(`建仓后总数量不能超过计划上限 ${maximum} 股`);
-          }
-        }
-      }
-    }
     return Object.freeze(issues);
   }
 
@@ -233,12 +222,6 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
     }
     if (!isBoardLot(draft.quantity)) {
       issues.push("减仓数量必须是正数且为 100 股整手");
-    }
-    if (draft.quantity > lot.remainingQuantity) {
-      issues.push("减仓数量不能超过批次剩余数量");
-    }
-    if (draft.quantity > lot.sellableQuantity) {
-      issues.push("减仓数量不能超过后端确认的当前可卖数量");
     }
     return Object.freeze(issues);
   }
@@ -264,24 +247,25 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
       error.value = operations === null ? "当前未配置持仓操作通道" : "持仓操作正在处理中";
       return false;
     }
-    const idempotencyKey = createIdempotencyKey();
+    const context = currentContext();
+    const command: PositionLotCreateCommand = {
+      acquiredTradeDate: draft.acquiredTradeDate,
+      bucket: draft.bucket,
+      costFen: draft.costFen,
+      expectedRevision: 0,
+      quantity: draft.quantity,
+      relatedAlertId: draft.relatedAlertId,
+      symbol: context.symbol,
+    };
+    const intentIdentity = mutationIdentity("CREATE", command);
+    const idempotencyKey = idempotencyKeyFor(intentIdentity);
     if (!idempotencyKeyPattern.test(idempotencyKey)) {
       error.value = "无法生成有效的持仓请求标识";
       return false;
     }
     busy.value = true;
     error.value = null;
-    const context = currentContext();
     try {
-      const command: PositionLotCreateCommand = {
-          acquiredTradeDate: draft.acquiredTradeDate,
-          bucket: draft.bucket,
-          costFen: draft.costFen,
-          expectedRevision: 0,
-          quantity: draft.quantity,
-          relatedAlertId: draft.relatedAlertId,
-          symbol: context.symbol,
-      };
       const receipt = await operations.createPosition({
         command,
         idempotencyKey,
@@ -295,10 +279,15 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
         error.value = "建仓操作可能已成功，但回执不一致，请重新加载核对";
         return false;
       }
-      return await refreshAfterMutation(context, operations, (candidate) =>
+      const confirmed = await refreshAfterMutation(context, operations, (candidate) =>
         pageContainsLot(candidate, receipt),
       );
+      if (confirmed) releaseMutationIntent(intentIdentity);
+      return confirmed;
     } catch (caught: unknown) {
+      if (isDeterministicClientRejection(errorStatus(caught))) {
+        releaseMutationIntent(intentIdentity);
+      }
       await handleMutationFailure(caught, operations, context);
       return false;
     } finally {
@@ -318,21 +307,22 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
       error.value = operations === null ? "当前未配置持仓操作通道" : "持仓操作正在处理中";
       return false;
     }
-    const idempotencyKey = createIdempotencyKey();
+    const context = currentContext();
+    const command: PositionLotClosureCommand = {
+      expectedRevision: draft.expectedRevision,
+      lotId: lot.lotId,
+      quantity: draft.quantity,
+      tradeDate: context.asOfTradeDate,
+    };
+    const intentIdentity = mutationIdentity("CLOSE", command);
+    const idempotencyKey = idempotencyKeyFor(intentIdentity);
     if (!idempotencyKeyPattern.test(idempotencyKey)) {
       error.value = "无法生成有效的持仓请求标识";
       return false;
     }
     busy.value = true;
     error.value = null;
-    const context = currentContext();
     try {
-      const command: PositionLotClosureCommand = {
-          expectedRevision: draft.expectedRevision,
-          lotId: lot.lotId,
-          quantity: draft.quantity,
-          tradeDate: context.asOfTradeDate,
-      };
       const receipt = await operations.closePosition({
         command,
         idempotencyKey,
@@ -346,10 +336,15 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
         error.value = "减仓操作可能已成功，但回执不一致，请重新加载核对";
         return false;
       }
-      return await refreshAfterMutation(context, operations, (candidate) =>
+      const confirmed = await refreshAfterMutation(context, operations, (candidate) =>
         pageContainsLot(candidate, receipt.lot),
       );
+      if (confirmed) releaseMutationIntent(intentIdentity);
+      return confirmed;
     } catch (caught: unknown) {
+      if (isDeterministicClientRejection(errorStatus(caught))) {
+        releaseMutationIntent(intentIdentity);
+      }
       await handleMutationFailure(caught, operations, context);
       return false;
     } finally {
@@ -471,7 +466,7 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
         "持仓冲突后未能刷新权威批次，请重新加载后核对",
       );
       if (result === "applied") {
-        error.value = "持仓已发生变化，请核对最新批次后重试";
+        error.value = "后端拒绝了持仓操作，请核对最新批次和计划规则后重试";
         return;
       }
       if (result === "failed") {
@@ -497,6 +492,23 @@ export function usePositions(options: UsePositionsOptions): UsePositionsResult {
       return options.createIdempotencyKey();
     }
     return `position-${crypto.randomUUID()}`;
+  }
+
+  function idempotencyKeyFor(identity: string): string {
+    if (retainedMutationIntent?.identity === identity) {
+      return retainedMutationIntent.key;
+    }
+    const key = createIdempotencyKey();
+    retainedMutationIntent = idempotencyKeyPattern.test(key)
+      ? Object.freeze({ identity, key })
+      : null;
+    return key;
+  }
+
+  function releaseMutationIntent(identity: string): void {
+    if (retainedMutationIntent?.identity === identity) {
+      retainedMutationIntent = null;
+    }
   }
 
   return {
@@ -586,4 +598,15 @@ function errorStatus(caught: unknown): number | null {
   } catch {
     return null;
   }
+}
+
+function isDeterministicClientRejection(status: number | null): boolean {
+  return status !== null && deterministicClientRejectionStatuses.has(status);
+}
+
+function mutationIdentity(
+  operation: "CLOSE" | "CREATE",
+  command: PositionLotClosureCommand | PositionLotCreateCommand,
+): string {
+  return `${operation}:${JSON.stringify(command)}`;
 }

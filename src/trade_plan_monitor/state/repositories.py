@@ -970,6 +970,9 @@ class PlanRepository:
 class PositionRepository:
     """Persist explicit manual buys and T+1-safe lot reductions."""
 
+    _MAX_PAGE_LIMIT = 100
+    _MAX_READ_ROWS = 10_000
+
     def __init__(
         self,
         session: Session,
@@ -1073,6 +1076,38 @@ class PositionRepository:
         ).all()
         return tuple(_position_lot_record(model) for model in models)
 
+    def list_lots(
+        self,
+        symbol: str,
+        *,
+        offset: int,
+        limit: int,
+    ) -> tuple[tuple[PositionLotRecord, ...], int]:
+        """Return a bounded stable page including exhausted lots for reconciliation."""
+
+        normalized_symbol = _symbol(symbol)
+        normalized_offset = _nonnegative_integer(offset, "offset")
+        normalized_limit = _positive_integer(limit, "limit")
+        if normalized_offset > self._MAX_READ_ROWS:
+            raise ValueError("offset exceeds the position-lot read limit")
+        if normalized_limit > self._MAX_PAGE_LIMIT:
+            raise ValueError("limit exceeds the position-lot page limit")
+        total = self._session.scalar(
+            select(func.count())
+            .select_from(PositionLot)
+            .where(PositionLot.symbol == normalized_symbol)
+        )
+        if type(total) is not int or not 0 <= total <= self._MAX_READ_ROWS:
+            raise RepositoryError("Position-lot collection exceeds its read limit")
+        models = self._session.scalars(
+            select(PositionLot)
+            .where(PositionLot.symbol == normalized_symbol)
+            .order_by(PositionLot.acquired_trade_date, PositionLot.id)
+            .offset(normalized_offset)
+            .limit(normalized_limit)
+        ).all()
+        return tuple(_position_lot_record(model) for model in models), total
+
     def sellable_quantity(
         self,
         symbol: str,
@@ -1095,20 +1130,37 @@ class PositionRepository:
         *,
         quantity: int,
         trade_date: date,
+        expected_revision: int | None = None,
+        board_lot: int = 100,
     ) -> PositionLotRecord:
         normalized_id = _bounded_text(lot_id, "lot_id", maximum=36)
         normalized_quantity = _positive_integer(quantity, "quantity")
         normalized_date = _calendar_date(trade_date, "trade_date")
+        normalized_board_lot = _positive_integer(board_lot, "board_lot")
+        normalized_revision = (
+            None
+            if expected_revision is None
+            else _nonnegative_integer(expected_revision, "expected_revision")
+        )
+        if normalized_quantity % normalized_board_lot != 0:
+            raise BoardLotViolationError("Reduction quantity must be a whole board lot")
         self._session.execute(
             update(PositionLot)
             .where(PositionLot.id == normalized_id)
             .values(remaining_qty=PositionLot.remaining_qty)
             .execution_options(synchronize_session=False)
         )
+        self._session.expire_all()
         model = self._session.get(PositionLot, normalized_id)
         if model is None:
             raise PositionLotNotFoundError("Position lot was not found")
         before = _position_lot_record(model)
+        reduced_quantity = model.quantity - model.remaining_qty
+        if reduced_quantity % normalized_board_lot != 0:
+            raise RepositoryError("Stored position lot has an invalid revision")
+        current_revision = reduced_quantity // normalized_board_lot
+        if normalized_revision is not None and normalized_revision != current_revision:
+            raise RevisionConflictError(current_revision)
         if model.acquired_trade_date >= normalized_date:
             raise PositionT1LockedError("Position lot is not sellable on this trade date")
         if normalized_quantity > model.remaining_qty:

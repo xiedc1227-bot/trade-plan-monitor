@@ -13,7 +13,6 @@ import {
 interface Props {
   asOfTradeDate: string;
   initialPage?: PositionLotPage | null;
-  maximumQuantity?: number | null;
   operations?: PositionOperations | null;
   prefill?: PositionPrefillView | null;
   summaryLots?: readonly PositionSummaryLot[];
@@ -26,7 +25,6 @@ type PendingConfirmation =
 
 const props = withDefaults(defineProps<Props>(), {
   initialPage: null,
-  maximumQuantity: null,
   operations: null,
   prefill: null,
   summaryLots: () => [],
@@ -34,7 +32,6 @@ const props = withDefaults(defineProps<Props>(), {
 const positions = usePositions({
   asOfTradeDate: () => props.asOfTradeDate,
   initialPage: () => props.initialPage,
-  maximumQuantity: () => props.maximumQuantity,
   operations: () => props.operations,
   prefill: () => props.prefill,
   summaryLots: () => props.summaryLots,
@@ -292,7 +289,6 @@ function canReduce(lot: (typeof positions.lots.value)[number]): boolean {
   return (
     props.operations !== null &&
     lot.revision !== null &&
-    lot.sellableQuantity >= 100 &&
     !positions.busy.value
   );
 }

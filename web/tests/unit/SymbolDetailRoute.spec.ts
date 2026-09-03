@@ -13,10 +13,12 @@ vi.mock("echarts", () => ({
 
 import type {
   BarPage,
+  PositionLotPage,
   SymbolDetailResponse,
   SymbolEventPage,
 } from "../../src/api/generated";
 import { createSymbolApi } from "../../src/api/symbols";
+import type { PositionOperations } from "../../src/composables/usePositions";
 import SymbolDetailRouteView from "../../src/views/SymbolDetailRouteView.vue";
 
 const symbol = "003043.SZ";
@@ -70,6 +72,20 @@ const detail = {
     totalConditionCount: 0,
   },
 } as SymbolDetailResponse;
+
+function positionPage(
+  targetSymbol = symbol,
+  targetAsOfTradeDate = observedAt.slice(0, 10),
+): PositionLotPage {
+  return {
+    asOfTradeDate: targetAsOfTradeDate,
+    items: [],
+    limit: 100,
+    offset: 0,
+    symbol: targetSymbol,
+    total: 0,
+  };
+}
 
 function barsPage(range: Readonly<{ startAt: string; endAt: string }>): BarPage {
   return {
@@ -142,6 +158,46 @@ describe("/stocks/:symbol route", () => {
       limit: 100,
       offset: 0,
     }, expect.any(Object));
+  });
+
+  it("loads the authoritative position page for the observed trade date and passes its gateway through", async () => {
+    const getBars = vi.fn(async (_symbol: string, query: typeof initialRange) => barsPage(query));
+    const getEvents = vi.fn(async (_symbol: string, query: typeof initialRange) => eventsPage(query));
+    const listPositions = vi.fn(async () => positionPage());
+    const positionApi = {
+      closePosition: vi.fn(),
+      createPosition: vi.fn(),
+      listPositions,
+    };
+    const wrapper = mount(SymbolDetailRouteView, {
+      attachTo: document.body,
+      props: {
+        api: {
+          getBars,
+          getEvents,
+          getSymbol: vi.fn(async () => detail),
+        },
+        positionApi,
+        symbol,
+      },
+    });
+
+    await flushPromises();
+
+    expect(listPositions).toHaveBeenCalledWith({
+      asOfTradeDate: "2026-08-24",
+      limit: 100,
+      offset: 0,
+      symbol,
+    }, expect.any(Object));
+    const detailView = wrapper.getComponent({ name: "SymbolDetailView" });
+    expect(detailView.props("positionAsOfTradeDate")).toBe("2026-08-24");
+    expect(detailView.props("positionPage")).toEqual(positionPage());
+    expect(detailView.props("positionOperations")).toMatchObject({
+      closePosition: expect.any(Function),
+      createPosition: expect.any(Function),
+      listPositions: expect.any(Function),
+    });
   });
 
   it("submits an explicit canonical Shanghai range without inventing bars or events", async () => {
@@ -257,5 +313,114 @@ describe("/stocks/:symbol route", () => {
 
     expect(wrapper.text()).toContain(`华亚智能 · ${laterSymbol}`);
     expect(wrapper.text()).not.toContain(`华亚智能 · ${symbol}`);
+  });
+
+  it("does not let a late position page for an old symbol replace the latest authority", async () => {
+    const laterSymbol = "600000.SH";
+    const laterObservedAt = "2026-08-25T10:05:05.000000+08:00";
+    const laterDetail: SymbolDetailResponse = {
+      ...detail,
+      summary: {
+        ...detail.summary,
+        decision: { ...detail.summary.decision, symbol: laterSymbol },
+        observedAt: laterObservedAt,
+        symbol: laterSymbol,
+      },
+    };
+    let resolveFirstPage: ((value: PositionLotPage) => void) | undefined;
+    const listPositions = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<PositionLotPage>((resolve) => {
+            resolveFirstPage = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(positionPage(laterSymbol, "2026-08-25"));
+    const wrapper = mount(SymbolDetailRouteView, {
+      attachTo: document.body,
+      props: {
+        api: {
+          getBars: vi.fn(async (_symbol: string, query: typeof initialRange) => barsPage(query)),
+          getEvents: vi.fn(async (_symbol: string, query: typeof initialRange) => eventsPage(query)),
+          getSymbol: vi
+            .fn()
+            .mockResolvedValueOnce(detail)
+            .mockResolvedValueOnce(laterDetail),
+        },
+        positionApi: {
+          closePosition: vi.fn(),
+          createPosition: vi.fn(),
+          listPositions,
+        },
+        symbol,
+      },
+    });
+
+    await flushPromises();
+    await wrapper.setProps({ symbol: laterSymbol });
+    await flushPromises();
+    resolveFirstPage?.(positionPage());
+    await flushPromises();
+
+    const detailView = wrapper.getComponent({ name: "SymbolDetailView" });
+    expect(detailView.props("positionPage")).toEqual(
+      positionPage(laterSymbol, "2026-08-25"),
+    );
+    expect(listPositions).toHaveBeenLastCalledWith({
+      asOfTradeDate: "2026-08-25",
+      limit: 100,
+      offset: 0,
+      symbol: laterSymbol,
+    }, expect.any(Object));
+  });
+
+  it("invalidates a pending parent read before a mutation-owned refresh", async () => {
+    let resolveInitial: ((value: PositionLotPage) => void) | undefined;
+    let initialSignal: AbortSignal | undefined;
+    const mutationPage = { ...positionPage(), total: 1 };
+    const listPositions = vi
+      .fn()
+      .mockImplementationOnce(
+        (_request, options: { signal?: AbortSignal } | undefined) => {
+          initialSignal = options?.signal;
+          return new Promise<PositionLotPage>((resolve) => {
+            resolveInitial = resolve;
+          });
+        },
+      )
+      .mockResolvedValueOnce(mutationPage);
+    const wrapper = mount(SymbolDetailRouteView, {
+      attachTo: document.body,
+      props: {
+        api: {
+          getBars: vi.fn(async (_symbol: string, query: typeof initialRange) => barsPage(query)),
+          getEvents: vi.fn(async (_symbol: string, query: typeof initialRange) => eventsPage(query)),
+          getSymbol: vi.fn(async () => detail),
+        },
+        positionApi: {
+          closePosition: vi.fn(),
+          createPosition: vi.fn(),
+          listPositions,
+        },
+        symbol,
+      },
+    });
+    await flushPromises();
+    const detailView = wrapper.getComponent({ name: "SymbolDetailView" });
+    const operations = detailView.props("positionOperations") as PositionOperations;
+
+    await expect(
+      operations.listPositions({
+        asOfTradeDate: "2026-08-24",
+        limit: 100,
+        offset: 0,
+        symbol,
+      }),
+    ).resolves.toEqual(mutationPage);
+    expect(initialSignal?.aborted).toBe(true);
+    resolveInitial?.(positionPage());
+    await flushPromises();
+    expect(detailView.props("positionPage")).toBeNull();
   });
 });

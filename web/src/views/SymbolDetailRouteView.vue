@@ -1,27 +1,55 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue";
 
+import type { PositionLotPage } from "../api/generated";
+import { createPositionApi, type PositionApi } from "../api/positions";
 import { isShanghaiDateTime, shanghaiDateTimeKey } from "../api/shanghaiTime";
 import { createSymbolApi, type SymbolApi } from "../api/symbols";
 import {
   useSymbolDetail,
   type SymbolHistoryRange,
 } from "../composables/useSymbolDetail";
+import type { PositionOperations } from "../composables/usePositions";
 import SymbolDetailView from "./SymbolDetailView.vue";
 
 interface Props {
   readonly api?: SymbolApi;
+  readonly positionApi?: PositionApi;
   readonly symbol: string;
 }
 
 const props = defineProps<Props>();
 const api = props.api ?? createSymbolApi();
+const positionApi = props.positionApi ?? createPositionApi();
+const positionOperations: PositionOperations = Object.freeze({
+  closePosition: (request: Parameters<PositionOperations["closePosition"]>[0]) =>
+    positionApi.closePosition(request.command, request.idempotencyKey),
+  createPosition: (request: Parameters<PositionOperations["createPosition"]>[0]) =>
+    positionApi.createPosition(request.command, request.idempotencyKey),
+  listPositions: (request: Parameters<PositionOperations["listPositions"]>[0]) => {
+    invalidatePendingPositionRead();
+    return positionApi.listPositions(request);
+  },
+});
 const range = shallowRef<SymbolHistoryRange | null>(null);
 const startAt = shallowRef("");
 const endAt = shallowRef("");
 const rangeError = shallowRef<string | null>(null);
+const positionPage = shallowRef<PositionLotPage | null>(null);
+const positionError = shallowRef<string | null>(null);
 const symbol = computed(() => props.symbol);
 const { bars, detail, error, events, loading, stale } = useSymbolDetail({ api, range, symbol });
+const positionAsOfTradeDate = computed(
+  () => detail.value?.summary.observedAt.slice(0, 10) ?? null,
+);
+let positionGeneration = 0;
+let activePositionController: AbortController | null = null;
+
+function invalidatePendingPositionRead(): void {
+  positionGeneration += 1;
+  activePositionController?.abort();
+  activePositionController = null;
+}
 
 watch(
   symbol,
@@ -46,6 +74,42 @@ watch(
     startAt.value = initialRange.startAt;
     endAt.value = initialRange.endAt;
   },
+);
+
+watch(
+  [symbol, positionAsOfTradeDate],
+  async ([targetSymbol, targetDate], _previous, onCleanup) => {
+    const generation = ++positionGeneration;
+    positionPage.value = null;
+    positionError.value = null;
+    if (targetDate === null) return;
+    const controller = new AbortController();
+    activePositionController = controller;
+    onCleanup(() => {
+      controller.abort();
+      if (activePositionController === controller) activePositionController = null;
+    });
+    try {
+      const loaded = await positionApi.listPositions(
+        {
+          asOfTradeDate: targetDate,
+          limit: 100,
+          offset: 0,
+          symbol: targetSymbol,
+        },
+        { signal: controller.signal },
+      );
+      if (generation !== positionGeneration || controller.signal.aborted) return;
+      positionPage.value = loaded;
+    } catch {
+      if (generation === positionGeneration && !controller.signal.aborted) {
+        positionError.value = "持仓批次暂不可用；页面不会推测仓位或 T+1 状态。";
+      }
+    } finally {
+      if (activePositionController === controller) activePositionController = null;
+    }
+  },
+  { immediate: true },
 );
 
 function submitRange(): void {
@@ -99,12 +163,18 @@ function submitRange(): void {
       </fieldset>
     </form>
     <p v-if="rangeError" class="symbol-detail-route__error" role="alert">{{ rangeError }}</p>
+    <p v-if="positionError" class="symbol-detail-route__error" role="status">
+      {{ positionError }}
+    </p>
     <SymbolDetailView
       :bars="bars"
       :detail="detail"
       :error="error"
       :events="events"
       :loading="loading"
+      :position-as-of-trade-date="positionAsOfTradeDate"
+      :position-operations="positionOperations"
+      :position-page="positionPage"
       :stale="stale"
     />
   </section>

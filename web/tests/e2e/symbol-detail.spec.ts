@@ -49,6 +49,25 @@ const detail = {
     totalConditionCount: 0,
   },
 };
+const sameDayLot = {
+  acquiredTradeDate: "2026-08-24",
+  bucket: "CORE",
+  closedAt: null,
+  costFen: 6_500,
+  lotId: "11111111-1111-4111-8111-111111111111",
+  quantity: 100,
+  relatedAlertId: null,
+  remainingQuantity: 100,
+  revision: 0,
+  sellableQuantity: 0,
+  symbol,
+};
+
+interface PositionRequests {
+  closures: unknown[];
+  creates: unknown[];
+  reads: Array<{ asOfTradeDate: string | null; limit: string | null; offset: string | null; symbol: string | null }>;
+}
 
 let server: ViteDevServer;
 let baseUrl: string;
@@ -97,9 +116,65 @@ test("reads backend detail, bars, and events for an explicit Shanghai history ra
   ]);
 });
 
+test("submits position commands for backend-only T+1 and maximum-policy decisions", async ({ page }) => {
+  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
+  const positionRequests: PositionRequests = { closures: [], creates: [], reads: [] };
+  await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges, positionRequests));
+
+  await page.goto(`${baseUrl}/stocks/${symbol}`);
+  await expect(page.getByRole("heading", { level: 2, name: "人工持仓批次" })).toBeVisible();
+  await expect.poll(() => positionRequests.reads.length).toBe(1);
+  expect(positionRequests.reads[0]).toEqual({
+    asOfTradeDate: "2026-08-24",
+    limit: "100",
+    offset: "0",
+    symbol,
+  });
+  await expect(page.getByTestId(`reduce-${sameDayLot.lotId}`)).toBeEnabled();
+
+  await page.locator('input[name="createCostFen"]').fill("6500");
+  await page.getByRole("button", { name: "复核建仓" }).click();
+  await expect(page.getByTestId("position-confirmation")).toBeVisible();
+  await page.getByTestId("confirm-position").click();
+
+  await expect.poll(() => positionRequests.creates.length).toBe(1);
+  expect(positionRequests.creates[0]).toEqual({
+    acquiredTradeDate: "2026-08-24",
+    bucket: "CORE",
+    costFen: 6_500,
+    expectedRevision: 0,
+    quantity: 100,
+    relatedAlertId: null,
+    symbol,
+  });
+  await expect(page.getByRole("alert")).toHaveText(
+    "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
+  );
+
+  await page.getByTestId(`reduce-${sameDayLot.lotId}`).click();
+  await page.getByRole("button", { name: "复核减仓" }).click();
+  await expect(page.getByTestId("position-confirmation")).toBeVisible();
+  await page.getByTestId("confirm-position").click();
+
+  await expect.poll(() => positionRequests.closures.length).toBe(1);
+  expect(positionRequests.closures[0]).toEqual({
+    expectedRevision: 0,
+    lotId: sameDayLot.lotId,
+    quantity: 100,
+    tradeDate: "2026-08-24",
+  });
+  await expect.poll(() => positionRequests.reads.length).toBe(3);
+  await expect(page.getByRole("alert")).toHaveText(
+    "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
+  );
+  await expect(page.locator("body")).not.toContainText("backend policy detail");
+  await expect(page.getByText("T+1 / 当前日期不可卖")).toBeVisible();
+});
+
 async function fulfillApi(
   route: Route,
   ranges: Array<{ endAt: string | null; startAt: string | null }>,
+  positionRequests?: PositionRequests,
 ): Promise<void> {
   const url = new URL(route.request().url());
   if (url.pathname === `/api/v1/symbols/${symbol}`) {
@@ -124,11 +199,62 @@ async function fulfillApi(
     });
     return;
   }
+  if (url.pathname === "/api/v1/position-lots" && route.request().method() === "GET") {
+    positionRequests?.reads.push({
+      asOfTradeDate: url.searchParams.get("asOfTradeDate"),
+      limit: url.searchParams.get("limit"),
+      offset: url.searchParams.get("offset"),
+      symbol: url.searchParams.get("symbol"),
+    });
+    await route.fulfill({
+      body: JSON.stringify({
+        asOfTradeDate: url.searchParams.get("asOfTradeDate"),
+        items: positionRequests === undefined ? [] : [sameDayLot],
+        limit: Number(url.searchParams.get("limit")),
+        offset: Number(url.searchParams.get("offset")),
+        symbol: url.searchParams.get("symbol"),
+        total: positionRequests === undefined ? 0 : 1,
+      }),
+      contentType: "application/json",
+    });
+    return;
+  }
+  if (url.pathname === "/api/v1/position-lots" && route.request().method() === "POST") {
+    positionRequests?.creates.push(readJsonBody(route));
+    await fulfillPositionConflict(route);
+    return;
+  }
+  if (url.pathname === "/api/v1/position-lot-closures" && route.request().method() === "POST") {
+    positionRequests?.closures.push(readJsonBody(route));
+    await fulfillPositionConflict(route);
+    return;
+  }
   await route.fulfill({
     body: JSON.stringify({
       error: { code: "SERVICE_UNAVAILABLE", details: [], message: "unavailable", requestId: "a".repeat(32) },
     }),
     contentType: "application/json",
     status: 503,
+  });
+}
+
+function readJsonBody(route: Route): unknown {
+  const body = route.request().postData();
+  if (body === null) throw new Error("position command had no JSON body");
+  return JSON.parse(body) as unknown;
+}
+
+async function fulfillPositionConflict(route: Route): Promise<void> {
+  await route.fulfill({
+    body: JSON.stringify({
+      error: {
+        code: "CONFLICT",
+        details: [],
+        message: "backend policy detail",
+        requestId: "c".repeat(32),
+      },
+    }),
+    contentType: "application/json",
+    status: 409,
   });
 }
