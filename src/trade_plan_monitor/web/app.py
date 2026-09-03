@@ -19,6 +19,7 @@ from trade_plan_monitor.web.lifespan import (
     RuntimeLifecycleFactory,
     create_runtime_lifespan,
 )
+from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory
 from trade_plan_monitor.web.origin_guard import (
     DEFAULT_WEB_PORT,
     LOOPBACK_HOST,
@@ -75,20 +76,6 @@ class ProductionAssetError(RuntimeError):
     """The installed distribution does not contain a complete Vue build."""
 
     code = "WEB_ASSETS_UNAVAILABLE"
-
-
-class _ReadOnlyPackagedLifecycle:
-    """Keep the packaged transport available without inventing runtime readiness."""
-
-    async def start(self) -> dict[str, object]:
-        return {
-            "status": "DEGRADED",
-            "readOnly": True,
-            "reason": "APPLICATION_SERVICES_UNAVAILABLE",
-        }
-
-    async def stop(self) -> None:
-        return None
 
 
 @contextmanager
@@ -161,7 +148,22 @@ def create_production_app(
             return ConfiguredAIWebLifecycle(config_path=config_path)
 
         ai_lifecycle_factory = create_configured_ai_lifecycle
-    lifecycle_factory = runtime_factory or _ReadOnlyPackagedLifecycle
+    lifecycle_factory = runtime_factory
+    has_explicit_monitor_service = any(
+        service is not None
+        for service in (
+            read_service,
+            position_service,
+            alert_service,
+            websocket_service,
+            market_index_read_service,
+        )
+    )
+    if lifecycle_factory is None and not has_explicit_monitor_service:
+        lifecycle_factory = create_monitor_composition_factory(
+            config_path=config_path,
+            database_path=database_path,
+        )
     plan_lifecycle_factory: PlanWebLifecycleFactory | None = None
     plan_snapshot_reader = plan_service
     if plan_service is None:

@@ -31,11 +31,7 @@ const AlertsRoute = createRoutePlaceholder(
   "提醒中心",
   "提醒视图将在后续任务中提供。",
 );
-const SystemRoute = createRoutePlaceholder(
-  "SystemRoute",
-  "系统设置",
-  "系统视图将在后续任务中提供。",
-);
+const SystemRoute = () => import("./views/SystemRouteView.vue");
 
 export const routes: RouteRecordRaw[] = [
   {
@@ -75,7 +71,7 @@ export const routes: RouteRecordRaw[] = [
     path: "/system",
     name: "system",
     component: SystemRoute,
-    meta: { title: "系统设置 · Trade Plan Monitor" },
+    meta: { title: "系统健康 · Trade Plan Monitor" },
   },
   {
     path: "/backtests",

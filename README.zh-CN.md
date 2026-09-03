@@ -6,7 +6,7 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 ## 产品状态
 
-`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。尚未组合的通用监控服务仍使用只读 `DEGRADED` fallback，但 `/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
+`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。WEBF05 现在使用惰性的真实监控组合：打开并迁移共用 monitor SQLite，暴露后端 `RuntimeHealthSnapshot`，并管理已提交事件流。由于实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，启动会在任何密钥或供应商请求前诚实报告只读 `DEGRADED` 和 `nextPollAt=null`，且不创建调度运行任务。没有权威持久投影的总览、股票、持仓、提醒和实时板块指数读取继续返回 `SERVICE_UNAVAILABLE`；不再使用通用生命周期占位组合，也不伪造空判断状态。`/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
 
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 
@@ -70,7 +70,7 @@ Web 启动时会校验严格 YAML，相对于该 YAML 解析 AI 项目密钥文�
 trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765
 ```
 
-在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。监控标题仍可能显示 `DEGRADED`；打开 `/plans` 可使用 AI 草稿与持久计划管理。首次 lifespan 启动会创建或升级 `data/monitor.sqlite3`；之后启动时，计划保存、查询、导入、启用和停用都使用同一 SQLite 文件。数据库及其 WAL/SHM 伴随文件必须保持私密，且不得直接复制正在使用的 WAL 数据库作为备份。修改 `config/app.yaml` 或选中的项目 `.env` 后必须重启 Web。
+在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。当实时分钟 `SourceTimeLabel` 语义或实时板块指数供应商仍未验证时，监控标题会诚实显示 `DEGRADED`、只读状态和没有下次轮询；打开 `/plans` 可使用 AI 草稿与持久计划管理。首次 lifespan 启动会创建或升级 `data/monitor.sqlite3`；之后启动时，计划保存、查询、导入、启用和停用都使用同一 SQLite 文件。数据库及其 WAL/SHM 伴随文件必须保持私密，且不得直接复制正在使用的 WAL 数据库作为备份。修改 `config/app.yaml` 或选中的项目 `.env` 后，必须重启 Web 才能更改 AI 设置。
 
 ### 5. 离线验证
 
@@ -129,7 +129,7 @@ p95 ≤ 200 毫秒。排除 ECharts 的入口/共享包必须 ≤ 150 KiB gzip�
 
 | 命令 | 用途 | 当前可用性 |
 |---|---|---|
-| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | 提供已打包 SPA、API、WebSocket、配置文件驱动的 AI 草稿和持久计划管理 | 可用；计划使用 `data/monitor.sqlite3`，未组合的通用监控服务仍保持只读/不可用 |
+| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | 提供已打包 SPA、API、WebSocket、配置文件驱动的 AI 草稿和持久计划管理 | 可用；WEBF05 惰性组合监控，并在实时前置条件验证前诚实报告只读 `DEGRADED`；缺失权威投影时保持不可用 |
 | `python -m trade_plan_monitor --help` | 显示稳定的安装式命令面 | 可用 |
 | `python -m pytest -q` | 运行完整后端测试 | 可用；离线 |
 | `python -m ruff check --no-cache src tests` | 运行后端代码检查 | 可用；离线 |
@@ -138,10 +138,10 @@ p95 ≤ 200 毫秒。排除 ECharts 的入口/共享包必须 ≤ 150 KiB gzip�
 | `npm test -- --run` | 运行前端单元测试 | 在 `web/` 中可用；离线 |
 | `npm run type-check` | 检查 Vue 和 TypeScript | 在 `web/` 中可用；离线 |
 | `npm run build` | 构建并暂存生产 SPA 资源 | 在 `web/` 中可用；安装依赖后离线 |
-| `python -m trade_plan_monitor validate` | 分派配置/计划校验 | 注入式边界；安装式 fallback 尚未接通 |
-| `python -m trade_plan_monitor monitor --once` | 分派一次无界面监控周期 | 注入式边界；安装式 fallback 尚未接通 |
-| `python -m trade_plan_monitor replay` | 分派确定性回放 | 注入式边界；安装式 fallback 尚未接通 |
-| `python -m trade_plan_monitor backup` | 分派已验证在线备份 | 注入式边界；安装式 fallback 尚未接通 |
+| `python -m trade_plan_monitor validate` | 分派配置/计划校验 | 注入式边界；独立控制台要求显式服务工厂 |
+| `python -m trade_plan_monitor monitor --once` | 分派一次无界面监控周期 | 注入式边界；独立控制台要求显式服务工厂 |
+| `python -m trade_plan_monitor replay` | 分派确定性回放 | 注入式边界；独立控制台要求显式服务工厂 |
+| `python -m trade_plan_monitor backup` | 分派已验证在线备份 | 注入式边界；独立控制台要求显式服务工厂 |
 
 当前独立控制台调用注入式边界命令时会抛出 `runtime service factory is not configured`。这是明确的组合未完成信号，不是成功的空操作。
 
@@ -332,7 +332,7 @@ python -c "import os; from trade_plan_monitor.state.backup import verify_sqlite_
 |---|---|
 | `WEB_ASSETS_UNAVAILABLE` | 安装分发缺少完整 Vite 构建。构建/重装 Python 包前运行 `npm install --include=optional --no-package-lock` 和 `npm run build`；不要增加 cwd fallback。 |
 | Rolldown 报告 `Cannot find native binding` | npm 遗漏了 Vite 的平台专用可选包。运行 `npm install --include=optional --no-package-lock`，再重试 `npm run build`。 |
-| 界面显示 `DEGRADED` 或通用监控 API 返回 `SERVICE_UNAVAILABLE` | 打包监控 fallback 的预期行为，不代表真实监控正在运行；独立组合的计划流程仍可使用。 |
+| 界面显示 `DEGRADED` 或通用监控 API 返回 `SERVICE_UNAVAILABLE` | 当实时分钟 `SourceTimeLabel` 语义或实时板块指数供应商未验证，或缺少权威投影时，这是预期行为。后端会保持只读健康状态，不调度可操作监控；独立的计划流程仍可使用。 |
 | `runtime service factory is not configured` | 在应用服务组合接通前调用了 `validate`、`monitor`、`replay` 或 `backup`。 |
 | 监听主机校验失败 | 使用精确字面量 `127.0.0.1`；系统有意拒绝 `localhost`、`::1`、`0.0.0.0`、主机名和局域网地址。 |
 | 8765 端口占用 | 停止另一个本地进程，或选择 1～65535 中未占用的其他端口，同时保持主机为 `127.0.0.1`。 |

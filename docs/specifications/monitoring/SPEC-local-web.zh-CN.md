@@ -298,7 +298,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 `SystemView` 是基于可选生成 `RuntimeHealthResponse` 的薄只读组合表面。它区分加载、不可用、失败和安全缓存状态，不渲染原始传输/供应商错误，并且只发出明确的刷新或股票选择意图。`MarketStatusStrip` 展示后端生成的生命周期、观察时间、成对的已完成分钟/判断时间戳与年龄、轮询、重试和冷却事实。`HealthMatrix` 展示供应商能力/延迟、有界缺口、执行器利用率、数据库/WAL/检查点/备份及投递状态。每个供应商/资源状态都拥有自己的文字、形状和 `data-status`；稳定诊断代码通过白名单展示，其他值一律掩码。
 
-该切片不调用 API、不写 Pinia、不组合 router、不计算供应商/规则或新鲜度，也不处理密钥。原生控件、带标签表格和滚动区域、持久清晰焦点、礼貌级状态、减少动态效果，以及 320/768/1024/1440 像素布局，均由单元测试和真实 Chromium/axe WCAG 2.1 A/AA 门禁验证。已安装资源发现和生产组合仍属于 T052；完整浏览器流程仍属于 T055；生成契约和 T024 判断语义保持不变。
+该切片不调用 API、不写 Pinia、不组合 router、不计算供应商/规则或新鲜度，也不处理密钥。原生控件、带标签表格和滚动区域、持久清晰焦点、礼貌级状态、减少动态效果，以及 320/768/1024/1440 像素布局，均由单元测试和真实 Chromium/axe WCAG 2.1 A/AA 门禁验证。已安装资源发现仍属于 T052；完整浏览器流程仍属于 T055；生成契约和 T024 判断语义保持不变。
 
 ### T052 安装式生产启动与资源边界
 
@@ -306,7 +306,14 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - Vite 继续以 `web/index.html` 为文档输入，并继续生成 `web/dist/index.html`。仅构建时启用的插件会用同一份完整 distribution 替换被忽略的 `src/trade_plan_monitor/web/dist` 暂存目录；setuptools 只打包其中的 `index.html` 和本地 `assets/*`。两个生成目录都不纳入版本控制。
 - 生产资源发现通过 `importlib.resources` 在整个服务生命周期内访问 `trade_plan_monitor.web/dist`。它绝不搜索当前工作目录、仓库根目录、`web/dist` 或其他源码树 fallback。缺少目录、`index.html`、`assets/` 或实际资源时，会在 Uvicorn 启动前只以 `WEB_ASSETS_UNAVAILABLE` 和固定文案 `Installed Web assets are unavailable.` 失败；绝不暴露路径、资源异常、context 或 cause。
 - `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 42 个 REST 路径（27 个实时路径加 15 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义仍由一个应用管理。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
-- T052 的通用监控生命周期仍使用明确的 `DEGRADED` 只读 fallback，同时负责配置文件驱动的 AI 生命周期和持久计划生命周期。启动顺序是监控运行时、AI、计划、回测，关闭严格反向执行。没有显式注入计划服务时，计划启动会打开并迁移 `data/monitor.sqlite3`，在计划 DDL 前拒绝既有回测/行情数据库，把同一个服务注入所有计划路由，并把同一实例提供给默认回测组合。计划关闭只在回测关闭后释放其自有引擎。AI 启动时只读取一次 `config/app.yaml`，并尝试读取选中的、被忽略的项目密钥文件。YAML 非法会导致启动失败；选中的密钥文件缺失、格式非法、键重复、值为空、超大或不可读时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加环境变量后备、CDN、远程运行资源、备用监听器或开发目录 fallback。
+- T052 负责打包启动、资源生命周期、配置文件驱动的 AI 生命周期和持久计划生命周期。启动顺序是监控运行时、AI、计划、回测，关闭严格反向执行。监控运行时的接线由下方 WEBF05 定义；T052 不构造或替代通用 `_ReadOnlyPackagedLifecycle`。没有显式注入计划服务时，计划启动会打开并迁移 `data/monitor.sqlite3`，在计划 DDL 前拒绝既有回测/行情数据库，把同一个服务注入所有计划路由，并把同一实例提供给默认回测组合。计划关闭只在回测关闭后释放其自有引擎。AI 启动时只读取一次 `config/app.yaml`，并尝试读取选中的、被忽略的项目密钥文件。YAML 非法会导致启动失败；选中的密钥文件缺失、格式非法、键重复、值为空、超大或不可读时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加环境变量后备、CDN、远程运行资源、备用监听器或开发目录 fallback。
+
+### WEBF05 真实生产监控组合边界
+
+- 当没有显式运行时/应用服务时，`create_production_app(...)` 使用惰性的 `create_monitor_composition_factory(config_path, database_path)`。工厂只在 FastAPI lifespan 内调用；它打开并迁移生产计划生命周期使用的同一个 monitor SQLite，构造真实的 `RuntimeLifecycleService`，暴露以后端为权威来源的 `RuntimeHealthSnapshot`，并管理基于数据库的 `CommittedMonitorEventStream`。明确注入的运行时和应用服务继续保持权威，并阻止默认组合构造。
+- 默认组合会在任何密钥或供应商请求前检查获批的实时前置条件。由于实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
+- 真实组合不会捏造缺失的权威投影。尚无持久投影的总览、股票、持仓、提醒和实时板块指数读取继续以稳定的 `SERVICE_UNAVAILABLE` 封闭失败；WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
+- 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储或组合错误不得被静默转换成健康响应；只有已知未验证的实时前置条件会产生有界的 `DEGRADED` 状态。
 
 ### 已批准的回测扩展边界
 
@@ -317,7 +324,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 增加真实计划与回测路由不能证明四条剩余历史占位路由已经接入业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
 - 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
-- 对未组合的通用监控服务，`create_production_app(...)` 继续处于 `DEGRADED`/`SERVICE_UNAVAILABLE`；但其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
+- `create_production_app(...)` 使用 WEBF05 惰性的真实监控组合：实时前置条件仍未验证时，后端健康诚实保持为 `DEGRADED`/只读，没有权威投影的读取继续为 `SERVICE_UNAVAILABLE`。其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
 
 ## 信息架构
 

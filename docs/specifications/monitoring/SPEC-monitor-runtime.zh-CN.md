@@ -150,7 +150,7 @@ T051 不重新解释地投影该无密钥契约。Vue 健康表面展示生命�
 
 - 安装后的控制台入口读取真实进程参数。维护命令继续使用明确注入的异步服务工厂；只有 `web` 会在通过回环校验后创建打包 FastAPI 上下文并调用 Uvicorn，且导入阶段不会加载配置、数据库、供应商、任务、资源或套接字。
 - 打包应用只在 Uvicorn 调用期间持有其 `importlib.resources` Vue distribution 上下文。正常返回或服务失败时，只有在 FastAPI lifespan 已取得注入运行时启动/关闭顺序的所有权后才退出该上下文。
-- T052 未提供配置好的通用监控运行时/应用服务组合时，无 I/O 的只读监控生命周期只报告 `DEGRADED`；总览、股票、健康、持仓、提醒和 WebSocket 依赖保持不可用并封闭失败。与此独立，生产 Web 拥有一个持久计划生命周期：启动时打开并迁移 `data/monitor.sqlite3`、注入以后端为权威来源的计划操作服务，并把它复用为默认回测计划快照读取器。计划保存、查询、JSON/YAML 导入、启用、停用、审核状态、幂等响应和启用 revision 均可跨进程重启保留。该 fallback 仍不调度、不探测供应商、不发布监控健康，也不替代 T034 生命周期状态。T053～T054 继续负责运维配置和全系统夹具工作。
+- T052 生产 Web 在没有显式运行时/应用服务时使用 WEBF05 惰性的 `create_monitor_composition_factory(config_path, database_path)`。工厂只在 FastAPI lifespan 内调用，并构造真实的 `RuntimeLifecycleService`、后端 `RuntimeHealthSnapshot`、同库 SQLite 生命周期和 `CommittedMonitorEventStream`；显式注入继续保持权威。获批的实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，因此默认组合会在任何密钥或供应商请求前进入诚实的 `DEGRADED` 只读健康状态，暴露 `next_poll_at=null`，且不创建调度运行任务。没有权威持久投影的总览、股票、持仓、提醒和实时板块指数依赖继续不可用，并以 `SERVICE_UNAVAILABLE` 封闭失败；不返回空的或伪造的判断状态。与此独立，生产 Web 拥有一个持久计划生命周期：启动时打开并迁移 `data/monitor.sqlite3`、注入以后端为权威来源的计划操作服务，并把它复用为默认回测计划快照读取器。计划保存、查询、JSON/YAML 导入、启用、停用、审核状态、幂等响应和启用 revision 均可跨进程重启保留。T052～T054 继续负责运维配置和全系统夹具工作。Schema v1 数据、历史回测结果、既有 hash、OpenAPI 和生成 TypeScript 均保持不变。
 - FastAPI 按监控运行时、AI、计划、回测的顺序启动生命周期，并严格反向关闭。明确注入的服务继续保持权威；显式计划服务会阻止构造默认计划生命周期。
 - 正常绑定主机继续是精确的 `127.0.0.1` 字面量。T052 不增加别名、通配、局域网/公网模式、守护进程、第二进程、CDN 或远程资源获取。
 

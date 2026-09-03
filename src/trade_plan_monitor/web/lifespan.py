@@ -27,6 +27,14 @@ class RuntimeLifecycle(Protocol):
 
 RuntimeLifecycleFactory = Callable[[], RuntimeLifecycle]
 
+_MONITOR_SERVICE_BINDINGS = (
+    ("read_service", "monitor_read_service"),
+    ("position_service", "position_operation_service"),
+    ("alert_service", "alert_operation_service"),
+    ("websocket_service", "monitor_websocket_service"),
+    ("market_index_read_service", "market_index_read_service"),
+)
+
 
 class BacktestLifecycle(Protocol):
     """One production backtest composition owned by the Web lifespan."""
@@ -104,9 +112,11 @@ def create_runtime_lifespan(
         ai_stop: Callable[[], object] | None = None
         plan_lifecycle: PlanWebLifecycle | None = None
         plan_stop: Callable[[], object] | None = None
+        monitor_service_state: tuple[str, ...] = ()
         app.state.runtime_lifecycle = runtime
         try:
             app.state.runtime_startup = await start()
+            monitor_service_state = _bind_monitor_service_state(app, runtime)
             if ai_lifecycle_factory is not None:
                 ai_lifecycle = await to_thread.run_sync(ai_lifecycle_factory)
                 ai_start = getattr(ai_lifecycle, "start", None)
@@ -166,6 +176,7 @@ def create_runtime_lifespan(
                             await ai_stop()
                     finally:
                         try:
+                            _clear_monitor_service_state(app, monitor_service_state)
                             await stop()
                         finally:
                             _clear_backtest_state(app)
@@ -187,6 +198,27 @@ def get_runtime_lifecycle(request: Request) -> RuntimeLifecycle:
 
 def _clear_runtime_state(app: FastAPI) -> None:
     for name in ("runtime_startup", "runtime_lifecycle"):
+        if hasattr(app.state, name):
+            delattr(app.state, name)
+
+
+def _bind_monitor_service_state(app: FastAPI, runtime: RuntimeLifecycle) -> tuple[str, ...]:
+    owned: list[str] = []
+    try:
+        for source_name, state_name in _MONITOR_SERVICE_BINDINGS:
+            service = getattr(runtime, source_name, None)
+            if service is None or hasattr(app.state, state_name):
+                continue
+            setattr(app.state, state_name, service)
+            owned.append(state_name)
+    except BaseException:
+        _clear_monitor_service_state(app, tuple(owned))
+        raise
+    return tuple(owned)
+
+
+def _clear_monitor_service_state(app: FastAPI, names: tuple[str, ...]) -> None:
+    for name in names:
         if hasattr(app.state, name):
             delattr(app.state, name)
 

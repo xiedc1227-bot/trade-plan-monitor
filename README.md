@@ -9,14 +9,19 @@ not place orders.
 ## Product Status
 
 Tasks `T001` through `T059` and `BT001` through `BT050` are implemented and accepted. The packaged
-command can serve the built Vue SPA, REST API, and WebSocket routes on exact loopback. The installed
-entry still uses read-only `DEGRADED` fallback for monitoring services that have not been composed,
-but its `/plans` workflow is usable: startup loads the project AI configuration once and injects
-one backend-authoritative persistent plan service over `data/monitor.sqlite3`. Plan save, query,
-JSON/YAML import, activation, and deactivation therefore survive Web process restarts; extraction
-runs only after the user submits plan text. A successful AI result enters the shared structured
-editor only through an explicit review action; saving creates an inactive draft, and activation
-still requires a separate user confirmation plus backend approval.
+command can serve the built Vue SPA, REST API, and WebSocket routes on exact loopback. WEBF05 now
+uses a lazy real monitoring composition: it opens and migrates the shared monitor SQLite, exposes
+backend `RuntimeHealthSnapshot`, and owns the committed event stream. Because live minute
+`SourceTimeLabel` semantics and the live board-index provider remain unverified, startup honestly
+reports read-only `DEGRADED` with `nextPollAt=null` before any token or provider request and creates
+no scheduler run task. Dashboard, symbol, position, alert, and live-index reads without an
+authoritative persisted projection remain `SERVICE_UNAVAILABLE`; no generic lifecycle placeholder
+or fabricated empty decision state is used. Its `/plans` workflow is usable: startup loads the
+project AI configuration once and injects one backend-authoritative persistent plan service over
+`data/monitor.sqlite3`. Plan save, query, JSON/YAML import, activation, and deactivation therefore
+survive Web process restarts; extraction runs only after the user submits plan text. A successful AI
+result enters the shared structured editor only through an explicit review action; saving creates an
+inactive draft, and activation still requires a separate user confirmation plus backend approval.
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.
@@ -117,10 +122,12 @@ trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765
 ```
 
 Open `http://127.0.0.1:8765/` on the same computer. Stop the foreground process with `Ctrl+C`.
-The monitoring header may remain `DEGRADED`; open `/plans` to use AI drafting and persistent plan
-management. The first lifespan startup creates or upgrades `data/monitor.sqlite3`; saving, querying,
-importing, activating, and deactivating plans uses that same SQLite file on later starts. Keep the
-database and its WAL/SHM companions private and do not copy an in-use WAL database as a backup.
+The monitoring header honestly reports `DEGRADED` while live minute `SourceTimeLabel` semantics or
+the live board-index provider remain unverified; it also shows read-only state and no next poll.
+Open `/plans` to use AI drafting and persistent plan management. The first lifespan startup creates
+or upgrades `data/monitor.sqlite3`; saving, querying, importing, activating, and deactivating plans
+uses that same SQLite file on later starts. Keep the database and its WAL/SHM companions private
+and do not copy an in-use WAL database as a backup.
 Edit `config/app.yaml` or the selected project `.env` and restart Web to change AI settings.
 
 ### 5. Offline verification
@@ -190,7 +197,7 @@ command changes directories itself.
 
 | Command | Purpose | Current availability |
 |---|---|---|
-| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | Serve packaged SPA, API, WebSocket, file-configured AI drafting, and persistent plan management | Available; plans use `data/monitor.sqlite3`, while uncomposed general monitoring services remain read-only/unavailable |
+| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | Serve packaged SPA, API, WebSocket, file-configured AI drafting, and persistent plan management | Available; WEBF05 composes the monitor lazily and reports honest read-only `DEGRADED` until live prerequisites are verified; missing projections remain unavailable |
 | `python -m trade_plan_monitor --help` | Show the stable installed command surface | Available |
 | `python -m pytest -q` | Run the complete backend suite | Available; offline |
 | `python -m ruff check --no-cache src tests` | Run backend lint | Available; offline |
@@ -199,10 +206,10 @@ command changes directories itself.
 | `npm test -- --run` | Run frontend unit tests | Available in `web/`; offline |
 | `npm run type-check` | Check Vue and TypeScript | Available in `web/`; offline |
 | `npm run build` | Build and stage production SPA assets | Available in `web/`; offline after dependencies are installed |
-| `python -m trade_plan_monitor validate` | Dispatch configuration/plan validation | Injection boundary; not wired by the packaged fallback |
-| `python -m trade_plan_monitor monitor --once` | Dispatch one headless monitor cycle | Injection boundary; not wired by the packaged fallback |
-| `python -m trade_plan_monitor replay` | Dispatch deterministic replay | Injection boundary; not wired by the packaged fallback |
-| `python -m trade_plan_monitor backup` | Dispatch verified online backup | Injection boundary; not wired by the packaged fallback |
+| `python -m trade_plan_monitor validate` | Dispatch configuration/plan validation | Injection boundary; standalone console requires an explicit service factory |
+| `python -m trade_plan_monitor monitor --once` | Dispatch one headless monitor cycle | Injection boundary; standalone console requires an explicit service factory |
+| `python -m trade_plan_monitor replay` | Dispatch deterministic replay | Injection boundary; standalone console requires an explicit service factory |
+| `python -m trade_plan_monitor backup` | Dispatch verified online backup | Injection boundary; standalone console requires an explicit service factory |
 
 An injection-boundary command raises `runtime service factory is not configured` when invoked
 through the current standalone console entry. This is an explicit incomplete-composition signal,
@@ -458,7 +465,7 @@ approved receiver and secret-handling procedure exist.
 |---|---|
 | `WEB_ASSETS_UNAVAILABLE` | The installed distribution lacks a complete Vite build. Run `npm install --include=optional --no-package-lock` and `npm run build` before building/reinstalling the Python package; do not add a cwd fallback. |
 | `Cannot find native binding` from Rolldown | npm omitted Vite's platform-specific optional package. Run `npm install --include=optional --no-package-lock`, then retry `npm run build`. |
-| UI shows `DEGRADED` or a general monitoring API returns `SERVICE_UNAVAILABLE` | Expected from the packaged monitoring fallback. It does not mean live monitoring is running; the separately composed plan workflow remains available. |
+| UI shows `DEGRADED` or a general monitoring API returns `SERVICE_UNAVAILABLE` | Expected while live minute `SourceTimeLabel` semantics or the live board-index provider is unverified, or when an authoritative projection is unavailable. The backend keeps health read-only and does not schedule actionable monitoring; the separately composed plan workflow remains available. |
 | `runtime service factory is not configured` | `validate`, `monitor`, `replay`, or `backup` was invoked before application service composition is wired. |
 | Host validation rejects the listener | Use the exact literal `127.0.0.1`; `localhost`, `::1`, `0.0.0.0`, hostnames, and LAN addresses are intentionally rejected. |
 | Port 8765 is busy | Stop the other local process or choose another unused port from 1–65535, keeping host `127.0.0.1`. |
