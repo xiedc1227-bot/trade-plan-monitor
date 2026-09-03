@@ -1,28 +1,9 @@
-import { defineComponent, h } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
-
-function createRoutePlaceholder(name: string, title: string, description: string) {
-  return defineComponent({
-    name,
-    setup() {
-      return () =>
-        h("section", { "aria-labelledby": `${name}-title` }, [
-          h("h1", { id: `${name}-title` }, title),
-          h("p", description),
-        ]);
-    },
-  });
-}
 
 const DashboardRoute = () => import("./views/DashboardRouteView.vue");
 const StockDetailRoute = () => import("./views/SymbolDetailRouteView.vue");
 const PlanWorkbenchRoute = () => import("./views/PlanDraftingView.vue");
-const AlertsRoute = createRoutePlaceholder(
-  "AlertsRoute",
-  "提醒中心",
-  "提醒视图将在后续任务中提供。",
-);
 const SystemRoute = () => import("./views/SystemRouteView.vue");
 
 export const routes: RouteRecordRaw[] = [
@@ -59,7 +40,7 @@ export const routes: RouteRecordRaw[] = [
   {
     path: "/alerts",
     name: "alerts",
-    component: AlertsRoute,
+    component: () => import("./views/AlertsRouteView.vue"),
     meta: { title: "提醒中心 · Trade Plan Monitor" },
   },
   {

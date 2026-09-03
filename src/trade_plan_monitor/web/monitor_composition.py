@@ -42,6 +42,7 @@ from trade_plan_monitor.state.database import (
 )
 from trade_plan_monitor.state.models import PlanVersionStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.plan_service import _reject_incompatible_database
 from trade_plan_monitor.web.position_service import PersistentPositionOperationService
@@ -500,6 +501,9 @@ def create_monitor_composition(
             unit_of_work_factory=state.unit_of_work_factory,
         ),
         position_service=PersistentPositionOperationService(
+            unit_of_work_factory=state.unit_of_work_factory,
+        ),
+        alert_service=PersistentAlertOperationService(
             unit_of_work_factory=state.unit_of_work_factory,
         ),
     )

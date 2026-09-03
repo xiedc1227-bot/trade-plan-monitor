@@ -257,7 +257,9 @@ describe("AppShell", () => {
     await alertsLink.trigger("click");
     await flushPromises();
 
-    expect(router.currentRoute.value.path).toBe("/alerts");
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.path).toBe("/alerts");
+    });
     expect(menuButton.attributes("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(wrapper.get("#main-content h1").element);
   });

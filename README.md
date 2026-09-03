@@ -14,7 +14,7 @@ uses a lazy real monitoring composition: it opens and migrates the shared monito
 backend `RuntimeHealthSnapshot`, and owns the committed event stream. Because live minute
 `SourceTimeLabel` semantics and the live board-index provider remain unverified, startup honestly
 reports read-only `DEGRADED` with `nextPollAt=null` before any token or provider request and creates
-no scheduler run task. Dashboard, symbol, alert, and live-index reads without an
+no scheduler run task. Dashboard, symbol, and live-index reads without an
 authoritative persisted projection remain `SERVICE_UNAVAILABLE`; no generic lifecycle placeholder
 or fabricated empty decision state is used. Its `/plans` workflow is usable: startup loads the
 project AI configuration once and injects one backend-authoritative persistent plan service over
@@ -29,6 +29,9 @@ WEBF09 connects the stock-detail position panel to the existing position REST co
 persistent service over the shared monitor database. The backend alone applies active-plan maximums,
 stored-calendar T+1, remaining quantity, board-lot, and revision rules; the browser performs input
 shape checks and explicit confirmation but never predicts whether a position command is eligible.
+WEBF10 connects `/alerts` to the existing alert REST contract and the shared persistent outbox.
+Filtering, canonical evidence, and acknowledgement revisions stay backend-authoritative;
+acknowledgement is idempotent and audited but never records a fill or changes a position.
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.

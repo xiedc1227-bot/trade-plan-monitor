@@ -258,6 +258,8 @@ T038 exposes the committed alert center through a separately injected applicatio
 
 T050 renders that contract as escaped server-authored plain text. The browser validates filter echoes and per-row membership, expands all evidence partitions and missing inputs, and deduplicates snapshot/live invalidations only after an authoritative refresh succeeds. It never treats an invalidation payload or acknowledgement receipt as canonical alert content. Acknowledgement uses one bounded, revision-bound idempotent command followed by authoritative reconciliation; later reads may settle an uncertain result, while persistent status/focus handling preserves keyboard truthfulness when filtering removes the row. No frontend acknowledgement path invokes or mutates positions.
 
+WEBF10 composes that existing contract with the production monitor SQLite unit of work. Alert-center filtering retains stable committed sequence order and reconstructs every selected row as a canonical `AlertEvent`. Revision-checked acknowledgement, idempotency completion, audit, and `alert.acknowledged` append commit atomically; identical replay creates no second acknowledgement event. The real `/alerts` route uses strict generated-type transport validation and authoritative rereads, while a validated monitor event remains only an invalidation hint. This adds no schema migration, REST field, delivery-state transition, fill, or position mutation.
+
 ## Code Style
 
 ```python

@@ -11,7 +11,7 @@ from hashlib import sha256
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,8 @@ IdFactory = Callable[[], str]
 
 DEFAULT_REPLAY_RETENTION = timedelta(days=7)
 MAX_REPLAY_LIMIT = 1_000
+MAX_ALERT_LIST_LIMIT = 100
+MAX_ALERT_LIST_ROWS = 10_000
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
@@ -53,6 +55,12 @@ class AlertNotFoundError(OutboxError):
     """The requested durable alert does not exist."""
 
     code = "ALERT_NOT_FOUND"
+
+
+class AlertRevisionConflictError(OutboxError):
+    """The caller's acknowledgement revision is no longer current."""
+
+    code = "ALERT_REVISION_CONFLICT"
 
 
 class OutboxStorageError(OutboxError):
@@ -194,6 +202,82 @@ class AlertOutbox:
             raise AlertNotFoundError("Alert event was not found")
         return _event_from_row(row)
 
+    def list_events(
+        self,
+        *,
+        symbol: str | None,
+        signal_type: str | None,
+        acknowledged: bool | None,
+        start_at: datetime | None,
+        end_at: datetime | None,
+        offset: int,
+        limit: int,
+    ) -> tuple[tuple[AlertEvent, ...], int]:
+        """Return one stable bounded page in committed delivery order."""
+
+        if symbol is not None and (
+            type(symbol) is not str or not _is_share_symbol(symbol)
+        ):
+            raise ValueError("symbol must be a canonical A-share identity")
+        if signal_type is not None and (
+            not isinstance(signal_type, str) or signal_type not in _ACTIONABLE_SIGNAL_TYPES
+        ):
+            raise ValueError("signal_type must be actionable")
+        if acknowledged is not None and type(acknowledged) is not bool:
+            raise TypeError("acknowledged must be a boolean or None")
+        if (start_at is None) != (end_at is None):
+            raise ValueError("alert time filters must appear together")
+        if start_at is not None and end_at is not None:
+            normalized_start = _query_datetime(start_at)
+            normalized_end = _query_datetime(end_at)
+            if normalized_start > normalized_end:
+                raise ValueError("alert time filter is reversed")
+        else:
+            normalized_start = None
+            normalized_end = None
+        if type(offset) is not int or not 0 <= offset <= MAX_ALERT_LIST_ROWS:
+            raise ValueError(f"offset must be between 0 and {MAX_ALERT_LIST_ROWS}")
+        if type(limit) is not int or not 1 <= limit <= MAX_ALERT_LIST_LIMIT:
+            raise ValueError(f"limit must be between 1 and {MAX_ALERT_LIST_LIMIT}")
+
+        filters = []
+        if symbol is not None:
+            filters.append(func.json_extract(AlertEventRow.payload_json, "$.symbol") == symbol)
+        if signal_type is not None:
+            filters.append(
+                func.json_extract(AlertEventRow.payload_json, "$.signal_type") == signal_type
+            )
+        if acknowledged is not None:
+            acknowledgement_column = AlertEventRow.acknowledged_at
+            filters.append(
+                acknowledgement_column.is_not(None)
+                if acknowledged
+                else acknowledgement_column.is_(None)
+            )
+        if normalized_start is not None and normalized_end is not None:
+            filters.extend(
+                (
+                    AlertEventRow.created_at >= normalized_start.isoformat(),
+                    AlertEventRow.created_at <= normalized_end.isoformat(),
+                )
+            )
+
+        total = self._session.scalar(
+            select(func.count()).select_from(AlertEventRow).where(*filters)
+        )
+        bounded_total = min(total or 0, MAX_ALERT_LIST_ROWS)
+        if offset >= bounded_total:
+            return (), bounded_total
+        effective_limit = min(limit, bounded_total - offset)
+        rows = self._session.scalars(
+            select(AlertEventRow)
+            .where(*filters)
+            .order_by(AlertEventRow.sequence)
+            .offset(offset)
+            .limit(effective_limit)
+        ).all()
+        return tuple(_event_from_row(row) for row in rows), bounded_total
+
     def replay_after(
         self,
         sequence: int,
@@ -218,10 +302,17 @@ class AlertOutbox:
         ).all()
         return tuple(_event_from_row(row) for row in rows)
 
-    def acknowledge(self, event_id: UUID) -> AlertEvent:
+    def acknowledge(
+        self,
+        event_id: UUID,
+        *,
+        expected_revision: int | None = None,
+    ) -> AlertEvent:
         """Mark an alert seen once without touching delivery or strategy state."""
 
         normalized_id = _event_id(event_id)
+        if expected_revision is not None and expected_revision not in {0, 1}:
+            raise ValueError("expected_revision must be zero or one")
         self._session.execute(
             update(AlertEventRow)
             .where(AlertEventRow.id == normalized_id)
@@ -232,6 +323,9 @@ class AlertOutbox:
         if row is None:
             raise AlertNotFoundError("Alert event was not found")
         before = _event_from_row(row)
+        current_revision = 0 if before.acknowledged_at is None else 1
+        if expected_revision is not None and expected_revision != current_revision:
+            raise AlertRevisionConflictError("Alert acknowledgement revision is stale")
         if before.acknowledged_at is not None:
             return before
 
@@ -329,6 +423,36 @@ def _dedup_key(value: str) -> str:
     ):
         raise ValueError("dedup_key must be a lowercase SHA-256 digest")
     return value
+
+
+_ACTIONABLE_SIGNAL_TYPES = {
+    "BUY_CORE_READY",
+    "BUY_TACTICAL_READY",
+    "PRESSURE_REDUCE_READY",
+    "RISK_BREACH",
+    "RISK_EXIT_READY",
+    "RISK_EXIT_PENDING_SETTLEMENT",
+}
+
+
+def _is_share_symbol(value: str) -> bool:
+    prefix, separator, suffix = value.partition(".")
+    return (
+        separator == "."
+        and len(prefix) == 6
+        and prefix.isascii()
+        and prefix.isdecimal()
+        and suffix in {"BJ", "SH", "SZ"}
+    )
+
+
+def _query_datetime(value: datetime) -> datetime:
+    if type(value) is not datetime or value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("alert time filter must be an aware datetime")
+    normalized = value.astimezone(_SHANGHAI)
+    if normalized.utcoffset() != timedelta(hours=8):  # pragma: no cover - zone invariant
+        raise ValueError("alert time filter must use Shanghai time")
+    return normalized
 
 
 def _audit_id(value: str) -> str:
@@ -447,8 +571,11 @@ def _canonical_json(value: object) -> str:
 __all__ = [
     "AlertIdentityConflictError",
     "AlertNotFoundError",
+    "AlertRevisionConflictError",
     "AlertOutbox",
     "DEFAULT_REPLAY_RETENTION",
+    "MAX_ALERT_LIST_LIMIT",
+    "MAX_ALERT_LIST_ROWS",
     "MAX_REPLAY_LIMIT",
     "OutboxError",
     "OutboxStorageError",

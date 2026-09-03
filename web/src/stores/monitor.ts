@@ -111,6 +111,7 @@ export const useMonitorStore = defineStore("monitor", () => {
   );
   const recoveryIntentState = shallowRef<SnapshotRecoveryIntent | null>(null);
   const lastInvalidationState = shallowRef<MonitorInvalidation | null>(null);
+  const lastEventState = shallowRef<MonitorEventEnvelope | null>(null);
 
   const symbols = computed<readonly SymbolSummaryView[]>(() =>
     Object.freeze(
@@ -146,6 +147,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     marketIndexesState.value = marketIndexes;
     recoveryIntentState.value = null;
     lastInvalidationState.value = null;
+    lastEventState.value = null;
     hasSnapshotState.value = true;
   }
 
@@ -192,6 +194,7 @@ export const useMonitorStore = defineStore("monitor", () => {
       sequence: event.sequence,
       type: event.type,
     });
+    lastEventState.value = freezeClone(event);
     return { sequence: event.sequence, status: "applied" };
   }
 
@@ -218,6 +221,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     dataAgeSeconds: readonly(dataAgeSecondsState),
     hasSnapshot: readonly(hasSnapshotState),
     lastInvalidation: readonly(lastInvalidationState),
+    lastEvent: readonly(lastEventState),
     marketIndexes: readonly(marketIndexesState),
     observedAt: readonly(observedAtState),
     recoveryIntent: readonly(recoveryIntentState),

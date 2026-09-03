@@ -12,8 +12,6 @@ const historicalPaths = [
   "/system",
 ] as const;
 
-const remainingPlaceholderPaths = ["/alerts"] as const;
-
 const backtestPaths = [
   "/backtests",
   "/backtests/new",
@@ -30,19 +28,26 @@ function routeAt(path: string): RouteRecordRaw {
 }
 
 describe("backtest production routes", () => {
-  it("keeps the exact ten-route surface with stock detail wired and alerts still placeholder", () => {
+  it("keeps the exact ten-route surface with stock detail and alerts wired", () => {
     expect(routes).toHaveLength(10);
     expect(routes.map((route) => route.path)).toEqual([
       ...historicalPaths,
       ...backtestPaths,
     ]);
 
-    for (const path of remainingPlaceholderPaths) {
-      expect(typeof routeAt(path).component).not.toBe("function");
-    }
-    for (const path of ["/", "/stocks/:symbol", "/plans", "/plans/:id", "/system"]) {
+    for (const path of ["/", "/stocks/:symbol", "/plans", "/plans/:id", "/alerts", "/system"]) {
       expect(typeof routeAt(path).component).toBe("function");
     }
+  });
+
+  it("loads /alerts from a real lazy SFC with route title metadata", async () => {
+    const route = routeAt("/alerts");
+
+    expect(route.meta?.title).toBe("提醒中心 · Trade Plan Monitor");
+    expect(typeof route.component).toBe("function");
+
+    const loaded = await (route.component as LazyRouteComponent)();
+    expect(loaded.default).toBeDefined();
   });
 
   it("keeps the three static backtest routes before the dynamic run route", () => {

@@ -34,6 +34,7 @@ import type { MonitorEventEnvelope } from "../stores/monitor";
 
 interface Props {
   createIdempotencyKey?: () => string;
+  initialLoading?: boolean;
   initialPage: AlertPage | null;
   liveEvents?: readonly MonitorEventEnvelope[];
   operations: AlertOperations;
@@ -41,6 +42,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   createIdempotencyKey: () => crypto.randomUUID(),
+  initialLoading: false,
   liveEvents: () => [],
 });
 
@@ -591,13 +593,13 @@ function isConflict(value: unknown): boolean {
       v-if="error !== null || page === null"
       type="button"
       data-retry-alerts="true"
-      :disabled="busy"
+      :disabled="busy || initialLoading"
       @click="retryAlerts"
     >重新加载提醒</button>
 
     <div class="alerts-view__layout">
       <AlertTable
-        :busy="busy"
+        :busy="busy || initialLoading"
         :page="page"
         :pending-acknowledgements="pendingAcknowledgements"
         :query="query"
@@ -605,7 +607,7 @@ function isConflict(value: unknown): boolean {
         @apply-filters="applyFilters"
         @page-change="changePage"
       />
-      <AlertRail :busy="busy" :live-update-count="liveUpdateCount" />
+      <AlertRail :busy="busy || initialLoading" :live-update-count="liveUpdateCount" />
     </div>
   </section>
 </template>

@@ -128,6 +128,7 @@ describe("monitor store", () => {
       sequence: 8,
       type: "symbol.snapshot.updated",
     });
+    expect(store.lastEvent).toEqual(event(8));
     expect(store.applyEvent(event(8))).toEqual({
       currentSequence: 8,
       receivedSequence: 8,
