@@ -290,6 +290,7 @@ ai:
 
     with create_production_app(
         config_path=config_path,
+        database_path=tmp_path / "monitor.sqlite3",
         runtime_factory=Runtime,
         backtest_lifecycle_factory=BacktestLifecycle,
     ) as app:

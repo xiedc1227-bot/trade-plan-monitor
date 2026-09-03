@@ -29,11 +29,12 @@ from trade_plan_monitor.decision.models import (
     NextStepCode,
     SignalIntent,
 )
-from trade_plan_monitor.domain.plan_codec import load_plan_yaml
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import OfficialCloseBelowLevelCondition, TradePlan
 from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
+    DraftReviewIssue,
     PlanValidationResult,
     validate_trade_plan,
 )
@@ -93,7 +94,9 @@ EXPECTED_APP_TABLES = frozenset(
         "monitor_event",
         "monitor_sequence",
         "plan_source",
+        "plan_activation_state",
         "plan_version",
+        "plan_version_review",
         "position_lot",
         "provider_health",
         "request_idempotency",
@@ -1310,6 +1313,157 @@ def test_plan_draft_is_durable_only_after_explicit_unit_of_work_commit(
         engine.dispose()
 
 
+def test_plan_repository_reports_the_next_immutable_version(tmp_path: Path) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan_v1, source_text = _sample_plan()
+    plan_v3 = plan_v1.model_copy(update={"version": 3})
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            assert work.plans.next_version(plan_v1.plan_id) == 1
+            work.plans.save_draft(plan_v1, source_text=source_text)
+            work.plans.save_draft(plan_v3, source_text="third source")
+            assert work.plans.next_version(plan_v1.plan_id) == 4
+            work.commit()
+
+        with _unit_of_work(engine) as work:
+            assert work.plans.next_version(plan_v1.plan_id) == 4
+            assert work.plans.get_version(plan_v1.plan_id, 1) is not None
+            assert work.plans.get_version(plan_v1.plan_id, 3) is not None
+    finally:
+        engine.dispose()
+
+
+def test_plan_draft_persists_review_details_and_initial_activation_state(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "monitor.db"
+    engine = create_sqlite_engine(database_path)
+    plan_v1, source_text = _sample_plan()
+    plan_v2 = plan_v1.model_copy(update={"version": 2})
+    review_issues = (
+        DraftReviewIssue(
+            kind="WARNING",
+            path="levels.pressure",
+            material=True,
+            resolved=False,
+        ),
+    )
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            saved_v1 = work.plans.save_draft(
+                plan_v1,
+                source_text=source_text,
+                review_issues=review_issues,
+            )
+            saved_v2 = work.plans.save_draft(plan_v2, source_text="second source")
+            work.commit()
+    finally:
+        engine.dispose()
+
+    restarted = create_sqlite_engine(database_path)
+    try:
+        with _unit_of_work(restarted) as work:
+            details = work.plans.get_version_details(saved_v1.id)
+            items, total = work.plans.list_version_details(
+                offset=0,
+                limit=10,
+                symbol=plan_v1.symbol,
+                status="DRAFT",
+            )
+            empty, empty_total = work.plans.list_version_details(
+                offset=0,
+                limit=10,
+                symbol="600000.SH",
+                status=None,
+            )
+            activation = work.plans.get_activation_state(plan_v1.symbol)
+
+        assert details is not None
+        assert details.id == saved_v1.id
+        assert details.source_text == source_text
+        assert details.review_issues == review_issues
+        assert total == 2
+        assert tuple(item.id for item in items) == tuple(
+            sorted((saved_v1.id, saved_v2.id), reverse=True)
+        )
+        assert empty == ()
+        assert empty_total == 0
+        assert activation is not None
+        assert activation.symbol == plan_v1.symbol
+        assert activation.plan_version_id is None
+        assert activation.revision == 0
+        assert activation.changed_at == _FIXED_NOW
+    finally:
+        restarted.dispose()
+
+
+def test_plan_detail_rejects_invalid_persisted_review_json_without_leaking_it(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+    sentinel = "SENSITIVE-INVALID-REVIEW"
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            saved = work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "UPDATE plan_version_review SET review_issues_json = :value "
+                "WHERE plan_version_id = :plan_version_id",
+                {"value": sentinel, "plan_version_id": saved.id},
+            )
+
+        with pytest.raises(RepositoryError) as captured:
+            with _unit_of_work(engine) as work:
+                work.plans.get_version_details(saved.id)
+
+        assert captured.value.__cause__ is None
+        assert captured.value.__context__ is None
+        assert sentinel not in str(captured.value)
+        assert sentinel not in repr(captured.value)
+    finally:
+        engine.dispose()
+
+
+def test_plan_detail_and_page_reject_a_missing_persisted_review_row(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            saved = work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "DELETE FROM plan_version_review WHERE plan_version_id = :plan_version_id",
+                {"plan_version_id": saved.id},
+            )
+
+        with pytest.raises(RepositoryError) as detail_error:
+            with _unit_of_work(engine) as work:
+                work.plans.get_version_details(saved.id)
+        with pytest.raises(RepositoryError) as page_error:
+            with _unit_of_work(engine) as work:
+                work.plans.list_version_details(offset=0, limit=20)
+
+        for error in (detail_error.value, page_error.value):
+            assert error.__cause__ is None
+            assert error.__context__ is None
+            assert saved.id not in str(error)
+    finally:
+        engine.dispose()
+
+
 def test_plan_versions_are_immutable_and_duplicate_identity_is_sanitized(
     tmp_path: Path,
 ) -> None:
@@ -1477,6 +1631,190 @@ def test_plan_activation_switches_one_active_version_with_revision_and_audit(
         engine.dispose()
 
 
+def test_plan_deactivation_revision_and_review_state_survive_restart(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "monitor.db"
+    engine = create_sqlite_engine(database_path)
+    plan_v1, source_text = _sample_plan()
+    plan_v2 = plan_v1.model_copy(update={"version": 2})
+    ready_v1 = validate_trade_plan(plan_v1, available_market_evidence=ALL_MARKET_EVIDENCE)
+    ready_v2 = validate_trade_plan(plan_v2, available_market_evidence=ALL_MARKET_EVIDENCE)
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            saved_v1 = work.plans.save_draft(plan_v1, source_text=source_text)
+            work.plans.save_draft(plan_v2, source_text=source_text)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            active = work.plans.activate(plan_v1, expected_revision=0, validation=ready_v1)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            inactive = work.plans.deactivate(plan_v1.symbol, expected_revision=1)
+            work.commit()
+
+        assert active.revision == 1
+        assert inactive.plan_version_id is None
+        assert inactive.revision == 2
+        with _unit_of_work(engine) as work:
+            assert work.plans.get_active(plan_v1.symbol) is None
+            deactivated_version = work.plans.get_version(plan_v1.plan_id, plan_v1.version)
+        assert deactivated_version is not None
+        assert deactivated_version.id == saved_v1.id
+        assert deactivated_version.status == "SUPERSEDED"
+        assert deactivated_version.revision == 2
+    finally:
+        engine.dispose()
+
+    restarted = create_sqlite_engine(database_path)
+    try:
+        with _unit_of_work(restarted) as work:
+            restored = work.plans.get_activation_state(plan_v1.symbol)
+            reactivated = work.plans.activate(
+                plan_v2,
+                expected_revision=2,
+                validation=ready_v2,
+            )
+            work.commit()
+        assert restored is not None
+        assert restored.plan_version_id is None
+        assert restored.revision == 2
+        assert reactivated.revision == 3
+
+        with _unit_of_work(restarted) as work:
+            events = work.events.replay_page_after(0).events
+        deactivated = next(
+            event for event in events if event.event_type is MonitorEventType.PLAN_DEACTIVATED
+        )
+        assert deactivated.aggregate_id == plan_v1.symbol
+        assert deactivated.payload.model_dump(exclude_none=True) == {
+            "entity_id": plan_v1.symbol,
+            "symbol": plan_v1.symbol,
+            "revision": 2,
+        }
+        with create_session_factory(restarted)() as session:
+            plan_audits = [
+                audit
+                for audit in session.scalars(select(AuditLog)).all()
+                if audit.action in {"PLAN_ACTIVATED", "PLAN_DEACTIVATED"}
+            ]
+        deactivation_audit = next(
+            audit for audit in plan_audits if audit.action == "PLAN_DEACTIVATED"
+        )
+        activation_audits = [audit for audit in plan_audits if audit.action == "PLAN_ACTIVATED"]
+        initial_activation_audit = next(
+            audit for audit in activation_audits if json.loads(audit.details_json)["revision"] == 1
+        )
+        reactivation_audit = next(
+            audit for audit in activation_audits if json.loads(audit.details_json)["revision"] == 3
+        )
+        assert deactivation_audit.entity_id == plan_v1.symbol
+        assert deactivation_audit.before_hash == initial_activation_audit.after_hash
+        assert reactivation_audit.before_hash == deactivation_audit.after_hash
+        assert len(deactivation_audit.after_hash or "") == 64
+    finally:
+        restarted.dispose()
+
+
+def test_plan_deactivation_rejects_a_stale_revision_without_mutation(tmp_path: Path) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+    ready = validate_trade_plan(plan, available_market_evidence=ALL_MARKET_EVIDENCE)
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            active = work.plans.activate(plan, expected_revision=0, validation=ready)
+            work.commit()
+
+        with pytest.raises(RevisionConflictError) as captured:
+            with _unit_of_work(engine) as work:
+                work.plans.deactivate(plan.symbol, expected_revision=0)
+
+        assert captured.value.current_revision == 1
+        with _unit_of_work(engine) as work:
+            assert work.plans.get_active(plan.symbol) == active
+            assert work.plans.get_activation_state(plan.symbol).revision == 1
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "drift",
+    (
+        "missing_pointer",
+        "plan_version_id",
+        "revision",
+        "timestamp",
+        "invalid_timestamp",
+    ),
+)
+def test_plan_activation_state_read_rejects_legacy_pointer_drift(
+    tmp_path: Path,
+    drift: str,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan_v1, source_text = _sample_plan()
+    plan_v2 = plan_v1.model_copy(update={"version": 2})
+    ready = validate_trade_plan(plan_v1, available_market_evidence=ALL_MARKET_EVIDENCE)
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            work.plans.save_draft(plan_v1, source_text=source_text)
+            saved_v2 = work.plans.save_draft(plan_v2, source_text=source_text)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            work.plans.activate(plan_v1, expected_revision=0, validation=ready)
+            work.commit()
+
+        with engine.begin() as connection:
+            if drift == "missing_pointer":
+                connection.exec_driver_sql(
+                    "DELETE FROM active_plan WHERE symbol = :symbol",
+                    {"symbol": plan_v1.symbol},
+                )
+            elif drift == "plan_version_id":
+                connection.exec_driver_sql(
+                    "UPDATE active_plan SET plan_version_id = :plan_version_id "
+                    "WHERE symbol = :symbol",
+                    {"plan_version_id": saved_v2.id, "symbol": plan_v1.symbol},
+                )
+            elif drift == "revision":
+                connection.exec_driver_sql(
+                    "UPDATE active_plan SET revision = revision + 1 WHERE symbol = :symbol",
+                    {"symbol": plan_v1.symbol},
+                )
+            elif drift == "timestamp":
+                connection.exec_driver_sql(
+                    "UPDATE active_plan SET activated_at = :activated_at WHERE symbol = :symbol",
+                    {
+                        "activated_at": (_FIXED_NOW + timedelta(minutes=1)).isoformat(),
+                        "symbol": plan_v1.symbol,
+                    },
+                )
+            else:
+                connection.exec_driver_sql(
+                    "UPDATE active_plan SET activated_at = 'SENSITIVE-INVALID-TIMESTAMP' "
+                    "WHERE symbol = :symbol",
+                    {"symbol": plan_v1.symbol},
+                )
+
+        with pytest.raises(RepositoryError) as captured:
+            with _unit_of_work(engine) as work:
+                work.plans.get_activation_state(plan_v1.symbol)
+        assert captured.value.__cause__ is None
+        assert captured.value.__context__ is None
+        assert saved_v2.id not in str(captured.value)
+        assert "SENSITIVE-INVALID-TIMESTAMP" not in str(captured.value)
+    finally:
+        engine.dispose()
+
+
 def test_request_idempotency_replays_completion_and_rejects_ambiguous_reuse(
     tmp_path: Path,
 ) -> None:
@@ -1513,6 +1851,40 @@ def test_request_idempotency_replays_completion_and_rejects_ambiguous_reuse(
             with _unit_of_work(engine) as work:
                 work.idempotency.claim("activate-request-2", "c" * 64)
         assert in_progress.value.code == "IDEMPOTENCY_IN_PROGRESS"
+    finally:
+        engine.dispose()
+
+
+def test_request_idempotency_accepts_four_mib_response_and_rejects_the_next_byte(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    response_limit = 4 * 1024 * 1024
+    canonical_overhead = len('{"value":""}')
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            work.idempotency.claim("four-mib-response", "d" * 64)
+            accepted = work.idempotency.complete(
+                "four-mib-response",
+                "d" * 64,
+                response_code=200,
+                response={"value": "x" * (response_limit - canonical_overhead)},
+            )
+            work.commit()
+        assert accepted.response_json is not None
+        assert len(accepted.response_json.encode("utf-8")) == response_limit
+
+        with pytest.raises(ValueError, match="response exceeds"):
+            with _unit_of_work(engine) as work:
+                work.idempotency.claim("over-four-mib-response", "e" * 64)
+                work.idempotency.complete(
+                    "over-four-mib-response",
+                    "e" * 64,
+                    response_code=200,
+                    response={"value": "x" * (response_limit - canonical_overhead + 1)},
+                )
     finally:
         engine.dispose()
 
@@ -1618,7 +1990,7 @@ def test_plan_activation_acquires_sqlite_writer_turn_before_any_read(
                 ),
             )
             work.commit()
-        assert statements[0].startswith("UPDATE active_plan")
+        assert statements[0].startswith("UPDATE plan_activation_state")
     finally:
         event.remove(engine, "before_cursor_execute", record_statement)
         engine.dispose()
@@ -1779,7 +2151,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0006_monitor_event"
+        assert first_revision == second_revision == "0007_plan_web_state"
     finally:
         engine.dispose()
 
@@ -1807,7 +2179,274 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0007_plan_web_state"
+            )
+    finally:
+        engine.dispose()
+
+
+def test_plan_web_state_migration_backfills_without_changing_existing_plan_rows(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+    inactive_plan = plan.model_copy(update={"plan_id": "inactive-plan", "symbol": "003044.SZ"})
+    source_id = "00000000-0000-0000-0000-000000000701"
+    version_id = "00000000-0000-0000-0000-000000000702"
+    inactive_source_id = "00000000-0000-0000-0000-000000000703"
+    inactive_version_id = "00000000-0000-0000-0000-000000000704"
+    changed_at = "2026-08-21T09:31:00+08:00"
+    inactive_changed_at = "2026-08-20T09:31:00+08:00"
+
+    try:
+        _upgrade_to(engine, "0006_monitor_event")
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO plan_source (id, source_text, source_hash, created_at) "
+                "VALUES (:id, :source_text, :source_hash, :created_at)",
+                {
+                    "id": source_id,
+                    "source_text": source_text,
+                    "source_hash": sha256(source_text.encode("utf-8")).hexdigest(),
+                    "created_at": changed_at,
+                },
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO plan_version "
+                "(id, plan_id, version, symbol, plan_hash, status, payload_json, source_id, "
+                "revision, created_at) VALUES "
+                "(:id, :plan_id, :version, :symbol, :plan_hash, 'ACTIVE', :payload_json, "
+                ":source_id, 1, :created_at)",
+                {
+                    "id": version_id,
+                    "plan_id": plan.plan_id,
+                    "version": plan.version,
+                    "symbol": plan.symbol,
+                    "plan_hash": plan_sha256(plan),
+                    "payload_json": dump_plan_json(plan),
+                    "source_id": source_id,
+                    "created_at": changed_at,
+                },
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO active_plan "
+                "(symbol, plan_version_id, activated_at, revision) "
+                "VALUES (:symbol, :plan_version_id, :activated_at, 3)",
+                {
+                    "symbol": plan.symbol,
+                    "plan_version_id": version_id,
+                    "activated_at": changed_at,
+                },
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO plan_source (id, source_text, source_hash, created_at) "
+                "VALUES (:id, :source_text, :source_hash, :created_at)",
+                {
+                    "id": inactive_source_id,
+                    "source_text": source_text,
+                    "source_hash": sha256(source_text.encode("utf-8")).hexdigest(),
+                    "created_at": inactive_changed_at,
+                },
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO plan_version "
+                "(id, plan_id, version, symbol, plan_hash, status, payload_json, source_id, "
+                "revision, created_at) VALUES "
+                "(:id, :plan_id, :version, :symbol, :plan_hash, 'DRAFT', :payload_json, "
+                ":source_id, 0, :created_at)",
+                {
+                    "id": inactive_version_id,
+                    "plan_id": inactive_plan.plan_id,
+                    "version": inactive_plan.version,
+                    "symbol": inactive_plan.symbol,
+                    "plan_hash": plan_sha256(inactive_plan),
+                    "payload_json": dump_plan_json(inactive_plan),
+                    "source_id": inactive_source_id,
+                    "created_at": inactive_changed_at,
+                },
+            )
+            before = connection.exec_driver_sql(
+                "SELECT id, plan_id, version, symbol, plan_hash, status, payload_json, "
+                "source_id, revision, created_at FROM plan_version ORDER BY id"
+            ).all()
+
+        upgrade_database(engine)
+
+        with engine.connect() as connection:
+            after = connection.exec_driver_sql(
+                "SELECT id, plan_id, version, symbol, plan_hash, status, payload_json, "
+                "source_id, revision, created_at FROM plan_version ORDER BY id"
+            ).all()
+            reviews = connection.exec_driver_sql(
+                "SELECT plan_version_id, review_issues_json FROM plan_version_review "
+                "ORDER BY plan_version_id"
+            ).all()
+            activations = connection.exec_driver_sql(
+                "SELECT symbol, plan_version_id, revision, changed_at "
+                "FROM plan_activation_state ORDER BY symbol"
+            ).all()
+
+        assert after == before
+        assert reviews == [(version_id, "[]"), (inactive_version_id, "[]")]
+        assert activations == [
+            (plan.symbol, version_id, 3, changed_at),
+            (inactive_plan.symbol, None, 0, inactive_changed_at),
+        ]
+    finally:
+        engine.dispose()
+
+
+def test_plan_web_state_migration_round_trips_reconstructible_state(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            saved = work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+
+        _downgrade_to(engine, "0006_monitor_event")
+
+        tables = frozenset(inspect(engine).get_table_names())
+        assert "plan_version_review" not in tables
+        assert "plan_activation_state" not in tables
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
                 == "0006_monitor_event"
+            )
+
+        upgrade_database(engine)
+
+        with engine.connect() as connection:
+            assert connection.exec_driver_sql(
+                "SELECT plan_version_id, review_issues_json FROM plan_version_review"
+            ).one() == (saved.id, "[]")
+            assert connection.exec_driver_sql(
+                "SELECT symbol, plan_version_id, revision, changed_at FROM plan_activation_state"
+            ).one() == (plan.symbol, None, 0, _FIXED_NOW.isoformat())
+    finally:
+        engine.dispose()
+
+
+def test_plan_web_state_migration_round_trips_an_active_pointer(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+    validation = validate_trade_plan(plan, available_market_evidence=ALL_MARKET_EVIDENCE)
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            saved = work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            active = work.plans.activate(plan, expected_revision=0, validation=validation)
+            work.commit()
+
+        _downgrade_to(engine, "0006_monitor_event")
+        upgrade_database(engine)
+
+        with engine.connect() as connection:
+            assert connection.exec_driver_sql(
+                "SELECT plan_version_id, review_issues_json FROM plan_version_review"
+            ).one() == (saved.id, "[]")
+            assert connection.exec_driver_sql(
+                "SELECT symbol, plan_version_id, revision, changed_at FROM plan_activation_state"
+            ).one() == (
+                plan.symbol,
+                active.plan_version_id,
+                active.revision,
+                active.activated_at.isoformat(),
+            )
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("loss_kind", ("review", "deactivation"))
+def test_plan_web_state_migration_refuses_lossy_downgrade_atomically(
+    tmp_path: Path,
+    loss_kind: str,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / f"monitor-{loss_kind}.db")
+    plan, source_text = _sample_plan()
+
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            saved = work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+        if loss_kind == "review":
+            issue = DraftReviewIssue(
+                kind="WARNING",
+                path="levels.pressure",
+                material=True,
+                resolved=False,
+            )
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "UPDATE plan_version_review SET review_issues_json = :review "
+                    "WHERE plan_version_id = :plan_version_id",
+                    {
+                        "plan_version_id": saved.id,
+                        "review": json.dumps(
+                            [issue.model_dump(mode="json")],
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        ),
+                    },
+                )
+        else:
+            validation = validate_trade_plan(
+                plan,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            )
+            with _unit_of_work(engine) as work:
+                work.plans.activate(plan, expected_revision=0, validation=validation)
+                work.commit()
+            with _unit_of_work(engine) as work:
+                work.plans.deactivate(plan.symbol, expected_revision=1)
+                work.commit()
+
+        with engine.connect() as connection:
+            reviews_before = connection.exec_driver_sql(
+                "SELECT plan_version_id, review_issues_json FROM plan_version_review "
+                "ORDER BY plan_version_id"
+            ).all()
+            states_before = connection.exec_driver_sql(
+                "SELECT symbol, plan_version_id, revision, changed_at "
+                "FROM plan_activation_state ORDER BY symbol"
+            ).all()
+
+        with pytest.raises(RuntimeError, match="refuses to discard plan Web state"):
+            _downgrade_to(engine, "0006_monitor_event")
+
+        assert {"plan_version_review", "plan_activation_state"} <= frozenset(
+            inspect(engine).get_table_names()
+        )
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0007_plan_web_state"
+            )
+            assert (
+                connection.exec_driver_sql(
+                    "SELECT plan_version_id, review_issues_json FROM plan_version_review "
+                    "ORDER BY plan_version_id"
+                ).all()
+                == reviews_before
+            )
+            assert (
+                connection.exec_driver_sql(
+                    "SELECT symbol, plan_version_id, revision, changed_at "
+                    "FROM plan_activation_state ORDER BY symbol"
+                ).all()
+                == states_before
             )
     finally:
         engine.dispose()
@@ -1830,7 +2469,7 @@ def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) 
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0006_monitor_event"
+                == "0007_plan_web_state"
             )
     finally:
         engine.dispose()
@@ -1883,7 +2522,7 @@ def test_monitor_event_migration_renames_high_water_and_backfills_alerts(
         }
         assert row.occurred_at == _FIXED_NOW.isoformat()
         assert high_water == 42
-        assert revision == "0006_monitor_event"
+        assert revision == "0007_plan_web_state"
     finally:
         engine.dispose()
 
@@ -2102,7 +2741,7 @@ def test_monitor_event_migration_refuses_lossy_non_alert_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0006_monitor_event"
+                == "0007_plan_web_state"
             )
     finally:
         engine.dispose()
@@ -2154,7 +2793,7 @@ def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
             "c" * 64,
             evaluated_at,
         )
-        assert revision == "0006_monitor_event"
+        assert revision == "0007_plan_web_state"
     finally:
         engine.dispose()
 
@@ -2227,7 +2866,7 @@ def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0006_monitor_event"
+                == "0007_plan_web_state"
             )
             assert connection.exec_driver_sql(
                 "SELECT evaluation_kind, target_value FROM evaluation_ledger"
@@ -2441,6 +3080,12 @@ def test_sqlite_migration_has_required_key_constraints_and_foreign_keys(
         assert _key_constraints(inspector, "plan_version") >= {
             ("plan_id", "version"),
         }
+        assert _key_constraints(inspector, "plan_version_review") >= {
+            ("plan_version_id",),
+        }
+        assert _key_constraints(inspector, "plan_activation_state") >= {
+            ("symbol",),
+        }
         assert _key_constraints(inspector, "evaluation_ledger") >= {
             (
                 "plan_hash",
@@ -2466,6 +3111,12 @@ def test_sqlite_migration_has_required_key_constraints_and_foreign_keys(
             (("source_id",), "plan_source", ("id",)),
         }
         assert _foreign_keys(inspector, "active_plan") >= {
+            (("plan_version_id",), "plan_version", ("id",)),
+        }
+        assert _foreign_keys(inspector, "plan_version_review") >= {
+            (("plan_version_id",), "plan_version", ("id",)),
+        }
+        assert _foreign_keys(inspector, "plan_activation_state") >= {
             (("plan_version_id",), "plan_version", ("id",)),
         }
         assert _foreign_keys(inspector, "position_lot") >= {

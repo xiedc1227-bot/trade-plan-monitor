@@ -248,6 +248,7 @@ function saveDraft(): void {
     return;
   }
   emit("saveDraft", {
+    basePlanVersionId: props.plan.id,
     expectedRevision: loadedRevision.value,
     planJson: assembled.value.json,
     reviewIssues: [...(props.plan.reviewIssues ?? [])],
@@ -271,6 +272,7 @@ function submitImport(): void {
     document: importDocument.value,
     expectedRevision: props.plan.revision,
     format: importFormat.value,
+    symbol: props.plan.symbol,
   });
 }
 
@@ -472,6 +474,15 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
           <option value="JSON">JSON</option>
           <option value="YAML">YAML</option>
         </select>
+        <label class="structured-editor__label" for="plan-import-symbol">
+          目标股票（当前版本）
+        </label>
+        <input
+          id="plan-import-symbol"
+          class="structured-editor__input"
+          :value="plan.symbol"
+          readonly
+        />
         <label class="structured-editor__label" for="plan-import-document">文档</label>
         <textarea
           id="plan-import-document"

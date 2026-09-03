@@ -9,18 +9,23 @@ from datetime import date, datetime
 from decimal import Decimal
 from hashlib import sha256
 from typing import Self
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, model_validator
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from trade_plan_monitor.domain.plan_codec import dump_plan_json
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
-from trade_plan_monitor.domain.plan_validation import PlanValidationResult, validate_trade_plan
+from trade_plan_monitor.domain.plan_validation import (
+    DraftReviewIssue,
+    PlanValidationResult,
+    validate_trade_plan,
+)
 from trade_plan_monitor.market_data.aggregation import (
     expected_five_minute_ends,
     five_minute_bucket_end,
@@ -55,8 +60,10 @@ from trade_plan_monitor.state.models import (
     EvaluationLedger,
     IdempotencyStatus,
     LatestQuote,
+    PlanActivationState,
     PlanSource,
     PlanVersion,
+    PlanVersionReview,
     PlanVersionStatus,
     PositionBucket,
     PositionLot,
@@ -224,6 +231,24 @@ class PlanVersionRecord(BaseModel):
     source_id: str
     revision: int
     created_at: datetime
+
+
+class PlanVersionDetailsRecord(PlanVersionRecord):
+    """Persisted plan version with its source and bounded review state."""
+
+    source_text: str
+    review_issues: tuple[DraftReviewIssue, ...] = ()
+
+
+class PlanActivationStateRecord(BaseModel):
+    """Monotone per-symbol activation state, including inactive revisions."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    plan_version_id: str | None
+    revision: int
+    changed_at: datetime
 
 
 class ActivePlanRecord(BaseModel):
@@ -403,6 +428,9 @@ class LatestQuoteRecord(BaseModel):
 class PlanRepository:
     """Persist immutable plan versions without exposing a raw Session."""
 
+    _MAX_PAGE_LIMIT = 100
+    _MAX_READ_ROWS = 10_000
+
     def __init__(
         self,
         session: Session,
@@ -416,12 +444,23 @@ class PlanRepository:
         self._id_factory = id_factory
         self._events = events
 
-    def save_draft(self, plan: TradePlan, *, source_text: str) -> PlanVersionRecord:
+    def save_draft(
+        self,
+        plan: TradePlan,
+        *,
+        source_text: str,
+        review_issues: Sequence[DraftReviewIssue] = (),
+    ) -> PlanVersionRecord:
         if not isinstance(plan, TradePlan):
             raise TypeError("plan must be a TradePlan")
         if not isinstance(source_text, str):
             raise TypeError("source_text must be a string")
-        if not validate_trade_plan(plan, available_market_evidence=set()).can_save:
+        normalized_review_issues = _plan_review_issues(review_issues)
+        if not validate_trade_plan(
+            plan,
+            available_market_evidence=set(),
+            review_issues=normalized_review_issues,
+        ).can_save:
             raise PlanSaveBlockedError("Plan has save-blocking validation errors")
 
         created_at = _aware_now(self._clock).isoformat()
@@ -443,9 +482,23 @@ class PlanRepository:
             revision=0,
             created_at=created_at,
         )
+        review = PlanVersionReview(
+            plan_version_id=version.id,
+            review_issues_json=_plan_review_issues_json(normalized_review_issues),
+        )
         try:
             with self._session.begin_nested():
-                self._session.add_all((source, version))
+                self._session.add_all((source, version, review))
+                self._session.execute(
+                    sqlite_insert(PlanActivationState)
+                    .values(
+                        symbol=plan.symbol,
+                        plan_version_id=None,
+                        revision=0,
+                        changed_at=created_at,
+                    )
+                    .on_conflict_do_nothing(index_elements=[PlanActivationState.symbol])
+                )
                 self._session.flush()
         except IntegrityError:
             existing = self.get_version(plan.plan_id, plan.version)
@@ -463,6 +516,109 @@ class PlanRepository:
             )
         )
         return None if model is None else _plan_version_record(model)
+
+    def next_version(self, plan_id: str) -> int:
+        """Return the next append-only version for one validated plan identity."""
+
+        normalized_plan_id = _plan_id(plan_id)
+        latest = self._session.scalar(
+            select(func.max(PlanVersion.version)).where(PlanVersion.plan_id == normalized_plan_id)
+        )
+        if latest is None:
+            return 1
+        if type(latest) is not int or not 1 <= latest < 9_223_372_036_854_775_807:
+            raise RepositoryError("Stored plan version sequence is invalid")
+        return latest + 1
+
+    def get_version_details(self, version_id: str) -> PlanVersionDetailsRecord | None:
+        normalized_id = _uuid_identifier(version_id, "version_id")
+        row = self._session.execute(
+            select(PlanVersion, PlanSource, PlanVersionReview)
+            .outerjoin(PlanSource, PlanSource.id == PlanVersion.source_id)
+            .outerjoin(
+                PlanVersionReview,
+                PlanVersionReview.plan_version_id == PlanVersion.id,
+            )
+            .where(PlanVersion.id == normalized_id)
+        ).one_or_none()
+        if row is None:
+            return None
+        if row[1] is None or row[2] is None:
+            raise RepositoryError("Stored plan version details are invalid")
+        return _plan_version_details_record(row[0], row[1], row[2])
+
+    def list_version_details(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        symbol: str | None = None,
+        status: str | PlanVersionStatus | None = None,
+    ) -> tuple[tuple[PlanVersionDetailsRecord, ...], int]:
+        normalized_offset = _nonnegative_integer(offset, "offset")
+        normalized_limit = _positive_integer(limit, "limit")
+        if normalized_offset > self._MAX_READ_ROWS:
+            raise ValueError("offset exceeds the plan-version read limit")
+        if normalized_limit > self._MAX_PAGE_LIMIT:
+            raise ValueError("limit exceeds the plan-version page limit")
+        filters = []
+        if symbol is not None:
+            filters.append(PlanVersion.symbol == _symbol(symbol))
+        if status is not None:
+            try:
+                normalized_status = PlanVersionStatus(status)
+            except TypeError, ValueError:
+                raise ValueError("status must be DRAFT, ACTIVE, or SUPERSEDED") from None
+            filters.append(PlanVersion.status == normalized_status)
+
+        total = self._session.scalar(select(func.count()).select_from(PlanVersion).where(*filters))
+        if type(total) is not int or not 0 <= total <= self._MAX_READ_ROWS:
+            raise RepositoryError("Plan-version collection exceeds its read limit")
+        rows = self._session.execute(
+            select(PlanVersion, PlanSource, PlanVersionReview)
+            .outerjoin(PlanSource, PlanSource.id == PlanVersion.source_id)
+            .outerjoin(
+                PlanVersionReview,
+                PlanVersionReview.plan_version_id == PlanVersion.id,
+            )
+            .where(*filters)
+            .order_by(PlanVersion.created_at.desc(), PlanVersion.id.desc())
+            .offset(normalized_offset)
+            .limit(normalized_limit)
+        ).all()
+        details: list[PlanVersionDetailsRecord] = []
+        for row in rows:
+            if row[1] is None or row[2] is None:
+                raise RepositoryError("Stored plan version details are invalid")
+            details.append(_plan_version_details_record(row[0], row[1], row[2]))
+        return tuple(details), total
+
+    def get_activation_state(self, symbol: str) -> PlanActivationStateRecord | None:
+        normalized_symbol = _symbol(symbol)
+        record = self._get_activation_state(normalized_symbol)
+        active = self.get_active(normalized_symbol)
+        self._consistent_activation_revision(state=record, active=active)
+        return record
+
+    def _get_activation_state(
+        self,
+        symbol: str,
+        *,
+        require_active_version: bool = True,
+    ) -> PlanActivationStateRecord | None:
+        model = self._session.get(PlanActivationState, symbol)
+        if model is None:
+            return None
+        record = _plan_activation_state_record(model)
+        if record.plan_version_id is not None:
+            version = self._session.get(PlanVersion, record.plan_version_id)
+            if (
+                version is None
+                or version.symbol != record.symbol
+                or (require_active_version and version.status != PlanVersionStatus.ACTIVE)
+            ):
+                raise RepositoryError("Stored plan activation state is invalid")
+        return record
 
     def get_active(self, symbol: str) -> ActivePlanRecord | None:
         model = self._session.get(ActivePlan, symbol)
@@ -484,87 +640,257 @@ class PlanRepository:
         if not validation.can_activate:
             raise PlanActivationBlockedError("Plan is not ready for activation")
 
+        try:
+            with self._session.begin_nested():
+                self._lock_plan_activation_writer(plan.symbol)
+                target = self.get_version(plan.plan_id, plan.version)
+                if target is None or target.plan_hash != plan_sha256(plan):
+                    raise PlanVersionNotFoundError("Plan version was not found")
+
+                before = self.get_active(plan.symbol)
+                before_state = self.get_activation_state(plan.symbol)
+                current_revision = self._consistent_activation_revision(
+                    state=before_state,
+                    active=before,
+                )
+                if expected_revision != current_revision:
+                    raise RevisionConflictError(current_revision)
+
+                activated_at = _aware_now(self._clock)
+                state_statement = sqlite_insert(PlanActivationState).values(
+                    symbol=plan.symbol,
+                    plan_version_id=target.id,
+                    changed_at=activated_at.isoformat(),
+                    revision=1,
+                )
+                state_statement = state_statement.on_conflict_do_update(
+                    index_elements=[PlanActivationState.symbol],
+                    set_={
+                        "plan_version_id": target.id,
+                        "changed_at": activated_at.isoformat(),
+                        "revision": PlanActivationState.revision + 1,
+                    },
+                    where=PlanActivationState.revision == expected_revision,
+                )
+                state_result = self._session.execute(state_statement)
+                if state_result.rowcount != 1:
+                    self._session.expire_all()
+                    current_state = self._get_activation_state(plan.symbol)
+                    raise RevisionConflictError(
+                        0 if current_state is None else current_state.revision
+                    )
+                self._session.expire_all()
+                changed_state = self._get_activation_state(
+                    plan.symbol,
+                    require_active_version=False,
+                )
+                if (
+                    changed_state is None
+                    or changed_state.plan_version_id != target.id
+                    or changed_state.revision != expected_revision + 1
+                ):
+                    raise RepositoryError("Activated plan state could not be reloaded")
+
+                active_statement = sqlite_insert(ActivePlan).values(
+                    symbol=plan.symbol,
+                    plan_version_id=target.id,
+                    activated_at=activated_at.isoformat(),
+                    revision=changed_state.revision,
+                )
+                active_statement = active_statement.on_conflict_do_update(
+                    index_elements=[ActivePlan.symbol],
+                    set_={
+                        "plan_version_id": target.id,
+                        "activated_at": activated_at.isoformat(),
+                        "revision": changed_state.revision,
+                    },
+                    where=ActivePlan.revision == expected_revision,
+                )
+                active_result = self._session.execute(active_statement)
+                if active_result.rowcount != 1:
+                    raise RepositoryError("Active plan pointer could not be synchronized")
+
+                if before is not None and before.plan_version_id != target.id:
+                    self._session.execute(
+                        update(PlanVersion)
+                        .where(PlanVersion.id == before.plan_version_id)
+                        .values(
+                            status=PlanVersionStatus.SUPERSEDED,
+                            revision=PlanVersion.revision + 1,
+                        )
+                    )
+                self._session.execute(
+                    update(PlanVersion)
+                    .where(PlanVersion.id == target.id)
+                    .values(
+                        status=PlanVersionStatus.ACTIVE,
+                        revision=PlanVersion.revision + 1,
+                    )
+                )
+                self._session.flush()
+                self._session.expire_all()
+                after = self.get_active(plan.symbol)
+                if after is None:
+                    raise RepositoryError("Activated plan could not be reloaded")
+                self._append_activation_audit(
+                    before=before,
+                    before_state=before_state,
+                    after=after,
+                )
+                self._events.append(
+                    MonitorEventDraft(
+                        event_id=monitor_event_id(
+                            MonitorEventType.PLAN_ACTIVATED,
+                            after.symbol,
+                            str(after.revision),
+                        ),
+                        event_type=MonitorEventType.PLAN_ACTIVATED,
+                        aggregate_id=after.symbol,
+                        payload=MonitorEventPayload(
+                            entity_id=after.plan_version_id,
+                            symbol=after.symbol,
+                            revision=after.revision,
+                        ),
+                        occurred_at=after.activated_at,
+                    )
+                )
+        except IntegrityError:
+            raise RepositoryError("Plan activation could not be persisted") from None
+        return after
+
+    def deactivate(
+        self,
+        symbol: str,
+        *,
+        expected_revision: int,
+    ) -> PlanActivationStateRecord:
+        normalized_symbol = _symbol(symbol)
+        normalized_revision = _nonnegative_integer(expected_revision, "expected_revision")
+        try:
+            with self._session.begin_nested():
+                self._lock_plan_activation_writer(normalized_symbol)
+                before = self.get_active(normalized_symbol)
+                before_state = self.get_activation_state(normalized_symbol)
+                current_revision = self._consistent_activation_revision(
+                    state=before_state,
+                    active=before,
+                )
+                if normalized_revision != current_revision:
+                    raise RevisionConflictError(current_revision)
+                if before is None or before_state is None:
+                    raise PlanVersionNotFoundError("Active plan was not found")
+
+                changed_at = _aware_now(self._clock)
+                state_result = self._session.execute(
+                    update(PlanActivationState)
+                    .where(
+                        PlanActivationState.symbol == normalized_symbol,
+                        PlanActivationState.plan_version_id == before.plan_version_id,
+                        PlanActivationState.revision == normalized_revision,
+                    )
+                    .values(
+                        plan_version_id=None,
+                        revision=PlanActivationState.revision + 1,
+                        changed_at=changed_at.isoformat(),
+                    )
+                    .execution_options(synchronize_session=False)
+                )
+                if state_result.rowcount != 1:
+                    self._session.expire_all()
+                    current_state = self._get_activation_state(normalized_symbol)
+                    raise RevisionConflictError(
+                        0 if current_state is None else current_state.revision
+                    )
+
+                active_result = self._session.execute(
+                    delete(ActivePlan).where(
+                        ActivePlan.symbol == normalized_symbol,
+                        ActivePlan.plan_version_id == before.plan_version_id,
+                        ActivePlan.revision == normalized_revision,
+                    )
+                )
+                if active_result.rowcount != 1:
+                    raise RepositoryError("Active plan pointer could not be removed")
+                version_result = self._session.execute(
+                    update(PlanVersion)
+                    .where(
+                        PlanVersion.id == before.plan_version_id,
+                        PlanVersion.status == PlanVersionStatus.ACTIVE,
+                    )
+                    .values(
+                        status=PlanVersionStatus.SUPERSEDED,
+                        revision=PlanVersion.revision + 1,
+                    )
+                )
+                if version_result.rowcount != 1:
+                    raise RepositoryError("Active plan version could not be superseded")
+
+                self._session.flush()
+                self._session.expire_all()
+                after = self.get_activation_state(normalized_symbol)
+                if (
+                    after is None
+                    or after.plan_version_id is not None
+                    or after.revision != normalized_revision + 1
+                ):
+                    raise RepositoryError("Deactivated plan state could not be reloaded")
+                self._append_deactivation_audit(before=before, after=after)
+                self._events.append(
+                    MonitorEventDraft(
+                        event_id=monitor_event_id(
+                            MonitorEventType.PLAN_DEACTIVATED,
+                            after.symbol,
+                            str(after.revision),
+                        ),
+                        event_type=MonitorEventType.PLAN_DEACTIVATED,
+                        aggregate_id=after.symbol,
+                        payload=MonitorEventPayload(
+                            entity_id=after.symbol,
+                            symbol=after.symbol,
+                            revision=after.revision,
+                        ),
+                        occurred_at=after.changed_at,
+                    )
+                )
+        except IntegrityError:
+            raise RepositoryError("Plan deactivation could not be persisted") from None
+        return after
+
+    def _lock_plan_activation_writer(self, symbol: str) -> None:
         self._session.execute(
-            update(ActivePlan)
-            .where(ActivePlan.symbol == plan.symbol)
-            .values(revision=ActivePlan.revision)
+            update(PlanActivationState)
+            .where(PlanActivationState.symbol == symbol)
+            .values(revision=PlanActivationState.revision)
             .execution_options(synchronize_session=False)
         )
-        target = self.get_version(plan.plan_id, plan.version)
-        if target is None or target.plan_hash != plan_sha256(plan):
-            raise PlanVersionNotFoundError("Plan version was not found")
 
-        before = self.get_active(plan.symbol)
-        if before is None and expected_revision != 0:
-            raise RevisionConflictError(0)
-        activated_at = _aware_now(self._clock)
-        statement = sqlite_insert(ActivePlan).values(
-            symbol=plan.symbol,
-            plan_version_id=target.id,
-            activated_at=activated_at.isoformat(),
-            revision=1,
-        )
-        statement = statement.on_conflict_do_update(
-            index_elements=[ActivePlan.symbol],
-            set_={
-                "plan_version_id": target.id,
-                "activated_at": activated_at.isoformat(),
-                "revision": ActivePlan.revision + 1,
-            },
-            where=ActivePlan.revision == expected_revision,
-        )
-        result = self._session.execute(statement)
-        if result.rowcount != 1:
-            self._session.expire_all()
-            current = self.get_active(plan.symbol)
-            raise RevisionConflictError(0 if current is None else current.revision)
-
-        if before is not None and before.plan_version_id != target.id:
-            self._session.execute(
-                update(PlanVersion)
-                .where(PlanVersion.id == before.plan_version_id)
-                .values(
-                    status=PlanVersionStatus.SUPERSEDED,
-                    revision=PlanVersion.revision + 1,
-                )
-            )
-        self._session.execute(
-            update(PlanVersion)
-            .where(PlanVersion.id == target.id)
-            .values(
-                status=PlanVersionStatus.ACTIVE,
-                revision=PlanVersion.revision + 1,
-            )
-        )
-        self._session.flush()
-        self._session.expire_all()
-        after = self.get_active(plan.symbol)
-        if after is None:  # pragma: no cover - protected by the successful upsert
-            raise RepositoryError("Activated plan could not be reloaded")
-        self._append_activation_audit(before=before, after=after)
-        self._events.append(
-            MonitorEventDraft(
-                event_id=monitor_event_id(
-                    MonitorEventType.PLAN_ACTIVATED,
-                    after.symbol,
-                    str(after.revision),
-                ),
-                event_type=MonitorEventType.PLAN_ACTIVATED,
-                aggregate_id=after.symbol,
-                payload=MonitorEventPayload(
-                    entity_id=after.plan_version_id,
-                    symbol=after.symbol,
-                    revision=after.revision,
-                ),
-                occurred_at=after.activated_at,
-            )
-        )
-        return after
+    @staticmethod
+    def _consistent_activation_revision(
+        *,
+        state: PlanActivationStateRecord | None,
+        active: ActivePlanRecord | None,
+    ) -> int:
+        if state is None:
+            if active is not None:
+                raise RepositoryError("Stored plan activation state is invalid")
+            return 0
+        if active is None:
+            if state.plan_version_id is not None:
+                raise RepositoryError("Stored plan activation state is invalid")
+            return state.revision
+        if (
+            state.plan_version_id != active.plan_version_id
+            or state.revision != active.revision
+            or state.changed_at != active.activated_at
+        ):
+            raise RepositoryError("Stored plan activation state is invalid")
+        return state.revision
 
     def _append_activation_audit(
         self,
         *,
         before: ActivePlanRecord | None,
+        before_state: PlanActivationStateRecord | None,
         after: ActivePlanRecord,
     ) -> None:
         details = {
@@ -578,10 +904,43 @@ class PlanRepository:
                 action="PLAN_ACTIVATED",
                 entity_type="ACTIVE_PLAN",
                 entity_id=after.symbol,
-                before_hash=None if before is None else _active_plan_hash(before),
+                before_hash=(
+                    _active_plan_hash(before)
+                    if before is not None
+                    else (
+                        _plan_activation_state_hash(before_state)
+                        if before_state is not None and before_state.revision > 0
+                        else None
+                    )
+                ),
                 after_hash=_active_plan_hash(after),
                 details_json=_canonical_json(details),
                 created_at=after.activated_at.isoformat(),
+            )
+        )
+        self._session.flush()
+
+    def _append_deactivation_audit(
+        self,
+        *,
+        before: ActivePlanRecord,
+        after: PlanActivationStateRecord,
+    ) -> None:
+        details = {
+            "planVersionId": before.plan_version_id,
+            "revision": after.revision,
+            "symbol": after.symbol,
+        }
+        self._session.add(
+            AuditLog(
+                id=self._id_factory(),
+                action="PLAN_DEACTIVATED",
+                entity_type="ACTIVE_PLAN",
+                entity_id=after.symbol,
+                before_hash=_active_plan_hash(before),
+                after_hash=_plan_activation_state_hash(after),
+                details_json=_canonical_json(details),
+                created_at=after.changed_at.isoformat(),
             )
         )
         self._session.flush()
@@ -1828,7 +2187,7 @@ class MarketReferenceRepository:
 class IdempotencyRepository:
     """Atomically claim request identities and retain bounded replay responses."""
 
-    _MAX_RESPONSE_BYTES = 256 * 1024
+    _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 
     def __init__(self, session: Session, *, clock: Clock) -> None:
         self._session = session
@@ -1938,18 +2297,147 @@ def _plan_version_record(model: PlanVersion) -> PlanVersionRecord:
     )
 
 
+def _plan_version_details_record(
+    version: PlanVersion,
+    source: PlanSource,
+    review: PlanVersionReview,
+) -> PlanVersionDetailsRecord:
+    record: PlanVersionDetailsRecord | None = None
+    try:
+        plan = load_plan_json(version.payload_json)
+        review_issues = _load_plan_review_issues(review.review_issues_json)
+        created_at = datetime.fromisoformat(version.created_at)
+        valid = (
+            version.id == review.plan_version_id
+            and version.source_id == source.id
+            and source.source_hash == sha256(source.source_text.encode("utf-8")).hexdigest()
+            and dump_plan_json(plan) == version.payload_json
+            and plan.plan_id == version.plan_id
+            and plan.version == version.version
+            and plan.symbol == version.symbol
+            and plan_sha256(plan) == version.plan_hash
+            and PlanVersionStatus(version.status).value == version.status
+            and version.revision >= 0
+            and created_at.tzinfo is not None
+            and created_at.utcoffset() is not None
+        )
+        if valid:
+            record = PlanVersionDetailsRecord(
+                **_plan_version_record(version).model_dump(mode="python"),
+                source_text=source.source_text,
+                review_issues=review_issues,
+            )
+    except TypeError, ValueError, RecursionError, UnicodeError:
+        pass
+    if record is None:
+        raise RepositoryError("Stored plan version details are invalid")
+    return record
+
+
+def _plan_review_issues(
+    review_issues: Sequence[DraftReviewIssue],
+) -> tuple[DraftReviewIssue, ...]:
+    if isinstance(review_issues, (str, bytes)) or not isinstance(review_issues, Sequence):
+        raise TypeError("review_issues must be a sequence of DraftReviewIssue values")
+    normalized = tuple(review_issues)
+    if len(normalized) > 512:
+        raise ValueError("review_issues exceeds the supported limit")
+    if any(not isinstance(issue, DraftReviewIssue) for issue in normalized):
+        raise TypeError("review_issues must contain only DraftReviewIssue values")
+    return normalized
+
+
+def _plan_review_issues_json(review_issues: Sequence[DraftReviewIssue]) -> str:
+    normalized = _plan_review_issues(review_issues)
+    return _canonical_json([issue.model_dump(mode="json", by_alias=True) for issue in normalized])
+
+
+def _load_plan_review_issues(value: str) -> tuple[DraftReviewIssue, ...]:
+    result: tuple[DraftReviewIssue, ...] | None = None
+    try:
+        payload = json.loads(value)
+        if isinstance(payload, list):
+            issues = tuple(DraftReviewIssue.model_validate(item) for item in payload)
+            if len(issues) <= 512 and _plan_review_issues_json(issues) == value:
+                result = issues
+    except TypeError, ValueError, RecursionError:
+        pass
+    if result is None:
+        raise RepositoryError("Stored plan review state is invalid")
+    return result
+
+
+def _plan_activation_state_record(model: PlanActivationState) -> PlanActivationStateRecord:
+    record: PlanActivationStateRecord | None = None
+    try:
+        changed_at = datetime.fromisoformat(model.changed_at)
+        valid = (
+            _symbol(model.symbol) == model.symbol
+            and (
+                model.plan_version_id is None
+                or _uuid_identifier(
+                    model.plan_version_id,
+                    "plan_version_id",
+                )
+                == model.plan_version_id
+            )
+            and model.revision >= 0
+            and changed_at.tzinfo is not None
+            and changed_at.utcoffset() is not None
+        )
+        if valid:
+            record = PlanActivationStateRecord(
+                symbol=model.symbol,
+                plan_version_id=model.plan_version_id,
+                revision=model.revision,
+                changed_at=changed_at,
+            )
+    except TypeError, ValueError:
+        pass
+    if record is None:
+        raise RepositoryError("Stored plan activation state is invalid")
+    return record
+
+
 def _active_plan_record(model: ActivePlan) -> ActivePlanRecord:
-    return ActivePlanRecord(
-        symbol=model.symbol,
-        plan_version_id=model.plan_version_id,
-        activated_at=datetime.fromisoformat(model.activated_at),
-        revision=model.revision,
-    )
+    record: ActivePlanRecord | None = None
+    try:
+        activated_at = datetime.fromisoformat(model.activated_at)
+        valid = (
+            _symbol(model.symbol) == model.symbol
+            and _uuid_identifier(model.plan_version_id, "plan_version_id") == model.plan_version_id
+            and type(model.revision) is int
+            and model.revision >= 0
+            and activated_at.tzinfo is not None
+            and activated_at.utcoffset() is not None
+        )
+        if valid:
+            record = ActivePlanRecord(
+                symbol=model.symbol,
+                plan_version_id=model.plan_version_id,
+                activated_at=activated_at,
+                revision=model.revision,
+            )
+    except TypeError, ValueError:
+        pass
+    if record is None:
+        raise RepositoryError("Stored active plan pointer is invalid")
+    return record
 
 
 def _active_plan_hash(record: ActivePlanRecord) -> str:
     snapshot = {
         "activatedAt": record.activated_at.isoformat(),
+        "planVersionId": record.plan_version_id,
+        "revision": record.revision,
+        "symbol": record.symbol,
+    }
+    return sha256(_canonical_json(snapshot).encode("utf-8")).hexdigest()
+
+
+def _plan_activation_state_hash(record: PlanActivationStateRecord) -> str:
+    snapshot = {
+        "changedAt": record.changed_at.isoformat(),
         "planVersionId": record.plan_version_id,
         "revision": record.revision,
         "symbol": record.symbol,
@@ -2298,11 +2786,32 @@ def _idempotency_key(value: str) -> str:
     return value
 
 
+def _uuid_identifier(value: str, name: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    parsed: UUID | None = None
+    try:
+        parsed = UUID(value)
+    except ValueError:
+        pass
+    if parsed is None or str(parsed) != value:
+        raise ValueError(f"{name} must be a canonical UUID")
+    return value
+
+
 def _symbol(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("symbol must be a string")
     if re.fullmatch(r"[0-9]{6}\.(?:SH|SZ|BJ)", value) is None:
         raise ValueError("symbol must be a canonical A-share symbol")
+    return value
+
+
+def _plan_id(value: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError("plan_id must be a string")
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value) is None:
+        raise ValueError("plan_id must be a canonical plan identity")
     return value
 
 
@@ -2498,9 +3007,11 @@ __all__ = [
     "MarketHistoryRepository",
     "MarketReferenceRepository",
     "PlanActivationBlockedError",
+    "PlanActivationStateRecord",
     "PlanRepository",
     "PlanSaveBlockedError",
     "PlanVersionNotFoundError",
+    "PlanVersionDetailsRecord",
     "PlanVersionRecord",
     "PositionLotNotFoundError",
     "PositionLotRecord",

@@ -15,6 +15,7 @@ from trade_plan_monitor.web.errors import install_error_boundary
 from trade_plan_monitor.web.lifespan import (
     AIWebLifecycleFactory,
     BacktestLifecycleFactory,
+    PlanWebLifecycleFactory,
     RuntimeLifecycleFactory,
     create_runtime_lifespan,
 )
@@ -131,6 +132,7 @@ def installed_web_assets() -> Iterator[Path]:
 def create_production_app(
     *,
     config_path: Path = Path("config/app.yaml"),
+    database_path: Path = Path("data/monitor.sqlite3"),
     runtime_factory: RuntimeLifecycleFactory | None = None,
     read_service: MonitorReadService | None = None,
     plan_service: PlanOperationService | None = None,
@@ -148,6 +150,8 @@ def create_production_app(
 
     if not isinstance(config_path, Path):
         raise TypeError("config_path must be a Path")
+    if not isinstance(database_path, Path):
+        raise TypeError("database_path must be a Path")
     if ai_service is not None and ai_lifecycle_factory is not None:
         raise ValueError("AI service and lifecycle factory are mutually exclusive")
     if ai_service is None and ai_lifecycle_factory is None:
@@ -158,6 +162,18 @@ def create_production_app(
 
         ai_lifecycle_factory = create_configured_ai_lifecycle
     lifecycle_factory = runtime_factory or _ReadOnlyPackagedLifecycle
+    plan_lifecycle_factory: PlanWebLifecycleFactory | None = None
+    plan_snapshot_reader = plan_service
+    if plan_service is None:
+        from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
+
+        persistent_plan_lifecycle = PersistentPlanWebLifecycle(database_path=database_path)
+
+        def create_persistent_plan_lifecycle() -> PersistentPlanWebLifecycle:
+            return persistent_plan_lifecycle
+
+        plan_lifecycle_factory = create_persistent_plan_lifecycle
+        plan_snapshot_reader = persistent_plan_lifecycle
     if backtest_lifecycle_factory is None:
         from trade_plan_monitor.backtest.composition import (
             create_backtest_composition_factory,
@@ -165,7 +181,7 @@ def create_production_app(
 
         backtest_lifecycle_factory = create_backtest_composition_factory(
             config_path=config_path,
-            plan_snapshot_reader=plan_service,
+            plan_snapshot_reader=plan_snapshot_reader,
         )
     with installed_web_assets() as static_directory:
         yield create_app(
@@ -173,6 +189,7 @@ def create_production_app(
             backtest_lifecycle_factory=backtest_lifecycle_factory,
             read_service=read_service,
             plan_service=plan_service,
+            plan_lifecycle_factory=plan_lifecycle_factory,
             ai_service=ai_service,
             ai_lifecycle_factory=ai_lifecycle_factory,
             position_service=position_service,
@@ -190,6 +207,7 @@ def create_app(
     runtime_factory: RuntimeLifecycleFactory | None = None,
     read_service: MonitorReadService | None = None,
     plan_service: PlanOperationService | None = None,
+    plan_lifecycle_factory: PlanWebLifecycleFactory | None = None,
     ai_service: AIOperationService | None = None,
     ai_lifecycle_factory: AIWebLifecycleFactory | None = None,
     position_service: PositionOperationService | None = None,
@@ -211,6 +229,8 @@ def create_app(
         raise ValueError("backtest services and lifecycle factory are mutually exclusive")
     if ai_lifecycle_factory is not None and ai_service is not None:
         raise ValueError("AI service and lifecycle factory are mutually exclusive")
+    if plan_lifecycle_factory is not None and plan_service is not None:
+        raise ValueError("plan service and lifecycle factory are mutually exclusive")
 
     allowed_origin = local_http_origin(bind_host, bind_port)
     static_files = LocalSpaStaticFiles(static_directory) if static_directory is not None else None
@@ -221,6 +241,7 @@ def create_app(
         lifespan=create_runtime_lifespan(
             runtime_factory,
             ai_lifecycle_factory=ai_lifecycle_factory,
+            plan_lifecycle_factory=plan_lifecycle_factory,
             backtest_lifecycle_factory=backtest_lifecycle_factory,
             bind_host=bind_host,
             bind_port=bind_port,

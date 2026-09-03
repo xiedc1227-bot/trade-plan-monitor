@@ -11,8 +11,10 @@ not place orders.
 Tasks `T001` through `T059` and `BT001` through `BT050` are implemented and accepted. The packaged
 command can serve the built Vue SPA, REST API, and WebSocket routes on exact loopback. The installed
 entry still uses read-only `DEGRADED` fallback for monitoring services that have not been composed,
-but its AI drafting path is now usable from `/plans`: startup loads the project AI configuration
-once and extraction runs only after the user submits plan text.
+but its `/plans` workflow is usable: startup loads the project AI configuration once and injects
+one backend-authoritative persistent plan service over `data/monitor.sqlite3`. Plan save, query,
+JSON/YAML import, activation, and deactivation therefore survive Web process restarts; extraction
+runs only after the user submits plan text.
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.
@@ -112,8 +114,11 @@ trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765
 ```
 
 Open `http://127.0.0.1:8765/` on the same computer. Stop the foreground process with `Ctrl+C`.
-The monitoring header may remain `DEGRADED`; open `/plans` to use the separately composed AI draft
-flow. Edit `config/app.yaml` or the selected project `.env` and restart Web to change AI settings.
+The monitoring header may remain `DEGRADED`; open `/plans` to use AI drafting and persistent plan
+management. The first lifespan startup creates or upgrades `data/monitor.sqlite3`; saving, querying,
+importing, activating, and deactivating plans uses that same SQLite file on later starts. Keep the
+database and its WAL/SHM companions private and do not copy an in-use WAL database as a backup.
+Edit `config/app.yaml` or the selected project `.env` and restart Web to change AI settings.
 
 ### 5. Offline verification
 
@@ -182,7 +187,7 @@ command changes directories itself.
 
 | Command | Purpose | Current availability |
 |---|---|---|
-| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | Serve packaged SPA, API, WebSocket, and file-configured AI drafting | Available; uncomposed monitoring services remain read-only/unavailable |
+| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | Serve packaged SPA, API, WebSocket, file-configured AI drafting, and persistent plan management | Available; plans use `data/monitor.sqlite3`, while uncomposed general monitoring services remain read-only/unavailable |
 | `python -m trade_plan_monitor --help` | Show the stable installed command surface | Available |
 | `python -m pytest -q` | Run the complete backend suite | Available; offline |
 | `python -m ruff check --no-cache src tests` | Run backend lint | Available; offline |
@@ -448,7 +453,7 @@ approved receiver and secret-handling procedure exist.
 |---|---|
 | `WEB_ASSETS_UNAVAILABLE` | The installed distribution lacks a complete Vite build. Run `npm install --include=optional --no-package-lock` and `npm run build` before building/reinstalling the Python package; do not add a cwd fallback. |
 | `Cannot find native binding` from Rolldown | npm omitted Vite's platform-specific optional package. Run `npm install --include=optional --no-package-lock`, then retry `npm run build`. |
-| UI shows `DEGRADED` or APIs return `SERVICE_UNAVAILABLE` | Expected from the current packaged read-only fallback. It does not mean live monitoring is running. |
+| UI shows `DEGRADED` or a general monitoring API returns `SERVICE_UNAVAILABLE` | Expected from the packaged monitoring fallback. It does not mean live monitoring is running; the separately composed plan workflow remains available. |
 | `runtime service factory is not configured` | `validate`, `monitor`, `replay`, or `backup` was invoked before application service composition is wired. |
 | Host validation rejects the listener | Use the exact literal `127.0.0.1`; `localhost`, `::1`, `0.0.0.0`, hostnames, and LAN addresses are intentionally rejected. |
 | Port 8765 is busy | Stop the other local process or choose another unused port from 1–65535, keeping host `127.0.0.1`. |

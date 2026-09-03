@@ -109,13 +109,13 @@ web/src/
 ### T037 计划与 AI 操作边界
 
 - `create_app(plan_service=..., ai_service=...)` 接收明确注入的 `PlanOperationService` 和 `AIOperationService` 适配器，但不构造服务，也不启动数据库、供应商、任务或网络工作。缺少服务时以 `SERVICE_UNAVAILABLE` 封闭失败。应用服务负责原子完成幂等占用/回放、乐观修订检查、持久化和审计写入；HTTP 层把经过校验的 `Idempotency-Key` 与服务端生成的 `requestId` 组成一个 `MutationContext` 传入。
-- T037 实现 `GET /plan-versions`、`GET /plan-versions/{id}`、`GET /plan-extractions/{id}`、`GET /ai-providers`、`POST /plan-drafts`、`POST /plan-imports`、`POST /plan-extractions`、`POST /plan-activations`、`POST /plan-deactivations`、`POST /ai-providers`、`PATCH /ai-providers/{id}`、`POST /ai-provider-secrets` 和 `POST /ai-provider-tests`。它不实现 T038 持仓/提醒/诊断资源、WebSocket 发布、Origin/安全响应头、静态资源提供、生产服务组合或任何 T024 判断行为。
-- 计划版本暴露一个规范、有界的 `planJson` 文档，以及精确的计划/版本/股票/hash identity、保留的有界 `sourceText`、审核问题、确定性校验问题、`canActivate`、状态、修订和创建时间。服务输出会被重新校验，并且必须匹配请求草稿/导入的 identity 与 provenance。`planJson` 保持为规范 `plan-domain` JSON 文档；外围 API 字段仍使用 camelCase。当 `offset` 超过 `total` 时，空分页仍然合法。
-- 草稿保存接收 `planJson`、`sourceText`、`reviewIssues` 和 `expectedRevision`。导入接收 `format=JSON|YAML`、安全有界的 `document` 和 `expectedRevision`。启用是针对不可变 `planVersionId` 的独立命令；停用是独立的股票命令。任何未解决的假设、警告、缺失证据、重大遗漏或阻断启用的校验问题都会使 `canActivate=false`，应用服务必须以冲突拒绝启用。
+- T037 实现 `GET /plan-versions`、`GET /plan-versions/{id}`、`GET /plan-activation-states/{symbol}`、`GET /plan-extractions/{id}`、`GET /ai-providers`、`POST /plan-drafts`、`POST /plan-imports`、`POST /plan-extractions`、`POST /plan-activations`、`POST /plan-deactivations`、`POST /ai-providers`、`PATCH /ai-providers/{id}`、`POST /ai-provider-secrets` 和 `POST /ai-provider-tests`。它不实现 T038 持仓/提醒/诊断资源、WebSocket 发布、Origin/安全响应头、静态资源提供或任何 T024 判断行为。
+- 计划版本集合项是有界的轻量摘要，包含精确的计划/版本/股票/hash identity、`canActivate`、状态、修订和创建时间；它们不包含可能很大的计划文档、原文和问题数组。`GET /plan-versions/{id}` 暴露完整版本，包括一个规范、有界的 `planJson` 文档、保留的有界 `sourceText`、审核问题和确定性校验问题。`GET /plan-activation-states/{symbol}` 暴露以后端为权威来源、可空的活动 `planVersionId`、单调递增的启用状态 `revision` 和变更时间；停用后仍可查询非活动状态。服务输出会被重新校验，并且必须匹配请求草稿/导入的 identity 与 provenance。`planJson` 保持为规范 `plan-domain` JSON 文档；外围 API 字段仍使用 camelCase。当 `offset` 超过 `total` 时，空分页仍然合法。
+- 草稿保存接收 `planJson`、`sourceText`、`reviewIssues`、`expectedRevision` 和可选的 `basePlanVersionId`。存在基版本 identity 时，应用服务会验证提交的 `plan_id` 与 `symbol` 是否匹配不可变基版本，并在同一个串行化幂等事务中为该 `plan_id` 分配下一版本；浏览器绝不分配这个后继版本，且不会覆盖任何既有版本。导入接收 `format=JSON|YAML`、明确的目标 `symbol`、安全有界的 `document` 和 `expectedRevision`；后端解析必须先证明文档股票与命令一致，revision 才能授权持久化。每个计划版本和返回的 revision 均受 JavaScript 安全整数上限约束。启用命令把 `expectedRevision` 上限设为该值减二，停用命令设为该值减一，从而保证每次递增都可精确表示，并让 revision 耗尽只能终止于非活动状态而不会卡住活动计划；不安全文档和已耗尽的后继版本序列会在提交前被拒绝，且不改变领域 Schema 或既有行。启用是针对不可变 `planVersionId` 的独立命令；停用是独立的股票命令。任何未解决的假设、警告、缺失证据、重大遗漏或阻断启用的校验问题都会使 `canActivate=false`，应用服务必须以冲突拒绝启用。
 - 计划提取和 AI 供应商测试只接受有界提交命令，并返回带强类型 `QUEUED` 回执的 `202`。路由只等待服务的持久提交边界；既不调用供应商，也不创建或运行提取工作，并且绝不启用计划。提取状态封闭为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`INVALID_OUTPUT`、`PROVIDER_ERROR` 和 `CANCELLED`；成功结果保留恰好一个阻断启用的 `AI_EVIDENCE_REVIEW_REQUIRED`，并且只暴露规范草稿 JSON、有界证据/问题、确定性校验结果、脱敏用量、hash 和时间戳。供应商/模型原始响应体和授权材料没有任何响应字段。
 - AI 供应商创建/更新使用完整的不含密钥配置。`PATCH` 是带修订保护的完整替换，其正文 `providerId` 必须与路径一致。API 通过具体 `AIProviderConfig` 的 class-local 脱敏校验器重新校验配置，包括 HTTPS/回环 URL 策略和资源限制。密钥替换接收现有 class-local `SecretWrite` 值，但响应只包含等价于 `SecretStatus` 的已配置状态、来源、固定掩码和代数元数据。服务返回的配置必须与提交的规范化配置一致；额外密钥或供应商原始字段会封闭失败。
 - 每个 T037 状态变更端点都要求 1～128 个白名单字符组成的 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同意图回放其规范响应。应用服务必须原子完成这些检查与审计写入；路由绝不重建仓储、校验或决策引擎行为。
-- 生产 Web 组合在 FastAPI lifespan 启动时，从 `config/app.yaml` 精确加载一个 AI 供应商。它在禁用环境变量后备的情况下，从有大小限制的项目密钥文件读取指定键，构造一个供应商客户端，并在关闭前复用这份不可变绑定。`GET /ai-runtime` 只返回供应商 ID、显示名、Base URL、模型、启用/已配置状态、输入/输出上限和固定修订号 `0`；没有密钥值、密钥路径、密钥键名或 Authorization 字段。通用供应商变更路由仍是注入式适配器契约，但配置文件驱动的生产服务对创建、更新、密钥替换和供应商测试统一返回 `METHOD_NOT_ALLOWED`。修改配置后必须重启 Web。
+- 生产 Web 组合在 FastAPI lifespan 启动时，从 `config/app.yaml` 精确加载一个 AI 供应商，并启动一个持久计划服务。计划服务默认打开并迁移 `data/monitor.sqlite3`，持久化计划文档、原文、审核问题、启用状态、审计、事件和幂等响应，同时作为默认回测计划快照读取器。因此，计划保存、查询、JSON/YAML 导入、启用和停用结果在独立 Web 进程重启后仍然保留。AI 生命周期在禁用环境变量后备的情况下，从有大小限制的项目密钥文件读取指定键，构造一个供应商客户端，并在关闭前复用这份不可变绑定。`GET /ai-runtime` 只返回供应商 ID、显示名、Base URL、模型、启用/已配置状态、输入/输出上限和固定修订号 `0`；没有密钥值、密钥路径、密钥键名或 Authorization 字段。通用供应商变更路由仍是注入式适配器契约，但配置文件驱动的生产服务对创建、更新、密钥替换和供应商测试统一返回 `METHOD_NOT_ALLOWED`。修改配置后必须重启 Web。
 
 ### T038 持仓、提醒与诊断边界
 
@@ -137,9 +137,9 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`18ce84db8156ad5c4db94a193157e6509b46ab4a03bfdc1ea2b2dceb88fe9d0c`
+OpenAPI 快照 SHA-256：`882d762abc4872a9970c34e49c06eec4427a286b1a1249a106686d0905ecc4a2`
 
-- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 41 个已批准 REST 路径：26 个实时路径（包含只读 `GET /ai-runtime` 和 `GET /market-indexes/{indexCode}/bars`）加精确 15 个回测路径，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
+- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 42 个已批准 REST 路径：27 个实时路径（包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars` 和 `GET /plan-activation-states/{symbol}`）加精确 15 个回测路径，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
 - `python scripts/generate_frontend_types.py --check` 是只读检查，只要任一已提交生成文件存在逐字节差异就失败。生成过程遇到不支持或悬空的 Schema 引用、参数位置、Schema 类型或非法 TypeScript 标识符时会封闭失败，而不是静默弱化契约。
 - `web/index.html` 是稳定的 Vite 应用文档，包含一个 `#app` 根节点和一个外部模块入口，不含违反 T040 CSP 的内联脚本或样式。Vite 现在执行会生成 `dist/index.html` 的文档式应用构建；T042 仍负责首个应用外壳、路由和组件挂载，T052 仍负责已安装资源发现及生产组合。
@@ -171,6 +171,7 @@ GET /symbols/{symbol}/events
 GET /market-indexes/{indexCode}/bars
 GET /plan-versions
 GET /plan-versions/{id}
+GET /plan-activation-states/{symbol}
 GET /plan-extractions/{id}
 GET /ai-runtime
 GET /ai-providers
@@ -261,11 +262,11 @@ T045 `PlanWorkbench` 只通过强类型 props/emits 组合 setup 风格 Vue 组�
 
 ### T046 结构化计划编辑与激活边界
 
-T046 `PlansView` 只通过生成的命令/视图契约组合路由局部版本选择、`StructuredPlanEditor` 和 `ActivationDiffDialog`。九个分区编辑器保留未知顶层计划内容，生成不求值条件的人类可读预览，并发出带修订保护的草稿/导入/导出意图。JSON/YAML 解析、规范化、确定性校验、交易规则、持久化和传输仍由后端或后续组合负责。活动版本绝不通过 props 改写；编辑只发出新草稿命令，dirty 局部内容在修订冲突、重复选择和分页移除版本时继续保留，直到用户明确重新载入或放弃。
+T046 `PlansView` 只通过生成的命令/视图契约组合路由局部版本选择、`StructuredPlanEditor` 和 `ActivationDiffDialog`。它读取有界的轻量版本摘要，并只按需获取所选版本及必需的活动版本详情。九个分区编辑器保留未知顶层计划内容，生成不求值条件的人类可读预览，并发出带修订保护的草稿/导入/导出意图。JSON/YAML 解析、规范化、确定性校验、后继版本分配、交易规则、持久化和传输仍由后端或后续组合负责。活动版本绝不通过 props 改写；编辑只发出绑定 `basePlanVersionId` 的新草稿命令，dirty 局部内容在修订冲突、重复选择和分页移除版本时继续保留，直到用户明确重新载入或放弃。
 
-导入文档及最终紧凑草稿/导出文档使用有界单遍检查和原子拒绝限制为 256 KiB UTF-8。pretty-print 的局部编辑缓冲使用独立 4 MiB 安全上限，避免合法紧凑计划仅因缩进膨胀而被拒绝。服务端和导入文本只作为已转义内容渲染；任何原始文本都不进入 `v-html`、日志、URL、持久浏览器状态或可变共享状态。
+导入文档及最终紧凑草稿/导出文档使用有界单遍检查和原子拒绝限制为 256 KiB UTF-8。导入命令携带用户选择或后端提供的目标 `symbol`；浏览器不会解析文档来推断它，并且只有取得该股票的权威启用 revision 后才提交。pretty-print 的局部编辑缓冲使用独立 4 MiB 安全上限，避免合法紧凑计划仅因缩进膨胀而被拒绝。服务端和导入文本只作为已转义内容渲染；任何原始文本都不进入 `v-html`、日志、URL、持久浏览器状态或可变共享状态。网络错误、无效响应或任意 5xx 结果都会为重试保留精确语义意图及幂等键，因为变更可能已经提交；确定性的 4xx 拒绝则使用固定安全文案并清除该键。
 
-存在未解决重大审核项、激活阻断校验项、dirty 编辑、busy 状态、缺失计划状态、跨股票 identity、缺失活动版本内容或修订漂移时，激活都会封闭失败。前后差异对话框使用真实模态边界，具备初始焦点、原生焦点约束、Escape/取消处理和焦点恢复。候选/当前计划的哈希、文档、状态、股票、修订及预期活动状态修订发生任何变化都会撤销确认；父级权威状态失配会关闭对话框，且不会静默重开。激活和停用保持为两个独立明确命令。T047+ 业务视图、API/store 组合、T052 已安装组合、T041 生成契约和 T024 判断语义保持不变。
+存在未解决重大审核项、激活阻断校验项、dirty 编辑、busy 状态、缺失计划状态、跨股票 identity、缺失活动版本内容或修订漂移时，激活都会封闭失败。前后差异对话框使用真实模态边界，具备初始焦点、原生焦点约束、Escape/取消处理和焦点恢复。候选/当前计划的哈希、文档、状态、股票、修订及预期活动状态修订发生任何变化都会撤销确认；父级权威状态失配会关闭对话框，且不会静默重开。激活和停用保持为两个独立明确命令。T041 工件会从这份已接受的后端契约重新生成；T047+ 业务视图、无关 API/store 组合、T052 已安装组合和 T024 判断语义保持不变。
 
 ### T047 多股票总览边界
 
@@ -298,19 +299,19 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 安装后的 `trade-plan-monitor` 控制台入口解析到 `trade_plan_monitor.cli:console_main`。CLI 导入和解析器构造继续保持无副作用；`web` 分支只有在精确回环主机和有界端口解析成功后，才惰性创建一个生产应用上下文并导入/运行 Uvicorn。
 - Vite 继续以 `web/index.html` 为文档输入，并继续生成 `web/dist/index.html`。仅构建时启用的插件会用同一份完整 distribution 替换被忽略的 `src/trade_plan_monitor/web/dist` 暂存目录；setuptools 只打包其中的 `index.html` 和本地 `assets/*`。两个生成目录都不纳入版本控制。
 - 生产资源发现通过 `importlib.resources` 在整个服务生命周期内访问 `trade_plan_monitor.web/dist`。它绝不搜索当前工作目录、仓库根目录、`web/dist` 或其他源码树 fallback。缺少目录、`index.html`、`assets/` 或实际资源时，会在 Uvicorn 启动前只以 `WEB_ASSETS_UNAVAILABLE` 和固定文案 `Installed Web assets are unavailable.` 失败；绝不暴露路径、资源异常、context 或 cause。
-- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 41 个 REST 路径（26 个实时路径加 15 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义均不改变。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
-- T052 的通用监控生命周期仍使用明确的 `DEGRADED` 只读 fallback，但现在负责配置文件驱动的 AI 生命周期。启动顺序是监控运行时、AI、回测，关闭严格反向执行。AI 启动时只读取一次 `config/app.yaml`，并尝试读取选中的、被忽略的项目密钥文件。YAML 非法会导致启动失败；选中的密钥文件缺失、格式非法、键重复、值为空、超大或不可读时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加环境变量后备、CDN、远程运行资源、备用监听器或开发目录 fallback。
+- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 42 个 REST 路径（27 个实时路径加 15 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义仍由一个应用管理。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
+- T052 的通用监控生命周期仍使用明确的 `DEGRADED` 只读 fallback，同时负责配置文件驱动的 AI 生命周期和持久计划生命周期。启动顺序是监控运行时、AI、计划、回测，关闭严格反向执行。没有显式注入计划服务时，计划启动会打开并迁移 `data/monitor.sqlite3`，在计划 DDL 前拒绝既有回测/行情数据库，把同一个服务注入所有计划路由，并把同一实例提供给默认回测组合。计划关闭只在回测关闭后释放其自有引擎。AI 启动时只读取一次 `config/app.yaml`，并尝试读取选中的、被忽略的项目密钥文件。YAML 非法会导致启动失败；选中的密钥文件缺失、格式非法、键重复、值为空、超大或不可读时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加环境变量后备、CDN、远程运行资源、备用监听器或开发目录 fallback。
 
 ### 已批准的回测扩展边界
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
-- 当前冻结契约精确为 41 条 REST 路径：26 条实时路径（包含只读 AI 运行配置和板块指数历史）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
+- 当前冻结契约精确为 42 条 REST 路径：27 条实时路径（包含只读 AI 运行配置、板块指数历史和权威计划启用状态）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
 - 生产 Router 精确包含十条路径：一条真实 `/plans` 视图、四条真实或延迟加载的 `/backtests...` 视图，以及五条剩余历史占位路由；两个静态回测子路由继续排在动态路由之前；
 - 增加真实计划与回测路由不能证明五条剩余历史占位路由已经接入业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
 - 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
-- 未显式注入生产服务时，`create_production_app(...)` 继续处于 `DEGRADED`/`SERVICE_UNAVAILABLE`。仅注册 Router Protocol 不等于产品可用组合。
+- 对未组合的通用监控服务，`create_production_app(...)` 继续处于 `DEGRADED`/`SERVICE_UNAVAILABLE`；但其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
 
 ## 信息架构
 
@@ -471,4 +472,4 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。当前 OpenAPI 契约精确包含 41 条路径，其中 26 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，其中 `/plans` 和四条回测路径是真实视图，其余五条仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，其中 `/plans` 和四条回测路径是真实视图，其余五条仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。

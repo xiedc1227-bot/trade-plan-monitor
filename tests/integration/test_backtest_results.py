@@ -72,6 +72,22 @@ def test_backtest_storage_domains_reject_aliases_and_live_tables(tmp_path) -> No
     live_path.unlink()
 
 
+@pytest.mark.parametrize("table_name", ["plan_activation_state", "plan_version_review"])
+def test_backtest_stores_reject_each_plan_web_state_table(
+    tmp_path: Path,
+    table_name: str,
+) -> None:
+    live_path = tmp_path / f"{table_name}.sqlite3"
+    with closing(sqlite3.connect(live_path)) as connection:
+        connection.execute(f"CREATE TABLE {table_name} (id INTEGER PRIMARY KEY)")
+        connection.commit()
+
+    with pytest.raises(ValueError, match="another storage domain"):
+        BacktestMarketStore(live_path)
+    with pytest.raises(ValueError, match="another storage domain"):
+        BacktestResultStore(live_path)
+
+
 def _hash(label: str) -> str:
     return sha256(label.encode("utf-8")).hexdigest()
 

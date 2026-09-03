@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   ActivePlanView,
   PlanDraftCommand,
+  PlanVersionSummary,
   PlanVersionView,
 } from "../../src/api/generated";
 import PlansView from "../../src/views/PlansView.vue";
@@ -76,17 +77,59 @@ const activeState: ActivePlanView = {
   symbol: "003043.SZ",
 };
 
+function planSummary(plan: PlanVersionSummary): PlanVersionSummary {
+  return {
+    canActivate: plan.canActivate,
+    createdAt: plan.createdAt,
+    id: plan.id,
+    planHash: plan.planHash,
+    planId: plan.planId,
+    revision: plan.revision,
+    status: plan.status,
+    symbol: plan.symbol,
+    version: plan.version,
+  };
+}
+
+function isPlanDetail(plan: PlanVersionSummary): plan is PlanVersionView {
+  return "planJson" in plan;
+}
+
 function mountView(
   props: Partial<InstanceType<typeof PlansView>["$props"]> = {},
   attachTo?: HTMLElement,
 ) {
+  const suppliedVersions = (props.versions ?? [candidateVersion, activeVersion]) as readonly (
+    | PlanVersionSummary
+    | PlanVersionView
+  )[];
+  const resolvedActiveState = Object.hasOwn(props, "activeState")
+    ? (props.activeState ?? null)
+    : activeState;
+  const selectedPlanId = Object.hasOwn(props, "selectedPlanId")
+    ? (props.selectedPlanId ?? null)
+    : candidateVersion.id;
+  const selectedPlan = Object.hasOwn(props, "selectedPlan")
+    ? (props.selectedPlan ?? null)
+    : (suppliedVersions.find(
+        (plan): plan is PlanVersionView =>
+          plan.id === selectedPlanId && isPlanDetail(plan),
+      ) ?? null);
+  const activePlan = Object.hasOwn(props, "activePlan")
+    ? (props.activePlan ?? null)
+    : (suppliedVersions.find(
+        (plan): plan is PlanVersionView =>
+          plan.id === resolvedActiveState?.planVersionId && isPlanDetail(plan),
+      ) ?? null);
   return mount(PlansView, {
     ...(attachTo === undefined ? {} : { attachTo }),
     props: {
-      activeState,
-      selectedPlanId: candidateVersion.id,
-      versions: [candidateVersion, activeVersion],
-      ...props,
+      activePlan,
+      activeState: resolvedActiveState,
+      busy: props.busy ?? false,
+      selectedPlan,
+      selectedPlanId,
+      versions: suppliedVersions.map(planSummary),
     },
   });
 }
@@ -109,6 +152,7 @@ describe("PlansView", () => {
 
     const command = wrapper.emitted("saveDraft")?.[0]?.[0] as PlanDraftCommand;
     expect(command.expectedRevision).toBe(5);
+    expect(command.basePlanVersionId).toBe(candidateVersion.id);
     expect(command.sourceText).toBe(candidateVersion.sourceText);
     expect(command.reviewIssues).toEqual([]);
     expect(JSON.parse(command.planJson)).toMatchObject({
@@ -191,8 +235,18 @@ describe("PlansView", () => {
     await wrapper.get<HTMLTextAreaElement>("#plan-import-document").setValue(importDocument);
     await wrapper.get('[data-testid="import-plan"]').trigger("submit");
     expect(wrapper.emitted("importPlan")).toEqual([
-      [{ document: importDocument, expectedRevision: 5, format: "YAML" }],
+      [
+        {
+          document: importDocument,
+          expectedRevision: 5,
+          format: "YAML",
+          symbol: candidateVersion.symbol,
+        },
+      ],
     ]);
+    expect(wrapper.get<HTMLInputElement>("#plan-import-symbol").element.value).toBe(
+      candidateVersion.symbol,
+    );
 
     await wrapper.get<HTMLSelectElement>("#plan-export-format").setValue("JSON");
     await wrapper.get('[data-testid="export-plan"]').trigger("click");
@@ -216,7 +270,10 @@ describe("PlansView", () => {
       planJson: JSON.stringify({ ...JSON.parse(candidatePlanJson), name: "服务器新名称" }),
       revision: 6,
     });
-    await wrapper.setProps({ versions: [serverPlan, activeVersion] });
+    await wrapper.setProps({
+      selectedPlan: serverPlan,
+      versions: [planSummary(serverPlan), planSummary(activeVersion)],
+    });
 
     expect(wrapper.get('[data-testid="revision-conflict"]').text()).toContain("修订 6");
     expect(name.element.value).toBe("本地未保存名称");
@@ -233,6 +290,7 @@ describe("PlansView", () => {
 
     const command = wrapper.emitted("saveDraft")?.[0]?.[0] as PlanDraftCommand;
     expect(command.expectedRevision).toBe(activeVersion.revision);
+    expect(command.basePlanVersionId).toBe(activeVersion.id);
     expect(activeVersion.status).toBe("ACTIVE");
     expect(JSON.parse(activeVersion.planJson).name).toBe("华亚智能旧方案");
   });
@@ -298,6 +356,10 @@ describe("PlansView", () => {
     expect(wrapper.get<HTMLInputElement>("#plan-name").element.value).toBe("待确认丢弃的名称");
     expect(wrapper.get('[data-testid="discard-selection-change"]').text()).toContain("放弃");
     await wrapper.get('[data-testid="confirm-selection-change"]').trigger("click");
+    await wrapper.setProps({
+      selectedPlan: activeVersion,
+      selectedPlanId: activeVersion.id,
+    });
     expect(wrapper.get<HTMLInputElement>("#plan-name").element.value).toBe("华亚智能旧方案");
   });
 
@@ -305,7 +367,11 @@ describe("PlansView", () => {
     const wrapper = mountView();
     await wrapper.get<HTMLInputElement>("#plan-name").setValue("分页刷新前的本地草稿");
 
-    await wrapper.setProps({ selectedPlanId: null, versions: [activeVersion] });
+    await wrapper.setProps({
+      selectedPlan: activeVersion,
+      selectedPlanId: activeVersion.id,
+      versions: [planSummary(activeVersion)],
+    });
 
     expect(wrapper.get<HTMLInputElement>("#plan-name").element.value).toBe(
       "分页刷新前的本地草稿",
@@ -374,7 +440,8 @@ describe("PlansView", () => {
     });
     await wrapper.setProps({
       activeState: { ...activeState, revision: 6 },
-      versions: [refreshedCandidate, activeVersion],
+      selectedPlan: refreshedCandidate,
+      versions: [planSummary(refreshedCandidate), planSummary(activeVersion)],
     });
 
     expect(wrapper.get('[data-testid="confirm-plan-action"]').attributes("disabled")).toBeDefined();

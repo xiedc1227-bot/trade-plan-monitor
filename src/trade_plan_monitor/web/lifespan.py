@@ -62,10 +62,25 @@ class AIWebLifecycle(Protocol):
 AIWebLifecycleFactory = Callable[[], AIWebLifecycle]
 
 
+class PlanWebLifecycle(Protocol):
+    """One persistent plan service owned by the Web application lifespan."""
+
+    @property
+    def operation_service(self) -> object: ...
+
+    async def start(self) -> None: ...
+
+    async def stop(self) -> None: ...
+
+
+PlanWebLifecycleFactory = Callable[[], PlanWebLifecycle]
+
+
 def create_runtime_lifespan(
     runtime_factory: RuntimeLifecycleFactory | None,
     *,
     ai_lifecycle_factory: AIWebLifecycleFactory | None = None,
+    plan_lifecycle_factory: PlanWebLifecycleFactory | None = None,
     backtest_lifecycle_factory: BacktestLifecycleFactory | None = None,
     bind_host: str = LOOPBACK_HOST,
     bind_port: int = DEFAULT_WEB_PORT,
@@ -87,6 +102,8 @@ def create_runtime_lifespan(
         backtest_stop: Callable[[], object] | None = None
         ai_lifecycle: AIWebLifecycle | None = None
         ai_stop: Callable[[], object] | None = None
+        plan_lifecycle: PlanWebLifecycle | None = None
+        plan_stop: Callable[[], object] | None = None
         app.state.runtime_lifecycle = runtime
         try:
             app.state.runtime_startup = await start()
@@ -105,6 +122,17 @@ def create_runtime_lifespan(
                 app.state.ai_startup = await ai_start()
                 app.state.ai_operation_service = ai_lifecycle.ai_operation_service
                 app.state.plan_extraction_service = ai_lifecycle.plan_extraction_service
+            if plan_lifecycle_factory is not None:
+                plan_lifecycle = await to_thread.run_sync(plan_lifecycle_factory)
+                plan_start = getattr(plan_lifecycle, "start", None)
+                plan_stop = getattr(plan_lifecycle, "stop", None)
+                if not callable(plan_start) or not callable(plan_stop):
+                    raise TypeError("plan Web lifecycle must expose start and stop")
+                if not hasattr(plan_lifecycle, "operation_service"):
+                    raise TypeError("plan Web lifecycle must expose its operation service")
+                app.state.plan_web_lifecycle = plan_lifecycle
+                await plan_start()
+                app.state.plan_operation_service = plan_lifecycle.operation_service
             if backtest_lifecycle_factory is not None:
                 backtest = await to_thread.run_sync(backtest_lifecycle_factory)
                 backtest_start = getattr(backtest, "start", None)
@@ -128,16 +156,22 @@ def create_runtime_lifespan(
                     await backtest_stop()
             finally:
                 try:
-                    if ai_stop is not None:
-                        _clear_ai_service_state(app)
-                        await ai_stop()
+                    if plan_stop is not None:
+                        _clear_plan_service_state(app)
+                        await plan_stop()
                 finally:
                     try:
-                        await stop()
+                        if ai_stop is not None:
+                            _clear_ai_service_state(app)
+                            await ai_stop()
                     finally:
-                        _clear_backtest_state(app)
-                        _clear_ai_state(app)
-                        _clear_runtime_state(app)
+                        try:
+                            await stop()
+                        finally:
+                            _clear_backtest_state(app)
+                            _clear_plan_state(app)
+                            _clear_ai_state(app)
+                            _clear_runtime_state(app)
 
     return runtime_lifespan
 
@@ -168,6 +202,16 @@ def _clear_backtest_state(app: FastAPI) -> None:
         delattr(app.state, "backtest_lifecycle")
 
 
+def _clear_plan_service_state(app: FastAPI) -> None:
+    if hasattr(app.state, "plan_operation_service"):
+        delattr(app.state, "plan_operation_service")
+
+
+def _clear_plan_state(app: FastAPI) -> None:
+    if hasattr(app.state, "plan_web_lifecycle"):
+        delattr(app.state, "plan_web_lifecycle")
+
+
 def _clear_ai_service_state(app: FastAPI) -> None:
     for name in ("ai_operation_service", "plan_extraction_service"):
         if hasattr(app.state, name):
@@ -185,6 +229,8 @@ __all__ = [
     "AIWebLifecycleFactory",
     "BacktestLifecycle",
     "BacktestLifecycleFactory",
+    "PlanWebLifecycle",
+    "PlanWebLifecycleFactory",
     "RuntimeLifecycle",
     "RuntimeLifecycleFactory",
     "create_runtime_lifespan",

@@ -141,6 +141,7 @@ def test_production_app_keeps_api_websocket_and_spa_routes_separate(
 
     with create_production_app(
         ai_service=_AIService(),
+        database_path=tmp_path / "monitor.sqlite3",
         runtime_factory=lambda: _Lifecycle(events),
         websocket_service=_WebSocketService(),
         backtest_lifecycle_factory=_BacktestLifecycle,

@@ -52,6 +52,8 @@ tests/integration/
 ```text
 plan_source(id, source_text, source_hash, created_at)
 plan_version(id, plan_id, version, symbol, plan_hash, status, payload_json, source_id, revision, created_at)
+plan_version_review(plan_version_id PRIMARY KEY, review_issues_json)
+plan_activation_state(symbol PRIMARY KEY, plan_version_id NULL, revision, changed_at)
 active_plan(symbol PRIMARY KEY, plan_version_id UNIQUE, activated_at, revision)
 position_lot(id, symbol, bucket, quantity, remaining_qty, acquired_trade_date, cost_fen, related_alert_id, closed_at)
 zone_episode(id, plan_hash, symbol, zone, started_at, episode_low_fen, bars_since_low, status, alerted_signal, last_processed_bucket_end)
@@ -115,13 +117,14 @@ class PositionLot(BaseModel):
 
 ### 计划仓储与工作单元契约
 
-- `save_draft` 接受类型化 `TradePlan`，重新执行跨字段保存校验，并在同一事务中保存源文本、规范 JSON、内容哈希、不可变版本和 `PLAN_DRAFT_SAVED` 审计。已有 `(plan_id, version)` 绝不覆盖。
-- 激活要求 `PlanValidationResult.can_activate` 成功。不存在活动记录时逻辑 revision 为 `0`；首次激活要求 `expected_revision=0` 并创建 revision `1`，此后每次激活都要求精确匹配当前 revision 并只递增一次。SQLite 写者在激活读取前串行化，条件 upsert 与数据库键共同保证每只股票仅有一个活动版本。
-- 新幂等键创建 `PENDING`。相同键和哈希在待处理时产生 `IDEMPOTENCY_IN_PROGRESS`；进入 `COMPLETED` 后重放已保存的规范响应。相同键对应不同 SHA-256 请求哈希时始终产生 `IDEMPOTENCY_KEY_REUSED`。
+- `save_draft` 接受类型化 `TradePlan`，重新执行跨字段保存校验，并在同一事务中保存源文本、规范 JSON、内容哈希、不可变版本、有界审核问题和 `PLAN_DRAFT_SAVED` 审计。股票尚不存在状态时，它还会创建 revision 为 `0` 的非活动 `plan_activation_state`。已有 `(plan_id, version)` 绝不覆盖。基版本保存会验证不可变计划/股票 identity，并且只有幂等占用已串行化 SQLite 写者后才取得该 `plan_id` 的下一版本；后继计划由应用服务而非浏览器构造后再保存。Web 边界把计划版本和返回 revision 限制在 JavaScript 安全整数上限内，并在提交前拒绝不安全的导入文档或耗尽的后继序列；这不会收窄或改写持久化 Schema v1 领域。版本详情读取会连接精确原文和审核记录，稳定分页集合读取则返回从这些已验证记录派生的轻量摘要，因此保存、查询与 JSON/YAML 导入 provenance 可跨重启保留，而无需在一页中返回每个大型文档。
+- 激活要求 `PlanValidationResult.can_activate` 成功，包括每个已持久化审核问题。不存在启用状态时逻辑 revision 为 `0`；首次激活要求 `expected_revision=0` 并创建 revision `1`，此后每次激活或停用都要求精确匹配当前 `plan_activation_state.revision` 并只递增一次。激活会同步可空持久状态与 `active_plan` 指针；停用则移除活动指针，保留带新 revision 的非活动状态，把此前活动的不可变版本标为 `SUPERSEDED`，并在同一事务中追加审计和 `plan.deactivated` 事件。SQLite 写者在启用状态读取前串行化，条件写入与数据库键共同保证每只股票仅有一个活动版本。
+- 新幂等键创建 `PENDING`。相同键和哈希在待处理时产生 `IDEMPOTENCY_IN_PROGRESS`；进入 `COMPLETED` 后重放已保存的规范响应。相同键对应不同 SHA-256 请求哈希时始终产生 `IDEMPOTENCY_KEY_REUSED`。已保存规范响应限制为 4 MiB，使完整计划版本响应可以重放，同时不形成无界持久化表面。
 - 仓储失败暴露稳定错误码，例如 `PLAN_VERSION_EXISTS`、`PLAN_SAVE_BLOCKED`、`PLAN_ACTIVATION_BLOCKED`、`PLAN_VERSION_NOT_FOUND`、`CONFLICT`、`IDEMPOTENCY_KEY_REUSED`、`IDEMPOTENCY_IN_PROGRESS` 和 `IDEMPOTENCY_CLAIM_NOT_FOUND`；后续传输适配器将其映射为 HTTP，但不暴露 SQL 或原始 Session 细节。
 - `UnitOfWork` 拥有一个显式短事务。调用方必须调用 `commit()` 才能持久化；退出上下文时未提交则回滚。其公共协议只暴露仓储及 `commit()`/`rollback()`，绝不暴露 SQLAlchemy Session。
 - `UnitOfWork.events` 暴露绑定 Session 的 `MonitorEventLog`，`UnitOfWork.alerts` 则在相同日志与 Session 上暴露 `AlertOutbox`。计划激活、持仓变更、股票/供应商健康变更、判断快照、提醒创建、确认审计及其对应事件因此共同提交或回滚。封闭业务词表为 `symbol.snapshot.updated`、`symbol.health.updated`、`alert.created`、`alert.acknowledged`、`plan.extraction.updated`、`plan.activated`、`plan.deactivated`、`position.updated`、`ai.provider.updated` 和 `system.health.updated`。负责提取、停用或 AI 供应商持久化的注入式应用服务必须在所属变更事务中追加对应事件；持久化边界不虚构这些服务。
 - 追加迁移 `0006_monitor_event` 紧随 `0005_evaluation_kind`，用唯一的 `monitor_sequence` 替换 `alert_sequence`，并以相同 UUID 和序号把每条历史 `alert_event` 回填为 `alert.created`。既有提醒序号因此保持稳定，后续提醒行在全局序号域中可以稀疏。在任何 DDL 前，由 revision 本地拥有的冻结 v1 校验器会拒绝不符合迁移原始契约、因而无法安全规范转换的任何历史提醒行：它校验精确载荷/对象形状、UUID/dedup/symbol/信号动作 identity、封闭条件/证据/事实类型、三值证据分区、节点/事实/数值预算、动作/区间/next-step 语义、精确上海时区时间差、有界且无控制字符的文本、确定性中文渲染及旧序号高水位。该 revision 完全自包含，绝不导入持续演进的应用 `AlertPayload`、`AlertEvent` 或 renderer；正常 `AlertOutbox` 读取会独立重校验当前完整规范事件。只有全部监控行都是与提醒 identity 匹配的 `alert.created` 时才允许降级；存在其他或不匹配事件时会在数据丢失前封闭失败。
+- 追加迁移 `0007_plan_web_state` 紧随 `0006_monitor_event`。它只新增 `plan_version_review` 和可空 `plan_activation_state`，为既有计划版本回填 `[]` 审核问题，把既有活动指针、revision 和启用时间复制到启用状态投影，并使用各股票最早的版本创建时间为其余仅有草稿的股票建立 revision `0` 的非活动状态。只有每条审核仍是可重建的规范 `[]`，且每条启用状态精确匹配旧活动指针或 revision `0` 的最早版本回填时才允许降级；任何已审核或已停用状态都会在 DDL 前封闭失败。它不重写 `plan_version.payload_json`、计划哈希、Schema v1 计划、历史回测结果或任何既有事件 identity。
 - `MonitorEventLog` 在 identity 读取前串行化 SQLite 写者，分配正数全局序号，保存规范、有界载荷 JSON，并只 flush 而不提交。相同 UUID 的精确重放幂等，语义冲突则拒绝。高水位不受事件保留删除影响；回放会按 7 天截止时间校验完整请求范围，再返回最多 1,000 个连续事件。提醒确认仍只修改 `alert_event.acknowledged_at`，追加一条 `ALERT_ACKNOWLEDGED` 审计和一条 `alert.acknowledged` 监控事件，绝不改变持仓，也不记录投递成功。
 
 ### 低吸事件游标与仓储契约
@@ -172,6 +175,7 @@ class UnitOfWork(Protocol):
 - 覆盖事件游标 start/reload/revise/restart、精确审计哈希链、单向生命周期、同游标重放、冲突初始 start 和游标倒退。
 - 覆盖 `0003_episode_cursor` 从全新及空 `0002` 数据库升级，以及对已有事件状态的 `0002` 数据库在 DDL 前原子拒绝。
 - 模拟崩溃/重启，确认已提交事务可恢复、未提交事务回滚。
+- 在计划保存、后继版本分配、查询、JSON/YAML 导入、启用与停用之间分别重启；验证审核问题、明确的导入股票绑定、幂等回放、不可变版本状态、可空活动 identity 和启用 revision 均被保留。
 - 并发激活和更新必须稳定返回 409 冲突。
 - 测试重复行情和延迟恢复的幂等写入。
 - 覆盖精确、有缺口、超限和仅有最新报价的判断历史读取，以及临时/官方日线 identity 分离。
@@ -191,7 +195,7 @@ class UnitOfWork(Protocol):
 
 ## 验收标准
 
-- 重启后活动计划、持仓、事件、风险和提醒去重状态完整保留。
+- 重启后已保存/导入计划版本、审核问题、活动或非活动启用状态、持仓、事件、风险和提醒去重状态完整保留。
 - 每只股票不可能存在两个活动计划版本。
 - 同一完整 5 分钟判断不能插入第二条记录。
 - 人工成交遵守手数、最大仓位、仓位类型、剩余数量和 T+1。

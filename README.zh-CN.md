@@ -6,7 +6,7 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 ## 产品状态
 
-`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。尚未组合的通用监控服务仍使用只读 `DEGRADED` fallback，但 AI 草稿流程已经可以从 `/plans` 使用：启动时只加载一次项目 AI 配置，只有用户提交计划原文后才执行提取。
+`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。尚未组合的通用监控服务仍使用只读 `DEGRADED` fallback，但 `/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。
 
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 
@@ -70,7 +70,7 @@ Web 启动时会校验严格 YAML，相对于该 YAML 解析 AI 项目密钥文�
 trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765
 ```
 
-在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。监控标题仍可能显示 `DEGRADED`；打开 `/plans` 可使用独立组合的 AI 草稿流程。修改 `config/app.yaml` 或选中的项目 `.env` 后必须重启 Web。
+在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。监控标题仍可能显示 `DEGRADED`；打开 `/plans` 可使用 AI 草稿与持久计划管理。首次 lifespan 启动会创建或升级 `data/monitor.sqlite3`；之后启动时，计划保存、查询、导入、启用和停用都使用同一 SQLite 文件。数据库及其 WAL/SHM 伴随文件必须保持私密，且不得直接复制正在使用的 WAL 数据库作为备份。修改 `config/app.yaml` 或选中的项目 `.env` 后必须重启 Web。
 
 ### 5. 离线验证
 
@@ -129,7 +129,7 @@ p95 ≤ 200 毫秒。排除 ECharts 的入口/共享包必须 ≤ 150 KiB gzip�
 
 | 命令 | 用途 | 当前可用性 |
 |---|---|---|
-| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | 提供已打包 SPA、API、WebSocket 和配置文件驱动的 AI 草稿 | 可用；未组合的通用监控服务仍保持只读/不可用 |
+| `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | 提供已打包 SPA、API、WebSocket、配置文件驱动的 AI 草稿和持久计划管理 | 可用；计划使用 `data/monitor.sqlite3`，未组合的通用监控服务仍保持只读/不可用 |
 | `python -m trade_plan_monitor --help` | 显示稳定的安装式命令面 | 可用 |
 | `python -m pytest -q` | 运行完整后端测试 | 可用；离线 |
 | `python -m ruff check --no-cache src tests` | 运行后端代码检查 | 可用；离线 |
@@ -330,7 +330,7 @@ python -c "import os; from trade_plan_monitor.state.backup import verify_sqlite_
 |---|---|
 | `WEB_ASSETS_UNAVAILABLE` | 安装分发缺少完整 Vite 构建。构建/重装 Python 包前运行 `npm install --include=optional --no-package-lock` 和 `npm run build`；不要增加 cwd fallback。 |
 | Rolldown 报告 `Cannot find native binding` | npm 遗漏了 Vite 的平台专用可选包。运行 `npm install --include=optional --no-package-lock`，再重试 `npm run build`。 |
-| 界面显示 `DEGRADED` 或 API 返回 `SERVICE_UNAVAILABLE` | 当前打包只读 fallback 的预期行为，不代表真实监控正在运行。 |
+| 界面显示 `DEGRADED` 或通用监控 API 返回 `SERVICE_UNAVAILABLE` | 打包监控 fallback 的预期行为，不代表真实监控正在运行；独立组合的计划流程仍可使用。 |
 | `runtime service factory is not configured` | 在应用服务组合接通前调用了 `validate`、`monitor`、`replay` 或 `backup`。 |
 | 监听主机校验失败 | 使用精确字面量 `127.0.0.1`；系统有意拒绝 `localhost`、`::1`、`0.0.0.0`、主机名和局域网地址。 |
 | 8765 端口占用 | 停止另一个本地进程，或选择 1～65535 中未占用的其他端口，同时保持主机为 `127.0.0.1`。 |

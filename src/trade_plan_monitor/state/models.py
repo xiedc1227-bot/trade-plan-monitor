@@ -97,6 +97,35 @@ class PlanVersion(Base):
     created_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class PlanVersionReview(Base):
+    """Persist bounded review state without changing immutable plan bytes."""
+
+    __tablename__ = "plan_version_review"
+
+    plan_version_id: Mapped[str] = mapped_column(
+        ForeignKey("plan_version.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    review_issues_json: Mapped[str] = mapped_column(Text)
+
+
+class PlanActivationState(Base):
+    """Retain the monotone activation revision while a symbol is inactive."""
+
+    __tablename__ = "plan_activation_state"
+    __table_args__ = (
+        CheckConstraint(
+            "revision >= 0",
+            name="ck_plan_activation_state_revision_nonnegative",
+        ),
+    )
+
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    plan_version_id: Mapped[str | None] = mapped_column(ForeignKey("plan_version.id"))
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+    changed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
 class ActivePlan(Base):
     __tablename__ = "active_plan"
     __table_args__ = (CheckConstraint("revision >= 0", name="ck_active_plan_revision_nonnegative"),)
@@ -531,8 +560,10 @@ __all__ = [
     "MinuteBar",
     "MonitorEvent",
     "MonitorSequence",
+    "PlanActivationState",
     "PlanSource",
     "PlanVersion",
+    "PlanVersionReview",
     "PlanVersionStatus",
     "PositionBucket",
     "PositionLot",

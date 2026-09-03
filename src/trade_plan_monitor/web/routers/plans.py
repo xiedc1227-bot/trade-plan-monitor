@@ -43,7 +43,9 @@ _DEFAULT_LIMIT = 20
 _MAX_LIMIT = 100
 _MAX_ROWS = 10_000
 _MAX_SOURCE_CHARS = 200_000
-_MAX_EXPECTED_REVISION = 9_223_372_036_854_775_806
+MAX_SAFE_INTEGER = 9_007_199_254_740_991
+_MAX_ACTIVATION_EXPECTED_REVISION = MAX_SAFE_INTEGER - 2
+_MAX_DEACTIVATION_EXPECTED_REVISION = MAX_SAFE_INTEGER - 1
 _PLAN_VERSION_COLLECTION_QUERY_FIELDS = frozenset(
     {"symbol", "status", "canActivate", "offset", "limit"}
 )
@@ -60,9 +62,22 @@ CanActivateQuery = Annotated[
     Query(alias="canActivate"),
 ]
 ResourceIdPath = Annotated[UUID, Path()]
-NonNegativeRevision = Annotated[
+PlanSymbolPath = Annotated[AShareSymbol, Path()]
+NonNegativeSafeInteger = Annotated[
     int,
-    Field(strict=True, ge=0, le=_MAX_EXPECTED_REVISION),
+    Field(strict=True, ge=0, le=MAX_SAFE_INTEGER),
+]
+PositiveSafeInteger = Annotated[
+    int,
+    Field(strict=True, gt=0, le=MAX_SAFE_INTEGER),
+]
+ActivationExpectedRevision = Annotated[
+    int,
+    Field(strict=True, ge=0, le=_MAX_ACTIVATION_EXPECTED_REVISION),
+]
+DeactivationExpectedRevision = Annotated[
+    int,
+    Field(strict=True, ge=0, le=_MAX_DEACTIVATION_EXPECTED_REVISION),
 ]
 PlanDocument = Annotated[
     str,
@@ -96,22 +111,33 @@ class PlanExtractionOperationStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
-class PlanVersionView(ApiValue):
-    """One immutable, canonical plan version plus its review/validation state."""
+class PlanVersionSummary(ApiValue):
+    """Bounded list projection for one immutable plan-version identity."""
 
     id: UUID
     plan_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)]
-    version: Annotated[int, Field(strict=True, gt=0)]
+    version: PositiveSafeInteger
     symbol: AShareSymbol
     plan_hash: Sha256Hex
     status: PlanVersionStatus
+    can_activate: bool = Field(strict=True)
+    revision: NonNegativeSafeInteger
+    created_at: ShanghaiDatetime
+
+    @model_validator(mode="after")
+    def validate_active_state(self) -> Self:
+        if self.status is PlanVersionStatus.ACTIVE and not self.can_activate:
+            raise ValueError("an active version cannot contain an activation blocker")
+        return self
+
+
+class PlanVersionView(PlanVersionSummary):
+    """One immutable, canonical plan version plus its review/validation state."""
+
     plan_json: PlanDocument
     source_text: PlanSourceText
     review_issues: tuple[DraftReviewIssue, ...] = Field(default=(), max_length=512)
     validation_issues: tuple[ValidationIssue, ...] = Field(default=(), max_length=512)
-    can_activate: bool = Field(strict=True)
-    revision: NonNegativeRevision
-    created_at: ShanghaiDatetime
 
     @field_validator("source_text")
     @classmethod
@@ -135,13 +161,11 @@ class PlanVersionView(ApiValue):
         ) and not any(not issue.resolved for issue in self.review_issues)
         if self.can_activate != expected_can_activate:
             raise ValueError("can_activate must match unresolved review and validation state")
-        if self.status is PlanVersionStatus.ACTIVE and not self.can_activate:
-            raise ValueError("an active version cannot contain an activation blocker")
         return self
 
 
 class PlanVersionPage(ApiValue):
-    items: tuple[PlanVersionView, ...] = Field(default=(), max_length=_MAX_LIMIT)
+    items: tuple[PlanVersionSummary, ...] = Field(default=(), max_length=_MAX_LIMIT)
     offset: Annotated[int, Field(strict=True, ge=0, le=_MAX_ROWS)]
     limit: Annotated[int, Field(strict=True, ge=1, le=_MAX_LIMIT)]
     total: Annotated[int, Field(strict=True, ge=0, le=_MAX_ROWS)]
@@ -159,6 +183,7 @@ class PlanVersionPage(ApiValue):
 
 
 class PlanDraftCommand(ApiValue):
+    base_plan_version_id: UUID | None = Field(default=None, strict=False)
     plan_json: PlanDocument
     source_text: PlanSourceText
     review_issues: tuple[DraftReviewIssue, ...] = Field(
@@ -166,12 +191,12 @@ class PlanDraftCommand(ApiValue):
         max_length=512,
         strict=False,
     )
-    expected_revision: NonNegativeRevision
+    expected_revision: NonNegativeSafeInteger
 
     @field_validator("plan_json")
     @classmethod
     def validate_plan_json(cls, value: str) -> str:
-        load_plan_json(value)
+        _validate_web_plan(load_plan_json(value))
         return value
 
     @field_validator("source_text")
@@ -181,23 +206,28 @@ class PlanDraftCommand(ApiValue):
 
 
 class PlanImportCommand(ApiValue):
+    symbol: AShareSymbol
     format: PlanDocumentFormat = Field(strict=False)
     document: PlanDocument
-    expected_revision: NonNegativeRevision
+    expected_revision: NonNegativeSafeInteger
 
     @model_validator(mode="after")
     def validate_document(self) -> Self:
-        if self.format is PlanDocumentFormat.JSON:
+        plan = (
             load_plan_json(self.document)
-        else:
-            load_plan_yaml(self.document)
+            if self.format is PlanDocumentFormat.JSON
+            else load_plan_yaml(self.document)
+        )
+        _validate_web_plan(plan)
+        if plan.symbol != self.symbol:
+            raise ValueError("symbol must match the imported plan document")
         return self
 
 
 class PlanExtractionCommand(ApiValue):
     provider_id: UUID = Field(strict=False)
     source_text: ExtractionSourceText
-    expected_revision: NonNegativeRevision
+    expected_revision: NonNegativeSafeInteger
 
     @field_validator("source_text")
     @classmethod
@@ -207,12 +237,12 @@ class PlanExtractionCommand(ApiValue):
 
 class PlanActivationCommand(ApiValue):
     plan_version_id: UUID = Field(strict=False)
-    expected_revision: NonNegativeRevision
+    expected_revision: ActivationExpectedRevision
 
 
 class PlanDeactivationCommand(ApiValue):
     symbol: AShareSymbol
-    expected_revision: NonNegativeRevision
+    expected_revision: DeactivationExpectedRevision
 
 
 class AIUsageView(ApiValue):
@@ -325,7 +355,7 @@ class ActivePlanView(ApiValue):
     symbol: AShareSymbol
     plan_version_id: UUID | None
     active: bool = Field(strict=True)
-    revision: NonNegativeRevision
+    revision: NonNegativeSafeInteger
     changed_at: ShanghaiDatetime
 
     @model_validator(mode="after")
@@ -362,6 +392,8 @@ class PlanOperationService(PlanExtractionService, Protocol):
     ) -> PlanVersionPage: ...
 
     async def get_plan_version(self, *, version_id: str) -> PlanVersionView | None: ...
+
+    async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None: ...
 
     async def save_plan_draft(
         self,
@@ -482,6 +514,20 @@ async def get_plan_version(
     return result
 
 
+@router.get("/plan-activation-states/{symbol}", response_model=ActivePlanView)
+async def get_plan_activation_state(
+    symbol: PlanSymbolPath,
+    service: PlanServiceDependency,
+) -> ActivePlanView:
+    value = await service.get_plan_activation_state(symbol=symbol)
+    if value is None:
+        raise ApiError(ApiErrorCode.NOT_FOUND)
+    result = validate_api_response(value, ActivePlanView)
+    if result.symbol != symbol:
+        raise RuntimeError("plan service returned a mismatched activation state")
+    return result
+
+
 @router.post("/plan-drafts", response_model=PlanVersionView)
 async def save_plan_draft(
     command: PlanDraftCommand,
@@ -492,7 +538,13 @@ async def save_plan_draft(
         await service.save_plan_draft(command=command, context=context),
         PlanVersionView,
     )
-    if not _matches_plan(result, load_plan_json(command.plan_json)):
+    submitted_plan = load_plan_json(command.plan_json)
+    expected_plan = (
+        submitted_plan
+        if command.base_plan_version_id is None
+        else submitted_plan.model_copy(update={"version": result.version})
+    )
+    if not _matches_plan(result, expected_plan):
         raise RuntimeError("plan service returned a mismatched draft")
     if result.status is not PlanVersionStatus.DRAFT:
         raise RuntimeError("plan service returned a non-draft version")
@@ -520,6 +572,8 @@ async def import_plan(
     )
     if not _matches_plan(result, plan):
         raise RuntimeError("plan service returned a mismatched import")
+    if result.symbol != command.symbol:
+        raise RuntimeError("plan service returned an import for another symbol")
     if result.status is not PlanVersionStatus.DRAFT:
         raise RuntimeError("plan service returned a non-draft import")
     if result.review_issues:
@@ -608,6 +662,12 @@ def _valid_utf8_text(value: str, *, max_bytes: int | None = None) -> str:
     return value
 
 
+def _validate_web_plan(plan: TradePlan) -> TradePlan:
+    if plan.version > MAX_SAFE_INTEGER:
+        raise ValueError("plan version exceeds the Web safe-integer limit")
+    return plan
+
+
 def _matches_plan(result: PlanVersionView, plan: TradePlan) -> bool:
     return (
         result.plan_id == plan.plan_id
@@ -619,6 +679,7 @@ def _matches_plan(result: PlanVersionView, plan: TradePlan) -> bool:
 
 __all__ = [
     "ActivePlanView",
+    "MAX_SAFE_INTEGER",
     "PlanActivationCommand",
     "PlanDeactivationCommand",
     "PlanDraftCommand",
@@ -628,6 +689,7 @@ __all__ = [
     "PlanImportCommand",
     "PlanOperationService",
     "PlanVersionPage",
+    "PlanVersionSummary",
     "PlanVersionView",
     "router",
 ]

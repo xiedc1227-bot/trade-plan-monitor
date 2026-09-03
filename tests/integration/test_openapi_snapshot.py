@@ -20,6 +20,7 @@ LOCAL_WEB_SPEC_PATH = PROJECT_ROOT / "docs" / "specifications" / "monitoring" / 
 LOCAL_WEB_SPEC_ZH_PATH = (
     PROJECT_ROOT / "docs" / "specifications" / "monitoring" / "SPEC-local-web.zh-CN.md"
 )
+MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 APPROVED_PATHS = {
     "/api/v1/ai-runtime",
@@ -49,6 +50,7 @@ APPROVED_PATHS = {
     "/api/v1/health",
     "/api/v1/health/symbols/{symbol}",
     "/api/v1/market-indexes/{indexCode}/bars",
+    "/api/v1/plan-activation-states/{symbol}",
     "/api/v1/plan-activations",
     "/api/v1/plan-deactivations",
     "/api/v1/plan-drafts",
@@ -151,6 +153,54 @@ def test_openapi_contains_only_approved_paths_and_public_error_schemas() -> None
             for status_code in PUBLIC_ERROR_STATUSES:
                 schema = responses[status_code]["content"]["application/json"]["schema"]
                 assert schema == {"$ref": "#/components/schemas/ErrorResponse"}
+
+
+def test_plan_contract_exposes_server_versioning_and_lightweight_summaries() -> None:
+    document = _load_generator().build_openapi_document()
+    schemas = document["components"]["schemas"]
+
+    draft = schemas["PlanDraftCommand"]
+    assert "basePlanVersionId" in draft["properties"]
+    assert "basePlanVersionId" not in draft["required"]
+
+    imported = schemas["PlanImportCommand"]
+    assert "symbol" in imported["required"]
+
+    page = schemas["PlanVersionPage"]
+    assert page["properties"]["items"]["items"] == {
+        "$ref": "#/components/schemas/PlanVersionSummary"
+    }
+    summary_fields = set(schemas["PlanVersionSummary"]["properties"])
+    assert summary_fields == {
+        "canActivate",
+        "createdAt",
+        "id",
+        "planHash",
+        "planId",
+        "revision",
+        "status",
+        "symbol",
+        "version",
+    }
+    detail_only_fields = {
+        "planJson",
+        "reviewIssues",
+        "sourceText",
+        "validationIssues",
+    }
+    assert detail_only_fields <= set(schemas["PlanVersionView"]["properties"])
+    assert detail_only_fields.isdisjoint(summary_fields)
+    assert schemas["PlanVersionSummary"]["properties"]["version"]["maximum"] == (MAX_SAFE_INTEGER)
+    assert schemas["PlanVersionSummary"]["properties"]["revision"]["maximum"] == (MAX_SAFE_INTEGER)
+    assert draft["properties"]["expectedRevision"]["maximum"] == MAX_SAFE_INTEGER
+    assert imported["properties"]["expectedRevision"]["maximum"] == MAX_SAFE_INTEGER
+    assert schemas["PlanActivationCommand"]["properties"]["expectedRevision"]["maximum"] == (
+        MAX_SAFE_INTEGER - 2
+    )
+    assert schemas["PlanDeactivationCommand"]["properties"]["expectedRevision"]["maximum"] == (
+        MAX_SAFE_INTEGER - 1
+    )
+    assert schemas["ActivePlanView"]["properties"]["revision"]["maximum"] == (MAX_SAFE_INTEGER)
 
 
 def test_typescript_contract_is_generated_from_the_snapshot() -> None:

@@ -1058,6 +1058,7 @@ _EXTRACTION_ID = "20000000-0000-4000-8000-000000000001"
 _PROVIDER_ID = "30000000-0000-4000-8000-000000000001"
 _PROVIDER_TEST_ID = "40000000-0000-4000-8000-000000000001"
 _API_NOW = datetime(2026, 8, 24, 11, 0, tzinfo=_SHANGHAI)
+_MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 
 def _sample_plan_document() -> tuple[str, str]:
@@ -1097,6 +1098,28 @@ def _plan_version_payload(
         "canActivate": not blocked,
         "revision": 3,
         "createdAt": _API_NOW,
+    }
+
+
+def _plan_version_summary_payload(
+    *,
+    version_id: str = _PLAN_VERSION_ID,
+    blocked: bool = False,
+) -> dict[str, object]:
+    payload = _plan_version_payload(version_id=version_id, blocked=blocked)
+    return {
+        key: payload[key]
+        for key in (
+            "id",
+            "planId",
+            "version",
+            "symbol",
+            "planHash",
+            "status",
+            "canActivate",
+            "revision",
+            "createdAt",
+        )
     }
 
 
@@ -1154,7 +1177,7 @@ class _FakePlanOperationService:
     ) -> object:
         self.calls.append(("list_plan_versions", offset, limit, symbol, status, can_activate))
         return {
-            "items": [_plan_version_payload()],
+            "items": [_plan_version_summary_payload()],
             "offset": offset,
             "limit": limit,
             "total": 1,
@@ -1167,6 +1190,18 @@ class _FakePlanOperationService:
         if version_id != _PLAN_VERSION_ID:
             return None
         return _plan_version_payload()
+
+    async def get_plan_activation_state(self, *, symbol: str) -> object | None:
+        self.calls.append(("get_plan_activation_state", symbol))
+        if symbol != "003043.SZ":
+            return None
+        return {
+            "symbol": symbol,
+            "planVersionId": _PLAN_VERSION_ID,
+            "active": True,
+            "revision": 4,
+            "changedAt": _API_NOW,
+        }
 
     async def save_plan_draft(self, *, command: object, context: object) -> object:
         self.calls.append(
@@ -1184,6 +1219,7 @@ class _FakePlanOperationService:
             (
                 "import_plan",
                 command.format,
+                command.symbol,
                 command.expected_revision,
                 context.idempotency_key,
             )
@@ -1385,7 +1421,17 @@ def test_plan_versions_are_paginated_and_details_revalidate_canonical_identity()
     missing = client.get(f"/api/v1/plan-versions/{missing_id}")
 
     assert page.status_code == 200
-    assert page.json()["items"][0]["planId"] == "huaya-smart"
+    assert set(page.json()["items"][0]) == {
+        "canActivate",
+        "createdAt",
+        "id",
+        "planHash",
+        "planId",
+        "revision",
+        "status",
+        "symbol",
+        "version",
+    }
     assert page.json()["limit"] == 20
     assert detail.status_code == 200
     assert detail.json()["planJson"].startswith('{"activation"')
@@ -1394,6 +1440,28 @@ def test_plan_versions_are_paginated_and_details_revalidate_canonical_identity()
         ("list_plan_versions", 0, 20, None, None, None),
         ("get_plan_version", _PLAN_VERSION_ID),
         ("get_plan_version", missing_id),
+    ]
+
+
+def test_plan_activation_state_is_read_from_the_authoritative_service() -> None:
+    service = _FakePlanOperationService()
+    client = TestClient(create_app(plan_service=service))
+
+    active = client.get("/api/v1/plan-activation-states/003043.SZ")
+    missing = client.get("/api/v1/plan-activation-states/600000.SH")
+
+    assert active.status_code == 200
+    assert active.json() == {
+        "active": True,
+        "changedAt": "2026-08-24T11:00:00+08:00",
+        "planVersionId": _PLAN_VERSION_ID,
+        "revision": 4,
+        "symbol": "003043.SZ",
+    }
+    _assert_error_envelope(missing, status=404, code="NOT_FOUND")
+    assert service.calls == [
+        ("get_plan_activation_state", "003043.SZ"),
+        ("get_plan_activation_state", "600000.SH"),
     ]
 
 
@@ -1472,7 +1540,7 @@ def test_plan_version_filters_revalidate_service_items(
 ) -> None:
     class _MismatchedFilterService(_FakePlanOperationService):
         async def list_plan_versions(self, **kwargs: object) -> object:
-            payload = _plan_version_payload() | payload_update
+            payload = _plan_version_summary_payload() | payload_update
             return {
                 "items": [payload],
                 "offset": kwargs["offset"],
@@ -1507,14 +1575,217 @@ def test_plan_draft_and_import_require_current_revision_and_idempotency_context(
     imported = client.post(
         "/api/v1/plan-imports",
         headers={"Idempotency-Key": "plan-import-1"},
-        json={"format": "JSON", "document": plan_json, "expectedRevision": 2},
+        json={
+            "format": "JSON",
+            "document": plan_json,
+            "symbol": "003043.SZ",
+            "expectedRevision": 2,
+        },
     )
 
     assert draft.status_code == 200
     assert imported.status_code == 200
     assert service.calls[0][:3] == ("save_plan_draft", 0, "plan-write-1")
     assert re.fullmatch(r"[0-9a-f]{32}", service.calls[0][3])
-    assert service.calls[1] == ("import_plan", "JSON", 2, "plan-import-1")
+    assert service.calls[1] == (
+        "import_plan",
+        "JSON",
+        "003043.SZ",
+        2,
+        "plan-import-1",
+    )
+
+
+@pytest.mark.parametrize("symbol", [None, "600000.SH"], ids=["missing", "mismatched"])
+def test_plan_import_requires_the_document_symbol_before_service(
+    symbol: str | None,
+) -> None:
+    service = _FakePlanOperationService()
+    plan_json, _ = _sample_plan_document()
+    body: dict[str, object] = {
+        "format": "JSON",
+        "document": plan_json,
+        "expectedRevision": 0,
+    }
+    if symbol is not None:
+        body["symbol"] = symbol
+
+    response = TestClient(create_app(plan_service=service)).post(
+        "/api/v1/plan-imports",
+        headers={"Idempotency-Key": "import-symbol-boundary"},
+        json=body,
+    )
+
+    _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+
+
+def test_plan_writes_reject_javascript_unsafe_versions_before_service() -> None:
+    service = _FakePlanOperationService()
+    plan = load_plan_json(_sample_plan_document()[0]).model_copy(
+        update={"version": _MAX_SAFE_INTEGER + 1}
+    )
+    plan_json = dump_plan_json(plan)
+    client = TestClient(create_app(plan_service=service))
+
+    draft = client.post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "unsafe-draft-version"},
+        json={
+            "planJson": plan_json,
+            "sourceText": "unsafe draft version",
+            "reviewIssues": [],
+            "expectedRevision": 0,
+        },
+    )
+    imported = client.post(
+        "/api/v1/plan-imports",
+        headers={"Idempotency-Key": "unsafe-import-version"},
+        json={
+            "format": "JSON",
+            "document": plan_json,
+            "symbol": plan.symbol,
+            "expectedRevision": 0,
+        },
+    )
+
+    _assert_error_envelope(draft, status=422, code="VALIDATION_ERROR")
+    _assert_error_envelope(imported, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    (
+        (
+            "/api/v1/plan-activations",
+            {
+                "planVersionId": _PLAN_VERSION_ID,
+                "expectedRevision": _MAX_SAFE_INTEGER - 1,
+            },
+        ),
+        (
+            "/api/v1/plan-deactivations",
+            {"symbol": "003043.SZ", "expectedRevision": _MAX_SAFE_INTEGER},
+        ),
+    ),
+)
+def test_plan_state_mutations_reserve_a_safe_integer_for_the_next_revision(
+    path: str,
+    body: dict[str, object],
+) -> None:
+    service = _FakePlanOperationService()
+
+    response = TestClient(create_app(plan_service=service)).post(
+        path,
+        headers={"Idempotency-Key": "unsafe-next-revision"},
+        json=body,
+    )
+
+    _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
+    assert service.calls == []
+
+
+def test_plan_reads_reject_javascript_unsafe_versions_from_service() -> None:
+    class _UnsafeVersionService(_FakePlanOperationService):
+        async def get_plan_version(self, *, version_id: str) -> object | None:
+            plan = load_plan_json(_sample_plan_document()[0]).model_copy(
+                update={"version": _MAX_SAFE_INTEGER + 1}
+            )
+            payload = _plan_version_payload()
+            payload.update(
+                {
+                    "planHash": plan_sha256(plan),
+                    "planJson": dump_plan_json(plan),
+                    "version": plan.version,
+                }
+            )
+            return payload
+
+    response = TestClient(
+        create_app(plan_service=_UnsafeVersionService()),
+        raise_server_exceptions=False,
+    ).get(f"/api/v1/plan-versions/{_PLAN_VERSION_ID}")
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_plan_import_rejects_a_service_response_for_another_symbol() -> None:
+    class _CrossSymbolImportService(_FakePlanOperationService):
+        async def import_plan(self, *, command: object, context: object) -> object:
+            del context
+            plan = load_plan_json(command.document).model_copy(update={"symbol": "000001.SZ"})
+            payload = _plan_version_payload()
+            payload.update(
+                {
+                    "planHash": plan_sha256(plan),
+                    "planJson": dump_plan_json(plan),
+                    "sourceText": command.document,
+                    "symbol": plan.symbol,
+                }
+            )
+            return payload
+
+    plan_json, _ = _sample_plan_document()
+    response = TestClient(
+        create_app(plan_service=_CrossSymbolImportService()),
+        raise_server_exceptions=False,
+    ).post(
+        "/api/v1/plan-imports",
+        headers={"Idempotency-Key": "cross-symbol-response"},
+        json={
+            "format": "JSON",
+            "document": plan_json,
+            "symbol": "003043.SZ",
+            "expectedRevision": 0,
+        },
+    )
+
+    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+
+
+def test_plan_draft_accepts_a_base_identity_and_revalidates_the_server_version() -> None:
+    base_id = "10000000-0000-4000-8000-000000000099"
+
+    class _ServerVersionService(_FakePlanOperationService):
+        async def save_plan_draft(self, *, command: object, context: object) -> object:
+            self.calls.append(
+                (
+                    "save_plan_draft",
+                    str(command.base_plan_version_id),
+                    context.idempotency_key,
+                )
+            )
+            assigned = load_plan_json(command.plan_json).model_copy(update={"version": 2})
+            payload = _plan_version_payload()
+            payload.update(
+                {
+                    "planHash": plan_sha256(assigned),
+                    "planJson": dump_plan_json(assigned),
+                    "sourceText": command.source_text,
+                    "version": assigned.version,
+                }
+            )
+            return payload
+
+    service = _ServerVersionService()
+    submitted = load_plan_json(_sample_plan_document()[0]).model_copy(update={"version": 999})
+    response = TestClient(create_app(plan_service=service)).post(
+        "/api/v1/plan-drafts",
+        headers={"Idempotency-Key": "server-versioned-draft"},
+        json={
+            "basePlanVersionId": base_id,
+            "planJson": dump_plan_json(submitted),
+            "sourceText": "server versioned draft",
+            "reviewIssues": [],
+            "expectedRevision": 0,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["version"] == 2
+    assert load_plan_json(response.json()["planJson"]).version == 2
+    assert service.calls == [("save_plan_draft", base_id, "server-versioned-draft")]
 
 
 def test_plan_draft_rejects_a_service_response_for_another_plan_identity() -> None:
@@ -1570,7 +1841,12 @@ def test_plan_draft_and_import_cannot_return_an_active_version() -> None:
     imported = client.post(
         "/api/v1/plan-imports",
         headers={"Idempotency-Key": "active-import"},
-        json={"format": "JSON", "document": plan_json, "expectedRevision": 0},
+        json={
+            "format": "JSON",
+            "document": plan_json,
+            "symbol": "003043.SZ",
+            "expectedRevision": 0,
+        },
     )
 
     _assert_error_envelope(draft, status=500, code="INTERNAL_ERROR")
@@ -1765,6 +2041,7 @@ def test_plan_activation_and_deactivation_require_an_advanced_revision_receipt()
             {
                 "format": "JSON",
                 "document": _sample_plan_document()[0],
+                "symbol": "003043.SZ",
                 "expectedRevision": 0,
             },
         ),
@@ -1808,7 +2085,11 @@ def test_plan_mutations_require_idempotency_key(path: str, body: dict[str, objec
         ),
         (
             "/api/v1/plan-imports",
-            {"format": "JSON", "document": _sample_plan_document()[0]},
+            {
+                "format": "JSON",
+                "document": _sample_plan_document()[0],
+                "symbol": "003043.SZ",
+            },
         ),
         (
             "/api/v1/plan-extractions",

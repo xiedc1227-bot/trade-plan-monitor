@@ -1043,6 +1043,7 @@ export type PlanDeactivationCommand = {
 export type PlanDocumentFormat = "JSON" | "YAML";
 
 export type PlanDraftCommand = {
+  basePlanVersionId?: (string) | (null);
   expectedRevision: number;
   planJson: string;
   reviewIssues?: Array<components["schemas"]["DraftReviewIssue"]>;
@@ -1080,16 +1081,29 @@ export type PlanImportCommand = {
   document: string;
   expectedRevision: number;
   format: components["schemas"]["PlanDocumentFormat"];
+  symbol: string;
 };
 
 export type PlanVersionPage = {
-  items?: Array<components["schemas"]["PlanVersionView"]>;
+  items?: Array<components["schemas"]["PlanVersionSummary"]>;
   limit: number;
   offset: number;
   total: number;
 };
 
 export type PlanVersionStatus = "DRAFT" | "ACTIVE" | "SUPERSEDED";
+
+export type PlanVersionSummary = {
+  canActivate: boolean;
+  createdAt: string;
+  id: string;
+  planHash: string;
+  planId: string;
+  revision: number;
+  status: components["schemas"]["PlanVersionStatus"];
+  symbol: string;
+  version: number;
+};
 
 export type PlanVersionView = {
   canActivate: boolean;
@@ -1517,6 +1531,7 @@ export interface components {
     PlanImportCommand: PlanImportCommand;
     PlanVersionPage: PlanVersionPage;
     PlanVersionStatus: PlanVersionStatus;
+    PlanVersionSummary: PlanVersionSummary;
     PlanVersionView: PlanVersionView;
     PositionLotClosureCommand: PositionLotClosureCommand;
     PositionLotClosureView: PositionLotClosureView;
@@ -3840,6 +3855,81 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["MarketIndexBarPage"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-activation-states/{symbol}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          symbol: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ActivePlanView"];
           };
         };
         "400": {

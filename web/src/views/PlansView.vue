@@ -7,6 +7,7 @@ import type {
   PlanDeactivationCommand,
   PlanDraftCommand,
   PlanImportCommand,
+  PlanVersionSummary,
   PlanVersionView,
 } from "../api/generated";
 import ActivationDiffDialog from "../components/plans/ActivationDiffDialog.vue";
@@ -15,10 +16,12 @@ import StructuredPlanEditor, {
 } from "../components/plans/StructuredPlanEditor.vue";
 
 interface Props {
+  activePlan?: PlanVersionView | null;
   activeState?: ActivePlanView | null;
   busy?: boolean;
+  selectedPlan?: PlanVersionView | null;
   selectedPlanId?: string | null;
-  versions: readonly PlanVersionView[];
+  versions: readonly PlanVersionSummary[];
 }
 
 interface Emits {
@@ -31,8 +34,10 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  activePlan: null,
   activeState: null,
   busy: false,
+  selectedPlan: null,
   selectedPlanId: null,
 });
 const emit = defineEmits<Emits>();
@@ -43,45 +48,48 @@ const dialogAction = shallowRef<"ACTIVATE" | "DEACTIVATE" | null>(null);
 const pendingSelectionId = shallowRef<string | null>(null);
 const pendingSelectionEmits = shallowRef(false);
 const selectedPlanSnapshot = shallowRef<PlanVersionView | null>(
-  props.versions.find((plan) => plan.id === selectedId.value) ?? null,
+  props.selectedPlan?.id === selectedId.value ? props.selectedPlan : null,
 );
 
-const selectedPlan = computed(() => {
-  const current = props.versions.find((plan) => plan.id === selectedId.value);
-  if (current !== undefined) {
-    return current;
+const currentPlan = computed(() => {
+  if (props.selectedPlan?.id === selectedId.value) {
+    return props.selectedPlan;
   }
   return editorDirty.value && selectedPlanSnapshot.value?.id === selectedId.value
     ? selectedPlanSnapshot.value
     : null;
 });
 const activeVersion = computed(
-  () =>
-    props.versions.find((plan) => plan.id === props.activeState?.planVersionId) ?? null,
+  () => {
+    const activeId = props.activeState?.planVersionId;
+    if (activeId === null || activeId === undefined) return null;
+    if (props.activePlan?.id === activeId) return props.activePlan;
+    return currentPlan.value?.id === activeId ? currentPlan.value : null;
+  },
 );
 const pendingSelection = computed(
   () => props.versions.find((plan) => plan.id === pendingSelectionId.value) ?? null,
 );
 const activationBlocked = computed(
   () =>
-    selectedPlan.value === null ||
-    selectedPlan.value.status !== "DRAFT" ||
-    !selectedPlan.value.canActivate ||
-    selectedPlan.value.reviewIssues?.some(
+    currentPlan.value === null ||
+    currentPlan.value.status !== "DRAFT" ||
+    !currentPlan.value.canActivate ||
+    currentPlan.value.reviewIssues?.some(
       (issue) => issue.material && issue.resolved !== true,
     ) === true ||
-    selectedPlan.value.validationIssues?.some(
+    currentPlan.value.validationIssues?.some(
       (issue) => issue.activationBlocking,
     ) === true ||
-    !hasAuthoritativeActivationState(selectedPlan.value) ||
+    !hasAuthoritativeActivationState(currentPlan.value) ||
     editorDirty.value ||
     props.busy,
 );
 const deactivationBlocked = computed(
   () =>
-    selectedPlan.value === null ||
-    selectedPlan.value.status !== "ACTIVE" ||
-    !hasAuthoritativeDeactivationState(selectedPlan.value) ||
+    currentPlan.value === null ||
+    currentPlan.value.status !== "ACTIVE" ||
+    !hasAuthoritativeDeactivationState(currentPlan.value) ||
     props.busy,
 );
 
@@ -98,11 +106,10 @@ watch(
 );
 
 watch(
-  () => [props.versions, props.selectedPlanId] as const,
+  () => [props.versions, props.selectedPlanId, props.selectedPlan] as const,
   () => {
-    const current = props.versions.find((plan) => plan.id === selectedId.value);
-    if (current !== undefined) {
-      selectedPlanSnapshot.value = current;
+    if (props.selectedPlan?.id === selectedId.value) {
+      selectedPlanSnapshot.value = props.selectedPlan;
     }
     const preferred = props.selectedPlanId;
     if (preferred !== null && props.versions.some((plan) => plan.id === preferred)) {
@@ -151,7 +158,7 @@ function requestSelection(planVersionId: string, shouldEmit: boolean): void {
 function applySelection(planVersionId: string, shouldEmit: boolean): void {
   selectedId.value = planVersionId;
   selectedPlanSnapshot.value =
-    props.versions.find((plan) => plan.id === planVersionId) ?? null;
+    props.selectedPlan?.id === planVersionId ? props.selectedPlan : null;
   editorDirty.value = false;
   dialogAction.value = null;
   pendingSelectionId.value = null;
@@ -229,7 +236,7 @@ function deactivate(command: PlanDeactivationCommand): void {
     <header class="plans-view__header">
       <div>
         <p class="plans-view__eyebrow">VERSIONED PLAN CONTROL</p>
-        <h1 id="plans-view-title">计划版本与激活</h1>
+        <h2 id="plans-view-title">计划版本与激活</h2>
       </div>
       <p>活动版本不可原地编辑。</p>
     </header>
@@ -249,7 +256,7 @@ function deactivate(command: PlanDeactivationCommand): void {
         </button>
       </nav>
 
-      <main class="plans-view__workspace">
+      <div class="plans-view__workspace">
         <section
           v-if="pendingSelection"
           class="plans-view__discard"
@@ -271,10 +278,10 @@ function deactivate(command: PlanDeactivationCommand): void {
           </div>
         </section>
 
-        <template v-if="selectedPlan">
+        <template v-if="currentPlan">
           <StructuredPlanEditor
             :busy="busy"
-            :plan="selectedPlan"
+            :plan="currentPlan"
             @dirty-change="editorDirty = $event"
             @export-document="emit('exportPlan', $event)"
             @import-document="emit('importPlan', $event)"
@@ -284,11 +291,11 @@ function deactivate(command: PlanDeactivationCommand): void {
           <section class="plans-view__activation" aria-labelledby="plan-activation-title">
             <h2 id="plan-activation-title">启停用控制</h2>
             <p v-if="editorDirty" role="status">先保存并重新取得后端校验结果，再请求激活。</p>
-            <p v-else-if="!selectedPlan.canActivate && selectedPlan.status === 'DRAFT'" role="status">
+            <p v-else-if="!currentPlan.canActivate && currentPlan.status === 'DRAFT'" role="status">
               后端报告仍有激活阻断项。
             </p>
             <button
-              v-if="selectedPlan.status === 'DRAFT'"
+              v-if="currentPlan.status === 'DRAFT'"
               data-testid="request-activation"
               type="button"
               :disabled="activationBlocked"
@@ -297,7 +304,7 @@ function deactivate(command: PlanDeactivationCommand): void {
               查看差异并请求激活
             </button>
             <button
-              v-else-if="selectedPlan.status === 'ACTIVE'"
+              v-else-if="currentPlan.status === 'ACTIVE'"
               data-testid="request-deactivation"
               type="button"
               :disabled="deactivationBlocked"
@@ -309,12 +316,12 @@ function deactivate(command: PlanDeactivationCommand): void {
           </section>
         </template>
         <p v-else>选择一个计划版本以继续。</p>
-      </main>
+      </div>
     </div>
 
     <ActivationDiffDialog
       v-if="
-        selectedPlan &&
+        currentPlan &&
         dialogAction &&
         activeState &&
         ((dialogAction === 'ACTIVATE' && !activationBlocked) ||
@@ -322,7 +329,7 @@ function deactivate(command: PlanDeactivationCommand): void {
       "
       :action="dialogAction"
       :busy="busy"
-      :candidate="selectedPlan"
+      :candidate="currentPlan"
       :current="activeVersion"
       :expected-revision="activeState.revision"
       open

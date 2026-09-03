@@ -318,7 +318,7 @@
             "title": "Planversionid"
           },
           "revision": {
-            "maximum": 9.223372036854776e+18,
+            "maximum": 9007199254740991.0,
             "minimum": 0.0,
             "title": "Revision",
             "type": "integer"
@@ -6647,7 +6647,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
+            "maximum": 9007199254740989.0,
             "minimum": 0.0,
             "title": "Expectedrevision",
             "type": "integer"
@@ -6669,7 +6669,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
+            "maximum": 9007199254740990.0,
             "minimum": 0.0,
             "title": "Expectedrevision",
             "type": "integer"
@@ -6698,8 +6698,20 @@
       "PlanDraftCommand": {
         "additionalProperties": false,
         "properties": {
+          "basePlanVersionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseplanversionid"
+          },
           "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
+            "maximum": 9007199254740991.0,
             "minimum": 0.0,
             "title": "Expectedrevision",
             "type": "integer"
@@ -6738,7 +6750,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
+            "maximum": 9007199254740991.0,
             "minimum": 0.0,
             "title": "Expectedrevision",
             "type": "integer"
@@ -6950,16 +6962,22 @@
             "type": "string"
           },
           "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
+            "maximum": 9007199254740991.0,
             "minimum": 0.0,
             "title": "Expectedrevision",
             "type": "integer"
           },
           "format": {
             "$ref": "#/components/schemas/PlanDocumentFormat"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
           }
         },
         "required": [
+          "symbol",
           "format",
           "document",
           "expectedRevision"
@@ -6973,7 +6991,7 @@
           "items": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/PlanVersionView"
+              "$ref": "#/components/schemas/PlanVersionSummary"
             },
             "maxItems": 100,
             "title": "Items",
@@ -7015,6 +7033,72 @@
         ],
         "title": "PlanVersionStatus",
         "type": "string"
+      },
+      "PlanVersionSummary": {
+        "additionalProperties": false,
+        "description": "Bounded list projection for one immutable plan-version identity.",
+        "properties": {
+          "canActivate": {
+            "title": "Canactivate",
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "planHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Planid",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanVersionStatus"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "planId",
+          "version",
+          "symbol",
+          "planHash",
+          "status",
+          "canActivate",
+          "revision",
+          "createdAt"
+        ],
+        "title": "PlanVersionSummary",
+        "type": "object"
       },
       "PlanVersionView": {
         "additionalProperties": false,
@@ -7063,7 +7147,7 @@
             "type": "array"
           },
           "revision": {
-            "maximum": 9.223372036854776e+18,
+            "maximum": 9007199254740991.0,
             "minimum": 0.0,
             "title": "Revision",
             "type": "integer"
@@ -7093,6 +7177,7 @@
           },
           "version": {
             "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
             "title": "Version",
             "type": "integer"
           }
@@ -7104,11 +7189,11 @@
           "symbol",
           "planHash",
           "status",
-          "planJson",
-          "sourceText",
           "canActivate",
           "revision",
-          "createdAt"
+          "createdAt",
+          "planJson",
+          "sourceText"
         ],
         "title": "PlanVersionView",
         "type": "object"
@@ -13907,6 +13992,149 @@
         "summary": "List Market Index Bars",
         "tags": [
           "market-indexes"
+        ]
+      }
+    },
+    "/api/v1/plan-activation-states/{symbol}": {
+      "get": {
+        "operationId": "get_plan_activation_state_api_v1_plan_activation_states__symbol__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivePlanView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Plan Activation State",
+        "tags": [
+          "plans"
         ]
       }
     },

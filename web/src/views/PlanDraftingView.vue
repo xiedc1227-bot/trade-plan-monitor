@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import type { AIPlanApi } from "../api/ai";
+import type { PlanApi } from "../api/plans";
+import PlanImportForm from "../components/plans/PlanImportForm.vue";
 import PlanWorkbench from "../components/plans/PlanWorkbench.vue";
 import { usePlanDrafting } from "../composables/usePlanDrafting";
+import { usePlans } from "../composables/usePlans";
+import PlansView from "./PlansView.vue";
 
 interface Props {
   api?: AIPlanApi;
   createIdempotencyKey?: () => string;
+  createPlanIdempotencyKey?: () => string;
+  planApi?: PlanApi;
   pollIntervalMs?: number;
 }
 
@@ -17,13 +23,19 @@ const drafting = usePlanDrafting({
     : { createIdempotencyKey: props.createIdempotencyKey }),
   ...(props.pollIntervalMs === undefined ? {} : { pollIntervalMs: props.pollIntervalMs }),
 });
+const plans = usePlans({
+  ...(props.planApi === undefined ? {} : { api: props.planApi }),
+  ...(props.createPlanIdempotencyKey === undefined
+    ? {}
+    : { createIdempotencyKey: props.createPlanIdempotencyKey }),
+});
 </script>
 
 <template>
-  <main class="plan-drafting-view">
+  <section class="plan-drafting-view" aria-labelledby="plan-workspace-title">
     <header class="plan-drafting-view__header">
       <p>CONFIG-DRIVEN AI DRAFTING</p>
-      <h1>计划工作台</h1>
+      <h1 id="plan-workspace-title">计划工作台</h1>
     </header>
     <p v-if="drafting.loading.value" class="plan-drafting-view__notice" role="status">
       正在读取 AI 配置
@@ -66,15 +78,59 @@ const drafting = usePlanDrafting({
         </template>
       </PlanWorkbench>
     </template>
-  </main>
+
+    <section class="plan-drafting-view__persistence" aria-label="持久计划版本">
+      <p v-if="plans.loading.value" class="plan-drafting-view__notice" role="status">
+        正在读取持久计划版本
+      </p>
+      <p v-if="plans.errorMessage.value" class="plan-drafting-view__error" role="alert">
+        {{ plans.errorMessage.value }}
+      </p>
+      <button
+        v-if="plans.errorMessage.value && !plans.loading.value"
+        class="plan-drafting-view__retry"
+        type="button"
+        @click="plans.refresh"
+      >
+        重新读取计划
+      </button>
+      <PlanImportForm
+        v-if="!plans.loading.value && !plans.errorMessage.value"
+        :busy="plans.busy.value"
+        :expected-revision="0"
+        @import-plan="plans.importPlan"
+      />
+      <PlansView
+        v-if="plans.versions.value.length > 0"
+        :active-plan="plans.activePlan.value"
+        :active-state="plans.activeState.value"
+        :busy="plans.busy.value"
+        :selected-plan="plans.selectedPlan.value"
+        :selected-plan-id="plans.selectedPlanId.value"
+        :versions="plans.versions.value"
+        @activate-plan="plans.activatePlan"
+        @deactivate-plan="plans.deactivatePlan"
+        @import-plan="plans.importPlan"
+        @save-draft="plans.saveDraft"
+        @select-plan="plans.selectPlan"
+      />
+    </section>
+  </section>
 </template>
 
 <style scoped>
 .plan-drafting-view {
+  display: grid;
+  gap: var(--space-7);
   box-sizing: border-box;
   width: 100%;
   padding: var(--space-6);
   color: var(--color-text-mineral);
+}
+
+.plan-drafting-view__persistence {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .plan-drafting-view__notice,
@@ -111,6 +167,18 @@ const drafting = usePlanDrafting({
 
 .plan-drafting-view__error {
   border-inline-start: 0.25rem solid var(--color-signal-risk-vermilion);
+}
+
+.plan-drafting-view__retry {
+  width: fit-content;
+  min-height: 2.75rem;
+  margin: 0 auto;
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-surface-ink);
+  font-weight: 700;
+  background: var(--color-signal-info-cyan);
+  border: 0;
+  border-radius: var(--radius-control);
 }
 
 .plan-drafting-view__draft pre {
