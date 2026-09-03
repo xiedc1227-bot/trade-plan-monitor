@@ -15,11 +15,7 @@ function createRoutePlaceholder(name: string, title: string, description: string
   });
 }
 
-const DashboardRoute = createRoutePlaceholder(
-  "DashboardRoute",
-  "监控总览",
-  "监控视图将在后续任务中提供。",
-);
+const DashboardRoute = () => import("./views/DashboardRouteView.vue");
 const StockDetailRoute = createRoutePlaceholder(
   "StockDetailRoute",
   "个股详情",

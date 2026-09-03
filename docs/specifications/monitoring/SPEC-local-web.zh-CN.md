@@ -147,7 +147,7 @@ OpenAPI 快照 SHA-256：`882d762abc4872a9970c34e49c06eec4427a286b1a1249a106686d
 ### T042 无障碍 Vue 应用外壳边界
 
 - `main.ts` 只在 `#app` 存在时挂载根 `App.vue`，为该生产根安装唯一应用路由，并保留工具链测试使用的强类型未挂载组件工厂。导入模块不会创建 API 客户端、store、Socket、定时器或领域状态。
-- 生产路由精确声明十条路径。`/plans` 和 `/plans/:id` 是延迟加载的真实计划工作台，四条 `/backtests...` 路径是延迟加载的真实研究视图，其余四条历史路由在获批视图接通前仍为带标签占位页。路由层不包含领域规则或可变共享行情状态。
+- 生产路由精确声明十条路径。`/`、`/plans` 和 `/plans/:id` 是延迟加载的真实监控/工作台视图，`/system` 和四条 `/backtests...` 路径是延迟加载的真实诊断/研究视图；只有 `/stocks/:symbol` 和 `/alerts` 在获批视图接通前仍为带标签历史占位页。路由层不包含领域规则或可变共享行情状态。
 - `AppShell` 只负责 landmark、桌面端与移动端导航、路由出口、一个强类型可选 `connectionBanner` 插槽，以及一个局部移动菜单布尔值。只有提供插槽时才渲染横幅包装器，并使用礼貌级状态语义；连接与健康状态所有权仍位于外壳之外。
 - 跳转链接把焦点移到持久的 `#main-content` landmark。导航使用原生链接和原生菜单按钮，具备清晰焦点、`aria-controls` 与 `aria-expanded`；Escape 把焦点恢复到菜单按钮，而移动端链接导航会关闭隐藏菜单并把焦点移到主内容。
 - 桌面导航在 `48rem` 替代移动端 disclosure。外壳动态效果仅限展示 CSS，`prefers-reduced-motion: reduce` 分支把动画/过渡时长缩短到 `0.01ms`。T043 设计变量、API 客户端、Pinia/store 与恢复行为，T044 流生命周期，后续业务视图、T052 已安装组合、T041 生成契约和 T024 判断语义均保持不变。
@@ -315,13 +315,20 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 真实组合不会捏造缺失的权威投影。尚无持久投影的总览、股票、持仓、提醒和实时板块指数读取继续以稳定的 `SERVICE_UNAVAILABLE` 封闭失败；WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
 - 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储或组合错误不得被静默转换成健康响应；只有已知未验证的实时前置条件会产生有界的 `DEGRADED` 状态。
 
+### WEBF06 监控总览路由边界
+
+- `/` 惰性加载 `DashboardRouteView`，它是既有 `monitor` Pinia store 与 `DashboardView` 之上的薄组合表面。store 只由权威 `GET /api/v1/dashboard` 快照生命周期填充；该路由绝不调用供应商、判断条件、映射板块、计算新鲜度或写入判断。
+- 路由把不可变的后端 `connectionStatus`、统计、数据年龄、观察时间、股票摘要、共用 `marketIndexes` 以及每只股票计划专属的 `referenceMarket.conditionProgress` 直接传给展示组件。因此界面始终分开共用板块指数事实与单计划结果，且不暗示统一市场结论。
+- 在权威快照存在前，路由展示既有加载状态而不是空自选表。选择已渲染股票只会向 `/stocks/:symbol` 发出路由导航意图；它不会修改监控状态，也不会构造详情响应。
+- 本边界不新增 REST 路径、OpenAPI 字段、生成 TypeScript 类型、Schema 迁移、Schema v1 数据变更、历史回测结果变更或 hash 变更。它不暴露 token，也不执行真实供应商请求。
+
 ### 已批准的回测扩展边界
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
 - 当前冻结契约精确为 42 条 REST 路径：27 条实时路径（包含只读 AI 运行配置、板块指数历史和权威计划启用状态）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
-- 生产 Router 精确包含十条路径：两条真实 `/plans` 和 `/plans/:id` 工作台视图、四条真实或延迟加载的 `/backtests...` 视图，以及四条剩余历史占位路由；两个静态回测子路由继续排在动态路由之前；
-- 增加真实计划与回测路由不能证明四条剩余历史占位路由已经接入业务视图；
+- 生产 Router 精确包含十条路径：真实 `/`、`/plans`、`/plans/:id` 和 `/system` 视图、四条真实或延迟加载的 `/backtests...` 视图，以及两条剩余历史占位路由（`/stocks/:symbol` 和 `/alerts`）；两个静态回测子路由继续排在动态路由之前；
+- 增加真实总览、计划、系统和回测路由不能证明两条剩余历史占位路由已经接入业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
 - 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
 - `create_production_app(...)` 使用 WEBF05 惰性的真实监控组合：实时前置条件仍未验证时，后端健康诚实保持为 `DEGRADED`/只读，没有权威投影的读取继续为 `SERVICE_UNAVAILABLE`。其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
@@ -486,4 +493,4 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，其中 `/plans`、`/plans/:id` 和四条回测路径是真实视图，其余四条仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到既有以后端为权威来源的总览快照和共用指数投影，但不改变其契约。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，其中 `/`、`/plans`、`/plans/:id`、`/system` 和四条回测路径是真实视图，`/stocks/:symbol` 与 `/alerts` 仍为占位页。提交、推送、依赖安装和联网访问继续需要分别授权。

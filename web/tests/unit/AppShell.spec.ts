@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { flushPromises, mount } from "@vue/test-utils";
+import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -67,7 +68,7 @@ async function mountShell(
 
   const wrapper = mount(AppShell, {
     attachTo: document.body,
-    global: { plugins: [router] },
+    global: { plugins: [createPinia(), router] },
     slots: withConnectionSlot
       ? { connectionBanner: '<p data-testid="connection-message">连接已恢复</p>' }
       : {},

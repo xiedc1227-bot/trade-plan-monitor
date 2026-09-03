@@ -22,6 +22,9 @@ project AI configuration once and injects one backend-authoritative persistent p
 survive Web process restarts; extraction runs only after the user submits plan text. A successful AI
 result enters the shared structured editor only through an explicit review action; saving creates an
 inactive draft, and activation still requires a separate user confirmation plus backend approval.
+WEBF06 connects `/` to the existing backend-authoritative dashboard snapshot: it renders stock
+decisions and shared board-index facts separately from plan-specific index progress, and retains an
+honest loading state until a snapshot exists. It adds no browser-side trading rules or provider call.
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.

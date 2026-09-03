@@ -12,9 +12,7 @@ const historicalPaths = [
   "/system",
 ] as const;
 
-const remainingPlaceholderPaths = historicalPaths.filter(
-  (path) => path !== "/plans" && path !== "/plans/:id",
-);
+const remainingPlaceholderPaths = ["/stocks/:symbol", "/alerts"] as const;
 
 const backtestPaths = [
   "/backtests",
@@ -42,8 +40,9 @@ describe("backtest production routes", () => {
     for (const path of remainingPlaceholderPaths) {
       expect(typeof routeAt(path).component).not.toBe("function");
     }
-    expect(typeof routeAt("/plans").component).toBe("function");
-    expect(typeof routeAt("/plans/:id").component).toBe("function");
+    for (const path of ["/", "/plans", "/plans/:id", "/system"]) {
+      expect(typeof routeAt(path).component).toBe("function");
+    }
   });
 
   it("keeps the three static backtest routes before the dynamic run route", () => {
