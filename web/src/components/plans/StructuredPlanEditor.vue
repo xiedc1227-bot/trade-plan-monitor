@@ -2,10 +2,12 @@
 import { computed, shallowRef, watch } from "vue";
 
 import type {
+  DraftReviewIssue,
   PlanDocumentFormat,
   PlanDraftCommand,
   PlanImportCommand,
-  PlanVersionView,
+  PlanVersionStatus,
+  ValidationIssue,
 } from "../../api/generated";
 
 const MAX_PLAN_DOCUMENT_BYTES = 256 * 1_024;
@@ -33,9 +35,24 @@ export interface PlanExportIntent {
   planVersionId: string;
 }
 
+export interface StructuredPlanDocument {
+  id: string;
+  planJson: string;
+  reviewIssues?: readonly DraftReviewIssue[];
+  revision: number;
+  sourceText: string;
+  status: PlanVersionStatus;
+  symbol: string;
+  validationIssues?: readonly ValidationIssue[];
+  version: number;
+}
+
 interface Props {
   busy?: boolean;
-  plan: PlanVersionView;
+  idPrefix?: string;
+  mode?: "PERSISTED" | "EXTRACTED_REVIEW";
+  plan: StructuredPlanDocument;
+  portable?: boolean;
 }
 
 interface Emits {
@@ -45,7 +62,12 @@ interface Emits {
   saveDraft: [command: PlanDraftCommand];
 }
 
-const props = withDefaults(defineProps<Props>(), { busy: false });
+const props = withDefaults(defineProps<Props>(), {
+  busy: false,
+  idPrefix: "",
+  mode: "PERSISTED",
+  portable: true,
+});
 const emit = defineEmits<Emits>();
 
 const originalDocument = shallowRef<PlanRecord>({});
@@ -61,6 +83,10 @@ const importError = shallowRef<string | null>(null);
 const exportFormat = shallowRef<PlanDocumentFormat>("JSON");
 const loadError = shallowRef<string | null>(null);
 const editError = shallowRef<string | null>(null);
+
+function idFor(id: string): string {
+  return `${props.idPrefix}${id}`;
+}
 
 const assembled = computed(() => assembleDocument());
 const preview = computed(() => executablePreview(assembled.value.document));
@@ -110,7 +136,7 @@ function emptySectionTexts(): SectionTexts {
   ) as SectionTexts;
 }
 
-function loadPlan(plan: PlanVersionView): void {
+function loadPlan(plan: StructuredPlanDocument): void {
   const withinLimit =
     utf8ByteLengthAtMost(plan.planJson, MAX_PLAN_DOCUMENT_BYTES) !== null;
   const parsed = withinLimit ? parseRecord(plan.planJson) : null;
@@ -131,7 +157,7 @@ function loadPlan(plan: PlanVersionView): void {
   loadedPlanId.value = plan.id;
   loadedRevision.value = plan.revision;
   conflictRevision.value = null;
-  setDirty(false);
+  setDirty(props.mode === "EXTRACTED_REVIEW");
 }
 
 function parseRecord(value: string): PlanRecord | null {
@@ -248,7 +274,7 @@ function saveDraft(): void {
     return;
   }
   emit("saveDraft", {
-    basePlanVersionId: props.plan.id,
+    ...(props.mode === "PERSISTED" ? { basePlanVersionId: props.plan.id } : {}),
     expectedRevision: loadedRevision.value,
     planJson: assembled.value.json,
     reviewIssues: [...(props.plan.reviewIssues ?? [])],
@@ -380,13 +406,15 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
 </script>
 
 <template>
-  <section class="structured-editor" aria-labelledby="structured-editor-title">
+  <section class="structured-editor" :aria-labelledby="idFor('structured-editor-title')">
     <header class="structured-editor__header">
       <div>
         <p class="structured-editor__eyebrow">STRUCTURED DRAFT</p>
-        <h2 id="structured-editor-title" class="structured-editor__title">结构化计划编辑</h2>
+        <h2 :id="idFor('structured-editor-title')" class="structured-editor__title">结构化计划编辑</h2>
       </div>
-      <span class="structured-editor__status">{{ plan.status }} · v{{ plan.version }}</span>
+      <span class="structured-editor__status">
+        {{ mode === "EXTRACTED_REVIEW" ? "AI 待保存审核" : `${plan.status} · v${plan.version}` }}
+      </span>
     </header>
 
     <p class="structured-editor__boundary">
@@ -400,9 +428,9 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
       </button>
     </div>
 
-    <label class="structured-editor__label" for="plan-name">计划名称</label>
+    <label class="structured-editor__label" :for="idFor('plan-name')">计划名称</label>
     <input
-      id="plan-name"
+      :id="idFor('plan-name')"
       class="structured-editor__input"
       type="text"
       :disabled="busy"
@@ -417,11 +445,11 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
         class="structured-editor__section"
         data-testid="plan-section"
       >
-        <label class="structured-editor__label" :for="`plan-section-${section.key}`">
+        <label class="structured-editor__label" :for="idFor(`plan-section-${section.key}`)">
           {{ section.label }} · <code>{{ section.key }}</code>
         </label>
         <textarea
-          :id="`plan-section-${section.key}`"
+          :id="idFor(`plan-section-${section.key}`)"
           class="structured-editor__textarea"
           :data-section="section.key"
           :disabled="busy"
@@ -437,16 +465,16 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
       {{ loadError ?? editError ?? assembled.error }}
     </p>
 
-    <section class="structured-editor__preview" data-testid="executable-preview" aria-labelledby="executable-preview-title">
-      <h3 id="executable-preview-title">人类可读执行预览</h3>
+    <section class="structured-editor__preview" data-testid="executable-preview" :aria-labelledby="idFor('executable-preview-title')">
+      <h3 :id="idFor('executable-preview-title')">人类可读执行预览</h3>
       <p>仅用于核对配置，不在浏览器执行或判定条件。</p>
       <ul>
         <li v-for="item in preview" :key="item">{{ item }}</li>
       </ul>
     </section>
 
-    <section class="structured-editor__issues" aria-labelledby="validation-issue-title">
-      <h3 id="validation-issue-title">后端校验与审核问题</h3>
+    <section class="structured-editor__issues" :aria-labelledby="idFor('validation-issue-title')">
+      <h3 :id="idFor('validation-issue-title')">后端校验与审核问题</h3>
       <p v-if="!(plan.validationIssues?.length || plan.reviewIssues?.length)">当前版本未返回问题。</p>
       <article v-for="issue in plan.validationIssues ?? []" :key="`${issue.code}:${issue.path}`">
         <code>{{ issue.path }}</code>
@@ -461,31 +489,37 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
     </section>
 
     <div class="structured-editor__actions">
-      <button data-testid="save-draft" type="button" :disabled="!canSave" @click="saveDraft">
-        {{ plan.status === "ACTIVE" ? "另存为新草稿" : "保存草稿" }}
+      <button :data-testid="idFor('save-draft')" type="button" :disabled="!canSave" @click="saveDraft">
+        {{
+          mode === "EXTRACTED_REVIEW"
+            ? "保存为待审核版本"
+            : plan.status === "ACTIVE"
+              ? "另存为新草稿"
+              : "保存草稿"
+        }}
       </button>
     </div>
 
-    <div class="structured-editor__portable">
+    <div v-if="portable" class="structured-editor__portable">
       <form data-testid="import-plan" class="structured-editor__portable-panel" @submit.prevent="submitImport">
         <h3>导入 YAML / JSON</h3>
-        <label class="structured-editor__label" for="plan-import-format">格式</label>
-        <select id="plan-import-format" v-model="importFormat" :disabled="busy">
+        <label class="structured-editor__label" :for="idFor('plan-import-format')">格式</label>
+        <select :id="idFor('plan-import-format')" v-model="importFormat" :disabled="busy">
           <option value="JSON">JSON</option>
           <option value="YAML">YAML</option>
         </select>
-        <label class="structured-editor__label" for="plan-import-symbol">
+        <label class="structured-editor__label" :for="idFor('plan-import-symbol')">
           目标股票（当前版本）
         </label>
         <input
-          id="plan-import-symbol"
+          :id="idFor('plan-import-symbol')"
           class="structured-editor__input"
           :value="plan.symbol"
           readonly
         />
-        <label class="structured-editor__label" for="plan-import-document">文档</label>
+        <label class="structured-editor__label" :for="idFor('plan-import-document')">文档</label>
         <textarea
-          id="plan-import-document"
+          :id="idFor('plan-import-document')"
           :value="importDocument"
           :disabled="busy"
           rows="8"
@@ -496,10 +530,10 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
         <button type="submit" :disabled="!canImport">提交后端安全导入</button>
       </form>
 
-      <section class="structured-editor__portable-panel" aria-labelledby="export-plan-title">
-        <h3 id="export-plan-title">导出 YAML / JSON</h3>
-        <label class="structured-editor__label" for="plan-export-format">格式</label>
-        <select id="plan-export-format" v-model="exportFormat" :disabled="busy">
+      <section class="structured-editor__portable-panel" :aria-labelledby="idFor('export-plan-title')">
+        <h3 :id="idFor('export-plan-title')">导出 YAML / JSON</h3>
+        <label class="structured-editor__label" :for="idFor('plan-export-format')">格式</label>
+        <select :id="idFor('plan-export-format')" v-model="exportFormat" :disabled="busy">
           <option value="JSON">JSON</option>
           <option value="YAML">YAML</option>
         </select>

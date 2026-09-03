@@ -10,6 +10,7 @@ import type { ComputedRef, ShallowRef } from "vue";
 import { ApiClientError, createPlanApi, type PlanApi } from "../api/plans";
 import type {
   ActivePlanView,
+  DraftReviewIssue,
   PlanActivationCommand,
   PlanDeactivationCommand,
   PlanDraftCommand,
@@ -34,6 +35,13 @@ export interface UsePlansOptions {
   readonly initialPlanVersionId?: string;
 }
 
+export interface ExtractedPlanDraftIntent {
+  readonly planJson: string;
+  readonly reviewIssues: readonly DraftReviewIssue[];
+  readonly sourceText: string;
+  readonly symbol: string;
+}
+
 export interface UsePlansResult {
   readonly activeState: Readonly<ShallowRef<ActivePlanView | null>>;
   readonly activePlan: Readonly<ShallowRef<PlanVersionView | null>>;
@@ -50,6 +58,7 @@ export interface UsePlansResult {
   openPlan(planVersionId: string | null): Promise<boolean>;
   refresh(): Promise<boolean>;
   saveDraft(command: PlanDraftCommand): Promise<boolean>;
+  saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<boolean>;
   selectPlan(planVersionId: string): Promise<boolean>;
 }
 
@@ -198,7 +207,10 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     errorMessage.value = null;
     let revision: number | null;
     try {
-      revision = await authoritativeImportRevision(command.symbol);
+      revision = await authoritativeTargetRevision(
+        command.symbol,
+        "目标股票启停状态无法确认，未提交导入。",
+      );
     } finally {
       busy.value = false;
     }
@@ -213,6 +225,37 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
       (prepared, key, signal) => api.importPlan(prepared, key, { signal }),
       (imported) => imported.id,
       "计划可能已导入，但无法确认结果；请刷新后核对。",
+    );
+  }
+
+  async function saveExtractedDraft(
+    intent: ExtractedPlanDraftIntent,
+  ): Promise<boolean> {
+    if (busy.value) return false;
+    busy.value = true;
+    errorMessage.value = null;
+    let revision: number | null;
+    try {
+      revision = await authoritativeTargetRevision(
+        intent.symbol,
+        "目标股票启停状态无法确认，未保存 AI 审核草稿。",
+      );
+    } finally {
+      busy.value = false;
+    }
+    if (revision === null) return false;
+    const command: PlanDraftCommand = {
+      expectedRevision: revision,
+      planJson: intent.planJson,
+      reviewIssues: [...intent.reviewIssues],
+      sourceText: intent.sourceText,
+    };
+    return mutate(
+      "SAVE_EXTRACTED_DRAFT",
+      command,
+      (prepared, key, signal) => api.savePlanDraft(prepared, key, { signal }),
+      (saved) => saved.id,
+      "AI 审核草稿可能已保存，但无法确认结果；请刷新后核对。",
     );
   }
 
@@ -329,7 +372,10 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     return state.revision;
   }
 
-  async function authoritativeImportRevision(symbol: string): Promise<number | null> {
+  async function authoritativeTargetRevision(
+    symbol: string,
+    unavailableMessage: string,
+  ): Promise<number | null> {
     const loadedPage = page.value;
     if (loadedPage === null) {
       errorMessage.value = "计划状态尚未确认，无法提交变更。";
@@ -344,7 +390,7 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     } catch (error) {
       if (controller.signal.aborted) return null;
       if (error instanceof ApiClientError && error.code === "NOT_FOUND") return 0;
-      errorMessage.value = "目标股票启停状态无法确认，未提交导入。";
+      errorMessage.value = unavailableMessage;
       return null;
     } finally {
       if (mutationController === controller) mutationController = null;
@@ -385,6 +431,7 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     openPlan,
     refresh: () => refresh(),
     saveDraft,
+    saveExtractedDraft,
     selectPlan,
   });
 }

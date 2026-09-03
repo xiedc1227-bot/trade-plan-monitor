@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { watch } from "vue";
+import { shallowRef, watch } from "vue";
 
 import type { AIPlanApi } from "../api/ai";
 import type { PlanApi } from "../api/plans";
+import ExtractedPlanReview from "../components/plans/ExtractedPlanReview.vue";
 import PlanImportForm from "../components/plans/PlanImportForm.vue";
 import PlanWorkbench from "../components/plans/PlanWorkbench.vue";
 import type { PlanExportIntent } from "../components/plans/StructuredPlanEditor.vue";
 import { usePlanDrafting } from "../composables/usePlanDrafting";
-import { usePlans } from "../composables/usePlans";
+import { usePlans, type ExtractedPlanDraftIntent } from "../composables/usePlans";
 import PlansView from "./PlansView.vue";
 
 interface Props {
@@ -34,6 +35,7 @@ const plans = usePlans({
     : { createIdempotencyKey: props.createPlanIdempotencyKey }),
   ...(props.planVersionId === undefined ? {} : { initialPlanVersionId: props.planVersionId }),
 });
+const savedExtractionId = shallowRef<string | null>(null);
 
 watch(
   () => props.planVersionId,
@@ -58,6 +60,14 @@ function exportPlan(intent: PlanExportIntent): void {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(objectUrl);
+}
+
+async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<void> {
+  const extractionId = drafting.extraction.value?.id ?? null;
+  if (extractionId === null) return;
+  if (await plans.saveExtractedDraft(intent)) {
+    savedExtractionId.value = extractionId;
+  }
 }
 </script>
 
@@ -100,11 +110,15 @@ function exportPlan(intent: PlanExportIntent): void {
         @stop-waiting="drafting.stopWaiting"
         @submit-extraction="drafting.submitExtraction"
       >
-        <template #extractedDraft="{ extraction }">
-          <section class="plan-drafting-view__draft" aria-labelledby="extracted-draft-title">
-            <h2 id="extracted-draft-title">待审核计划草稿</h2>
-            <pre>{{ extraction.draftPlanJson }}</pre>
-          </section>
+        <template #extractedDraft="{ extraction, resolvedIssueKeys, sourceText }">
+          <ExtractedPlanReview
+            :busy="plans.busy.value"
+            :extraction="extraction"
+            :resolved-issue-keys="resolvedIssueKeys"
+            :saved="savedExtractionId === extraction.id"
+            :source-text="sourceText"
+            @save-draft="saveExtractedDraft"
+          />
         </template>
       </PlanWorkbench>
     </template>
@@ -165,8 +179,7 @@ function exportPlan(intent: PlanExportIntent): void {
 }
 
 .plan-drafting-view__notice,
-.plan-drafting-view__error,
-.plan-drafting-view__draft {
+.plan-drafting-view__error {
   width: min(100%, 90rem);
   box-sizing: border-box;
   margin: 0 auto var(--space-5);
@@ -210,13 +223,6 @@ function exportPlan(intent: PlanExportIntent): void {
   background: var(--color-signal-info-cyan);
   border: 0;
   border-radius: var(--radius-control);
-}
-
-.plan-drafting-view__draft pre {
-  max-height: 32rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 @media (max-width: 47.999rem) {

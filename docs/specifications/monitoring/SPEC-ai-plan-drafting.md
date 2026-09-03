@@ -148,7 +148,7 @@ The Vue `PlanWorkbench` is a thin local composition boundary with typed props an
 
 `PlanDraftingView` loads the one safe runtime summary, creates one idempotency key per submission, materializes the `202` receipt, and polls the exact operation ID until `SUCCEEDED`, `INVALID_OUTPUT`, `PROVIDER_ERROR`, or `CANCELLED`. Only one local submission/poll runs at once. Unmount and “stop waiting” abort browser work; stopping browser polling does not claim to cancel an accepted server operation. Error messages are fixed and cannot contain provider response or key material.
 
-The source editor treats pasted plans as untrusted plain text and uses the configured input-character limit with Python-compatible Unicode code-point counting. An over-limit edit is rejected atomically and restores the previous complete value. Evidence is tied to the exact submitted source snapshot and hidden when stale. Extracted evidence, assumptions, warnings, unmapped text, validation issues, usage, errors, and canonical draft JSON render through escaped Vue text interpolation only. Structured editing, diff, validation orchestration, and activation remain T046 responsibilities.
+The source editor treats pasted plans as untrusted plain text and uses the configured input-character limit with Python-compatible Unicode code-point counting. An over-limit edit is rejected atomically and restores the previous complete value. Evidence is tied to the exact submitted source snapshot and hidden when stale. Extracted evidence, assumptions, warnings, unmapped text, validation issues, usage, errors, and canonical draft content render through escaped Vue text interpolation only. A successful result exposes a separate explicit `进入结构化审核` handoff with no persistence or activation side effect. Only after that user action may the structured editor emit a root draft save intent containing the exact source and reviewed issue identities. T046 owns the authoritative-revision preflight, backend save and deterministic validation, diff, and separate activation confirmation; neither extraction success nor draft save activates a plan.
 
 ## Code Style
 
@@ -182,6 +182,7 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 - Use fake DeepSeek-profile and generic OpenAI-compatible services for request-shape validation, success, standard response extensions, invalid JSON, schema mismatch, real timeout, 401/403, 429, 5xx, retry, cancellation, compressed response, and oversized output.
 - Embed prompt-injection samples in plan text and verify they cannot alter the output contract or gain tool access.
 - Cover missing dates, ambiguous boundaries, unsupported text, and the Huaya Intelligent example plan.
+- Verify extraction success, structured-review entry, issue resolution, draft save, and activation are distinct user-visible steps; no earlier step emits an activation command.
 - Verify AI failure cannot affect already active monitoring plans.
 - Verify APIs, logs, serialized errors, and exception chains never return or retain an API key or Authorization header.
 

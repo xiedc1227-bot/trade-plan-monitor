@@ -258,11 +258,13 @@ The T045 `PlanWorkbench` composes setup-style Vue components through typed props
 
 `PlanDraftingView` and `usePlanDrafting` own the same-origin API flow. Mounting loads `GET /api/v1/ai-runtime`; submission creates one idempotency key, sends `POST /api/v1/plan-extractions`, materializes its `QUEUED` receipt, then polls `GET /api/v1/plan-extractions/{operationId}` until a closed terminal status. Only one local submission/poll is active. Unmount aborts requests and timers. “Stop waiting” stops browser polling and explicitly says that an already accepted server task may continue; it does not claim server cancellation. Errors are fixed Chinese text and never include raw provider, key, or transport details.
 
-`SourceTextEditor` owns one local plain-text model. Its limit comes from the selected runtime configuration, uses Python-compatible Unicode code-point counting, stops at the first rejected code point, and atomically rejects an over-limit edit instead of truncating it. `ExtractionEvidence` renders only validated evidence, assumptions, warnings, omissions, validation issues, usage, and bounded status through escaped Vue text interpolation. A successful canonical draft is rendered as escaped text and remains review-only; no extraction response can activate a plan. T046 retains structured editing, diff, validation orchestration, and activation.
+`SourceTextEditor` owns one local plain-text model. Its limit comes from the selected runtime configuration, uses Python-compatible Unicode code-point counting, stops at the first rejected code point, and atomically rejects an over-limit edit instead of truncating it. `ExtractionEvidence` renders only validated evidence, assumptions, warnings, omissions, validation issues, usage, and bounded status through escaped Vue text interpolation. A successful canonical draft remains review-only until the user explicitly chooses `进入结构化审核`; that handoff has no persistence or activation side effect and is discarded when the source snapshot becomes stale. No extraction response can save or activate a plan by itself. T046 retains structured editing, backend validation, persistence, diff, and activation.
 
 ### T046 Structured Plan Editing and Activation Boundary
 
 The T046 `PlansView` composes route-local version selection, `StructuredPlanEditor`, and `ActivationDiffDialog` through generated command/view contracts only. It loads bounded lightweight version summaries and fetches only the selected and required active-version details. Nine section editors preserve unknown top-level plan content, produce a human-readable preview without evaluating conditions, and emit revision-guarded draft/import/export intents. JSON/YAML parsing, canonicalization, deterministic validation, successor-version allocation, trading rules, persistence, and transport remain backend or later-composition responsibilities. Active versions are never mutated through props; an edit emits a new-draft command bound to `basePlanVersionId`, and dirty local content survives revision conflicts, repeated selection, and paginated version removal until the user explicitly reloads or discards it.
+
+`ExtractedPlanReview` reuses `StructuredPlanEditor` only after the explicit handoff. It maps the bounded extraction issues to `DraftReviewIssue` identities, preserves the exact submitted source text, and emits a root `PlanDraftCommand` without `basePlanVersionId` only when the user explicitly saves. Before `POST /plan-drafts`, `usePlans` obtains the target symbol's authoritative activation revision; browser parsing of the already-canonical draft is limited to the routing identity needed for that read. The backend reparses and validates the complete plan, persists review state, and returns the sole authoritative `canActivate`. Saving never creates an activation command, and a saved version remains inactive until the separate diff and confirmation flow succeeds.
 
 Import documents and final compact draft/export documents are capped at 256 KiB UTF-8 with bounded single-pass checks and atomic rejection. Import commands carry a user-selected or backend-sourced target `symbol`; the browser does not parse the document to infer it and submits only after obtaining that symbol's authoritative activation revision. The pretty-printed local editing buffer has an independent 4 MiB safety cap so valid compact plans are not rejected only because indentation expands them. Server and imported text is rendered only as escaped content; no raw text enters `v-html`, logging, URLs, persistent browser state, or mutable shared state. A network error, invalid response, or any 5xx outcome retains the exact semantic intent and idempotency key for retry because the mutation may already have committed; a deterministic 4xx rejection is shown with fixed safe copy and clears that key.
 
@@ -375,10 +377,11 @@ Route views are composition surfaces only.
 | `PriceChart` | ECharts bars/zones/markers | immutable chart series | range change |
 | `EpisodeTimeline` | Episode/risk transitions | timeline events | select time |
 | `PositionLots` | Local lot forms, T+1 display, and explicit confirmation | authoritative page/prefill/operation gateway | confirmed add/close command |
-| `PlanWorkbench` | Orchestrate extraction/review/edit/activation | draft/extraction | save/activate |
+| `PlanWorkbench` | Orchestrate extraction and evidence review | draft/extraction | extraction/review intents |
 | `SourceTextEditor` | Plain-text plan input | source text | update text |
 | `AIProviderSelector` | Show/select file-configured provider | safe runtime summary | select |
 | `ExtractionEvidence` | Evidence, uncertainty, omissions | extraction result | resolve issue |
+| `ExtractedPlanReview` | Explicitly bridge an AI result into structured review | extraction/source/resolved issues | root draft save intent |
 | `StructuredPlanEditor` | Sectioned typed draft editing | plan draft/issues | update draft |
 | `ActivationDiffDialog` | Confirm immutable version switch | before/after/issues | confirm/cancel |
 | `HealthMatrix` | Provider/symbol health | health rows | select symbol |
@@ -441,7 +444,7 @@ Use `<script setup lang="ts">`, PascalCase SFCs, script/template/scoped-style or
 - WebSocket tests for snapshot consistency, ordering, replay, sequence gap, reconnect, and restart.
 - Vue unit tests for stores, plan workbench, AI extraction review, activation gates, watchlist, details, alerts, settings, loading/error/empty states, and keyboard interactions.
 - Chart mapping tests plus accessible table fallback.
-- Playwright end-to-end flows: start with a fake provider in project test configuration, paste a plan, extract, resolve a warning, activate, replay market data, receive one alert, acknowledge it, and verify no position change.
+- Playwright end-to-end flows: start with a fake provider in project test configuration, paste a plan, extract, explicitly enter structured review, resolve a warning, save, separately confirm backend-approved activation, replay market data, receive one alert, acknowledge it, and verify no position change.
 - Accessibility automation with axe plus keyboard/manual checks.
 - Browser verification at desktop, tablet, and mobile widths.
 

@@ -14,7 +14,9 @@ entry still uses read-only `DEGRADED` fallback for monitoring services that have
 but its `/plans` workflow is usable: startup loads the project AI configuration once and injects
 one backend-authoritative persistent plan service over `data/monitor.sqlite3`. Plan save, query,
 JSON/YAML import, activation, and deactivation therefore survive Web process restarts; extraction
-runs only after the user submits plan text.
+runs only after the user submits plan text. A successful AI result enters the shared structured
+editor only through an explicit review action; saving creates an inactive draft, and activation
+still requires a separate user confirmation plus backend approval.
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.
@@ -39,7 +41,8 @@ condition outcomes, and historical Schema v1 plans/results remain unchanged.
 - The live system is monitoring and reminder software, not a broker, order router, or investment
   adviser. Every actionable reminder carries the literal `仅提醒，不会自动下单。`; only the isolated offline `BACKTEST` mode may create clearly labeled simulated research fills.
 - Plans are typed, reviewed, versioned, and immutable after activation. AI output remains an
-  untrusted draft until deterministic validation and user review succeed.
+  untrusted draft until deterministic validation and user review succeed; extraction and draft
+  save never activate it automatically.
 - Prices are stored as integer fen, quantities as integer shares, and A-share timestamps as
   timezone-aware `Asia/Shanghai` values.
 - Missing, stale, unauthorized, or semantically unverified market data fails closed.

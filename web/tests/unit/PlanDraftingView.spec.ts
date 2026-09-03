@@ -93,6 +93,40 @@ const planVersion: PlanVersionView = {
   version: 1,
 };
 
+const successfulExtraction: PlanExtractionView = {
+  assumptions: [],
+  completedAt: "2026-09-02T09:00:02+08:00",
+  draftPlanJson: planVersion.planJson,
+  evidence: [
+    {
+      end: 8,
+      excerpt: "华亚智能交易计划",
+      path: "draft",
+      start: 0,
+    },
+  ],
+  id: OPERATION_ID,
+  model: "deepseek-v4-flash",
+  promptVersion: "plan-extract-v1",
+  providerId: PROVIDER_ID,
+  sourceTextSha256: "b".repeat(64),
+  startedAt: "2026-09-02T09:00:01+08:00",
+  status: "SUCCEEDED",
+  submittedAt: receipt.submittedAt,
+  unmappedText: [],
+  usage: null,
+  validationIssues: [
+    {
+      activationBlocking: true,
+      code: "AI_EVIDENCE_REVIEW_REQUIRED",
+      message: "必须由用户审核 AI 字段证据。",
+      path: "draft",
+      severity: "WARNING",
+    },
+  ],
+  warnings: [],
+};
+
 const planPage: PlanVersionPage = {
   items: [planSummary(planVersion)],
   limit: 100,
@@ -187,6 +221,87 @@ describe("PlanDraftingView", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(wrapper.get('[role="alert"]').text()).toContain("AI 输出未通过封闭契约校验");
+    wrapper.unmount();
+  });
+
+  it("requires an explicit handoff before an AI result can be reviewed and saved", async () => {
+    const sourceText = "华亚智能交易计划";
+    const listPlanVersions = vi
+      .fn()
+      .mockResolvedValueOnce({ ...planPage, items: [], total: 0 })
+      .mockResolvedValueOnce(planPage);
+    const getPlanActivationState = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ApiClientError({
+          code: "NOT_FOUND",
+          message: "请求的资源不存在",
+          status: 404,
+        }),
+      )
+      .mockResolvedValueOnce(inactiveState);
+    const savePlanDraft = vi.fn().mockResolvedValue(planVersion);
+    const activatePlan = vi.fn();
+    const wrapper = mount(PlanDraftingView, {
+      props: {
+        api: apiWith({
+          getExtraction: vi.fn().mockResolvedValue(successfulExtraction),
+          getRuntime: vi.fn().mockResolvedValue(runtime),
+          submitExtraction: vi.fn().mockResolvedValue(receipt),
+        }),
+        createIdempotencyKey: () => "ai-extraction-key",
+        createPlanIdempotencyKey: () => "ai-reviewed-draft-key",
+        planApi: planApiWith({
+          activatePlan,
+          getPlanActivationState,
+          listPlanVersions,
+          savePlanDraft,
+        }),
+        pollIntervalMs: 0,
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get<HTMLTextAreaElement>("#plan-source-text").setValue(sourceText);
+    await wrapper.get('[data-testid="source-editor"]').trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="enter-structured-review"]').text()).toContain(
+      "进入结构化审核",
+    );
+    expect(wrapper.find("#ai-review-plan-name").exists()).toBe(false);
+    expect(savePlanDraft).not.toHaveBeenCalled();
+    expect(activatePlan).not.toHaveBeenCalled();
+
+    await wrapper.get('[data-testid="enter-structured-review"]').trigger("click");
+    expect(wrapper.get<HTMLInputElement>("#ai-review-plan-name").element.value).toBe(
+      "华亚智能审核方案",
+    );
+    expect(wrapper.get('[data-testid="ai-review-save-draft"]').text()).toContain(
+      "保存为待审核版本",
+    );
+    expect(savePlanDraft).not.toHaveBeenCalled();
+    expect(activatePlan).not.toHaveBeenCalled();
+
+    await wrapper.get('[data-issue-key="MISSING_EVIDENCE:draft"] button').trigger("click");
+    await wrapper.get('[data-testid="ai-review-save-draft"]').trigger("click");
+    await flushPromises();
+
+    expect(savePlanDraft).toHaveBeenCalledWith(
+      {
+        expectedRevision: 0,
+        planJson: planVersion.planJson,
+        reviewIssues: [
+          { kind: "MISSING_EVIDENCE", material: true, path: "draft", resolved: true },
+        ],
+        sourceText,
+      },
+      "ai-reviewed-draft-key",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(savePlanDraft.mock.calls[0]?.[0]).not.toHaveProperty("basePlanVersionId");
+    expect(activatePlan).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="request-activation"]').text()).toContain("激活");
     wrapper.unmount();
   });
 

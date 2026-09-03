@@ -4,8 +4,11 @@ import { computed } from "vue";
 import type {
   DraftReviewIssue,
   PlanExtractionView,
-  ReviewIssueKind,
 } from "../../api/generated";
+import {
+  duplicateReviewKeys,
+  extractionReviewItems,
+} from "./extractionReview";
 
 interface Props {
   extraction: PlanExtractionView;
@@ -18,14 +21,11 @@ interface Emits {
   retry: [];
 }
 
-interface ReviewItemBase {
-  excerpt?: string;
-  issue: DraftReviewIssue;
-  key: string;
-  message: string;
-}
-
-interface ReviewItem extends ReviewItemBase {
+interface ReviewItem {
+  readonly excerpt?: string;
+  readonly issue: DraftReviewIssue;
+  readonly key: string;
+  readonly message: string;
   renderKey: string;
 }
 
@@ -40,35 +40,13 @@ const isPending = computed(
 );
 
 const reviewItems = computed<readonly ReviewItem[]>(() => {
-  const items: ReviewItemBase[] = [];
-  for (const issue of props.extraction.assumptions ?? []) {
-    items.push(reviewItem("ASSUMPTION", issue.path, issue.material, issue.message));
-  }
-  for (const issue of props.extraction.warnings ?? []) {
-    items.push(reviewItem("WARNING", issue.path, issue.material, issue.message));
-  }
-  for (const issue of props.extraction.unmappedText ?? []) {
-    items.push(
-      reviewItem("UNMAPPED_TEXT", issue.path, issue.material, issue.reason, issue.excerpt),
-    );
-  }
-  for (const issue of props.extraction.validationIssues ?? []) {
-    if (issue.code === "AI_EVIDENCE_REVIEW_REQUIRED" && issue.activationBlocking) {
-      items.push(reviewItem("MISSING_EVIDENCE", issue.path, true, issue.message));
-    }
-  }
-  return items.map((item, index) => ({ ...item, renderKey: `${item.key}:${index}` }));
+  return extractionReviewItems(props.extraction).map((item, index) => ({
+    ...item,
+    renderKey: `${item.key}:${index}`,
+  }));
 });
 
-const duplicateReviewKeys = computed(() => {
-  const counts = new Map<string, number>();
-  for (const item of reviewItems.value) {
-    counts.set(item.key, (counts.get(item.key) ?? 0) + 1);
-  }
-  return new Set(
-    [...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key),
-  );
-});
+const duplicateKeys = computed(() => duplicateReviewKeys(reviewItems.value));
 
 const unresolvedMaterialCount = computed(
   () =>
@@ -76,21 +54,6 @@ const unresolvedMaterialCount = computed(
       (item) => item.issue.material && !isResolved(item),
     ).length,
 );
-
-function reviewItem(
-  kind: ReviewIssueKind,
-  path: string,
-  material: boolean,
-  message: string,
-  excerpt?: string,
-): ReviewItemBase {
-  return {
-    ...(excerpt === undefined ? {} : { excerpt }),
-    issue: { kind, material, path, resolved: false },
-    key: `${kind}:${path}`,
-    message,
-  };
-}
 
 function resolve(item: ReviewItem): void {
   if (isDuplicate(item) || isResolved(item)) {
@@ -100,7 +63,7 @@ function resolve(item: ReviewItem): void {
 }
 
 function isDuplicate(item: ReviewItem): boolean {
-  return duplicateReviewKeys.value.has(item.key);
+  return duplicateKeys.value.has(item.key);
 }
 
 function isResolved(item: ReviewItem): boolean {

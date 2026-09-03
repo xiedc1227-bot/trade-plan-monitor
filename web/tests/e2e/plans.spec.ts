@@ -10,6 +10,7 @@ import type {
   ActivePlanView,
   ConfiguredAIRuntimeView,
   DashboardResponse,
+  DraftReviewIssue,
   OperationReceipt,
   PlanExtractionView,
   PlanVersionSummary,
@@ -150,6 +151,33 @@ const invalidExtraction: PlanExtractionView = {
   warnings: [],
 };
 
+const successfulExtraction: PlanExtractionView = {
+  assumptions: [],
+  completedAt: "2026-09-02T09:00:02.000000+08:00",
+  draftPlanJson: planDocument,
+  evidence: [{ end: 8, excerpt: "华亚智能交易计划", path: "draft", start: 0 }],
+  id: OPERATION_ID,
+  model: "deepseek-v4-flash",
+  promptVersion: "plan-extract-v1",
+  providerId: PROVIDER_ID,
+  sourceTextSha256: "d".repeat(64),
+  startedAt: "2026-09-02T09:00:01.000000+08:00",
+  status: "SUCCEEDED",
+  submittedAt: TIME,
+  unmappedText: [],
+  usage: null,
+  validationIssues: [
+    {
+      activationBlocking: true,
+      code: "AI_EVIDENCE_REVIEW_REQUIRED",
+      message: "Review AI field evidence before activation.",
+      path: "draft",
+      severity: "WARNING",
+    },
+  ],
+  warnings: [],
+};
+
 let server: ViteDevServer;
 let baseUrl: string;
 
@@ -170,6 +198,143 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await server.close();
+});
+
+test("requires explicit review, save, and backend-approved activation for an AI result", async ({
+  page,
+}) => {
+  const consoleFailures: string[] = [];
+  const externalRequests: string[] = [];
+  const savedDraftCommands: Record<string, unknown>[] = [];
+  const activationCommands: Record<string, unknown>[] = [];
+  let storedPlan: PlanVersionView | null = null;
+  let activationState: ActivePlanView | null = null;
+
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      message.text() ===
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ) {
+      return;
+    }
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleFailures.push(`${message.type()}:${message.text()}`);
+    }
+  });
+  page.on("request", (request) => {
+    const requestUrl = new URL(request.url());
+    if (requestUrl.host !== new URL(baseUrl).host) externalRequests.push(request.url());
+  });
+  await page.route(`${baseUrl}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const key = `${request.method()} ${path}`;
+    let body: unknown;
+    let status = 200;
+    if (key === "GET /api/v1/dashboard") body = dashboard;
+    else if (key === "GET /api/v1/ai-runtime") body = runtime;
+    else if (key === "GET /api/v1/plan-versions") {
+      body = {
+        items: storedPlan === null ? [] : [planSummary(storedPlan)],
+        limit: 100,
+        offset: 0,
+        total: storedPlan === null ? 0 : 1,
+      };
+    } else if (key.startsWith("GET /api/v1/plan-versions/")) {
+      body = storedPlan ?? {};
+    } else if (key.startsWith("GET /api/v1/plan-activation-states/")) {
+      if (activationState === null) {
+        body = {
+          error: {
+            code: "NOT_FOUND",
+            message: "request not found",
+            requestId: "0".repeat(32),
+          },
+        };
+        status = 404;
+      } else {
+        body = activationState;
+      }
+    } else if (key === "POST /api/v1/plan-extractions") {
+      body = receipt;
+      status = 202;
+    } else if (key === `GET /api/v1/plan-extractions/${OPERATION_ID}`) {
+      body = successfulExtraction;
+    } else if (key === "POST /api/v1/plan-drafts") {
+      const command = request.postDataJSON() as Record<string, unknown>;
+      savedDraftCommands.push(command);
+      storedPlan = {
+        ...persistedPlan,
+        id: SAVED_PLAN_VERSION_ID,
+        planJson: String(command.planJson ?? ""),
+        reviewIssues: (command.reviewIssues ?? []) as DraftReviewIssue[],
+        sourceText: String(command.sourceText ?? ""),
+      };
+      activationState = { ...inactiveState, planVersionId: null };
+      body = storedPlan;
+    } else if (key === "POST /api/v1/plan-activations") {
+      const command = request.postDataJSON() as Record<string, unknown>;
+      activationCommands.push(command);
+      storedPlan = storedPlan === null ? null : { ...storedPlan, revision: 1, status: "ACTIVE" };
+      activationState = {
+        ...inactiveState,
+        active: true,
+        planVersionId: SAVED_PLAN_VERSION_ID,
+        revision: 1,
+      };
+      body = activationState;
+    } else {
+      await route.fulfill({ body: "unexpected request", status: 500 });
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify(body),
+      contentType: "application/json; charset=utf-8",
+      status,
+    });
+  });
+
+  await page.goto(`${baseUrl}/plans`);
+  await page.getByLabel("粘贴中文计划原文").fill("华亚智能交易计划");
+  await page.getByRole("button", { name: "提交提取审核" }).click();
+  await expect(page.getByText("结构化草稿已生成；仍需完成证据与重大问题审核。")).toBeVisible();
+  await expect(page.getByTestId("enter-structured-review")).toBeVisible();
+  await expect(page.locator("#ai-review-plan-name")).toHaveCount(0);
+  expect(savedDraftCommands).toEqual([]);
+  expect(activationCommands).toEqual([]);
+
+  await page.getByTestId("enter-structured-review").click();
+  await expect(page.locator("#ai-review-plan-name")).toHaveValue("华亚智能审核方案");
+  expect(savedDraftCommands).toEqual([]);
+  expect(activationCommands).toEqual([]);
+
+  await page.getByRole("button", { name: "标记 MISSING_EVIDENCE draft 为已处理" }).click();
+  await page.getByTestId("ai-review-save-draft").click();
+  await expect(page.getByText("AI 审核结果已保存为持久草稿")).toBeVisible();
+  expect(savedDraftCommands).toEqual([
+    {
+      expectedRevision: 0,
+      planJson: planDocument,
+      reviewIssues: [
+        { kind: "MISSING_EVIDENCE", material: true, path: "draft", resolved: true },
+      ],
+      sourceText: "华亚智能交易计划",
+    },
+  ]);
+  expect(activationCommands).toEqual([]);
+
+  await page.getByTestId("request-activation").click();
+  expect(activationCommands).toEqual([]);
+  await page.locator("#confirm-plan-action").check();
+  expect(activationCommands).toEqual([]);
+  await page.getByTestId("confirm-plan-action").click();
+  await expect(page.getByTestId("request-deactivation")).toBeVisible();
+  expect(activationCommands).toEqual([
+    { expectedRevision: 0, planVersionId: SAVED_PLAN_VERSION_ID },
+  ]);
+  expect(consoleFailures).toEqual([]);
+  expect(externalRequests).toEqual([]);
 });
 
 test("runs the configured AI and persisted plan workbench flow in isolated Chromium", async ({ page }) => {

@@ -258,11 +258,13 @@ T045 `PlanWorkbench` 只通过强类型 props/emits 组合 setup 风格 Vue 组�
 
 `PlanDraftingView` 与 `usePlanDrafting` 负责同源 API 流程。挂载时读取 `GET /api/v1/ai-runtime`；提交时生成一个幂等 Key，调用 `POST /api/v1/plan-extractions`，把 `QUEUED` 回执显示为当前任务，然后轮询 `GET /api/v1/plan-extractions/{operationId}`，直到进入封闭的终态。局部同时只运行一组提交/轮询。卸载会中止请求和计时器。“停止等待”只停止浏览器轮询，并明确说明服务端已经接收的任务可能继续；它不会谎称服务端任务已取消。错误使用固定中文文本，不包含供应商、密钥或传输原始详情。
 
-`SourceTextEditor` 拥有一个局部纯文本模型。上限来自选中的运行配置，按与 Python 一致的 Unicode code point 计数，在第一个被拒绝的 code point 处停止扫描，并原子拒绝超限编辑而不截断。`ExtractionEvidence` 只通过已转义的 Vue 文本插值渲染经过校验的证据、假设、警告、遗漏、校验问题、用量和有界状态。成功的规范草稿也只作为转义文本显示并保持待审核；任何提取响应都不能启用计划。T046 继续负责结构化编辑、差异、校验编排和启用。
+`SourceTextEditor` 拥有一个局部纯文本模型。上限来自选中的运行配置，按与 Python 一致的 Unicode code point 计数，在第一个被拒绝的 code point 处停止扫描，并原子拒绝超限编辑而不截断。`ExtractionEvidence` 只通过已转义的 Vue 文本插值渲染经过校验的证据、假设、警告、遗漏、校验问题、用量和有界状态。成功的规范草稿保持待审核，直到用户明确选择“进入结构化审核”；该交接没有持久化或启用副作用，并在原文快照过期时被丢弃。任何提取响应本身都不能保存或启用计划。T046 继续负责结构化编辑、后端校验、持久化、差异和启用。
 
 ### T046 结构化计划编辑与激活边界
 
 T046 `PlansView` 只通过生成的命令/视图契约组合路由局部版本选择、`StructuredPlanEditor` 和 `ActivationDiffDialog`。它读取有界的轻量版本摘要，并只按需获取所选版本及必需的活动版本详情。九个分区编辑器保留未知顶层计划内容，生成不求值条件的人类可读预览，并发出带修订保护的草稿/导入/导出意图。JSON/YAML 解析、规范化、确定性校验、后继版本分配、交易规则、持久化和传输仍由后端或后续组合负责。活动版本绝不通过 props 改写；编辑只发出绑定 `basePlanVersionId` 的新草稿命令，dirty 局部内容在修订冲突、重复选择和分页移除版本时继续保留，直到用户明确重新载入或放弃。
+
+`ExtractedPlanReview` 只在用户明确交接后复用 `StructuredPlanEditor`。它把有界提取问题映射为 `DraftReviewIssue` identity，保留精确的已提交原文，并且只在用户明确保存时发出不带 `basePlanVersionId` 的根 `PlanDraftCommand`。调用 `POST /plan-drafts` 前，`usePlans` 获取目标股票的权威启用 revision；浏览器对已规范化草稿的解析仅限于该读取所需的路由 identity。后端重新解析并校验完整计划、持久化审核状态，并返回唯一权威的 `canActivate`。保存绝不会创建启用命令；已保存版本只有在独立的差异与确认流程成功后才能启用。
 
 导入文档及最终紧凑草稿/导出文档使用有界单遍检查和原子拒绝限制为 256 KiB UTF-8。导入命令携带用户选择或后端提供的目标 `symbol`；浏览器不会解析文档来推断它，并且只有取得该股票的权威启用 revision 后才提交。pretty-print 的局部编辑缓冲使用独立 4 MiB 安全上限，避免合法紧凑计划仅因缩进膨胀而被拒绝。服务端和导入文本只作为已转义内容渲染；任何原始文本都不进入 `v-html`、日志、URL、持久浏览器状态或可变共享状态。网络错误、无效响应或任意 5xx 结果都会为重试保留精确语义意图及幂等键，因为变更可能已经提交；确定性的 4xx 拒绝则使用固定安全文案并清除该键。
 
@@ -375,10 +377,11 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 | `PriceChart` | ECharts K 线、区间和标记 | 不可变图表序列 | 区间变更 |
 | `EpisodeTimeline` | 阶段与风险状态转换 | 时间线事件 | 选择时间 |
 | `PositionLots` | 局部批次表单、T+1 展示和显式确认 | 权威分页/预填/操作网关 | 已确认的增加或关闭命令 |
-| `PlanWorkbench` | 编排提取、审核、编辑和启用 | 草稿与提取结果 | 保存或启用 |
+| `PlanWorkbench` | 编排提取与证据审核 | 草稿与提取结果 | 提取或审核意图 |
 | `SourceTextEditor` | 纯文本计划输入 | 原文 | 更新文本 |
 | `AIProviderSelector` | 显示或选择配置文件中的供应商 | 安全运行摘要 | 选择 |
 | `ExtractionEvidence` | 展示证据、不确定性和遗漏 | 提取结果 | 解决问题 |
+| `ExtractedPlanReview` | 把 AI 结果显式交接到结构化审核 | 提取结果/原文/已解决问题 | 根草稿保存意图 |
 | `StructuredPlanEditor` | 分区编辑强类型草稿 | 计划草稿与问题 | 更新草稿 |
 | `ActivationDiffDialog` | 确认不可变版本切换 | 变更前后内容与问题 | 确认或取消 |
 | `HealthMatrix` | 供应商及股票健康矩阵 | 健康数据行 | 选择股票 |
@@ -441,7 +444,7 @@ const emit = defineEmits<Emits>()
 - WebSocket 测试覆盖快照一致性、顺序、回放、序号缺口、重连和重启。
 - Vue 单元测试覆盖 store、计划工作台、AI 提取审核、启用闸门、自选表、详情、提醒、设置、加载、错误、空状态及键盘交互。
 - 图表映射测试及无障碍表格替代视图测试。
-- Playwright 端到端流程：使用项目测试配置中的模拟 AI 供应商启动、粘贴计划、提取、解决警告、启用、回放行情、接收一条提醒、确认提醒，并验证持仓未变化。
+- Playwright 端到端流程：使用项目测试配置中的模拟 AI 供应商启动、粘贴计划、提取、显式进入结构化审核、解决警告、保存、单独确认后端允许的启用、回放行情、接收一条提醒、确认提醒，并验证持仓未变化。
 - 使用 axe 执行无障碍自动化测试，并补充键盘和人工检查。
 - 在桌面、平板和移动端宽度下进行浏览器验证。
 

@@ -218,6 +218,95 @@ describe("usePlans", () => {
     wrapper.unmount();
   });
 
+  it("saves an AI-reviewed root draft only after resolving target authority", async () => {
+    const reviewedVersion: PlanVersionView = {
+      ...version,
+      reviewIssues: [
+        { kind: "MISSING_EVIDENCE", material: true, path: "draft", resolved: true },
+      ],
+    };
+    const listPlanVersions = vi
+      .fn()
+      .mockResolvedValueOnce({ ...page, items: [], total: 0 })
+      .mockResolvedValueOnce({ ...page, items: [summary(reviewedVersion)] });
+    const getPlanActivationState = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ApiClientError({
+          code: "NOT_FOUND",
+          message: "请求的资源不存在",
+          status: 404,
+        }),
+      )
+      .mockResolvedValueOnce(inactiveState);
+    const savePlanDraft = vi.fn().mockResolvedValue(reviewedVersion);
+    const api = apiWith({
+      getPlanActivationState,
+      getPlanVersion: vi.fn().mockResolvedValue(reviewedVersion),
+      listPlanVersions,
+      savePlanDraft,
+    });
+    const { plans, wrapper } = mountPlans(api, ["ai-reviewed-root-draft"]);
+    await flushPromises();
+
+    const saved = await plans.saveExtractedDraft({
+      planJson: version.planJson,
+      reviewIssues: reviewedVersion.reviewIssues ?? [],
+      sourceText: version.sourceText,
+      symbol: version.symbol,
+    });
+
+    expect(saved).toBe(true);
+    expect(savePlanDraft).toHaveBeenCalledWith(
+      {
+        expectedRevision: 0,
+        planJson: version.planJson,
+        reviewIssues: reviewedVersion.reviewIssues,
+        sourceText: version.sourceText,
+      },
+      "ai-reviewed-root-draft",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(savePlanDraft.mock.calls[0]?.[0]).not.toHaveProperty("basePlanVersionId");
+    expect(getPlanActivationState.mock.invocationCallOrder[0]).toBeLessThan(
+      savePlanDraft.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(plans.selectedPlan.value).toEqual(reviewedVersion);
+    wrapper.unmount();
+  });
+
+  it("does not save an AI-reviewed draft when target authority is unavailable", async () => {
+    const savePlanDraft = vi.fn();
+    const api = apiWith({
+      getPlanActivationState: vi.fn().mockRejectedValue(
+        new ApiClientError({
+          code: "SERVICE_UNAVAILABLE",
+          message: "sensitive upstream detail",
+          status: 503,
+        }),
+      ),
+      listPlanVersions: vi.fn().mockResolvedValue({ ...page, items: [], total: 0 }),
+      savePlanDraft,
+    });
+    const { plans, wrapper } = mountPlans(api, ["must-not-be-used"]);
+    await flushPromises();
+
+    const saved = await plans.saveExtractedDraft({
+      planJson: version.planJson,
+      reviewIssues: [],
+      sourceText: version.sourceText,
+      symbol: version.symbol,
+    });
+
+    expect(saved).toBe(false);
+    expect(savePlanDraft).not.toHaveBeenCalled();
+    expect(plans.errorMessage.value).toBe(
+      "目标股票启停状态无法确认，未保存 AI 审核草稿。",
+    );
+    expect(plans.errorMessage.value).not.toContain("sensitive upstream detail");
+    wrapper.unmount();
+  });
+
   it("uses one caller key per save, activation, and deactivation then requeries", async () => {
     const listPlanVersions = vi.fn().mockResolvedValue(page);
     const savedVersion = {
