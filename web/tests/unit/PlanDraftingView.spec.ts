@@ -186,6 +186,48 @@ describe("PlanDraftingView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("defaults to the left-side AI workflow and preserves unfinished input", async () => {
+    const wrapper = mount(PlanDraftingView, {
+      props: {
+        api: apiWith({ getRuntime: vi.fn().mockResolvedValue(runtime) }),
+        planApi: planApiWith(),
+      },
+    });
+    await flushPromises();
+
+    const importTab = wrapper.get('[data-testid="creation-mode-import"]');
+    const aiTab = wrapper.get('[data-testid="creation-mode-ai"]');
+    const importPanel = wrapper.get('[data-testid="creation-panel-import"]');
+    const aiPanel = wrapper.get('[data-testid="creation-panel-ai"]');
+    const tabs = wrapper.findAll('[role="tab"]');
+
+    expect(tabs[0]?.attributes("data-testid")).toBe("creation-mode-ai");
+    expect(aiTab.attributes("aria-selected")).toBe("true");
+    expect(importTab.attributes("aria-selected")).toBe("false");
+    expect(aiPanel.isVisible()).toBe(true);
+    expect(importPanel.isVisible()).toBe(false);
+
+    await wrapper
+      .get<HTMLTextAreaElement>("#plan-source-text")
+      .setValue("华亚智能交易计划");
+    await importTab.trigger("click");
+
+    expect(importTab.attributes("aria-selected")).toBe("true");
+    expect(aiTab.attributes("aria-selected")).toBe("false");
+    expect(wrapper.get('[data-testid="creation-panel-ai"]').attributes("style")).toContain(
+      "display: none",
+    );
+    expect(wrapper.get('[data-testid="creation-panel-import"]').attributes("style")).not.toContain(
+      "display: none",
+    );
+
+    await aiTab.trigger("click");
+    expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.value).toBe(
+      "华亚智能交易计划",
+    );
+    wrapper.unmount();
+  });
+
   it("loads the file-configured AI runtime and completes the Web extraction flow", async () => {
     const getRuntime = vi.fn().mockResolvedValue(runtime);
     const submitExtraction = vi.fn().mockResolvedValue(receipt);

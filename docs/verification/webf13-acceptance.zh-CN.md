@@ -6,9 +6,9 @@
 
 ## 范围与证据边界
 
-WEBF13 记录既有真实生产路由，并补齐缺失的浏览器级新建回测旅程证据。证据于 2026-09-04（Asia/Shanghai）从 `main` 的 `8171a7d8b7815b587a6a6f1ff9f92ee2c83735fb` 收集；本切片开始前工作树干净。环境为 Windows、CPython 3.14.7、Node 24.13.1、npm 11.8.0，以及锁定的 Playwright 1.62.1 Chromium 项目。
+WEBF13 记录既有真实生产路由、补齐缺失的浏览器级新建回测旅程证据，并记录后续计划工作台布局稳定化。证据于 2026-09-04（Asia/Shanghai）从本地 `main` 的 `a11f9b181b39b4ff8a25efc94a8772ab8c8ed73b` 加保留的工作树 UI 修改收集。环境为 Windows、CPython 3.14.7、Node 24.13.1、npm 11.8.0，以及锁定的 Playwright 1.62.1 Chromium 项目。
 
-本切片只改变测试和配对文档。它不改变生产源码、REST 路径、OpenAPI 字段、生成 TypeScript 类型、数据库 Schema、Schema v1 数据、哈希公式、供应商边界、token 处理或历史结果。
+最终切片改变生产 Vue 计划工作台组合与响应式呈现、对应单元/浏览器测试以及本配对证据记录。它不改变后端业务判断、REST 路径、OpenAPI 字段、生成 TypeScript 类型、数据库 Schema、Schema v1 数据、既有哈希、供应商边界、token 处理或历史结果。
 
 ## 路由证据
 
@@ -17,6 +17,14 @@ WEBF13 记录既有真实生产路由，并补齐缺失的浏览器级新建回�
 - `rg -n "createRoutePlaceholder" web/src` 未找到引用。
 - `BacktestRouter.spec.ts` 固定精确且有序的 10 路由表面，并逐一惰性加载五条曾经的占位路由、既有计划工作台和四条回测视图。其聚焦运行通过 `12 tests`。
 - 完整确定性浏览器套件通过 `20 tests`。既有生产 Router 旅程覆盖 `/`、`/stocks/:symbol`、`/plans/:id` 和 `/alerts`；新增 `/system` 路由用例经过真实 Router 和 `GET /api/v1/health`，断言路由标题/一级标题，并且没有控制台、失败请求、未预期 API 或外部请求问题。
+
+## 计划工作台布局证据
+
+计划页面在持久版本工作区之前展示一个紧凑创建区。结构化 JSON/YAML 导入和可选 AI 提取作为互斥可见的创建方式，不再把两套完整流程纵向堆叠。切换方式会保留未完成的本地输入；解析、校验、草稿创建、激活资格和生命周期判断继续由后端权威负责。
+
+- 初始 RED：聚焦 Vue 测试因不存在创建方式控件和隔离面板而失败。GREEN 增加可访问 tablist，将 AI 提取置于首位并默认选中，通过 `v-show` 保留未完成输入，并支持 Left/Right/Home/End 键盘选择。
+- 浏览器 RED 在桌面 fixture 中测得导入面板高 `698 px`，持久版本工作区宽仅 `894 px`。GREEN 将导入面板保持在 `400 px` 以下，并让两个主要区域均超过路由宽度的 `90%`，且不改变请求 payload 或后端调用。
+- 响应式 RED 在 `320 px` 视口发现 `81 px` 横向溢出。最终浏览器闸门在 `320`、`768`、`1024`、`1440 px` 均无路由级横向溢出；窄屏标题/操作纵向排列，技术枚举值允许断行，创建控件保持键盘可访问。计划旅程的 WCAG 2.1 A/AA 严重/致命 axe 结果为空。
 
 ## 新建回测旅程证据
 
@@ -56,10 +64,10 @@ npm --prefix web run test:e2e
 git diff --check
 ```
 
-结果：Ruff 通过；聚焦后端集合通过 `284` 项并有 `1` 项已记录平台跳过；production-fake 旅程通过 `1` 项；OpenAPI 快照通过 `14` 项；生成一致性通过；Vitest 通过 `40 files / 580 tests`；`vue-tsc` 通过；Vite 生产构建通过；Chromium 通过 `20 tests`；`git diff --check` 通过。Vite 保留既有提示：一个生成 chunk 压缩后超过 500 kB；本切片不改变生产 bundle 源码。历史验收报告和哈希保持不变。
+结果：Ruff 通过；聚焦后端集合通过 `284` 项并有 `1` 项已记录平台跳过；production-fake 旅程通过 `1` 项；OpenAPI 快照通过 `14` 项；生成一致性通过；Vitest 通过 `40 files / 581 tests`；`vue-tsc` 通过；Vite 生产构建通过；Chromium 通过 `20 tests`；`git diff --check` 通过。Vite 保留既有提示：生成 chunk 压缩后超过 500 kB；本布局切片未增加依赖或 API 表面。历史 Schema v1 数据、回测结果和哈希保持不变。
 
 ## 遗留风险
 
 - 确定性 fake 验收不能证明真实 Tushare、DeepSeek、券商或其他供应商的可用性/语义；它们继续使用单独授权闸门。
 - Windows 运行会跳过 POSIX 文件 ownership 用例，不能替代该平台专属证据。
-- 本次仅测试/文档切片没有重新运行手工 NVDA 或全新性能 profiling；既有历史证据保持不变，不会被重标为新的 WEBF13 证据。
+- 本布局切片没有重新运行手工 NVDA 或全新性能 profiling；自动键盘、响应式和 axe 证据不能替代这些单独的手工闸门。

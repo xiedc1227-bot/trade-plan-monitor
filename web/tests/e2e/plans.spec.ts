@@ -296,6 +296,10 @@ test("requires explicit review, save, and backend-approved activation for an AI 
   });
 
   await page.goto(`${baseUrl}/plans`);
+  await expect(page.getByRole("tab", { name: /从原文 AI 提取/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await page.getByLabel("粘贴中文计划原文").fill("华亚智能交易计划");
   await page.getByRole("button", { name: "提交提取审核" }).click();
   await expect(page.getByText("结构化草稿已生成；仍需完成证据与重大问题审核。")).toBeVisible();
@@ -460,6 +464,31 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
 
   await page.goto(`${baseUrl}/plans`);
   await expect(page.getByRole("heading", { level: 1, name: "计划工作台" })).toBeVisible();
+  const creationTabs = page.getByRole("tab");
+  await expect(creationTabs.first()).toContainText("从原文 AI 提取");
+  await expect(page.getByRole("tab", { name: /从原文 AI 提取/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByRole("heading", { name: "AI 计划提取审核" })).toBeVisible();
+  await page.getByRole("tab", { name: /导入 JSON \/ YAML/ }).click();
+  const planViewWidth = await page.locator(".plan-drafting-view").evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  const importPanelWidth = await page.locator(".plan-import").evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  const importPanelHeight = await page.locator(".plan-import").evaluate(
+    (element) => element.getBoundingClientRect().height,
+  );
+  expect(importPanelWidth).toBeGreaterThan(planViewWidth * 0.9);
+  expect(importPanelHeight).toBeLessThan(400);
+  await expect(page.getByRole("tab", { name: /导入 JSON \/ YAML/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByRole("heading", { name: "AI 计划提取审核" })).toBeHidden();
+  await page.getByRole("tab", { name: /从原文 AI 提取/ }).click();
   await expect(page.getByText("配置文件只读")).toBeVisible();
   await expect(page.getByText("deepseek-v4-flash", { exact: true })).toBeVisible();
   await expect(page.locator("#provider-secret")).toHaveCount(0);
@@ -477,11 +506,16 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
     sourceText: source,
   });
   expect(idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+  await page.getByRole("tab", { name: /导入 JSON \/ YAML/ }).click();
   const importForm = page.getByTestId("plan-import-form");
   await importForm.getByLabel("计划文档").fill(planDocument);
   await importForm.getByLabel("导入目标股票").fill(persistedPlan.symbol);
   await page.getByRole("button", { name: "提交后端安全导入" }).click();
   await expect(page.getByText("v1 · 003043.SZ")).toBeVisible();
+  const versionWorkspaceWidth = await page.locator(".plans-view").evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  expect(versionWorkspaceWidth).toBeGreaterThan(planViewWidth * 0.9);
   expect(importIdempotencyKeys[0]).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
   expect(importCommands[0]).toEqual({
     document: planDocument,
@@ -516,6 +550,7 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
 
   await page.goto(`${baseUrl}/plans`);
   await expect(page.getByText("v1 · 003043.SZ")).toBeVisible();
+  await page.getByRole("tab", { name: /导入 JSON \/ YAML/ }).click();
   const crossSymbolImportForm = page.getByTestId("plan-import-form");
   await crossSymbolImportForm.getByLabel("计划文档").fill(crossSymbolPlan.planJson);
   await crossSymbolImportForm.getByLabel("导入目标股票").fill(CROSS_SYMBOL);
@@ -551,6 +586,41 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
       `GET /api/v1/plan-activation-states/${CROSS_SYMBOL}`,
     ]),
   );
+
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ height: 900, width });
+    const layout = await page.evaluate(() => ({
+      horizontalOverflow:
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      overflowingElements: [...document.querySelectorAll<HTMLElement>("body *")]
+        .filter(
+          (element) =>
+            element.children.length === 0 &&
+            element.getBoundingClientRect().right > window.innerWidth + 1,
+        )
+        .slice(-20)
+        .map((element) => ({
+          className: element.className,
+          left: Math.round(element.getBoundingClientRect().left),
+          right: Math.round(element.getBoundingClientRect().right),
+          tagName: element.tagName,
+          text: element.textContent?.slice(0, 40),
+        })),
+    }));
+    expect(
+      layout.horizontalOverflow,
+      `viewport ${width}px: ${JSON.stringify(layout.overflowingElements)}`,
+    ).toBeLessThanOrEqual(1);
+  }
+
+  await page.setViewportSize({ height: 900, width: 320 });
+  const mobileImportTab = await page.getByRole("tab", { name: /导入 JSON \/ YAML/ }).boundingBox();
+  const mobileAiTab = await page.getByRole("tab", { name: /从原文 AI 提取/ }).boundingBox();
+  expect(mobileImportTab).not.toBeNull();
+  expect(mobileAiTab).not.toBeNull();
+  expect(mobileImportTab?.y).toBeGreaterThan(mobileAiTab?.y ?? Number.POSITIVE_INFINITY);
+
+  await page.setViewportSize({ height: 900, width: 1440 });
 
   await page.addScriptTag({ path: axePath });
   const seriousViolations = await page.evaluate(async () => {

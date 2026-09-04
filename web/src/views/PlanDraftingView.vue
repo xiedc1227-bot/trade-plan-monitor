@@ -4,6 +4,9 @@ import { shallowRef, watch } from "vue";
 import type { AIPlanApi } from "../api/ai";
 import type { PlanApi } from "../api/plans";
 import ExtractedPlanReview from "../components/plans/ExtractedPlanReview.vue";
+import PlanCreationSwitcher, {
+  type PlanCreationMode,
+} from "../components/plans/PlanCreationSwitcher.vue";
 import PlanImportForm from "../components/plans/PlanImportForm.vue";
 import PlanWorkbench from "../components/plans/PlanWorkbench.vue";
 import type { PlanExportIntent } from "../components/plans/StructuredPlanEditor.vue";
@@ -36,6 +39,7 @@ const plans = usePlans({
   ...(props.planVersionId === undefined ? {} : { initialPlanVersionId: props.planVersionId }),
 });
 const savedExtractionId = shallowRef<string | null>(null);
+const creationMode = shallowRef<PlanCreationMode>("AI");
 
 watch(
   () => props.planVersionId,
@@ -74,76 +78,87 @@ async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<voi
 <template>
   <section class="plan-drafting-view" aria-labelledby="plan-workspace-title">
     <header class="plan-drafting-view__header">
-      <p>CONFIG-DRIVEN AI DRAFTING</p>
+      <p class="plan-drafting-view__eyebrow">PLAN VERSION WORKSPACE</p>
       <h1 id="plan-workspace-title">计划工作台</h1>
+      <p class="plan-drafting-view__description">
+        创建、审核和管理交易计划版本。浏览器只提交操作意图，后端负责解析、校验与状态决策。
+      </p>
     </header>
-    <p v-if="drafting.loading.value" class="plan-drafting-view__notice" role="status">
-      正在读取 AI 配置
-    </p>
-    <p
-      v-else-if="drafting.errorMessage.value && !drafting.runtime.value"
-      class="plan-drafting-view__error"
-      role="alert"
-    >
-      {{ drafting.errorMessage.value }}
-    </p>
-    <template v-else-if="drafting.runtime.value">
-      <p
-        v-if="drafting.errorMessage.value"
-        class="plan-drafting-view__error"
-        role="alert"
-      >
-        {{ drafting.errorMessage.value }}
-      </p>
-      <p
-        v-if="drafting.stoppedMessage.value"
-        class="plan-drafting-view__notice"
-        role="status"
-      >
-        {{ drafting.stoppedMessage.value }}
-      </p>
-      <PlanWorkbench
-        :extraction="drafting.extraction.value"
-        :initial-provider-id="drafting.runtime.value.providerId"
-        :providers="[drafting.runtime.value]"
-        :submitting="drafting.submitting.value"
-        @stop-waiting="drafting.stopWaiting"
-        @submit-extraction="drafting.submitExtraction"
-      >
-        <template #extractedDraft="{ extraction, resolvedIssueKeys, sourceText }">
-          <ExtractedPlanReview
-            :busy="plans.busy.value"
-            :extraction="extraction"
-            :resolved-issue-keys="resolvedIssueKeys"
-            :saved="savedExtractionId === extraction.id"
-            :source-text="sourceText"
-            @save-draft="saveExtractedDraft"
-          />
+
+    <PlanCreationSwitcher v-model="creationMode">
+      <template #import>
+        <p v-if="plans.loading.value" class="plan-drafting-view__notice" role="status">
+          正在读取持久计划版本
+        </p>
+        <p v-if="plans.errorMessage.value" class="plan-drafting-view__error" role="alert">
+          {{ plans.errorMessage.value }}
+        </p>
+        <button
+          v-if="plans.errorMessage.value && !plans.loading.value"
+          class="plan-drafting-view__retry"
+          type="button"
+          @click="plans.refresh"
+        >
+          重新读取计划
+        </button>
+        <PlanImportForm
+          v-if="!plans.loading.value && !plans.errorMessage.value"
+          :busy="plans.busy.value"
+          :expected-revision="0"
+          @import-plan="plans.importPlan"
+        />
+      </template>
+
+      <template #ai>
+        <p v-if="drafting.loading.value" class="plan-drafting-view__notice" role="status">
+          正在读取 AI 配置
+        </p>
+        <p
+          v-else-if="drafting.errorMessage.value && !drafting.runtime.value"
+          class="plan-drafting-view__error"
+          role="alert"
+        >
+          {{ drafting.errorMessage.value }}
+        </p>
+        <template v-else-if="drafting.runtime.value">
+          <p
+            v-if="drafting.errorMessage.value"
+            class="plan-drafting-view__error"
+            role="alert"
+          >
+            {{ drafting.errorMessage.value }}
+          </p>
+          <p
+            v-if="drafting.stoppedMessage.value"
+            class="plan-drafting-view__notice"
+            role="status"
+          >
+            {{ drafting.stoppedMessage.value }}
+          </p>
+          <PlanWorkbench
+            :extraction="drafting.extraction.value"
+            :initial-provider-id="drafting.runtime.value.providerId"
+            :providers="[drafting.runtime.value]"
+            :submitting="drafting.submitting.value"
+            @stop-waiting="drafting.stopWaiting"
+            @submit-extraction="drafting.submitExtraction"
+          >
+            <template #extractedDraft="{ extraction, resolvedIssueKeys, sourceText }">
+              <ExtractedPlanReview
+                :busy="plans.busy.value"
+                :extraction="extraction"
+                :resolved-issue-keys="resolvedIssueKeys"
+                :saved="savedExtractionId === extraction.id"
+                :source-text="sourceText"
+                @save-draft="saveExtractedDraft"
+              />
+            </template>
+          </PlanWorkbench>
         </template>
-      </PlanWorkbench>
-    </template>
+      </template>
+    </PlanCreationSwitcher>
 
     <section class="plan-drafting-view__persistence" aria-label="持久计划版本">
-      <p v-if="plans.loading.value" class="plan-drafting-view__notice" role="status">
-        正在读取持久计划版本
-      </p>
-      <p v-if="plans.errorMessage.value" class="plan-drafting-view__error" role="alert">
-        {{ plans.errorMessage.value }}
-      </p>
-      <button
-        v-if="plans.errorMessage.value && !plans.loading.value"
-        class="plan-drafting-view__retry"
-        type="button"
-        @click="plans.refresh"
-      >
-        重新读取计划
-      </button>
-      <PlanImportForm
-        v-if="!plans.loading.value && !plans.errorMessage.value"
-        :busy="plans.busy.value"
-        :expected-revision="0"
-        @import-plan="plans.importPlan"
-      />
       <PlansView
         v-if="plans.versions.value.length > 0"
         :active-plan="plans.activePlan.value"
@@ -160,6 +175,7 @@ async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<voi
         @select-plan="plans.selectPlan"
       />
     </section>
+
   </section>
 </template>
 
@@ -198,11 +214,22 @@ async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<voi
   margin: 0;
 }
 
-.plan-drafting-view__header p {
+.plan-drafting-view__eyebrow {
   color: var(--color-signal-info-cyan);
   font-family: var(--font-numeric);
   font-size: 0.75rem;
   letter-spacing: 0.08em;
+}
+
+.plan-drafting-view__header h1 {
+  font-size: clamp(1.75rem, 4vw, 3rem);
+  line-height: 1.1;
+}
+
+.plan-drafting-view__description {
+  max-width: 58rem;
+  margin-block-start: var(--space-2) !important;
+  color: var(--color-text-muted);
 }
 
 .plan-drafting-view__notice {

@@ -352,7 +352,8 @@ function deactivate(command: PlanDeactivationCommand): void {
 .plans-view {
   display: grid;
   gap: var(--space-6);
-  max-width: 100rem;
+  box-sizing: border-box;
+  width: min(100%, 90rem);
   margin: 0 auto;
 }
 
@@ -380,6 +381,7 @@ function deactivate(command: PlanDeactivationCommand): void {
 .plans-view__workspace {
   display: grid;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .plans-view__versions button {
@@ -439,6 +441,14 @@ function deactivate(command: PlanDeactivationCommand): void {
 @media (max-width: 63.999rem) {
   .plans-view__layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 47.999rem) {
+  .plans-view__header {
+    align-items: start;
+    flex-direction: column;
+    padding-block-end: var(--space-3);
   }
 }
 </style>

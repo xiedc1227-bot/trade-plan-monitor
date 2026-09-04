@@ -549,6 +549,7 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
 .structured-editor {
   display: grid;
   gap: var(--space-5);
+  min-width: 0;
   padding: var(--space-6);
   background: var(--color-surface-graphite);
   border: var(--border-technical);
@@ -587,6 +588,15 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
   padding: var(--space-4);
   background: var(--color-surface-raised);
   border-inline-start: 0.25rem solid var(--color-signal-watch-amber);
+}
+
+.structured-editor__preview,
+.structured-editor__issues,
+.structured-editor__portable,
+.structured-editor__portable-panel,
+.structured-editor__section {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .structured-editor__conflict,
@@ -657,6 +667,22 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
   .structured-editor__sections,
   .structured-editor__portable {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 47.999rem) {
+  .structured-editor {
+    padding: var(--space-4);
+  }
+
+  .structured-editor__header,
+  .structured-editor__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .structured-editor button {
+    width: 100%;
   }
 }
 </style>

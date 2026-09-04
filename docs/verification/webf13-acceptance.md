@@ -6,9 +6,9 @@
 
 ## Scope and Evidence Boundary
 
-WEBF13 documents existing real production routing and closes the missing browser-level new-backtest journey evidence. Evidence was collected on 2026-09-04 (Asia/Shanghai) from `main` at `8171a7d8b7815b587a6a6f1ff9f92ee2c83735fb`; the working tree was clean before this slice. The environment was Windows with CPython 3.14.7, Node 24.13.1, npm 11.8.0, and the pinned Playwright 1.62.1 Chromium project.
+WEBF13 documents existing real production routing, closes the missing browser-level new-backtest journey evidence, and records the follow-up plan-workspace layout stabilization. Evidence was collected on 2026-09-04 (Asia/Shanghai) from local `main` at `a11f9b181b39b4ff8a25efc94a8772ab8c8ed73b` plus the preserved working-tree UI changes. The environment was Windows with CPython 3.14.7, Node 24.13.1, npm 11.8.0, and the pinned Playwright 1.62.1 Chromium project.
 
-This slice changes tests and paired documentation only. It changes no production source, REST path, OpenAPI field, generated TypeScript type, database schema, Schema v1 data, hash formula, provider boundary, token handling, or historical result.
+This final slice changes the production Vue plan-workspace composition and responsive presentation, its unit/browser tests, and this paired evidence record. It changes no backend business decision, REST path, OpenAPI field, generated TypeScript type, database schema, Schema v1 data, existing hash, provider boundary, token handling, or historical result.
 
 ## Route Evidence
 
@@ -17,6 +17,14 @@ Required route map: `/`, `/stocks/:symbol`, `/plans`, `/plans/:id`, `/alerts`, `
 - `rg -n "createRoutePlaceholder" web/src` found no reference.
 - `BacktestRouter.spec.ts` fixes the exact ordered 10-route surface and lazy-loads each of the five former placeholders plus the existing plan workbench and four backtest views. Its focused run passed `12 tests`.
 - The full deterministic browser suite passed `20 tests`. Existing production-router journeys cover `/`, `/stocks/:symbol`, `/plans/:id`, and `/alerts`; the new `/system` route case uses the real router and `GET /api/v1/health`, asserts the route title/heading, and reports no console, failed-request, unexpected-API, or external-request finding.
+
+## Plan Workspace Layout Evidence
+
+The plan page presents one compact creation area before the persisted version workspace. Structured JSON/YAML import and optional AI extraction are mutually visible creation modes rather than two full workflows stacked vertically. Switching modes preserves unfinished local input; parsing, validation, draft creation, activation eligibility, and lifecycle decisions remain backend-authoritative.
+
+- Initial RED: the focused Vue test failed because no creation-mode controls or isolated panels existed. GREEN adds an accessible tablist, places AI extraction first and selects it by default, preserves unfinished input through `v-show`, and supports Left/Right/Home/End keyboard selection.
+- Browser RED measured the import panel at `698 px` high and the persisted workspace at only `894 px` wide in the desktop fixture. GREEN keeps the import panel below `400 px` and both major regions above `90%` of the route width without changing request payloads or backend calls.
+- Responsive RED found `81 px` horizontal overflow at a `320 px` viewport. The final browser gate reports no route-level horizontal overflow at `320`, `768`, `1024`, or `1440 px`; narrow headers/actions stack, technical enum values can wrap, and the creation controls remain keyboard-accessible. The plan journey's WCAG 2.1 A/AA serious/critical axe result is empty.
 
 ## New-Backtest Journey Evidence
 
@@ -56,10 +64,10 @@ npm --prefix web run test:e2e
 git diff --check
 ```
 
-Results: Ruff passed; the focused backend collection passed `284` with `1` documented platform skip; the production-fake journey passed `1`; the OpenAPI snapshot passed `14`; generation consistency passed; Vitest passed `40 files / 580 tests`; `vue-tsc` passed; Vite production build passed; Chromium passed `20 tests`; and `git diff --check` passed. Vite retained its existing advisory that a generated chunk exceeds 500 kB after minification; this slice changes no production bundle source. Historical acceptance reports and hashes remain unchanged.
+Results: Ruff passed; the focused backend collection passed `284` with `1` documented platform skip; the production-fake journey passed `1`; the OpenAPI snapshot passed `14`; generation consistency passed; Vitest passed `40 files / 581 tests`; `vue-tsc` passed; Vite production build passed; Chromium passed `20 tests`; and `git diff --check` passed. Vite retained its existing advisory that generated chunks exceed 500 kB after minification; this layout slice adds no dependency or API surface. Historical Schema v1 data, backtest results, and hashes remain unchanged.
 
 ## Residual Risks
 
 - Deterministic fake acceptance does not prove live Tushare, DeepSeek, broker, or other supplier availability or semantics; those remain separately authorized gates.
 - The Windows run skips the POSIX file-ownership case and does not replace that platform-specific evidence.
-- Manual NVDA and fresh performance profiling were not rerun for this test/documentation-only slice; the existing historical evidence remains unchanged and is not relabeled as new WEBF13 evidence.
+- Manual NVDA and fresh performance profiling were not rerun for this layout slice; automated keyboard, responsive, and axe evidence does not replace those separate manual gates.
