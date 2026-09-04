@@ -61,7 +61,7 @@ Symbol detail additionally exposes `indexConditionEvidence`, ordered by exact `p
 
 ### Invalidation
 
-The WebSocket union adds `market.index.updated` with exactly `entityId`, `revision`, and `status`. It is an invalidation notice only. The browser refetches dashboard/detail/history data and never constructs a snapshot or condition outcome from the event.
+The WebSocket union adds `market.index.updated` with exactly `entityId`, `revision`, and `status`. WEBF11 makes this approved invalidation durable through the existing monitor-event ledger and global cursor using `0008_market_index_monitor_event`; it is not a parallel sequence. The browser refetches dashboard/detail/history data and never constructs a snapshot or condition outcome from the event. Ordinary reconnects resume from the applied store cursor; an event gap, heartbeat cursor mismatch, malformed frame, or `snapshot.required` causes an authoritative dashboard snapshot before resuming. Missing dashboard projections remain `SERVICE_UNAVAILABLE`.
 
 ## Vue Component Map and Data Flow
 
@@ -87,6 +87,7 @@ Route views remain composition surfaces. Readonly generated types flow down thro
 ## Testing Strategy
 
 - Backend tests prove snapshot deduplication, bounded/signed history, exact decimals/time, safe errors, nullable migration fields, progress invariants, path evidence, and invalidation payloads.
+- WEBF11 migration/stream tests prove `market.index.updated` is stored and replayed through the global cursor, existing rows/sequences/identities are preserved, row-count and seven-column-copy checks run before replacement, and downgrade refuses before DDL when index rows exist.
 - Vitest covers shared-vs-plan separation, no-condition copy, cached/stale/gapped/blocked/empty/loading/failure states, cancellation races, keyboard/table semantics, and zero browser policy functions.
 - Playwright covers dashboard/detail with two plans sharing one snapshot but different outcomes, one failed board beside a healthy board, no-condition behavior, responsive widths, and axe with no serious/critical findings.
 
@@ -99,4 +100,4 @@ Route views remain composition surfaces. Readonly generated types flow down thro
 
 ## Review Status
 
-Approved for implementation and offline browser/API verification on `2026-09-02`; real provider calls remain unauthorized.
+Approved for implementation and offline browser/API verification on `2026-09-02`. WEBF11 extends that offline boundary for this session and reuses T039/T043/T044 without changing the API contract; real provider calls remain unauthorized.

@@ -61,7 +61,7 @@ Schema v1 计划的 `referenceMarket=null`。没有指数叶子的 Schema v2 计
 
 ### 失效通知
 
-WebSocket 联合类型增加 `market.index.updated`，准确字段为 `entityId`、`revision` 和 `status`。它只表示数据失效。浏览器重新获取总览/详情/历史数据，绝不根据事件创建快照或条件结果。
+WebSocket 联合类型增加 `market.index.updated`，准确字段为 `entityId`、`revision` 和 `status`。WEBF11 通过 `0008_market_index_monitor_event` 使该已批准的失效通知经由既有监控事件账本和全局游标持久化；它不是并行序号。浏览器重新获取总览/详情/历史数据，绝不根据事件创建快照或条件结果。普通断线重连从已应用状态的游标恢复；事件缺口、心跳游标不匹配、格式错误帧或 `snapshot.required` 会在恢复前重新获取权威总览快照。总览权威投影缺失时仍为 `SERVICE_UNAVAILABLE`。
 
 ## Vue 组件图与数据流
 
@@ -87,6 +87,7 @@ WebSocket 联合类型增加 `market.index.updated`，准确字段为 `entityId`
 ## 测试策略
 
 - 后端测试证明快照去重、有界/签名历史、准确十进制/时间、安全错误、可空迁移字段、进度不变量、路径证据和失效事件。
+- WEBF11 迁移/事件流测试证明 `market.index.updated` 经全局游标持久化和回放、既有行/序号/identity 保留、替换前执行行数与七列复制校验，以及存在板块指数行时在 DDL 前拒绝降级。
 - Vitest 覆盖共用/计划分区、无条件文案、缓存/过期/缺口/阻断/空/加载/故障、取消竞态、键盘/表格语义以及浏览器策略函数为零。
 - Playwright 覆盖两份计划共用一份快照但结果不同、一个故障板块与一个健康板块并列、无条件行为、各响应宽度，以及 axe 无严重/致命问题。
 
@@ -99,4 +100,4 @@ WebSocket 联合类型增加 `market.index.updated`，准确字段为 `entityId`
 
 ## 审核状态
 
-已于 `2026-09-02` 授权实施和离线浏览器/API 验证；真实供应商调用仍未授权。
+已于 `2026-09-02` 授权实施和离线浏览器/API 验证。WEBF11 在本会话扩展该离线边界，并复用 T039/T043/T044 而不改变 API 契约；真实供应商调用仍未授权。

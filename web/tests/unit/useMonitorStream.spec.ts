@@ -303,6 +303,32 @@ describe("useMonitorStream", () => {
     wrapper.unmount();
   });
 
+  it("does not let duplicate replay frames mask two missed heartbeats", async () => {
+    vi.useFakeTimers();
+    const apiClient: ApiClient = { getDashboard: vi.fn(async () => snapshot) };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({ apiClient, createSocket: sockets.createSocket });
+    await flushPromises();
+    const socket = sockets.sockets[0];
+    if (socket === undefined) throw new Error("expected one socket");
+    socket.open();
+    socket.receive({ type: "heartbeat", sequence: 7 });
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    socket.receive(event(7));
+    await vi.advanceTimersByTimeAsync(19_999);
+    expect(socket.close).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(socket.close).toHaveBeenCalled();
+    expect(stream.connectionState.value).toMatchObject({
+      code: "STALE",
+      label: expect.stringContaining("过期"),
+    });
+    wrapper.unmount();
+  });
+
   it("times out a socket that never leaves the connecting state", async () => {
     vi.useFakeTimers();
     const apiClient: ApiClient = { getDashboard: vi.fn(async () => snapshot) };

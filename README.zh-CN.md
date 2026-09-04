@@ -13,6 +13,7 @@ WEBF06 将 `/` 接到既有以后端为权威来源的总览快照：它展示�
 WEBF09 把个股详情持仓面板接到既有持仓 REST 契约，以及共用 monitor 数据库上的持久服务。只有后端执行已启用计划最大持仓、已存日历 T+1、剩余数量、整手和 revision 规则；浏览器只做输入形状检查和显式确认，绝不预测持仓命令是否符合资格。
 
 WEBF10 把 `/alerts` 接到既有提醒 REST 契约和共用持久出站箱。筛选、规范证据和确认 revision 均由后端权威判断；确认操作幂等且受审计，但绝不记录成交或变更持仓。
+WEBF11 加固既有 T039/T043/T044 监控事件流：普通断线重连直接使用已应用状态的 SQLite 全局游标恢复；只有事件缺口或 `snapshot.required` 帧才会先重新获取以后端为权威来源的总览快照，再使用该快照的 `sequence` 重连。只有严格匹配的心跳才能重置存活状态并允许进入 `LIVE`；重复或旧帧不能掩盖超时。追加的 `0008_market_index_monitor_event` 迁移只扩展既有事件账本 CHECK 约束，使已批准的 `market.index.updated` 真正可落库；保留所有既有行、序号和 identity，绝不重写冻结的 `0006_monitor_event`。默认生产组合缺少权威总览投影时仍返回 `SERVICE_UNAVAILABLE`；WEBF11 绝不伪造恢复数据。本变更不增加 OpenAPI 路径或生成 TypeScript 字段，不改变 Schema v1 数据、历史回测结果、既有 hash，也不声称回测策略事件 cursor resume 已完成。
 
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 

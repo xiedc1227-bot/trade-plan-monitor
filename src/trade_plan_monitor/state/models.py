@@ -171,7 +171,8 @@ class MonitorEvent(Base):
             "'plan.deactivated', "
             "'position.updated', "
             "'ai.provider.updated', "
-            "'system.health.updated')",
+            "'system.health.updated', "
+            "'market.index.updated')",
             name="ck_monitor_event_type",
         ),
         CheckConstraint("schema_version = 1", name="ck_monitor_event_schema_version"),

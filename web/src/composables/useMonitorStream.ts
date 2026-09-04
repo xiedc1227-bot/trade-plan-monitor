@@ -180,7 +180,6 @@ export function useMonitorStream(
   }
 
   function handleMessage(socket: WebSocket, revision: number, message: MessageEvent): void {
-    armSocketTimeout(socket, revision, HEARTBEAT_TIMEOUT_MS);
     const frame = parseFrame(message.data);
     if (isHeartbeatFrame(frame)) {
       if (frame.sequence !== store.sequence) {
@@ -188,6 +187,7 @@ export function useMonitorStream(
         recoverSnapshot();
         return;
       }
+      armSocketTimeout(socket, revision, HEARTBEAT_TIMEOUT_MS);
       retryAttempt = 0;
       connectionCode.value = store.connectionStatus === "CONNECTED" ? "LIVE" : "STALE";
       return;

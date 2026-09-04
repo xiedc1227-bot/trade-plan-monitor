@@ -32,6 +32,17 @@ shape checks and explicit confirmation but never predicts whether a position com
 WEBF10 connects `/alerts` to the existing alert REST contract and the shared persistent outbox.
 Filtering, canonical evidence, and acknowledgement revisions stay backend-authoritative;
 acknowledgement is idempotent and audited but never records a fill or changes a position.
+WEBF11 hardens the existing T039/T043/T044 monitor stream: reconnects resume from the SQLite
+global cursor, and any event gap or `snapshot.required` frame causes a fresh
+backend-authoritative dashboard snapshot before reconnecting with that snapshot's `sequence`.
+Only a strictly matching heartbeat can reset liveness and permit `LIVE`; duplicate or stale frames
+cannot conceal a timeout. The additive `0008_market_index_monitor_event` migration only permits the
+already approved `market.index.updated` event in the existing ledger CHECK constraint; it preserves
+all existing rows, sequences, and identities and never rewrites frozen `0006_monitor_event`.
+The default production composition still returns `SERVICE_UNAVAILABLE` when no authoritative
+dashboard projection exists; WEBF11 never fabricates recovery data. This does not add an OpenAPI
+path or generated TypeScript field, change Schema v1 data, historical backtest results, established
+hashes, or claim strategy-event-cursor resume for backtesting.
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.

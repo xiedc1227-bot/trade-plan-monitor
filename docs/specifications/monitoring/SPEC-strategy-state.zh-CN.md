@@ -122,10 +122,11 @@ class PositionLot(BaseModel):
 - 新幂等键创建 `PENDING`。相同键和哈希在待处理时产生 `IDEMPOTENCY_IN_PROGRESS`；进入 `COMPLETED` 后重放已保存的规范响应。相同键对应不同 SHA-256 请求哈希时始终产生 `IDEMPOTENCY_KEY_REUSED`。已保存规范响应限制为 4 MiB，使完整计划版本响应可以重放，同时不形成无界持久化表面。
 - 仓储失败暴露稳定错误码，例如 `PLAN_VERSION_EXISTS`、`PLAN_SAVE_BLOCKED`、`PLAN_ACTIVATION_BLOCKED`、`PLAN_VERSION_NOT_FOUND`、`CONFLICT`、`IDEMPOTENCY_KEY_REUSED`、`IDEMPOTENCY_IN_PROGRESS` 和 `IDEMPOTENCY_CLAIM_NOT_FOUND`；后续传输适配器将其映射为 HTTP，但不暴露 SQL 或原始 Session 细节。
 - `UnitOfWork` 拥有一个显式短事务。调用方必须调用 `commit()` 才能持久化；退出上下文时未提交则回滚。其公共协议只暴露仓储及 `commit()`/`rollback()`，绝不暴露 SQLAlchemy Session。
-- `UnitOfWork.events` 暴露绑定 Session 的 `MonitorEventLog`，`UnitOfWork.alerts` 则在相同日志与 Session 上暴露 `AlertOutbox`。计划激活、持仓变更、股票/供应商健康变更、判断快照、提醒创建、确认审计及其对应事件因此共同提交或回滚。封闭业务词表为 `symbol.snapshot.updated`、`symbol.health.updated`、`alert.created`、`alert.acknowledged`、`plan.extraction.updated`、`plan.activated`、`plan.deactivated`、`position.updated`、`ai.provider.updated` 和 `system.health.updated`。负责提取、停用或 AI 供应商持久化的注入式应用服务必须在所属变更事务中追加对应事件；持久化边界不虚构这些服务。
+- `UnitOfWork.events` 暴露绑定 Session 的 `MonitorEventLog`，`UnitOfWork.alerts` 则在相同日志与 Session 上暴露 `AlertOutbox`。计划激活、持仓变更、股票/供应商健康变更、判断快照、提醒创建、确认审计及其对应事件因此共同提交或回滚。封闭业务词表为 `symbol.snapshot.updated`、`symbol.health.updated`、`alert.created`、`alert.acknowledged`、`plan.extraction.updated`、`plan.activated`、`plan.deactivated`、`position.updated`、`ai.provider.updated`、`system.health.updated` 和已批准的 `market.index.updated`。负责提取、停用或 AI 供应商持久化的注入式应用服务必须在所属变更事务中追加对应事件；持久化边界不虚构这些服务。
 - 追加迁移 `0006_monitor_event` 紧随 `0005_evaluation_kind`，用唯一的 `monitor_sequence` 替换 `alert_sequence`，并以相同 UUID 和序号把每条历史 `alert_event` 回填为 `alert.created`。既有提醒序号因此保持稳定，后续提醒行在全局序号域中可以稀疏。在任何 DDL 前，由 revision 本地拥有的冻结 v1 校验器会拒绝不符合迁移原始契约、因而无法安全规范转换的任何历史提醒行：它校验精确载荷/对象形状、UUID/dedup/symbol/信号动作 identity、封闭条件/证据/事实类型、三值证据分区、节点/事实/数值预算、动作/区间/next-step 语义、精确上海时区时间差、有界且无控制字符的文本、确定性中文渲染及旧序号高水位。该 revision 完全自包含，绝不导入持续演进的应用 `AlertPayload`、`AlertEvent` 或 renderer；正常 `AlertOutbox` 读取会独立重校验当前完整规范事件。只有全部监控行都是与提醒 identity 匹配的 `alert.created` 时才允许降级；存在其他或不匹配事件时会在数据丢失前封闭失败。
 - 追加迁移 `0007_plan_web_state` 紧随 `0006_monitor_event`。它只新增 `plan_version_review` 和可空 `plan_activation_state`，为既有计划版本回填 `[]` 审核问题，把既有活动指针、revision 和启用时间复制到启用状态投影，并使用各股票最早的版本创建时间为其余仅有草稿的股票建立 revision `0` 的非活动状态。只有每条审核仍是可重建的规范 `[]`，且每条启用状态精确匹配旧活动指针或 revision `0` 的最早版本回填时才允许降级；任何已审核或已停用状态都会在 DDL 前封闭失败。它不重写 `plan_version.payload_json`、计划哈希、Schema v1 计划、历史回测结果或任何既有事件 identity。
 - `MonitorEventLog` 在 identity 读取前串行化 SQLite 写者，分配正数全局序号，保存规范、有界载荷 JSON，并只 flush 而不提交。相同 UUID 的精确重放幂等，语义冲突则拒绝。高水位不受事件保留删除影响；回放会按 7 天截止时间校验完整请求范围，再返回最多 1,000 个连续事件。提醒确认仍只修改 `alert_event.acknowledged_at`，追加一条 `ALERT_ACKNOWLEDGED` 审计和一条 `alert.acknowledged` 监控事件，绝不改变持仓，也不记录投递成功。
+- WEBF11 只新增位于 `0007_plan_web_state` 之后的追加迁移 `0008_market_index_monitor_event`。它预检 `event_type`，复制现有七列，并在替换原表前校验行数，再使用允许 `market.index.updated` 的 CHECK 约束。若存在任何 `market.index.updated` 行，因旧契约无法无损表示该事件，降级必须在 DDL 前拒绝。既有行、全局序号、UUID identity 以及冻结的 `0006_monitor_event` 数据保持不变；该事件通过同一个全局游标持久化和回放，而不是使用并行序号。
 
 ### 低吸事件游标与仓储契约
 
@@ -179,6 +180,7 @@ class UnitOfWork(Protocol):
 - 并发激活和更新必须稳定返回 409 冲突。
 - 测试重复行情和延迟恢复的幂等写入。
 - 覆盖精确、有缺口、超限和仅有最新报价的判断历史读取，以及临时/官方日线 identity 分离。
+- 覆盖 `0008_market_index_monitor_event` 升级/降级：事件类型预检、七列复制、行数校验、既有序号与 identity 保留、`market.index.updated` 的持久化/回放，以及存在板块指数事件时在 DDL 前拒绝有损降级。
 - 在 WAL 写入期间执行在线备份、`PRAGMA integrity_check`、恢复冒烟测试，并只保留最近 30 个成功备份。
 
 ## 边界

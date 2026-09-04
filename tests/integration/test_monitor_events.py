@@ -101,6 +101,11 @@ def _drafts():
             "TUSHARE_RT_MIN",
             payload(entity_id="TUSHARE_RT_MIN", status="READY"),
         ),
+        (
+            event_types.MARKET_INDEX_UPDATED,
+            "000688.SH",
+            payload(entity_id="000688.SH", revision=1, status="LIVE"),
+        ),
     )
     return tuple(
         draft(
@@ -125,18 +130,50 @@ def test_global_event_log_sequences_every_closed_event_type_and_restarts(
         created = tuple(work.events.append(draft) for draft in drafts)
         work.commit()
 
-    assert tuple(event.sequence for event in created) == tuple(range(1, 11))
+    assert tuple(event.sequence for event in created) == tuple(range(1, 12))
+    assert tuple(event.event_type for event in drafts) == tuple(_module().MonitorEventType)
     assert tuple(event.event_type for event in created) == tuple(
         event.event_type for event in drafts
     )
 
     with factory() as restarted:
         page = restarted.events.replay_page_after(0)
-        assert restarted.events.current_sequence() == 10
+        assert restarted.events.current_sequence() == 11
 
     assert page.requires_snapshot is False
-    assert page.high_water_sequence == 10
+    assert page.high_water_sequence == 11
     assert page.events == created
+
+
+def test_market_index_event_commits_and_replays_after_the_previous_cursor(
+    database_engine: Engine,
+) -> None:
+    events = _module()
+    factory = _factory(database_engine)
+    baseline = _drafts()[-2]
+    market_index = events.MonitorEventDraft(
+        event_id=UUID(int=201),
+        event_type=events.MonitorEventType.MARKET_INDEX_UPDATED,
+        aggregate_id="000688.SH",
+        payload=events.MonitorEventPayload(
+            entity_id="000688.SH",
+            revision=1,
+            status="LIVE",
+        ),
+        occurred_at=NOW + timedelta(seconds=20),
+    )
+
+    with factory() as work:
+        first = work.events.append(baseline)
+        committed = work.events.append(market_index)
+        work.commit()
+
+    with factory() as restarted:
+        page = restarted.events.replay_page_after(first.sequence)
+
+    assert page.requires_snapshot is False
+    assert page.high_water_sequence == committed.sequence
+    assert page.events == (committed,)
 
 
 @pytest.mark.parametrize(

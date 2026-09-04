@@ -130,3 +130,78 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await page.getByRole("link", { name: "688001.SH" }).click();
   await expect(page).toHaveURL(/\/stocks\/688001\.SH$/);
 });
+
+test("recovers a sequence gap with a fresh dashboard snapshot before replaying from its cursor", async ({
+  page,
+}) => {
+  const recoveredDashboard = structuredClone(dashboard);
+  const recoveredSymbol = recoveredDashboard.symbols?.[0];
+  if (recoveredSymbol === undefined) {
+    throw new Error("dashboard fixture must contain one symbol");
+  }
+  recoveredDashboard.sequence = 9;
+  recoveredSymbol.name = "权威恢复后的华兴源创";
+
+  let dashboardRequests = 0;
+  let releaseRecoveredDashboard: (() => void) | undefined;
+  const recoveredDashboardGate = new Promise<void>((resolve) => {
+    releaseRecoveredDashboard = resolve;
+  });
+  const socketUrls: string[] = [];
+  const sockets: Array<{ send(message: string): void; url(): string }> = [];
+
+  await page.route(`${baseUrl}/api/v1/dashboard`, async (route) => {
+    dashboardRequests += 1;
+    if (dashboardRequests === 2) {
+      await recoveredDashboardGate;
+    }
+    await route.fulfill({
+      body: JSON.stringify(dashboardRequests === 1 ? dashboard : recoveredDashboard),
+      contentType: "application/json; charset=utf-8",
+      status: 200,
+    });
+  });
+  await page.routeWebSocket(
+    (url) => url.pathname === "/ws/v1/monitor",
+    (socket) => {
+      socketUrls.push(socket.url());
+      sockets.push(socket);
+    },
+  );
+
+  await page.goto(baseUrl);
+  await expect(page.getByText("华兴源创")).toBeVisible();
+  const initialSocketUrl = `${baseUrl.replace("http", "ws")}/ws/v1/monitor?after=7`;
+  await expect.poll(() => socketUrls).toEqual([initialSocketUrl]);
+
+  sockets[0]?.send(
+    JSON.stringify({
+      aggregateId: "688001.SH",
+      eventId: "00000000-0000-0000-0000-000000000009",
+      occurredAt: "2026-09-02T10:35:03+08:00",
+      payload: {
+        entityId: "688001.SH",
+        resultHash: "d".repeat(64),
+        symbol: "688001.SH",
+      },
+      schemaVersion: 1,
+      sequence: 9,
+      type: "symbol.snapshot.updated",
+    }),
+  );
+
+  await expect.poll(() => dashboardRequests).toBe(2);
+  await expect(page.locator('[role="status"]')).toHaveAttribute("data-connection-state", "STALE");
+  expect(socketUrls).toEqual([initialSocketUrl]);
+  expect(releaseRecoveredDashboard).toBeDefined();
+  releaseRecoveredDashboard?.();
+
+  await expect(page.getByText("权威恢复后的华兴源创")).toBeVisible();
+  await expect.poll(() => socketUrls).toEqual([
+    `${baseUrl.replace("http", "ws")}/ws/v1/monitor?after=7`,
+    `${baseUrl.replace("http", "ws")}/ws/v1/monitor?after=9`,
+  ]);
+
+  sockets[1]?.send(JSON.stringify({ sequence: 9, type: "heartbeat" }));
+  await expect(page.locator('[role="status"]')).toHaveAttribute("data-connection-state", "LIVE");
+});

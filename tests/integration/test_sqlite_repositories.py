@@ -2151,7 +2151,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0007_plan_web_state"
+        assert first_revision == second_revision == "0008_market_index_monitor_event"
     finally:
         engine.dispose()
 
@@ -2179,7 +2179,7 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0007_plan_web_state"
+                == "0008_market_index_monitor_event"
             )
     finally:
         engine.dispose()
@@ -2432,7 +2432,7 @@ def test_plan_web_state_migration_refuses_lossy_downgrade_atomically(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0007_plan_web_state"
+                == "0008_market_index_monitor_event"
             )
             assert (
                 connection.exec_driver_sql(
@@ -2469,7 +2469,7 @@ def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) 
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0007_plan_web_state"
+                == "0008_market_index_monitor_event"
             )
     finally:
         engine.dispose()
@@ -2522,7 +2522,7 @@ def test_monitor_event_migration_renames_high_water_and_backfills_alerts(
         }
         assert row.occurred_at == _FIXED_NOW.isoformat()
         assert high_water == 42
-        assert revision == "0007_plan_web_state"
+        assert revision == "0008_market_index_monitor_event"
     finally:
         engine.dispose()
 
@@ -2547,6 +2547,250 @@ def test_monitor_event_migration_contract_is_frozen_inside_its_revision() -> Non
     )
 
     assert application_imports == ()
+
+
+def test_market_index_event_constraint_migration_preserves_the_existing_ledger(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    existing_id = "00000000-0000-0000-0000-000000000801"
+    existing_payload = '{"entityId":"TUSHARE_RT_MIN","status":"READY"}'
+
+    try:
+        _upgrade_to(engine, "0007_plan_web_state")
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO monitor_event "
+                "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                "occurred_at) VALUES (:id, 7, 'system.health.updated', 1, "
+                "'TUSHARE_RT_MIN', :payload, :occurred_at)",
+                {
+                    "id": existing_id,
+                    "payload": existing_payload,
+                    "occurred_at": _FIXED_NOW.isoformat(),
+                },
+            )
+            connection.exec_driver_sql(
+                "UPDATE monitor_sequence SET last_sequence = 7 WHERE singleton_id = 1"
+            )
+
+        inspector = inspect(engine)
+        foreign_keys_before = inspector.get_foreign_keys("monitor_event")
+        indexes_before = inspector.get_indexes("monitor_event")
+        unique_constraints_before = inspector.get_unique_constraints("monitor_event")
+
+        upgrade_database(engine)
+
+        with engine.begin() as connection:
+            existing_after = connection.exec_driver_sql(
+                "SELECT id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                "occurred_at FROM monitor_event"
+            ).one()
+            high_water_after = connection.exec_driver_sql(
+                "SELECT last_sequence FROM monitor_sequence WHERE singleton_id = 1"
+            ).scalar_one()
+            revision = connection.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).scalar_one()
+            connection.exec_driver_sql(
+                "INSERT INTO monitor_event "
+                "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                "occurred_at) VALUES "
+                "('00000000-0000-0000-0000-000000000802', 8, "
+                "'market.index.updated', 1, '000688.SH', "
+                '\'{"entityId":"000688.SH","revision":1,"status":"LIVE"}\', '
+                ":occurred_at)",
+                {"occurred_at": _FIXED_NOW.isoformat()},
+            )
+
+        inspector = inspect(engine)
+        assert existing_after == (
+            existing_id,
+            7,
+            "system.health.updated",
+            1,
+            "TUSHARE_RT_MIN",
+            existing_payload,
+            _FIXED_NOW.isoformat(),
+        )
+        assert high_water_after == 7
+        assert revision == "0008_market_index_monitor_event"
+        assert inspector.get_foreign_keys("monitor_event") == foreign_keys_before
+        assert inspector.get_indexes("monitor_event") == indexes_before
+        assert inspector.get_unique_constraints("monitor_event") == unique_constraints_before
+    finally:
+        engine.dispose()
+
+
+def test_market_index_event_constraint_migration_refuses_lossy_downgrade(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    event_id = "00000000-0000-0000-0000-000000000803"
+
+    try:
+        upgrade_database(engine)
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO monitor_event "
+                "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                "occurred_at) VALUES (:id, 1, 'market.index.updated', 1, '000688.SH', "
+                '\'{"entityId":"000688.SH","revision":1,"status":"LIVE"}\', '
+                ":occurred_at)",
+                {"id": event_id, "occurred_at": _FIXED_NOW.isoformat()},
+            )
+            connection.exec_driver_sql(
+                "UPDATE monitor_sequence SET last_sequence = 1 WHERE singleton_id = 1"
+            )
+
+        with pytest.raises(RuntimeError, match="refuses to discard market-index events"):
+            _downgrade_to(engine, "0007_plan_web_state")
+
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0008_market_index_monitor_event"
+            )
+            assert connection.exec_driver_sql("SELECT id, sequence FROM monitor_event").one() == (
+                event_id,
+                1,
+            )
+            assert (
+                connection.exec_driver_sql(
+                    "SELECT last_sequence FROM monitor_sequence WHERE singleton_id = 1"
+                ).scalar_one()
+                == 1
+            )
+    finally:
+        engine.dispose()
+
+
+def test_market_index_event_constraint_migration_downgrades_without_changing_old_state(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    event_id = "00000000-0000-0000-0000-000000000804"
+    payload = '{"entityId":"TUSHARE_RT_MIN","status":"READY"}'
+    occurred_at = _FIXED_NOW.isoformat()
+
+    try:
+        _upgrade_to(engine, "0007_plan_web_state")
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO monitor_event "
+                "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                "occurred_at) VALUES (:id, 7, 'system.health.updated', 1, "
+                "'TUSHARE_RT_MIN', :payload, :occurred_at)",
+                {"id": event_id, "payload": payload, "occurred_at": occurred_at},
+            )
+            connection.exec_driver_sql(
+                "UPDATE monitor_sequence SET last_sequence = 7 WHERE singleton_id = 1"
+            )
+
+        upgrade_database(engine)
+        _downgrade_to(engine, "0007_plan_web_state")
+
+        with engine.connect() as connection:
+            assert connection.exec_driver_sql(
+                "SELECT id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                "occurred_at FROM monitor_event"
+            ).one() == (
+                event_id,
+                7,
+                "system.health.updated",
+                1,
+                "TUSHARE_RT_MIN",
+                payload,
+                occurred_at,
+            )
+            assert (
+                connection.exec_driver_sql(
+                    "SELECT last_sequence FROM monitor_sequence WHERE singleton_id = 1"
+                ).scalar_one()
+                == 7
+            )
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0007_plan_web_state"
+            )
+
+        with engine.begin() as connection:
+            with pytest.raises(IntegrityError, match="ck_monitor_event_type"):
+                connection.exec_driver_sql(
+                    "INSERT INTO monitor_event "
+                    "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                    "occurred_at) VALUES "
+                    "('00000000-0000-0000-0000-000000000805', 8, "
+                    "'market.index.updated', 1, '000688.SH', "
+                    '\'{"entityId":"000688.SH","revision":1,"status":"LIVE"}\', '
+                    ":occurred_at)",
+                    {"occurred_at": occurred_at},
+                )
+    finally:
+        engine.dispose()
+
+
+def test_market_index_event_constraint_migration_rejects_unknown_type_before_ddl(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    event_id = "00000000-0000-0000-0000-000000000806"
+    payload = '{"entityId":"unknown-event","status":"READY"}'
+
+    try:
+        _upgrade_to(engine, "0007_plan_web_state")
+        with engine.begin() as connection:
+            connection.exec_driver_sql("PRAGMA ignore_check_constraints = ON")
+            try:
+                connection.exec_driver_sql(
+                    "INSERT INTO monitor_event "
+                    "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                    "occurred_at) VALUES (:id, 4, 'unknown.event.updated', 1, "
+                    "'unknown-event', :payload, :occurred_at)",
+                    {
+                        "id": event_id,
+                        "payload": payload,
+                        "occurred_at": _FIXED_NOW.isoformat(),
+                    },
+                )
+                connection.exec_driver_sql(
+                    "UPDATE monitor_sequence SET last_sequence = 4 WHERE singleton_id = 1"
+                )
+            finally:
+                connection.exec_driver_sql("PRAGMA ignore_check_constraints = OFF")
+
+        with pytest.raises(
+            RuntimeError,
+            match="0008_market_index_monitor_event found an invalid event type",
+        ):
+            upgrade_database(engine)
+
+        assert "monitor_event_0008" not in inspect(engine).get_table_names()
+        with engine.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                == "0007_plan_web_state"
+            )
+            assert connection.exec_driver_sql(
+                "SELECT id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                "occurred_at FROM monitor_event"
+            ).one() == (
+                event_id,
+                4,
+                "unknown.event.updated",
+                1,
+                "unknown-event",
+                payload,
+                _FIXED_NOW.isoformat(),
+            )
+            assert (
+                connection.exec_driver_sql(
+                    "SELECT last_sequence FROM monitor_sequence WHERE singleton_id = 1"
+                ).scalar_one()
+                == 4
+            )
+    finally:
+        engine.dispose()
 
 
 @pytest.mark.parametrize(
@@ -2741,7 +2985,7 @@ def test_monitor_event_migration_refuses_lossy_non_alert_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0007_plan_web_state"
+                == "0008_market_index_monitor_event"
             )
     finally:
         engine.dispose()
@@ -2793,7 +3037,7 @@ def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
             "c" * 64,
             evaluated_at,
         )
-        assert revision == "0007_plan_web_state"
+        assert revision == "0008_market_index_monitor_event"
     finally:
         engine.dispose()
 
@@ -2866,7 +3110,7 @@ def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0007_plan_web_state"
+                == "0008_market_index_monitor_event"
             )
             assert connection.exec_driver_sql(
                 "SELECT evaluation_kind, target_value FROM evaluation_ledger"
