@@ -345,6 +345,13 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 追加的 `0008_market_index_monitor_event` 迁移沿既有监控事件迁移链执行。它预检 `event_type`，复制现有七列，并在替换原表前校验行数，再使用允许 `market.index.updated` 的 CHECK 约束。若存在任何既有板块指数事件行，必须在 DDL 前拒绝降级；所有既有行、全局序号和事件 identity 保持不变，冻结的 `0006_monitor_event` 绝不被重写。
 - WEBF11 不改变 REST 路径或字段：OpenAPI 快照继续精确为 42 路径，生成 TypeScript 保持不变。默认生产组合缺少权威总览投影时仍返回 `SERVICE_UNAVAILABLE`；WEBF11 绝不伪造快照。它不改变 Schema v1 数据、历史回测结果、既有 hash、判断规则、token 处理或供应商请求，也不实现或声称回测回放期间的策略事件 cursor resume；该边界仍单独延后。
 
+### WEBF12 共用指数与当前计划展示边界
+
+- 总览在“参考板块指数：共用数据”条带中只展示一次以后端为权威来源的共用指数快照，而自选表每一行只展示该股票当前计划的 `conditionProgress`。因此多个计划可以共用同一份指数事实，但不会合并或暗示它们的结果。
+- 个股路由使用详情响应中的后端 `referenceMarket` identity，按所选股票历史范围调用既有板块指数 K 线接口，并使用 `interval=FIVE_MINUTE`。Vue 只负责请求生命周期、取消和陈旧 generation 防护；它不映射股票、连接事实、计算指标或推导条件结果。
+- 个股详情把共用参考事实和历史放在“参考指数数据”分区，把当前计划 identity、条件进度和准确的 `indexConditionEvidence.planPath` 结果放在独立的“计划指数条件”分区。计划 identity、快照/截止时间、健康、加载、故障和缓存上下文都保持可见；没有指数条件的计划明确显示“计划未使用”。股票和指数历史保持分开，且每份历史都有可访问的文本表格替代。
+- 严格传输校验会在渲染前拒绝格式错误的参考/证据 identity、排序和进度数据。WEBF12 不改变 REST 路径或字段、OpenAPI 快照、生成 TypeScript、Schema v1 数据、历史回测结果或既有 hash；不读取 token，也不执行真实 DeepSeek、Tushare 或其他供应商请求。
+
 ### 已批准的回测扩展边界
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
@@ -516,6 +523,6 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。
+WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。
 
 基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到既有以后端为权威来源的总览快照和共用指数投影，但不改变其契约。WEBF09 组合既有持仓 API 和真实个股详情路由，同时把所有 T+1 与持仓策略判断保留在后端。WEBF10 组合既有提醒 API 和真实 `/alerts` 路由，同时把筛选成员归属、规范提醒和确认 revision 保留在后端。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，且全部接入真实视图。提交、推送、依赖安装和联网访问继续需要分别授权。

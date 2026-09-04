@@ -1,4 +1,4 @@
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { computed, isShallow, nextTick, shallowRef } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -149,11 +149,21 @@ describe("market index monitor views", () => {
 
   it("renders mapping and exact server evidence paths without recomputation", () => {
     const wrapper = mount(ReferenceMarketPanel, {
-      props: { evidence, reference },
+      props: {
+        evidence,
+        plan: {
+          planHash: "e".repeat(64),
+          planId: "plan-star-1",
+          planVersion: 3,
+        },
+        reference,
+      },
     });
 
     expect(wrapper.text()).toContain("参考指数数据");
     expect(wrapper.text()).toContain("计划指数条件");
+    expect(wrapper.text()).toContain("当前计划 plan-star-1 · v3");
+    expect(wrapper.text()).toContain("e".repeat(64));
     expect(wrapper.text()).toContain("entry.condition.conditions[0]");
     expect(wrapper.text()).toContain("INDEX_CLOSE_GTE_MA");
     expect(wrapper.text()).toContain("1234.56");
@@ -166,6 +176,35 @@ describe("market index monitor views", () => {
     expect(wrapper.get("caption").text()).toContain("板块指数点位");
     expect(wrapper.get("table").text()).toContain("1234.56");
     expect(wrapper.text()).not.toContain("元");
+  });
+
+  it("keeps a cached index page visible while reporting refresh state", () => {
+    const wrapper = mount(MarketIndexChart, {
+      props: {
+        bars,
+        error: "指数历史暂不可用",
+        loading: true,
+        snapshotHash: hash,
+      },
+    });
+
+    expect(wrapper.get('[role="alert"]').text()).toContain("指数历史暂不可用");
+    expect(wrapper.get('[role="status"]').text()).toContain("正在刷新共享指数历史");
+    expect(wrapper.text()).toContain("已缓存后端点位继续显示");
+    expect(wrapper.text()).toContain(hash);
+    expect(wrapper.get("table").text()).toContain("1234.56");
+  });
+
+  it("does not expose an empty scroll region while no index history is available", () => {
+    const loadingWrapper = mount(MarketIndexChart, { props: { loading: true } });
+    const errorWrapper = mount(MarketIndexChart, {
+      props: { error: "指数历史暂不可用" },
+    });
+
+    expect(loadingWrapper.find(".index-chart__scroller").exists()).toBe(false);
+    expect(errorWrapper.find(".index-chart__scroller").exists()).toBe(false);
+    expect(loadingWrapper.find("table").exists()).toBe(false);
+    expect(errorWrapper.find("table").exists()).toBe(false);
   });
 });
 
@@ -208,6 +247,38 @@ describe("useMarketIndexSeries", () => {
     expect(result.status.value).toBe("READY");
     expect(result.page.value?.items).toEqual(bars);
     expect(Object.isFrozen(result.page.value)).toBe(true);
+  });
+
+  it("retains the last validated page when a later range refresh fails", async () => {
+    const query = shallowRef<MarketIndexSeriesQuery | null>({
+      endAt: "2026-09-02T10:45:00+08:00",
+      indexCode: "000688.SH",
+      interval: "FIVE_MINUTE",
+      limit: 100,
+      startAt: "2026-09-02T09:35:00+08:00",
+    });
+    const page: MarketIndexBarPage = {
+      hasMore: false,
+      items: [...bars],
+      limit: 100,
+      nextCursor: null,
+      snapshotHash: hash,
+    };
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce(page)
+      .mockRejectedValueOnce(new Error("untrusted detail"));
+    const result = useMarketIndexSeries({ loader, query: computed(() => query.value) });
+    await flushPromises();
+    expect(result.status.value).toBe("READY");
+
+    query.value = { ...query.value!, startAt: "2026-09-02T09:30:00+08:00" };
+    await nextTick();
+    await flushPromises();
+
+    expect(result.status.value).toBe("ERROR");
+    expect(result.error.value).toBe("指数历史暂不可用");
+    expect(result.page.value).toEqual(page);
   });
 });
 

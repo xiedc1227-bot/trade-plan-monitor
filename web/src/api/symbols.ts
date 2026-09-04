@@ -1,10 +1,18 @@
 import type {
   BarInterval,
   BarPage,
+  IndexConditionEvidenceView,
   SymbolDetailResponse,
   SymbolEventPage,
+  SymbolReferenceMarketView,
 } from "./generated";
-import { isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
+import { isAuthoritativeDecision } from "./client";
+import { isCanonicalMarketIndexIdentity } from "./marketIndexIdentity";
+import {
+  isCalendarDate as isValidCalendarDate,
+  isShanghaiDateTime,
+  shanghaiDateTimeKey,
+} from "./shanghaiTime";
 import { invalidResponse, requestJson } from "./transport";
 
 export interface SymbolHistoryQuery {
@@ -44,7 +52,52 @@ const signalTypes = new Set([
   "RISK_EXIT_READY",
   "RISK_EXIT_PENDING_SETTLEMENT",
 ]);
-
+const marketIndexHealth = new Set(["LIVE", "STALE", "GAPPED", "BLOCKED"]);
+const marketIndexIssues = new Set([
+  "MISSING_FIVE_MINUTE_BAR",
+  "MISSING_OFFICIAL_DAILY_BAR",
+  "INSUFFICIENT_HISTORY",
+  "STALE_DATA",
+  "DUPLICATE_IDENTITY",
+  "GAPPED_SERIES",
+  "INDEX_IDENTITY_MISMATCH",
+  "FUTURE_DATA",
+  "INVALID_TIMESTAMP",
+  "NONCANONICAL_DECIMAL",
+  "INVALID_OHLC",
+  "FORMULA_MISMATCH",
+  "PROVIDER_UNAVAILABLE",
+]);
+const indexConditionTypes = new Set([
+  "INDEX_CLOSE_GTE_MA",
+  "INDEX_CLOSE_LTE_MA",
+  "INDEX_MA_NON_DECREASING",
+  "INDEX_MA_NON_INCREASING",
+  "INDEX_RETURN_GTE",
+  "INDEX_RETURN_LTE",
+]);
+const indexMissingInputs = new Set([
+  "INDEX_SNAPSHOT",
+  "INDEX_IDENTITY",
+  "INDEX_CUTOFF",
+  "INDEX_HEALTH",
+  "INDEX_FACT",
+  "INDEX_HISTORY",
+  "INDEX_FORMULA",
+]);
+const evidenceUnits = new Set([
+  "FEN",
+  "SHARES",
+  "RATIO",
+  "BARS",
+  "YUAN",
+  "COUNT",
+  "BOOLEAN",
+  "DATE",
+  "DATETIME",
+  "CODE",
+  "POINTS",
+]);
 export function createSymbolApi(
   fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
 ): SymbolApi {
@@ -150,18 +203,37 @@ function requireHistoryQuery(query: Readonly<Record<string, unknown>>): void {
 }
 
 function isSymbolDetail(value: unknown, symbol: string): value is SymbolDetailResponse {
-  return (
-    isRecord(value) &&
-    hasOnlyKeys(value, ["indexConditionEvidence", "positionLots", "referenceMarket", "summary"]) &&
-    hasKeys(value, ["summary"]) &&
-    isSymbolSummary(value.summary, symbol) &&
-    (value.positionLots === undefined ||
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["indexConditionEvidence", "positionLots", "referenceMarket", "summary"]) ||
+    !hasKeys(value, ["summary"]) ||
+    !isSymbolSummary(value.summary, symbol) ||
+    !(value.positionLots === undefined ||
       (Array.isArray(value.positionLots) &&
         value.positionLots.length <= 200 &&
-        value.positionLots.every(isPositionLot))) &&
-    (value.indexConditionEvidence === undefined ||
-      (Array.isArray(value.indexConditionEvidence) && value.indexConditionEvidence.length <= 50))
-  );
+        value.positionLots.every(isPositionLot)))
+  ) {
+    return false;
+  }
+
+  const referenceMarket = value.referenceMarket ?? null;
+  const summaryReferenceMarket = value.summary.referenceMarket ?? null;
+  if (
+    !(referenceMarket === null || isSymbolReferenceMarket(referenceMarket)) ||
+    !sameReferenceMarket(referenceMarket, summaryReferenceMarket)
+  ) {
+    return false;
+  }
+
+  const evidence = value.indexConditionEvidence === undefined ? [] : value.indexConditionEvidence;
+  if (
+    !Array.isArray(evidence) ||
+    evidence.length > 50 ||
+    !evidence.every((item) => isIndexConditionEvidence(item, referenceMarket))
+  ) {
+    return false;
+  }
+  return isSortedUnique(evidence.map((item) => item.planPath));
 }
 
 function isSymbolSummary(value: unknown, symbol: string): boolean {
@@ -185,8 +257,204 @@ function isSymbolSummary(value: unknown, symbol: string): boolean {
     value.name.length <= 128 &&
     isShanghaiDateTime(value.observedAt) &&
     isRecord(value.decision) &&
-    value.decision.symbol === symbol
+    isAuthoritativeDecision(value.decision) &&
+    value.decision.symbol === symbol &&
+    (value.referenceMarket === undefined ||
+      value.referenceMarket === null ||
+      isSymbolReferenceMarket(value.referenceMarket))
   );
+}
+
+function isSymbolReferenceMarket(value: unknown): value is SymbolReferenceMarketView {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "board",
+      "conditionProgress",
+      "dataAt",
+      "displayName",
+      "health",
+      "indexCode",
+      "issues",
+      "mappingVersion",
+      "snapshotHash",
+    ]) ||
+    !isCanonicalMarketIndexIdentity(value) ||
+    value.mappingVersion !== "board-index-map-v1" ||
+    !(value.snapshotHash === null || isSha256(value.snapshotHash)) ||
+    !(value.dataAt === null || isShanghaiDateTime(value.dataAt)) ||
+    (value.snapshotHash === null) !== (value.dataAt === null) ||
+    !(typeof value.health === "string" && marketIndexHealth.has(value.health)) ||
+    !Array.isArray(value.issues) ||
+    value.issues.length > 16 ||
+    new Set(value.issues).size !== value.issues.length ||
+    !value.issues.every((issue) => typeof issue === "string" && marketIndexIssues.has(issue))
+  ) {
+    return false;
+  }
+  return isIndexConditionProgress(value.conditionProgress);
+}
+
+function isIndexConditionProgress(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["missing", "satisfied", "total", "unsatisfied"]) ||
+    !isNonnegativeInteger(value.missing) ||
+    !isNonnegativeInteger(value.satisfied) ||
+    !isNonnegativeInteger(value.total) ||
+    !isNonnegativeInteger(value.unsatisfied)
+  ) {
+    return false;
+  }
+  return BigInt(value.satisfied) + BigInt(value.unsatisfied) + BigInt(value.missing) === BigInt(value.total);
+}
+
+function sameReferenceMarket(left: unknown, right: unknown): boolean {
+  if (left === null || right === null) return left === right;
+  if (!isSymbolReferenceMarket(left) || !isSymbolReferenceMarket(right)) return false;
+  return (
+    left.indexCode === right.indexCode &&
+    left.displayName === right.displayName &&
+    left.board === right.board &&
+    left.mappingVersion === right.mappingVersion &&
+    left.snapshotHash === right.snapshotHash &&
+    left.dataAt === right.dataAt &&
+    left.health === right.health &&
+    left.issues.length === right.issues.length &&
+    left.issues.every((issue, index) => issue === right.issues[index]) &&
+    left.conditionProgress.satisfied === right.conditionProgress.satisfied &&
+    left.conditionProgress.unsatisfied === right.conditionProgress.unsatisfied &&
+    left.conditionProgress.missing === right.conditionProgress.missing &&
+    left.conditionProgress.total === right.conditionProgress.total
+  );
+}
+
+function isIndexConditionEvidence(
+  value: unknown,
+  referenceMarket: SymbolReferenceMarketView | null,
+): value is IndexConditionEvidenceView {
+  if (
+    referenceMarket === null ||
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      "actualValue",
+      "comparisonValue",
+      "conditionType",
+      "dataCutoff",
+      "decisionCutoff",
+      "formulaDefinitionHash",
+      "formulaId",
+      "indexCode",
+      "mappingVersion",
+      "missingInputs",
+      "outcome",
+      "parameters",
+      "planPath",
+      "snapshotHash",
+      "unit",
+    ]) ||
+    !hasKeys(value, [
+      "actualValue",
+      "comparisonValue",
+      "conditionType",
+      "dataCutoff",
+      "decisionCutoff",
+      "formulaDefinitionHash",
+      "formulaId",
+      "indexCode",
+      "mappingVersion",
+      "outcome",
+      "planPath",
+      "snapshotHash",
+      "unit",
+    ])
+  ) {
+    return false;
+  }
+  const parameters = value.parameters === undefined ? [] : value.parameters;
+  const missingInputs = value.missingInputs === undefined ? [] : value.missingInputs;
+  if (
+    !isIndexPlanPath(value.planPath) ||
+    !(typeof value.conditionType === "string" && indexConditionTypes.has(value.conditionType)) ||
+    value.indexCode !== referenceMarket.indexCode ||
+    value.mappingVersion !== referenceMarket.mappingVersion ||
+    !(value.snapshotHash === null || isSha256(value.snapshotHash)) ||
+    (value.snapshotHash !== null && value.snapshotHash !== referenceMarket.snapshotHash) ||
+    !isShanghaiDateTime(value.decisionCutoff) ||
+    !(value.dataCutoff === null || isShanghaiDateTime(value.dataCutoff)) ||
+    (value.dataCutoff !== null && value.dataCutoff !== referenceMarket.dataAt) ||
+    !(value.formulaId === "SMA" || value.formulaId === "SMA_LOOKBACK" || value.formulaId === "RETURN") ||
+    !(value.formulaDefinitionHash === null || isSha256(value.formulaDefinitionHash)) ||
+    !Array.isArray(parameters) ||
+    parameters.length > 8 ||
+    new Set(parameters.map((parameter) => isRecord(parameter) ? parameter.key : parameter)).size !==
+      parameters.length ||
+    !parameters.every(isIndexEvidenceParameter) ||
+    !Array.isArray(missingInputs) ||
+    missingInputs.length > 7 ||
+    new Set(missingInputs).size !== missingInputs.length ||
+    !missingInputs.every(
+      (item) => typeof item === "string" && indexMissingInputs.has(item),
+    ) ||
+    !(value.unit === "POINTS" || value.unit === "RATIO") ||
+    !(value.outcome === "SATISFIED" || value.outcome === "UNSATISFIED" || value.outcome === "MISSING_INPUT")
+  ) {
+    return false;
+  }
+  if (value.outcome === "MISSING_INPUT") {
+    return missingInputs.length > 0 && value.actualValue === null && value.comparisonValue === null;
+  }
+  return (
+    missingInputs.length === 0 &&
+    isDecimal(value.actualValue) &&
+    isDecimal(value.comparisonValue) &&
+    value.snapshotHash !== null &&
+    value.dataCutoff !== null &&
+    value.formulaDefinitionHash !== null
+  );
+}
+
+function isIndexEvidenceParameter(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["key", "unit", "value"]) ||
+    typeof value.key !== "string" ||
+    !/^[a-z][a-z0-9_]{0,63}$/.test(value.key) ||
+    typeof value.unit !== "string" ||
+    !evidenceUnits.has(value.unit)
+  ) {
+    return false;
+  }
+  if (value.unit === "BOOLEAN") return typeof value.value === "boolean";
+  if (value.unit === "DATE") return isValidCalendarDate(value.value);
+  if (value.unit === "DATETIME") return isShanghaiDateTime(value.value);
+  if (value.unit === "CODE") return isStableCode(value.value);
+  if (value.unit === "FEN" || value.unit === "BARS" || value.unit === "COUNT") {
+    return typeof value.value === "number" && Number.isSafeInteger(value.value);
+  }
+  if (value.unit === "SHARES") {
+    return (
+      (typeof value.value === "number" && Number.isSafeInteger(value.value)) ||
+      isDecimal(value.value)
+    );
+  }
+  return isDecimal(value.value);
+}
+
+function isIndexPlanPath(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length >= 15 &&
+    value.length <= 256 &&
+    /^(?:entry|reduction|risk|blockers)\.condition(?:\.conditions\[[0-9]+\])*$/.test(value)
+  );
+}
+
+function isSortedUnique(values: readonly string[]): boolean {
+  return values.every((value, index) => {
+    const previous = index === 0 ? undefined : values[index - 1];
+    return previous === undefined || previous < value;
+  });
 }
 
 function isPositionLot(value: unknown): boolean {
@@ -354,6 +622,10 @@ function isDecimal(value: unknown): boolean {
 
 function isSha256(value: unknown): boolean {
   return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+function isStableCode(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(value);
 }
 
 function isNonnegativeInteger(value: unknown): value is number {

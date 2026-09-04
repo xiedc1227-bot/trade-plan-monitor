@@ -79,7 +79,13 @@ function factLabel(fact: IndicatorFact): string {
 <style scoped>
 .index-strip {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
+  min-width: 0;
+}
+
+.index-strip > * {
+  min-width: 0;
 }
 
 .index-strip__header,
@@ -95,7 +101,13 @@ function factLabel(fact: IndicatorFact): string {
 .index-strip__empty,
 .index-strip__issues {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--color-text-muted);
+}
+
+.index-strip__header > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .index-strip__grid {
@@ -138,5 +150,11 @@ function factLabel(fact: IndicatorFact): string {
 
 .index-strip__card ul {
   padding-inline-start: var(--space-4);
+}
+
+@media (max-width: 39.999rem) {
+  .index-strip__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

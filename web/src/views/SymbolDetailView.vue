@@ -27,6 +27,9 @@ interface Props {
   events: readonly SymbolEventView[];
   loading?: boolean;
   indexBars?: readonly MarketIndexBarView[];
+  indexHistoryError?: string | null;
+  indexHistoryLoading?: boolean;
+  indexHistorySnapshotHash?: string | null;
   positionAsOfTradeDate?: string | null;
   positionOperations?: PositionOperations | null;
   positionPage?: PositionLotPage | null;
@@ -43,6 +46,9 @@ const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
   indexBars: () => [],
+  indexHistoryError: null,
+  indexHistoryLoading: false,
+  indexHistorySnapshotHash: null,
   positionAsOfTradeDate: null,
   positionOperations: null,
   positionPage: null,
@@ -220,16 +226,18 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
 
     <template v-if="detail !== null">
       <ReferenceMarketPanel
-        v-if="referenceMarket"
         :reference="referenceMarket"
         :evidence="indexConditionEvidence"
+        :plan="detail.summary.decision"
       />
-      <section v-else class="symbol-detail__panel" aria-labelledby="reference-market-none-title">
-        <h2 id="reference-market-none-title">参考指数数据</h2>
-        <p>Schema v1 计划未配置参考指数；原有判断保持不变。</p>
-      </section>
 
-      <MarketIndexChart v-if="referenceMarket" :bars="indexBars" />
+      <MarketIndexChart
+        v-if="referenceMarket"
+        :bars="indexBars"
+        :error="indexHistoryError"
+        :loading="indexHistoryLoading"
+        :snapshot-hash="indexHistorySnapshotHash"
+      />
 
       <PriceChart :series="series" :stale="visiblyStale" @range-change="forwardRange" />
 
@@ -354,9 +362,17 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
 <style scoped>
 .symbol-detail {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
   max-width: 100rem;
   margin: 0 auto;
   gap: var(--space-5);
+}
+
+.symbol-detail > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .symbol-detail__header {
@@ -370,6 +386,11 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
 .symbol-detail__eyebrow {
   color: var(--color-signal-info-cyan);
   font-family: var(--font-numeric);
+}
+
+.symbol-detail__eyebrow,
+.symbol-detail__header h1 {
+  overflow-wrap: anywhere;
 }
 
 .symbol-detail__meta {

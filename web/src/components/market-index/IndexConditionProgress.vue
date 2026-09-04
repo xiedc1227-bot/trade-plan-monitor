@@ -31,7 +31,7 @@ const summary = computed(() =>
 .index-progress {
   display: grid;
   gap: var(--space-1);
-  min-width: 8rem;
+  min-width: 0;
   font-family: var(--font-numeric);
 }
 

@@ -1,12 +1,17 @@
+import { createRequire } from "node:module";
+
 import { expect, test } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 
 import type { DashboardResponse } from "../../src/api/generated";
 
+const require = createRequire(import.meta.url);
+const axePath = require.resolve("axe-core/axe.min.js");
+
 const dashboard: DashboardResponse = {
   connectionStatus: "CONNECTED",
-  counts: { actionable: 0, blocked: 0, lowZoneWatch: 1, normal: 0, risk: 0, stale: 0 },
+  counts: { actionable: 0, blocked: 0, lowZoneWatch: 2, normal: 0, risk: 0, stale: 0 },
   dataAgeSeconds: 2,
   marketIndexes: [
     {
@@ -18,13 +23,30 @@ const dashboard: DashboardResponse = {
       indexCode: "000688.SH",
       indicatorFacts: [],
       issues: [],
-      mappedSymbolCount: 1,
+      mappedSymbolCount: 2,
       mappingVersion: "board-index-map-v1",
       observedAt: "2026-09-02T10:35:02+08:00",
       priorClosePoints: "1220.11",
       revision: 42,
       sessionChangeRatio: "0.011843",
       snapshotHash: "a".repeat(64),
+    },
+    {
+      board: "BSE",
+      closePoints: null,
+      completedBucketAt: null,
+      displayName: "北证50",
+      health: "BLOCKED",
+      indexCode: "899050.BJ",
+      indicatorFacts: [],
+      issues: ["PROVIDER_UNAVAILABLE"],
+      mappedSymbolCount: 0,
+      mappingVersion: "board-index-map-v1",
+      observedAt: "2026-09-02T10:35:02+08:00",
+      priorClosePoints: null,
+      revision: 43,
+      sessionChangeRatio: null,
+      snapshotHash: "f".repeat(64),
     },
   ],
   observedAt: "2026-09-02T10:35:02+08:00",
@@ -86,6 +108,30 @@ const dashboard: DashboardResponse = {
   ],
 };
 
+const firstSymbol = dashboard.symbols?.[0];
+const firstReference = firstSymbol?.referenceMarket;
+if (firstSymbol === undefined || firstReference === undefined || firstReference === null) {
+  throw new Error("dashboard fixture requires one symbol with a reference market");
+}
+dashboard.symbols?.push({
+  ...structuredClone(firstSymbol),
+  decision: {
+    ...structuredClone(firstSymbol.decision),
+    planHash: "d".repeat(64),
+    planId: "plan-2",
+    planVersion: 2,
+    resultHash: "e".repeat(64),
+    symbol: "688002.SH",
+  },
+  name: "睿创微纳",
+  referenceMarket: {
+    ...structuredClone(firstReference),
+    conditionProgress: { missing: 0, satisfied: 0, total: 2, unsatisfied: 2 },
+  },
+  satisfiedConditionCount: 0,
+  symbol: "688002.SH",
+});
+
 let server: ViteDevServer;
 let baseUrl: string;
 
@@ -126,10 +172,88 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await expect(page.getByText("参考板块指数：共用数据")).toBeVisible();
   await expect(page.getByText("科创50").first()).toBeVisible();
   await expect(page.getByText("计划指数条件")).toBeVisible();
+  const indexCards = page.getByTestId("market-index-card");
+  await expect(indexCards).toHaveCount(2);
+  await expect(indexCards.filter({ hasText: "科创50" })).toContainText("实时 ●");
+  await expect(indexCards.filter({ hasText: "北证50" })).toContainText("阻断 ×");
+  await expect(indexCards.filter({ hasText: "北证50" })).toContainText("PROVIDER_UNAVAILABLE");
+  const rows = page.getByTestId("watchlist-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("满足 1");
+  await expect(rows.nth(0)).toContainText("未满足 1");
+  await expect(rows.nth(1)).toContainText("满足 0");
+  await expect(rows.nth(1)).toContainText("未满足 2");
+  await expect(rows.nth(0)).toContainText("000688.SH");
+  await expect(rows.nth(1)).toContainText("000688.SH");
 
   await page.getByRole("link", { name: "688001.SH" }).click();
   await expect(page).toHaveURL(/\/stocks\/688001\.SH$/);
 });
+
+test("keeps the shared-index and per-plan dashboard boundary responsive and accessible", async ({
+  page,
+}) => {
+  await page.route(`${baseUrl}/api/v1/dashboard`, async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(dashboard),
+      contentType: "application/json; charset=utf-8",
+      status: 200,
+    });
+  });
+
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ height: 900, width });
+    await page.goto(baseUrl);
+    await expect(page.getByTestId("watchlist-row")).toHaveCount(2);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    const sizes = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    const overflowSources = await collectOverflowSources(page);
+    expect(
+      sizes.scrollWidth,
+      `dashboard overflow at ${width}px: ${JSON.stringify(overflowSources)}`,
+    ).toBeLessThanOrEqual(sizes.clientWidth);
+  }
+
+  await page.addScriptTag({ path: axePath });
+  const seriousViolations = await page.evaluate(async () => {
+    const axe = (globalThis as typeof globalThis & {
+      axe: { run: (root: Document, options: object) => Promise<{ violations: { impact: string | null }[] }> };
+    }).axe;
+    const result = await axe.run(document, {
+      runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    });
+    return result.violations.filter(
+      (violation) => violation.impact === "serious" || violation.impact === "critical",
+    );
+  });
+  expect(seriousViolations).toEqual([]);
+});
+
+async function collectOverflowSources(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    return [...document.querySelectorAll<HTMLElement>("body *")]
+      .map((element) => ({
+        className: element.className,
+        clientWidth: element.clientWidth,
+        overflowX: getComputedStyle(element).overflowX,
+        scrollWidth: element.scrollWidth,
+        tagName: element.tagName,
+      }))
+      .filter(
+        (element) =>
+          element.clientWidth > viewportWidth ||
+          (element.scrollWidth > element.clientWidth && element.overflowX === "visible"),
+      )
+      .sort((left, right) => right.scrollWidth - left.scrollWidth)
+      .slice(0, 20);
+  });
+}
 
 test("recovers a sequence gap with a fresh dashboard snapshot before replaying from its cursor", async ({
   page,

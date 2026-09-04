@@ -501,6 +501,50 @@ describe("API client", () => {
     await expect(client.getDashboard()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
 
+  it("rejects noncanonical market-index identity tuples in shared and plan projections", async () => {
+    const sharedMismatch = structuredClone(snapshot);
+    sharedMismatch.marketIndexes = [
+      {
+        board: "BSE",
+        closePoints: "1234.56",
+        completedBucketAt: "2026-08-24T10:30:00+08:00",
+        displayName: "科创50",
+        health: "LIVE",
+        indexCode: "000688.SH",
+        indicatorFacts: [],
+        issues: [],
+        mappedSymbolCount: 1,
+        mappingVersion: "board-index-map-v1",
+        observedAt: "2026-08-24T10:30:00+08:00",
+        priorClosePoints: "1220.11",
+        revision: 1,
+        sessionChangeRatio: "0.011843",
+        snapshotHash: "c".repeat(64),
+      },
+    ];
+    const planMismatch = structuredClone(snapshot);
+    const summary = planMismatch.symbols?.[0];
+    if (summary === undefined) throw new Error("test fixture must contain one symbol");
+    summary.referenceMarket = {
+      board: "BSE",
+      conditionProgress: { missing: 0, satisfied: 1, total: 1, unsatisfied: 0 },
+      dataAt: "2026-08-24T10:30:00+08:00",
+      displayName: "科创50",
+      health: "LIVE",
+      indexCode: "000688.SH",
+      issues: [],
+      mappingVersion: "board-index-map-v1",
+      snapshotHash: "c".repeat(64),
+    };
+
+    for (const body of [sharedMismatch, planMismatch]) {
+      const client = createApiClient(async () =>
+        new Response(JSON.stringify(body), { status: 200 }),
+      );
+      await expect(client.getDashboard()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    }
+  });
+
   it("rejects evidence values outside their generated unit contract", async () => {
     const invalidEvidenceSnapshot = structuredClone(snapshot);
     const decision = invalidEvidenceSnapshot.symbols?.[0]?.decision;

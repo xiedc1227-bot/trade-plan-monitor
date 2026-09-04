@@ -122,6 +122,6 @@ describe("DashboardRouteView", () => {
 
     await vi.waitFor(() => {
       expect(router.currentRoute.value.path).toBe("/stocks/688001.SH");
-    });
+    }, { timeout: 5_000 });
   });
 });

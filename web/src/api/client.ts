@@ -6,6 +6,7 @@ import {
   isShanghaiDateTime,
   shanghaiDateTimeKey,
 } from "./shanghaiTime";
+import { isCanonicalMarketIndexIdentity } from "./marketIndexIdentity";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
 
 export { ApiClientError };
@@ -14,20 +15,6 @@ export type { ApiClientErrorCode } from "./transport";
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER;
 const MAX_VALIDATION_DEPTH = 32;
 
-const marketIndexCodes = new Set([
-  "000001.SH",
-  "399001.SZ",
-  "399006.SZ",
-  "000688.SH",
-  "899050.BJ",
-]);
-const marketIndexBoards = new Set([
-  "SSE_MAIN",
-  "SZSE_MAIN",
-  "CHINEXT",
-  "STAR_MARKET",
-  "BSE",
-]);
 const marketIndexHealth = new Set(["LIVE", "STALE", "GAPPED", "BLOCKED"]);
 const marketIndexIssues = new Set([
   "MISSING_FIVE_MINUTE_BAR",
@@ -270,7 +257,7 @@ function isSymbolSummary(value: unknown): boolean {
   );
 }
 
-function isAuthoritativeDecision(value: unknown): boolean {
+export function isAuthoritativeDecision(value: unknown): boolean {
   if (
     !isRecord(value) ||
     !hasOnlyKeys(value, [
@@ -536,12 +523,7 @@ function isMarketIndexSnapshot(value: unknown): boolean {
       "sessionChangeRatio",
       "snapshotHash",
     ]) ||
-    typeof value.indexCode !== "string" ||
-    !marketIndexCodes.has(value.indexCode) ||
-    !isBoundedString(value.displayName, 32) ||
-    typeof value.board !== "string" ||
-    !marketIndexBoards.has(value.board) ||
-    value.mappingVersion !== "board-index-map-v1" ||
+    !isCanonicalMarketIndexIdentity(value) ||
     typeof value.health !== "string" ||
     !marketIndexHealth.has(value.health) ||
     !isShanghaiDateTime(value.observedAt) ||
@@ -657,12 +639,7 @@ function isSymbolReferenceMarket(value: unknown): boolean {
       "mappingVersion",
       "snapshotHash",
     ]) ||
-    typeof value.indexCode !== "string" ||
-    !marketIndexCodes.has(value.indexCode) ||
-    !isBoundedString(value.displayName, 32) ||
-    typeof value.board !== "string" ||
-    !marketIndexBoards.has(value.board) ||
-    value.mappingVersion !== "board-index-map-v1" ||
+    !isCanonicalMarketIndexIdentity(value) ||
     typeof value.health !== "string" ||
     !marketIndexHealth.has(value.health) ||
     !Array.isArray(value.issues) ||

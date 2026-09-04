@@ -520,6 +520,13 @@ function canReduce(lot: (typeof positions.lots.value)[number]): boolean {
   border: var(--border-technical);
 }
 
+.position-lots__forms input,
+.position-lots__forms select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
 .position-lots dialog {
   max-width: 32rem;
   color: inherit;

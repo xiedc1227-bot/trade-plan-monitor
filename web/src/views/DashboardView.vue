@@ -259,9 +259,17 @@ function compareText(left: string, right: string): number {
 <style scoped>
 .dashboard-view {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
+  width: 100%;
+  min-width: 0;
   max-width: 100rem;
   margin: 0 auto;
+}
+
+.dashboard-view > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .dashboard-view__header {
@@ -277,6 +285,12 @@ function compareText(left: string, right: string): number {
   font-family: var(--font-numeric);
 }
 
+.dashboard-view__eyebrow,
+.dashboard-view__header h1,
+.dashboard-view__header p {
+  overflow-wrap: anywhere;
+}
+
 .dashboard-view__market-status {
   display: flex;
   flex-wrap: wrap;
@@ -284,6 +298,11 @@ function compareText(left: string, right: string): number {
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface-raised);
   border-inline-start: 0.25rem solid var(--color-signal-live-sea-glass);
+}
+
+.dashboard-view__market-status > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-view__market-status[data-connection="DISCONNECTED"],

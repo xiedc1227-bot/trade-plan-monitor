@@ -1,12 +1,49 @@
+import { createRequire } from "node:module";
+
 import { expect, test } from "@playwright/test";
 import type { Route } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 
+const require = createRequire(import.meta.url);
+const axePath = require.resolve("axe-core/axe.min.js");
+
 const symbol = "003043.SZ";
 const observedAt = "2026-08-24T10:05:05.000000+08:00";
+const indexSnapshotHash = "d".repeat(64);
+const referenceMarket = {
+  board: "SZSE_MAIN",
+  conditionProgress: { missing: 0, satisfied: 1, total: 2, unsatisfied: 1 },
+  dataAt: observedAt,
+  displayName: "深证成指",
+  health: "LIVE",
+  indexCode: "399001.SZ",
+  issues: [],
+  mappingVersion: "board-index-map-v1",
+  snapshotHash: indexSnapshotHash,
+};
 const detail = {
+  indexConditionEvidence: [
+    {
+      actualValue: "3220.88",
+      comparisonValue: "3200.00",
+      conditionType: "INDEX_CLOSE_GTE_MA",
+      dataCutoff: observedAt,
+      decisionCutoff: observedAt,
+      formulaDefinitionHash: "e".repeat(64),
+      formulaId: "SMA",
+      indexCode: "399001.SZ",
+      mappingVersion: "board-index-map-v1",
+      missingInputs: [],
+      outcome: "SATISFIED",
+      parameters: [{ key: "period", unit: "COUNT", value: 20 }],
+      planPath: "entry.condition.conditions[0]",
+      snapshotHash: indexSnapshotHash,
+      unit: "POINTS",
+    },
+  ],
   positionLots: [],
+  referenceMarket,
   summary: {
     connected: false,
     decision: {
@@ -43,6 +80,7 @@ const detail = {
     },
     name: "华亚智能",
     observedAt,
+    referenceMarket,
     riskDistanceFen: null,
     satisfiedConditionCount: 0,
     symbol,
@@ -93,15 +131,38 @@ test.afterAll(async () => {
 
 test("reads backend detail, bars, and events for an explicit Shanghai history range", async ({ page }) => {
   const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
-  await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges));
+  const indexRanges: Array<{
+    endAt: string | null;
+    indexCode: string;
+    interval: string | null;
+    startAt: string | null;
+  }> = [];
+  await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges, undefined, indexRanges));
 
   await page.goto(`${baseUrl}/stocks/${symbol}`);
   await expect(page.getByRole("heading", { level: 1, name: "华亚智能 · 003043.SZ" })).toBeVisible();
   await expect.poll(() => ranges.length).toBe(2);
+  await expect.poll(() => indexRanges.length).toBe(1);
   expect(ranges).toEqual([
     { endAt: observedAt, startAt: "2026-08-24T00:00:00.000000+08:00" },
     { endAt: observedAt, startAt: "2026-08-24T00:00:00.000000+08:00" },
   ]);
+  expect(indexRanges).toEqual([
+    {
+      endAt: observedAt,
+      indexCode: "399001.SZ",
+      interval: "FIVE_MINUTE",
+      startAt: "2026-08-24T00:00:00.000000+08:00",
+    },
+  ]);
+  await expect(page.getByRole("heading", { level: 2, name: "参考指数数据" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "计划指数条件" })).toBeVisible();
+  await expect(page.getByText("当前计划 plan-1 · v1")).toBeVisible();
+  await expect(page.getByText("entry.condition.conditions[0]")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "板块指数历史" })).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "板块指数点位（与后端返回精度一致）" }),
+  ).toContainText("3220.88");
 
   const startAt = "2026-08-22T09:30:00.000000+08:00";
   const endAt = "2026-08-22T15:00:00.000000+08:00";
@@ -110,10 +171,166 @@ test("reads backend detail, bars, and events for an explicit Shanghai history ra
   await page.getByRole("button", { name: "查询历史" }).click();
 
   await expect.poll(() => ranges.length).toBe(4);
+  await expect.poll(() => indexRanges.length).toBe(2);
   expect(ranges.slice(-2)).toEqual([
     { endAt, startAt },
     { endAt, startAt },
   ]);
+  expect(indexRanges.at(-1)).toEqual({
+    endAt,
+    indexCode: "399001.SZ",
+    interval: "FIVE_MINUTE",
+    startAt,
+  });
+});
+
+test("keeps current-plan evidence visible when shared index history fails", async ({ page }) => {
+  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
+  await page.route("**/api/v1/**", async (route) =>
+    fulfillApi(route, ranges, undefined, undefined, true),
+  );
+
+  await page.goto(`${baseUrl}/stocks/${symbol}`);
+
+  await expect(page.getByRole("alert").filter({ hasText: "指数历史暂不可用" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "参考指数数据" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "计划指数条件" })).toBeVisible();
+  await expect(page.getByText("entry.condition.conditions[0]")).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("provider-private-detail");
+});
+
+test("keeps both sections explicit when the current plan has no index conditions", async ({ page }) => {
+  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
+  const detailWithoutReference = {
+    ...structuredClone(detail),
+    indexConditionEvidence: [],
+    referenceMarket: null,
+    summary: {
+      ...structuredClone(detail.summary),
+      referenceMarket: null,
+    },
+  };
+  let indexHistoryRequests = 0;
+  await page.route("**/api/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/v1/symbols/${symbol}`) {
+      await route.fulfill({
+        body: JSON.stringify(detailWithoutReference),
+        contentType: "application/json",
+      });
+      return;
+    }
+    if (url.pathname.startsWith("/api/v1/market-indexes/")) {
+      indexHistoryRequests += 1;
+    }
+    await fulfillApi(route, ranges);
+  });
+
+  await page.goto(`${baseUrl}/stocks/${symbol}`);
+
+  await expect(page.getByRole("heading", { level: 2, name: "参考指数数据" })).toBeVisible();
+  await expect(page.getByText("Schema v1 计划未配置参考指数；原有判断保持不变。")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "计划指数条件" })).toBeVisible();
+  await expect(page.getByText("当前计划 plan-1 · v1")).toBeVisible();
+  await expect(page.getByText("计划未使用", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "板块指数历史" })).toHaveCount(0);
+  expect(indexHistoryRequests).toBe(0);
+});
+
+test("marks a mapped Schema v2 plan with zero index leaves as unused", async ({ page }) => {
+  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
+  const unusedReference = {
+    ...structuredClone(referenceMarket),
+    conditionProgress: { missing: 0, satisfied: 0, total: 0, unsatisfied: 0 },
+  };
+  const detailWithoutIndexLeaves = {
+    ...structuredClone(detail),
+    indexConditionEvidence: [],
+    referenceMarket: unusedReference,
+    summary: {
+      ...structuredClone(detail.summary),
+      referenceMarket: structuredClone(unusedReference),
+    },
+  };
+  const indexRanges: Array<{
+    endAt: string | null;
+    indexCode: string;
+    interval: string | null;
+    startAt: string | null;
+  }> = [];
+  await page.route("**/api/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/v1/symbols/${symbol}`) {
+      await route.fulfill({
+        body: JSON.stringify(detailWithoutIndexLeaves),
+        contentType: "application/json",
+      });
+      return;
+    }
+    await fulfillApi(route, ranges, undefined, indexRanges);
+  });
+
+  await page.goto(`${baseUrl}/stocks/${symbol}`);
+
+  await expect(page.getByRole("heading", { level: 2, name: "参考指数数据" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "计划指数条件" })).toBeVisible();
+  await expect(page.getByText("计划未使用", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "板块指数历史" })).toBeVisible();
+  await expect.poll(() => indexRanges.length).toBe(1);
+});
+
+test("keeps the separated detail sections responsive and accessible", async ({ page }) => {
+  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
+  await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges));
+
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ height: 900, width });
+    await page.goto(`${baseUrl}/stocks/${symbol}`);
+    await expect(page.getByRole("heading", { level: 2, name: "计划指数条件" })).toBeVisible();
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    const sizes = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    const overflowSources = await page.evaluate(() => {
+      const viewportWidth = document.documentElement.clientWidth;
+      return [...document.querySelectorAll<HTMLElement>("body *")]
+        .map((element) => ({
+          className: element.className,
+          clientWidth: element.clientWidth,
+          overflowX: getComputedStyle(element).overflowX,
+          scrollWidth: element.scrollWidth,
+          tagName: element.tagName,
+        }))
+        .filter(
+          (element) =>
+            element.clientWidth > viewportWidth ||
+            (element.scrollWidth > element.clientWidth && element.overflowX === "visible"),
+        )
+        .sort((left, right) => right.scrollWidth - left.scrollWidth)
+        .slice(0, 20);
+    });
+    expect(
+      sizes.scrollWidth,
+      `symbol detail overflow at ${width}px: ${JSON.stringify(overflowSources)}`,
+    ).toBeLessThanOrEqual(sizes.clientWidth);
+  }
+
+  await page.addScriptTag({ path: axePath });
+  const seriousViolations = await page.evaluate(async () => {
+    const axe = (globalThis as typeof globalThis & {
+      axe: { run: (root: Document, options: object) => Promise<{ violations: { impact: string | null }[] }> };
+    }).axe;
+    const result = await axe.run(document, {
+      runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    });
+    return result.violations.filter(
+      (violation) => violation.impact === "serious" || violation.impact === "critical",
+    );
+  });
+  expect(seriousViolations).toEqual([]);
 });
 
 test("submits position commands for backend-only T+1 and maximum-policy decisions", async ({ page }) => {
@@ -175,6 +392,13 @@ async function fulfillApi(
   route: Route,
   ranges: Array<{ endAt: string | null; startAt: string | null }>,
   positionRequests?: PositionRequests,
+  indexRanges?: Array<{
+    endAt: string | null;
+    indexCode: string;
+    interval: string | null;
+    startAt: string | null;
+  }>,
+  failIndexHistory = false,
 ): Promise<void> {
   const url = new URL(route.request().url());
   if (url.pathname === `/api/v1/symbols/${symbol}`) {
@@ -194,6 +418,56 @@ async function fulfillApi(
         offset: Number(url.searchParams.get("offset")),
         startAt: url.searchParams.get("startAt"),
         total: 0,
+      }),
+      contentType: "application/json",
+    });
+    return;
+  }
+  if (url.pathname === "/api/v1/market-indexes/399001.SZ/bars") {
+    indexRanges?.push({
+      endAt: url.searchParams.get("endAt"),
+      indexCode: "399001.SZ",
+      interval: url.searchParams.get("interval"),
+      startAt: url.searchParams.get("startAt"),
+    });
+    if (failIndexHistory) {
+      await route.fulfill({
+        body: JSON.stringify({
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            details: [],
+            message: "provider-private-detail",
+            requestId: "f".repeat(32),
+          },
+        }),
+        contentType: "application/json",
+        status: 503,
+      });
+      return;
+    }
+    const barAt = url.searchParams.get("endAt") ?? observedAt;
+    await route.fulfill({
+      body: JSON.stringify({
+        hasMore: false,
+        items: [
+          {
+            amount: null,
+            barAt,
+            closePoints: "3220.88",
+            highPoints: "3222.00",
+            indexCode: "399001.SZ",
+            interval: "FIVE_MINUTE",
+            lowPoints: "3217.50",
+            observedAt: barAt,
+            openPoints: "3218.00",
+            providerRevision: 1,
+            sourceKind: "PROVISIONAL",
+            volume: "100000",
+          },
+        ],
+        limit: Number(url.searchParams.get("limit")),
+        nextCursor: null,
+        snapshotHash: indexSnapshotHash,
       }),
       contentType: "application/json",
     });

@@ -73,6 +73,13 @@ The WebSocket union adds `market.index.updated` with exactly `entityId`, `revisi
 | `MarketIndexChart.vue` | Render validated index points and a textual table alternative; no policy calculation |
 | `useMarketIndexSeries.ts` | Own bounded request, cancellation, generation guard, loading/empty/error states |
 
+### WEBF12 production presentation completion
+
+- The dashboard's shared-index strip is distinct from each watchlist row's current-plan progress, even when several plans reference the same immutable snapshot.
+- The symbol route derives its existing market-index history request only from backend `referenceMarket`, uses the selected stock-history range and `FIVE_MINUTE`, and discards cancelled or stale responses. No browser mapping, indicator calculation, condition evaluation, or outcome inference is permitted.
+- The detail view separately labels shared reference facts/history and current-plan identity/progress/evidence. Loading, failure, health, original cutoff, and cached context remain visible; `conditionProgress.total=0` is rendered as “计划未使用”. Stock and index charts remain separate with textual table alternatives.
+- Strict transport validation covers reference/evidence identity, exact `planPath` ordering, and progress invariants before presentation. This completion reuses the existing REST/OpenAPI/generated TypeScript contract and changes no Schema v1 data, historical backtest result, established hash, token, or provider-request boundary.
+
 Route views remain composition surfaces. Readonly generated types flow down through typed props; navigation and range changes emit typed events up. Reusable derived presentation uses `computed`; requests use cleanup-aware watchers; large immutable series use `shallowRef`. Components never derive the board mapping, SMA, return, condition result, policy priority, or final decision.
 
 ## Presentation and Accessibility
@@ -100,4 +107,4 @@ Route views remain composition surfaces. Readonly generated types flow down thro
 
 ## Review Status
 
-Approved for implementation and offline browser/API verification on `2026-09-02`. WEBF11 extends that offline boundary for this session and reuses T039/T043/T044 without changing the API contract; real provider calls remain unauthorized.
+Approved for implementation and offline browser/API verification on `2026-09-02`. WEBF11 extends that offline boundary for this session and reuses T039/T043/T044 without changing the API contract; WEBF12 completes the offline dashboard/detail presentation boundary without changing the API contract. Real provider calls remain unauthorized.

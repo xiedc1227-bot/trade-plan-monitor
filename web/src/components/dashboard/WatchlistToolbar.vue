@@ -114,7 +114,7 @@ function toggleViewMode(): void {
 <style scoped>
 .watchlist-toolbar {
   display: grid;
-  grid-template-columns: minmax(12rem, 2fr) repeat(2, minmax(10rem, 1fr)) auto;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) auto;
   gap: var(--space-3);
   align-items: end;
   padding: var(--space-4);
@@ -124,6 +124,7 @@ function toggleViewMode(): void {
 
 .watchlist-toolbar__field {
   display: grid;
+  min-width: 0;
   gap: var(--space-1);
 }
 
@@ -134,6 +135,8 @@ function toggleViewMode(): void {
 
 .watchlist-toolbar__control,
 .watchlist-toolbar__button {
+  width: 100%;
+  min-width: 0;
   min-height: 2.75rem;
   box-sizing: border-box;
   padding: var(--space-2) var(--space-3);
@@ -161,7 +164,7 @@ function toggleViewMode(): void {
 
 @media (max-width: 39.999rem) {
   .watchlist-toolbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .watchlist-toolbar__field--search,

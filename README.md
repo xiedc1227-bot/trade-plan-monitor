@@ -44,6 +44,17 @@ dashboard projection exists; WEBF11 never fabricates recovery data. This does no
 path or generated TypeScript field, change Schema v1 data, historical backtest results, established
 hashes, or claim strategy-event-cursor resume for backtesting.
 
+WEBF12 completes the presentation boundary for shared index data and current-plan conditions.
+The dashboard shows one backend-authoritative shared-index strip and keeps each watchlist row's
+plan-specific progress separate. The symbol route uses the backend detail `referenceMarket` identity
+to load the existing market-index bars for the selected stock-history range at `FIVE_MINUTE`, with
+cancellation and stale-generation protection. Shared reference facts/history and current-plan
+identity/progress/evidence are explicitly separated, with loading, failure, health, cutoff, and
+cached context visible. Vue performs no mapping or outcome calculation; strict transport validation
+rejects malformed identity/evidence before rendering. This adds no REST/OpenAPI/generated-TypeScript
+change and changes no Schema v1 data, historical backtest result, established hash, token, or provider
+request boundary.
+
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.
 

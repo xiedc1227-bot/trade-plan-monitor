@@ -15,6 +15,8 @@ WEBF09 把个股详情持仓面板接到既有持仓 REST 契约，以及共用 
 WEBF10 把 `/alerts` 接到既有提醒 REST 契约和共用持久出站箱。筛选、规范证据和确认 revision 均由后端权威判断；确认操作幂等且受审计，但绝不记录成交或变更持仓。
 WEBF11 加固既有 T039/T043/T044 监控事件流：普通断线重连直接使用已应用状态的 SQLite 全局游标恢复；只有事件缺口或 `snapshot.required` 帧才会先重新获取以后端为权威来源的总览快照，再使用该快照的 `sequence` 重连。只有严格匹配的心跳才能重置存活状态并允许进入 `LIVE`；重复或旧帧不能掩盖超时。追加的 `0008_market_index_monitor_event` 迁移只扩展既有事件账本 CHECK 约束，使已批准的 `market.index.updated` 真正可落库；保留所有既有行、序号和 identity，绝不重写冻结的 `0006_monitor_event`。默认生产组合缺少权威总览投影时仍返回 `SERVICE_UNAVAILABLE`；WEBF11 绝不伪造恢复数据。本变更不增加 OpenAPI 路径或生成 TypeScript 字段，不改变 Schema v1 数据、历史回测结果、既有 hash，也不声称回测策略事件 cursor resume 已完成。
 
+WEBF12 完成共用指数数据与当前计划条件的展示边界。总览只显示一条以后端为权威来源的共用指数条带，并把自选表每行的计划专属进度分开。个股路由依据后端详情 `referenceMarket` identity，按所选股票历史范围以 `FIVE_MINUTE` 加载既有板块指数 K 线，并具备取消和陈旧 generation 防护。共用参考事实/历史与当前计划 identity/进度/证据明确分区，加载、故障、健康、截止时间和缓存上下文保持可见。Vue 不做映射或结果计算；严格传输校验会在渲染前拒绝错误 identity/证据。本次不增加 REST/OpenAPI/生成 TypeScript 变更，不改变 Schema v1 数据、历史回测结果、既有 hash、token 或供应商请求边界。
+
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 
 本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。另行授权的 T059 性能修复现已在不改变阈值的前提下通过 100k-export、ten-symbol/252-day、内存、存储及完整离线闸门。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。

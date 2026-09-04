@@ -2,6 +2,7 @@
 import { computed, shallowRef, watch } from "vue";
 
 import type { PositionLotPage } from "../api/generated";
+import { createMarketIndexApi, type MarketIndexApi } from "../api/marketIndexes";
 import { createPositionApi, type PositionApi } from "../api/positions";
 import { isShanghaiDateTime, shanghaiDateTimeKey } from "../api/shanghaiTime";
 import { createSymbolApi, type SymbolApi } from "../api/symbols";
@@ -9,17 +10,23 @@ import {
   useSymbolDetail,
   type SymbolHistoryRange,
 } from "../composables/useSymbolDetail";
+import {
+  useMarketIndexSeries,
+  type MarketIndexSeriesQuery,
+} from "../composables/useMarketIndexSeries";
 import type { PositionOperations } from "../composables/usePositions";
 import SymbolDetailView from "./SymbolDetailView.vue";
 
 interface Props {
   readonly api?: SymbolApi;
+  readonly marketIndexApi?: MarketIndexApi;
   readonly positionApi?: PositionApi;
   readonly symbol: string;
 }
 
 const props = defineProps<Props>();
 const api = props.api ?? createSymbolApi();
+const marketIndexApi = props.marketIndexApi ?? createMarketIndexApi();
 const positionApi = props.positionApi ?? createPositionApi();
 const positionOperations: PositionOperations = Object.freeze({
   closePosition: (request: Parameters<PositionOperations["closePosition"]>[0]) =>
@@ -39,6 +46,26 @@ const positionPage = shallowRef<PositionLotPage | null>(null);
 const positionError = shallowRef<string | null>(null);
 const symbol = computed(() => props.symbol);
 const { bars, detail, error, events, loading, stale } = useSymbolDetail({ api, range, symbol });
+const marketIndexQuery = computed<MarketIndexSeriesQuery | null>(() => {
+  const currentRange = range.value;
+  const reference = detail.value?.referenceMarket ?? detail.value?.summary.referenceMarket ?? null;
+  if (currentRange === null || reference === null) return null;
+  return Object.freeze({
+    endAt: currentRange.endAt,
+    indexCode: reference.indexCode,
+    interval: "FIVE_MINUTE",
+    limit: 100,
+    startAt: currentRange.startAt,
+  });
+});
+const {
+  error: indexHistoryError,
+  page: indexHistoryPage,
+  status: indexHistoryStatus,
+} = useMarketIndexSeries({
+  loader: (query, signal) => marketIndexApi.getBars(query, { signal }),
+  query: marketIndexQuery,
+});
 const positionAsOfTradeDate = computed(
   () => detail.value?.summary.observedAt.slice(0, 10) ?? null,
 );
@@ -171,6 +198,10 @@ function submitRange(): void {
       :detail="detail"
       :error="error"
       :events="events"
+      :index-bars="indexHistoryPage?.items ?? []"
+      :index-history-error="indexHistoryError"
+      :index-history-loading="indexHistoryStatus === 'LOADING'"
+      :index-history-snapshot-hash="indexHistoryPage?.snapshotHash ?? null"
       :loading="loading"
       :position-as-of-trade-date="positionAsOfTradeDate"
       :position-operations="positionOperations"
@@ -183,7 +214,15 @@ function submitRange(): void {
 <style scoped>
 .symbol-detail-route {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
+  width: 100%;
+  min-width: 0;
+}
+
+.symbol-detail-route > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .symbol-detail-route__range,

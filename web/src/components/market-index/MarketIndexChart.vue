@@ -3,12 +3,18 @@ import type { BacktestMarketIndexPointView, MarketIndexBarView } from "../../api
 
 interface Props {
   bars?: readonly MarketIndexBarView[];
+  error?: string | null;
+  loading?: boolean;
   points?: readonly BacktestMarketIndexPointView[];
+  snapshotHash?: string | null;
 }
 
 withDefaults(defineProps<Props>(), {
   bars: () => [],
+  error: null,
+  loading: false,
   points: () => [],
+  snapshotHash: null,
 });
 
 const emit = defineEmits<{
@@ -19,8 +25,27 @@ const emit = defineEmits<{
 <template>
   <section class="index-chart" aria-labelledby="index-chart-title">
     <h2 id="index-chart-title">板块指数历史</h2>
-    <p v-if="bars.length === 0 && points.length === 0" role="status">暂无后端指数历史数据。</p>
-    <div v-else class="index-chart__scroller" tabindex="0" aria-label="板块指数历史表，可横向滚动">
+    <p v-if="snapshotHash" class="index-chart__identity">
+      后端历史快照 {{ snapshotHash }}
+    </p>
+    <p v-if="loading" class="index-chart__status" role="status" aria-live="polite">
+      正在刷新共享指数历史；已有后端点位会继续显示。
+    </p>
+    <p v-if="error" class="index-chart__error" role="alert">
+      {{ error }}；{{ bars.length > 0 || points.length > 0 ? "已缓存后端点位继续显示。" : "不会补造指数点位。" }}
+    </p>
+    <p
+      v-if="!loading && !error && bars.length === 0 && points.length === 0"
+      role="status"
+    >
+      暂无后端指数历史数据。
+    </p>
+    <div
+      v-if="bars.length > 0 || points.length > 0"
+      class="index-chart__scroller"
+      tabindex="0"
+      aria-label="板块指数历史表，可横向滚动"
+    >
       <table v-if="points.length > 0">
         <caption>回测板块指数点位与后端指标事实（POINTS）</caption>
         <thead>
@@ -72,6 +97,21 @@ const emit = defineEmits<{
 
 .index-chart__scroller {
   overflow-x: auto;
+}
+
+.index-chart__identity,
+.index-chart__status,
+.index-chart__error {
+  overflow-wrap: anywhere;
+}
+
+.index-chart__identity {
+  font-family: var(--font-numeric);
+}
+
+.index-chart__error {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 0.25rem solid var(--color-signal-risk-vermilion);
 }
 
 .index-chart table {

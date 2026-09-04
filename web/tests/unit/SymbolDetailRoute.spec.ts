@@ -13,9 +13,11 @@ vi.mock("echarts", () => ({
 
 import type {
   BarPage,
+  MarketIndexBarPage,
   PositionLotPage,
   SymbolDetailResponse,
   SymbolEventPage,
+  SymbolReferenceMarketView,
 } from "../../src/api/generated";
 import { createSymbolApi } from "../../src/api/symbols";
 import type { PositionOperations } from "../../src/composables/usePositions";
@@ -27,6 +29,23 @@ const initialRange = Object.freeze({
   endAt: observedAt,
   startAt: "2026-08-24T00:00:00.000000+08:00",
 });
+const indexSnapshotHash = "d".repeat(64);
+const referenceMarket: SymbolReferenceMarketView = {
+  board: "SSE_MAIN",
+  conditionProgress: {
+    missing: 0,
+    satisfied: 1,
+    total: 2,
+    unsatisfied: 1,
+  },
+  dataAt: observedAt,
+  displayName: "上证指数",
+  health: "LIVE",
+  indexCode: "000001.SH",
+  issues: [],
+  mappingVersion: "board-index-map-v1",
+  snapshotHash: indexSnapshotHash,
+};
 
 const detail = {
   positionLots: [],
@@ -73,6 +92,34 @@ const detail = {
   },
 } as SymbolDetailResponse;
 
+const detailWithMarketIndex = {
+  ...detail,
+  indexConditionEvidence: [
+    {
+      actualValue: "3100.25",
+      comparisonValue: "3095.10",
+      conditionType: "INDEX_CLOSE_GTE_MA",
+      dataCutoff: observedAt,
+      decisionCutoff: observedAt,
+      formulaDefinitionHash: "e".repeat(64),
+      formulaId: "SMA",
+      indexCode: "000001.SH",
+      mappingVersion: "board-index-map-v1",
+      missingInputs: [],
+      outcome: "SATISFIED",
+      parameters: [{ key: "period", unit: "COUNT", value: 20 }],
+      planPath: "entry.condition.conditions[0]",
+      snapshotHash: indexSnapshotHash,
+      unit: "POINTS",
+    },
+  ],
+  referenceMarket,
+  summary: {
+    ...detail.summary,
+    referenceMarket,
+  },
+} satisfies SymbolDetailResponse;
+
 function positionPage(
   targetSymbol = symbol,
   targetAsOfTradeDate = observedAt.slice(0, 10),
@@ -106,6 +153,31 @@ function eventsPage(range: Readonly<{ startAt: string; endAt: string }>): Symbol
     offset: 0,
     startAt: range.startAt,
     total: 0,
+  };
+}
+
+function marketIndexPage(): MarketIndexBarPage {
+  return {
+    hasMore: false,
+    items: [
+      {
+        amount: null,
+        barAt: observedAt,
+        closePoints: "3100.25",
+        highPoints: "3102.00",
+        indexCode: "000001.SH",
+        interval: "FIVE_MINUTE",
+        lowPoints: "3098.50",
+        observedAt,
+        openPoints: "3099.00",
+        providerRevision: 1,
+        sourceKind: "PROVISIONAL",
+        volume: "100000",
+      },
+    ],
+    limit: 100,
+    nextCursor: null,
+    snapshotHash: indexSnapshotHash,
   };
 }
 
@@ -147,6 +219,9 @@ describe("/stocks/:symbol route", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("华亚智能 · 003043.SZ");
+    expect(wrapper.text()).toContain("参考指数数据");
+    expect(wrapper.text()).toContain("计划指数条件");
+    expect(wrapper.text()).toContain("计划未使用");
     expect(getBars).toHaveBeenCalledWith(symbol, {
       ...initialRange,
       interval: "FIVE_MINUTES",
@@ -158,6 +233,97 @@ describe("/stocks/:symbol route", () => {
       limit: 100,
       offset: 0,
     }, expect.any(Object));
+  });
+
+  it("loads shared index history from the backend reference without recomputing plan evidence", async () => {
+    const getIndexBars = vi.fn(async () => marketIndexPage());
+    const wrapper = mount(SymbolDetailRouteView, {
+      attachTo: document.body,
+      props: {
+        api: {
+          getBars: vi.fn(async (_symbol: string, query: typeof initialRange) => barsPage(query)),
+          getEvents: vi.fn(async (_symbol: string, query: typeof initialRange) => eventsPage(query)),
+          getSymbol: vi.fn(async () => detailWithMarketIndex),
+        },
+        marketIndexApi: { getBars: getIndexBars },
+        positionApi: {
+          closePosition: vi.fn(),
+          createPosition: vi.fn(),
+          listPositions: vi.fn(async () => positionPage()),
+        },
+        symbol,
+      },
+    });
+
+    await flushPromises();
+
+    expect(getIndexBars).toHaveBeenCalledWith(
+      {
+        ...initialRange,
+        indexCode: "000001.SH",
+        interval: "FIVE_MINUTE",
+        limit: 100,
+      },
+      { signal: expect.any(AbortSignal) },
+    );
+    const detailView = wrapper.getComponent({ name: "SymbolDetailView" });
+    expect(detailView.props("indexBars")).toEqual(marketIndexPage().items);
+    expect(detailView.props("indexHistorySnapshotHash")).toBe(indexSnapshotHash);
+    expect(wrapper.text()).toContain("参考指数数据");
+    expect(wrapper.text()).toContain("计划指数条件");
+    expect(wrapper.text()).toContain("entry.condition.conditions[0]");
+    expect(wrapper.text()).toContain("3100.25");
+  });
+
+  it("does not request index history when the authoritative detail has no reference market", async () => {
+    const getIndexBars = vi.fn(async () => marketIndexPage());
+    mount(SymbolDetailRouteView, {
+      attachTo: document.body,
+      props: {
+        api: {
+          getBars: vi.fn(async (_symbol: string, query: typeof initialRange) => barsPage(query)),
+          getEvents: vi.fn(async (_symbol: string, query: typeof initialRange) => eventsPage(query)),
+          getSymbol: vi.fn(async () => detail),
+        },
+        marketIndexApi: { getBars: getIndexBars },
+        positionApi: {
+          closePosition: vi.fn(),
+          createPosition: vi.fn(),
+          listPositions: vi.fn(async () => positionPage()),
+        },
+        symbol,
+      },
+    });
+
+    await flushPromises();
+
+    expect(getIndexBars).not.toHaveBeenCalled();
+  });
+
+  it("keeps detail evidence visible when shared index history fails", async () => {
+    const wrapper = mount(SymbolDetailRouteView, {
+      attachTo: document.body,
+      props: {
+        api: {
+          getBars: vi.fn(async (_symbol: string, query: typeof initialRange) => barsPage(query)),
+          getEvents: vi.fn(async (_symbol: string, query: typeof initialRange) => eventsPage(query)),
+          getSymbol: vi.fn(async () => detailWithMarketIndex),
+        },
+        marketIndexApi: { getBars: vi.fn(async () => Promise.reject(new Error("unsafe detail"))) },
+        positionApi: {
+          closePosition: vi.fn(),
+          createPosition: vi.fn(),
+          listPositions: vi.fn(async () => positionPage()),
+        },
+        symbol,
+      },
+    });
+
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("指数历史暂不可用");
+    expect(wrapper.text()).toContain("entry.condition.conditions[0]");
+    expect(wrapper.text()).not.toContain("unsafe detail");
   });
 
   it("loads the authoritative position page for the observed trade date and passes its gateway through", async () => {
