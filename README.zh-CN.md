@@ -17,6 +17,8 @@ WEBF11 加固既有 T039/T043/T044 监控事件流：普通断线重连直接使
 
 WEBF12 完成共用指数数据与当前计划条件的展示边界。总览只显示一条以后端为权威来源的共用指数条带，并把自选表每行的计划专属进度分开。个股路由依据后端详情 `referenceMarket` identity，按所选股票历史范围以 `FIVE_MINUTE` 加载既有板块指数 K 线，并具备取消和陈旧 generation 防护。共用参考事实/历史与当前计划 identity/进度/证据明确分区，加载、故障、健康、截止时间和缓存上下文保持可见。Vue 不做映射或结果计算；严格传输校验会在渲染前拒绝错误 identity/证据。本次不增加 REST/OpenAPI/生成 TypeScript 变更，不改变 Schema v1 数据、历史回测结果、既有 hash、token 或供应商请求边界。
 
+WEBF13 完成生产路由与新建回测的验收缺口。曾经的五条占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现已在精确 10 路由地图中具备惰性 SFC 与真实浏览器回归证据。确定性 Chromium 旅程还会提交生成的运行命令，沿后端权威 `runId`/`jobId` 轮询，仅在 `COMPLETED` 后移除 `jobId`，再渲染 materialized 结果。OpenAPI 契约继续为 42 条路径（27 条实时加 15 条回测），生成 TypeScript 保持不变，也不改变 Schema v1、历史结果、既有哈希、token 或供应商边界。详见 [WEBF13 验收报告](docs/verification/webf13-acceptance.zh-CN.md)。
+
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 
 本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。另行授权的 T059 性能修复现已在不改变阈值的前提下通过 100k-export、ten-symbol/252-day、内存、存储及完整离线闸门。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。

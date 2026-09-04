@@ -5,7 +5,7 @@ import type { Browser, Page, TestInfo } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 
-import type { RuntimeHealthResponse } from "../../src/api/generated";
+import type { DashboardResponse, RuntimeHealthResponse } from "../../src/api/generated";
 
 const require = createRequire(import.meta.url);
 const axePath = require.resolve("axe-core/axe.min.js");
@@ -52,6 +52,23 @@ const health: RuntimeHealthResponse = {
   stoppedAt: null,
 };
 
+const dashboard: DashboardResponse = {
+  connectionStatus: "CONNECTED",
+  counts: {
+    actionable: 0,
+    blocked: 0,
+    lowZoneWatch: 0,
+    normal: 0,
+    risk: 0,
+    stale: 0,
+  },
+  dataAgeSeconds: 0,
+  marketIndexes: [],
+  observedAt: health.observedAt,
+  sequence: 1,
+  symbols: [],
+};
+
 let server: ViteDevServer;
 let baseUrl: string;
 
@@ -72,6 +89,64 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await server.close();
+});
+
+test("loads system health through the production /system route", async ({ page }, testInfo) => {
+  const consoleFailures: string[] = [];
+  const externalRequests: string[] = [];
+  const requestFailures: string[] = [];
+  const unexpectedRequests: string[] = [];
+  let healthRequests = 0;
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleFailures.push(`${message.type()}:${message.text()}`);
+    }
+  });
+  page.on("request", (request) => {
+    const requestUrl = new URL(request.url());
+    if (
+      (requestUrl.protocol === "http:" || requestUrl.protocol === "https:") &&
+      requestUrl.host !== new URL(baseUrl).host
+    ) {
+      externalRequests.push(request.url());
+    }
+  });
+  page.on("requestfailed", (request) => {
+    requestFailures.push(`${request.method()} ${request.url()}`);
+  });
+  await page.route(`${baseUrl}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/v1/health") {
+      healthRequests += 1;
+      await route.fulfill({
+        body: JSON.stringify(health),
+        contentType: "application/json; charset=utf-8",
+        status: 200,
+      });
+      return;
+    }
+    if (request.method() === "GET" && url.pathname === "/api/v1/dashboard") {
+      await route.fulfill({
+        body: JSON.stringify(dashboard),
+        contentType: "application/json; charset=utf-8",
+        status: 200,
+      });
+      return;
+    }
+    unexpectedRequests.push(`${request.method()} ${url.pathname}`);
+    await route.fulfill({ body: "unexpected request", status: 500 });
+  });
+
+  await page.goto(`${baseUrl}/system`);
+  await expect(page.getByRole("heading", { level: 1, name: "系统健康" })).toBeVisible();
+  await expect(page).toHaveTitle("系统健康 · Trade Plan Monitor");
+  expect(healthRequests).toBe(1);
+  expect(consoleFailures).toEqual([]);
+  expect(externalRequests).toEqual([]);
+  expect(requestFailures).toEqual([]);
+  expect(unexpectedRequests).toEqual([]);
+  expectChromiumProject(testInfo);
 });
 
 async function mountSystemView(page: Page) {

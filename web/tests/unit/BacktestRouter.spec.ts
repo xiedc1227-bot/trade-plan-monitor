@@ -12,6 +12,14 @@ const historicalPaths = [
   "/system",
 ] as const;
 
+const formerlyPlaceholderRoutes = [
+  ["/", "监控总览 · Trade Plan Monitor"],
+  ["/stocks/:symbol", "个股详情 · Trade Plan Monitor"],
+  ["/plans/:id", "计划详情 · Trade Plan Monitor"],
+  ["/alerts", "提醒中心 · Trade Plan Monitor"],
+  ["/system", "系统健康 · Trade Plan Monitor"],
+] as const;
+
 const backtestPaths = [
   "/backtests",
   "/backtests/new",
@@ -28,7 +36,7 @@ function routeAt(path: string): RouteRecordRaw {
 }
 
 describe("backtest production routes", () => {
-  it("keeps the exact ten-route surface with stock detail and alerts wired", () => {
+  it("keeps the exact ten-route production surface", () => {
     expect(routes).toHaveLength(10);
     expect(routes.map((route) => route.path)).toEqual([
       ...historicalPaths,
@@ -40,10 +48,23 @@ describe("backtest production routes", () => {
     }
   });
 
-  it("loads /alerts from a real lazy SFC with route title metadata", async () => {
-    const route = routeAt("/alerts");
+  it.each(formerlyPlaceholderRoutes)(
+    "loads formerly placeholder route %s from a real lazy SFC",
+    async (path, title) => {
+      const route = routeAt(path);
 
-    expect(route.meta?.title).toBe("提醒中心 · Trade Plan Monitor");
+      expect(route.meta?.title).toBe(title);
+      expect(typeof route.component).toBe("function");
+
+      const loaded = await (route.component as LazyRouteComponent)();
+      expect(loaded.default).toBeDefined();
+    },
+  );
+
+  it("keeps the plans workbench route real alongside the five former placeholders", async () => {
+    const route = routeAt("/plans");
+
+    expect(route.meta?.title).toBe("计划工作台 · Trade Plan Monitor");
     expect(typeof route.component).toBe("function");
 
     const loaded = await (route.component as LazyRouteComponent)();

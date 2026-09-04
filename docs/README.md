@@ -51,6 +51,7 @@ This directory contains the project's design, specification, decision, operating
 
 ## Verification Evidence
 
+- [WEBF13 route and new-backtest acceptance](verification/webf13-acceptance.md) ([Chinese](verification/webf13-acceptance.zh-CN.md)) — passed offline route, journey, contract, and security evidence from 2026-09-04; it does not replace historical acceptance reports.
 - [Backtest production-fake acceptance](verification/backtest-acceptance.md) ([Chinese](verification/backtest-acceptance.zh-CN.md))
 - [Tushare live contract acceptance](verification/tushare-live.md) ([Chinese](verification/tushare-live.zh-CN.md))
 - [T059 release acceptance](verification/release-acceptance.md) ([Chinese](verification/release-acceptance.zh-CN.md))

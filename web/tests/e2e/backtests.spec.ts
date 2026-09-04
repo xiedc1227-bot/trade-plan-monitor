@@ -9,6 +9,7 @@ import type {
   BacktestDatasetPage,
   BacktestDetailPage,
   BacktestEquitySeries,
+  BacktestJobReceipt,
   BacktestJobView,
   BacktestMarketIndexSeriesView,
   BacktestReferenceMarketCoverageView,
@@ -88,6 +89,7 @@ interface BrowserAudit {
   maxInFlight: Map<string, number>;
   requestFailures: string[];
   requestTotals: Map<string, number>;
+  runSubmissions: { body: unknown; idempotencyKey: string | null }[];
   unexpectedRequests: string[];
 }
 
@@ -414,6 +416,18 @@ const decisionDetails: BacktestDetailPage = {
   nextCursor: null,
 };
 
+const queuedRunReceipt: BacktestJobReceipt = {
+  attempt: 0,
+  datasetHash: DATASET_HASH,
+  jobId: JOB_ID,
+  kind: "BACKTEST_RUN",
+  reused: false,
+  revision: 0,
+  runId: RUN_ID,
+  status: "QUEUED",
+  submittedAt: TIME,
+};
+
 test.beforeAll(async () => {
   server = await createServer({
     clearScreen: false,
@@ -495,6 +509,7 @@ function newAudit(): BrowserAudit {
     maxInFlight: new Map(),
     requestFailures: [],
     requestTotals: new Map(),
+    runSubmissions: [],
     unexpectedRequests: [],
   };
 }
@@ -552,6 +567,20 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
       } else if (key === "GET /api/v1/plan-versions") {
         expect(url.searchParams.get("canActivate")).toBe("true");
         await fulfillJson(route, planVersionPage);
+      } else if (key === "POST /api/v1/backtest-runs") {
+        audit.runSubmissions.push({
+          body: request.postDataJSON(),
+          idempotencyKey: request.headers()["idempotency-key"] ?? null,
+        });
+        await route.fulfill({
+          body: JSON.stringify(queuedRunReceipt),
+          contentType: "application/json; charset=utf-8",
+          headers: {
+            Location: `/api/v1/backtest-jobs/${JOB_ID}`,
+            "Retry-After": "2",
+          },
+          status: 202,
+        });
       } else if (key === "GET /api/v1/backtest-runs") {
         await fulfillJson(route, runPage);
       } else if (key === "GET /api/v1/backtest-datasets") {
@@ -598,6 +627,18 @@ async function openRoute(page: Page, route: (typeof ROUTES)[number]): Promise<vo
   await page.goto(`${baseUrl}${route.path}`);
   await expect(page.getByRole("heading", { level: 1, name: route.heading })).toBeVisible();
   await expect(page.getByTestId(route.readyTestId)).toBeVisible();
+}
+
+async function fillValidRunCommand(page: Page): Promise<void> {
+  await page.locator("#plan-version-id").selectOption(PLAN_VERSION_ID);
+  await page.locator("#dataset-hash").fill(DATASET_HASH);
+  await page.locator("#initial-cash-fen").fill("10000000");
+  await page.locator("#commission-rate").fill("0.0003");
+  await page.locator("#minimum-commission-fen").fill("500");
+  await page.locator("#stamp-duty-rate").fill("0.001");
+  await page.locator("#transfer-fee-rate").fill("0.00001");
+  await page.locator("#buy-slippage-bps").fill("2.5");
+  await page.locator("#sell-slippage-bps").fill("3.75");
 }
 
 async function expectNoSeriousAxeViolations(page: Page): Promise<void> {
@@ -708,6 +749,62 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   );
   await expectNoSeriousAxeViolations(page);
 
+  expectChromiumProject(testInfo);
+  expectCleanAudit(audit);
+  await page.close();
+});
+
+test("submits a complete new run and follows the authoritative job to its result", async ({
+  browser,
+}, testInfo) => {
+  const { audit, page } = await openPage(browser);
+
+  await openRoute(page, ROUTES[1]);
+  await fillValidRunCommand(page);
+  await expect(page.getByTestId("reference-market-coverage")).toContainText("深证成指");
+  const submissionResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/v1/backtest-runs",
+  );
+  await page.getByTestId("submit-backtest-run").click();
+  const acceptedResponse = await submissionResponse;
+
+  expect(acceptedResponse.status()).toBe(202);
+  expect(await acceptedResponse.headerValue("location")).toBe(
+    `/api/v1/backtest-jobs/${JOB_ID}`,
+  );
+  expect(await acceptedResponse.headerValue("retry-after")).toBe("2");
+  expect(acceptedResponse.request().headers()["content-type"]).toBe("application/json");
+  await expect(page).toHaveURL(`${baseUrl}/backtests/${RUN_ID}?jobId=${JOB_ID}`);
+  await expect(page.getByTestId("backtest-job-status")).toHaveAttribute(
+    "data-status",
+    "RUNNING",
+  );
+  await expect(page).toHaveURL(`${baseUrl}/backtests/${RUN_ID}?tab=summary`, {
+    timeout: 7_000,
+  });
+  await expect(page.getByRole("heading", { level: 2, name: "结果审阅" })).toBeVisible();
+
+  expect(audit.requestTotals.get("POST /api/v1/backtest-runs")).toBe(1);
+  expect(audit.runSubmissions).toHaveLength(1);
+  expect(audit.runSubmissions[0]?.body).toEqual({
+    datasetHash: DATASET_HASH,
+    eventRiskAssumption: "NO_EVENT_RISK",
+    executionConfig: {
+      buySlippageBps: "2.5",
+      commissionRate: "0.0003",
+      minimumCommissionFen: 500,
+      sellSlippageBps: "3.75",
+      stampDutyRate: "0.001",
+      transferFeeRate: "0.00001",
+    },
+    initialCashFen: 10_000_000,
+    initialLots: [],
+    planVersionId: PLAN_VERSION_ID,
+  });
+  expect(audit.runSubmissions[0]?.idempotencyKey).toMatch(/^[A-Za-z0-9._:-]{1,128}$/);
+  expect(audit.jobRequestTimes).toHaveLength(2);
   expectChromiumProject(testInfo);
   expectCleanAudit(audit);
   await page.close();

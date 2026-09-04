@@ -51,6 +51,7 @@
 
 ## 验证证据
 
+- [WEBF13 路由与新建回测验收](verification/webf13-acceptance.zh-CN.md)（[英文](verification/webf13-acceptance.md)）——已于 2026-09-04 通过离线路由、旅程、契约和安全证据；不替代历史验收报告。
 - [回测生产 fake 验收](verification/backtest-acceptance.zh-CN.md)（[英文](verification/backtest-acceptance.md)）
 - [Tushare 真实契约验收](verification/tushare-live.zh-CN.md)（[英文](verification/tushare-live.md)）
 - [T059 发布验收](verification/release-acceptance.zh-CN.md)（[英文](verification/release-acceptance.md)）

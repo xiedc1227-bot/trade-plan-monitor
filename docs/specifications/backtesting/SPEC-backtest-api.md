@@ -10,7 +10,7 @@ Expose additive, typed, loopback-only FastAPI resources for backtest datasets, p
 
 `backtest-api` is the contract-first adapter over `backtest-data`, `backtest-jobs`, `backtest-results`, immutable `plan-domain` versions, and the shared `local-web` error/origin/OpenAPI boundary. It does not implement strategy rules, SQL repositories, worker loops, provider mapping, result formatting in Vue, a new authentication system, or a new WebSocket.
 
-The current committed OpenAPI has exactly 24 live-monitor paths. This specification adds 13 resource paths; after implementation and regeneration the canonical document must have exactly 37 paths. Until implementation is accepted, `openapi.json` remains the 24-path baseline and no placeholder router counts as completion.
+The original approved baseline had 24 live-monitor paths and this specification proposed 13 backtest resource paths, for 37 paths after its initial implementation. Two later additive board-index backtest resources raised the backtest total to 15, while live resources grew to 27. The current frozen OpenAPI therefore has exactly 42 paths (27 live plus 15 backtest), and `openapi.json` and `web/src/api/generated.ts` are generated together. WEBF13 consumes that current contract without changing any path, field, status, or schema.
 
 ## Commands
 
@@ -200,7 +200,7 @@ Use typed FastAPI dependencies, strict frozen Pydantic input/output models, expl
 
 Contract tests cover every method/path/status/schema; all field and cross-field constraints; JavaScript-safe fen input and `FenText` output; uniform `Asia/Shanghai`/`+08:00` datetime round trips, 0–6-digit input to fixed-six-digit canonicalization, and rejection of `Z`, offsetless, overprecision, and other-offset values; rate/slippage bounds; 200 initial lots and `lotKey` normalization; plan snapshot validation and zero worker/replay live-database access; job progress/result unions; dataset/run views; filters; exact cursor format, signature, high-water traversal, key rotation, tampering, and filter mismatch; 100-item, 32 KiB-item, and sub-4 MiB response gates; all availability states; 14-day idempotency and races; immediate completed reuse under `202`; pin revisions; the full cancellation matrix; queue-full retry; missing services; origin/body/security headers; redaction; v1 exclusion, v2 64 KiB streamed export, and disconnect abort; request IDs; and zero request-handler work.
 
-OpenAPI tests fix exactly 37 paths, regenerate TypeScript, and reject schema/status drift. Production-composition tests prove real services and lifecycle are reachable rather than defaulting to `DEGRADED`/`SERVICE_UNAVAILABLE`. Performance tests and their measured thresholds are defined in the approved implementation plan, not invented during specification implementation.
+OpenAPI tests fix exactly 42 paths, regenerate TypeScript, and reject schema/status drift. Production-composition tests prove real services and lifecycle are reachable rather than defaulting to `DEGRADED`/`SERVICE_UNAVAILABLE`. Performance tests and their measured thresholds are defined in the approved implementation plan, not invented during specification implementation.
 
 ## Boundaries
 
@@ -211,7 +211,7 @@ OpenAPI tests fix exactly 37 paths, regenerate TypeScript, and reject schema/sta
 
 ## Success Criteria
 
-- The canonical OpenAPI expands from exactly 24 to exactly 37 declared paths with byte-matching generated TypeScript.
+- The current canonical OpenAPI has exactly 42 declared paths (27 live plus 15 backtest) with byte-matching generated TypeScript; WEBF13 makes no contract change.
 - Every long operation returns a durable `202` receipt, including deterministic completed reuse, without provider/replay work in the handler.
 - Same-key receipt replay is guaranteed through the 14-day window; conflicting reuse fails; identical run inputs execute once.
 - Lists/details remain stable, bounded, signed, filter-bound, at most 100 items, at most 32 KiB per item, and below 4 MiB per JSON page.
@@ -227,4 +227,4 @@ No blocking question remains for the first contract proposal. WebSocket job even
 
 ## Review Status
 
-The user confirmed the six-module map, additive local REST direction, and this detailed specification set on 2026-08-26. A bilingual consistency pass then corrected `BacktestRunCommand.planVersionId` to the existing RFC 4122 UUID/string identity, added the backtest-only `FenText` decision projection without changing the live 24-path contract, closed job discriminator invariants, and clarified application-owned cancellation/pin idempotency. On 2026-08-26, the user explicitly rejected the temporary UTC proposal, confirmed one `Asia/Shanghai`/`+08:00` contract for every backtest time, and confirmed all remaining corrected clauses. Section 15 of the bilingual implementation plan was approved on 2026-08-26. That approval authorizes only generating the bilingual `BT009`–`BT050` task list. The generated task list still requires separate explicit approval; implementation, regeneration of the committed 24-path snapshot, commit, push, dependency installation, and any network access remain unauthorized.
+The user confirmed the six-module map, additive local REST direction, and this detailed specification set on 2026-08-26. A bilingual consistency pass then corrected `BacktestRunCommand.planVersionId` to the existing RFC 4122 UUID/string identity, added the backtest-only `FenText` decision projection without changing the original live baseline, closed job discriminator invariants, and clarified application-owned cancellation/pin idempotency. The resulting implementation and later board-index additions now form the frozen 42-path contract. WEBF13 uses that contract unchanged; its acceptance report must record only actually run offline evidence. Commit, push, dependency installation, and network access remain separately authorized actions.

@@ -147,7 +147,7 @@ OpenAPI 快照 SHA-256：`882d762abc4872a9970c34e49c06eec4427a286b1a1249a106686d
 ### T042 无障碍 Vue 应用外壳边界
 
 - `main.ts` 只在 `#app` 存在时挂载根 `App.vue`，为该生产根安装唯一应用路由，并保留工具链测试使用的强类型未挂载组件工厂。导入模块不会创建 API 客户端、store、Socket、定时器或领域状态。
-- 生产路由精确声明十条路径。`/`、`/stocks/:symbol`、`/plans` 和 `/plans/:id` 是延迟加载的真实监控/详情/工作台视图，`/system` 和四条 `/backtests...` 路径是延迟加载的真实诊断/研究视图；只有 `/alerts` 在获批视图接通前仍为带标签历史占位页。路由层不包含领域规则或可变共享行情状态。
+- 生产路由精确声明十条路径。`/`、`/stocks/:symbol`、`/plans`、`/plans/:id`、`/alerts`、`/system` 和四条 `/backtests...` 路径均为延迟加载的真实监控、工作台、诊断或研究视图。WEBF13 在下文固定当前准确路由集合及曾经占位路由的历史。路由层不包含领域规则或可变共享行情状态。
 - `AppShell` 只负责 landmark、桌面端与移动端导航、路由出口、一个强类型可选 `connectionBanner` 插槽，以及一个局部移动菜单布尔值。只有提供插槽时才渲染横幅包装器，并使用礼貌级状态语义；连接与健康状态所有权仍位于外壳之外。
 - 跳转链接把焦点移到持久的 `#main-content` landmark。导航使用原生链接和原生菜单按钮，具备清晰焦点、`aria-controls` 与 `aria-expanded`；Escape 把焦点恢复到菜单按钮，而移动端链接导航会关闭隐藏菜单并把焦点移到主内容。
 - 桌面导航在 `48rem` 替代移动端 disclosure。外壳动态效果仅限展示 CSS，`prefers-reduced-motion: reduce` 分支把动画/过渡时长缩短到 `0.01ms`。T043 设计变量、API 客户端、Pinia/store 与恢复行为，T044 流生命周期，后续业务视图、T052 已安装组合、T041 生成契约和 T024 判断语义均保持不变。
@@ -352,6 +352,13 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 个股详情把共用参考事实和历史放在“参考指数数据”分区，把当前计划 identity、条件进度和准确的 `indexConditionEvidence.planPath` 结果放在独立的“计划指数条件”分区。计划 identity、快照/截止时间、健康、加载、故障和缓存上下文都保持可见；没有指数条件的计划明确显示“计划未使用”。股票和指数历史保持分开，且每份历史都有可访问的文本表格替代。
 - 严格传输校验会在渲染前拒绝格式错误的参考/证据 identity、排序和进度数据。WEBF12 不改变 REST 路径或字段、OpenAPI 快照、生成 TypeScript、Schema v1 数据、历史回测结果或既有 hash；不读取 token，也不执行真实 DeepSeek、Tushare 或其他供应商请求。
 
+### WEBF13 真实生产路由与新建回测旅程边界
+
+- 曾经的占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现在各自解析到真实的惰性 SFC Route View。它们连同既有 `/plans` 路由以及四条有序回测路由（`/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId`）使生产 Router 精确包含 10 条路由。静态回测子路由继续位于动态 `:runId` 路由之前。
+- 单次新建回测的浏览器旅程必须精确为：选择后端列出的不可变计划版本和已校验数据集，提交一个明确的幂等命令，导航至 `/backtests/:runId?jobId=<jobId>`，轮询匹配的持久化任务，仅在 `COMPLETED` 后通过规范替换移除 `jobId`，再读取 materialized 结果。失败或取消的任务保留其任务 identity 以供诊断，绝不伪造结果。
+- 后端继续是计划资格与快照、数据集覆盖、运行 identity、任务状态、完成和 materialized 结果可用性的唯一权威。Vue 只负责生成契约校验、有界请求/重试生命周期、URL 导航、展示和无障碍；它不推断资格、进度完成或结果内容。
+- WEBF13 不改变 REST 路径、OpenAPI 字段、生成 TypeScript 类型、Schema、哈希、供应商边界、token 处理或历史结果。其验证报告只记录实际运行的证据，绝不改写历史验收制品。
+
 ### 已批准的回测扩展边界
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
@@ -523,6 +530,6 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。
+WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。WEBF13 记录当前真实路由和新建回测旅程边界，不改变冻结契约；其配对离线验收证据已于 2026-09-04 通过。
 
 基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到既有以后端为权威来源的总览快照和共用指数投影，但不改变其契约。WEBF09 组合既有持仓 API 和真实个股详情路由，同时把所有 T+1 与持仓策略判断保留在后端。WEBF10 组合既有提醒 API 和真实 `/alerts` 路由，同时把筛选成员归属、规范提醒和确认 revision 保留在后端。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，且全部接入真实视图。提交、推送、依赖安装和联网访问继续需要分别授权。

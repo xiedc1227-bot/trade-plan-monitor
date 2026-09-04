@@ -34,8 +34,11 @@
 3. 监控：`IDX006`–`IDX008`——运行时、API/OpenAPI、Vue。
 4. 回测：`IDX009`–`IDX011`——回放数据/身份、API/导出、Vue。
 5. 完成：`IDX012`——双语一致、README/API/测试报告和完整离线门禁。
+6. WEBF13 路由与旅程收口——证明真实路由/新建回测边界，保持冻结的 42 路径契约，并且只记录实际运行的离线证据。
 
 每个阶段后设置检查点。检查点要求聚焦测试通过、修改表面的 Ruff/类型检查通过、`git diff --check` 通过，并确认差异中没有密钥或无关文件。
+
+WEBF13 检查点还要验证精确的 10 路由地图以及 `submit → /backtests/:runId?jobId=<jobId> → poll → remove jobId → materialized result` 新建回测链路。在把配对证据标记为 `PASS` 前，必须运行 OpenAPI 一致性检查、聚焦后端/前端测试、Ruff、`vue-tsc`、生产构建和确定性浏览器套件；不得增加 API 字段、重新生成发生变更的契约、读取 token 或调用供应商。
 
 ## 风险与缓解
 

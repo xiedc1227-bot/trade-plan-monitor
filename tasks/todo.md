@@ -64,3 +64,10 @@
   - Acceptance: bilingual parity, documented provider limitation, complete file/test/risk report, clean secret scan, all required gates green.
   - Verify: full commands in `tasks/plan.md`, `git diff --check`, `git status --short`.
   - Files: `README.md`, `README.zh-CN.md`, `docs/README*`, paired verification report, `openapi.json`, generated TypeScript.
+
+## WEBF13 Route and Journey Closure
+
+- [x] `WEBF13` — Prove the real production-route/new-backtest journey boundary and record offline acceptance evidence without changing the frozen contract.
+  - Acceptance: paired specifications identify the former placeholder routes `/`, `/stocks/:symbol`, `/plans/:id`, `/alerts`, and `/system` as real lazy SFCs; the exact 10-route map and `submit → run+job URL → poll → remove jobId → materialized result` chain have unit, browser, and backend-fake evidence; OpenAPI remains exactly 42 paths (27 live plus 15 backtest); the paired report is `PASS`.
+  - Verify: focused backend pytest plus the production-fake journey; Ruff; OpenAPI snapshot and generated-TypeScript consistency; full Vitest, `vue-tsc`, build, and Chromium suites; `git diff --check`.
+  - Files: `README*`, `docs/README*`, paired local-Web/backtest/API/ADR specifications, `tasks/plan*`, `tasks/todo*`, `docs/verification/webf13-acceptance*`, `web/tests/unit/BacktestRouter.spec.ts`, `web/tests/e2e/backtests.spec.ts`, and `web/tests/e2e/accessibility.spec.ts`.

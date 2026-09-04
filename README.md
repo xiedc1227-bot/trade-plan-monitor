@@ -55,6 +55,15 @@ rejects malformed identity/evidence before rendering. This adds no REST/OpenAPI/
 change and changes no Schema v1 data, historical backtest result, established hash, token, or provider
 request boundary.
 
+WEBF13 closes the production-route and new-backtest acceptance gap. The five former placeholders
+`/`, `/stocks/:symbol`, `/plans/:id`, `/alerts`, and `/system` now have explicit lazy-SFC and
+real-browser regression evidence within the exact 10-route map. A deterministic Chromium journey
+also submits the generated run command, follows the authoritative `runId`/`jobId` through polling,
+removes `jobId` only after `COMPLETED`, and then renders the materialized result. The OpenAPI contract
+remains 42 paths (27 live plus 15 backtest), generated TypeScript is unchanged, and no Schema v1,
+historical result, established hash, token, or provider boundary changes. See the
+[WEBF13 acceptance report](docs/verification/webf13-acceptance.md).
+
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
 Live provider checks remain separately authorized operations.
 

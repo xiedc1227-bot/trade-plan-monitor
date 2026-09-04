@@ -34,8 +34,11 @@ Implement the six approved modules in dependency order while preserving the clea
 3. Monitoring: `IDX006`–`IDX008` — runtime, API/OpenAPI, Vue.
 4. Backtesting: `IDX009`–`IDX011` — replay data/identity, API/export, Vue.
 5. Completion: `IDX012` — parity, README/API/test report, full offline gates.
+6. WEBF13 route and journey closure — prove the real-route/new-backtest boundary, preserve the frozen 42-path contract, and record only actually run offline evidence.
 
 Checkpoints occur after each phase. A checkpoint requires focused tests green, Ruff/type checks for changed surfaces, `git diff --check`, and confirmation that no secret or unrelated file entered the diff.
+
+The WEBF13 checkpoint additionally verifies the exact 10-route map and the new-backtest chain `submit → /backtests/:runId?jobId=<jobId> → poll → remove jobId → materialized result`. It must run the OpenAPI consistency check, focused backend and frontend tests, Ruff, `vue-tsc`, production build, and deterministic browser suite before marking the paired evidence `PASS`; it must not add an API field, regenerate a changed contract, read a token, or call a provider.
 
 ## Risks and Mitigations
 
