@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import closing
 from datetime import date, datetime
 from pathlib import Path
@@ -32,7 +32,10 @@ from trade_plan_monitor.runtime.health import (
     RuntimeResourceStatus,
     RuntimeServiceStatus,
 )
-from trade_plan_monitor.runtime.request_control import TushareRequestController
+from trade_plan_monitor.runtime.request_control import (
+    TushareRequestController,
+    create_live_tushare_request_controller,
+)
 from trade_plan_monitor.runtime.scheduler import MarketDeadline, MarketSessionScheduler
 from trade_plan_monitor.runtime.service import RuntimeLifecycleService
 from trade_plan_monitor.state.database import (
@@ -43,12 +46,13 @@ from trade_plan_monitor.state.database import (
 from trade_plan_monitor.state.models import PlanVersionStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
-from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+from trade_plan_monitor.web.persistent_monitor_read_service import PersistentMonitorReadService
 from trade_plan_monitor.web.plan_service import _reject_incompatible_database
 from trade_plan_monitor.web.position_service import PersistentPositionOperationService
 from trade_plan_monitor.web.websocket import CommittedMonitorEventStream
 
 _RUNNER_SHUTDOWN_SECONDS = 5.0
+_RUNTIME_RESTART_DELAYS_SECONDS = (1.0, 2.0, 4.0)
 _ACTIVE_PLAN_READ_LIMIT = 11
 _PROVIDER_CAPABILITIES = (
     "current_day_minutes",
@@ -79,17 +83,23 @@ class MonitorWebComposition:
         *,
         runtime: MonitorRuntime,
         read_service: object,
+        runtime_factory: Callable[[], MonitorRuntime] | None = None,
+        restart_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         websocket_service: object | None = None,
         position_service: object | None = None,
         alert_service: object | None = None,
         market_index_read_service: object | None = None,
     ) -> None:
-        for name in ("start", "run", "stop", "health"):
-            if not callable(getattr(runtime, name, None)):
-                raise TypeError(f"runtime must expose {name}")
+        self._validate_runtime(runtime)
+        if runtime_factory is not None and not callable(runtime_factory):
+            raise TypeError("runtime_factory must be callable")
+        if not callable(restart_sleep):
+            raise TypeError("restart_sleep must be callable")
         if read_service is None:
             raise TypeError("read_service is required")
         self._runtime = runtime
+        self._runtime_factory = runtime_factory
+        self._restart_sleep = restart_sleep
         self._read_service = read_service
         self._websocket_service = websocket_service
         self._position_service = position_service
@@ -99,10 +109,13 @@ class MonitorWebComposition:
         self._start_lock = asyncio.Lock()
         self._runtime_stop_lock = asyncio.Lock()
         self._runtime_stopped = False
+        self._last_runtime_health: RuntimeHealthSnapshot | None = None
         self._started = False
         self._stopping = False
         self._stopped = False
         self._runner_failed = False
+        self._restart_pending = False
+        self._restart_attempts = 0
 
     @property
     def read_service(self) -> object:
@@ -130,19 +143,32 @@ class MonitorWebComposition:
         async with self._start_lock:
             if self._stopped:
                 raise RuntimeError("monitor composition is already stopped")
+            if self._stopping:
+                raise RuntimeError("monitor composition startup is terminal")
             if self._started:
                 return self.health()
 
-            startup = await self._runtime.start()
-            status = getattr(startup, "status", None)
-            read_only = getattr(startup, "read_only", None)
-            if not isinstance(status, RuntimeServiceStatus) or type(read_only) is not bool:
-                raise TypeError("runtime startup must expose typed status and read_only")
-            if read_only != (status is RuntimeServiceStatus.DEGRADED):
-                raise ValueError("runtime startup readiness is inconsistent")
+            try:
+                startup = await self._runtime.start()
+                status = self._validate_startup(startup)
+                runtime_health = self._validated_health(self._runtime.health())
+                if (
+                    runtime_health.status is not status
+                    or runtime_health.read_only is not startup.read_only
+                ):
+                    raise ValueError("runtime startup and health readiness are inconsistent")
+            except BaseException as startup_error:
+                self._stopping = True
+                try:
+                    await self._stop_runtime()
+                except BaseException as cleanup_error:
+                    raise cleanup_error from startup_error
+                self._stopped = True
+                raise
+            self._last_runtime_health = runtime_health
             if status is RuntimeServiceStatus.RUNNING:
                 runner = asyncio.create_task(
-                    self._run_runtime(),
+                    self._supervise_runtime(),
                     name="trade-plan-monitor-runtime",
                 )
                 runner.add_done_callback(self._observe_runner)
@@ -157,13 +183,21 @@ class MonitorWebComposition:
     def health(self) -> RuntimeHealthSnapshot:
         """Return the runtime snapshot, degrading any prematurely exited runner."""
 
-        snapshot = self._runtime.health()
+        try:
+            snapshot = self._validated_health(self._runtime.health())
+        except Exception:
+            if not self._runner_failed or self._last_runtime_health is None:
+                raise
+            snapshot = self._last_runtime_health
+        else:
+            self._last_runtime_health = snapshot
         runner = self._runner_task
         runner_failed = (
             not self._stopping
             and not self._stopped
             and (
                 self._runner_failed
+                or self._restart_pending
                 or (
                     runner is not None
                     and runner.done()
@@ -196,6 +230,8 @@ class MonitorWebComposition:
 
         runner = self._runner_task
         if runner is not None:
+            if self._restart_pending and not runner.done():
+                runner.cancel()
             try:
                 await asyncio.wait_for(
                     asyncio.shield(runner),
@@ -215,65 +251,131 @@ class MonitorWebComposition:
         if first_error is not None:
             raise first_error
 
-    async def _run_runtime(self) -> None:
-        try:
-            await self._runtime.run()
-        finally:
-            if not self._stopping:
-                self._runner_failed = True
-                await self._stop_runtime()
+    async def _supervise_runtime(self) -> None:
+        """Restart only a post-start failed runner after exact cleanup."""
 
-    async def _stop_runtime(self) -> None:
-        async with self._runtime_stop_lock:
-            if self._runtime_stopped:
+        while not self._stopping:
+            runtime = self._runtime
+            try:
+                await runtime.run()
+            except asyncio.CancelledError:
+                if self._stopping:
+                    return
+                self._runner_failed = True
+                raise
+            except Exception:
+                pass
+            if self._stopping:
                 return
-            await self._runtime.stop()
-            self._runtime_stopped = True
+
+            try:
+                exit_health = self._validated_health(runtime.health())
+            except Exception:
+                return
+            self._last_runtime_health = exit_health
+            unexpected_exit = getattr(runtime, "unexpected_run_exit", False)
+            if type(unexpected_exit) is not bool:
+                return
+            cleanup_failed = getattr(runtime, "cleanup_failed", False)
+            if type(cleanup_failed) is not bool or cleanup_failed:
+                self._runner_failed = True
+                return
+            if (
+                not unexpected_exit
+                and exit_health.status is not RuntimeServiceStatus.RUNNING
+            ):
+                self._runner_failed = False
+                return
+
+            self._runner_failed = True
+            try:
+                await self._stop_runtime(runtime)
+            except Exception:
+                return
+            if (
+                self._runtime_factory is None
+                or self._restart_attempts >= len(_RUNTIME_RESTART_DELAYS_SECONDS)
+            ):
+                return
+
+            delay = _RUNTIME_RESTART_DELAYS_SECONDS[self._restart_attempts]
+            self._restart_attempts += 1
+            self._restart_pending = True
+            try:
+                await self._restart_sleep(delay)
+            except asyncio.CancelledError:
+                if self._stopping:
+                    return
+                raise
+            finally:
+                self._restart_pending = False
+            if self._stopping:
+                return
+
+            replacement: MonitorRuntime | None = None
+            try:
+                replacement = self._runtime_factory()
+                self._validate_runtime(replacement)
+                self._runtime = replacement
+                self._runtime_stopped = False
+                startup = await replacement.start()
+                status = self._validate_startup(startup)
+                replacement_health = self._validated_health(replacement.health())
+                if (
+                    replacement_health.status is not status
+                    or replacement_health.read_only is not startup.read_only
+                ):
+                    raise ValueError("runtime startup and health readiness are inconsistent")
+                self._last_runtime_health = replacement_health
+            except asyncio.CancelledError:
+                if self._stopping:
+                    return
+                raise
+            except Exception:
+                if replacement is not None:
+                    try:
+                        await self._stop_runtime(replacement)
+                    except Exception:
+                        pass
+                return
+            if status is not RuntimeServiceStatus.RUNNING:
+                return
+            self._runner_failed = False
+
+    async def _stop_runtime(self, runtime: MonitorRuntime | None = None) -> None:
+        target = self._runtime if runtime is None else runtime
+        async with self._runtime_stop_lock:
+            if target is self._runtime and self._runtime_stopped:
+                return
+            await target.stop()
+            if target is self._runtime:
+                self._runtime_stopped = True
 
     def _observe_runner(self, task: asyncio.Task[None]) -> None:
         if not task.cancelled():
             task.exception()
-        if not self._stopping:
-            self._runner_failed = True
-
-
-class _HealthOnlyMonitorReadService:
-    """Expose real lifecycle health while unavailable projections fail closed."""
-
-    def __init__(self, health: Callable[[], RuntimeHealthSnapshot]) -> None:
-        if not callable(health):
-            raise TypeError("health must be callable")
-        self._health = health
-
-    async def get_health(self) -> RuntimeHealthSnapshot:
-        return self._health()
-
-    async def get_dashboard(self) -> None:
-        self._unavailable()
-
-    async def list_symbols(self, *, offset: int, limit: int) -> None:
-        del offset, limit
-        self._unavailable()
-
-    async def get_symbol(self, *, symbol: str) -> None:
-        del symbol
-        self._unavailable()
-
-    async def list_symbol_bars(self, **kwargs: object) -> None:
-        del kwargs
-        self._unavailable()
-
-    async def list_symbol_events(self, **kwargs: object) -> None:
-        del kwargs
-        self._unavailable()
-
-    async def get_symbol_health(self, *, symbol: str) -> None:
-        del symbol
-        self._unavailable()
 
     @staticmethod
-    def _unavailable() -> None:
-        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+    def _validate_runtime(runtime: object) -> None:
+        for name in ("start", "run", "stop", "health"):
+            if not callable(getattr(runtime, name, None)):
+                raise TypeError(f"runtime must expose {name}")
+
+    @staticmethod
+    def _validate_startup(startup: object) -> RuntimeServiceStatus:
+        status = getattr(startup, "status", None)
+        read_only = getattr(startup, "read_only", None)
+        if not isinstance(status, RuntimeServiceStatus) or type(read_only) is not bool:
+            raise TypeError("runtime startup must expose typed status and read_only")
+        if read_only != (status is RuntimeServiceStatus.DEGRADED):
+            raise ValueError("runtime startup readiness is inconsistent")
+        return status
+
+    @staticmethod
+    def _validated_health(value: object) -> RuntimeHealthSnapshot:
+        if not isinstance(value, RuntimeHealthSnapshot):
+            raise TypeError("runtime health must return RuntimeHealthSnapshot")
+        return value
 
 
 class _HealthBinding:
@@ -461,50 +563,64 @@ def create_monitor_composition(
     clock = SystemClock()
     engine = create_sqlite_engine(database_path)
     session_factory = create_session_factory(engine)
-    request_controller = TushareRequestController(clock=clock)
-    dispatcher = NotificationDispatcher(
-        session_factory,
-        channels=(InAppChannel(),),
+
+    def unit_of_work_factory() -> SqlAlchemyUnitOfWork:
+        return SqlAlchemyUnitOfWork(session_factory, clock=clock.now)
+
+    def runtime_factory() -> RuntimeLifecycleService:
+        request_controller = create_live_tushare_request_controller(clock=clock)
+        dispatcher = NotificationDispatcher(
+            session_factory,
+            channels=(InAppChannel(),),
+            clock=clock.now,
+        )
+        state = _ProductionRuntimeState(
+            config_path=config_path,
+            database_path=database_path,
+            engine=engine,
+            session_factory=session_factory,
+            clock=clock,
+            request_controller=request_controller,
+        )
+        scheduler = MarketSessionScheduler(clock=clock, is_open_on=state.is_open_on)
+        return RuntimeLifecycleService(
+            clock=clock,
+            validate_configuration=state.validate_configuration,
+            open_database=state.open_database,
+            load_active_symbols=state.load_active_symbols,
+            probe_capabilities=state.probe_capabilities,
+            refresh_references=state.refresh_references,
+            recover_startup=state.recover_startup,
+            scheduler=scheduler,
+            run_deadline=state.run_deadline,
+            dispatcher=dispatcher,
+            request_controller=request_controller,
+            checkpoint_wal=state.checkpoint_wal,
+            close_database=state.close_database,
+            health_details=state.health_details,
+        )
+
+    runtime = runtime_factory()
+    health_binding = _HealthBinding()
+    read_service = PersistentMonitorReadService(
+        unit_of_work_factory,
+        health_binding,
         clock=clock.now,
     )
-    state = _ProductionRuntimeState(
-        config_path=config_path,
-        database_path=database_path,
-        engine=engine,
-        session_factory=session_factory,
-        clock=clock,
-        request_controller=request_controller,
-    )
-    scheduler = MarketSessionScheduler(clock=clock, is_open_on=state.is_open_on)
-    runtime = RuntimeLifecycleService(
-        clock=clock,
-        validate_configuration=state.validate_configuration,
-        open_database=state.open_database,
-        load_active_symbols=state.load_active_symbols,
-        probe_capabilities=state.probe_capabilities,
-        refresh_references=state.refresh_references,
-        recover_startup=state.recover_startup,
-        scheduler=scheduler,
-        run_deadline=state.run_deadline,
-        dispatcher=dispatcher,
-        request_controller=request_controller,
-        checkpoint_wal=state.checkpoint_wal,
-        close_database=state.close_database,
-        health_details=state.health_details,
-    )
-    health_binding = _HealthBinding()
-    read_service = _HealthOnlyMonitorReadService(health_binding)
     composition = MonitorWebComposition(
         runtime=runtime,
+        runtime_factory=runtime_factory,
         read_service=read_service,
         websocket_service=CommittedMonitorEventStream(
-            unit_of_work_factory=state.unit_of_work_factory,
+            unit_of_work_factory=unit_of_work_factory,
+            runtime_liveness_provider=health_binding,
+            clock=clock.now,
         ),
         position_service=PersistentPositionOperationService(
-            unit_of_work_factory=state.unit_of_work_factory,
+            unit_of_work_factory=unit_of_work_factory,
         ),
         alert_service=PersistentAlertOperationService(
-            unit_of_work_factory=state.unit_of_work_factory,
+            unit_of_work_factory=unit_of_work_factory,
         ),
     )
     health_binding.bind(composition.health)

@@ -6,7 +6,7 @@ from datetime import timedelta
 from typing import Annotated, Self
 
 from fastapi import APIRouter, Path
-from pydantic import Field, model_validator
+from pydantic import UUID4, Field, model_validator
 
 from trade_plan_monitor.decision.models import DataHealthStatus
 from trade_plan_monitor.market_data.models import (
@@ -15,6 +15,7 @@ from trade_plan_monitor.market_data.models import (
     ShanghaiDatetime,
 )
 from trade_plan_monitor.runtime.health import (
+    LEGACY_RUNTIME_GENERATION,
     HealthErrorCode,
     HealthName,
     RuntimeResourceStatus,
@@ -130,6 +131,7 @@ class DeliveryHealthView(ReadModel):
 class RuntimeHealthResponse(ReadModel):
     status: RuntimeServiceStatus
     read_only: bool = Field(strict=True)
+    runtime_generation: UUID4 = Field(default=LEGACY_RUNTIME_GENERATION, exclude=True)
     observed_at: ShanghaiDatetime
     started_at: ShanghaiDatetime
     stopped_at: ShanghaiDatetime | None
@@ -206,6 +208,7 @@ class SymbolHealthResponse(ReadModel):
     fresh: bool = Field(strict=True)
     gaps: tuple[ShanghaiDatetime, ...] = Field(default=(), max_length=240)
     consecutive_incomplete_buckets: NonNegativeInteger
+    last_required_bucket_end: ShanghaiDatetime | None = None
     error_code: SymbolHealthErrorCode | None
     actionable: bool = Field(strict=True)
 
@@ -213,6 +216,13 @@ class SymbolHealthResponse(ReadModel):
     def validate_symbol_health(self) -> Self:
         if self.observed_at < self.target_end:
             raise ValueError("health observation cannot precede target")
+        if (
+            self.last_required_bucket_end is not None
+            and self.last_required_bucket_end > self.target_end
+        ):
+            raise ValueError("last required bucket cannot follow target")
+        if self.consecutive_incomplete_buckets > 0 and self.last_required_bucket_end is None:
+            raise ValueError("an incomplete streak requires its last required bucket")
         if (self.latest_bar_end is None) != (self.data_age_seconds is None):
             raise ValueError("latest bar and age must appear together")
         if self.latest_bar_end is not None:

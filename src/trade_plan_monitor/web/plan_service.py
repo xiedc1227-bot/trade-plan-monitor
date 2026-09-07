@@ -64,7 +64,27 @@ DEFAULT_MONITOR_DATABASE = Path("data/monitor.sqlite3")
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _MAX_PLAN_ROWS = 10_000
 _FILTER_BATCH_SIZE = 100
-_INCOMPATIBLE_TABLE_PREFIXES = ("backtest_", "market_")
+_INCOMPATIBLE_TABLES = frozenset(
+    {
+        "backtest_detail",
+        "backtest_fill",
+        "backtest_job",
+        "backtest_job_idempotency",
+        "backtest_job_state",
+        "backtest_plan_snapshot",
+        "backtest_run",
+        "backtest_run_input",
+        "market_artifact",
+        "market_dataset",
+        "market_dataset_index_item",
+        "market_dataset_item",
+        "market_head",
+        "market_index_artifact",
+        "market_index_head",
+        "market_minute_artifact",
+        "market_minute_head",
+    }
+)
 
 
 class _PlanVersionDetails(Protocol):
@@ -347,7 +367,15 @@ class PersistentPlanWebLifecycle:
     def _get_plan_activation_state_sync(self, *, symbol: str) -> ActivePlanView | None:
         with self._unit_of_work() as work:
             record = work.plans.get_activation_state(symbol)
-            return None if record is None else _active_plan_view(record)
+            if record is not None:
+                return _active_plan_view(record)
+            return ActivePlanView(
+                symbol=symbol,
+                plan_version_id=None,
+                active=False,
+                revision=0,
+                changed_at=_shanghai_datetime(self._clock()),
+            )
 
     def _save_plan_sync(
         self,
@@ -606,7 +634,7 @@ def _reject_incompatible_database(path: Path) -> None:
             }
     except OSError, sqlite3.Error:
         raise ValueError("monitor database_path must be a readable SQLite file") from None
-    if any(table.startswith(prefix) for table in tables for prefix in _INCOMPATIBLE_TABLE_PREFIXES):
+    if tables & _INCOMPATIBLE_TABLES:
         raise ValueError("monitor database_path belongs to another storage domain")
 
 

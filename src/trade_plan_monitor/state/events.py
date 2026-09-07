@@ -25,6 +25,7 @@ Clock = Callable[[], datetime]
 DEFAULT_EVENT_RETENTION = timedelta(days=7)
 MAX_EVENT_REPLAY_LIMIT = 1_000
 MAX_SQLITE_SEQUENCE = 2**63 - 1
+MAX_PUBLIC_SEQUENCE = 2**53 - 1
 MONITOR_EVENT_NAMESPACE = UUID("d389b36f-4500-57c1-ad5b-566dc39e7865")
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 
@@ -46,7 +47,7 @@ Sha256Digest = Annotated[
     StringConstraints(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
 ]
 NonNegativeRevision = Annotated[int, Field(strict=True, ge=0, le=MAX_SQLITE_SEQUENCE)]
-PositiveSequence = Annotated[int, Field(strict=True, ge=1, le=MAX_SQLITE_SEQUENCE)]
+PositiveSequence = Annotated[int, Field(strict=True, ge=1, le=MAX_PUBLIC_SEQUENCE)]
 
 
 def _to_camel(name: str) -> str:
@@ -213,8 +214,8 @@ class MonitorEvent(MonitorEventDraft):
 class MonitorReplayPage(_EventValue):
     """One contiguous retained page checked against the durable high-water mark."""
 
-    after_sequence: Annotated[int, Field(strict=True, ge=0, le=MAX_SQLITE_SEQUENCE)]
-    high_water_sequence: Annotated[int, Field(strict=True, ge=0, le=MAX_SQLITE_SEQUENCE)]
+    after_sequence: Annotated[int, Field(strict=True, ge=0, le=MAX_PUBLIC_SEQUENCE)]
+    high_water_sequence: Annotated[int, Field(strict=True, ge=0, le=MAX_PUBLIC_SEQUENCE)]
     events: tuple[MonitorEvent, ...] = Field(default=(), max_length=MAX_EVENT_REPLAY_LIMIT)
     requires_snapshot: bool
 
@@ -360,7 +361,7 @@ class MonitorEventLog:
         if (
             state is None
             or type(state.last_sequence) is not int
-            or not 0 <= state.last_sequence <= MAX_SQLITE_SEQUENCE
+            or not 0 <= state.last_sequence <= MAX_PUBLIC_SEQUENCE
         ):
             raise MonitorEventStorageError("Monitor sequence state is invalid")
         retained_maximum = self._session.scalar(select(func.max(MonitorEventRow.sequence)))
@@ -380,6 +381,8 @@ class MonitorEventLog:
             raise ValueError("sequence must be a non-negative integer")
         if sequence > MAX_SQLITE_SEQUENCE:
             raise ValueError("sequence must fit the SQLite integer range")
+        if sequence > MAX_PUBLIC_SEQUENCE:
+            raise ValueError("sequence must fit the public safe-integer range")
         if type(limit) is not int or not 1 <= limit <= MAX_EVENT_REPLAY_LIMIT:
             raise ValueError(f"limit must be between 1 and {MAX_EVENT_REPLAY_LIMIT}")
         return _database_operation(
@@ -475,7 +478,7 @@ class MonitorEventLog:
         if (
             state is None
             or type(state.last_sequence) is not int
-            or not 0 <= state.last_sequence < MAX_SQLITE_SEQUENCE
+            or not 0 <= state.last_sequence < MAX_PUBLIC_SEQUENCE
         ):
             raise MonitorEventStorageError("Monitor sequence state is invalid")
         state.last_sequence += 1
@@ -549,6 +552,7 @@ def _canonical_json(value: object) -> str:
 __all__ = [
     "DEFAULT_EVENT_RETENTION",
     "MAX_EVENT_REPLAY_LIMIT",
+    "MAX_PUBLIC_SEQUENCE",
     "MAX_SQLITE_SEQUENCE",
     "MONITOR_EVENT_NAMESPACE",
     "MonitorEvent",

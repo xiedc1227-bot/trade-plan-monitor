@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -208,8 +209,8 @@ def test_startup_rejects_more_than_ten_symbols_before_provider_work() -> None:
         "config",
         "database",
         "plans",
-        "dispatcher-close",
         "controller-close",
+        "dispatcher-close",
         "wal-checkpoint",
         "database-close",
     ]
@@ -345,6 +346,27 @@ def test_runtime_health_exposes_sanitized_operational_facts_and_exact_ages() -> 
         assert all("secret-value" not in surface for surface in surfaces)
 
 
+def test_runtime_health_rejects_a_non_uuid4_generation() -> None:
+    with pytest.raises(ValidationError, match="UUID version 4"):
+        RuntimeHealthSnapshot(
+            status=RuntimeServiceStatus.DEGRADED,
+            read_only=True,
+            runtime_generation=UUID("00000000-0000-1000-8000-000000000001"),
+            observed_at=_at(10, 0),
+            started_at=_at(9, 0),
+            executor=ExecutorHealthSnapshot(max_workers=1, active_count=0, waiting_count=0),
+            database=DatabaseHealthSnapshot(
+                status=RuntimeResourceStatus.READY,
+                wal_status=RuntimeResourceStatus.READY,
+            ),
+            delivery=DeliveryHealthSnapshot(
+                status=RuntimeResourceStatus.READY,
+                pending_count=0,
+                failed_count=0,
+            ),
+        )
+
+
 @pytest.mark.parametrize(
     ("status", "read_only"),
     [
@@ -420,8 +442,14 @@ def test_shutdown_stops_scheduling_allows_bounded_finish_and_checkpoints_wal() -
         await service.start()
         run_task = asyncio.create_task(service.run())
         await work_started.wait()
-        asyncio.get_running_loop().call_soon(release_work.set)
-        await service.stop()
+        stop_task = asyncio.create_task(service.stop())
+        for _ in range(10):
+            if "controller-close" in events:
+                break
+            await asyncio.sleep(0)
+        assert "controller-close" in events
+        release_work.set()
+        await stop_task
         await run_task
         return events, scheduler.wait_cancelled, service.owned_task_count
 
@@ -429,9 +457,10 @@ def test_shutdown_stops_scheduling_allows_bounded_finish_and_checkpoints_wal() -
 
     assert "work-finish" in events
     assert wait_cancelled is False
+    assert events.index("controller-close") < events.index("work-finish")
     assert events[-4:] == [
+        "work-finish",
         "dispatcher-close",
-        "controller-close",
         "wal-checkpoint",
         "database-close",
     ]

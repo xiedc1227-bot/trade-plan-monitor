@@ -38,11 +38,17 @@ from trade_plan_monitor.runtime.request_control import (
     DEFAULT_TUSHARE_EXECUTOR_WORKERS,
     DEFAULT_TUSHARE_MAX_CONCURRENCY,
     DEFAULT_TUSHARE_QUEUE_LIMIT,
+    LIVE_TUSHARE_EXECUTOR_WORKERS,
+    LIVE_TUSHARE_IN_CYCLE_RETRIES,
+    LIVE_TUSHARE_MAX_CONCURRENCY,
+    LIVE_TUSHARE_MIN_INTERVAL,
+    LIVE_TUSHARE_TIMEOUT_SECONDS,
     RequestControlError,
     RequestControlErrorCode,
     RequestPriority,
     TushareOperation,
     TushareRequestController,
+    create_live_tushare_request_controller,
 )
 from trade_plan_monitor.runtime.scheduler import (
     DEFAULT_OFFICIAL_CLOSE_ATTEMPTS,
@@ -78,30 +84,42 @@ class _FakeClock:
             self.current = deadline
 
 
-class _BlockingPaceClock(_FakeClock):
-    def __init__(self, current: datetime) -> None:
-        super().__init__(current)
-        self.sleep_started = asyncio.Event()
-        self.release_sleep = asyncio.Event()
+class _FakePacer:
+    def __init__(self) -> None:
+        self.current = 0.0
+        self.sleep_delays: list[float] = []
 
-    async def sleep_until(self, deadline: datetime) -> None:
-        self.sleep_deadlines.append(deadline)
-        self.sleep_started.set()
-        await self.release_sleep.wait()
-        if deadline > self.current:
-            self.current = deadline
+    def now(self) -> float:
+        return self.current
+
+    async def sleep(self, delay_seconds: float) -> None:
+        self.sleep_delays.append(delay_seconds)
+        self.current += delay_seconds
 
 
-class _FailingPaceClock(_FakeClock):
-    def __init__(self, current: datetime, sentinel: str) -> None:
-        super().__init__(current)
+class _FailingPacer(_FakePacer):
+    def __init__(self, sentinel: str) -> None:
+        super().__init__()
         self.sentinel = sentinel
         self.sleep_calls = 0
 
-    async def sleep_until(self, deadline: datetime) -> None:
-        self.sleep_deadlines.append(deadline)
+    async def sleep(self, delay_seconds: float) -> None:
+        self.sleep_delays.append(delay_seconds)
         self.sleep_calls += 1
         raise RuntimeError(self.sentinel)
+
+
+class _BlockingPacer(_FakePacer):
+    def __init__(self) -> None:
+        super().__init__()
+        self.sleep_started = asyncio.Event()
+        self.release_sleep = asyncio.Event()
+
+    async def sleep(self, delay_seconds: float) -> None:
+        self.sleep_delays.append(delay_seconds)
+        self.sleep_started.set()
+        await self.release_sleep.wait()
+        self.current += delay_seconds
 
 
 class _Calendar:
@@ -532,6 +550,61 @@ def test_request_concurrency_defaults_match_the_approved_runtime_contract() -> N
         controller.close()
 
 
+def test_live_tushare_request_profile_is_serial_paced_bounded_and_never_retries() -> None:
+    assert LIVE_TUSHARE_EXECUTOR_WORKERS == 1
+    assert LIVE_TUSHARE_MAX_CONCURRENCY == 1
+    assert LIVE_TUSHARE_MIN_INTERVAL == timedelta(milliseconds=1_250)
+    assert LIVE_TUSHARE_TIMEOUT_SECONDS == 15
+    assert LIVE_TUSHARE_IN_CYCLE_RETRIES == 0
+
+    async def scenario() -> tuple[list[float], RequestControlError, int, int]:
+        clock = _FakeClock(_shanghai(9, 0))
+        pacer = _FakePacer()
+        controller = create_live_tushare_request_controller(
+            clock=clock,
+            monotonic=pacer.now,
+            pace_sleep=pacer.sleep,
+        )
+        starts: list[float] = []
+        attempts = 0
+
+        def ready() -> None:
+            starts.append(pacer.now())
+
+        def transient() -> None:
+            nonlocal attempts
+            attempts += 1
+            raise TushareProviderError(TushareErrorCode.TRANSIENT, "daily")
+
+        try:
+            await controller.execute(
+                TushareOperation.TRADING_CALENDAR,
+                ready,
+                work_key="live:calendar",
+            )
+            await controller.execute(
+                TushareOperation.DAILY_LIMITS,
+                ready,
+                work_key="live:limits",
+            )
+            with pytest.raises(RequestControlError) as captured:
+                await controller.execute(
+                    TushareOperation.DAILY_BARS,
+                    transient,
+                    work_key="live:daily",
+                )
+            return starts, captured.value, attempts, controller.max_concurrency
+        finally:
+            controller.close()
+
+    starts, error, attempts, max_concurrency = asyncio.run(scenario())
+    assert starts == [0.0, 1.25]
+    assert error.code is RequestControlErrorCode.TRANSIENT
+    assert error.attempts == 1
+    assert attempts == 1
+    assert max_concurrency == 1
+
+
 def test_request_concurrency_never_exceeds_two_dedicated_tushare_workers() -> None:
     async def scenario() -> tuple[list[int], int, set[str]]:
         controller = _request_controller(_FakeClock(_shanghai(8, 0)))
@@ -722,19 +795,22 @@ def test_request_retry_bounds_backoff_keys_without_evicting_live_state() -> None
 
 
 def test_request_priority_global_minimum_interval_and_jitter_space_attempt_starts() -> None:
-    async def scenario() -> tuple[list[datetime], list[datetime]]:
+    async def scenario() -> tuple[list[float], list[float]]:
         clock = _FakeClock(_shanghai(9, 0))
+        pacer = _FakePacer()
         controller = TushareRequestController(
             clock=clock,
             min_interval=timedelta(seconds=1),
             jitter=timedelta(milliseconds=250),
             jitter_source=lambda: 1.0,
             timeout_seconds=1,
+            monotonic=pacer.now,
+            pace_sleep=pacer.sleep,
         )
-        starts: list[datetime] = []
+        starts: list[float] = []
 
         def call() -> None:
-            starts.append(clock.now())
+            starts.append(pacer.now())
 
         try:
             for index in range(3):
@@ -744,25 +820,22 @@ def test_request_priority_global_minimum_interval_and_jitter_space_attempt_start
                     work_key=f"paced:{index}",
                     priority=RequestPriority.MARKET_DEADLINE,
                 )
-            return starts, clock.sleep_deadlines
+            return starts, pacer.sleep_delays
         finally:
             controller.close()
 
     starts, sleeps = asyncio.run(scenario())
 
-    assert starts == [
-        _shanghai(9, 0),
-        _shanghai(9, 0, 1) + timedelta(milliseconds=250),
-        _shanghai(9, 0, 2) + timedelta(milliseconds=500),
-    ]
-    assert sleeps == starts[1:]
+    assert starts == [0.0, 1.25, 2.5]
+    assert sleeps == [1.25, 1.25]
 
 
 def test_request_priority_clock_failure_is_sanitized_without_busy_loop() -> None:
     sentinel = "sensitive-clock-failure"
 
     async def scenario() -> tuple[int, RequestControlError]:
-        clock = _FailingPaceClock(_shanghai(9, 0), sentinel)
+        clock = _FakeClock(_shanghai(9, 0))
+        pacer = _FailingPacer(sentinel)
         controller = TushareRequestController(
             clock=clock,
             executor_workers=1,
@@ -772,6 +845,8 @@ def test_request_priority_clock_failure_is_sanitized_without_busy_loop() -> None
             jitter_source=lambda: 0.0,
             timeout_seconds=0.1,
             in_cycle_retries=0,
+            monotonic=pacer.now,
+            pace_sleep=pacer.sleep,
         )
         try:
             await controller.execute(
@@ -785,7 +860,7 @@ def test_request_priority_clock_failure_is_sanitized_without_busy_loop() -> None
                     lambda: None,
                     work_key="clock:second",
                 )
-            return clock.sleep_calls, captured.value
+            return pacer.sleep_calls, captured.value
         finally:
             controller.close()
 
@@ -979,8 +1054,9 @@ def test_request_retry_queued_call_rechecks_new_permission_block_before_sdk_star
 
 
 def test_request_priority_pre_start_block_does_not_consume_physical_pacing() -> None:
-    async def scenario() -> tuple[list[datetime], RequestControlError]:
+    async def scenario() -> tuple[list[float], RequestControlError]:
         clock = _FakeClock(_shanghai(9, 0))
+        pacer = _FakePacer()
         controller = TushareRequestController(
             clock=clock,
             executor_workers=1,
@@ -990,13 +1066,15 @@ def test_request_priority_pre_start_block_does_not_consume_physical_pacing() -> 
             jitter_source=lambda: 0.0,
             timeout_seconds=1,
             in_cycle_retries=0,
+            monotonic=pacer.now,
+            pace_sleep=pacer.sleep,
         )
         release = threading.Event()
         first_started = threading.Event()
-        physical_starts: list[datetime] = []
+        physical_starts: list[float] = []
 
         def denied() -> None:
-            physical_starts.append(clock.now())
+            physical_starts.append(pacer.now())
             first_started.set()
             release.wait(timeout=2)
             raise TushareProviderError(
@@ -1025,7 +1103,7 @@ def test_request_priority_pre_start_block_does_not_consume_physical_pacing() -> 
                 capture(
                     controller.execute(
                         TushareOperation.CURRENT_DAY_MINUTES,
-                        lambda: physical_starts.append(clock.now()),
+                        lambda: physical_starts.append(pacer.now()),
                         work_key="phantom:queued",
                         priority=RequestPriority.RECOVERY,
                     )
@@ -1037,7 +1115,7 @@ def test_request_priority_pre_start_block_does_not_consume_physical_pacing() -> 
             assert first_error.code is RequestControlErrorCode.BLOCKED_PERMISSION
             await controller.execute(
                 TushareOperation.TRADING_CALENDAR,
-                lambda: physical_starts.append(clock.now()),
+                lambda: physical_starts.append(pacer.now()),
                 work_key="phantom:market",
                 priority=RequestPriority.MARKET_DEADLINE,
             )
@@ -1048,7 +1126,7 @@ def test_request_priority_pre_start_block_does_not_consume_physical_pacing() -> 
 
     physical_starts, queued_error = asyncio.run(scenario())
 
-    assert physical_starts == [_shanghai(9, 0), _shanghai(9, 0, 1)]
+    assert physical_starts == [0.0, 1.0]
     assert queued_error.code is RequestControlErrorCode.BLOCKED_PERMISSION
     assert queued_error.attempts == 0
 
@@ -1287,6 +1365,111 @@ def test_request_retry_timeout_uses_at_most_two_physical_workers_and_three_attem
     assert error.code is RequestControlErrorCode.TIMEOUT
     assert error.attempts == 3
     assert error.next_retry_at == _shanghai(9, 0, 30)
+
+
+def test_admission_and_provider_each_receive_the_full_configured_timeout() -> None:
+    async def scenario() -> str:
+        controller = _request_controller(
+            _FakeClock(_shanghai(9, 0)),
+            executor_workers=1,
+            max_concurrency=1,
+            timeout_seconds=0.15,
+            in_cycle_retries=0,
+        )
+        first_started = threading.Event()
+        release_first = threading.Event()
+
+        def occupy_slot() -> None:
+            first_started.set()
+            release_first.wait(timeout=2)
+
+        def bounded_provider() -> str:
+            time_module.sleep(0.09)
+            return "ok"
+
+        first = asyncio.create_task(
+            controller.execute(
+                TushareOperation.REALTIME_MINUTES,
+                occupy_slot,
+                work_key="occupy-timeout-slot",
+            )
+        )
+        try:
+            assert await asyncio.to_thread(first_started.wait, 1)
+            second = asyncio.create_task(
+                controller.execute(
+                    TushareOperation.DAILY_BARS,
+                    bounded_provider,
+                    work_key="independent-provider-timeout",
+                )
+            )
+            await _wait_until(lambda: controller.waiting_count == 1)
+            await asyncio.sleep(0.09)
+            release_first.set()
+            await first
+            return await second
+        finally:
+            release_first.set()
+            await asyncio.gather(first, return_exceptions=True)
+            await controller.aclose()
+
+    assert asyncio.run(scenario()) == "ok"
+
+
+def test_close_wakes_queued_request_with_closed_without_starting_callable() -> None:
+    async def scenario() -> tuple[RequestControlError, int]:
+        controller = _request_controller(
+            _FakeClock(_shanghai(9, 0)),
+            executor_workers=1,
+            max_concurrency=1,
+            in_cycle_retries=0,
+        )
+        first_started = threading.Event()
+        release_first = threading.Event()
+        queued_calls = 0
+
+        def occupy_slot() -> None:
+            first_started.set()
+            release_first.wait(timeout=2)
+
+        def queued_provider() -> None:
+            nonlocal queued_calls
+            queued_calls += 1
+
+        first = asyncio.create_task(
+            controller.execute(
+                TushareOperation.REALTIME_MINUTES,
+                occupy_slot,
+                work_key="close-active",
+            )
+        )
+        queued: asyncio.Task[None] | None = None
+        try:
+            assert await asyncio.to_thread(first_started.wait, 1)
+            queued = asyncio.create_task(
+                controller.execute(
+                    TushareOperation.DAILY_BARS,
+                    queued_provider,
+                    work_key="close-queued",
+                )
+            )
+            await _wait_until(lambda: controller.waiting_count == 1)
+            controller.close()
+            with pytest.raises(RequestControlError) as captured:
+                await asyncio.wait_for(queued, timeout=0.1)
+            return captured.value, queued_calls
+        finally:
+            release_first.set()
+            await asyncio.gather(first, return_exceptions=True)
+            if queued is not None:
+                await asyncio.gather(queued, return_exceptions=True)
+            await controller.aclose()
+
+    error, queued_calls = asyncio.run(scenario())
+
+    assert error.code is RequestControlErrorCode.CLOSED
+    assert error.attempts == 0
+    assert queued_calls == 0
 
 
 def test_request_retry_never_returning_sync_calls_do_not_stall_logical_timeout() -> None:
@@ -1562,13 +1745,16 @@ def test_request_priority_market_displaces_recovery_when_queue_is_full() -> None
 
 def test_request_priority_market_overtakes_recovery_waiting_for_pacing_with_two_slots() -> None:
     async def scenario() -> list[str]:
-        clock = _BlockingPaceClock(_shanghai(9, 0))
+        clock = _FakeClock(_shanghai(9, 0))
+        pacer = _BlockingPacer()
         controller = TushareRequestController(
             clock=clock,
             min_interval=timedelta(seconds=1),
             jitter=timedelta(0),
             jitter_source=lambda: 0.0,
             timeout_seconds=1,
+            monotonic=pacer.now,
+            pace_sleep=pacer.sleep,
         )
         release_first = threading.Event()
         first_started = threading.Event()
@@ -1602,7 +1788,7 @@ def test_request_priority_market_overtakes_recovery_waiting_for_pacing_with_two_
                     priority=RequestPriority.RECOVERY,
                 )
             )
-            await clock.sleep_started.wait()
+            await asyncio.wait_for(pacer.sleep_started.wait(), timeout=1)
             market = asyncio.create_task(
                 controller.execute(
                     TushareOperation.REALTIME_MINUTES,
@@ -1612,13 +1798,13 @@ def test_request_priority_market_overtakes_recovery_waiting_for_pacing_with_two_
                 )
             )
             await asyncio.sleep(0)
-            clock.release_sleep.set()
+            pacer.release_sleep.set()
             await asyncio.gather(recovery, market)
             release_first.set()
             await first
             return order
         finally:
-            clock.release_sleep.set()
+            pacer.release_sleep.set()
             release_first.set()
             controller.close()
 

@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import math
 from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol, cast
 
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
+from trade_plan_monitor.runtime.health import live_runtime_identity
 from trade_plan_monitor.state.events import MonitorEvent, MonitorEventError
 from trade_plan_monitor.state.unit_of_work import UnitOfWork
 
@@ -18,10 +20,12 @@ _CLOSE_NORMAL = 1000
 _CLOSE_POLICY_VIOLATION = 1008
 _CLOSE_INTERNAL_ERROR = 1011
 _CLOSE_TRY_AGAIN_LATER = 1013
-_MAX_SEQUENCE = 2**63 - 1
+_MAX_SEQUENCE = 2**53 - 1
 _SNAPSHOT_REASON = "REPLAY_UNAVAILABLE"
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
+RuntimeLivenessProvider = Callable[[], object]
+Clock = Callable[[], datetime]
 router = APIRouter(tags=["monitor"])
 
 
@@ -45,6 +49,8 @@ class CommittedMonitorEventStream:
         *,
         unit_of_work_factory: UnitOfWorkFactory,
         heartbeat_interval_seconds: int | float = DEFAULT_HEARTBEAT_SECONDS,
+        runtime_liveness_provider: RuntimeLivenessProvider | None = None,
+        clock: Clock | None = None,
     ) -> None:
         if not callable(unit_of_work_factory):
             raise TypeError("unit_of_work_factory must be callable")
@@ -57,6 +63,10 @@ class CommittedMonitorEventStream:
             raise ValueError("heartbeat_interval_seconds must be positive and finite")
         self._unit_of_work_factory = unit_of_work_factory
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
+        self._runtime_liveness_provider = runtime_liveness_provider
+        if clock is not None and not callable(clock):
+            raise TypeError("clock must be callable")
+        self._clock = clock
         self._condition = asyncio.Condition()
         self._publication_revision = 0
 
@@ -111,7 +121,7 @@ class CommittedMonitorEventStream:
                     publication_revision
                 )
                 if not changed:
-                    await websocket.send_json({"type": "heartbeat", "sequence": cursor})
+                    await websocket.send_json(self._heartbeat_frame(cursor))
         except WebSocketDisconnect:
             return
 
@@ -131,6 +141,39 @@ class CommittedMonitorEventStream:
             except TimeoutError:
                 return self._publication_revision, False
             return self._publication_revision, True
+
+    def _heartbeat_frame(self, sequence: int) -> dict[str, object]:
+        provider = self._runtime_liveness_provider
+        if provider is None:
+            return {
+                "type": "heartbeat",
+                "sequence": sequence,
+                "runtimeLive": False,
+                "runtimeGeneration": None,
+                "runtimeStartedAt": None,
+            }
+        try:
+            value = provider()
+            observed_at = (
+                self._clock()
+                if self._clock is not None
+                else getattr(value, "observed_at", None)
+            )
+            runtime_identity = live_runtime_identity(value, observed_at=observed_at)
+        except Exception:
+            runtime_identity = None
+        runtime_live = runtime_identity is not None
+        return {
+            "type": "heartbeat",
+            "sequence": sequence,
+            "runtimeLive": runtime_live,
+            "runtimeGeneration": (
+                str(runtime_identity[1]) if runtime_identity is not None else None
+            ),
+            "runtimeStartedAt": (
+                runtime_identity[0].isoformat() if runtime_identity is not None else None
+            ),
+        }
 
 
 def _event_frame(event: MonitorEvent) -> dict[str, object]:

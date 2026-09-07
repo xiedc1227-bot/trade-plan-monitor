@@ -60,6 +60,7 @@ from trade_plan_monitor.state.models import (
     EvaluationLedger,
     IdempotencyStatus,
     LatestQuote,
+    PendingOfficialClose,
     PlanActivationState,
     PlanSource,
     PlanVersion,
@@ -646,6 +647,19 @@ class PlanRepository:
                 target = self.get_version(plan.plan_id, plan.version)
                 if target is None or target.plan_hash != plan_sha256(plan):
                     raise PlanVersionNotFoundError("Plan version was not found")
+                unresolved_close = self._session.scalar(
+                    select(PendingOfficialClose).where(
+                        PendingOfficialClose.symbol == plan.symbol
+                    )
+                )
+                if unresolved_close is not None and (
+                    unresolved_close.plan_hash != target.plan_hash
+                    or unresolved_close.formula_version
+                    != plan.monitoring.indicator_formula_version
+                ):
+                    raise PlanActivationBlockedError(
+                        "Another plan has an unresolved official close"
+                    )
 
                 before = self.get_active(plan.symbol)
                 before_state = self.get_activation_state(plan.symbol)
@@ -779,6 +793,15 @@ class PlanRepository:
                     raise RevisionConflictError(current_revision)
                 if before is None or before_state is None:
                     raise PlanVersionNotFoundError("Active plan was not found")
+                unresolved_close = self._session.scalar(
+                    select(PendingOfficialClose).where(
+                        PendingOfficialClose.symbol == normalized_symbol
+                    )
+                )
+                if unresolved_close is not None:
+                    raise PlanActivationBlockedError(
+                        "Plan has an unresolved official close"
+                    )
 
                 changed_at = _aware_now(self._clock)
                 state_result = self._session.execute(

@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import math
 import random
+import time
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -34,6 +35,11 @@ DEFAULT_SYMBOL_BACKOFF: Final = (
 DEFAULT_SHARED_RATE_LIMIT_COOLDOWN: Final = timedelta(seconds=300)
 DEFAULT_TUSHARE_QUEUE_LIMIT: Final = 32
 DEFAULT_TUSHARE_BACKOFF_KEY_LIMIT: Final = 64
+LIVE_TUSHARE_EXECUTOR_WORKERS: Final = 1
+LIVE_TUSHARE_MAX_CONCURRENCY: Final = 1
+LIVE_TUSHARE_MIN_INTERVAL: Final = timedelta(milliseconds=1_250)
+LIVE_TUSHARE_TIMEOUT_SECONDS: Final = 15
+LIVE_TUSHARE_IN_CYCLE_RETRIES: Final = 0
 DEFAULT_AI_MAX_CONCURRENCY: Final = 1
 DEFAULT_AI_QUEUE_LIMIT: Final = 5
 _MAX_BACKOFF_STEPS: Final = 16
@@ -182,13 +188,14 @@ class _ProviderAdmission:
 
     __slots__ = (
         "_active",
-        "_clock",
         "_jitter",
         "_jitter_source",
         "_limit",
         "_max_waiters",
         "_min_interval",
-        "_next_start_at",
+        "_monotonic",
+        "_next_start_monotonic",
+        "_pace_sleep",
         "_sequence",
         "_waiters",
     )
@@ -197,20 +204,22 @@ class _ProviderAdmission:
         self,
         *,
         limit: int,
-        clock: Clock,
         min_interval: timedelta,
         jitter: timedelta,
         jitter_source: Callable[[], float],
         max_waiters: int,
+        monotonic: Callable[[], float],
+        pace_sleep: Callable[[float], Awaitable[None]],
     ) -> None:
         self._limit = limit
-        self._clock = clock
         self._min_interval = min_interval
         self._jitter = jitter
         self._jitter_source = jitter_source
         self._max_waiters = max_waiters
+        self._monotonic = monotonic
+        self._pace_sleep = pace_sleep
         self._active = 0
-        self._next_start_at: datetime | None = None
+        self._next_start_monotonic: float | None = None
         self._sequence = count()
         self._waiters: list[_Waiter] = []
 
@@ -245,20 +254,35 @@ class _ProviderAdmission:
                 waiter.event.clear()
                 if waiter.rejected:
                     raise _QueueFullError
+                blocked = before_start()
+                if blocked is not None:
+                    raise blocked from None
                 if self._is_next(waiter):
-                    now = _canonical_shanghai(self._clock.now())
-                    if self._next_start_at is None or now >= self._next_start_at:
+                    now = self._monotonic()
+                    if (
+                        type(now) not in (int, float)
+                        or not math.isfinite(now)
+                        or now < 0
+                    ):
+                        raise ValueError("monotonic must return a finite non-negative value")
+                    if (
+                        self._next_start_monotonic is None
+                        or now >= self._next_start_monotonic
+                    ):
                         blocked = before_start()
                         if blocked is not None:
                             raise blocked from None
-                        next_start_at = self._calculate_next_start(now)
+                        next_start = self._calculate_next_start(now)
                         self._waiters.remove(waiter)
                         waiter.granted = True
                         self._active += 1
-                        self._next_start_at = next_start_at
+                        self._next_start_monotonic = next_start
                         self._wake_waiters()
                         return
-                    await self._wait_for_time_or_change(waiter, self._next_start_at)
+                    await self._wait_for_time_or_change(
+                        waiter,
+                        self._next_start_monotonic - now,
+                    )
                     continue
                 await waiter.event.wait()
         except BaseException:
@@ -273,6 +297,11 @@ class _ProviderAdmission:
         self._active -= 1
         self._wake_waiters()
 
+    def notify_state_change(self) -> None:
+        """Wake queued requests so controller state can be re-evaluated."""
+
+        self._wake_waiters()
+
     def _is_next(self, waiter: _Waiter) -> bool:
         if self._active >= self._limit:
             return False
@@ -281,18 +310,22 @@ class _ProviderAdmission:
             key=lambda candidate: (candidate.priority, candidate.sequence),
         )
 
-    def _calculate_next_start(self, now: datetime) -> datetime:
+    def _calculate_next_start(self, now: float) -> float:
         factor = self._jitter_source()
         if type(factor) not in (int, float) or not math.isfinite(factor) or not 0 <= factor <= 1:
             raise ValueError("jitter_source must return a finite value from 0 to 1")
-        return now + self._min_interval + self._jitter * float(factor)
+        return (
+            now
+            + self._min_interval.total_seconds()
+            + self._jitter.total_seconds() * float(factor)
+        )
 
     async def _wait_for_time_or_change(
         self,
         waiter: _Waiter,
-        deadline: datetime,
+        delay_seconds: float,
     ) -> None:
-        sleep_task = asyncio.create_task(self._clock.sleep_until(deadline))
+        sleep_task = asyncio.create_task(self._pace_sleep(max(0.0, delay_seconds)))
         change_task = asyncio.create_task(waiter.event.wait())
         tasks = (sleep_task, change_task)
         completed: set[asyncio.Task[None]] = set()
@@ -338,7 +371,10 @@ class TushareRequestController:
         "_executor",
         "_executor_workers",
         "_in_cycle_retries",
+        "_inflight_futures",
         "_max_concurrency",
+        "_monotonic",
+        "_pace_sleep",
         "_rate_limit_cooldown",
         "_timeout_seconds",
     )
@@ -356,6 +392,8 @@ class TushareRequestController:
         in_cycle_retries: int = DEFAULT_IN_CYCLE_RETRIES,
         backoff: tuple[timedelta, ...] = DEFAULT_SYMBOL_BACKOFF,
         rate_limit_cooldown: timedelta = DEFAULT_SHARED_RATE_LIMIT_COOLDOWN,
+        monotonic: Callable[[], float] = time.monotonic,
+        pace_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self._validate_configuration(
             clock=clock,
@@ -368,6 +406,8 @@ class TushareRequestController:
             in_cycle_retries=in_cycle_retries,
             backoff=backoff,
             rate_limit_cooldown=rate_limit_cooldown,
+            monotonic=monotonic,
+            pace_sleep=pace_sleep,
         )
         self._clock = clock
         self._executor_workers = executor_workers
@@ -376,13 +416,16 @@ class TushareRequestController:
         self._in_cycle_retries = in_cycle_retries
         self._backoff = backoff
         self._rate_limit_cooldown = rate_limit_cooldown
+        self._monotonic = monotonic
+        self._pace_sleep = pace_sleep
         self._admission = _ProviderAdmission(
             limit=max_concurrency,
-            clock=clock,
             min_interval=min_interval,
             jitter=jitter,
             jitter_source=jitter_source,
             max_waiters=DEFAULT_TUSHARE_QUEUE_LIMIT,
+            monotonic=monotonic,
+            pace_sleep=pace_sleep,
         )
         self._executor = ThreadPoolExecutor(
             max_workers=executor_workers,
@@ -393,6 +436,7 @@ class TushareRequestController:
         self._backoff_until: dict[str, datetime] = {}
         self._cooldown_until: datetime | None = None
         self._closed = False
+        self._inflight_futures: set[asyncio.Future[object]] = set()
 
     @staticmethod
     def _validate_configuration(
@@ -407,6 +451,8 @@ class TushareRequestController:
         in_cycle_retries: int,
         backoff: tuple[timedelta, ...],
         rate_limit_cooldown: timedelta,
+        monotonic: Callable[[], float],
+        pace_sleep: Callable[[float], Awaitable[None]],
     ) -> None:
         if not isinstance(clock, Clock):
             raise TypeError("clock must implement Clock")
@@ -421,6 +467,8 @@ class TushareRequestController:
                 raise ValueError(f"{name} cannot be negative")
         if not callable(jitter_source):
             raise TypeError("jitter_source must be callable")
+        if not callable(monotonic) or not callable(pace_sleep):
+            raise TypeError("monotonic and pace_sleep must be callable")
         if (
             type(timeout_seconds) not in (int, float)
             or not math.isfinite(timeout_seconds)
@@ -605,6 +653,12 @@ class TushareRequestController:
         operation: TushareOperation,
         work_key: str,
     ) -> RequestControlError | None:
+        if self._closed:
+            return RequestControlError(
+                RequestControlErrorCode.CLOSED,
+                operation,
+                attempts=0,
+            )
         if operation in self._blocked_operations:
             return RequestControlError(
                 RequestControlErrorCode.BLOCKED_PERMISSION,
@@ -645,6 +699,7 @@ class TushareRequestController:
         operation: TushareOperation,
         work_key: str,
     ) -> T:
+        loop = asyncio.get_running_loop()
         async with asyncio.timeout(self._timeout_seconds):
             await self._admission.acquire(
                 int(priority),
@@ -667,8 +722,9 @@ class TushareRequestController:
                 release_once()
 
         try:
-            loop = asyncio.get_running_loop()
             future = loop.run_in_executor(self._executor, call)
+            self._inflight_futures.add(future)
+            future.add_done_callback(self._inflight_futures.discard)
             done, _ = await asyncio.wait((future,), timeout=self._timeout_seconds)
             if future not in done:
                 raise TimeoutError
@@ -711,12 +767,51 @@ class TushareRequestController:
         return _canonical_shanghai(self._clock.now())
 
     def close(self) -> None:
-        """Stop accepting work and shut down the owned executor."""
+        """Stop admission immediately without blocking the caller's event loop."""
 
         if self._closed:
             return
         self._closed = True
-        self._executor.shutdown(wait=True, cancel_futures=True)
+        self._admission.notify_state_change()
+        self._executor.shutdown(wait=False, cancel_futures=True)
+
+    async def aclose(self) -> None:
+        """Join bounded provider work before allowing a replacement runtime."""
+
+        self.close()
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._timeout_seconds
+        while self._inflight_futures and loop.time() < deadline:
+            await asyncio.sleep(min(0.01, max(0.0, deadline - loop.time())))
+        if self._inflight_futures:
+            raise RuntimeError("Tushare executor did not stop within its transport timeout")
+        await asyncio.to_thread(
+            self._executor.shutdown,
+            wait=True,
+            cancel_futures=True,
+        )
+
+
+def create_live_tushare_request_controller(
+    *,
+    clock: Clock,
+    monotonic: Callable[[], float] = time.monotonic,
+    pace_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> TushareRequestController:
+    """Build the production live profile without inheriting retry-oriented defaults."""
+
+    return TushareRequestController(
+        clock=clock,
+        executor_workers=LIVE_TUSHARE_EXECUTOR_WORKERS,
+        max_concurrency=LIVE_TUSHARE_MAX_CONCURRENCY,
+        min_interval=LIVE_TUSHARE_MIN_INTERVAL,
+        jitter=timedelta(0),
+        jitter_source=lambda: 0.0,
+        timeout_seconds=LIVE_TUSHARE_TIMEOUT_SECONDS,
+        in_cycle_retries=LIVE_TUSHARE_IN_CYCLE_RETRIES,
+        monotonic=monotonic,
+        pace_sleep=pace_sleep,
+    )
 
 
 _NO_RESULT: Final = object()
@@ -791,9 +886,15 @@ __all__ = [
     "DEFAULT_TUSHARE_EXECUTOR_WORKERS",
     "DEFAULT_TUSHARE_MAX_CONCURRENCY",
     "DEFAULT_TUSHARE_QUEUE_LIMIT",
+    "LIVE_TUSHARE_EXECUTOR_WORKERS",
+    "LIVE_TUSHARE_IN_CYCLE_RETRIES",
+    "LIVE_TUSHARE_MAX_CONCURRENCY",
+    "LIVE_TUSHARE_MIN_INTERVAL",
+    "LIVE_TUSHARE_TIMEOUT_SECONDS",
     "RequestControlError",
     "RequestControlErrorCode",
     "RequestPriority",
     "TushareOperation",
     "TushareRequestController",
+    "create_live_tushare_request_controller",
 ]

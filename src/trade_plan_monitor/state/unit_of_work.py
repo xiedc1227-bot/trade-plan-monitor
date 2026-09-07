@@ -14,6 +14,7 @@ from trade_plan_monitor.notifications.outbox import (
     AlertOutbox,
 )
 from trade_plan_monitor.state.events import MonitorEventLog
+from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.repositories import (
     EpisodeRepository,
     EvaluationRepository,
@@ -47,6 +48,9 @@ class UnitOfWork(Protocol):
 
     @property
     def evaluations(self) -> EvaluationRepository: ...
+
+    @property
+    def projections(self) -> ProjectionRepository: ...
 
     @property
     def health(self) -> HealthRepository: ...
@@ -101,6 +105,7 @@ class SqlAlchemyUnitOfWork:
         self._episodes: EpisodeRepository | None = None
         self._risk: RiskRepository | None = None
         self._evaluations: EvaluationRepository | None = None
+        self._projections: ProjectionRepository | None = None
         self._health: HealthRepository | None = None
         self._alerts: AlertOutbox | None = None
         self._events: MonitorEventLog | None = None
@@ -142,6 +147,12 @@ class SqlAlchemyUnitOfWork:
         if self._evaluations is None:
             raise RuntimeError("Unit of work is not active")
         return self._evaluations
+
+    @property
+    def projections(self) -> ProjectionRepository:
+        if self._projections is None:
+            raise RuntimeError("Unit of work is not active")
+        return self._projections
 
     @property
     def health(self) -> HealthRepository:
@@ -207,6 +218,7 @@ class SqlAlchemyUnitOfWork:
             id_factory=self._id_factory,
         )
         self._evaluations = EvaluationRepository(self._session)
+        self._projections = ProjectionRepository(self._session)
         self._health = HealthRepository(
             self._session,
             clock=self._clock,
@@ -248,6 +260,7 @@ class SqlAlchemyUnitOfWork:
             self._episodes = None
             self._risk = None
             self._evaluations = None
+            self._projections = None
             self._health = None
             self._alerts = None
             self._events = None

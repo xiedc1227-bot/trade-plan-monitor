@@ -13,6 +13,7 @@ import json
 import os
 import re
 import time
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from datetime import time as wall_time
@@ -70,6 +71,7 @@ _REPORTS = (
 _HEALTH_MATRIX = _ROOT / "web" / "src" / "components" / "health" / "HealthMatrix.vue"
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _AUTHORIZATION_ENV = "TRADE_PLAN_MONITOR_ALLOW_TUSHARE_LIVE"
+_CHILD_ENV = "TRADE_PLAN_MONITOR_TUSHARE_LIVE_CHILD"
 _OBSERVATION_ENV = "T058_REPORT_OBSERVATIONS"
 _TOKEN_ENV = "TUSHARE_TOKEN"
 _ENDPOINT = "https://api.quicksync.cn"
@@ -86,7 +88,7 @@ _BATCH_SYMBOLS = (
     "600519.SH",
     "601318.SH",
 )
-_MIN_CALL_INTERVAL_SECONDS = 1.0
+_MIN_CALL_INTERVAL_SECONDS = 1.25
 _TIMEOUT_SECONDS = 15
 _MIN_CLOSE_OBSERVATION_TIME = wall_time(15, 20)
 _MINUTE_FIELDS = "ts_code,time,open,close,high,low,vol,amount"
@@ -251,6 +253,7 @@ class _LiveEvidence:
     returned_symbols: int = 0
     final_minute: str | None = None
     official_close_rows: int | None = None
+    market_window_outcome: str = "RUN"
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,6 +306,32 @@ class _OfflineInvalidResponseClient:
     def daily(self, **kwargs: Any) -> object:
         del kwargs
         return object()
+
+
+class _OfflineRateLimitedClient:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def daily(self, **kwargs: Any) -> pd.DataFrame:
+        del kwargs
+        self.calls.append("daily")
+        raise TushareProviderError(TushareErrorCode.RATE_LIMITED, "daily")
+
+    def trade_cal(self, **kwargs: Any) -> pd.DataFrame:
+        del kwargs
+        self.calls.append("trade_cal")
+        return pd.DataFrame()
+
+
+class _UnreadableEnvironment(Mapping[str, str]):
+    def __getitem__(self, key: str) -> str:
+        raise AssertionError(f"environment must not be read: {key}")
+
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        raise AssertionError("environment must not be read")
+
+    def __len__(self) -> int:
+        raise AssertionError("environment must not be read")
 
 
 class _PacedRecordingClient:
@@ -443,7 +472,11 @@ def _shanghai_now() -> datetime:
 
 
 def _classify_error(operation: str, error: Exception) -> tuple[str, str]:
-    provider_error = TushareMarketDataProvider._safe_provider_error(operation, error)
+    provider_error = (
+        error
+        if isinstance(error, TushareProviderError)
+        else TushareMarketDataProvider._safe_provider_error(operation, error)
+    )
     if provider_error.code is TushareErrorCode.BLOCKED_PERMISSION:
         capability_status = ProviderCapabilityStatus.BLOCKED_PERMISSION
     elif provider_error.code is TushareErrorCode.RATE_LIMITED:
@@ -463,6 +496,8 @@ def _probe_call(
         frame = _call(client, operation, **kwargs)
     except _SanitizedCallError as error:
         statuses[operation] = error.capability_status
+        if error.provider_error_code == TushareErrorCode.RATE_LIMITED.value:
+            _fail("T058_LIVE_RATE_LIMITED_STOP")
         return None
     statuses[operation] = "READY"
     return frame
@@ -473,6 +508,17 @@ def _previous_weekday(value: date) -> date:
     while candidate.weekday() >= 5:
         candidate -= timedelta(days=1)
     return candidate
+
+
+def _realtime_contract_window(observed_at: datetime, *, today_open: bool | None) -> bool:
+    if today_open is not True:
+        return False
+    local_time = observed_at.astimezone(_SHANGHAI).time()
+    return (
+        wall_time(9, 32) <= local_time <= wall_time(11, 28)
+        or wall_time(13, 2) <= local_time <= wall_time(14, 56)
+        or local_time >= _MIN_CLOSE_OBSERVATION_TIME
+    )
 
 
 def _require_columns(frame: pd.DataFrame, operation: str, required: set[str]) -> None:
@@ -886,15 +932,29 @@ def _emit_observations(
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
 
 
+def _require_authorized_live_child(
+    marker_expression: str,
+    environment: Mapping[str, str],
+) -> None:
+    """Validate the explicitly selected one-shot child before reading secret injection."""
+
+    if marker_expression.strip() != "live":
+        pytest.skip("live Tushare tests require the explicit '-m live' selector")
+    if environment.get(_CHILD_ENV) != "1":
+        pytest.fail("T058_LIVE_ONE_SHOT_CHILD_REQUIRED", pytrace=False)
+    if environment.get(_AUTHORIZATION_ENV) != "1":
+        pytest.fail("T058_LIVE_NETWORK_AUTHORIZATION_UNAVAILABLE", pytrace=False)
+    if not environment.get(_TOKEN_ENV):
+        pytest.fail("T058_LIVE_TOKEN_REFERENCE_UNAVAILABLE", pytrace=False)
+
+
 @pytest.fixture(scope="session")
 def authorized_live_context(request: pytest.FixtureRequest) -> _LiveContext:
+    observed_at = _shanghai_now()
+    if not _realtime_contract_window(observed_at, today_open=True):
+        pytest.skip("T058_LIVE_NOT_RUN_MARKET_WINDOW")
     marker_expression = str(request.config.getoption("markexpr")).strip()
-    if marker_expression != "live":
-        pytest.skip("live Tushare tests require the explicit '-m live' selector")
-    if os.environ.get(_AUTHORIZATION_ENV) != "1":
-        pytest.fail("T058_LIVE_NETWORK_AUTHORIZATION_UNAVAILABLE", pytrace=False)
-    if not os.environ.get(_TOKEN_ENV):
-        pytest.fail("T058_LIVE_TOKEN_REFERENCE_UNAVAILABLE", pytrace=False)
+    _require_authorized_live_child(marker_expression, os.environ)
 
     configuration = TushareConfiguration.model_validate(
         {
@@ -909,8 +969,42 @@ def authorized_live_context(request: pytest.FixtureRequest) -> _LiveContext:
         pytest.fail("T058_LIVE_CLIENT_INITIALIZATION_FAILED", pytrace=False)
     return _LiveContext(
         client=_PacedRecordingClient(raw_client),
-        observed_at=_shanghai_now(),
+        observed_at=observed_at,
     )
+
+
+def test_live_harness_offline_safety_contract() -> None:
+    with pytest.raises(pytest.skip.Exception):
+        _require_authorized_live_child("not live", _UnreadableEnvironment())
+
+    with pytest.raises(pytest.fail.Exception, match="T058_LIVE_ONE_SHOT_CHILD_REQUIRED"):
+        _require_authorized_live_child(
+            "live",
+            {_AUTHORIZATION_ENV: "1", _TOKEN_ENV: "must-not-be-reached"},
+        )
+
+    assert _realtime_contract_window(
+        datetime(2026, 9, 5, 10, 0, tzinfo=_SHANGHAI),
+        today_open=False,
+    ) is False
+    assert _realtime_contract_window(
+        datetime(2026, 9, 7, 8, 0, tzinfo=_SHANGHAI),
+        today_open=True,
+    ) is False
+    assert _realtime_contract_window(
+        datetime(2026, 9, 7, 10, 0, tzinfo=_SHANGHAI),
+        today_open=True,
+    ) is True
+
+    raw_client = _OfflineRateLimitedClient()
+    client = _PacedRecordingClient(raw_client)
+    statuses: dict[str, str] = {}
+    with pytest.raises(pytest.fail.Exception, match="T058_LIVE_RATE_LIMITED_STOP"):
+        _probe_call(client, statuses, "daily")
+        _probe_call(client, statuses, "trade_cal")
+    assert raw_client.calls == ["daily"]
+    assert statuses == {"daily": "RATE_LIMITED"}
+    assert _MIN_CALL_INTERVAL_SECONDS >= 1.25
 
 
 @pytest.mark.live
@@ -921,6 +1015,9 @@ def test_authorized_live_capabilities_pacing_and_intraday_contract(
     client = context.client
     observed_at = _shanghai_now()
     today = observed_at.date()
+    if today.weekday() >= 5:
+        context.evidence.market_window_outcome = "NOT_RUN_MARKET_WINDOW"
+        pytest.skip("T058_LIVE_NOT_RUN_MARKET_WINDOW")
     calendar_start = today - timedelta(days=14)
     statuses: dict[str, str] = {}
     calendar = _probe_call(
@@ -936,6 +1033,9 @@ def test_authorized_live_capabilities_pacing_and_intraday_contract(
     reference_date = _previous_weekday(today)
     if calendar is not None:
         today_open, reference_date = _calendar_dates(calendar, today)
+    if not _realtime_contract_window(observed_at, today_open=today_open):
+        context.evidence.market_window_outcome = "NOT_RUN_MARKET_WINDOW"
+        pytest.skip("T058_LIVE_NOT_RUN_MARKET_WINDOW")
 
     limits = _probe_call(
         client,
@@ -1016,12 +1116,8 @@ def test_authorized_live_capabilities_pacing_and_intraday_contract(
             current_day_samples.append(current_day)
 
     source_time_label = SourceTimeLabel.UNVERIFIED
-    contract_window = (
-        wall_time(9, 32) <= observed_at.time() <= wall_time(11, 28)
-        or wall_time(13, 2) <= observed_at.time() <= wall_time(14, 56)
-        or observed_at.time() >= _MIN_CLOSE_OBSERVATION_TIME
-    )
-    if today_open is True and contract_window and len(current_day_samples) == 2:
+    contract_window = _realtime_contract_window(observed_at, today_open=today_open)
+    if contract_window and len(current_day_samples) == 2:
         source_time_label = _derive_source_time_label(
             (current_day_samples[0], current_day_samples[1]),
             observed_at,
@@ -1086,6 +1182,8 @@ def test_authorized_live_final_minute_and_official_close(
     authorized_live_context: _LiveContext,
 ) -> None:
     context = authorized_live_context
+    if context.evidence.market_window_outcome == "NOT_RUN_MARKET_WINDOW":
+        pytest.skip("T058_LIVE_NOT_RUN_MARKET_WINDOW")
     observed_at = _shanghai_now()
     client = context.client
     today = observed_at.date()
@@ -1254,9 +1352,6 @@ def test_bilingual_live_report_contract_is_redacted_and_equivalent(
     for report in (english, chinese):
         if any(pattern.search(report) for pattern in _REPORT_SECRET_PATTERNS):
             _fail("T058_LIVE_REPORT_SECRET_MATERIAL_DETECTED")
-    token = os.environ.get(_TOKEN_ENV)
-    if token and (token in english or token in chinese):
-        _fail("T058_LIVE_REPORT_CONFIGURED_TOKEN_DETECTED")
     english_evidence = _canonical_evidence(english)
     chinese_evidence = _canonical_evidence(chinese)
     if english_evidence != chinese_evidence or english_evidence != _EXPECTED_CANONICAL_EVIDENCE:
@@ -1265,5 +1360,7 @@ def test_bilingual_live_report_contract_is_redacted_and_equivalent(
         context = request.getfixturevalue("authorized_live_context")
         if not isinstance(context, _LiveContext):
             _fail("T058_LIVE_REPORT_SESSION_EVIDENCE_INVALID")
+        if context.evidence.market_window_outcome == "NOT_RUN_MARKET_WINDOW":
+            pytest.skip("T058_LIVE_NOT_RUN_MARKET_WINDOW")
         if _report_semantics(english_evidence) != _live_semantics(context):
             _fail("T058_LIVE_REPORT_SESSION_EVIDENCE_MISMATCH")

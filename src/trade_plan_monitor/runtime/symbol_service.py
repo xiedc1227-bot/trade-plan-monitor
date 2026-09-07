@@ -43,6 +43,24 @@ PersistFiveMinute = Callable[[FiveMinuteBar], None]
 IsOpenOn = Callable[[date], bool | None]
 
 
+class SymbolHealthRestoreState(BaseModel):
+    """Exact durable health scoped to one active-plan generation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    symbol: str
+    activation_revision: int = Field(ge=1)
+    snapshot: SymbolHealthSnapshot | None = None
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> Self:
+        if not _SYMBOL_PATTERN.fullmatch(self.symbol):
+            raise ValueError("symbol must use a canonical A-share identity")
+        if self.snapshot is not None and self.snapshot.symbol != self.symbol:
+            raise ValueError("health snapshot must match its activation symbol")
+        return self
+
+
 class _RuntimeContextValue(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -148,12 +166,42 @@ class SymbolService:
         self._persist_five_minute = persist_five_minute
         self._is_open_on = is_open_on
         self._health_tracker = health_tracker
+        self._hydrated_generations: dict[str, int] = {}
+
+    def restore_health(
+        self,
+        *,
+        symbols: tuple[str, ...],
+        states: tuple[SymbolHealthRestoreState, ...],
+    ) -> None:
+        """Restore validated durable tracker state before acquiring a new batch."""
+
+        requested = set(self._validated_active_symbols(symbols))
+        if type(states) is not tuple or any(
+            type(state) is not SymbolHealthRestoreState for state in states
+        ):
+            raise TypeError("health restore states must be an exact tuple")
+        state_by_symbol = {state.symbol: state for state in states}
+        if len(state_by_symbol) != len(states) or set(state_by_symbol) != requested:
+            raise ValueError("health restore states must match the active symbols exactly")
+        self._hydrated_generations = {
+            symbol: revision
+            for symbol, revision in self._hydrated_generations.items()
+            if symbol in requested
+        }
+        for symbol in symbols:
+            state = state_by_symbol[symbol]
+            if self._hydrated_generations.get(symbol) == state.activation_revision:
+                continue
+            self._health_tracker.replace(symbol, state.snapshot)
+            self._hydrated_generations[symbol] = state.activation_revision
 
     async def run_realtime_batch(
         self,
         *,
         bar_end: datetime,
         observed_at: datetime,
+        symbols: tuple[str, ...] | None = None,
     ) -> RealtimeBatchResult:
         """Run one canonical-minute batch without cross-symbol cancellation."""
 
@@ -163,7 +211,9 @@ class SymbolService:
             raise ValueError("batch observation cannot precede its market target")
         required_bucket = five_minute_bucket_end(bar_end) == bar_end
         expected = expected_five_minute_ends(bar_end) if required_bucket else (bar_end,)
-        symbols = self._validated_active_symbols(self._active_symbols())
+        symbols = self._validated_active_symbols(
+            self._active_symbols() if symbols is None else symbols
+        )
         self._health_tracker.retain_only(symbols)
         if not symbols:
             return RealtimeBatchResult(
@@ -255,27 +305,49 @@ class SymbolService:
                     break
 
         loaded: tuple[MinuteBar, ...] = ()
+        health_minutes: tuple[MinuteBar, ...] = ()
         aggregate: FiveMinuteBar | None = None
         if error_code is None:
             try:
-                loaded = self._load_minutes(
+                retained_gaps = self._health_tracker.gaps_for(
                     symbol,
-                    start=expected[0],
+                    trade_date=bar_end.date(),
+                )
+                allowed_ends = set((*expected, *retained_gaps))
+                loaded_range = self._load_minutes(
+                    symbol,
+                    start=min(allowed_ends),
                     end=expected[-1],
                 )
-                if type(loaded) is not tuple:
+                if type(loaded_range) is not tuple:
                     raise TypeError("minute loader must return a tuple")
-                if any(not isinstance(minute, MinuteBar) for minute in loaded):
+                if any(not isinstance(minute, MinuteBar) for minute in loaded_range):
                     raise TypeError("minute loader must return normalized MinuteBar values")
                 if any(
-                    minute.symbol != symbol or minute.bar_end not in expected for minute in loaded
+                    minute.symbol != symbol
+                    or not min(allowed_ends) <= minute.bar_end <= expected[-1]
+                    for minute in loaded_range
                 ):
                     raise ValueError("loaded minutes must match the requested symbol and range")
-                if len({minute.bar_end for minute in loaded}) != len(loaded):
+                if len({minute.bar_end for minute in loaded_range}) != len(loaded_range):
                     raise ValueError("loaded minutes cannot contain duplicate identities")
                 if missing_current:
-                    loaded = tuple(minute for minute in loaded if minute.bar_end != bar_end)
-                loaded = tuple(sorted(loaded, key=lambda minute: minute.bar_end))
+                    loaded_range = tuple(
+                        minute for minute in loaded_range if minute.bar_end != bar_end
+                    )
+                health_minutes = tuple(
+                    sorted(
+                        (
+                            minute
+                            for minute in loaded_range
+                            if minute.bar_end in allowed_ends
+                        ),
+                        key=lambda minute: minute.bar_end,
+                    )
+                )
+                loaded = tuple(
+                    minute for minute in health_minutes if minute.bar_end in expected
+                )
             except TypeError, ValueError:
                 loaded = ()
                 error_code = SymbolHealthErrorCode.INVALID_CONTEXT
@@ -308,7 +380,7 @@ class SymbolService:
                     symbol=symbol,
                     bucket_end=bar_end,
                     observed_at=observed_at,
-                    minutes=loaded,
+                    minutes=health_minutes,
                     blocked_error_code=error_code,
                 )
             else:
@@ -316,7 +388,7 @@ class SymbolService:
                     symbol=symbol,
                     bar_end=bar_end,
                     observed_at=observed_at,
-                    minutes=loaded,
+                    minutes=health_minutes,
                     blocked_error_code=error_code,
                 )
         except TypeError, ValueError:

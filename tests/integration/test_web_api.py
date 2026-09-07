@@ -212,6 +212,7 @@ def _dashboard_payload() -> dict[str, object]:
     return {
         "sequence": 18,
         "observedAt": datetime(2026, 8, 24, 10, 5, tzinfo=_SHANGHAI),
+        "runtimeGeneration": "00000000-0000-4000-8000-000000000001",
         "connectionStatus": "CONNECTED",
         "dataAgeSeconds": 60,
         "counts": {
@@ -225,6 +226,16 @@ def _dashboard_payload() -> dict[str, object]:
         "symbols": [_symbol_summary_payload()],
         "marketIndexes": [],
     }
+
+
+def test_dashboard_rejects_a_non_uuid4_runtime_generation() -> None:
+    from trade_plan_monitor.web.routers.dashboard import DashboardResponse
+
+    payload = _dashboard_payload()
+    payload["runtimeGeneration"] = UUID("00000000-0000-1000-8000-000000000001")
+
+    with pytest.raises(ValidationError, match="UUID version 4"):
+        DashboardResponse.model_validate_json(json.dumps(payload, default=str))
 
 
 def _runtime_health_payload() -> dict[str, object]:
@@ -731,8 +742,9 @@ def test_dashboard_returns_authoritative_decision_evidence_and_data_age() -> Non
     payload = response.json()
     assert set(payload) == {
         "sequence",
-        "observedAt",
-        "connectionStatus",
+            "observedAt",
+            "runtimeGeneration",
+            "connectionStatus",
         "dataAgeSeconds",
         "counts",
         "symbols",
@@ -756,6 +768,70 @@ def test_dashboard_returns_authoritative_decision_evidence_and_data_age() -> Non
     ]
     assert "result_hash" not in response.text
     assert service.calls == [("dashboard",)]
+
+
+def test_dashboard_returns_a_typed_200_when_authoritative_projection_is_not_ready() -> None:
+    class _UnavailableProjectionService(_FakeMonitorReadService):
+        async def get_dashboard(self) -> object:
+            return {
+                "availability": "UNAVAILABLE",
+                "observedAt": datetime(2026, 8, 24, 10, 5, tzinfo=_SHANGHAI),
+                "reason": "AWAITING_FIRST_EVALUATION",
+                "sequence": 18,
+            }
+
+    response = TestClient(create_app(read_service=_UnavailableProjectionService())).get(
+        "/api/v1/dashboard"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "availability": "UNAVAILABLE",
+        "observedAt": "2026-08-24T10:05:00+08:00",
+        "reason": "AWAITING_FIRST_EVALUATION",
+        "sequence": 18,
+    }
+
+
+def test_symbol_collection_and_detail_return_typed_projection_unavailability() -> None:
+    class _UnavailableProjectionService(_FakeMonitorReadService):
+        async def list_symbols(self, *, offset: int, limit: int) -> object:
+            assert (offset, limit) == (0, 20)
+            return {
+                "availability": "UNAVAILABLE",
+                "observedAt": datetime(2026, 8, 24, 10, 5, tzinfo=_SHANGHAI),
+                "reason": "NO_ACTIVE_PLANS",
+                "sequence": 18,
+            }
+
+        async def get_symbol(self, *, symbol: str) -> object:
+            return {
+                "availability": "UNAVAILABLE",
+                "observedAt": datetime(2026, 8, 24, 10, 5, tzinfo=_SHANGHAI),
+                "reason": "NO_ACTIVE_PLAN",
+                "sequence": 18,
+                "symbol": symbol,
+            }
+
+    client = TestClient(create_app(read_service=_UnavailableProjectionService()))
+    collection = client.get("/api/v1/symbols")
+    detail = client.get("/api/v1/symbols/003043.SZ")
+
+    assert collection.status_code == 200
+    assert collection.json() == {
+        "availability": "UNAVAILABLE",
+        "observedAt": "2026-08-24T10:05:00+08:00",
+        "reason": "NO_ACTIVE_PLANS",
+        "sequence": 18,
+    }
+    assert detail.status_code == 200
+    assert detail.json() == {
+        "availability": "UNAVAILABLE",
+        "observedAt": "2026-08-24T10:05:00+08:00",
+        "reason": "NO_ACTIVE_PLAN",
+        "sequence": 18,
+        "symbol": "003043.SZ",
+    }
 
 
 def test_symbols_are_paginated_and_symbol_detail_is_thin_service_read() -> None:
@@ -927,7 +1003,7 @@ def test_symbol_pagination_is_bounded(path: str, params: dict[str, object]) -> N
     _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
 
 
-def test_disconnected_or_stale_symbol_cannot_be_labelled_live() -> None:
+def test_disconnected_symbol_can_retain_immutable_live_evaluation_evidence() -> None:
     class _ContradictoryService(_FakeMonitorReadService):
         async def get_dashboard(self) -> object:
             payload = _dashboard_payload()
@@ -939,9 +1015,12 @@ def test_disconnected_or_stale_symbol_cannot_be_labelled_live() -> None:
 
     app = create_app(read_service=_ContradictoryService())
 
-    response = TestClient(app, raise_server_exceptions=False).get("/api/v1/dashboard")
+    response = TestClient(app).get("/api/v1/dashboard")
 
-    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
+    assert response.status_code == 200
+    assert response.json()["connectionStatus"] == "DISCONNECTED"
+    assert response.json()["symbols"][0]["connected"] is False
+    assert response.json()["symbols"][0]["decision"]["dataHealth"]["status"] == "LIVE"
 
 
 def test_read_service_payload_cannot_expose_raw_provider_bodies() -> None:
@@ -1458,7 +1537,11 @@ def test_plan_activation_state_is_read_from_the_authoritative_service() -> None:
         "revision": 4,
         "symbol": "003043.SZ",
     }
-    _assert_error_envelope(missing, status=404, code="NOT_FOUND")
+    assert missing.status_code == 200
+    assert missing.json()["active"] is False
+    assert missing.json()["planVersionId"] is None
+    assert missing.json()["revision"] == 0
+    assert missing.json()["symbol"] == "600000.SH"
     assert service.calls == [
         ("get_plan_activation_state", "003043.SZ"),
         ("get_plan_activation_state", "600000.SH"),

@@ -52,7 +52,11 @@ from trade_plan_monitor.domain.plan_models import (
     PriceInZoneCondition,
     TradePlan,
 )
-from trade_plan_monitor.domain.plan_validation import migrate_trade_plan_to_schema_v2
+from trade_plan_monitor.domain.plan_validation import (
+    ALL_MARKET_EVIDENCE,
+    migrate_trade_plan_to_schema_v2,
+    validate_trade_plan,
+)
 from trade_plan_monitor.market_data.aggregation import (
     FiveMinuteBar,
     expected_five_minute_ends,
@@ -86,12 +90,15 @@ from trade_plan_monitor.runtime.recovery import (
     RecoveryService,
 )
 from trade_plan_monitor.runtime.request_control import TushareRequestController
+from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.runtime.service import (
     IntradayCycleStatus,
     IntradayMarketFacts,
     OfficialCloseCycleStatus,
     OfficialCloseMarketFacts,
+    RuntimeDeadlineCoordinator,
     RuntimeEvaluationService,
+    StaleActivationGenerationError,
 )
 from trade_plan_monitor.runtime.symbol_service import SymbolService
 from trade_plan_monitor.state.database import (
@@ -106,12 +113,17 @@ from trade_plan_monitor.state.models import (
 from trade_plan_monitor.state.models import (
     AuditLog,
     EvaluationLedger,
+    PendingOfficialClose,
     RiskState,
+    SymbolDecisionHead,
     SymbolHealth,
     ZoneEpisode,
 )
 from trade_plan_monitor.state.models import (
     DailyBar as DailyBarRow,
+)
+from trade_plan_monitor.state.models import (
+    EvaluationResult as EvaluationResultRow,
 )
 from trade_plan_monitor.state.models import (
     FiveMinuteBar as FiveMinuteBarRow,
@@ -272,6 +284,7 @@ def _service(
     history: _FakeHistory,
     controller: TushareRequestController,
     is_open_on: Callable[[date], bool | None] | None = None,
+    health_tracker: SymbolHealthTracker | None = None,
 ) -> SymbolService:
     return SymbolService(
         provider=provider,
@@ -281,7 +294,7 @@ def _service(
         load_minutes=history.load_minutes,
         persist_five_minute=history.persist_five_minute,
         is_open_on=is_open_on or (lambda _trade_date: True),
-        health_tracker=SymbolHealthTracker(stale_after=timedelta(seconds=60)),
+        health_tracker=health_tracker or SymbolHealthTracker(stale_after=timedelta(seconds=60)),
     )
 
 
@@ -718,6 +731,79 @@ def test_targeted_recovery_persists_only_explicit_detected_gaps() -> None:
     assert result.results[0].requested_gaps == requested_gaps
     assert result.results[0].recovered_ends == requested_gaps
     assert result.results[0].remaining_gaps == ()
+
+
+@pytest.mark.parametrize("restart", [False, True])
+def test_repaired_historical_gap_clears_on_the_next_bucket(
+    restart: bool,
+) -> None:
+    symbol = SYMBOLS[0]
+    first_end = _at(9, 35)
+    next_end = _at(9, 40)
+    provider = _FakeProvider([])
+    active = _ActiveSymbols((symbol,))
+    history = _FakeHistory()
+    history.seed_before_target((symbol,), first_end)
+    controller = _controller(_at(9, 35, 12))
+    tracker = SymbolHealthTracker(stale_after=timedelta(seconds=60))
+    service = _service(
+        provider=provider,
+        active=active,
+        history=history,
+        controller=controller,
+        health_tracker=tracker,
+    )
+
+    try:
+        first = asyncio.run(
+            service.run_realtime_batch(
+                bar_end=first_end,
+                observed_at=_at(9, 35, 12),
+            )
+        ).context_for(symbol)
+        assert first.health.gaps == (first_end,)
+
+        provider.recovery_rows[symbol] = [_bar(symbol, first_end)]
+        recovery = _recovery_service(
+            provider=provider,
+            active=active,
+            history=history,
+            controller=controller,
+        )
+        repaired = asyncio.run(
+            recovery.repair_detected_gaps(
+                trade_date=first_end.date(),
+                gaps={symbol: first.health.gaps},
+            )
+        )
+        assert repaired.results[0].recovered_ends == (first_end,)
+
+        history.seed_before_target((symbol,), next_end)
+        provider.rows = [_bar(symbol, next_end)]
+        if restart:
+            tracker = SymbolHealthTracker(stale_after=timedelta(seconds=60))
+            tracker.restore((first.health,))
+            service = _service(
+                provider=provider,
+                active=active,
+                history=history,
+                controller=controller,
+                health_tracker=tracker,
+            )
+
+        following = asyncio.run(
+            service.run_realtime_batch(
+                bar_end=next_end,
+                observed_at=_at(9, 40, 12),
+            )
+        ).context_for(symbol)
+    finally:
+        controller.close()
+
+    assert following.five_minute_bar is not None
+    assert following.health.gaps == ()
+    assert following.health.data_health.status.value == "LIVE"
+    assert following.health.actionable is True
 
 
 def test_recovery_yields_before_starting_another_symbol_when_realtime_is_pending() -> None:
@@ -1260,9 +1346,10 @@ def test_intraday_service_fetches_outside_transaction_and_assembles_exact_contex
     assert result.status is IntradayCycleStatus.COMMITTED
     assert result.claim_created is True
     assert result.committed_event is None
-    assert observed == ["fetch", "context", "evaluate", "publish"]
-    assert len(published) == 1
+    assert observed == ["fetch", "context", "evaluate", "publish", "publish"]
+    assert len(published) == 2
     assert published[0].event_type is MonitorEventType.SYMBOL_SNAPSHOT_UPDATED
+    assert published[1].event_type is MonitorEventType.SYMBOL_HEALTH_UPDATED
     assert published[0].payload.symbol == plan.symbol
     assert published[0].payload.result_hash == result.evaluation_result.result_hash
     assert tracker["active"] == 0
@@ -1271,6 +1358,11 @@ def test_intraday_service_fetches_outside_transaction_and_assembles_exact_contex
         assert session.scalar(select(func.count()).select_from(FiveMinuteBarRow)) == 1
         assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+        assert session.scalar(select(func.count()).select_from(EvaluationResultRow)) == 1
+        head = session.get(SymbolDecisionHead, plan.symbol)
+        assert head is not None
+        assert head.result_hash == result.evaluation_result.result_hash
+        assert head.event_sequence == published[0].sequence
 
 
 def test_intraday_service_injects_one_validated_reference_snapshot(
@@ -1387,6 +1479,265 @@ def test_intraday_service_injects_one_validated_reference_snapshot(
     assert snapshot is not None
     assert snapshot.index_code is MarketIndexCode.SHENZHEN_COMPONENT
     assert snapshot.snapshot_hash
+
+
+def test_intraday_batch_uses_prefetched_deadline_minutes_without_second_fetch(
+    runtime_engine: Engine,
+) -> None:
+    first_plan = _runtime_plan()
+    second_payload = first_plan.model_dump(mode="python", round_trip=True)
+    second_payload.update(
+        {
+            "plan_id": "runtime-prefetched-second",
+            "symbol": "000002.SZ",
+            "name": "Runtime Prefetched Second",
+        }
+    )
+    second_plan = TradePlan.model_validate(second_payload)
+    plans = (first_plan, second_plan)
+    bucket_end = _at(9, 35)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    prefetched = {
+        plan.symbol: tuple(
+            _bar(plan.symbol, minute_end)
+            for minute_end in expected_five_minute_ends(bucket_end)
+        )
+        for plan in plans
+    }
+    fetch_count = 0
+
+    async def forbidden_fetch(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        nonlocal fetch_count
+        fetch_count += 1
+        pytest.fail("prefetched deadline evaluation must not fetch quotes")
+
+    tracker = {"active": 0}
+    service = RuntimeEvaluationService(
+        fetch_minutes=forbidden_fetch,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            tracker,
+            now=evaluated_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        committed_event_publisher=lambda _event: None,
+    )
+
+    results = asyncio.run(
+        service.run_intraday_batch_from_minutes(
+            plans=plans,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+            minutes_by_symbol=prefetched,
+        )
+    )
+
+    assert fetch_count == 0
+    assert len(results) == 2
+    assert all(result.status is IntradayCycleStatus.COMMITTED for result in results)
+
+
+def test_plan_rotation_during_fetch_is_discarded_and_next_cycle_still_commits(
+    runtime_engine: Engine,
+) -> None:
+    plan = _runtime_plan()
+    source_text = SAMPLE_PLAN_PATH.read_text(encoding="utf-8")
+    bucket_end = _at(9, 35)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    factory = _runtime_uow_factory(
+        runtime_engine,
+        {"active": 0},
+        now=evaluated_at + timedelta(seconds=1),
+    )
+    with factory() as work:
+        work.plans.save_draft(plan, source_text=source_text)
+        work.plans.activate(
+            plan,
+            expected_revision=0,
+            validation=validate_trade_plan(
+                plan,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        work.commit()
+
+    calls = 0
+
+    async def rotating_fetch(symbol: str, target: datetime) -> list[MinuteBar]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            with factory() as work:
+                work.plans.deactivate(symbol, expected_revision=1)
+                work.commit()
+        return [_bar(symbol, end) for end in expected_five_minute_ends(target)]
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=rotating_fetch,
+        unit_of_work_factory=factory,
+        context_builder=_runtime_context,
+        committed_event_publisher=lambda _event: None,
+    )
+
+    stale_results = asyncio.run(
+        service.run_intraday_batch(
+            plans=(plan,),
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+    assert stale_results == ()
+    inactive_restore = service.load_persisted_symbol_health((plan.symbol,))
+    assert inactive_restore[0].activation_revision == 2
+    assert inactive_restore[0].snapshot is None
+    with factory() as work:
+        assert work.projections.get_decision_head(plan.symbol) is None
+        work.plans.activate(
+            plan,
+            expected_revision=2,
+            validation=validate_trade_plan(
+                plan,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        work.commit()
+
+    recovered = asyncio.run(
+        service.run_intraday_batch(
+            plans=(plan,),
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at + timedelta(seconds=1),
+        )
+    )
+    assert len(recovered) == 1
+    assert recovered[0].status is IntradayCycleStatus.COMMITTED
+    assert calls == 2
+
+
+def test_stale_activation_error_is_a_typed_expected_runtime_outcome() -> None:
+    error = StaleActivationGenerationError("003043.SZ")
+
+    assert error.symbol == "003043.SZ"
+    assert "003043.SZ" in str(error)
+
+
+def test_deadline_coordinator_starts_one_stock_batch_and_reuses_it_for_every_plan(
+    runtime_engine: Engine,
+) -> None:
+    first_plan = _runtime_plan()
+    second_payload = first_plan.model_dump(mode="python", round_trip=True)
+    second_payload.update(
+        {
+            "plan_id": "runtime-deadline-second",
+            "symbol": "000002.SZ",
+            "name": "Runtime Deadline Second",
+        }
+    )
+    plans = (first_plan, TradePlan.model_validate(second_payload))
+    symbols = tuple(plan.symbol for plan in plans)
+    bucket_end = _at(9, 35)
+    observed_at = bucket_end + timedelta(seconds=12)
+    provider = _FakeProvider([_bar(symbol, bucket_end) for symbol in symbols])
+    history = _FakeHistory()
+    history.seed_before_target(symbols, bucket_end)
+    controller = _controller(observed_at)
+    symbol_service = _service(
+        provider=provider,
+        active=_ActiveSymbols(symbols),
+        history=history,
+        controller=controller,
+    )
+    fetch_count = 0
+
+    async def forbidden_fetch(_symbol: str, _target: datetime) -> list[MinuteBar]:
+        nonlocal fetch_count
+        fetch_count += 1
+        pytest.fail("deadline evaluation must reuse its realtime batch")
+
+    evaluation_service = RuntimeEvaluationService(
+        fetch_minutes=forbidden_fetch,
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            {"active": 0},
+            now=observed_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        committed_event_publisher=lambda _event: None,
+    )
+    coordinator = RuntimeDeadlineCoordinator(
+        clock=_ImmediateClock(observed_at),
+        active_plans=lambda: plans,
+        symbol_service=symbol_service,
+        evaluation_service=evaluation_service,
+    )
+    deadline = MarketDeadline(
+        kind=DeadlineKind.REALTIME_MINUTE,
+        trade_date=bucket_end.date(),
+        due_at=observed_at,
+        bar_end=bucket_end,
+    )
+
+    try:
+        results = asyncio.run(coordinator.run_deadline(deadline))
+    finally:
+        controller.close()
+
+    assert provider.calls == [symbols]
+    assert fetch_count == 0
+    assert len(results) == len(plans)
+    assert all(result.status is IntradayCycleStatus.COMMITTED for result in results)
+
+
+@pytest.mark.parametrize("minute", (31, 35))
+def test_deadline_uses_immutable_plan_symbol_snapshot_when_active_set_changes(
+    runtime_engine: Engine,
+    minute: int,
+) -> None:
+    plan = _runtime_plan()
+    bar_end = _at(9, minute)
+    observed_at = bar_end + timedelta(seconds=12)
+    active_symbols = _ActiveSymbols((plan.symbol,))
+    provider = _FakeProvider([])
+    history = _FakeHistory()
+    controller = _controller(observed_at)
+    symbol_service = _service(
+        provider=provider,
+        active=active_symbols,
+        history=history,
+        controller=controller,
+    )
+    evaluation_service = RuntimeEvaluationService(
+        fetch_minutes=lambda _symbol, _target: (),  # type: ignore[arg-type]
+        unit_of_work_factory=_runtime_uow_factory(
+            runtime_engine,
+            {"active": 0},
+            now=observed_at + timedelta(seconds=1),
+        ),
+        context_builder=_runtime_context,
+        committed_event_publisher=lambda _event: None,
+    )
+
+    def plans_before_concurrent_activation() -> tuple[TradePlan, ...]:
+        active_symbols.symbols = (plan.symbol, "000002.SZ")
+        return (plan,)
+
+    coordinator = RuntimeDeadlineCoordinator(
+        clock=_ImmediateClock(observed_at),
+        active_plans=plans_before_concurrent_activation,
+        symbol_service=symbol_service,
+        evaluation_service=evaluation_service,
+    )
+    deadline = MarketDeadline(
+        kind=DeadlineKind.REALTIME_MINUTE,
+        trade_date=bar_end.date(),
+        due_at=observed_at,
+        bar_end=bar_end,
+    )
+    try:
+        assert asyncio.run(coordinator.run_deadline(deadline)) == ()
+    finally:
+        controller.close()
+    assert provider.calls == [(plan.symbol,)]
 
 
 def test_intraday_batch_unions_requirements_and_shares_one_snapshot_across_plans(
@@ -1574,6 +1925,8 @@ def test_intraday_service_latest_quote_cannot_hide_gapped_current_day_context(
     with create_session_factory(runtime_engine)() as session:
         assert session.scalar(select(func.count()).select_from(MinuteBarRow)) == 1
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(EvaluationResultRow)) == 0
+        assert session.scalar(select(func.count()).select_from(SymbolDecisionHead)) == 0
 
     expected = expected_five_minute_ends(bucket_end)
 
@@ -1602,7 +1955,8 @@ def test_intraday_service_latest_quote_cannot_hide_gapped_current_day_context(
 
     assert recovery_result.status is IntradayCycleStatus.COMMITTED
     assert [event.event_type for event in recovery_publications] == [
-        MonitorEventType.SYMBOL_SNAPSHOT_UPDATED
+        MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
     ]
     assert recovery_result.facts is not None
     assert recovery_result.facts.current_day_minutes == tuple(
@@ -1654,7 +2008,8 @@ def test_intraday_service_assembles_full_240_minute_provisional_close(
 
     assert result.status is IntradayCycleStatus.COMMITTED
     assert [event.event_type for event in publications] == [
-        MonitorEventType.SYMBOL_SNAPSHOT_UPDATED
+        MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
     ]
     assert result.facts is not None
     assert len(result.facts.current_day_minutes) == 240
@@ -1711,6 +2066,8 @@ def test_intraday_service_rolls_back_atomic_application_then_restarts_exactly_on
 
     with create_session_factory(runtime_engine)() as session:
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(EvaluationResultRow)) == 0
+        assert session.scalar(select(func.count()).select_from(SymbolDecisionHead)) == 0
         assert session.scalar(select(func.count()).select_from(RiskState)) == 0
         assert session.scalar(select(func.count()).select_from(ZoneEpisode)) == 0
         assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
@@ -1721,9 +2078,13 @@ def test_intraday_service_rolls_back_atomic_application_then_restarts_exactly_on
     def publish_after_commit(event) -> None:
         assert tracker["active"] == 0
         with create_session_factory(runtime_engine)() as session:
-            assert session.get(AlertEventRow, str(event.event_id)) is not None
+            if event.event_type is MonitorEventType.ALERT_CREATED:
+                assert session.get(AlertEventRow, str(event.event_id)) is not None
             assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
-        published.append(event.event_id)
+            assert session.scalar(select(func.count()).select_from(EvaluationResultRow)) == 1
+            assert session.scalar(select(func.count()).select_from(SymbolDecisionHead)) == 1
+        if event.event_type is MonitorEventType.ALERT_CREATED:
+            published.append(event.event_id)
 
     def create_service() -> RuntimeEvaluationService:
         return RuntimeEvaluationService(
@@ -1768,6 +2129,8 @@ def test_intraday_service_rolls_back_atomic_application_then_restarts_exactly_on
     assert tracker["active"] == 0
     with create_session_factory(runtime_engine)() as session:
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+        assert session.scalar(select(func.count()).select_from(EvaluationResultRow)) == 1
+        assert session.scalar(select(func.count()).select_from(SymbolDecisionHead)) == 1
         assert session.scalar(select(func.count()).select_from(ZoneEpisode)) == 1
         assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 1
         assert session.scalar(select(func.count()).select_from(AuditLog)) == 2
@@ -1815,6 +2178,8 @@ def test_intraday_service_publisher_failure_cannot_undo_committed_outbox(
     assert tracker["active"] == 0
     with create_session_factory(runtime_engine)() as session:
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+        assert session.scalar(select(func.count()).select_from(EvaluationResultRow)) == 1
+        assert session.scalar(select(func.count()).select_from(SymbolDecisionHead)) == 1
         assert session.scalar(select(func.count()).select_from(ZoneEpisode)) == 1
         assert session.get(AlertEventRow, str(event_id)) is not None
 
@@ -1976,7 +2341,7 @@ def test_intraday_service_same_cause_commits_later_bucket_without_republish(
     first_bucket = _at(9, 40)
     later_bucket = _at(9, 45)
     tracker = {"active": 0}
-    published: list[UUID] = []
+    published: list[MonitorEvent] = []
     event_ids = iter(
         (
             UUID("00000000-0000-0000-0000-000000000034"),
@@ -2021,7 +2386,9 @@ def test_intraday_service_same_cause_commits_later_bucket_without_republish(
     assert later.committed_event is None
     assert [event.event_type for event in published] == [
         MonitorEventType.ALERT_CREATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
         MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
     ]
     assert published[0].event_id == UUID("00000000-0000-0000-0000-000000000034")
     with create_session_factory(runtime_engine)() as session:
@@ -2083,7 +2450,9 @@ def test_official_close_uses_trusted_post_fetch_observation_time(
 
     assert result.status is OfficialCloseCycleStatus.COMMITTED
     assert [event.event_type for event in publications] == [
-        MonitorEventType.SYMBOL_SNAPSHOT_UPDATED
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
+        MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
     ]
     assert result.facts is not None
     assert result.facts.evaluated_at == observed_at
@@ -2143,7 +2512,9 @@ def test_completed_official_close_short_circuits_later_attempt_after_restart(
     )
     assert first.status is OfficialCloseCycleStatus.COMMITTED
     assert [event.event_type for event in publications] == [
-        MonitorEventType.SYMBOL_SNAPSHOT_UPDATED
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
+        MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
     ]
 
     restarted = RuntimeEvaluationService(
@@ -2191,6 +2562,7 @@ def test_official_close_accepts_scheduler_attempt_beyond_ten(runtime_engine: Eng
     trade_date = date(2026, 8, 24)
     evaluated_at = datetime.combine(trade_date, time(17, 1), SHANGHAI)
     tracker = {"active": 0}
+    publications: list[MonitorEvent] = []
 
     async def fetch_official_daily(
         _symbol: str,
@@ -2212,7 +2584,7 @@ def test_official_close_accepts_scheduler_attempt_beyond_ten(runtime_engine: Eng
         context_builder=_runtime_context,
         official_context_builder=_official_context,
         evaluator=evaluate,
-        committed_event_publisher=lambda _event: pytest.fail("pending cannot publish"),
+        committed_event_publisher=publications.append,
     )
 
     result = asyncio.run(
@@ -2226,6 +2598,9 @@ def test_official_close_accepts_scheduler_attempt_beyond_ten(runtime_engine: Eng
 
     assert result.status is OfficialCloseCycleStatus.CLOSE_PENDING
     assert result.close_attempt == 11
+    assert [event.event_type for event in publications] == [
+        MonitorEventType.SYMBOL_HEALTH_UPDATED
+    ]
 
 
 def test_official_close_attempts_persist_pending_then_commit_matching_official_risk(
@@ -2285,10 +2660,12 @@ def test_official_close_attempts_persist_pending_then_commit_matching_official_r
     def publish_after_commit(event) -> None:
         assert tracker["active"] == 0
         with create_session_factory(runtime_engine)() as session:
-            assert session.get(AlertEventRow, str(event.event_id)) is not None
-            assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
-            assert session.scalar(select(func.count()).select_from(RiskState)) == 1
-        published.append(event.event_id)
+            if event.event_type is MonitorEventType.ALERT_CREATED:
+                assert session.get(AlertEventRow, str(event.event_id)) is not None
+                assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 1
+                assert session.scalar(select(func.count()).select_from(RiskState)) == 1
+        if event.event_type is MonitorEventType.ALERT_CREATED:
+            published.append(event.event_id)
 
     service = RuntimeEvaluationService(
         fetch_minutes=lambda _symbol, _target: pytest.fail("intraday fetch is out of scope"),
@@ -2334,6 +2711,7 @@ def test_official_close_attempts_persist_pending_then_commit_matching_official_r
         assert health.status == "CLOSE_PENDING"
         assert health.latest_bar_end is None
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
+        assert session.scalar(select(func.count()).select_from(PendingOfficialClose)) == 1
         assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 1
 
     third = asyncio.run(
@@ -2364,6 +2742,9 @@ def test_official_close_attempts_persist_pending_then_commit_matching_official_r
         assert ledger is not None
         assert ledger.evaluation_kind == "OFFICIAL_CLOSE"
         assert ledger.target_value == trade_date.isoformat()
+        assert session.scalar(select(func.count()).select_from(EvaluationResultRow)) == 1
+        assert session.scalar(select(func.count()).select_from(SymbolDecisionHead)) == 1
+        assert session.scalar(select(func.count()).select_from(PendingOfficialClose)) == 0
         assert session.scalar(select(func.count()).select_from(DailyBarRow)) == 2
         risk = session.get(RiskState, plan.symbol)
         assert risk is not None
@@ -2392,6 +2773,7 @@ def test_official_close_rejects_provisional_fetch_and_mixed_context(
     )
     tracker = {"active": 0}
     fetched: list[DailyBar] = [provisional]
+    publications: list[MonitorEvent] = []
 
     async def fetch_official_daily(
         _symbol: str,
@@ -2416,7 +2798,7 @@ def test_official_close_rejects_provisional_fetch_and_mixed_context(
         context_builder=_runtime_context,
         official_context_builder=mixed_context,
         evaluator=evaluate,
-        committed_event_publisher=lambda _event: pytest.fail("invalid evidence cannot publish"),
+        committed_event_publisher=publications.append,
     )
 
     pending = asyncio.run(
@@ -2445,6 +2827,11 @@ def test_official_close_rejects_provisional_fetch_and_mixed_context(
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
         assert session.scalar(select(func.count()).select_from(RiskState)) == 0
         assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
+    assert publications
+    assert all(
+        event.event_type is MonitorEventType.SYMBOL_HEALTH_UPDATED
+        for event in publications
+    )
 
 
 def test_official_evaluation_failure_retains_pending_and_blocks_later_close(
@@ -2455,6 +2842,7 @@ def test_official_evaluation_failure_retains_pending_and_blocks_later_close(
     next_date = date(2026, 8, 25)
     tracker = {"active": 0}
     calls: list[date] = []
+    publications: list[MonitorEvent] = []
 
     async def fetch_official_daily(
         _symbol: str,
@@ -2485,7 +2873,7 @@ def test_official_evaluation_failure_retains_pending_and_blocks_later_close(
         context_builder=_runtime_context,
         official_context_builder=_official_context,
         evaluator=fail_evaluation,
-        committed_event_publisher=lambda _event: pytest.fail("failed evaluation cannot publish"),
+        committed_event_publisher=publications.append,
     )
 
     with pytest.raises(RuntimeError, match="evaluation failed"):
@@ -2515,6 +2903,11 @@ def test_official_evaluation_failure_retains_pending_and_blocks_later_close(
         assert session.scalar(select(func.count()).select_from(EvaluationLedger)) == 0
         assert session.scalar(select(func.count()).select_from(RiskState)) == 0
         assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
+    assert publications
+    assert all(
+        event.event_type is MonitorEventType.SYMBOL_HEALTH_UPDATED
+        for event in publications
+    )
 
 
 def test_official_close_rolls_back_application_then_restarts_exactly_once(
@@ -2532,6 +2925,10 @@ def test_official_close_rolls_back_application_then_restarts_exactly_once(
     tracker = {"active": 0}
     published: list[UUID] = []
     event_id = UUID("00000000-0000-0000-0000-000000000037")
+
+    def publish_alert(event: MonitorEvent) -> None:
+        if event.event_type is MonitorEventType.ALERT_CREATED:
+            published.append(event.event_id)
 
     async def fetch_official_daily(
         _symbol: str,
@@ -2554,7 +2951,7 @@ def test_official_close_rolls_back_application_then_restarts_exactly_once(
             context_builder=_runtime_context,
             official_context_builder=_official_context,
             evaluator=evaluate,
-            committed_event_publisher=lambda event: published.append(event.event_id),
+            committed_event_publisher=publish_alert,
             event_id_factory=lambda: event_id,
         )
 
@@ -2691,8 +3088,13 @@ def test_unresolved_close_pending_blocks_next_day_until_original_date_resolves(
     assert resolved.status is OfficialCloseCycleStatus.COMMITTED
     assert next_close.status is OfficialCloseCycleStatus.COMMITTED
     assert [event.event_type for event in publications] == [
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
         MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
         MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
     ]
     assert calls == [first_date, first_date, next_date]
     with create_session_factory(runtime_engine)() as session:
@@ -2740,7 +3142,7 @@ def test_concurrent_official_close_attempts_serialize_before_next_day_transition
         context_builder=_runtime_context,
         official_context_builder=_official_context,
         evaluator=evaluate,
-        committed_event_publisher=lambda _event: pytest.fail("pending cannot publish"),
+        committed_event_publisher=lambda _event: None,
     )
 
     async def run_both():

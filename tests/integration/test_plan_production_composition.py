@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json, load_plan_yaml
 from trade_plan_monitor.domain.plan_validation import DraftReviewIssue
+from trade_plan_monitor.state.database import create_sqlite_engine, upgrade_database
 from trade_plan_monitor.web import plan_service as plan_service_module
 from trade_plan_monitor.web.app import create_app, create_production_app
 from trade_plan_monitor.web.errors import ApiError
@@ -137,6 +138,11 @@ def test_production_app_lazily_injects_the_persistent_plan_service(
         assert not database_path.exists()
         assert not hasattr(app.state, "plan_operation_service")
         with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            inactive = client.get("/api/v1/plan-activation-states/003043.SZ")
+            assert inactive.status_code == 200
+            assert inactive.json()["active"] is False
+            assert inactive.json()["planVersionId"] is None
+            assert inactive.json()["revision"] == 0
             response = client.get("/api/v1/plan-versions")
             assert response.status_code == 200
             assert response.json() == {"items": [], "limit": 20, "offset": 0, "total": 0}
@@ -786,6 +792,28 @@ def test_plan_lifecycle_rejects_backtest_database_without_modifying_it(tmp_path:
         assert connection.execute("SELECT run_id FROM backtest_run").fetchall() == [
             ("preserve-me",)
         ]
+
+
+def test_plan_lifecycle_accepts_the_live_market_index_projection_tables_after_restart(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "monitor.sqlite3"
+    engine = create_sqlite_engine(database_path)
+    try:
+        upgrade_database(engine)
+    finally:
+        engine.dispose()
+
+    async def scenario() -> None:
+        first = PersistentPlanWebLifecycle(database_path=database_path)
+        await first.start()
+        await first.stop()
+
+        restarted = PersistentPlanWebLifecycle(database_path=database_path)
+        await restarted.start()
+        await restarted.stop()
+
+    asyncio.run(scenario())
 
 
 def test_unresolved_review_remains_an_activation_blocker_after_restart(

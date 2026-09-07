@@ -184,7 +184,7 @@ class AlertView(ApiValue):
     """One canonical deterministic reminder projected for the local alert center."""
 
     event_id: UUID = Field(strict=False)
-    sequence: Annotated[int, Field(strict=True, gt=0)]
+    sequence: Annotated[int, Field(strict=True, gt=0, le=2**53 - 1)]
     dedup_key: Sha256Hex
     plan_id: str = Field(strict=True, min_length=1, max_length=128)
     plan_version: Annotated[int, Field(strict=True, gt=0)]

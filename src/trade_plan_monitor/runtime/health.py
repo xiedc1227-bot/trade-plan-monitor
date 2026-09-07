@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Self
+from uuid import UUID, uuid4
 
 from pydantic import (
+    UUID4,
     BaseModel,
     ConfigDict,
     Field,
@@ -17,7 +19,10 @@ from pydantic import (
 )
 
 from trade_plan_monitor.decision.models import DataHealthSnapshot, DataHealthStatus
-from trade_plan_monitor.market_data.aggregation import expected_five_minute_ends
+from trade_plan_monitor.market_data.aggregation import (
+    expected_five_minute_ends,
+    five_minute_bucket_end,
+)
 from trade_plan_monitor.market_data.models import (
     AShareSymbol,
     MinuteBar,
@@ -28,6 +33,7 @@ from trade_plan_monitor.market_data.sessions import session_for_minute_end
 
 _MAX_ACTIVE_SYMBOLS = 10
 _MAX_GAPS = 240
+LEGACY_RUNTIME_GENERATION = UUID("00000000-0000-4000-8000-000000000001")
 
 NonNegativeInteger = Annotated[int, Field(strict=True, ge=0)]
 HealthName = Annotated[
@@ -226,6 +232,7 @@ class RuntimeHealthSnapshot(RuntimeHealthDetails):
 
     status: RuntimeServiceStatus
     read_only: bool = Field(strict=True)
+    runtime_generation: UUID4 = Field(default_factory=uuid4, exclude=True)
     observed_at: ShanghaiDatetime
     started_at: ShanghaiDatetime
     stopped_at: ShanghaiDatetime | None = None
@@ -299,6 +306,58 @@ class RuntimeHealthSnapshot(RuntimeHealthDetails):
             raise ValueError(f"{label} age must match the observation")
 
 
+def live_runtime_started_at(
+    value: object,
+    *,
+    observed_at: datetime,
+) -> datetime | None:
+    """Return the active generation only while scheduler progress is not overdue."""
+
+    if type(observed_at) is not datetime or observed_at.utcoffset() != timedelta(hours=8):
+        raise ValueError("runtime liveness observation must use Asia/Shanghai")
+    status = getattr(value, "status", None)
+    read_only = getattr(value, "read_only", None)
+    started_at = getattr(value, "started_at", None)
+    next_poll_at = getattr(value, "next_poll_at", None)
+    if (
+        not isinstance(status, RuntimeServiceStatus)
+        or type(read_only) is not bool
+        or type(started_at) is not datetime
+        or started_at.utcoffset() != timedelta(hours=8)
+        or (
+            next_poll_at is not None
+            and (
+                type(next_poll_at) is not datetime
+                or next_poll_at.utcoffset() != timedelta(hours=8)
+            )
+        )
+    ):
+        raise ValueError("runtime liveness requires a validated lifecycle snapshot")
+    if (
+        status is not RuntimeServiceStatus.RUNNING
+        or read_only
+        or next_poll_at is None
+        or observed_at < started_at
+        or observed_at > next_poll_at
+    ):
+        return None
+    return started_at
+
+
+def live_runtime_identity(
+    value: object,
+    *,
+    observed_at: datetime,
+) -> tuple[datetime, UUID] | None:
+    """Return exact causal runtime identity only while its progress is live."""
+
+    started_at = live_runtime_started_at(value, observed_at=observed_at)
+    generation = getattr(value, "runtime_generation", None)
+    if started_at is None or type(generation) is not UUID or generation.version != 4:
+        return None
+    return started_at, generation
+
+
 def _validation_error_without_inputs(error: ValidationError) -> ValidationError:
     line_errors = error.errors(include_url=False)
     for line_error in line_errors:
@@ -319,6 +378,7 @@ class SymbolHealthSnapshot(_RuntimeHealthValue):
     data_health: DataHealthSnapshot
     gaps: tuple[ShanghaiDatetime, ...] = Field(default=(), max_length=_MAX_GAPS)
     consecutive_incomplete_buckets: NonNegativeInteger
+    last_required_bucket_end: ShanghaiDatetime | None = None
     error_code: SymbolHealthErrorCode | None
 
     @property
@@ -343,6 +403,14 @@ class SymbolHealthSnapshot(_RuntimeHealthValue):
             raise ValueError("health gaps must be unique and strictly ordered")
         if any(gap > self.target_end for gap in self.gaps):
             raise ValueError("health gaps cannot follow the observed target")
+        if self.last_required_bucket_end is not None and (
+            five_minute_bucket_end(self.last_required_bucket_end)
+            != self.last_required_bucket_end
+            or self.last_required_bucket_end > self.target_end
+        ):
+            raise ValueError("last required bucket must be canonical and not follow target")
+        if self.consecutive_incomplete_buckets > 0 and self.last_required_bucket_end is None:
+            raise ValueError("an incomplete streak requires its last required bucket")
         if self.actionable and (self.gaps or self.error_code is not None):
             raise ValueError("actionable health cannot retain a gap or error")
         if not self.actionable and self.error_code is None:
@@ -425,6 +493,32 @@ class SymbolHealthTracker:
         self._incomplete_streaks: dict[str, int] = {}
         self._last_required_bucket: dict[str, datetime] = {}
 
+    def restore(self, snapshots: tuple[SymbolHealthSnapshot, ...]) -> None:
+        """Hydrate exact durable tracker state before the first post-restart batch."""
+
+        if type(snapshots) is not tuple or len(snapshots) > _MAX_ACTIVE_SYMBOLS:
+            raise ValueError("health snapshots must be a tuple capped at 10")
+        if any(type(snapshot) is not SymbolHealthSnapshot for snapshot in snapshots):
+            raise TypeError("health snapshots must contain exact SymbolHealthSnapshot values")
+        symbols = tuple(snapshot.symbol for snapshot in snapshots)
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("health snapshot symbols must be unique")
+        for snapshot in snapshots:
+            previous = self._snapshots.get(snapshot.symbol)
+            if previous is not None and previous != snapshot:
+                raise ValueError("health tracker cannot overwrite hydrated state")
+            self._snapshots[snapshot.symbol] = snapshot
+            self._gaps[snapshot.symbol] = set(snapshot.gaps)
+            self._incomplete_streaks[snapshot.symbol] = (
+                snapshot.consecutive_incomplete_buckets
+            )
+            if snapshot.last_required_bucket_end is None:
+                self._last_required_bucket.pop(snapshot.symbol, None)
+            else:
+                self._last_required_bucket[snapshot.symbol] = (
+                    snapshot.last_required_bucket_end
+                )
+
     def retain_only(self, symbols: tuple[str, ...]) -> None:
         """Discard disabled in-memory trackers so reactivation starts independently."""
 
@@ -446,6 +540,33 @@ class SymbolHealthTracker:
             if symbol in active
         }
 
+    def replace(self, symbol: str, snapshot: SymbolHealthSnapshot | None) -> None:
+        """Replace one symbol state when its activation generation changes."""
+
+        if type(symbol) is not str or not symbol:
+            raise ValueError("symbol must be a non-empty string")
+        if snapshot is not None and (
+            type(snapshot) is not SymbolHealthSnapshot or snapshot.symbol != symbol
+        ):
+            raise ValueError("replacement snapshot must match the exact symbol")
+        self._snapshots.pop(symbol, None)
+        self._gaps.pop(symbol, None)
+        self._incomplete_streaks.pop(symbol, None)
+        self._last_required_bucket.pop(symbol, None)
+        if snapshot is not None:
+            self.restore((snapshot,))
+
+    def gaps_for(self, symbol: str, *, trade_date: date) -> tuple[datetime, ...]:
+        """Return retained canonical gaps for one symbol and trading date."""
+
+        if type(symbol) is not str or not symbol:
+            raise ValueError("symbol must be a non-empty string")
+        if isinstance(trade_date, datetime) or not isinstance(trade_date, date):
+            raise TypeError("trade_date must be a date")
+        return tuple(
+            sorted(gap for gap in self._gaps.get(symbol, set()) if gap.date() == trade_date)
+        )
+
     def record_minute(
         self,
         *,
@@ -459,8 +580,8 @@ class SymbolHealthTracker:
 
         if session_for_minute_end(bar_end) is None:
             raise ValueError("bar_end must be a canonical monitoring minute")
-        if type(minutes) is not tuple or len(minutes) > 1:
-            raise ValueError("minute health input must be a tuple of at most one value")
+        if type(minutes) is not tuple or len(minutes) > 1 + _MAX_GAPS:
+            raise ValueError("minute health input exceeds the target plus retained-gap bound")
         return self._record(
             symbol=symbol,
             target_end=bar_end,
@@ -483,8 +604,8 @@ class SymbolHealthTracker:
         """Record one required five-minute bucket without affecting another symbol."""
 
         expected = expected_five_minute_ends(bucket_end)
-        if type(minutes) is not tuple or len(minutes) > len(expected):
-            raise ValueError("bucket minutes must be a tuple of at most five values")
+        if type(minutes) is not tuple or len(minutes) > len(expected) + _MAX_GAPS:
+            raise ValueError("bucket health input exceeds the target plus retained-gap bound")
         return self._record(
             symbol=symbol,
             target_end=bucket_end,
@@ -513,9 +634,6 @@ class SymbolHealthTracker:
         minute_ends = tuple(minute.bar_end for minute in minutes)
         if len(minute_ends) != len(set(minute_ends)):
             raise ValueError("bucket minutes cannot contain duplicate identities")
-        if any(minute_end not in expected for minute_end in minute_ends):
-            raise ValueError("bucket minutes must belong to the required bucket")
-
         previous = self._snapshots.get(symbol)
         if previous is not None and target_end < previous.target_end:
             raise ValueError("health target cannot regress")
@@ -526,6 +644,8 @@ class SymbolHealthTracker:
 
         missing = set(expected).difference(minute_ends)
         retained_gaps = set(self._gaps.get(symbol, set())) if same_trade_date else set()
+        if any(minute_end not in set(expected) | retained_gaps for minute_end in minute_ends):
+            raise ValueError("bucket minutes must belong to the target or a retained gap")
         retained_gaps.difference_update(minute_ends)
         retained_gaps.update(missing)
         gaps = tuple(sorted(retained_gaps))
@@ -593,6 +713,7 @@ class SymbolHealthTracker:
             ),
             gaps=gaps,
             consecutive_incomplete_buckets=incomplete_streak,
+            last_required_bucket_end=last_required_bucket,
             error_code=error_code,
         )
         self._snapshots[symbol] = snapshot
@@ -621,6 +742,7 @@ __all__ = [
     "DatabaseHealthSnapshot",
     "DeliveryHealthSnapshot",
     "ExecutorHealthSnapshot",
+    "LEGACY_RUNTIME_GENERATION",
     "ProviderHealthSnapshot",
     "RuntimeGapSnapshot",
     "RuntimeHealthDetails",
@@ -631,5 +753,7 @@ __all__ = [
     "SymbolHealthSnapshot",
     "SymbolHealthTracker",
     "SystemHealthSnapshot",
+    "live_runtime_started_at",
+    "live_runtime_identity",
     "summarize_system_health",
 ]

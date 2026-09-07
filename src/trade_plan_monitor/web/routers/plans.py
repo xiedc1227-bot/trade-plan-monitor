@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal, Protocol, Self, cast
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Path, Query, Request, status
 from pydantic import Field, field_validator, model_validator
@@ -521,7 +523,13 @@ async def get_plan_activation_state(
 ) -> ActivePlanView:
     value = await service.get_plan_activation_state(symbol=symbol)
     if value is None:
-        raise ApiError(ApiErrorCode.NOT_FOUND)
+        value = ActivePlanView(
+            symbol=symbol,
+            plan_version_id=None,
+            active=False,
+            revision=0,
+            changed_at=datetime.now(ZoneInfo("Asia/Shanghai")),
+        )
     result = validate_api_response(value, ActivePlanView)
     if result.symbol != symbol:
         raise RuntimeError("plan service returned a mismatched activation state")

@@ -10,6 +10,8 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     ForeignKey,
+    ForeignKeyConstraint,
+    Index,
     Integer,
     String,
     Text,
@@ -284,6 +286,16 @@ class RiskState(Base):
 class EvaluationLedger(Base):
     __tablename__ = "evaluation_ledger"
     __table_args__ = (
+        Index(
+            "uq_evaluation_ledger_identity_hash",
+            "plan_hash",
+            "symbol",
+            "evaluation_kind",
+            "target_value",
+            "formula_version",
+            "result_hash",
+            unique=True,
+        ),
         CheckConstraint(
             "evaluation_kind IN ('INTRADAY', 'OFFICIAL_CLOSE')",
             name="ck_evaluation_ledger_kind",
@@ -308,6 +320,297 @@ class EvaluationLedger(Base):
     formula_version: Mapped[str] = mapped_column(String(32), primary_key=True)
     result_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
     evaluated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
+class EvaluationResult(Base):
+    """Immutable complete decision result attached to an existing ledger claim."""
+
+    __tablename__ = "evaluation_result"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            (
+                "plan_hash",
+                "symbol",
+                "evaluation_kind",
+                "target_value",
+                "formula_version",
+                "result_hash",
+            ),
+            (
+                "evaluation_ledger.plan_hash",
+                "evaluation_ledger.symbol",
+                "evaluation_ledger.evaluation_kind",
+                "evaluation_ledger.target_value",
+                "evaluation_ledger.formula_version",
+                "evaluation_ledger.result_hash",
+            ),
+            name="fk_evaluation_result_ledger",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "plan_hash",
+            "symbol",
+            "evaluation_kind",
+            "target_value",
+            "formula_version",
+            "result_hash",
+            name="uq_evaluation_result_identity_hash",
+        ),
+        CheckConstraint(
+            "evaluation_kind IN ('INTRADAY', 'OFFICIAL_CLOSE')",
+            name="ck_evaluation_result_kind",
+        ),
+        CheckConstraint(
+            "(evaluation_kind = 'INTRADAY' "
+            "AND length(target_value) = 25 "
+            "AND substr(target_value, 11, 1) = 'T' "
+            "AND substr(target_value, 20, 6) = '+08:00') "
+            "OR (evaluation_kind = 'OFFICIAL_CLOSE' "
+            "AND length(target_value) = 10 "
+            "AND substr(target_value, 5, 1) = '-' "
+            "AND substr(target_value, 8, 1) = '-')",
+            name="ck_evaluation_result_target_shape",
+        ),
+        CheckConstraint("length(result_hash) = 64", name="ck_evaluation_result_hash"),
+        CheckConstraint("schema_version = 1", name="ck_evaluation_result_schema_version"),
+    )
+
+    plan_hash: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    evaluation_kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    target_value: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH), primary_key=True)
+    formula_version: Mapped[str] = mapped_column(String(32), primary_key=True)
+    result_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    result_json: Mapped[str] = mapped_column(Text)
+    position_lots_json: Mapped[str] = mapped_column(Text)
+    evaluated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    source_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
+    schema_version: Mapped[int] = mapped_column(Integer)
+
+
+class SymbolDecisionHead(Base):
+    """Current complete decision result and committed event for one symbol."""
+
+    __tablename__ = "symbol_decision_head"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            (
+                "plan_hash",
+                "symbol",
+                "evaluation_kind",
+                "target_value",
+                "formula_version",
+                "result_hash",
+            ),
+            (
+                "evaluation_result.plan_hash",
+                "evaluation_result.symbol",
+                "evaluation_result.evaluation_kind",
+                "evaluation_result.target_value",
+                "evaluation_result.formula_version",
+                "evaluation_result.result_hash",
+            ),
+            name="fk_symbol_decision_head_result",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "event_sequence",
+            name="uq_symbol_decision_head_event_sequence",
+        ),
+        CheckConstraint(
+            "evaluation_kind IN ('INTRADAY', 'OFFICIAL_CLOSE')",
+            name="ck_symbol_decision_head_kind",
+        ),
+        CheckConstraint(
+            "(evaluation_kind = 'INTRADAY' "
+            "AND length(target_value) = 25 "
+            "AND substr(target_value, 11, 1) = 'T' "
+            "AND substr(target_value, 20, 6) = '+08:00') "
+            "OR (evaluation_kind = 'OFFICIAL_CLOSE' "
+            "AND length(target_value) = 10 "
+            "AND substr(target_value, 5, 1) = '-' "
+            "AND substr(target_value, 8, 1) = '-')",
+            name="ck_symbol_decision_head_target_shape",
+        ),
+        CheckConstraint(
+            "event_sequence >= 1",
+            name="ck_symbol_decision_head_event_sequence_positive",
+        ),
+        CheckConstraint(
+            "activation_revision >= 1",
+            name="ck_symbol_decision_head_activation_revision_positive",
+        ),
+        CheckConstraint(
+            "length(result_hash) = 64",
+            name="ck_symbol_decision_head_result_hash",
+        ),
+    )
+
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    plan_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    evaluation_kind: Mapped[str] = mapped_column(String(16))
+    target_value: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    formula_version: Mapped[str] = mapped_column(String(32))
+    result_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    activation_revision: Mapped[int] = mapped_column(Integer)
+    event_sequence: Mapped[int] = mapped_column(
+        ForeignKey("monitor_event.sequence", ondelete="RESTRICT")
+    )
+    updated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
+class SymbolHealthProjection(Base):
+    """Complete current public health projection with a monotonic revision."""
+
+    __tablename__ = "symbol_health_projection"
+    __table_args__ = (
+        CheckConstraint(
+            "revision >= 1",
+            name="ck_symbol_health_projection_revision_positive",
+        ),
+        CheckConstraint(
+            "schema_version = 1",
+            name="ck_symbol_health_projection_schema_version",
+        ),
+        CheckConstraint(
+            "activation_revision >= 1",
+            name="ck_symbol_health_projection_activation_revision_positive",
+        ),
+        CheckConstraint(
+            "length(runtime_generation) = 36",
+            name="ck_symbol_health_projection_runtime_generation_uuid",
+        ),
+    )
+
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    activation_revision: Mapped[int] = mapped_column(Integer)
+    runtime_generation: Mapped[str] = mapped_column(String(36))
+    projection_json: Mapped[str] = mapped_column(Text)
+    observed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    schema_version: Mapped[int] = mapped_column(Integer)
+
+
+class PendingOfficialClose(Base):
+    """Recoverable unresolved official-close identity and resume payload."""
+
+    __tablename__ = "pending_official_close"
+    __table_args__ = (
+        UniqueConstraint("symbol", name="uq_pending_official_close_symbol"),
+        CheckConstraint(
+            "length(plan_hash) = 64",
+            name="ck_pending_official_close_plan_hash",
+        ),
+    )
+
+    plan_hash: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    trade_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    formula_version: Mapped[str] = mapped_column(String(32), primary_key=True)
+    pending_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    updated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
+class MarketIndexSnapshot(Base):
+    """Immutable canonical market-index payload and all source identities."""
+
+    __tablename__ = "market_index_snapshot"
+    __table_args__ = (
+        UniqueConstraint(
+            "mapping_version",
+            "index_code",
+            "decision_cutoff",
+            "request_set_hash",
+            "provider_content_revision",
+            name="uq_market_index_snapshot_cache_identity",
+        ),
+        UniqueConstraint(
+            "mapping_version",
+            "index_code",
+            "decision_cutoff",
+            "request_set_hash",
+            "provider_content_revision",
+            "snapshot_hash",
+            name="uq_market_index_snapshot_head_target",
+        ),
+        CheckConstraint(
+            "provider_content_revision >= 1",
+            name="ck_market_index_snapshot_provider_revision_positive",
+        ),
+        CheckConstraint(
+            "revision >= 1",
+            name="ck_market_index_snapshot_revision_positive",
+        ),
+        CheckConstraint(
+            "length(snapshot_hash) = 64 "
+            "AND length(request_set_hash) = 64 "
+            "AND length(bar_set_hash) = 64 "
+            "AND length(formula_definition_hash) = 64",
+            name="ck_market_index_snapshot_hashes",
+        ),
+        CheckConstraint(
+            "schema_version = 1",
+            name="ck_market_index_snapshot_schema_version",
+        ),
+    )
+
+    snapshot_hash: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
+    mapping_version: Mapped[str] = mapped_column(String(32))
+    index_code: Mapped[str] = mapped_column(String(16))
+    decision_cutoff: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    request_set_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    provider_content_revision: Mapped[int] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(Integer)
+    bar_set_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    formula_definition_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    snapshot_json: Mapped[str] = mapped_column(Text)
+    observed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    schema_version: Mapped[int] = mapped_column(Integer)
+
+
+class MarketIndexSnapshotHead(Base):
+    """Current snapshot per mapping/index/cutoff/request-set domain."""
+
+    __tablename__ = "market_index_snapshot_head"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            (
+                "mapping_version",
+                "index_code",
+                "decision_cutoff",
+                "request_set_hash",
+                "provider_content_revision",
+                "snapshot_hash",
+            ),
+            (
+                "market_index_snapshot.mapping_version",
+                "market_index_snapshot.index_code",
+                "market_index_snapshot.decision_cutoff",
+                "market_index_snapshot.request_set_hash",
+                "market_index_snapshot.provider_content_revision",
+                "market_index_snapshot.snapshot_hash",
+            ),
+            name="fk_market_index_snapshot_head_payload",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "provider_content_revision >= 1",
+            name="ck_market_index_snapshot_head_provider_revision_positive",
+        ),
+        CheckConstraint(
+            "length(snapshot_hash) = 64 AND length(request_set_hash) = 64",
+            name="ck_market_index_snapshot_head_hashes",
+        ),
+    )
+
+    mapping_version: Mapped[str] = mapped_column(String(32), primary_key=True)
+    index_code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    decision_cutoff: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH), primary_key=True)
+    request_set_hash: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
+    provider_content_revision: Mapped[int] = mapped_column(Integer)
+    snapshot_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    updated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
 class AIProviderConfiguration(Base):
@@ -556,8 +859,11 @@ __all__ = [
     "DeliveryAttempt",
     "EvaluationKind",
     "EvaluationLedger",
+    "EvaluationResult",
     "FiveMinuteBar",
     "LatestQuote",
+    "MarketIndexSnapshot",
+    "MarketIndexSnapshotHead",
     "MinuteBar",
     "MonitorEvent",
     "MonitorSequence",
@@ -566,6 +872,7 @@ __all__ = [
     "PlanVersion",
     "PlanVersionReview",
     "PlanVersionStatus",
+    "PendingOfficialClose",
     "PositionBucket",
     "PositionLot",
     "ProviderHealth",
@@ -573,6 +880,8 @@ __all__ = [
     "IdempotencyStatus",
     "RiskState",
     "SymbolHealth",
+    "SymbolDecisionHead",
+    "SymbolHealthProjection",
     "SymbolHealthStatus",
     "TradingCalendar",
     "ZoneEpisode",

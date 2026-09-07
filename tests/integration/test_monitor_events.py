@@ -289,6 +289,25 @@ def test_global_event_numeric_fields_are_bounded_to_sqlite_int64(
             work.events.replay_page_after(2**63)
 
 
+def test_global_event_sequence_refuses_to_cross_the_public_safe_integer_boundary(
+    database_engine: Engine,
+) -> None:
+    events = _module()
+    session_factory = create_session_factory(database_engine)
+    with session_factory.begin() as session:
+        state = session.get(events.MonitorSequence, 1)
+        assert state is not None
+        state.last_sequence = events.MAX_PUBLIC_SEQUENCE
+
+    with _factory(database_engine)() as work:
+        assert work.events.current_sequence() == events.MAX_PUBLIC_SEQUENCE
+        with pytest.raises(events.MonitorEventStorageError, match="sequence state is invalid"):
+            work.events.append(_drafts()[0])
+
+    with _factory(database_engine)() as work:
+        assert work.events.current_sequence() == events.MAX_PUBLIC_SEQUENCE
+
+
 @pytest.mark.parametrize(
     "operation",
     ("append", "lock", "get", "current_sequence", "replay"),

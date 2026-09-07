@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime, timedelta
 from importlib import import_module
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -29,6 +29,7 @@ from trade_plan_monitor.decision.models import (
 from trade_plan_monitor.domain.plan_models import OfficialCloseBelowLevelCondition
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertPayload, AlertSeverity
+from trade_plan_monitor.runtime.health import LEGACY_RUNTIME_GENERATION, RuntimeServiceStatus
 from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
@@ -71,6 +72,7 @@ class _DashboardService:
         return DashboardResponse(
             sequence=self.sequence,
             observed_at=NOW,
+            runtime_generation=LEGACY_RUNTIME_GENERATION,
             connection_status=ConnectionStatus.CONNECTED,
             data_age_seconds=0,
             counts=DashboardCounts(
@@ -371,7 +373,13 @@ def test_duplicate_publication_never_duplicates_a_sequence(
 
     assert created["type"] == "alert.created"
     assert created["sequence"] == event.sequence
-    assert heartbeat == {"type": "heartbeat", "sequence": event.sequence}
+    assert heartbeat == {
+        "type": "heartbeat",
+        "sequence": event.sequence,
+        "runtimeLive": False,
+        "runtimeGeneration": None,
+        "runtimeStartedAt": None,
+    }
 
 
 def test_committed_publication_wakes_a_connected_client_without_waiting_for_heartbeat(
@@ -528,7 +536,51 @@ def test_empty_stream_uses_exact_twenty_second_default_heartbeat_contract(
     ) as websocket:
         frame = websocket.receive_json()
 
-    assert frame == {"type": "heartbeat", "sequence": 0}
+    assert frame == {
+        "type": "heartbeat",
+        "sequence": 0,
+        "runtimeLive": False,
+        "runtimeGeneration": None,
+        "runtimeStartedAt": None,
+    }
+
+
+def test_heartbeat_fails_closed_after_runtime_progress_deadline(
+    database_engine: Engine,
+    clock: _Clock,
+) -> None:
+    factory = _unit_of_work_factory(database_engine, clock)
+    runtime = SimpleNamespace(
+        status=RuntimeServiceStatus.RUNNING,
+        read_only=False,
+        observed_at=NOW,
+        started_at=NOW - timedelta(minutes=1),
+        next_poll_at=NOW + timedelta(seconds=30),
+        runtime_generation=LEGACY_RUNTIME_GENERATION,
+    )
+    module = _websocket_module()
+    stream = module.CommittedMonitorEventStream(
+        unit_of_work_factory=factory,
+        runtime_liveness_provider=lambda: runtime,
+        clock=clock,
+    )
+
+    assert stream._heartbeat_frame(4) == {
+        "type": "heartbeat",
+        "sequence": 4,
+        "runtimeLive": True,
+        "runtimeGeneration": str(LEGACY_RUNTIME_GENERATION),
+        "runtimeStartedAt": runtime.started_at.isoformat(),
+    }
+
+    clock.now = NOW + timedelta(minutes=1)
+    assert stream._heartbeat_frame(4) == {
+        "type": "heartbeat",
+        "sequence": 4,
+        "runtimeLive": False,
+        "runtimeGeneration": None,
+        "runtimeStartedAt": None,
+    }
 
 
 @pytest.mark.parametrize(
@@ -540,6 +592,7 @@ def test_empty_stream_uses_exact_twenty_second_default_heartbeat_contract(
         "01",
         "not-a-sequence",
         str(2**63),
+        str(2**53),
         "9" * 20,
         pytest.param("9" * 5_000, id="too-many-digits"),
         "0&after=1",

@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from inspect import isawaitable
-from typing import Self
+from typing import Self, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
@@ -17,6 +17,8 @@ from trade_plan_monitor.decision.engine import evaluate
 from trade_plan_monitor.decision.models import (
     DailyIndicatorProvenance,
     DailyIndicatorSnapshot,
+    DataHealthSnapshot,
+    DataHealthStatus,
     EpisodeTransitionIntent,
     EvaluationContext,
     EvaluationResult,
@@ -27,6 +29,7 @@ from trade_plan_monitor.decision.models import (
     RiskTransitionIntent,
     SignalType,
 )
+from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
 from trade_plan_monitor.market_data.aggregation import (
@@ -55,12 +58,19 @@ from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
 from trade_plan_monitor.runtime.clock import Clock, SystemClock, _canonical_shanghai
 from trade_plan_monitor.runtime.health import (
+    LEGACY_RUNTIME_GENERATION,
     RuntimeHealthDetails,
     RuntimeHealthSnapshot,
     RuntimeServiceStatus,
+    SymbolHealthErrorCode,
+    SymbolHealthSnapshot,
 )
-from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexService
-from trade_plan_monitor.runtime.scheduler import MarketDeadline
+from trade_plan_monitor.runtime.market_indexes import (
+    RuntimeMarketIndexBatch,
+    RuntimeMarketIndexService,
+)
+from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
+from trade_plan_monitor.runtime.symbol_service import SymbolHealthRestoreState, SymbolService
 from trade_plan_monitor.state.events import (
     MonitorEvent,
     MonitorEventDraft,
@@ -105,6 +115,7 @@ OfficialObservedAt = Callable[[datetime], datetime]
 Evaluator = Callable[[EvaluationContext], EvaluationResult]
 CommittedEventPublisher = Callable[[MonitorEvent], object]
 EventIdFactory = Callable[[], UUID]
+ActivePlans = Callable[[], tuple[TradePlan, ...]]
 
 
 class _RuntimeValue(BaseModel):
@@ -121,6 +132,52 @@ class _RuntimeValue(BaseModel):
         values = self.model_dump(mode="python", round_trip=True)
         values.update(update)
         return type(self).model_validate(values)
+
+
+class _PersistedSymbolHealth(_RuntimeValue):
+    """Closed public projection shape used to hydrate runtime tracker state."""
+
+    symbol: str
+    observed_at: ShanghaiDatetime = Field(alias="observedAt")
+    target_end: ShanghaiDatetime = Field(alias="targetEnd")
+    status: DataHealthStatus
+    latest_bar_end: ShanghaiDatetime | None = Field(alias="latestBarEnd")
+    data_age_seconds: int | None = Field(alias="dataAgeSeconds", ge=0)
+    required_data_complete: bool = Field(alias="requiredDataComplete", strict=True)
+    fresh: bool = Field(strict=True)
+    gaps: tuple[ShanghaiDatetime, ...] = ()
+    consecutive_incomplete_buckets: int = Field(
+        alias="consecutiveIncompleteBuckets",
+        ge=0,
+    )
+    last_required_bucket_end: ShanghaiDatetime | None = Field(
+        default=None,
+        alias="lastRequiredBucketEnd",
+    )
+    error_code: SymbolHealthErrorCode | None = Field(alias="errorCode")
+    actionable: bool = Field(strict=True)
+
+    def snapshot(self) -> SymbolHealthSnapshot:
+        snapshot = SymbolHealthSnapshot(
+            symbol=self.symbol,
+            observed_at=self.observed_at,
+            target_end=self.target_end,
+            data_health=DataHealthSnapshot(
+                symbol=self.symbol,
+                status=self.status,
+                latest_bar_end=self.latest_bar_end,
+                data_age_seconds=self.data_age_seconds,
+                required_data_complete=self.required_data_complete,
+                fresh=self.fresh,
+            ),
+            gaps=self.gaps,
+            consecutive_incomplete_buckets=self.consecutive_incomplete_buckets,
+            last_required_bucket_end=self.last_required_bucket_end,
+            error_code=self.error_code,
+        )
+        if snapshot.actionable is not self.actionable:
+            raise ValueError("persisted symbol health actionable flag is invalid")
+        return snapshot
 
 
 class IntradayMarketFacts(_RuntimeValue):
@@ -369,6 +426,14 @@ class OfficialCloseCycleResult(_RuntimeValue):
         return self
 
 
+class StaleActivationGenerationError(RuntimeError):
+    """Expected control-flow outcome when a UI plan mutation wins a runtime race."""
+
+    def __init__(self, symbol: str) -> None:
+        self.symbol = symbol
+        super().__init__(f"plan activation generation changed for {symbol}")
+
+
 class RuntimeEvaluationService:
     """Persist exact market facts, evaluate purely, then apply results atomically."""
 
@@ -385,6 +450,7 @@ class RuntimeEvaluationService:
         evaluator: Evaluator = evaluate,
         event_id_factory: EventIdFactory = uuid4,
         market_index_service: RuntimeMarketIndexService | None = None,
+        runtime_generation: UUID = LEGACY_RUNTIME_GENERATION,
     ) -> None:
         dependencies = (
             fetch_minutes,
@@ -405,6 +471,10 @@ class RuntimeEvaluationService:
             RuntimeMarketIndexService,
         ):
             raise TypeError("market_index_service must be a RuntimeMarketIndexService")
+        if type(runtime_generation) is not UUID:
+            raise TypeError("runtime_generation must be a UUID")
+        if runtime_generation.version != 4:
+            raise ValueError("runtime_generation must be a UUIDv4")
         system_clock = SystemClock()
         self._fetch_minutes = fetch_minutes
         self._fetch_official_daily = fetch_official_daily
@@ -418,6 +488,7 @@ class RuntimeEvaluationService:
         self._evaluator = evaluator
         self._event_id_factory = event_id_factory
         self._market_index_service = market_index_service
+        self._runtime_generation = runtime_generation
         self._official_serial = asyncio.Lock()
 
     async def run_intraday(
@@ -436,12 +507,14 @@ class RuntimeEvaluationService:
                 decision_cutoff=bucket_end,
                 observed_no_later_than=evaluated_at,
             )
+            self._persist_market_index_batch(prepared)
             reference_market_snapshot = prepared.snapshot_for_plan(plan)
         return await self._run_intraday_with_snapshot(
             plan=plan,
             bucket_end=bucket_end,
             evaluated_at=evaluated_at,
             reference_market_snapshot=reference_market_snapshot,
+            health_snapshot=None,
         )
 
     async def run_intraday_batch(
@@ -453,10 +526,192 @@ class RuntimeEvaluationService:
     ) -> tuple[IntradayCycleResult, ...]:
         """Union index needs, then evaluate an active-plan batch without cancellation."""
 
+        return await self._run_intraday_batch(
+            plans=plans,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+            minutes_by_symbol=None,
+        )
+
+    async def run_intraday_batch_from_minutes(
+        self,
+        *,
+        plans: tuple[TradePlan, ...],
+        bucket_end: datetime,
+        evaluated_at: datetime,
+        minutes_by_symbol: Mapping[str, tuple[MinuteBar, ...]],
+        health_by_symbol: Mapping[str, SymbolHealthSnapshot] | None = None,
+        activation_revisions: Mapping[str, int] | None = None,
+    ) -> tuple[IntradayCycleResult, ...]:
+        """Evaluate one deadline from its single, already acquired stock batch."""
+
+        validated = self._validated_prefetched_minutes(plans, minutes_by_symbol)
+        return await self._run_intraday_batch(
+            plans=plans,
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+            minutes_by_symbol=validated,
+            health_by_symbol=health_by_symbol,
+            activation_revisions=activation_revisions,
+        )
+
+    def load_persisted_symbol_health(
+        self,
+        symbols: tuple[str, ...],
+    ) -> tuple[SymbolHealthRestoreState, ...]:
+        """Load the exact durable tracker state before a post-restart batch."""
+
+        if type(symbols) is not tuple or len(symbols) > 10:
+            raise ValueError("symbols must be a tuple capped at 10")
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("symbols must be unique")
+        states: list[SymbolHealthRestoreState] = []
+        with self._unit_of_work_factory() as unit_of_work:
+            for symbol in symbols:
+                active = unit_of_work.plans.get_active(symbol)
+                if active is None:
+                    activation_state = unit_of_work.plans.get_activation_state(symbol)
+                    states.append(
+                        SymbolHealthRestoreState(
+                            symbol=symbol,
+                            activation_revision=(
+                                1 if activation_state is None else activation_state.revision
+                            ),
+                            snapshot=None,
+                        )
+                    )
+                    continue
+                record = unit_of_work.projections.get_symbol_health(symbol)
+                if record is None or record.activation_revision != active.revision:
+                    snapshot = None
+                else:
+                    projection = _validate_persisted_symbol_health(record.projection)
+                    if (
+                        projection.symbol != symbol
+                        or projection.observed_at != record.observed_at
+                    ):
+                        raise ValueError("persisted symbol health identity is inconsistent")
+                    snapshot = projection.snapshot()
+                states.append(
+                    SymbolHealthRestoreState(
+                        symbol=symbol,
+                        activation_revision=active.revision,
+                        snapshot=snapshot,
+                    )
+                )
+        return tuple(states)
+
+    async def persist_symbol_health_batch(
+        self,
+        snapshots: tuple[SymbolHealthSnapshot, ...],
+        *,
+        activation_revisions: Mapping[str, int],
+    ) -> None:
+        """Commit exact non-evaluated runtime health and publish its durable events."""
+
+        if (
+            type(snapshots) is not tuple
+            or len(snapshots) > 10
+            or any(not isinstance(item, SymbolHealthSnapshot) for item in snapshots)
+        ):
+            raise TypeError("snapshots must be a tuple of at most 10 health snapshots")
+        symbols = tuple(item.symbol for item in snapshots)
+        if len(set(symbols)) != len(symbols):
+            raise ValueError("health snapshot symbols must be unique")
+        if (
+            not isinstance(activation_revisions, Mapping)
+            or set(activation_revisions) != set(symbols)
+            or any(type(value) is not int or value < 1 for value in activation_revisions.values())
+        ):
+            raise ValueError("activation revisions must match the health symbols exactly")
+        if not snapshots:
+            return
+        committed: list[MonitorEvent] = []
+        with self._unit_of_work_factory() as unit_of_work:
+            for snapshot in snapshots:
+                expected_activation_revision = activation_revisions[snapshot.symbol]
+                try:
+                    self._require_symbol_activation_revision(
+                        unit_of_work,
+                        symbol=snapshot.symbol,
+                        expected_revision=expected_activation_revision,
+                    )
+                except StaleActivationGenerationError:
+                    continue
+                health = snapshot.data_health
+                current = unit_of_work.health.get_symbol(snapshot.symbol)
+                after = unit_of_work.health.upsert_symbol(
+                    symbol=snapshot.symbol,
+                    status=SymbolHealthStatus(health.status.value),
+                    latest_bar_end=health.latest_bar_end,
+                    data_age_seconds=(
+                        0 if health.data_age_seconds is None else health.data_age_seconds
+                    ),
+                    gaps=tuple(gap.isoformat() for gap in snapshot.gaps),
+                    error_streak=(
+                        0
+                        if snapshot.actionable
+                        else 1 if current is None else current.error_streak + 1
+                    ),
+                    expected_revision=0 if current is None else current.revision,
+                )
+                unit_of_work.projections.put_symbol_health(
+                    symbol=snapshot.symbol,
+                    revision=after.revision,
+                    activation_revision=expected_activation_revision,
+                    runtime_generation=self._runtime_generation,
+                    projection={
+                        "symbol": snapshot.symbol,
+                        "observedAt": snapshot.observed_at,
+                        "targetEnd": snapshot.target_end,
+                        "status": health.status,
+                        "latestBarEnd": health.latest_bar_end,
+                        "dataAgeSeconds": health.data_age_seconds,
+                        "requiredDataComplete": health.required_data_complete,
+                        "fresh": health.fresh,
+                        "gaps": snapshot.gaps,
+                        "consecutiveIncompleteBuckets": (
+                            snapshot.consecutive_incomplete_buckets
+                        ),
+                        "lastRequiredBucketEnd": snapshot.last_required_bucket_end,
+                        "errorCode": snapshot.error_code,
+                        "actionable": snapshot.actionable,
+                    },
+                    observed_at=snapshot.observed_at,
+                )
+                committed.append(
+                    unit_of_work.events.get(
+                        monitor_event_id(
+                            MonitorEventType.SYMBOL_HEALTH_UPDATED,
+                            after.symbol,
+                            str(after.revision),
+                        )
+                    )
+                )
+            unit_of_work.commit()
+        await self._publish_committed_events(tuple(committed))
+
+    async def _run_intraday_batch(
+        self,
+        *,
+        plans: tuple[TradePlan, ...],
+        bucket_end: datetime,
+        evaluated_at: datetime,
+        minutes_by_symbol: Mapping[str, tuple[MinuteBar, ...]] | None,
+        health_by_symbol: Mapping[str, SymbolHealthSnapshot] | None = None,
+        activation_revisions: Mapping[str, int] | None = None,
+    ) -> tuple[IntradayCycleResult, ...]:
         if type(plans) is not tuple or any(not isinstance(plan, TradePlan) for plan in plans):
             raise TypeError("plans must be a tuple of TradePlan values")
         if len(plans) > 10:
             raise ValueError("runtime supports at most 10 active plans")
+        plan_symbols = {plan.symbol for plan in plans}
+        if activation_revisions is not None and (
+            not isinstance(activation_revisions, Mapping)
+            or set(activation_revisions) != plan_symbols
+            or any(type(value) is not int or value < 1 for value in activation_revisions.values())
+        ):
+            raise ValueError("activation revisions must match the intraday plans exactly")
         prepared = (
             None
             if self._market_index_service is None
@@ -466,6 +721,8 @@ class RuntimeEvaluationService:
                 observed_no_later_than=evaluated_at,
             )
         )
+        if prepared is not None:
+            self._persist_market_index_batch(prepared)
         results = await asyncio.gather(
             *(
                 self._run_intraday_with_snapshot(
@@ -475,12 +732,31 @@ class RuntimeEvaluationService:
                     reference_market_snapshot=(
                         None if prepared is None else prepared.snapshot_for_plan(plan)
                     ),
+                    health_snapshot=(
+                        None if health_by_symbol is None else health_by_symbol[plan.symbol]
+                    ),
+                    fetched_minutes=(
+                        None if minutes_by_symbol is None else minutes_by_symbol[plan.symbol]
+                    ),
+                    activation_revision=(
+                        None
+                        if activation_revisions is None
+                        else activation_revisions[plan.symbol]
+                    ),
                 )
                 for plan in plans
             ),
             return_exceptions=True,
         )
-        first_error = next((item for item in results if isinstance(item, BaseException)), None)
+        first_error = next(
+            (
+                item
+                for item in results
+                if isinstance(item, BaseException)
+                and not isinstance(item, StaleActivationGenerationError)
+            ),
+            None,
+        )
         if first_error is not None:
             raise first_error
         return tuple(item for item in results if isinstance(item, IntradayCycleResult))
@@ -492,6 +768,9 @@ class RuntimeEvaluationService:
         bucket_end: datetime,
         evaluated_at: datetime,
         reference_market_snapshot: MarketIndexSnapshot | None,
+        health_snapshot: SymbolHealthSnapshot | None,
+        fetched_minutes: tuple[MinuteBar, ...] | None = None,
+        activation_revision: int | None = None,
     ) -> IntradayCycleResult:
         """Evaluate one plan using an already shared reference-index snapshot."""
 
@@ -504,8 +783,14 @@ class RuntimeEvaluationService:
         )
         if canonical_evaluated_at < canonical_bucket:
             raise ValueError("evaluated_at cannot precede bucket_end")
+        if activation_revision is None:
+            activation_revision = self._capture_plan_activation_revision(plan)
 
-        fetched = await self._fetch_minutes(plan.symbol, canonical_bucket)
+        fetched = (
+            await self._fetch_minutes(plan.symbol, canonical_bucket)
+            if fetched_minutes is None
+            else fetched_minutes
+        )
         incoming = self._validated_fetch(
             fetched,
             symbol=plan.symbol,
@@ -554,7 +839,13 @@ class RuntimeEvaluationService:
 
         committed_event: AlertEvent | None = None
         publication_event: MonitorEvent | None = None
+        health_event: MonitorEvent | None = None
         with self._unit_of_work_factory() as unit_of_work:
+            self._require_evaluated_plan_active(
+                unit_of_work,
+                plan,
+                expected_revision=activation_revision,
+            )
             identity = result.evaluation_identity
             claim = unit_of_work.evaluations.claim(
                 plan_hash=identity.plan_hash,
@@ -567,7 +858,25 @@ class RuntimeEvaluationService:
                 evaluated_at=result.snapshot.evaluated_at,
             )
             if claim.created:
-                publication_event = self._append_snapshot_event(unit_of_work, result)
+                health_event = self._persist_projection_dependencies(
+                    unit_of_work,
+                    result,
+                    reference_market_snapshot=reference_market_snapshot,
+                    health_snapshot=health_snapshot,
+                    activation_revision=activation_revision,
+                    runtime_generation=self._runtime_generation,
+                )
+                unit_of_work.projections.add_evaluation_result(
+                    result,
+                    position_lots=unit_of_work.positions.list_open_lots(identity.symbol),
+                )
+                snapshot_event = self._append_snapshot_event(unit_of_work, result)
+                unit_of_work.projections.advance_decision_head(
+                    result=result,
+                    event_sequence=snapshot_event.sequence,
+                    activation_revision=activation_revision,
+                )
+                publication_event = snapshot_event
                 self._apply_transitions(unit_of_work, result)
                 if result.signal_intent is not None:
                     dedup_key = alert_dedup_key(result.signal_intent)
@@ -592,10 +901,7 @@ class RuntimeEvaluationService:
                 claim_created=False,
                 committed_event=None,
             )
-        if publication_event is not None:
-            publication = self._publisher(publication_event)
-            if isawaitable(publication):
-                await publication
+        await self._publish_committed_events((publication_event, health_event))
         return IntradayCycleResult(
             status=IntradayCycleStatus.COMMITTED,
             facts=facts,
@@ -608,7 +914,12 @@ class RuntimeEvaluationService:
         """Return one validated durable close-pending date for startup recovery."""
 
         with self._unit_of_work_factory() as unit_of_work:
+            pending = unit_of_work.projections.list_pending_official_closes(symbol=symbol)
             health = unit_of_work.health.get_symbol(symbol)
+        if pending:
+            if len(pending) != 1:
+                raise ValueError("one symbol cannot retain multiple pending close identities")
+            return pending[0].trade_date
         if health is None or health.status is not SymbolHealthStatus.CLOSE_PENDING:
             return None
         pending_date, _resume = _close_pending_payload(health.gap_json)
@@ -650,20 +961,25 @@ class RuntimeEvaluationService:
                 observed_no_later_than=canonical_evaluated_at,
             )
         )
+        if prepared is not None:
+            self._persist_market_index_batch(prepared)
         results: list[OfficialCloseCycleResult] = []
         async with self._official_serial:
             for plan in plans:
-                results.append(
-                    await self._run_official_close_unlocked(
-                        plan=plan,
-                        trade_date=trade_date,
-                        evaluated_at=canonical_evaluated_at,
-                        close_attempt=close_attempt,
-                        reference_market_snapshot=(
-                            None if prepared is None else prepared.snapshot_for_plan(plan)
-                        ),
+                try:
+                    results.append(
+                        await self._run_official_close_unlocked(
+                            plan=plan,
+                            trade_date=trade_date,
+                            evaluated_at=canonical_evaluated_at,
+                            close_attempt=close_attempt,
+                            reference_market_snapshot=(
+                                None if prepared is None else prepared.snapshot_for_plan(plan)
+                            ),
+                        )
                     )
-                )
+                except StaleActivationGenerationError:
+                    continue
         return tuple(results)
 
     async def run_official_close(
@@ -684,6 +1000,7 @@ class RuntimeEvaluationService:
                 decision_cutoff=cutoff,
                 observed_no_later_than=evaluated_at,
             )
+            self._persist_market_index_batch(prepared)
             reference_market_snapshot = prepared.snapshot_for_plan(plan)
         async with self._official_serial:
             return await self._run_official_close_unlocked(
@@ -724,6 +1041,7 @@ class RuntimeEvaluationService:
         )
         if canonical_evaluated_at < source_as_of:
             raise ValueError("official close cannot be evaluated before the 15:00 cutoff")
+        activation_revision = self._capture_plan_activation_revision(plan)
 
         pending_date = self.pending_close_date(plan.symbol)
         if pending_date is not None and pending_date > trade_date:
@@ -746,10 +1064,11 @@ class RuntimeEvaluationService:
                 committed_event=None,
                 error_code=OfficialCloseErrorCode.EARLIER_CLOSE_PENDING,
             )
-        if self._official_close_completed(
+        if await self._official_close_completed(
             plan=plan,
             trade_date=trade_date,
             evaluated_at=canonical_evaluated_at,
+            activation_revision=activation_revision,
         ):
             return OfficialCloseCycleResult(
                 status=OfficialCloseCycleStatus.DUPLICATE,
@@ -798,8 +1117,10 @@ class RuntimeEvaluationService:
             evaluated_at=canonical_evaluated_at,
             source_as_of=source_as_of,
             incoming=incoming,
+            activation_revision=activation_revision,
         )
-        reconciliation, official_history = persisted
+        reconciliation, official_history, pending_event = persisted
+        await self._publish_committed_events((pending_event,))
         if not reconciliation.advance_close_risk or reconciliation.official_bar is None:
             return OfficialCloseCycleResult(
                 status=OfficialCloseCycleStatus.CLOSE_PENDING,
@@ -850,7 +1171,13 @@ class RuntimeEvaluationService:
 
         committed_event: AlertEvent | None = None
         publication_event: MonitorEvent | None = None
+        projection_health_event: MonitorEvent | None = None
         with self._unit_of_work_factory() as unit_of_work:
+            self._require_evaluated_plan_active(
+                unit_of_work,
+                plan,
+                expected_revision=activation_revision,
+            )
             identity = result.evaluation_identity
             claim = unit_of_work.evaluations.claim(
                 plan_hash=identity.plan_hash,
@@ -863,7 +1190,25 @@ class RuntimeEvaluationService:
                 evaluated_at=result.snapshot.evaluated_at,
             )
             if claim.created:
-                publication_event = self._append_snapshot_event(unit_of_work, result)
+                projection_health_event = self._persist_projection_dependencies(
+                    unit_of_work,
+                    result,
+                    reference_market_snapshot=reference_market_snapshot,
+                    health_snapshot=None,
+                    activation_revision=activation_revision,
+                    runtime_generation=self._runtime_generation,
+                )
+                unit_of_work.projections.add_evaluation_result(
+                    result,
+                    position_lots=unit_of_work.positions.list_open_lots(identity.symbol),
+                )
+                snapshot_event = self._append_snapshot_event(unit_of_work, result)
+                unit_of_work.projections.advance_decision_head(
+                    result=result,
+                    event_sequence=snapshot_event.sequence,
+                    activation_revision=activation_revision,
+                )
+                publication_event = snapshot_event
                 self._apply_transitions(unit_of_work, result)
                 if result.signal_intent is not None:
                     dedup_key = alert_dedup_key(result.signal_intent)
@@ -878,11 +1223,14 @@ class RuntimeEvaluationService:
                         )
                         committed_event = unit_of_work.alerts.enqueue(payload)
                         publication_event = unit_of_work.events.get(payload.event_id)
-            self._clear_close_pending(
+            health_event = self._clear_close_pending(
                 unit_of_work,
+                plan=plan,
                 symbol=plan.symbol,
                 trade_date=trade_date,
                 evaluated_at=canonical_evaluated_at,
+                activation_revision=activation_revision,
+                runtime_generation=self._runtime_generation,
             )
             unit_of_work.commit()
 
@@ -899,10 +1247,9 @@ class RuntimeEvaluationService:
                 committed_event=None,
                 error_code=None,
             )
-        if publication_event is not None:
-            publication = self._publisher(publication_event)
-            if isawaitable(publication):
-                await publication
+        await self._publish_committed_events(
+            (publication_event, projection_health_event, health_event)
+        )
         return OfficialCloseCycleResult(
             status=OfficialCloseCycleStatus.COMMITTED,
             trade_date=trade_date,
@@ -941,14 +1288,21 @@ class RuntimeEvaluationService:
             )
         )
 
-    def _official_close_completed(
+    async def _official_close_completed(
         self,
         *,
         plan: TradePlan,
         trade_date: date,
         evaluated_at: datetime,
+        activation_revision: int,
     ) -> bool:
+        health_event: MonitorEvent | None = None
         with self._unit_of_work_factory() as unit_of_work:
+            self._require_evaluated_plan_active(
+                unit_of_work,
+                plan,
+                expected_revision=activation_revision,
+            )
             completed = unit_of_work.evaluations.has_claim(
                 plan_hash=plan_sha256(plan),
                 symbol=plan.symbol,
@@ -958,13 +1312,17 @@ class RuntimeEvaluationService:
                 formula_version=plan.monitoring.indicator_formula_version,
             )
             if completed:
-                self._clear_close_pending(
+                health_event = self._clear_close_pending(
                     unit_of_work,
+                    plan=plan,
                     symbol=plan.symbol,
                     trade_date=trade_date,
                     evaluated_at=evaluated_at,
+                    activation_revision=activation_revision,
+                    runtime_generation=self._runtime_generation,
                 )
                 unit_of_work.commit()
+        await self._publish_committed_events((health_event,))
         return completed
 
     def _persist_official_market_context(
@@ -975,8 +1333,14 @@ class RuntimeEvaluationService:
         evaluated_at: datetime,
         source_as_of: datetime,
         incoming: tuple[DailyBar, ...],
-    ) -> tuple[CloseReconciliationIntent, tuple[DailyBar, ...]]:
+        activation_revision: int,
+    ) -> tuple[CloseReconciliationIntent, tuple[DailyBar, ...], MonitorEvent]:
         with self._unit_of_work_factory() as unit_of_work:
+            self._require_evaluated_plan_active(
+                unit_of_work,
+                plan,
+                expected_revision=activation_revision,
+            )
             if incoming:
                 unit_of_work.history.upsert_daily_bars(incoming)
             rows = unit_of_work.history.list_daily_bars(
@@ -995,16 +1359,19 @@ class RuntimeEvaluationService:
             )
             if any(row.received_at > evaluated_at for row in (*official_history, *current_rows)):
                 raise ValueError("persisted official market facts cannot be from the future")
-            self._mark_close_pending(
+            pending_event = self._mark_close_pending(
                 unit_of_work,
+                plan=plan,
                 symbol=plan.symbol,
                 trade_date=trade_date,
                 evaluated_at=evaluated_at,
+                activation_revision=activation_revision,
+                runtime_generation=self._runtime_generation,
             )
             unit_of_work.commit()
         if source_as_of > evaluated_at:  # pragma: no cover - validated by caller
             raise ValueError("official source cutoff cannot follow evaluation")
-        return reconciliation, official_history
+        return reconciliation, official_history, pending_event
 
     @staticmethod
     def _validated_official_fetch(
@@ -1100,6 +1467,29 @@ class RuntimeEvaluationService:
         ):
             raise ValueError("fetched minutes must match the requested symbol and cutoff")
         return tuple(sorted(minutes, key=lambda minute: (minute.bar_end, minute.received_at)))
+
+    @staticmethod
+    def _validated_prefetched_minutes(
+        plans: object,
+        minutes_by_symbol: object,
+    ) -> dict[str, tuple[MinuteBar, ...]]:
+        if type(plans) is not tuple or any(not isinstance(plan, TradePlan) for plan in plans):
+            raise TypeError("plans must be a tuple of TradePlan values")
+        if not isinstance(minutes_by_symbol, Mapping):
+            raise TypeError("minutes_by_symbol must be a mapping")
+        expected_symbols = {plan.symbol for plan in plans}
+        if set(minutes_by_symbol) != expected_symbols:
+            raise ValueError("minutes_by_symbol must contain exactly the due plan symbols")
+        validated: dict[str, tuple[MinuteBar, ...]] = {}
+        for symbol, minutes in minutes_by_symbol.items():
+            if type(symbol) is not str or type(minutes) is not tuple:
+                raise TypeError("prefetched minute batches must use string keys and tuple values")
+            if len(minutes) > _MAX_FETCHED_MINUTES or any(
+                not isinstance(minute, MinuteBar) for minute in minutes
+            ):
+                raise ValueError("prefetched minute batches must contain normalized bounded rows")
+            validated[symbol] = minutes
+        return validated
 
     @staticmethod
     def _validate_context(
@@ -1220,30 +1610,59 @@ class RuntimeEvaluationService:
     def _mark_close_pending(
         unit_of_work: UnitOfWork,
         *,
+        plan: TradePlan,
         symbol: str,
         trade_date: date,
         evaluated_at: datetime,
-    ) -> None:
+        activation_revision: int,
+        runtime_generation: UUID = LEGACY_RUNTIME_GENERATION,
+    ) -> MonitorEvent:
         current = unit_of_work.health.get_symbol(symbol)
         if current is not None and current.status is SymbolHealthStatus.CLOSE_PENDING:
             persisted_date, resume = _close_pending_payload(current.gap_json)
             if persisted_date != trade_date:
                 raise ValueError("one symbol cannot retain two CLOSE_PENDING dates")
+            existing_pending = unit_of_work.projections.get_pending_official_close(
+                symbol=symbol,
+                trade_date=trade_date,
+            )
+            if existing_pending is None:
+                raise ValueError("CLOSE_PENDING health has no exact durable identity")
+            resume_projection = existing_pending.pending.get("resumeProjection")
+            resume_projection_generation = existing_pending.pending.get(
+                "resumeProjectionGeneration"
+            )
         else:
             resume = {
                 "status": (
-                    SymbolHealthStatus.LIVE.value if current is None else current.status.value
+                    SymbolHealthStatus.BLOCKED.value
+                    if current is None
+                    else current.status.value
                 ),
                 "gaps": [] if current is None else _json_value(current.gap_json),
                 "errorStreak": 0 if current is None else current.error_streak,
+                "latestBarEnd": (
+                    None if current is None or current.latest_bar_end is None
+                    else current.latest_bar_end.isoformat()
+                ),
+                "dataAgeSeconds": 0 if current is None else current.data_age_seconds,
             }
+            current_projection = unit_of_work.projections.get_symbol_health(symbol)
+            resume_projection = (
+                None if current_projection is None else current_projection.projection
+            )
+            resume_projection_generation = (
+                None
+                if current_projection is None
+                else str(current_projection.runtime_generation)
+            )
         latest_bar_end = None if current is None else current.latest_bar_end
         data_age_seconds = (
             0
             if latest_bar_end is None
             else max(0, int((evaluated_at - latest_bar_end).total_seconds()))
         )
-        unit_of_work.health.upsert_symbol(
+        after = unit_of_work.health.upsert_symbol(
             symbol=symbol,
             status=SymbolHealthStatus.CLOSE_PENDING,
             latest_bar_end=latest_bar_end,
@@ -1255,36 +1674,401 @@ class RuntimeEvaluationService:
             error_streak=1 if current is None else current.error_streak + 1,
             expected_revision=0 if current is None else current.revision,
         )
+        unit_of_work.projections.put_symbol_health(
+            symbol=symbol,
+            revision=after.revision,
+            activation_revision=activation_revision,
+            runtime_generation=runtime_generation,
+            projection={
+                "symbol": symbol,
+                "observedAt": evaluated_at,
+                "targetEnd": datetime.combine(
+                    trade_date,
+                    time(15, 0),
+                    evaluated_at.tzinfo,
+                ),
+                "status": "CLOSE_PENDING",
+                "latestBarEnd": latest_bar_end,
+                "dataAgeSeconds": None if latest_bar_end is None else data_age_seconds,
+                "requiredDataComplete": False,
+                "fresh": False,
+                "gaps": (),
+                "consecutiveIncompleteBuckets": 0,
+                "lastRequiredBucketEnd": None,
+                "errorCode": SymbolHealthErrorCode.INCOMPLETE_BUCKET,
+                "actionable": False,
+            },
+            observed_at=evaluated_at,
+        )
+        unit_of_work.projections.put_pending_official_close(
+            plan_hash=plan_sha256(plan),
+            symbol=symbol,
+            trade_date=trade_date,
+            formula_version=plan.monitoring.indicator_formula_version,
+            pending={
+                "latestBarEnd": (
+                    None if latest_bar_end is None else latest_bar_end.isoformat()
+                ),
+                "resume": resume,
+                "resumeProjection": resume_projection,
+                "resumeProjectionGeneration": resume_projection_generation,
+            },
+            observed_at=evaluated_at,
+        )
+        return unit_of_work.events.get(
+            monitor_event_id(
+                MonitorEventType.SYMBOL_HEALTH_UPDATED,
+                after.symbol,
+                str(after.revision),
+            )
+        )
 
     @staticmethod
     def _clear_close_pending(
         unit_of_work: UnitOfWork,
         *,
+        plan: TradePlan,
         symbol: str,
         trade_date: date,
         evaluated_at: datetime,
-    ) -> None:
+        activation_revision: int,
+        runtime_generation: UUID = LEGACY_RUNTIME_GENERATION,
+    ) -> MonitorEvent | None:
+        pending = unit_of_work.projections.get_pending_official_close(
+            symbol=symbol,
+            trade_date=trade_date,
+        )
         current = unit_of_work.health.get_symbol(symbol)
+        if pending is None:
+            if current is None or current.status is not SymbolHealthStatus.CLOSE_PENDING:
+                return None
+            raise ValueError("official close pending identity is missing")
+        cleared = unit_of_work.projections.clear_pending_official_close(
+            plan_hash=plan_sha256(plan),
+            symbol=symbol,
+            trade_date=trade_date,
+            formula_version=plan.monitoring.indicator_formula_version,
+        )
+        if not cleared:
+            raise ValueError("official close pending identity does not match the active plan")
         if current is None or current.status is not SymbolHealthStatus.CLOSE_PENDING:
-            return
+            return None
         persisted_date, resume = _close_pending_payload(current.gap_json)
         if persisted_date != trade_date:
             raise ValueError("cannot clear another official close pending date")
-        latest_bar_end = current.latest_bar_end
-        data_age_seconds = (
-            0
-            if latest_bar_end is None
-            else max(0, int((evaluated_at - latest_bar_end).total_seconds()))
+        raw_resume_projection = pending.pending.get("resumeProjection")
+        resume_projection = (
+            None
+            if raw_resume_projection is None
+            else _validate_persisted_symbol_health(raw_resume_projection)
         )
-        unit_of_work.health.upsert_symbol(
+        if resume_projection is not None and resume_projection.symbol != symbol:
+            raise ValueError("pending health projection crosses symbol identity")
+        raw_resume_generation = pending.pending.get("resumeProjectionGeneration")
+        resume_projection_generation = (
+            None
+            if resume_projection is None
+            else LEGACY_RUNTIME_GENERATION
+            if raw_resume_generation is None
+            else _runtime_generation(
+                raw_resume_generation,
+                name="CLOSE_PENDING resume projection generation",
+            )
+        )
+        latest_bar_end = _optional_market_datetime(
+            resume.get("latestBarEnd", pending.pending.get("latestBarEnd")),
+            name="CLOSE_PENDING resume latestBarEnd",
+        )
+        restored_status = cast(SymbolHealthStatus, resume["status"])
+        restored_gaps = resume["gaps"]
+        restored_streak = cast(int, resume["errorStreak"])
+        raw_data_age_seconds = resume.get("dataAgeSeconds")
+        data_age_seconds = (
+            max(0, int((evaluated_at - latest_bar_end).total_seconds()))
+            if raw_data_age_seconds is None and latest_bar_end is not None
+            else 0 if raw_data_age_seconds is None else cast(int, raw_data_age_seconds)
+        )
+        after = unit_of_work.health.upsert_symbol(
             symbol=symbol,
-            status=resume["status"],
+            status=restored_status,
             latest_bar_end=latest_bar_end,
             data_age_seconds=data_age_seconds,
-            gaps=resume["gaps"],
-            error_streak=resume["errorStreak"],
+            gaps=restored_gaps,
+            error_streak=restored_streak,
             expected_revision=current.revision,
         )
+        if resume_projection is None:
+            restored_public_gaps = _legacy_resume_gaps(restored_gaps)
+            target_end = datetime.combine(
+                trade_date,
+                time(15, 0),
+                evaluated_at.tzinfo,
+            )
+            public_status = (
+                SymbolHealthStatus.STALE
+                if restored_status is SymbolHealthStatus.LIVE
+                else restored_status
+            )
+            error_code = {
+                SymbolHealthStatus.STALE: SymbolHealthErrorCode.STALE_DATA,
+                SymbolHealthStatus.GAPPED: SymbolHealthErrorCode.HISTORY_GAP,
+                SymbolHealthStatus.DEGRADED: SymbolHealthErrorCode.PROVIDER_BLOCKED,
+                SymbolHealthStatus.BLOCKED: SymbolHealthErrorCode.INVALID_CONTEXT,
+                SymbolHealthStatus.STARTING: SymbolHealthErrorCode.INVALID_CONTEXT,
+            }.get(public_status)
+            projection: Mapping[str, object] = {
+                "symbol": symbol,
+                "observedAt": evaluated_at,
+                "targetEnd": target_end,
+                "status": public_status,
+                "latestBarEnd": latest_bar_end,
+                "dataAgeSeconds": (
+                    None
+                    if latest_bar_end is None
+                    else max(0, int((evaluated_at - latest_bar_end).total_seconds()))
+                ),
+                "requiredDataComplete": False,
+                "fresh": False,
+                "gaps": restored_public_gaps,
+                "consecutiveIncompleteBuckets": restored_streak,
+                "lastRequiredBucketEnd": target_end if restored_streak > 0 else None,
+                "errorCode": error_code,
+                "actionable": False,
+            }
+            projection_observed_at = evaluated_at
+        else:
+            projection = resume_projection.model_dump(
+                mode="python",
+                round_trip=True,
+                by_alias=True,
+            )
+            projection_observed_at = resume_projection.observed_at
+        unit_of_work.projections.put_symbol_health(
+            symbol=symbol,
+            revision=after.revision,
+            activation_revision=activation_revision,
+            runtime_generation=(
+                runtime_generation
+                if resume_projection_generation is None
+                else resume_projection_generation
+            ),
+            projection=projection,
+            observed_at=projection_observed_at,
+        )
+        return unit_of_work.events.get(
+            monitor_event_id(
+                MonitorEventType.SYMBOL_HEALTH_UPDATED,
+                after.symbol,
+                str(after.revision),
+            )
+        )
+
+    def _persist_market_index_batch(self, prepared: RuntimeMarketIndexBatch) -> None:
+        if not isinstance(prepared, RuntimeMarketIndexBatch):
+            raise TypeError("prepared must be a RuntimeMarketIndexBatch")
+        with self._unit_of_work_factory() as unit_of_work:
+            for snapshot in sorted(
+                prepared.snapshots_by_index.values(),
+                key=lambda item: item.index_code.value,
+            ):
+                provider_revision = snapshot.cache_key.provider_content_revision
+                unit_of_work.projections.put_market_index_snapshot(
+                    snapshot,
+                    provider_content_revision=provider_revision,
+                )
+                unit_of_work.projections.advance_market_index_head(
+                    snapshot,
+                    provider_content_revision=provider_revision,
+                )
+            unit_of_work.commit()
+
+    @staticmethod
+    def _require_evaluated_plan_active(
+        unit_of_work: UnitOfWork,
+        plan: TradePlan,
+        *,
+        expected_revision: int,
+    ) -> None:
+        activation_state = unit_of_work.plans.get_activation_state(plan.symbol)
+        # The runtime service is also used as a narrow persistence primitive in
+        # tests and offline tooling that have no plan registry.  Once a symbol
+        # has entered the registry, however, its activation state is
+        # authoritative and a concurrent deactivation/rotation must fail closed.
+        if activation_state is None:
+            if expected_revision != 1:
+                raise StaleActivationGenerationError(plan.symbol)
+            return
+        if activation_state.revision != expected_revision:
+            raise StaleActivationGenerationError(plan.symbol)
+        active = unit_of_work.plans.get_active(plan.symbol)
+        if active is None or activation_state.plan_version_id != active.plan_version_id:
+            raise StaleActivationGenerationError(plan.symbol)
+        details = unit_of_work.plans.get_version_details(active.plan_version_id)
+        if (
+            details is None
+            or details.plan_hash != plan_sha256(plan)
+            or load_plan_json(details.payload_json) != plan
+        ):
+            raise StaleActivationGenerationError(plan.symbol)
+
+    @staticmethod
+    def _require_symbol_activation_revision(
+        unit_of_work: UnitOfWork,
+        *,
+        symbol: str,
+        expected_revision: int,
+    ) -> None:
+        state = unit_of_work.plans.get_activation_state(symbol)
+        if state is None:
+            if expected_revision != 1:
+                raise StaleActivationGenerationError(symbol)
+            return
+        active = unit_of_work.plans.get_active(symbol)
+        if (
+            state.revision != expected_revision
+            or active is None
+            or active.revision != expected_revision
+        ):
+            raise StaleActivationGenerationError(symbol)
+
+    def _capture_plan_activation_revision(self, plan: TradePlan) -> int:
+        with self._unit_of_work_factory() as unit_of_work:
+            state = unit_of_work.plans.get_activation_state(plan.symbol)
+            if state is None:
+                return 1
+            active = unit_of_work.plans.get_active(plan.symbol)
+            if active is None or active.revision != state.revision:
+                raise StaleActivationGenerationError(plan.symbol)
+            details = unit_of_work.plans.get_version_details(active.plan_version_id)
+            if (
+                details is None
+                or details.plan_hash != plan_sha256(plan)
+                or load_plan_json(details.payload_json) != plan
+            ):
+                raise StaleActivationGenerationError(plan.symbol)
+            return state.revision
+
+    @staticmethod
+    def _persist_projection_dependencies(
+        unit_of_work: UnitOfWork,
+        result: EvaluationResult,
+        *,
+        reference_market_snapshot: MarketIndexSnapshot | None,
+        health_snapshot: SymbolHealthSnapshot | None,
+        activation_revision: int,
+        runtime_generation: UUID,
+    ) -> MonitorEvent:
+        reference = result.snapshot.reference_market
+        if (reference is None) != (reference_market_snapshot is None):
+            raise ValueError("result and context reference-market snapshots must agree")
+        if reference_market_snapshot is not None:
+            if (
+                reference is None
+                or reference.snapshot_hash != reference_market_snapshot.snapshot_hash
+            ):
+                raise ValueError("result reference market crosses its immutable snapshot")
+            stored = unit_of_work.projections.get_market_index_snapshot(
+                reference_market_snapshot.snapshot_hash
+            )
+            if stored is None or stored.snapshot != reference_market_snapshot:
+                raise ValueError("result reference market is not durably persisted")
+
+        identity = result.evaluation_identity
+        if isinstance(identity, IntradayEvaluationIdentity):
+            target_end = identity.bucket_end
+        elif isinstance(identity, OfficialCloseEvaluationIdentity):
+            target_end = datetime.combine(
+                identity.official_trade_date,
+                time(15, 0),
+                result.snapshot.evaluated_at.tzinfo,
+            )
+        else:  # pragma: no cover - closed EvaluationIdentity union
+            raise TypeError("evaluation identity is not supported")
+
+        health = result.snapshot.data_health
+        if health_snapshot is not None and (
+            health_snapshot.symbol != result.snapshot.symbol
+            or health_snapshot.target_end != target_end
+            or health_snapshot.observed_at != result.snapshot.evaluated_at
+            or health_snapshot.data_health != health
+        ):
+            raise ValueError("runtime health snapshot must match its evaluation result")
+        current_health = unit_of_work.health.get_symbol(result.snapshot.symbol)
+        actionable = (
+            health.status.value == "LIVE"
+            and health.required_data_complete
+            and health.fresh
+        )
+        error_code = None if health_snapshot is None else health_snapshot.error_code
+        if not actionable and error_code is None:
+            error_code = {
+                "STALE": SymbolHealthErrorCode.STALE_DATA,
+                "GAPPED": SymbolHealthErrorCode.HISTORY_GAP,
+                "BLOCKED": SymbolHealthErrorCode.PROVIDER_BLOCKED,
+            }.get(health.status.value, SymbolHealthErrorCode.INVALID_CONTEXT)
+        gaps = () if health_snapshot is None else health_snapshot.gaps
+        incomplete_streak = (
+            0 if actionable else 1
+        ) if health_snapshot is None else health_snapshot.consecutive_incomplete_buckets
+        after = unit_of_work.health.upsert_symbol(
+            symbol=result.snapshot.symbol,
+            status=SymbolHealthStatus(health.status.value),
+            latest_bar_end=health.latest_bar_end,
+            data_age_seconds=0 if health.data_age_seconds is None else health.data_age_seconds,
+            gaps=gaps,
+            error_streak=(
+                0
+                if actionable
+                else 1 if current_health is None else current_health.error_streak + 1
+            ),
+            expected_revision=0 if current_health is None else current_health.revision,
+        )
+        unit_of_work.projections.put_symbol_health(
+            symbol=result.snapshot.symbol,
+            revision=after.revision,
+            activation_revision=activation_revision,
+            runtime_generation=runtime_generation,
+            projection={
+                "symbol": result.snapshot.symbol,
+                "observedAt": result.snapshot.evaluated_at,
+                "targetEnd": target_end,
+                "status": health.status,
+                "latestBarEnd": health.latest_bar_end,
+                "dataAgeSeconds": health.data_age_seconds,
+                "requiredDataComplete": health.required_data_complete,
+                "fresh": health.fresh,
+                "gaps": gaps,
+                "consecutiveIncompleteBuckets": incomplete_streak,
+                "lastRequiredBucketEnd": (
+                    health_snapshot.last_required_bucket_end
+                    if health_snapshot is not None
+                    else target_end if incomplete_streak > 0 else None
+                ),
+                "errorCode": error_code,
+                "actionable": actionable,
+            },
+            observed_at=result.snapshot.evaluated_at,
+        )
+        return unit_of_work.events.get(
+            monitor_event_id(
+                MonitorEventType.SYMBOL_HEALTH_UPDATED,
+                after.symbol,
+                str(after.revision),
+            )
+        )
+
+    async def _publish_committed_events(
+        self,
+        events: tuple[MonitorEvent | None, ...],
+    ) -> None:
+        published: set[UUID] = set()
+        for event in events:
+            if event is None or event.event_id in published:
+                continue
+            publication = self._publisher(event)
+            if isawaitable(publication):
+                await publication
+            published.add(event.event_id)
 
     @staticmethod
     def _apply_transitions(unit_of_work: UnitOfWork, result: EvaluationResult) -> None:
@@ -1338,6 +2122,120 @@ class RuntimeEvaluationService:
             alerted_signal=episode.alerted_signal,
             last_processed_bucket_end=episode.last_processed_bucket_end,
         )
+
+
+class RuntimeDeadlineCoordinator:
+    """Own one stock acquisition and reuse its immutable rows for a whole deadline."""
+
+    def __init__(
+        self,
+        *,
+        clock: Clock,
+        active_plans: ActivePlans,
+        symbol_service: SymbolService,
+        evaluation_service: RuntimeEvaluationService,
+    ) -> None:
+        if not isinstance(clock, Clock):
+            raise TypeError("clock must implement Clock")
+        if not callable(active_plans):
+            raise TypeError("active_plans must be callable")
+        if not isinstance(symbol_service, SymbolService):
+            raise TypeError("symbol_service must be a SymbolService")
+        if not isinstance(evaluation_service, RuntimeEvaluationService):
+            raise TypeError("evaluation_service must be a RuntimeEvaluationService")
+        self._clock = clock
+        self._active_plans = active_plans
+        self._symbol_service = symbol_service
+        self._evaluation_service = evaluation_service
+
+    async def run_deadline(
+        self,
+        deadline: MarketDeadline,
+    ) -> tuple[IntradayCycleResult | OfficialCloseCycleResult, ...]:
+        """Execute one scheduler deadline without performing duplicate quote fetches."""
+
+        if not isinstance(deadline, MarketDeadline):
+            raise TypeError("deadline must be a MarketDeadline")
+        plans = self._validated_active_plans(self._active_plans())
+        observed_at = max(_canonical_shanghai(self._clock.now()), deadline.due_at)
+        if deadline.kind is DeadlineKind.OFFICIAL_CLOSE:
+            if deadline.close_attempt is None:  # protected by MarketDeadline validation
+                raise ValueError("official-close deadline requires close_attempt")
+            return await self._evaluation_service.run_official_close_batch(
+                plans=plans,
+                trade_date=deadline.trade_date,
+                evaluated_at=observed_at,
+                close_attempt=deadline.close_attempt,
+            )
+
+        bar_end = deadline.bar_end
+        if bar_end is None:  # protected by MarketDeadline validation
+            raise ValueError("realtime deadline requires bar_end")
+        symbols = tuple(plan.symbol for plan in plans)
+        restore_states = self._evaluation_service.load_persisted_symbol_health(symbols)
+        self._symbol_service.restore_health(symbols=symbols, states=restore_states)
+        activation_revisions = {
+            state.symbol: state.activation_revision for state in restore_states
+        }
+        batch = await self._symbol_service.run_realtime_batch(
+            bar_end=bar_end,
+            observed_at=observed_at,
+            symbols=symbols,
+        )
+        if five_minute_bucket_end(bar_end) != bar_end:
+            await self._evaluation_service.persist_symbol_health_batch(
+                tuple(context.health for context in batch.contexts),
+                activation_revisions={
+                    context.symbol: activation_revisions[context.symbol]
+                    for context in batch.contexts
+                },
+            )
+            return ()
+        complete_contexts = {
+            context.symbol: context
+            for context in batch.contexts
+            if context.five_minute_bar is not None
+        }
+        await self._evaluation_service.persist_symbol_health_batch(
+            tuple(
+                context.health
+                for context in batch.contexts
+                if context.symbol not in complete_contexts
+            ),
+            activation_revisions={
+                context.symbol: activation_revisions[context.symbol]
+                for context in batch.contexts
+                if context.symbol not in complete_contexts
+            },
+        )
+        due_plans = tuple(plan for plan in plans if plan.symbol in complete_contexts)
+        if not due_plans:
+            return ()
+        minutes_by_symbol = {
+            symbol: context.minutes for symbol, context in complete_contexts.items()
+        }
+        return await self._evaluation_service.run_intraday_batch_from_minutes(
+            plans=due_plans,
+            bucket_end=bar_end,
+            evaluated_at=observed_at,
+            minutes_by_symbol={
+                plan.symbol: minutes_by_symbol[plan.symbol] for plan in due_plans
+            },
+            health_by_symbol={
+                plan.symbol: complete_contexts[plan.symbol].health for plan in due_plans
+            },
+            activation_revisions={
+                plan.symbol: activation_revisions[plan.symbol] for plan in due_plans
+            },
+        )
+
+    @staticmethod
+    def _validated_active_plans(value: object) -> tuple[TradePlan, ...]:
+        if type(value) is not tuple or any(not isinstance(plan, TradePlan) for plan in value):
+            raise TypeError("active_plans must return a tuple of TradePlan values")
+        if len(value) > 10:
+            raise ActiveSymbolLimitError(len(value))
+        return value
 
 
 class ActiveSymbolLimitError(RuntimeError):
@@ -1460,10 +2358,14 @@ class RuntimeLifecycleService:
         self._schedule_wait_task: asyncio.Task[MarketDeadline | None] | None = None
         self._work_tasks: set[asyncio.Task[object]] = set()
         self._last_deadline_at: datetime | None = None
+        self._unexpected_run_exit = False
+        self._cleanup_failed = False
+        self._cleanup_error: BaseException | None = None
         self._stopping = False
         self._cleanup_complete = False
         self._stop_task: asyncio.Task[None] | None = None
         self._shutdown_requested_event: asyncio.Event | None = None
+        self._runtime_generation = uuid4()
 
     @property
     def status(self) -> RuntimeServiceStatus:
@@ -1481,6 +2383,10 @@ class RuntimeLifecycleService:
             + int(stopping is not None and not stopping.done())
         )
 
+    @property
+    def runtime_generation(self) -> UUID:
+        return self._runtime_generation
+
     def health(self) -> RuntimeHealthSnapshot:
         """Build one current snapshot from owned lifecycle and injected dynamic facts."""
 
@@ -1494,6 +2400,7 @@ class RuntimeLifecycleService:
             **details.model_dump(mode="python", round_trip=True),
             status=self._status,
             read_only=self._read_only,
+            runtime_generation=self._runtime_generation,
             observed_at=observed_at,
             started_at=self._started_at,
             stopped_at=self._stopped_at,
@@ -1595,6 +2502,7 @@ class RuntimeLifecycleService:
             deadline = await self._wait_for_next(after=None)
             if deadline is None or not self._accepting_work:
                 return None
+            self._advance_progress_deadline(deadline)
             return await self._execute_deadline(deadline)
         finally:
             try:
@@ -1607,6 +2515,7 @@ class RuntimeLifecycleService:
         """Run scheduled deadlines until stopped, then close every owned resource."""
 
         schedule_owner = self._claim_schedule_owner()
+        startup: RuntimeStartupResult | None = None
         try:
             startup = await self.start()
             if startup.read_only:
@@ -1625,20 +2534,44 @@ class RuntimeLifecycleService:
                     raise
                 if deadline is None or not self._accepting_work:
                     break
+                self._advance_progress_deadline(deadline)
                 try:
                     await self._execute_deadline(deadline)
                 except asyncio.CancelledError:
                     if not self._accepting_work:
                         break
                     raise
-                self._last_deadline_at = deadline.due_at
-                next_deadline = self._scheduler.next_deadline(after=self._last_deadline_at)
-                self._next_poll_at = None if next_deadline is None else next_deadline.due_at
         finally:
+            self._unexpected_run_exit = (
+                startup is not None
+                and startup.status is RuntimeServiceStatus.RUNNING
+                and not self._stopping
+            )
             try:
                 await self.stop()
             finally:
                 self._release_schedule_owner(schedule_owner)
+
+    def _advance_progress_deadline(self, deadline: MarketDeadline) -> None:
+        """Publish the following due time before current provider work can block."""
+
+        self._last_deadline_at = deadline.due_at
+        next_deadline = self._scheduler.next_deadline(after=self._last_deadline_at)
+        if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):
+            raise TypeError("scheduler must return MarketDeadline or None")
+        self._next_poll_at = None if next_deadline is None else next_deadline.due_at
+
+    @property
+    def unexpected_run_exit(self) -> bool:
+        """Whether a RUNNING loop ended before an explicit stop request."""
+
+        return self._unexpected_run_exit
+
+    @property
+    def cleanup_failed(self) -> bool:
+        """Whether cleanup failed and a replacement runtime would be unsafe."""
+
+        return self._cleanup_failed
 
     async def stop(self) -> None:
         """Stop admission, bound task completion, close resources, and checkpoint WAL."""
@@ -1652,7 +2585,17 @@ class RuntimeLifecycleService:
             stop_task = asyncio.create_task(self._stop_sequence(initiator=initiator))
             stop_task.add_done_callback(self._observe_stop_result)
             self._stop_task = stop_task
-        await asyncio.shield(stop_task)
+        try:
+            await asyncio.shield(stop_task)
+        except asyncio.CancelledError:
+            if stop_task.cancelled():
+                self._record_cleanup_failure(
+                    RuntimeError("runtime cleanup task was cancelled")
+                )
+            raise
+        except Exception as error:
+            self._record_cleanup_failure(error)
+            raise
 
     async def _stop_sequence(self, *, initiator: asyncio.Task[object] | None) -> None:
         """Run cleanup independently from any one public stop waiter."""
@@ -1663,6 +2606,15 @@ class RuntimeLifecycleService:
         if self._shutdown_requested_event is not None:
             self._shutdown_requested_event.set()
         first_error: BaseException | None = None
+        if not self._request_controller_closed:
+            try:
+                await self._invoke(self._request_controller.close)
+            except BaseException as error:
+                first_error = error
+            else:
+                self._request_controller_closed = not callable(
+                    getattr(self._request_controller, "aclose", None)
+                )
         current_task = asyncio.current_task()
         start_task = self._start_task
         if start_task is not None and start_task is not current_task and not start_task.done():
@@ -1681,11 +2633,32 @@ class RuntimeLifecycleService:
         pending = await self._finish_owned_tasks(active) if active else set()
         self._work_tasks = {task for task in self._work_tasks if not task.done()}
         if pending:
-            raise RuntimeShutdownError(len(pending))
+            first_error = RuntimeShutdownError(len(pending))
+            if not self._request_controller_closed:
+                try:
+                    await self._invoke(
+                        getattr(
+                            self._request_controller,
+                            "aclose",
+                            self._request_controller.close,
+                        )
+                    )
+                except BaseException:
+                    pass
+                else:
+                    self._request_controller_closed = True
+            raise first_error
 
         resources = (
             ("_dispatcher_closed", self._dispatcher.aclose),
-            ("_request_controller_closed", self._request_controller.close),
+            (
+                "_request_controller_closed",
+                getattr(
+                    self._request_controller,
+                    "aclose",
+                    self._request_controller.close,
+                ),
+            ),
         )
         for state_name, operation in resources:
             if getattr(self, state_name):
@@ -1719,6 +2692,8 @@ class RuntimeLifecycleService:
         self._status = RuntimeServiceStatus.STOPPED
         self._stopped_at = _canonical_shanghai(self._clock.now())
         self._cleanup_complete = True
+        self._cleanup_failed = False
+        self._cleanup_error = None
 
     async def _wait_for_next(self, *, after: datetime | None) -> MarketDeadline | None:
         wait_task = asyncio.create_task(self._scheduler.wait_for_next(after=after))
@@ -1773,10 +2748,19 @@ class RuntimeLifecycleService:
             )
         return set(pending)
 
-    @staticmethod
-    def _observe_stop_result(task: asyncio.Task[None]) -> None:
-        if not task.cancelled():
-            task.exception()
+    def _observe_stop_result(self, task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            self._record_cleanup_failure(RuntimeError("runtime cleanup task was cancelled"))
+            return
+        error = task.exception()
+        if error is not None:
+            self._record_cleanup_failure(error)
+
+    def _record_cleanup_failure(self, error: BaseException) -> None:
+        if self._cleanup_complete or self._cleanup_failed:
+            return
+        self._cleanup_failed = True
+        self._cleanup_error = error
 
     @staticmethod
     async def _invoke(operation: Callable[..., object], *args: object) -> object:
@@ -1870,6 +2854,72 @@ def _json_value(value: str) -> object:
     return parsed
 
 
+def _validate_persisted_symbol_health(value: object) -> _PersistedSymbolHealth:
+    """Validate the actual JSON storage representation under strict model rules."""
+
+    try:
+        wire_value = json.dumps(
+            value,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            default=_json_wire_default,
+        )
+        return _PersistedSymbolHealth.model_validate_json(wire_value)
+    except (TypeError, ValueError, RecursionError):
+        raise ValueError("persisted symbol health projection is invalid") from None
+
+
+def _optional_market_datetime(value: object, *, name: str) -> datetime | None:
+    if value is None:
+        return None
+    candidate = value
+    if type(value) is str:
+        try:
+            candidate = datetime.fromisoformat(value)
+        except ValueError:
+            raise ValueError(f"{name} is invalid") from None
+    try:
+        return _SHANGHAI_DATETIME.validate_python(candidate, strict=True)
+    except ValueError:
+        raise ValueError(f"{name} is invalid") from None
+
+
+def _runtime_generation(value: object, *, name: str) -> UUID:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be a canonical UUID string")
+    try:
+        parsed = UUID(value)
+    except ValueError as error:
+        raise ValueError(f"{name} must be a canonical UUID string") from error
+    if str(parsed) != value or parsed.version != 4:
+        raise ValueError(f"{name} must be a canonical UUIDv4 string")
+    return parsed
+
+
+def _legacy_resume_gaps(value: object) -> tuple[datetime, ...]:
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("persisted CLOSE_PENDING resume gaps are invalid")
+    gaps: list[datetime] = []
+    for item in value:
+        gap = _optional_market_datetime(
+            item,
+            name="persisted CLOSE_PENDING resume gap",
+        )
+        if gap is None:
+            raise ValueError("persisted CLOSE_PENDING resume gaps are invalid")
+        gaps.append(gap)
+    canonical = tuple(gaps)
+    if canonical != tuple(sorted(set(canonical))):
+        raise ValueError("persisted CLOSE_PENDING resume gaps are invalid")
+    return canonical
+
+
+def _json_wire_default(value: object) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    raise TypeError(f"unsupported persisted JSON value: {type(value).__name__}")
+
+
 def _close_pending_payload(value: str) -> tuple[date, dict[str, object]]:
     parsed = _json_value(value)
     if not isinstance(parsed, dict) or set(parsed) != {
@@ -1882,12 +2932,10 @@ def _close_pending_payload(value: str) -> tuple[date, dict[str, object]]:
     if (
         type(date_text) is not str
         or not isinstance(resume, dict)
-        or set(resume)
-        != {
-            "status",
-            "gaps",
-            "errorStreak",
-        }
+        or not {"status", "gaps", "errorStreak"}.issubset(resume)
+        or not set(resume).issubset(
+            {"status", "gaps", "errorStreak", "latestBarEnd", "dataAgeSeconds"}
+        )
     ):
         raise ValueError("persisted CLOSE_PENDING health is invalid") from None
     try:
@@ -1897,6 +2945,16 @@ def _close_pending_payload(value: str) -> tuple[date, dict[str, object]]:
         pending_date = None
         resume_status = None
     error_streak = resume.get("errorStreak")
+    data_age_seconds = resume.get("dataAgeSeconds")
+    if data_age_seconds is not None and (
+        type(data_age_seconds) is not int or data_age_seconds < 0
+    ):
+        raise ValueError("persisted CLOSE_PENDING health is invalid") from None
+    latest_bar_end = resume.get("latestBarEnd")
+    _optional_market_datetime(
+        latest_bar_end,
+        name="persisted CLOSE_PENDING resume latestBarEnd",
+    )
     if (
         pending_date is None
         or pending_date.isoformat() != date_text
@@ -1907,11 +2965,16 @@ def _close_pending_payload(value: str) -> tuple[date, dict[str, object]]:
         or "gaps" not in resume
     ):
         raise ValueError("persisted CLOSE_PENDING health is invalid") from None
-    return pending_date, {
+    restored: dict[str, object] = {
         "status": resume_status,
         "gaps": resume["gaps"],
         "errorStreak": error_streak,
     }
+    if "latestBarEnd" in resume:
+        restored["latestBarEnd"] = latest_bar_end
+    if "dataAgeSeconds" in resume:
+        restored["dataAgeSeconds"] = data_age_seconds
+    return pending_date, restored
 
 
 __all__ = [
@@ -1924,8 +2987,10 @@ __all__ = [
     "OfficialCloseCycleStatus",
     "OfficialCloseErrorCode",
     "OfficialCloseMarketFacts",
+    "RuntimeDeadlineCoordinator",
     "RuntimeEvaluationService",
     "RuntimeLifecycleService",
     "RuntimeShutdownError",
     "RuntimeStartupResult",
+    "StaleActivationGenerationError",
 ]

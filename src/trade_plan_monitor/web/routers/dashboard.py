@@ -9,7 +9,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal, Protocol, Self, cast
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import UUID4, BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import to_json
 
 from trade_plan_monitor.decision.models import (
@@ -50,9 +50,9 @@ if TYPE_CHECKING:
     from trade_plan_monitor.web.routers.symbols import (
         BarInterval,
         BarPage,
-        SymbolDetailResponse,
+        SymbolCollectionResponse,
+        SymbolDetailProjectionResponse,
         SymbolEventPage,
-        SymbolPage,
     )
 
 router = APIRouter(prefix="/api/v1", tags=["monitor"])
@@ -123,6 +123,7 @@ Sha256Hex = Annotated[
     Field(strict=True, min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
 ]
 NonNegativeInteger = Annotated[int, Field(strict=True, ge=0)]
+SafeMonitorSequence = Annotated[int, Field(strict=True, ge=0, le=2**53 - 1)]
 PositiveFen = Annotated[int, Field(strict=True, gt=0)]
 FiniteDecimal = Annotated[Decimal, Field(strict=True, allow_inf_nan=False)]
 
@@ -473,10 +474,9 @@ class SymbolSummaryView(ReadModel):
             raise ValueError("summary observation cannot precede its decision")
         if self.decision.symbol != self.symbol:
             raise ValueError("summary and decision symbols must match")
-        if not self.connected and self.decision.data_health.status is DataHealthStatus.LIVE:
-            raise ValueError("disconnected data cannot be labelled LIVE")
-        if self.decision.data_health.status is DataHealthStatus.LIVE and not self.connected:
-            raise ValueError("LIVE data requires a connected source")
+        # `decision.data_health` is immutable evidence at evaluation time;
+        # `connected` is the current persisted-symbol plus lifecycle liveness.
+        # They intentionally may diverge after a disconnect or restart.
         return self
 
 
@@ -489,9 +489,51 @@ class DashboardCounts(ReadModel):
     normal: NonNegativeInteger
 
 
-class DashboardResponse(ReadModel):
-    sequence: NonNegativeInteger
+class ProjectionUnavailableReason(StrEnum):
+    """Stable, non-sensitive reasons that a read projection does not exist yet."""
+
+    EMPTY_DATABASE = "EMPTY_DATABASE"
+    NO_ACTIVE_PLANS = "NO_ACTIVE_PLANS"
+    NO_ACTIVE_PLAN = "NO_ACTIVE_PLAN"
+    AWAITING_FIRST_EVALUATION = "AWAITING_FIRST_EVALUATION"
+
+
+class ProjectionUnavailableResponse(ReadModel):
+    """An honest successful response when no authoritative dashboard exists."""
+
+    availability: Literal["UNAVAILABLE"]
     observed_at: ShanghaiDatetime
+    reason: ProjectionUnavailableReason
+    sequence: SafeMonitorSequence
+    symbol: AShareSymbol | None = None
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> Self:
+        if self.symbol is None and self.reason is ProjectionUnavailableReason.NO_ACTIVE_PLAN:
+            raise ValueError("aggregate unavailability cannot use NO_ACTIVE_PLAN")
+        if self.symbol is not None and self.reason in {
+            ProjectionUnavailableReason.EMPTY_DATABASE,
+            ProjectionUnavailableReason.NO_ACTIVE_PLANS,
+        }:
+            raise ValueError("symbol unavailability cannot use an aggregate reason")
+        return self
+
+
+class DashboardProjectionUnavailableResponse(ReadModel):
+    availability: Literal["UNAVAILABLE"]
+    observed_at: ShanghaiDatetime
+    reason: Literal[
+        ProjectionUnavailableReason.EMPTY_DATABASE,
+        ProjectionUnavailableReason.NO_ACTIVE_PLANS,
+        ProjectionUnavailableReason.AWAITING_FIRST_EVALUATION,
+    ]
+    sequence: SafeMonitorSequence
+
+
+class DashboardResponse(ReadModel):
+    sequence: SafeMonitorSequence
+    observed_at: ShanghaiDatetime
+    runtime_generation: UUID4 | None
     connection_status: ConnectionStatus
     data_age_seconds: NonNegativeInteger | None
     counts: DashboardCounts
@@ -505,10 +547,13 @@ class DashboardResponse(ReadModel):
             raise ValueError("dashboard symbols must be unique")
         if any(symbol.observed_at > self.observed_at for symbol in self.symbols):
             raise ValueError("symbol observation cannot follow dashboard observation")
-        if self.connection_status is ConnectionStatus.DISCONNECTED and any(
-            symbol.decision.data_health.status is DataHealthStatus.LIVE for symbol in self.symbols
+        connected_count = sum(symbol.connected for symbol in self.symbols)
+        if self.connection_status is ConnectionStatus.CONNECTED and connected_count != len(
+            self.symbols
         ):
-            raise ValueError("disconnected dashboard cannot contain LIVE symbols")
+            raise ValueError("connected dashboard requires every current symbol connection")
+        if self.connection_status is ConnectionStatus.DISCONNECTED and connected_count != 0:
+            raise ValueError("disconnected dashboard cannot contain a current connection")
         index_codes = tuple(item.index_code for item in self.market_indexes)
         if len(set(index_codes)) != len(index_codes):
             raise ValueError("dashboard market-index identities must be unique")
@@ -519,14 +564,31 @@ class DashboardResponse(ReadModel):
         return self
 
 
+DashboardProjectionResponse = DashboardResponse | DashboardProjectionUnavailableResponse
+
+
+def validate_dashboard_projection(value: object) -> DashboardProjectionResponse:
+    """Revalidate either a complete snapshot or the explicit unavailable state."""
+
+    if isinstance(value, ReadModel):
+        value = value.model_dump(mode="python", round_trip=True)
+    if isinstance(value, Mapping) and value.get("availability") == "UNAVAILABLE":
+        return DashboardProjectionUnavailableResponse.model_validate_json(to_json(value))
+    return validate_read_response(value, DashboardResponse)
+
+
 class MonitorReadService(Protocol):
     """Application-service surface consumed by the T036 read adapters."""
 
-    async def get_dashboard(self) -> DashboardResponse: ...
+    async def get_dashboard(self) -> DashboardProjectionResponse: ...
 
-    async def list_symbols(self, *, offset: int, limit: int) -> SymbolPage: ...
+    async def list_symbols(self, *, offset: int, limit: int) -> SymbolCollectionResponse: ...
 
-    async def get_symbol(self, *, symbol: str) -> SymbolDetailResponse | None: ...
+    async def get_symbol(
+        self,
+        *,
+        symbol: str,
+    ) -> SymbolDetailProjectionResponse | None: ...
 
     async def list_symbol_bars(
         self,
@@ -567,16 +629,23 @@ ReadServiceDependency = Annotated[
 ]
 
 
-@router.get("/dashboard", response_model=DashboardResponse)
+@router.get(
+    "/dashboard",
+    response_model=DashboardProjectionResponse,
+    response_model_exclude_none=True,
+)
 async def get_dashboard(
     service: ReadServiceDependency,
-) -> DashboardResponse:
-    return validate_read_response(await service.get_dashboard(), DashboardResponse)
+) -> DashboardProjectionResponse:
+    return validate_dashboard_projection(await service.get_dashboard())
 
 
 __all__ = [
     "AuthoritativeDecisionView",
+    "DashboardProjectionResponse",
+    "DashboardProjectionUnavailableResponse",
     "DashboardResponse",
+    "ProjectionUnavailableResponse",
     "IndexConditionEvidenceView",
     "IndexConditionProgressView",
     "MarketIndexSnapshotView",
@@ -587,5 +656,6 @@ __all__ = [
     "SymbolSummaryView",
     "get_monitor_read_service",
     "router",
+    "validate_dashboard_projection",
     "validate_read_response",
 ]

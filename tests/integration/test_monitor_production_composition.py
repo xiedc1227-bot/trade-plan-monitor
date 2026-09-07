@@ -138,6 +138,31 @@ class _RecordingRuntime:
         self.allow_run_exit.set()
 
 
+class _ControlledRestartDelay:
+    def __init__(self) -> None:
+        self.calls: list[float] = []
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def __call__(self, delay_seconds: float) -> None:
+        self.calls.append(delay_seconds)
+        self.entered.set()
+        await self.release.wait()
+
+
+class _CleanupFailingRuntime(_RecordingRuntime):
+    async def stop(self) -> None:
+        self.stop_calls += 1
+        self.allow_run_exit.set()
+        raise RuntimeError("sanitized cleanup failure")
+
+
+class _StartupFailingRuntime(_RecordingRuntime):
+    async def start(self) -> RuntimeHealthSnapshot:
+        self.start_calls += 1
+        raise RuntimeError("sanitized startup failure")
+
+
 class _WebSocketService:
     async def serve(self, websocket, *, after: int) -> None:
         await websocket.accept()
@@ -370,6 +395,271 @@ def test_monitor_composition_degrades_a_runtime_whose_runner_exits_early() -> No
     asyncio.run(scenario())
 
 
+def test_monitor_composition_projects_degraded_health_during_backoff_then_restarts_fresh(
+) -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        failed = _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+        failed.allow_run_exit.set()
+        recovered = _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+        replacements: list[_RecordingRuntime] = []
+        delay = _ControlledRestartDelay()
+        read_service = _DegradedReadService()
+
+        def runtime_factory() -> _RecordingRuntime:
+            replacements.append(recovered)
+            return recovered
+
+        composition = MonitorWebComposition(
+            runtime=failed,
+            runtime_factory=runtime_factory,
+            restart_sleep=delay,
+            read_service=read_service,
+        )
+
+        await composition.start()
+        await asyncio.wait_for(delay.entered.wait(), timeout=0.2)
+
+        during_backoff = composition.health()
+        assert during_backoff.status is RuntimeServiceStatus.DEGRADED
+        assert during_backoff.read_only is True
+        assert during_backoff.next_poll_at is None
+        assert failed.stop_calls == 1
+        assert replacements == []
+        assert composition.read_service is read_service
+
+        delay.release.set()
+        await asyncio.wait_for(recovered.run_started.wait(), timeout=0.2)
+
+        after_restart = composition.health()
+        assert after_restart.status is RuntimeServiceStatus.RUNNING
+        assert after_restart.read_only is False
+        assert delay.calls == [1.0]
+        assert replacements == [recovered]
+        assert recovered.start_calls == 1
+        assert recovered.run_calls == 1
+        assert composition.read_service is read_service
+
+        await composition.stop()
+        assert recovered.stop_calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_monitor_composition_exhausts_exact_restart_budget_without_orphan_tasks() -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        runtimes = [
+            _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+            for _ in range(4)
+        ]
+        for runtime in runtimes:
+            runtime.allow_run_exit.set()
+        replacement_index = 1
+        delays: list[float] = []
+
+        def runtime_factory() -> _RecordingRuntime:
+            nonlocal replacement_index
+            runtime = runtimes[replacement_index]
+            replacement_index += 1
+            return runtime
+
+        async def restart_sleep(delay_seconds: float) -> None:
+            delays.append(delay_seconds)
+            await asyncio.sleep(0)
+
+        composition = MonitorWebComposition(
+            runtime=runtimes[0],
+            runtime_factory=runtime_factory,
+            restart_sleep=restart_sleep,
+            read_service=_DegradedReadService(),
+        )
+
+        await composition.start()
+        for _ in range(50):
+            if all(runtime.stop_calls == 1 for runtime in runtimes):
+                break
+            await asyncio.sleep(0)
+
+        exhausted = composition.health()
+        assert exhausted.status is RuntimeServiceStatus.DEGRADED
+        assert exhausted.read_only is True
+        assert exhausted.next_poll_at is None
+        assert delays == [1.0, 2.0, 4.0]
+        assert replacement_index == 4
+        assert [runtime.start_calls for runtime in runtimes] == [1, 1, 1, 1]
+        assert [runtime.run_calls for runtime in runtimes] == [1, 1, 1, 1]
+        assert [runtime.stop_calls for runtime in runtimes] == [1, 1, 1, 1]
+
+        await composition.stop()
+        await asyncio.sleep(0)
+        assert not any(
+            task.get_name() == "trade-plan-monitor-runtime"
+            for task in asyncio.all_tasks()
+            if task is not asyncio.current_task()
+        )
+
+    asyncio.run(scenario())
+
+
+def test_monitor_composition_never_restarts_after_cleanup_failure() -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        failed = _CleanupFailingRuntime(status=RuntimeServiceStatus.RUNNING)
+        failed.allow_run_exit.set()
+        factory_calls = 0
+        delays: list[float] = []
+
+        def runtime_factory() -> _RecordingRuntime:
+            nonlocal factory_calls
+            factory_calls += 1
+            return _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+
+        async def restart_sleep(delay_seconds: float) -> None:
+            delays.append(delay_seconds)
+
+        composition = MonitorWebComposition(
+            runtime=failed,
+            runtime_factory=runtime_factory,
+            restart_sleep=restart_sleep,
+            read_service=_DegradedReadService(),
+        )
+
+        await composition.start()
+        for _ in range(20):
+            if failed.stop_calls:
+                break
+            await asyncio.sleep(0)
+
+        snapshot = composition.health()
+        assert snapshot.status is RuntimeServiceStatus.DEGRADED
+        assert snapshot.read_only is True
+        assert snapshot.next_poll_at is None
+        assert failed.stop_calls == 1
+        assert factory_calls == 0
+        assert delays == []
+        with pytest.raises(RuntimeError, match="cleanup failure"):
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_monitor_composition_never_retries_a_replacement_startup_failure() -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        failed = _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+        failed.allow_run_exit.set()
+        replacement = _StartupFailingRuntime(status=RuntimeServiceStatus.RUNNING)
+        factory_calls = 0
+
+        def runtime_factory() -> _StartupFailingRuntime:
+            nonlocal factory_calls
+            factory_calls += 1
+            return replacement
+
+        async def restart_sleep(_delay_seconds: float) -> None:
+            await asyncio.sleep(0)
+
+        composition = MonitorWebComposition(
+            runtime=failed,
+            runtime_factory=runtime_factory,
+            restart_sleep=restart_sleep,
+            read_service=_DegradedReadService(),
+        )
+
+        await composition.start()
+        for _ in range(20):
+            if replacement.stop_calls:
+                break
+            await asyncio.sleep(0)
+
+        snapshot = composition.health()
+        assert snapshot.status is RuntimeServiceStatus.DEGRADED
+        assert snapshot.read_only is True
+        assert snapshot.next_poll_at is None
+        assert factory_calls == 1
+        assert replacement.start_calls == 1
+        assert replacement.run_calls == 0
+        assert replacement.stop_calls == 1
+        await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_monitor_composition_initial_startup_failure_cleans_once_and_is_terminal() -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        runtime = _StartupFailingRuntime(status=RuntimeServiceStatus.RUNNING)
+        factory_calls = 0
+
+        def runtime_factory() -> _RecordingRuntime:
+            nonlocal factory_calls
+            factory_calls += 1
+            return _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+
+        composition = MonitorWebComposition(
+            runtime=runtime,
+            runtime_factory=runtime_factory,
+            read_service=_DegradedReadService(),
+        )
+
+        with pytest.raises(RuntimeError, match="startup failure"):
+            await composition.start()
+
+        assert runtime.start_calls == 1
+        assert runtime.stop_calls == 1
+        assert factory_calls == 0
+        with pytest.raises(RuntimeError, match="already stopped"):
+            await composition.start()
+
+        await composition.stop()
+        assert runtime.stop_calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_monitor_composition_stop_cancels_and_joins_restart_delay() -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        failed = _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+        failed.allow_run_exit.set()
+        delay = _ControlledRestartDelay()
+        factory_calls = 0
+
+        def runtime_factory() -> _RecordingRuntime:
+            nonlocal factory_calls
+            factory_calls += 1
+            return _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+
+        composition = MonitorWebComposition(
+            runtime=failed,
+            runtime_factory=runtime_factory,
+            restart_sleep=delay,
+            read_service=_DegradedReadService(),
+        )
+
+        await composition.start()
+        await asyncio.wait_for(delay.entered.wait(), timeout=0.2)
+        await composition.stop()
+
+        assert factory_calls == 0
+        assert delay.calls == [1.0]
+        assert failed.stop_calls == 1
+        assert not any(
+            task.get_name() == "trade-plan-monitor-runtime"
+            for task in asyncio.all_tasks()
+            if task is not asyncio.current_task()
+        )
+
+    asyncio.run(scenario())
+
+
 def test_lifespan_binds_composed_services_and_removes_only_owned_bindings() -> None:
     from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
 
@@ -466,7 +756,7 @@ def test_lifespan_rolls_back_partial_monitor_service_binding() -> None:
     assert events == ["start", "stop"]
 
 
-def test_unavailable_default_read_projection_returns_service_unavailable(
+def test_broken_injected_read_projection_remains_service_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -523,6 +813,11 @@ def test_default_monitor_composition_starts_offline_with_safe_health_and_websock
         backtest_lifecycle_factory=_InertBacktestLifecycle,
     ) as app:
         with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            from trade_plan_monitor.web.persistent_monitor_read_service import (
+                PersistentMonitorReadService,
+            )
+
+            assert isinstance(app.state.monitor_read_service, PersistentMonitorReadService)
             health = client.get("/api/v1/health")
             dashboard = client.get("/api/v1/dashboard")
             with client.websocket_connect("/ws/v1/monitor?after=0"):
@@ -534,12 +829,15 @@ def test_default_monitor_composition_starts_offline_with_safe_health_and_websock
     assert health.json()["nextPollAt"] is None
     assert health.json()["database"]["status"] == "READY"
     assert health.json()["database"]["walStatus"] == "READY"
+    assert health.json()["executor"]["maxWorkers"] == 1
     assert len(health.json()["providers"]) == 5
     assert {provider["status"] for provider in health.json()["providers"]} == {
         "UNVERIFIED"
     }
-    assert dashboard.status_code == 503
-    assert dashboard.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
+    assert dashboard.status_code == 200
+    assert dashboard.json()["availability"] == "UNAVAILABLE"
+    assert dashboard.json()["reason"] == "EMPTY_DATABASE"
+    assert dashboard.json()["sequence"] == 0
     assert "token" not in health.text.casefold()
     assert str(tmp_path) not in health.text
     assert database_path.is_file()

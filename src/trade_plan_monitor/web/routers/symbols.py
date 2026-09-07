@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Path, Query
 from pydantic import Field, model_validator
@@ -15,8 +15,10 @@ from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.routers.dashboard import (
     IndexConditionEvidenceView,
+    ProjectionUnavailableReason,
     ReadModel,
     ReadServiceDependency,
+    SafeMonitorSequence,
     Sha256Hex,
     SymbolReferenceMarketView,
     SymbolSummaryView,
@@ -125,6 +127,52 @@ class SymbolPage(ReadModel):
         return self
 
 
+class SymbolCollectionUnavailableResponse(ReadModel):
+    availability: Literal["UNAVAILABLE"]
+    observed_at: ShanghaiDatetime
+    reason: Literal[
+        ProjectionUnavailableReason.EMPTY_DATABASE,
+        ProjectionUnavailableReason.NO_ACTIVE_PLANS,
+        ProjectionUnavailableReason.AWAITING_FIRST_EVALUATION,
+    ]
+    sequence: SafeMonitorSequence
+
+
+class SymbolDetailUnavailableResponse(ReadModel):
+    availability: Literal["UNAVAILABLE"]
+    observed_at: ShanghaiDatetime
+    reason: Literal[
+        ProjectionUnavailableReason.NO_ACTIVE_PLAN,
+        ProjectionUnavailableReason.AWAITING_FIRST_EVALUATION,
+    ]
+    sequence: SafeMonitorSequence
+    symbol: AShareSymbol
+
+
+SymbolCollectionResponse = SymbolPage | SymbolCollectionUnavailableResponse
+SymbolDetailProjectionResponse = SymbolDetailResponse | SymbolDetailUnavailableResponse
+
+
+def _validate_symbol_projection[
+    ReadModelT: ReadModel
+](
+    value: object,
+    model_type: type[ReadModelT],
+    *,
+    symbol: str | None,
+) -> ReadModelT | SymbolCollectionUnavailableResponse | SymbolDetailUnavailableResponse:
+    if isinstance(value, ReadModel):
+        value = value.model_dump(mode="python", round_trip=True)
+    if isinstance(value, dict) and value.get("availability") == "UNAVAILABLE":
+        if symbol is None:
+            return validate_read_response(value, SymbolCollectionUnavailableResponse)
+        response = validate_read_response(value, SymbolDetailUnavailableResponse)
+        if response.symbol != symbol:
+            raise ValueError("unavailable projection scope does not match the request")
+        return response
+    return validate_read_response(value, model_type)
+
+
 class BarView(ReadModel):
     symbol: AShareSymbol
     interval: BarInterval
@@ -174,7 +222,7 @@ class BarPage(ReadModel):
 
 class SymbolEventView(ReadModel):
     symbol: AShareSymbol
-    sequence: Annotated[int, Field(strict=True, ge=0)]
+    sequence: SafeMonitorSequence
     event_id: Annotated[
         str,
         Field(
@@ -236,16 +284,23 @@ def _ensure_requested_page(
         raise ValueError("service response pagination does not match the request")
 
 
-@router.get("/symbols", response_model=SymbolPage)
+@router.get(
+    "/symbols",
+    response_model=SymbolCollectionResponse,
+    response_model_exclude_none=True,
+)
 async def list_symbols(
     service: ReadServiceDependency,
     offset: OffsetQuery = 0,
     limit: LimitQuery = _DEFAULT_LIMIT,
-) -> SymbolPage:
-    response = validate_read_response(
+) -> SymbolCollectionResponse:
+    response = _validate_symbol_projection(
         await service.list_symbols(offset=offset, limit=limit),
         SymbolPage,
+        symbol=None,
     )
+    if isinstance(response, SymbolCollectionUnavailableResponse):
+        return response
     _ensure_requested_page(
         response_offset=response.offset,
         response_limit=response.limit,
@@ -255,15 +310,21 @@ async def list_symbols(
     return response
 
 
-@router.get("/symbols/{symbol}", response_model=SymbolDetailResponse)
+@router.get(
+    "/symbols/{symbol}",
+    response_model=SymbolDetailProjectionResponse,
+    response_model_exclude_none=True,
+)
 async def get_symbol(
     symbol: SymbolPath,
     service: ReadServiceDependency,
-) -> SymbolDetailResponse:
+) -> SymbolDetailProjectionResponse:
     value = await service.get_symbol(symbol=symbol)
     if value is None:
         raise ApiError(ApiErrorCode.NOT_FOUND)
-    response = validate_read_response(value, SymbolDetailResponse)
+    response = _validate_symbol_projection(value, SymbolDetailResponse, symbol=symbol)
+    if isinstance(response, SymbolDetailUnavailableResponse):
+        return response
     if response.summary.symbol != symbol:
         raise ValueError("service response symbol does not match the requested symbol")
     return response
