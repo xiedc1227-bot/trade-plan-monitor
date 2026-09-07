@@ -6,7 +6,7 @@
 
 Convert pasted natural-language trade plans into reviewable `plan-domain` drafts through a user-configured AI service. AI performs extraction and normalization only; it cannot activate plans or participate in live decisions.
 
-The default service is DeepSeek through its OpenAI-format Chat Completions endpoint. The user can change the request profile, base URL, model, secret reference, and bounded request settings, or select another reviewed OpenAI-compatible service. The user can test connectivity, paste a Chinese plan, inspect field evidence, assumptions, and omissions, edit the structured result, run deterministic validation, and activate through a separate explicit action.
+The default service is DeepSeek through its OpenAI-format Chat Completions endpoint. The user can change the request profile, base URL, model, directly configured API key, and bounded request settings, or select another reviewed OpenAI-compatible service. The user can test connectivity, paste a Chinese plan, inspect field evidence, assumptions, and omissions, edit the structured result, run deterministic validation, and activate through a separate explicit action.
 
 ## Tech Stack
 
@@ -14,7 +14,7 @@ The default service is DeepSeek through its OpenAI-format Chat Completions endpo
 - `httpx` asynchronous HTTP client
 - Pydantic 2 for AI-output and plan-draft validation
 - Internal `AIProvider` protocol with explicit DeepSeek and generic OpenAI-compatible request profiles
-- `SecretStore` protocol populated by a bounded configured project-secret file for Web and CLI operations
+- `SecretStore` protocol populated from direct application configuration, with legacy file-reference compatibility
 - SQLite for non-secret configuration and audit metadata only
 
 The first release uses an explicit HTTP adapter rather than a vendor AI SDK to reduce coupling.
@@ -36,7 +36,7 @@ src/trade_plan_monitor/ai/
 ├── openai_compatible.py  # Resource-bounded HTTP adapter
 ├── prompts.py            # Versioned prompt construction
 ├── extraction.py         # Draft extraction, parsing, and validation flow
-├── file_secrets.py       # Bounded project-secret file loader
+├── file_secrets.py       # Direct/legacy configured credential loader
 └── secrets.py            # SecretStore protocol and implementations
 tests/unit/
 └── test_ai_plan_drafting.py
@@ -52,23 +52,23 @@ class AIProvider(Protocol):
     async def extract_plan(self, request: PlanExtractionRequest) -> RawAIResponse: ...
 ```
 
-Configurable non-secret fields include:
+Configurable fields include:
 
 - `providerId`, request profile, display name, provider type, base URL, and model;
-- project-secret file/key reference and a boolean “secret configured” status;
+- direct `api_key`, legacy project-secret file/key reference, and a boolean “secret configured” status;
 - timeout, maximum retries, maximum input characters, and maximum output tokens;
 - temperature fixed to 0 by default, allowed range 0–0.3;
 - prompt version and enabled status.
 
-Stable first-release bounds are: base URL at most 2,048 characters; project-secret file path at most 1,024 characters; secret file at most 65,536 bytes; timeout 1–120 seconds (default 30); retries 0–2 (default 2); input 1–200,000 characters (default 50,000); output 1–16,384 tokens (default 4,096); and temperature 0–0.3 (default 0). Redirects are never configurable and remain disabled. HTTP is accepted only for literal `localhost`, IPv4 loopback, or IPv6 loopback hosts; all other endpoints require HTTPS. Base URLs with credentials, query strings, or fragments are invalid.
+Stable first-release bounds are: base URL at most 2,048 characters; direct API key at most 8,192 characters; legacy project-secret file path at most 1,024 characters and file at most 65,536 bytes; timeout 1–120 seconds (default 30); retries 0–2 (default 2); input 1–200,000 characters (default 50,000); output 1–16,384 tokens (default 4,096); and temperature 0–0.3 (default 0). Redirects are never configurable and remain disabled. HTTP is accepted only for literal `localhost`, IPv4 loopback, or IPv6 loopback hosts; all other endpoints require HTTPS. Base URLs with credentials, query strings, or fragments are invalid.
 
 ### Provider Adapter Contract
 
-The adapter sends `POST {baseUrl}/chat/completions` with Bearer authentication, never sends tools, and returns model content only as untrusted raw text. The generic `OPENAI_COMPATIBLE` profile uses `messages`, `temperature`, `max_completion_tokens`, and `stream=false`. The default `DEEPSEEK` profile follows the current DeepSeek contract: it uses `max_tokens`, sets `thinking={"type":"disabled"}`, adds `response_format={"type":"json_object"}` for plan extraction, and keeps `stream=false`. DeepSeek defaults are `https://api.deepseek.com`, `deepseek-v4-flash`, and project-secret key `DEEPSEEK_API_KEY`. The file reference is `../.env`, resolved relative to `config/app.yaml`, so the local workspace reads its own ignored project-root secret file.
+The adapter sends `POST {baseUrl}/chat/completions` with Bearer authentication, never sends tools, and returns model content only as untrusted raw text. The generic `OPENAI_COMPATIBLE` profile uses `messages`, `temperature`, `max_completion_tokens`, and `stream=false`. The default `DEEPSEEK` profile follows the current DeepSeek contract: it uses `max_tokens`, sets `thinking={"type":"disabled"}`, adds `response_format={"type":"json_object"}` for plan extraction, and keeps `stream=false`. DeepSeek defaults are `https://api.deepseek.com` and `deepseek-v4-flash`; the user places the key in `ai.api_key` in the ignored `config/app.yaml`.
 
-Both Web and CLI resolve the configured secret path relative to the YAML file, read at most 65,536 bytes as strict UTF-8, select exactly one non-empty assignment matching `api_key_ref.key`, and load it into a process-local store created with environment fallback disabled. Missing files, directories, oversized files, invalid UTF-8, missing keys, empty values, and duplicate keys all fail closed without exposing file contents. The Web composition reads configuration once during startup, keeps it immutable for that server lifetime, and exposes extraction through `/plans`. The maintenance CLI keeps `ai test [--config PATH]` and `ai extract [--config PATH] --source FILE`; `test` sends one bounded connectivity request, while `extract` reads one strict UTF-8 regular file, enforces byte and configured character limits, validates the returned draft, and prints it without activating it.
+Both Web and CLI prefer the non-empty `ai.api_key` value loaded directly from YAML. During migration, when that field is absent, they can still resolve `api_key_ref` relative to the YAML file and select one assignment from the bounded legacy file. The Web composition reads configuration once during startup, keeps it immutable for that server lifetime, and exposes extraction through `/plans`. The maintenance CLI keeps `ai test [--config PATH]` and `ai extract [--config PATH] --source FILE`; `test` sends one bounded connectivity request, while `extract` reads one strict UTF-8 regular source file, enforces byte and configured character limits, validates the returned draft, and prints it without activating it.
 
-- API keys exist transiently only in the Authorization header and must contain printable ASCII characters. Requests send `Accept-Encoding: identity`.
+- API keys are read from local configuration and used in the Authorization header; they must contain printable ASCII characters. Requests send `Accept-Encoding: identity`.
 - Each attempt has the configured timeout and the complete operation uses at most `1 + max_retries` attempts. Transport failures, timeouts, HTTP 408, 429, and 5xx are retryable; numeric `Retry-After` and exponential delays are capped at 2 seconds. Cancellation always propagates.
 - Redirect responses are rejected; 401/403 map to authentication failure; other non-retryable 4xx responses map to rejection. Provider response bodies never cross the adapter error boundary.
 - Successful responses must be uncompressed or identity-encoded and are read as raw bytes with a 1,048,576-byte ceiling before JSON parsing. Any other content encoding is rejected without decompression.
@@ -83,9 +83,9 @@ class SecretStore(Protocol):
     def status(self, reference: SecretReference) -> SecretStatus: ...
 ```
 
-`SecretStatus` exposes only configured state, source (`STORE`, `ENVIRONMENT`, or `NONE`), a fixed mask, and replacement generation. The generic store retains its environment capability for existing integrations and isolated tests, but the configured Web and CLI compositions always construct it with an empty environment and insert only the value selected from the configured project-secret file. The concrete store keeps runtime materialization package-private so provider composition can authenticate without widening the public management protocol.
+`SecretStatus` exposes only configured state, source (`STORE`, `ENVIRONMENT`, or `NONE`), a fixed mask, and replacement generation. The configured Web and CLI compositions insert the direct YAML value, or the legacy file-selected value when no direct value exists, into the process-local store. The concrete store keeps runtime materialization package-private so provider composition can authenticate without widening the public management protocol.
 
-The generic injected API contract can accept a replacement secret, but the project-file production composition disables that mutation with `METHOD_NOT_ALLOWED`; no Web page sends it. No read API returns secret material. Logs, errors, audit records, and plan exports contain only non-secret status or references where the legacy injected contract requires them.
+The generic injected API contract can accept a replacement secret, but the configuration-driven production composition disables that mutation with `METHOD_NOT_ALLOWED`; the user edits `config/app.yaml` instead and no Web page sends the mutation. No read API returns secret material. Logs, errors, audit records, and plan exports contain only non-secret status or references where the legacy injected contract requires them.
 
 ### Extraction Result
 
@@ -136,7 +136,7 @@ AI can create drafts only. Activation requires:
 
 ### T037 HTTP Adapter Boundary
 
-The generic local API still supports an injected `AIOperationService` and the plan extraction submission service. The production Web composition instead constructs `ConfiguredAIWebLifecycle` from `config/app.yaml`, attaches its read-only AI summary and extraction service during lifespan startup, and removes both during shutdown. `GET /api/v1/ai-runtime` exposes only provider ID, display name, safe base URL, model, configured/enabled flags, input/output limits, and revision `0`; it cannot expose the secret file path, selected key name, or value.
+The generic local API still supports an injected `AIOperationService` and the plan extraction submission service. The production Web composition instead constructs `ConfiguredAIWebLifecycle` from `config/app.yaml`, attaches its read-only AI summary and extraction service during lifespan startup, and removes both during shutdown. `GET /api/v1/ai-runtime` exposes only provider ID, display name, safe base URL, model, configured/enabled flags, input/output limits, and revision `0`; it cannot expose the configured API-key value or legacy reference details.
 
 The project-file production service returns `METHOD_NOT_ALLOWED` for provider create/update, secret replacement, and provider test. Plan extraction requires `Idempotency-Key`, provider identity, and revision `0`; the service hashes each intent, replays only an identical key/request pair, retains at most 1,000 operation records, and runs at most one extraction concurrently. HTTP responses contain only bounded receipts and validated extraction views. Extra fields, raw provider bodies, authorization data, and secret material fail closed before serialization.
 
@@ -188,7 +188,7 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 
 ## Threat Model and Boundaries
 
-- Trust boundaries: user text, file-configured base URL, model output, provider error body, and project secret file.
+- Trust boundaries: user text, configured base URL, model output, provider error body, and local application configuration.
 - Protected assets: AI secret, plan integrity, activation authority, and spending limits.
 - Always: require HTTPS for non-loopback AI endpoints; reject embedded credentials and unsafe redirects.
 - Always: bound input, output tokens, timeout, retry count, and concurrent extractions.
@@ -208,4 +208,4 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 
 ## Open Questions
 
-None. Web AI settings editing is intentionally out of scope; both Web and CLI use the configured, Git-ignored project-secret file with no environment-variable fallback.
+None. Web AI settings editing is intentionally out of scope; both Web and CLI prefer direct credentials in the Git-ignored `config/app.yaml`, with the former file reference retained only for migration compatibility.

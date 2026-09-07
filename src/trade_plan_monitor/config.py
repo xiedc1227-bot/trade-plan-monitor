@@ -1,4 +1,4 @@
-"""Typed, non-secret application configuration."""
+"""Typed application configuration for one local personal installation."""
 
 from collections.abc import Mapping
 from ipaddress import ip_address
@@ -82,10 +82,11 @@ class WebConfiguration(_ConfigurationModel):
 
 
 class TushareConfiguration(_ConfigurationModel):
-    """Non-secret Tushare transport settings and one token reference."""
+    """Tushare transport settings with a direct token and legacy reference."""
 
     api_url: AnyHttpUrl | None = None
     timeout_seconds: int = Field(default=30, ge=1, le=120)
+    token: str | None = Field(default=None, min_length=1, max_length=8_192)
 
     token_ref: EnvironmentSecretReference = Field(
         default_factory=lambda: EnvironmentSecretReference(environment_variable="TUSHARE_TOKEN")
@@ -136,6 +137,7 @@ class AIConfiguration(_ConfigurationModel):
         max_length=200,
         pattern=r"^[^\s\x00-\x1f\x7f]+$",
     )
+    api_key: str | None = Field(default=None, min_length=1, max_length=8_192)
     api_key_ref: ProjectSecretFileReference | None = None
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     max_retries: int = Field(default=2, ge=0, le=2)
@@ -168,7 +170,7 @@ class AIConfiguration(_ConfigurationModel):
     def to_provider_config(self) -> AIProviderConfig | None:
         """Build the existing non-secret provider contract when AI is configured."""
 
-        if self.api_key_ref is None:
+        if self.api_key is None and self.api_key_ref is None:
             return None
         return AIProviderConfig(
             provider_id=UUID("00000000-0000-4000-8000-0000000000d5"),

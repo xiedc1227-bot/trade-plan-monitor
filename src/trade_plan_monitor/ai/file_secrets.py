@@ -1,4 +1,4 @@
-"""Fail-closed loading of one API key from a configured local secret file."""
+"""Materialize one directly configured or legacy file-backed API key."""
 
 from __future__ import annotations
 
@@ -18,18 +18,23 @@ def create_project_secret_store(
     config_path: Path,
     settings: AIConfiguration,
 ) -> InMemorySecretStore:
-    """Load only the configured key without consulting process environment variables."""
+    """Load the direct key first, then the legacy configured file reference."""
 
     store = InMemorySecretStore(environment={})
     provider_config = settings.to_provider_config()
     reference = settings.api_key_ref
-    if provider_config is None or reference is None:
+    if provider_config is None:
         return store
     try:
-        secret_value = _read_named_assignment(
-            path=_resolve_secret_path(config_path, reference.file),
-            key=reference.key,
-        )
+        if settings.api_key is not None:
+            secret_value = settings.api_key
+        elif reference is not None:
+            secret_value = _read_named_assignment(
+                path=_resolve_secret_path(config_path, reference.file),
+                key=reference.key,
+            )
+        else:  # pragma: no cover - guarded by to_provider_config
+            return store
         store.replace(
             provider_config.secret_ref,
             SecretWrite(value=secret_value),

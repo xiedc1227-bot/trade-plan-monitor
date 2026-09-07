@@ -23,9 +23,9 @@
 ## Stock Runtime
 
 - [ ] `LPC005` — Harden the zero-network/default and one-shot live stock harness.
-  - Acceptance: serial single-concurrency, `>=1.25 s` starts, 15-second timeout, no retry, stop on 429, no secret artifact; a stock profile becomes `READY` only from fresh gated evidence with a verified `SourceTimeLabel`, otherwise it remains explicitly blocked or `NOT_RUN_MARKET_WINDOW`.
+  - Acceptance: direct `config/app.yaml` token loading, serial single-concurrency, `>=1.25 s` starts, 15-second timeout, no retry, and stop on 429; a stock profile becomes `READY` only from fresh gated evidence with a verified `SourceTimeLabel`, otherwise it remains explicitly blocked or `NOT_RUN_MARKET_WINDOW`.
   - Verify: offline contract tests and candidate secret scan.
-  - Blocked evidence: Windows Credential Manager child-only injection, a secret-blind parent, sanitized seven-day profiles, and the real stock probe are implemented and offline-tested. The local target `trade-plan-monitor/tushare-live` is not provisioned, so no token was read and no open-market call was attempted; fresh `READY`/`SourceTimeLabel` evidence is still required.
+  - Blocked evidence: direct configuration loading, seven-day profiles, and the real stock probe are implemented and offline-tested. The local `config/app.yaml` has no Tushare token, so no open-market call was attempted; fresh `READY`/`SourceTimeLabel` evidence is still required.
 - [ ] `LPC006` — Compose the certified stock provider and one-batch recoverable runtime.
   - Acceptance: depends on a `READY` LPC005 stock profile; reference refresh/recovery/supervisor work; one `rt_min` batch per deadline for at most ten symbols; no evaluation refetch or network in transaction. Until that dependency passes, production stays `DEGRADED` with no token read, provider call, or actionable deadline coordinator.
   - Verify: provider, request-controller, deadline, recovery, restart, and ten-symbol tests.
@@ -36,7 +36,7 @@
 - [ ] `LPC007` — Establish separate live board-index certification evidence.
   - Acceptance: separate authorization/profile/`SourceTimeLabel`; unsuitable market window records `NOT_RUN_MARKET_WINDOW`; no stock evidence is reused.
   - Verify: offline harness tests and, only when gated, the serial live selector.
-  - Blocked evidence: the separate authorization, profile, timestamp-label derivation, and per-index `idx_mins`/`index_daily` probe are implemented and offline-tested. The local credential target is not provisioned, so no separately authorized open-market observation was performed.
+  - Blocked evidence: the separate authorization, profile, timestamp-label derivation, and per-index `idx_mins`/`index_daily` probe are implemented and offline-tested. The local application configuration has no Tushare token, so no separately authorized open-market observation was performed.
 - [ ] `LPC008` — Compose the independent board-index provider and isolated condition failures.
   - Acceptance: each required index is fetched at most once per cutoff; one failure affects only dependent condition paths.
   - Verify: focused market-index runtime and decision tests.

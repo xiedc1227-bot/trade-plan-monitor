@@ -1,11 +1,8 @@
-"""Parent-side, secret-blind launcher for live Tushare certification."""
+"""Explicitly selected live Tushare certification from local configuration."""
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, time
 from enum import StrEnum
@@ -14,26 +11,7 @@ from typing import Final
 from zoneinfo import ZoneInfo
 
 _SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
-DEFAULT_CREDENTIAL_TARGET: Final = "trade-plan-monitor/tushare-live"
-_CHILD_SURFACE_ENV: Final = "TRADE_PLAN_MONITOR_LIVE_CERTIFICATION_SURFACE"
-_SAFE_ENVIRONMENT_NAMES: Final = frozenset(
-    {
-        "appdata",
-        "comspec",
-        "localappdata",
-        "no_color",
-        "path",
-        "pathext",
-        "systemdrive",
-        "systemroot",
-        "temp",
-        "tmp",
-        "userprofile",
-        "username",
-        "windir",
-    }
-)
-_SECRET_NAME_MARKERS: Final = ("API_KEY", "PASSWORD", "SECRET", "TOKEN")
+_DEFAULT_OUTPUT_DIRECTORY: Final = Path(__file__).parents[2] / "data" / "live-certification"
 
 
 class LiveCertificationSurface(StrEnum):
@@ -73,59 +51,37 @@ def market_window_is_eligible(surface: LiveCertificationSurface, now: datetime) 
     )
 
 
-def child_environment(source: Mapping[str, str]) -> dict[str, str]:
-    """Copy only non-secret OS values required by the isolated Python child."""
-
-    sanitized: dict[str, str] = {}
-    for name, value in source.items():
-        upper_name = name.upper()
-        if name.casefold() not in _SAFE_ENVIRONMENT_NAMES:
-            continue
-        if any(marker in upper_name for marker in _SECRET_NAME_MARKERS):
-            continue
-        if isinstance(value, str):
-            sanitized[name] = value
-    return sanitized
-
-
 def launch_live_certification(
     *,
     surface: LiveCertificationSurface,
     authorization: str,
-    credential_target: str,
+    config_path: Path,
+    output_directory: Path = _DEFAULT_OUTPUT_DIRECTORY,
     now: datetime | None = None,
-    environment: Mapping[str, str] | None = None,
-    executable: Path | None = None,
-    project_root: Path | None = None,
-    runner: Callable[..., object] = subprocess.run,
+    runner: Callable[[LiveCertificationSurface, Path, Path], int] | None = None,
 ) -> LiveCertificationLaunchResult:
-    """Launch one credential-reading child only after local eligibility checks."""
+    """Run one configured surface directly after local eligibility checks."""
 
     observed_at = datetime.now(_SHANGHAI) if now is None else now
     if not market_window_is_eligible(surface, observed_at):
         return LiveCertificationLaunchResult("NOT_RUN_MARKET_WINDOW", 0)
     if authorization != required_authorization(surface):
         raise ValueError("authorization does not match the selected live surface")
-    if type(credential_target) is not str or not credential_target.strip():
-        raise ValueError("credential target is invalid")
+    if not isinstance(config_path, Path):
+        raise TypeError("config_path must be a Path")
+    if not isinstance(output_directory, Path):
+        raise TypeError("output_directory must be a Path")
+    if runner is None:
+        from trade_plan_monitor.live_certification_runner import (
+            run_configured_certification,
+        )
 
-    child_env = child_environment(os.environ if environment is None else environment)
-    child_env[_CHILD_SURFACE_ENV] = surface.value
-    python = Path(sys.executable) if executable is None else executable
-    root = Path(__file__).parents[2] if project_root is None else project_root
-    command = [
-        str(python),
-        "-m",
-        "trade_plan_monitor.live_certification_child",
-        "--surface",
-        surface.value,
-        "--credential-target",
-        credential_target,
-    ]
-    completed = runner(command, cwd=root, env=child_env, check=False)
-    return_code = getattr(completed, "returncode", None)
+        selected_runner = run_configured_certification
+    else:
+        selected_runner = runner
+    return_code = selected_runner(surface, config_path, output_directory)
     if type(return_code) is not int:
-        raise TypeError("live child runner must return an integer returncode")
+        raise TypeError("live certification runner must return an integer returncode")
     return LiveCertificationLaunchResult(
         "COMPLETED" if return_code == 0 else "FAILED",
         return_code,
@@ -133,10 +89,8 @@ def launch_live_certification(
 
 
 __all__ = [
-    "DEFAULT_CREDENTIAL_TARGET",
     "LiveCertificationLaunchResult",
     "LiveCertificationSurface",
-    "child_environment",
     "launch_live_certification",
     "market_window_is_eligible",
     "required_authorization",

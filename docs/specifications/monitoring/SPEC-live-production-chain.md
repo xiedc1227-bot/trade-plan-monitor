@@ -91,7 +91,7 @@ The production stock path remains dependency-blocked until a fresh stock capabil
 
 ## Live Harness and Evidence Contract
 
-Ordinary tests make zero external requests. The live harness receives a token only from a secret store into one one-shot child process; it never reads a project `.env`, emits the value, includes it in the command line, stores it in configuration, logs/reports it, or returns it to the parent.
+Ordinary tests make zero external requests. The live harness runs in the selected process and reads `tushare.token` directly from the ignored local `config/app.yaml`. `ai.api_key` follows the same direct-configuration convention. Legacy `token_ref` and `api_key_ref` values remain readable during migration, with direct values taking precedence.
 
 Real calls are serial, single-concurrency, start at least `1.25` seconds apart, time out after `15` seconds, and have no automatic retry. The first `429` stops all later calls. Stock and index observations use separate reports, authorization contexts, capability sets, and timestamp labels. Realtime-minute label semantics may be certified only after `trade_cal` proves that the observation date is open and the current window can expose completed minutes. Outside that window the outcome is `NOT_RUN_MARKET_WINDOW`, not a guessed mapping. DeepSeek and all other providers are forbidden.
 
@@ -115,7 +115,7 @@ Playwright uses the installed Google Chrome channel (`channel: "chrome"`), one w
 - Migration tests start from every supported prior revision, preserve exact protected rows/hashes, and reject unsafe downgrade.
 - OpenAPI snapshot and generated TypeScript must change together and remain byte-current.
 - Vue/Vitest covers every state transition and proves removal of the Health fallback. Chrome covers console/request cleanliness, no unavailable-state WebSocket, route behavior, and chunk isolation.
-- Secret scan covers tracked and untracked candidate files without reading secret stores or credential files.
+- Configuration tests cover direct Tushare and AI credentials plus legacy-reference compatibility.
 
 ## Boundaries
 
@@ -123,7 +123,7 @@ Playwright uses the installed Google Chrome channel (`channel: "chrome"`), one w
 - Always: keep provider I/O outside database transactions and publication after commit.
 - Always: preserve historical identities, hashes, Schema v1, backtests, DeepSeek, and prior Web work.
 - Ask first: add another provider, change formula/mapping versions, place orders, expose a non-loopback listener, or reinterpret historical ledger rows.
-- Never: manufacture an empty snapshot, infer readiness from Health in Vue, share stock/index timestamp evidence, retry live certification automatically, expose a token, or call DeepSeek.
+- Never: manufacture an empty snapshot, infer readiness from Health in Vue, share stock/index timestamp evidence, retry live certification automatically, or call DeepSeek from the Tushare certification runner.
 
 ## Success Criteria
 
@@ -137,4 +137,4 @@ Playwright uses the installed Google Chrome channel (`channel: "chrome"`), one w
 
 ## Review Status
 
-Approved for implementation by the user's explicit request. Provider authorization does not waive secret or market-window gates. On 2026-09-07 (Monday), the pre-window launcher check returned `NOT_RUN_MARKET_WINDOW`; realtime-minute semantics remain uncertified until a later authorized open-market run supplies fresh evidence through child-only secret injection.
+Approved for implementation by the user's explicit request. On 2026-09-07 the user removed the OS credential-store and child-only injection boundary for this personal tool; credentials may be stored directly in ignored local application configuration. The market-window gate remains. Realtime-minute semantics remain uncertified until `config/app.yaml` contains a Tushare token and a later authorized open-market run supplies fresh evidence.

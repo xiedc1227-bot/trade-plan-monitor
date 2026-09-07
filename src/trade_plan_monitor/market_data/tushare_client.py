@@ -28,7 +28,9 @@ def create_tushare_client[ClientT](
         raise TushareClientConfigurationError("Tushare API URL is not configured")
 
     values = os.environ if environment is None else environment
-    token = values.get(configuration.token_ref.environment_variable)
+    token = configuration.token
+    if token is None:
+        token = values.get(configuration.token_ref.environment_variable)
     if token is None or not token.strip():
         raise TushareClientConfigurationError("Tushare token is not configured")
     if len(token) > _MAX_TOKEN_LENGTH or any(

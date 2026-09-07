@@ -1,5 +1,8 @@
 # Tushare live contract acceptance
 
+> Historical T058 evidence. The one-shot child credential boundary described below was superseded
+> on 2026-09-07 by direct credentials in the ignored local `config/app.yaml`.
+
 Status: PASS — the visible-block branch is accepted; all five capabilities are `ERROR` from sanitized provider code `TRANSIENT`
 
 - Evidence date: 2026-08-31, 11:24:21–11:24:26 `+08:00` (`Asia/Shanghai`).

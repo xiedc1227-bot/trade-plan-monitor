@@ -46,8 +46,9 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
 
 ## Runtime and Provider Evidence
 
-- The offline live-harness contract passes `1 test` with `3` live tests deselected. It proves
-  the ordinary gate cannot authorize a live child or read its environment.
+- The historical offline live-harness contract passed `1 test` with `3` live tests deselected.
+  Its child-process boundary was superseded on 2026-09-07 by direct credential loading from the
+  ignored local application configuration; the market-window and exact-authorization gates remain.
 - The Monday pre-window launcher exits successfully with `NOT_RUN_MARKET_WINDOW`. No token,
   external network, Tushare, DeepSeek, broker, or webhook call was used.
 - Runtime tests cover one immutable at-most-ten-symbol batch per deadline, no evaluation
@@ -115,18 +116,18 @@ reported rather than hidden, skipped, or relaxed.
   trading date during a suitable completed-minute window.
 - Board-index live capability and timestamp evidence require their own authorization/profile;
   stock-provider evidence cannot satisfy that gate.
-- The OS-backed, child-only secret injection adapter is now implemented with Windows Credential
-  Manager, a secret-blind allowlisted parent environment, mutable-buffer zeroing, and separate
-  stock/index authorization phrases. The local target `trade-plan-monitor/tushare-live` was not
-  provisioned during this verification, so no token was read and no provider call was attempted.
-- Sanitized, hash-protected stock and board-index profiles now expire after seven days and fail
+- Direct `tushare.token` and `ai.api_key` configuration is implemented, with legacy references
+  retained for migration compatibility. Windows Credential Manager and child-only certification
+  were removed by the user's explicit personal-tool policy. The local `config/app.yaml` has no
+  Tushare token, so no provider call was attempted.
+- Hash-protected stock and board-index profiles expire after seven days and fail
   closed on tampering, endpoint mismatch, schema mismatch, or cross-surface reuse. Real stock and
   per-index probes are implemented, including first-429 global stop behavior, but fresh open-market
   profiles remain outstanding.
 - CPython cannot forcibly terminate an arbitrary non-cooperative synchronous provider
   callable. The real Tushare transport is configured with its own 15-second timeout and
-  shutdown is bounded and visible, but `LPC005`/`LPC006` cannot be certified until the gated
-  live child proves the real transport behavior.
+  shutdown is bounded and visible, but `LPC005`/`LPC006` cannot be certified until the configured
+  live runner proves the real transport behavior.
 - The repository-wide offline gate remains blocked by the unrelated 252-day backtest
   performance budget described above; the live-chain-focused `558` tests are green.
 

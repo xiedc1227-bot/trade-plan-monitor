@@ -91,7 +91,9 @@ Dashboard/集合范围不得出现 `symbol`，股票详情范围必须包含 `sy
 
 ## 真实 Harness 与证据契约
 
-普通测试执行零外部请求。真实 harness 只从 secret store 把 Token 注入一个一次性子进程；它不读取项目 `.env`、不输出该值、不把它放入命令行、不写入配置、不写日志/报告，也不向父进程返回。
+普通测试执行零外部请求。真实 harness 在选定进程中直接运行，并从被忽略的本地 `config/app.yaml`
+读取 `tushare.token`；`ai.api_key` 采用相同的直接配置约定。迁移期间仍可读取原有 `token_ref` 与
+`api_key_ref`，且直接值优先。
 
 真实调用串行、单并发、起点至少相隔 `1.25` 秒、每次 `15` 秒超时且不自动重试。遇到第一个 `429` 后停止所有后续调用。股票和指数观测使用独立报告、授权 context、能力集合和时间戳标签。只有在 `trade_cal` 证明观测日期开市且当前窗口可暴露完整分钟后，才能认证实时分钟标签语义。窗口不合适时结果为 `NOT_RUN_MARKET_WINDOW`，不能猜测映射。禁止调用 DeepSeek 和全部其他 provider。
 
@@ -115,7 +117,7 @@ Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 
 - 迁移测试从每个受支持的旧 revision 开始，保留精确受保护行/hash，并拒绝不安全 downgrade。
 - OpenAPI 快照和生成 TypeScript 必须同步改变并保持逐字节 current。
 - Vue/Vitest 覆盖每种状态转换，并证明已删除 Health fallback。Chrome 覆盖 console/request 清洁、unavailable 不开 WebSocket、路由行为和 chunk 隔离。
-- 密钥扫描覆盖已跟踪及未跟踪候选文件，但不读取 secret store 或凭据文件。
+- 配置测试覆盖直接 Tushare/AI 凭证以及旧引用格式兼容性。
 
 ## 边界
 
@@ -123,7 +125,7 @@ Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 
 - 始终：供应商 I/O 位于数据库事务外，且只在 commit 后发布。
 - 始终：保留历史 identity、hash、Schema v1、回测、DeepSeek 和既有 Web 工作。
 - 先确认：增加其他 provider、修改公式/映射版本、下单、暴露非回环监听或重新解释历史 ledger 行。
-- 禁止：伪造空快照、让 Vue 根据 Health 推断 readiness、共用股票/指数时间戳证据、自动重试真实认证、暴露 Token 或调用 DeepSeek。
+- 禁止：伪造空快照、让 Vue 根据 Health 推断 readiness、共用股票/指数时间戳证据、自动重试真实认证，或从 Tushare 认证 runner 调用 DeepSeek。
 
 ## 验收标准
 
@@ -137,4 +139,6 @@ Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 
 
 ## 审核状态
 
-用户通过明确请求批准实施。供应商调用授权不会取消密钥或市场窗口闸门。2026-09-07（星期一）的开盘前 launcher 检查返回 `NOT_RUN_MARKET_WINDOW`；实时分钟语义仍未认证，直至之后通过仅子进程密钥注入执行获授权的开市窗口运行并提供新鲜证据。
+用户通过明确请求批准实施。2026-09-07，用户针对这款个人工具取消 OS 凭据存储与仅子进程注入
+边界，允许把凭证直接保存到被忽略的本地应用配置中；市场窗口闸门继续保留。实时分钟语义仍未
+认证，直至 `config/app.yaml` 包含 Tushare Token，且之后获授权的开市窗口运行提供新鲜证据。

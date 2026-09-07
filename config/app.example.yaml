@@ -1,5 +1,4 @@
-# Copy this file to config/app.yaml for local use. Keep secret values in an ignored
-# project secret file; paths below are resolved relative to this YAML file.
+# Copy this file to config/app.yaml for local use. The local file is ignored by Git.
 web:
   # Security boundary: the only supported listener is exact IPv4 loopback.
   host: 127.0.0.1
@@ -9,9 +8,7 @@ tushare:
   # Verified Tushare-compatible HTTPS endpoint. Never downgrade this to plain HTTP.
   api_url: https://api.quicksync.cn
   timeout_seconds: 30
-  # Tushare still uses the existing process-environment adapter.
-  token_ref:
-    environment_variable: TUSHARE_TOKEN
+  token: replace-with-your-tushare-token
 
 ai:
   # DeepSeek uses an OpenAI-compatible Chat Completions endpoint with a few
@@ -21,10 +18,7 @@ ai:
   display_name: DeepSeek
   base_url: https://api.deepseek.com
   model: deepseek-v4-flash
-  api_key_ref:
-    # ../.env resolves to the ignored project-root .env after this file is copied.
-    file: ../.env
-    key: DEEPSEEK_API_KEY
+  api_key: replace-with-your-deepseek-api-key
   timeout_seconds: 30
   max_retries: 2
   max_input_chars: 50000

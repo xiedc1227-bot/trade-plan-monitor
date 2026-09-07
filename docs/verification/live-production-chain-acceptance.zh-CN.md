@@ -39,8 +39,8 @@ WEBF13 Health fallback 方案；不改写历史 WEBF13 结果，不把 T058 股�
 
 ## 运行时与供应商证据
 
-- 离线真实 harness 契约通过 `1 test`，另有 `3` 个 live 测试被取消选择；它证明普通闸门不能
-  授权真实子进程，也不能读取其环境。
+- 历史离线真实 harness 契约通过 `1 test`，另有 `3` 个 live 测试被取消选择。其子进程边界已于
+  2026-09-07 被“从被忽略的本地应用配置直接读取凭证”取代；开市窗口与精确授权闸门继续保留。
 - 星期一开盘前 launcher 以 `NOT_RUN_MARKET_WINDOW` 成功退出。未使用 Token、外部网络、
   Tushare、DeepSeek、券商或 Webhook 调用。
 - Runtime 测试覆盖每个 deadline 一次不可变的最多十股票批次、判断零重取、分别完整的准入/
@@ -100,14 +100,14 @@ git diff --check
 
 - 实时分钟时间戳语义需要在开放交易日的合适已完成分钟窗口内重新获得授权并采集新证据。
 - 板块指数实时能力和时间戳证据需要独立授权/profile；股票供应商证据不能满足该闸门。
-- OS 支持的仅子进程密钥注入适配器现已使用 Windows 凭据管理器实现，并具备不接触密钥且环境
-  白名单化的父进程、可变缓冲区清零，以及独立股票/指数授权短语。本次验证期间，本机目标
-  `trade-plan-monitor/tushare-live` 尚未配置，因此未读取 Token，也未尝试供应商调用。
-- 脱敏且带哈希保护的股票与板块指数 profile 现在会在七天后过期，并在篡改、端点不匹配、schema
+- 已实现直接 `tushare.token` 与 `ai.api_key` 配置，并保留旧引用作为迁移兼容。根据用户针对个人
+  工具的明确策略，已移除 Windows 凭据管理器与仅子进程认证。本机 `config/app.yaml` 尚无
+  Tushare Token，因此未尝试供应商调用。
+- 带哈希保护的股票与板块指数 profile 现在会在七天后过期，并在篡改、端点不匹配、schema
   不匹配或跨数据面复用时安全阻断。真实股票探针与逐指数探针已经实现，包括首个 429 后全局停止；
   但新鲜开市窗口 profile 仍待采集。
 - CPython 无法强制终止任意不合作的同步 provider callable。真实 Tushare transport 已配置自身
-  15 秒超时，shutdown 有界且可见，但在闸门控制的真实子进程证明真实 transport 行为前，
+  15 秒超时，shutdown 有界且可见，但在已配置的真实 runner 证明真实 transport 行为前，
   `LPC005`/`LPC006` 不能通过认证。
 - 仓库级离线闸门仍被上述无关的 252 日回测性能预算阻断；live-chain 聚焦的 `558` 个测试为绿色。
 

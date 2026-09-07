@@ -68,9 +68,8 @@ historical result, established hash, token, or provider boundary changes. See th
 [WEBF13 acceptance report](docs/verification/webf13-acceptance.md).
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
-Live provider checks remain separately authorized operations. The Windows Credential Manager
-setup, child-only injection boundary, separate stock/index commands, eligible market windows, and
-sanitized evidence format are documented in the
+Live provider checks remain separately authorized operations. Direct credential configuration,
+separate stock/index commands, eligible market windows, and the evidence format are documented in the
 [live-certification operations guide](docs/operations/live-certification.md).
 
 The local backtest implementation provides isolated `sync`, `verify`, `run`, `list`, and `prune`
@@ -100,8 +99,8 @@ condition outcomes, and historical Schema v1 plans/results remain unchanged.
 - Missing, stale, unauthorized, or semantically unverified market data fails closed.
 - Board-index data never creates a global market-strength opinion or hidden trading rule. A plan
   with no index condition keeps its original decision when reference-index data is absent.
-- AI secrets stay in ignored project secret files selected by a non-secret YAML file/key
-  reference; secrets never enter tracked YAML, database columns, API responses, logs, or exports.
+- Provider credentials may be stored directly in ignored `config/app.yaml` for this personal tool;
+  legacy environment/file references remain compatible during migration.
 - The Web listener accepts only the literal `127.0.0.1`; authentication is not implemented.
 
 ## Quick Start
@@ -132,35 +131,32 @@ Pop-Location
 build into the ignored Python package staging directory. The installed Web command does not fall
 back to the current working directory or the frontend source tree when those assets are absent.
 
-### 3. Configure local references
+### 3. Configure local credentials
 
 ```powershell
 Copy-Item config\app.example.yaml config\app.yaml
 ```
 
-The YAML file contains non-secret provider settings, the Tushare environment-variable name, and an
-AI project-secret file/key reference. The versioned example selects the verified
+The YAML file contains provider settings and direct Tushare/AI credentials. The versioned example
+uses replaceable placeholders and selects the verified
 `https://api.quicksync.cn` Tushare-compatible endpoint and the DeepSeek OpenAI-format endpoint
 `https://api.deepseek.com` with model `deepseek-v4-flash`. The AI profile, display name, base URL,
-model, timeout, retry budget, input limit, output limit, temperature, secret-file path, and key name
-are configurable. The local `config/app.yaml` copy is ignored by Git. For Tushare, set its process
-variable only when that service is used:
+model, timeout, retry budget, input limit, output limit, temperature, and credentials are
+configurable. The local `config/app.yaml` copy is ignored by Git. Replace these fields directly:
 
-```powershell
-$env:TUSHARE_TOKEN = "replace-with-your-tushare-token"
+```yaml
+tushare:
+  token: replace-with-your-tushare-token
+ai:
+  api_key: replace-with-your-deepseek-api-key
 ```
 
-[.env.example](.env.example) is the versioned project-secret template. Copy it to the ignored
-project-root `.env` when using the example `api_key_ref`, then replace only the selected key's
-placeholder. This workspace's local configuration uses its own ignored project-root `.env`; its
-`DEEPSEEK_API_KEY` was copied from `TradingAgents/.env` without printing the value. Never put a
-token or API key directly in `config/app.yaml`, and never commit `config/app.yaml`, `.env`,
-databases, backups, keys, or build output.
+Legacy `token_ref` and `api_key_ref` entries remain readable during migration, but direct values
+take precedence. Do not commit `config/app.yaml`, databases, backups, or build output.
 
-Web startup validates the strict YAML, resolves the AI project-secret file relative to that YAML,
-and creates one immutable AI client binding for the server lifetime. It never reads the AI key from
-the process environment. The general monitoring `DEGRADED` state remains independent and does not
-prove Tushare readiness.
+Web startup validates the strict YAML and creates one immutable AI client binding for the server
+lifetime. The general monitoring `DEGRADED` state remains independent and does not prove Tushare
+readiness.
 
 ### 4. Start the packaged local Web UI
 
@@ -175,7 +171,7 @@ Open `/plans` to use AI drafting and persistent plan management. The first lifes
 or upgrades `data/monitor.sqlite3`; saving, querying, importing, activating, and deactivating plans
 uses that same SQLite file on later starts. Keep the database and its WAL/SHM companions private
 and do not copy an in-use WAL database as a backup.
-Edit `config/app.yaml` or the selected project `.env` and restart Web to change AI settings.
+Edit `config/app.yaml` and restart Web to change AI settings.
 
 ### 5. Offline verification
 
@@ -299,8 +295,8 @@ The adapter exposes one independent capability probe and five normalized operati
 | `daily_limits` | `stk_limit` | Official daily up/down limits |
 | `daily_bars` | `daily` | Official unadjusted daily bars |
 
-The non-secret example configuration selects `https://api.quicksync.cn`. The
-`create_tushare_client` factory resolves `TUSHARE_TOKEN` only at runtime and sets the endpoint on
+The example configuration selects `https://api.quicksync.cn`. The `create_tushare_client` factory
+reads `tushare.token` from `config/app.yaml` and sets the endpoint on
 one official `tushare==1.4.29` `DataApi` instance instead of mutating the SDK's process-global
 endpoint. Plain HTTP, embedded credentials, query strings, and fragments are rejected.
 
@@ -313,9 +309,9 @@ must explicitly opt into the project policy `TUSHARE_STK_MINS_241_END_V1`, descr
 the observation nor that historical policy replaces the separately required live `rt_min` and
 `rt_min_daily` capabilities.
 
-Set `TUSHARE_TOKEN` only for a separately authorized live capability probe. Capability, account
-permission, rate limit, and minute-label semantics are discovered independently; configuration
-never implies availability. A denied or unverified required capability blocks actionable output.
+Set `tushare.token` in `config/app.yaml` before a separately authorized live capability probe.
+Capability, account permission, rate limit, and minute-label semantics are discovered independently;
+configuration never implies availability. A denied or unverified required capability blocks actionable output.
 The default contract suite uses deterministic fake DataFrames:
 
 ```powershell
@@ -348,14 +344,11 @@ The fee/slippage numbers below are explicit illustrative assumptions, not produc
 
 ```powershell
 # 1. Incrementally synchronize missing historical facts with explicit authorization.
-$env:TUSHARE_TOKEN = "<set-in-this-shell-only>"
 python -m trade_plan_monitor backtest sync `
   --symbols 003043.SZ `
   --start 2025-01-02 `
   --end 2025-12-31 `
   --allow-network
-Remove-Item Env:TUSHARE_TOKEN
-
 # 2. Freeze the same scope locally and copy dataset_hash from the JSON result.
 python -m trade_plan_monitor backtest verify `
   --symbols 003043.SZ `
@@ -382,15 +375,14 @@ python -m trade_plan_monitor backtest prune --batch-size 1000
 
 Run summaries, assumptions, final metrics, and fill ledgers are retained long-term. Successful decision/signal/daily-equity detail is limited to the newest 100 runs and at most 90 days; failed, cancelled, and opt-in debug detail is retained for 14 days; pinned runs are exempt. Result publication first stages canonical rows in `backtest-results.sqlite3`; ordinary reads and statistics hide all staged rows. One transaction sets the internal `materialized` visibility flag only after the complete `reportHash`, expected fill/detail counts, and canonical identity/content set hashes all match. First publication persists those counts and set hashes, and every published retry must match them exactly; ordinary summary/fill/detail reads also validate each SQL identity against its hashed payload before applying any detail-kind filter. The CLI then atomically writes `backtest-report-summary-v1` JSON plus fill CSV. `materialized` is the only publication gate, not a public run status; public statuses remain `COMPLETED`, `FAILED`, or `CANCELLED`. Bounded `prune` maintenance removes unpinned abandoned staged summary/fill/detail after 14 days, while recent stages remain recoverable. Missing or corrupt files can be rebuilt from the long-lived summary/fill rows without network access, replay, or duplicate fills; pruned decision/signal/outcome/equity detail is intentionally not reconstructable. `reportHash` remains the audit identity of the original complete run and is not a file-byte hash. Pin metadata and initial lots are supported by lower-level backtest contracts, but the current CLI exposes neither pin/unpin nor initial-lot input and therefore starts each CLI run with cash only. Full minute-by-minute account snapshots and duplicate market rows are not stored. See [SPEC-backtest.md](docs/specifications/backtesting/SPEC-backtest.md) for the isolation, no-lookahead, report, and retention contracts.
 
-## AI Configuration and Secrets
+## AI Configuration and Credentials
 
-`DEEPSEEK_API_KEY` is optional unless AI-assisted drafting is enabled. YAML stores only
-`api_key_ref.file` and `api_key_ref.key`; the real value remains in the ignored project secret file.
-Relative file paths are resolved from the directory containing `app.yaml`. The default `DEEPSEEK`
+`ai.api_key` is optional unless AI-assisted drafting is enabled and may be stored directly in the
+ignored `config/app.yaml`. The default `DEEPSEEK`
 profile sends DeepSeek's current `max_tokens`, `thinking={"type":"disabled"}`, and JSON-output
 request fields. Change `profile` to `OPENAI_COMPATIBLE` and configure another reviewed base URL,
-model, file, and key to use a different compatible service. Runtime provider configuration stores
-a non-secret reference, model, bounded timeout/retry/token limits, and an HTTPS base URL (plain HTTP
+model, and API key to use a different compatible service. Runtime provider configuration stores
+an internal reference, model, bounded timeout/retry/token limits, and an HTTPS base URL (plain HTTP
 is accepted only for an explicit loopback host).
 
 API-key material is loaded only by the backend and cannot be returned through the public contract.
@@ -401,7 +393,7 @@ and secret-bearing validation errors are rejected. AI output is never activated 
 
 Web is the primary AI workflow: open `/plans`, paste the source text, submit it, and review the
 validated result. The backend holds at most one concurrent extraction and the page polls its exact
-operation ID. Changing `config/app.yaml` or `.env` requires a Web restart. The CLI remains as a
+operation ID. Changing `config/app.yaml` requires a Web restart. The CLI remains as a
 maintenance tool; both commands below make a real provider request and can consume paid tokens:
 
 ```powershell
@@ -414,10 +406,8 @@ python -m trade_plan_monitor ai extract --source .\plan-source.txt
 
 Pass `--config <path>` after `test` or `extract` to select another configuration file. The command
 rejects a missing/non-file source, invalid UTF-8, source text above the configured character limit,
-and a missing, oversized, invalid, duplicate-key, or empty project secret file before accepting a
-result. The secret file is capped at 65,536 bytes, decoded as strict UTF-8, and never consulted
-through the process environment. Web and CLI use the same file-based configuration and secret
-loader; neither offers a Web settings editor and neither uses an AI environment-variable fallback.
+and a missing or empty configured API key before accepting a result. Web and CLI use the same
+application configuration; the former file-reference format remains available during migration.
 
 T059 adds an optional, fail-closed connectivity probe. It is not part of ordinary tests and must
 not be run without a separately approved real-provider network operation. Review a canonical
@@ -516,9 +506,9 @@ approved receiver and secret-handling procedure exist.
 | `runtime service factory is not configured` | `validate`, `monitor`, `replay`, or `backup` was invoked before application service composition is wired. |
 | Host validation rejects the listener | Use the exact literal `127.0.0.1`; `localhost`, `::1`, `0.0.0.0`, hostnames, and LAN addresses are intentionally rejected. |
 | Port 8765 is busy | Stop the other local process or choose another unused port from 1–65535, keeping host `127.0.0.1`. |
-| YAML reports an unknown field | Start again from `config/app.example.yaml`; the schema deliberately rejects unsupported sections and literal secrets. |
-| Tushare capability is `DENIED`/`UNVERIFIED` | Check the process environment and account permission, then run only an authorized live probe. Never bypass the blocker. |
-| AI returns configuration/authentication errors | Verify `api_key_ref.file`, `api_key_ref.key`, profile, base URL, and model; keep the real key only in the ignored project secret file, not in a URL or YAML. |
+| YAML reports an unknown field | Start again from `config/app.example.yaml`; the schema deliberately rejects unsupported sections. |
+| Tushare capability is `DENIED`/`UNVERIFIED` | Check `tushare.token` and account permission, then run an authorized live probe. |
+| AI returns configuration/authentication errors | Verify `ai.api_key`, profile, base URL, and model in `config/app.yaml`. |
 | Frontend generated types drift | Run `python scripts/generate_frontend_types.py --check`; regenerate only as part of an approved API-contract change. |
 
 ## No Port Forwarding

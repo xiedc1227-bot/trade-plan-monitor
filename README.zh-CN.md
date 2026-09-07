@@ -20,7 +20,7 @@ WEBF12 完成共用指数数据与当前计划条件的展示边界。总览只�
 WEBF13 在历史上完成生产路由与新建回测的验收缺口。曾经的五条占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现已在精确 10 路由地图中具备惰性 SFC 与真实浏览器回归证据。确定性 Chromium 旅程还会提交生成的运行命令，沿后端权威 `runId`/`jobId` 轮询，仅在 `COMPLETED` 后移除 `jobId`，再渲染 materialized 结果。其 42 条路径契约（27 条实时加 15 条回测）继续作为历史证据；ADR 0004 后续改变既有监控响应联合与生成 TypeScript，但没有增加路径。Schema v1、历史结果、既有哈希、token 或供应商边界保持不变。详见 [WEBF13 验收报告](docs/verification/webf13-acceptance.zh-CN.md)。
 
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的
-操作。Windows 凭据管理器配置、仅子进程注入边界、独立股票/指数命令、可用开市窗口和脱敏证据格式
+操作。直接凭证配置、独立股票/指数命令、可用开市窗口和证据格式
 详见[真实认证运维指南](docs/operations/live-certification.zh-CN.md)。
 
 本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。另行授权的 T059 性能修复现已在不改变阈值的前提下通过 100k-export、ten-symbol/252-day、内存、存储及完整离线闸门。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
@@ -34,7 +34,7 @@ WEBF13 在历史上完成生产路由与新建回测的验收缺口。曾经的�
 - 价格按整数“分”保存，数量按整数“股”保存，A 股时间戳必须是带 `Asia/Shanghai` 时区的值。
 - 行情缺失、过期、无权限或来源语义未验证时安全阻断。
 - 板块指数数据不会生成统一大盘强弱观点或隐藏交易规则。没有指数条件的计划在参考指数数据缺失时保持原有判断。
-- AI 密钥保留在被 Git 忽略的项目密钥文件中，YAML 只选择文件和键名；密钥不能进入受版本控制的 YAML、数据库列、API 响应、日志或导出内容。
+- 这款个人工具允许把供应商凭证直接保存在被 Git 忽略的 `config/app.yaml`；迁移期间继续兼容旧环境变量/文件引用。
 - Web 监听只接受字面量 `127.0.0.1`；系统未实现登录鉴权。
 
 ## 快速开始
@@ -61,21 +61,30 @@ Pop-Location
 
 `npm run build` 保留常规 `web/dist/index.html` 输出，并将同一份完整构建复制到被忽略的 Python 包暂存目录。缺少这些资源时，安装式 Web 命令不会回退到当前工作目录或前端源码树。
 
-### 3. 配置本地引用
+### 3. 配置本地凭证
 
 ```powershell
 Copy-Item config\app.example.yaml config\app.yaml
 ```
 
-YAML 保存非密钥供应商设置、Tushare 环境变量名称，以及 AI 项目密钥文件和键名。纳入版本控制的示例选择已验证的 Tushare 兼容端点 `https://api.quicksync.cn`，并选择 DeepSeek 的 OpenAI 格式端点 `https://api.deepseek.com` 和模型 `deepseek-v4-flash`。AI profile、显示名称、Base URL、模型、超时、重试次数、输入上限、输出上限、温度、密钥文件路径和键名都可以修改。本地副本 `config/app.yaml` 会被 Git 忽略。Tushare 仍只在使用时设置进程变量：
+YAML 保存供应商设置以及直接配置的 Tushare/AI 凭证。纳入版本控制的示例使用可替换占位值，
+选择已验证的 Tushare 兼容端点 `https://api.quicksync.cn`，并选择 DeepSeek 的 OpenAI 格式端点
+`https://api.deepseek.com` 和模型 `deepseek-v4-flash`。AI profile、显示名称、Base URL、模型、
+超时、重试次数、输入上限、输出上限、温度和凭证都可以修改。本地副本 `config/app.yaml` 会被
+Git 忽略。直接替换以下字段：
 
-```powershell
-$env:TUSHARE_TOKEN = "replace-with-your-tushare-token"
+```yaml
+tushare:
+  token: replace-with-your-tushare-token
+ai:
+  api_key: replace-with-your-deepseek-api-key
 ```
 
-[.env.example](.env.example) 是纳入版本控制的项目密钥模板。使用示例 `api_key_ref` 时，把它复制为项目根目录中被忽略的 `.env`，再只替换所选键的占位值。当前工作区的本地配置使用本项目根目录中被忽略的 `.env`；其中的 `DEEPSEEK_API_KEY` 已从 `TradingAgents/.env` 复制，过程中不会打印密钥值。绝不能把 Token 或 API Key 直接写进 `config/app.yaml`，也不要提交 `config/app.yaml`、`.env`、数据库、备份、密钥或构建输出。
+迁移期间仍可读取原有 `token_ref` 和 `api_key_ref`，但直接值优先。不要提交
+`config/app.yaml`、数据库、备份或构建输出。
 
-Web 启动时会校验严格 YAML，相对于该 YAML 解析 AI 项目密钥文件，并为本次服务生命周期创建一份不可变 AI 客户端绑定。AI 密钥绝不从进程环境读取。通用监控的 `DEGRADED` 状态与此独立，也不能证明 Tushare 已就绪。
+Web 启动时会校验严格 YAML，并为本次服务生命周期创建一份不可变 AI 客户端绑定。通用监控的
+`DEGRADED` 状态与此独立，也不能证明 Tushare 已就绪。
 
 ### 4. 启动已打包本地 Web 界面
 
@@ -83,7 +92,7 @@ Web 启动时会校验严格 YAML，相对于该 YAML 解析 AI 项目密钥文�
 trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765
 ```
 
-在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。当实时分钟 `SourceTimeLabel` 语义或实时板块指数供应商仍未验证时，监控标题会诚实显示 `DEGRADED`、只读状态和没有下次轮询；打开 `/plans` 可使用 AI 草稿与持久计划管理。首次 lifespan 启动会创建或升级 `data/monitor.sqlite3`；之后启动时，计划保存、查询、导入、启用和停用都使用同一 SQLite 文件。数据库及其 WAL/SHM 伴随文件必须保持私密，且不得直接复制正在使用的 WAL 数据库作为备份。修改 `config/app.yaml` 或选中的项目 `.env` 后，必须重启 Web 才能更改 AI 设置。
+在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。当实时分钟 `SourceTimeLabel` 语义或实时板块指数供应商仍未验证时，监控标题会诚实显示 `DEGRADED`、只读状态和没有下次轮询；打开 `/plans` 可使用 AI 草稿与持久计划管理。首次 lifespan 启动会创建或升级 `data/monitor.sqlite3`；之后启动时，计划保存、查询、导入、启用和停用都使用同一 SQLite 文件。数据库及其 WAL/SHM 伴随文件必须保持私密，且不得直接复制正在使用的 WAL 数据库作为备份。修改 `config/app.yaml` 后，必须重启 Web 才能更改 AI 设置。
 
 ### 5. 离线验证
 
@@ -192,11 +201,15 @@ Tushare ─→ 规范化完整 K 线 ─────┴──→ 确定性决策
 | `daily_limits` | `stk_limit` | 官方每日涨跌停价格 |
 | `daily_bars` | `daily` | 官方不复权日 K 线 |
 
-非密钥示例配置选择 `https://api.quicksync.cn`。`create_tushare_client` 工厂仅在运行时解析 `TUSHARE_TOKEN`，并把端点设置到单个官方 `tushare==1.4.29` `DataApi` 实例，不修改 SDK 的进程级全局端点。系统拒绝明文 HTTP、内嵌账号密码、查询字符串和片段。
+示例配置选择 `https://api.quicksync.cn`。`create_tushare_client` 工厂从 `config/app.yaml`
+读取 `tushare.token`，并把端点设置到单个官方 `tushare==1.4.29` `DataApi` 实例，不修改 SDK 的
+进程级全局端点。系统拒绝明文 HTTP、内嵌账号密码、查询字符串和片段。
 
 2026-08-25 经明确授权的检查已通过 HTTPS 和官方 SDK 验证 `stk_mins`：`600000.SH` 在 2026-08-24 的一个完整交易日返回 241 条一分钟记录，覆盖 09:30:00 至 15:00:00，包含预期的 8 个字段，且不存在重复行、必要字段空值、非法 OHLC、负成交量或错误股票代码行。该观察本身不能证明上游标签语义，因此适配器仍默认使用 `UNVERIFIED`；经审核的回测组合必须显式选择下文所述项目策略 `TUSHARE_STK_MINS_241_END_V1`。该观察和历史策略都不能替代另行要求的实时 `rt_min` 和 `rt_min_daily` 能力。
 
-只在另行授权的真实能力探测中设置 `TUSHARE_TOKEN`。能力、账号权限、限流和分钟标签语义均独立发现；配置不代表能力可用。必要能力被拒绝或未验证时会阻断可操作输出。默认契约测试使用确定性假 DataFrame：
+在另行授权的真实能力探测前，于 `config/app.yaml` 设置 `tushare.token`。能力、账号权限、限流和
+分钟标签语义均独立发现；配置不代表能力可用。必要能力被拒绝或未验证时会阻断可操作输出。默认
+契约测试使用确定性假 DataFrame：
 
 ```powershell
 python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
@@ -228,14 +241,11 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 ```powershell
 # 1. 经明确授权，增量同步缺失历史事实。
-$env:TUSHARE_TOKEN = "<set-in-this-shell-only>"
 python -m trade_plan_monitor backtest sync `
   --symbols 003043.SZ `
   --start 2025-01-02 `
   --end 2025-12-31 `
   --allow-network
-Remove-Item Env:TUSHARE_TOKEN
-
 # 2. 在本地冻结相同范围，并从 JSON 结果复制 dataset_hash。
 python -m trade_plan_monitor backtest verify `
   --symbols 003043.SZ `
@@ -262,13 +272,17 @@ python -m trade_plan_monitor backtest prune --batch-size 1000
 
 运行摘要、假设、最终指标和成交账本长期保留。成功运行的判断/信号/每日权益详情只保留最新 100 次且最多 90 天；失败、取消及按需调试详情保留 14 天；置顶运行豁免。结果发布先把规范行 staged 到 `backtest-results.sqlite3`；普通读取和统计看不到任何 staged 行。只有完整 `reportHash`、预期成交/详情数量和规范 identity/内容集合哈希都匹配时，一个事务才会设置内部 `materialized` 可见性标记。首次发布会持久化这些数量和集合哈希，已发布运行的每次重试都必须精确匹配；普通摘要/成交/详情读取还会在应用任何 detail-kind 过滤前，根据已哈希 payload 校验每个 SQL identity。随后 CLI 原子写入 `backtest-report-summary-v1` JSON 和成交 CSV。`materialized` 是唯一发布闸门，但不是公开运行状态；公开状态仍为 `COMPLETED`、`FAILED` 或 `CANCELLED`。有界 `prune` 维护会在 14 天后移除未置顶的废弃 staged 摘要/成交/详情，近期 stage 仍可恢复。文件缺失或损坏时，可以根据长期摘要/成交行重建，不联网、不重放、也不重复成交；已清理的判断/信号/结果/权益详情按设计不可重建。`reportHash` 继续作为原始完整运行的审计 identity，并不是文件字节哈希。底层回测契约支持置顶元数据和初始持仓批次，但当前 CLI 尚未暴露置顶/取消置顶或初始持仓输入，因此每次 CLI 运行都只从现金开始。不保存完整逐分钟账户快照，也不重复保存行情行。隔离、禁止未来数据、报告及保留契约详见 [SPEC-backtest.zh-CN.md](docs/specifications/backtesting/SPEC-backtest.zh-CN.md)。
 
-## AI 配置与密钥
+## AI 配置与凭证
 
-仅在启用 AI 辅助草稿时才需要 `DEEPSEEK_API_KEY`。YAML 只保存 `api_key_ref.file` 和 `api_key_ref.key`，真实值保留在被 Git 忽略的项目密钥文件中；相对路径以 `app.yaml` 所在目录为基准。默认 `DEEPSEEK` profile 按 DeepSeek 当前接口发送 `max_tokens`、`thinking={"type":"disabled"}` 和 JSON 输出字段。若要使用其他兼容服务，可把 `profile` 改为 `OPENAI_COMPATIBLE`，并配置经过审核的 Base URL、模型、文件和键名。运行时供应商配置保存非密钥引用、模型、有界超时/重试/Token 限制和 HTTPS 基础 URL（仅显式回环主机允许明文 HTTP）。
+仅在启用 AI 辅助草稿时才需要 `ai.api_key`，它可直接保存在被 Git 忽略的
+`config/app.yaml`。默认 `DEEPSEEK` profile 按 DeepSeek 当前接口发送 `max_tokens`、
+`thinking={"type":"disabled"}` 和 JSON 输出字段。若要使用其他兼容服务，可把 `profile` 改为
+`OPENAI_COMPATIBLE`，并配置 Base URL、模型和 API Key。运行时供应商配置保存内部引用、模型、
+有界超时/重试/Token 限制和 HTTPS 基础 URL（仅显式回环主机允许明文 HTTP）。
 
 API Key 只由后端加载，公共契约无法返回。Web 页面只显示供应商名称、模型、安全 Base URL、限制、启用状态和密钥是否已加载；没有供应商修改、Token 输入、密钥替换或连接测试控件。系统拒绝重定向、URL 内嵌账号密码、带查询参数的基础 URL、执行原始模型内容以及包含密钥的校验错误。AI 输出绝不会直接激活。
 
-Web 是主要 AI 使用方式：打开 `/plans`，粘贴原文，提交后审核经过校验的结果。后端最多同时执行一个提取，页面只轮询精确任务 ID。修改 `config/app.yaml` 或 `.env` 后必须重启 Web。CLI 保留为维护工具；下面两个命令都会向真实服务发送请求，并可能产生 Token 费用：
+Web 是主要 AI 使用方式：打开 `/plans`，粘贴原文，提交后审核经过校验的结果。后端最多同时执行一个提取，页面只轮询精确任务 ID。修改 `config/app.yaml` 后必须重启 Web。CLI 保留为维护工具；下面两个命令都会向真实服务发送请求，并可能产生 Token 费用：
 
 ```powershell
 # 使用 config/app.yaml 发送一次最小连通性请求。
@@ -278,7 +292,9 @@ python -m trade_plan_monitor ai test
 python -m trade_plan_monitor ai extract --source .\plan-source.txt
 ```
 
-如需选择其他配置文件，在 `test` 或 `extract` 后增加 `--config <路径>`。命令会拒绝不存在的来源文件、目录、非法 UTF-8、超过配置字符上限的文本，以及缺失、超大、格式非法、键重复或值为空的项目密钥文件，不会把不合格结果当成有效草稿。密钥文件最大 65,536 字节，必须是严格 UTF-8，并且不会通过进程环境读取。Web 与 CLI 使用同一套文件配置和密钥读取器；两者都不提供 Web 设置编辑器，也都不使用 AI 环境变量后备。
+如需选择其他配置文件，在 `test` 或 `extract` 后增加 `--config <路径>`。命令会拒绝不存在的
+来源文件、目录、非法 UTF-8、超过配置字符上限的文本，以及缺失或为空的已配置 API Key，不会
+把不合格结果当成有效草稿。Web 与 CLI 使用同一应用配置；迁移期间继续支持原文件引用格式。
 
 T059 增加了可选、fail-closed 的连通性探测。它不属于普通测试，未单独批准真实供应商联网操作时不得运行。先审核一个规范 lowercase HTTPS base URL 和精确 model，再把授权绑定到操作、规范化目标和 model。digest context 是 `trade-plan-monitor:t059:ai-live:test-connection:v1`，并包含下方所示的 3 个换行分隔符，包括最后一个换行：
 
@@ -349,9 +365,9 @@ python -c "import os; from trade_plan_monitor.state.backup import verify_sqlite_
 | `runtime service factory is not configured` | 在应用服务组合接通前调用了 `validate`、`monitor`、`replay` 或 `backup`。 |
 | 监听主机校验失败 | 使用精确字面量 `127.0.0.1`；系统有意拒绝 `localhost`、`::1`、`0.0.0.0`、主机名和局域网地址。 |
 | 8765 端口占用 | 停止另一个本地进程，或选择 1～65535 中未占用的其他端口，同时保持主机为 `127.0.0.1`。 |
-| YAML 报告未知字段 | 重新从 `config/app.example.yaml` 开始；模式会有意拒绝不支持的节和明文密钥。 |
-| Tushare 能力为 `DENIED`/`UNVERIFIED` | 检查进程环境和账号权限，然后只运行获批的真实探测；绝不能绕过阻断。 |
-| AI 返回配置/鉴权错误 | 检查 `api_key_ref.file`、`api_key_ref.key`、profile、Base URL 和模型；真实密钥只放在被忽略的项目密钥文件中，不要放进 URL 或 YAML。 |
+| YAML 报告未知字段 | 重新从 `config/app.example.yaml` 开始；schema 会有意拒绝不支持的节。 |
+| Tushare 能力为 `DENIED`/`UNVERIFIED` | 检查 `tushare.token` 和账号权限，然后运行获批的真实探测。 |
+| AI 返回配置/鉴权错误 | 检查 `config/app.yaml` 中的 `ai.api_key`、profile、Base URL 和模型。 |
 | 前端生成类型漂移 | 运行 `python scripts/generate_frontend_types.py --check`；只在获批 API 契约变更中重新生成。 |
 
 ## 禁止端口转发

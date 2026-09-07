@@ -31,20 +31,23 @@ def test_empty_yaml_uses_loopback_web_and_secret_reference_defaults(tmp_path: Pa
     assert config.web.port == 8765
     assert config.tushare.api_url is None
     assert config.tushare.timeout_seconds == 30
+    assert config.tushare.token is None
     assert config.tushare.token_ref.environment_variable == "TUSHARE_TOKEN"
+    assert config.ai.api_key is None
     assert config.ai.api_key_ref is None
     assert config.ai.profile is AIProviderProfile.DEEPSEEK
     assert str(config.ai.base_url) == "https://api.deepseek.com/"
     assert config.ai.model == "deepseek-v4-flash"
 
 
-def test_yaml_accepts_project_secret_file_references_without_secret_values(tmp_path: Path) -> None:
+def test_yaml_accepts_direct_credentials_and_legacy_references(tmp_path: Path) -> None:
     config_path = tmp_path / "app.yaml"
     config_path.write_text(
         """\
 tushare:
   api_url: https://api.quicksync.cn
   timeout_seconds: 20
+  token: configured-tushare-token
   token_ref:
     environment_variable: MONITOR_TUSHARE_TOKEN
 ai:
@@ -52,6 +55,7 @@ ai:
   display_name: Private compatible service
   base_url: https://ai.example.com/v1
   model: private-chat-model
+  api_key: configured-ai-key
   api_key_ref:
     file: ../private-secrets.env
     key: PRIVATE_AI_API_KEY
@@ -68,8 +72,10 @@ ai:
 
     assert str(config.tushare.api_url) == "https://api.quicksync.cn/"
     assert config.tushare.timeout_seconds == 20
+    assert config.tushare.token == "configured-tushare-token"
     assert config.tushare.token_ref.environment_variable == "MONITOR_TUSHARE_TOKEN"
     assert config.ai.api_key_ref is not None
+    assert config.ai.api_key == "configured-ai-key"
     assert config.ai.api_key_ref.file == "../private-secrets.env"
     assert config.ai.api_key_ref.key == "PRIVATE_AI_API_KEY"
     assert config.ai.profile is AIProviderProfile.OPENAI_COMPATIBLE
@@ -89,17 +95,17 @@ ai:
     assert provider_config.secret_ref.environment_variable is None
 
 
-def test_example_configuration_is_valid_and_contains_references_only() -> None:
+def test_example_configuration_is_valid_and_contains_direct_placeholders() -> None:
     config = load_application_config(PROJECT_ROOT / "config" / "app.example.yaml")
 
     assert config.web.host == "127.0.0.1"
     assert config.web.port == 8765
     assert str(config.tushare.api_url) == "https://api.quicksync.cn/"
     assert config.tushare.timeout_seconds == 30
+    assert config.tushare.token == "replace-with-your-tushare-token"
     assert config.tushare.token_ref.environment_variable == "TUSHARE_TOKEN"
-    assert config.ai.api_key_ref is not None
-    assert config.ai.api_key_ref.file == "../.env"
-    assert config.ai.api_key_ref.key == "DEEPSEEK_API_KEY"
+    assert config.ai.api_key_ref is None
+    assert config.ai.api_key == "replace-with-your-deepseek-api-key"
     assert config.ai.profile is AIProviderProfile.DEEPSEEK
     assert config.ai.display_name == "DeepSeek"
     assert str(config.ai.base_url) == "https://api.deepseek.com/"
@@ -132,27 +138,23 @@ def test_ai_composition_selects_the_configured_profile_without_reading_the_secre
     assert binding.config.secret_ref.environment_variable is None
 
 
-def test_project_secret_file_drives_provider_without_process_environment(
+def test_direct_ai_key_drives_provider_without_project_secret_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config_directory = tmp_path / "config"
     config_directory.mkdir()
     config_path = config_directory / "app.yaml"
-    secret_path = tmp_path / "shared-secrets.env"
     config_path.write_text(
         """\
 ai:
   profile: DEEPSEEK
   base_url: https://api.deepseek.com
   model: deepseek-v4-flash
-  api_key_ref:
-    file: ../shared-secrets.env
-    key: DEEPSEEK_API_KEY
+  api_key: direct-config-test-key
 """,
         encoding="utf-8",
     )
-    secret_path.write_text("DEEPSEEK_API_KEY=file-owned-test-key\n", encoding="utf-8")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "wrong-process-value")
     settings = load_application_config(config_path).ai
     store = create_project_secret_store(config_path=config_path, settings=settings)
@@ -190,7 +192,7 @@ ai:
     result = asyncio.run(scenario())
 
     assert result.connected is True
-    assert captured_authorization == ["Bearer file-owned-test-key"]
+    assert captured_authorization == ["Bearer direct-config-test-key"]
 
 
 @pytest.mark.parametrize(
@@ -259,15 +261,13 @@ ai:
     [
         ("unexpected: true\n", "unexpected"),
         ("web:\n  host: 0.0.0.0\n", "web.host"),
-        ("tushare:\n  token: literal-value\n", "tushare.token"),
         ("tushare:\n  api_url: http://api.quicksync.cn\n", "tushare.api_url"),
         ("tushare:\n  api_url: https://user:pass@api.quicksync.cn\n", "tushare.api_url"),
         ("tushare:\n  api_url: https://api.quicksync.cn?token=value\n", "tushare.api_url"),
         ("tushare:\n  api_url: https://api.quicksync.cn#fragment\n", "tushare.api_url"),
-        ("ai:\n  api_key: literal-value\n", "ai.api_key"),
     ],
 )
-def test_yaml_rejects_unknown_and_literal_secret_fields(
+def test_yaml_rejects_unknown_and_invalid_url_fields(
     tmp_path: Path,
     yaml_text: str,
     field_path: str,

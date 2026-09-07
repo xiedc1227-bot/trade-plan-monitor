@@ -1,12 +1,12 @@
-"""Secret-blind parent launcher for stock or board-index live certification."""
+"""Run stock or board-index live certification from local configuration."""
 
 from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 from trade_plan_monitor.live_certification import (
-    DEFAULT_CREDENTIAL_TARGET,
     LiveCertificationSurface,
     launch_live_certification,
 )
@@ -16,7 +16,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("surface", choices=("stock", "index"))
     parser.add_argument("--authorize", required=True)
-    parser.add_argument("--credential-target", default=DEFAULT_CREDENTIAL_TARGET)
+    parser.add_argument("--config", type=Path, default=Path("config/app.yaml"))
     arguments = parser.parse_args()
     surface = (
         LiveCertificationSurface.STOCK
@@ -27,7 +27,7 @@ def main() -> int:
         result = launch_live_certification(
             surface=surface,
             authorization=arguments.authorize,
-            credential_target=arguments.credential_target,
+            config_path=arguments.config,
         )
     except ValueError:
         print(

@@ -46,6 +46,17 @@ def test_client_factory_configures_one_official_sdk_instance_without_global_muta
     assert client._DataApi__http_url == "https://api.quicksync.cn"  # type: ignore[attr-defined]
 
 
+def test_client_factory_prefers_direct_configuration_token() -> None:
+    client = create_tushare_client(
+        _configuration(token="direct-config-token"),
+        environment={"MONITOR_TUSHARE_TOKEN": "legacy-environment-token"},
+        data_api_factory=StubDataApi,
+    )
+
+    assert isinstance(client, StubDataApi)
+    assert client.received_token == "direct-config-token"
+
+
 def test_client_factory_fails_closed_without_an_explicit_https_endpoint() -> None:
     called = False
 

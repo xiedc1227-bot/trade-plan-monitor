@@ -47,10 +47,10 @@ Rejected because network latency would hold database locks and a late failure co
 - Migration and restart tests must prove identity/hash preservation and atomic rollback.
 - Live readiness may remain unavailable until stock and index certifications succeed in valid market windows; the application must report that honestly.
 
-## Security and Reversal
+## Configuration and Reversal
 
-Tokens exist only in a one-shot child process created by the live harness. Reports, commands, configuration, logs, exceptions, APIs, Git, and parent environment contain no token. Reversal restores code and a verified pre-migration database backup; it does not rewrite Schema v1 rows or invent reverse data transformations.
+As revised by the user on 2026-09-07 for this personal tool, provider credentials may be stored directly in the Git-ignored `config/app.yaml` and read by the selected process. The former Windows credential-store and one-shot child-process boundary is removed. Reversal restores code and a verified pre-migration database backup; it does not rewrite Schema v1 rows or invent reverse data transformations.
 
 ## Review Status
 
-Accepted by the user's explicit 2026-09-05 production-repair authorization. No live readiness is accepted without fresh capability-specific evidence.
+Accepted by the user's explicit 2026-09-05 production-repair authorization and revised by the user's explicit 2026-09-07 direct-configuration decision. No live readiness is accepted without fresh capability-specific evidence.
