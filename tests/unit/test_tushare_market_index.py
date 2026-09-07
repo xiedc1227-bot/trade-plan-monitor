@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 import pytest
 
 from trade_plan_monitor.market_data.sessions import SourceTimeLabel
@@ -15,8 +17,10 @@ from trade_plan_monitor.market_index.tushare import (
     TushareMarketIndexProvider,
     TushareMarketIndexProviderError,
     TushareMarketIndexSourceTimeLabel,
+    certified_tushare_market_index_profile,
     unverified_tushare_market_index_profile,
 )
+from trade_plan_monitor.runtime.request_control import TushareOperation
 
 
 def test_unverified_index_profile_is_separate_and_fails_before_any_sdk_call() -> None:
@@ -54,3 +58,187 @@ def test_unverified_index_profile_is_separate_and_fails_before_any_sdk_call() ->
     assert captured.value.code == "PROVIDER_UNAVAILABLE"
     assert str(captured.value) == "Tushare market-index provider unavailable"
     assert captured.value.__cause__ is None
+
+
+class _Controller:
+    def __init__(self) -> None:
+        self.calls: list[tuple[TushareOperation, str]] = []
+
+    async def execute(
+        self,
+        operation: TushareOperation,
+        call: object,
+        *,
+        work_key: str,
+        priority: object,
+    ) -> object:
+        del priority
+        self.calls.append((operation, work_key))
+        assert callable(call)
+        return call()
+
+
+class _Client:
+    def __init__(self) -> None:
+        self.idx_calls: list[dict[str, object]] = []
+        self.daily_calls: list[dict[str, object]] = []
+
+    def idx_mins(self, **kwargs: object) -> pd.DataFrame:
+        self.idx_calls.append(kwargs)
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "399001.SZ",
+                    "trade_time": "2026-09-07 09:55:00",
+                    "open": "101.1",
+                    "high": "102.2",
+                    "low": "100.5",
+                    "close": "102.0",
+                    "vol": "12",
+                    "amount": "34.5",
+                },
+                {
+                    "ts_code": "399001.SZ",
+                    "trade_time": "2026-09-07 10:00:00",
+                    "open": "102.0",
+                    "high": "103.0",
+                    "low": "101.8",
+                    "close": "102.5",
+                    "vol": "13",
+                    "amount": "35.5",
+                },
+            ]
+        )
+
+    def index_daily(self, **kwargs: object) -> pd.DataFrame:
+        self.daily_calls.append(kwargs)
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "399001.SZ",
+                    "trade_date": "20260903",
+                    "open": "98",
+                    "high": "101",
+                    "low": "97",
+                    "close": "100",
+                    "vol": "2",
+                    "amount": "3",
+                },
+                {
+                    "ts_code": "399001.SZ",
+                    "trade_date": "20260904",
+                    "open": "100",
+                    "high": "102",
+                    "low": "99",
+                    "close": "101",
+                    "vol": "4",
+                    "amount": "5",
+                },
+            ]
+        )
+
+
+def _ready_profile():
+    return certified_tushare_market_index_profile(
+        capabilities={
+            code: TushareMarketIndexCapabilityStatus.READY for code in MarketIndexCode
+        },
+        source_time_label=TushareMarketIndexSourceTimeLabel.END,
+    )
+
+
+def test_certified_index_profile_requires_dedicated_evidence_values() -> None:
+    profile = _ready_profile()
+
+    assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.END
+    assert profile.five_minute_endpoint == "idx_mins"
+    assert profile.official_daily_endpoint == "index_daily"
+    assert set(profile.capabilities.values()) == {TushareMarketIndexCapabilityStatus.READY}
+
+
+def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_units() -> None:
+    client = _Client()
+    controller = _Controller()
+    provider = TushareMarketIndexProvider(
+        client=client,
+        profile=_ready_profile(),
+        request_controller=controller,
+        now=lambda: datetime(2026, 9, 7, 10, 0, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    batch = asyncio.run(
+        provider.acquire_index_data(
+            index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+            decision_cutoff=datetime(
+                2026,
+                9,
+                7,
+                10,
+                0,
+                tzinfo=ZoneInfo("Asia/Shanghai"),
+            ),
+            five_minute_bar_count=2,
+            official_daily_bar_count=2,
+        )
+    )
+
+    assert controller.calls == [
+        (TushareOperation.INDEX_MINUTES, "index:399001.SZ:20260907T1000:minutes"),
+        (TushareOperation.INDEX_DAILY, "index:399001.SZ:20260907T1000:daily"),
+    ]
+    assert len(client.idx_calls) == 1
+    assert len(client.daily_calls) == 1
+    assert [bar.bar_at.isoformat(timespec="minutes") for bar in batch.five_minute_bars] == [
+        "2026-09-07T09:55+08:00",
+        "2026-09-07T10:00+08:00",
+    ]
+    assert [bar.close_points for bar in batch.official_daily_bars] == [
+        Decimal("100"),
+        Decimal("101"),
+    ]
+    assert batch.official_daily_bars[-1].volume == Decimal("400")
+    assert batch.official_daily_bars[-1].amount == Decimal("5000")
+    assert all(bar.provider_revision == batch.content_revision for bar in batch.five_minute_bars)
+    assert all(
+        bar.provider_revision == batch.content_revision for bar in batch.official_daily_bars
+    )
+
+
+def test_index_provider_fails_before_request_control_for_uncertified_index() -> None:
+    profile = certified_tushare_market_index_profile(
+        capabilities={
+            code: (
+                TushareMarketIndexCapabilityStatus.BLOCKED_PERMISSION
+                if code is MarketIndexCode.BSE_50
+                else TushareMarketIndexCapabilityStatus.READY
+            )
+            for code in MarketIndexCode
+        },
+        source_time_label=TushareMarketIndexSourceTimeLabel.END,
+    )
+    controller = _Controller()
+    provider = TushareMarketIndexProvider(
+        client=_Client(),
+        profile=profile,
+        request_controller=controller,
+        now=lambda: datetime(2026, 9, 7, 10, 0, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    with pytest.raises(TushareMarketIndexProviderError):
+        asyncio.run(
+            provider.acquire_index_data(
+                index_code=MarketIndexCode.BSE_50,
+                decision_cutoff=datetime(
+                    2026,
+                    9,
+                    7,
+                    10,
+                    0,
+                    tzinfo=ZoneInfo("Asia/Shanghai"),
+                ),
+                five_minute_bar_count=1,
+                official_daily_bar_count=1,
+            )
+        )
+
+    assert controller.calls == []

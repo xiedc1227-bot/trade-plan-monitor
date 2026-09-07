@@ -56,6 +56,8 @@ class TushareOperation(StrEnum):
     TRADING_CALENDAR = "trading_calendar"
     DAILY_LIMITS = "daily_limits"
     DAILY_BARS = "daily_bars"
+    INDEX_MINUTES = "index_minutes"
+    INDEX_DAILY = "index_daily"
 
 
 class RequestPriority(IntEnum):

@@ -1,19 +1,48 @@
-"""Fail-closed Tushare board-index profile pending independent live certification."""
+"""Certified, fail-closed Tushare board-index provider.
+
+Tushare documents ``idx_mins`` as the index-minute endpoint and
+``index_daily`` as the official daily endpoint:
+https://tushare.pro/document/2?doc_id=419
+https://tushare.pro/document/1?doc_id=95
+"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import hashlib
+import json
+from collections import Counter
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time, timedelta
+from decimal import Decimal, DecimalException
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
+from zoneinfo import ZoneInfo
+
+import pandas as pd
 
 from trade_plan_monitor.market_index.identity import MarketIndexCode
-from trade_plan_monitor.market_index.models import MarketIndexIssueCode
+from trade_plan_monitor.market_index.models import (
+    MarketIndexBar,
+    MarketIndexInterval,
+    MarketIndexIssueCode,
+    MarketIndexSourceKind,
+)
 from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
+from trade_plan_monitor.runtime.request_control import (
+    RequestPriority,
+    TushareOperation,
+    TushareRequestController,
+)
 
 _PROFILE_ID: Final = "tushare-board-index-live-v1"
+_SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
+_INDEX_MINUTE_ENDPOINT: Final = "idx_mins"
+_INDEX_DAILY_ENDPOINT: Final = "index_daily"
+_INDEX_MINUTE_FIELDS: Final = "ts_code,trade_time,open,close,high,low,vol,amount"
+_INDEX_DAILY_FIELDS: Final = "ts_code,trade_date,open,high,low,close,vol,amount"
+_MAX_REQUESTED_BARS: Final = 8_000
 
 
 class TushareMarketIndexCapabilityStatus(StrEnum):
@@ -56,14 +85,25 @@ class TushareMarketIndexProfile:
             for index_code, status in capabilities.items()
         ):
             raise TypeError("market-index capabilities use dedicated enum values")
-        if (
-            self.source_time_label is not TushareMarketIndexSourceTimeLabel.UNVERIFIED
-            or self.five_minute_endpoint is not None
-            or self.official_daily_endpoint is not None
+        unverified = self.source_time_label is TushareMarketIndexSourceTimeLabel.UNVERIFIED
+        if unverified:
+            if (
+                self.five_minute_endpoint is not None
+                or self.official_daily_endpoint is not None
+                or any(
+                    status is not TushareMarketIndexCapabilityStatus.UNVERIFIED
+                    for status in capabilities.values()
+                )
+            ):
+                raise ValueError("unverified market-index profile cannot enable endpoints")
+        elif (
+            self.five_minute_endpoint != _INDEX_MINUTE_ENDPOINT
+            or self.official_daily_endpoint != _INDEX_DAILY_ENDPOINT
             or any(
-                status is not TushareMarketIndexCapabilityStatus.UNVERIFIED
+                status is TushareMarketIndexCapabilityStatus.UNVERIFIED
                 for status in capabilities.values()
             )
+            or TushareMarketIndexCapabilityStatus.READY not in capabilities.values()
         ):
             raise ValueError("market-index profile requires independent live certification")
         object.__setattr__(self, "capabilities", MappingProxyType(capabilities))
@@ -84,6 +124,22 @@ def unverified_tushare_market_index_profile() -> TushareMarketIndexProfile:
     )
 
 
+def certified_tushare_market_index_profile(
+    *,
+    capabilities: Mapping[MarketIndexCode, TushareMarketIndexCapabilityStatus],
+    source_time_label: TushareMarketIndexSourceTimeLabel,
+) -> TushareMarketIndexProfile:
+    """Build the strict profile shape accepted only after index-specific evidence."""
+
+    return TushareMarketIndexProfile(
+        profile_id=_PROFILE_ID,
+        capabilities=capabilities,
+        source_time_label=source_time_label,
+        five_minute_endpoint=_INDEX_MINUTE_ENDPOINT,
+        official_daily_endpoint=_INDEX_DAILY_ENDPOINT,
+    )
+
+
 class TushareMarketIndexProviderError(RuntimeError):
     """Stable index-provider failure without SDK response or credential context."""
 
@@ -95,10 +151,20 @@ class TushareMarketIndexProviderError(RuntimeError):
 class TushareMarketIndexProvider:
     """Independent live surface that cannot call an uncertified index endpoint."""
 
-    def __init__(self, *, profile: TushareMarketIndexProfile) -> None:
+    def __init__(
+        self,
+        *,
+        profile: TushareMarketIndexProfile,
+        client: object | None = None,
+        request_controller: TushareRequestController | object | None = None,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
         if not isinstance(profile, TushareMarketIndexProfile):
             raise TypeError("profile must be a TushareMarketIndexProfile")
         self._profile = profile
+        self._client = client
+        self._request_controller = request_controller
+        self._now = now
 
     @property
     def profile(self) -> TushareMarketIndexProfile:
@@ -112,8 +178,281 @@ class TushareMarketIndexProvider:
         five_minute_bar_count: int,
         official_daily_bar_count: int,
     ) -> MarketIndexProviderBatch:
-        del index_code, decision_cutoff, five_minute_bar_count, official_daily_bar_count
-        raise TushareMarketIndexProviderError from None
+        if not isinstance(index_code, MarketIndexCode):
+            raise TypeError("index_code must be a MarketIndexCode")
+        if not isinstance(decision_cutoff, datetime) or decision_cutoff.tzinfo is None:
+            raise TypeError("decision_cutoff must be timezone-aware")
+        if decision_cutoff.utcoffset() != timedelta(hours=8):
+            raise ValueError("decision_cutoff must use Asia/Shanghai")
+        for name, value in (
+            ("five_minute_bar_count", five_minute_bar_count),
+            ("official_daily_bar_count", official_daily_bar_count),
+        ):
+            if type(value) is not int or not 1 <= value <= _MAX_REQUESTED_BARS:
+                raise ValueError(f"{name} must be between 1 and {_MAX_REQUESTED_BARS}")
+        if (
+            self._profile.capabilities[index_code]
+            is not TushareMarketIndexCapabilityStatus.READY
+            or self._profile.source_time_label
+            is TushareMarketIndexSourceTimeLabel.UNVERIFIED
+            or self._client is None
+            or self._request_controller is None
+            or self._now is None
+        ):
+            raise TushareMarketIndexProviderError from None
+
+        cutoff = decision_cutoff.astimezone(_SHANGHAI)
+        work_prefix = f"index:{index_code.value}:{cutoff.strftime('%Y%m%dT%H%M')}"
+        try:
+            minute_frame = await self._request_controller.execute(
+                TushareOperation.INDEX_MINUTES,
+                lambda: self._fetch_index_minutes(index_code, cutoff),
+                work_key=f"{work_prefix}:minutes",
+                priority=RequestPriority.MARKET_DEADLINE,
+            )
+            daily_frame = await self._request_controller.execute(
+                TushareOperation.INDEX_DAILY,
+                lambda: self._fetch_index_daily(index_code, cutoff),
+                work_key=f"{work_prefix}:daily",
+                priority=RequestPriority.MARKET_DEADLINE,
+            )
+            if not isinstance(minute_frame, pd.DataFrame) or not isinstance(
+                daily_frame, pd.DataFrame
+            ):
+                raise ValueError("index provider returned a non-tabular response")
+            observed_at = self._observed_at()
+            revision = self._content_revision(minute_frame, daily_frame)
+            minute_bars = self._minute_bars(
+                minute_frame,
+                index_code=index_code,
+                decision_cutoff=cutoff,
+                observed_at=observed_at,
+                revision=revision,
+            )[-five_minute_bar_count:]
+            daily_bars = self._daily_bars(
+                daily_frame,
+                index_code=index_code,
+                decision_cutoff=cutoff,
+                observed_at=observed_at,
+                revision=revision,
+            )[-official_daily_bar_count:]
+            return MarketIndexProviderBatch(
+                index_code=index_code,
+                five_minute_bars=minute_bars,
+                official_daily_bars=daily_bars,
+                content_revision=revision,
+                observed_at=observed_at,
+            )
+        except Exception:
+            raise TushareMarketIndexProviderError from None
+
+    def _fetch_index_minutes(
+        self,
+        index_code: MarketIndexCode,
+        decision_cutoff: datetime,
+    ) -> object:
+        endpoint = getattr(self._client, _INDEX_MINUTE_ENDPOINT)
+        return endpoint(
+            ts_code=index_code.value,
+            freq="5min",
+            start_date=(decision_cutoff - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
+            end_date=decision_cutoff.strftime("%Y-%m-%d %H:%M:%S"),
+            fields=_INDEX_MINUTE_FIELDS,
+        )
+
+    def _fetch_index_daily(
+        self,
+        index_code: MarketIndexCode,
+        decision_cutoff: datetime,
+    ) -> object:
+        endpoint = getattr(self._client, _INDEX_DAILY_ENDPOINT)
+        return endpoint(
+            ts_code=index_code.value,
+            start_date=(decision_cutoff.date() - timedelta(days=400)).strftime("%Y%m%d"),
+            end_date=decision_cutoff.date().strftime("%Y%m%d"),
+            fields=_INDEX_DAILY_FIELDS,
+        )
+
+    def _observed_at(self) -> datetime:
+        if self._now is None:  # pragma: no cover - constructor gate
+            raise ValueError("index provider clock is unavailable")
+        value = self._now()
+        if not isinstance(value, datetime) or value.tzinfo is None:
+            raise ValueError("index provider clock must be timezone-aware")
+        canonical = value.astimezone(_SHANGHAI)
+        if value.utcoffset() != canonical.utcoffset():
+            raise ValueError("index provider clock must use Asia/Shanghai")
+        return canonical
+
+    def _minute_bars(
+        self,
+        frame: pd.DataFrame,
+        *,
+        index_code: MarketIndexCode,
+        decision_cutoff: datetime,
+        observed_at: datetime,
+        revision: int,
+    ) -> tuple[MarketIndexBar, ...]:
+        self._require_columns(
+            frame,
+            {"ts_code", "trade_time", "open", "high", "low", "close", "vol", "amount"},
+        )
+        candidates: dict[datetime, MarketIndexBar] = {}
+        for row in frame.to_dict(orient="records"):
+            try:
+                if row["ts_code"] != index_code.value:
+                    continue
+                source_at = self._source_datetime(row["trade_time"])
+                bar_at = (
+                    source_at + timedelta(minutes=5)
+                    if self._profile.source_time_label
+                    is TushareMarketIndexSourceTimeLabel.START
+                    else source_at
+                )
+                local_time = bar_at.timetz().replace(tzinfo=None)
+                valid_session_time = (
+                    time(9, 35) <= local_time <= time(11, 30)
+                    or time(13, 5) <= local_time <= time(15, 0)
+                )
+                if bar_at.minute % 5 or not valid_session_time or bar_at > decision_cutoff:
+                    continue
+                bar = self._bar(
+                    row,
+                    index_code=index_code,
+                    interval=MarketIndexInterval.FIVE_MINUTE,
+                    bar_at=bar_at,
+                    observed_at=observed_at,
+                    source_kind=MarketIndexSourceKind.PROVISIONAL,
+                    revision=revision,
+                    daily_units=False,
+                )
+            except (DecimalException, KeyError, TypeError, ValueError):
+                continue
+            if bar_at in candidates:
+                raise ValueError("duplicate index-minute identity")
+            candidates[bar_at] = bar
+        return tuple(candidates[key] for key in sorted(candidates))
+
+    def _daily_bars(
+        self,
+        frame: pd.DataFrame,
+        *,
+        index_code: MarketIndexCode,
+        decision_cutoff: datetime,
+        observed_at: datetime,
+        revision: int,
+    ) -> tuple[MarketIndexBar, ...]:
+        self._require_columns(
+            frame,
+            {"ts_code", "trade_date", "open", "high", "low", "close", "vol", "amount"},
+        )
+        latest_official_date = decision_cutoff.date()
+        if decision_cutoff.timetz().replace(tzinfo=None) < time(15, 0):
+            latest_official_date -= timedelta(days=1)
+        candidates: dict[datetime, MarketIndexBar] = {}
+        for row in frame.to_dict(orient="records"):
+            try:
+                if row["ts_code"] != index_code.value:
+                    continue
+                trade_date = datetime.strptime(str(row["trade_date"]), "%Y%m%d").date()
+                if trade_date > latest_official_date:
+                    continue
+                bar_at = datetime.combine(trade_date, time(15, 0), _SHANGHAI)
+                bar = self._bar(
+                    row,
+                    index_code=index_code,
+                    interval=MarketIndexInterval.OFFICIAL_DAILY,
+                    bar_at=bar_at,
+                    observed_at=observed_at,
+                    source_kind=MarketIndexSourceKind.OFFICIAL,
+                    revision=revision,
+                    daily_units=True,
+                )
+            except (DecimalException, KeyError, TypeError, ValueError):
+                continue
+            if bar_at in candidates:
+                raise ValueError("duplicate index-daily identity")
+            candidates[bar_at] = bar
+        return tuple(candidates[key] for key in sorted(candidates))
+
+    @staticmethod
+    def _bar(
+        row: Mapping[str, object],
+        *,
+        index_code: MarketIndexCode,
+        interval: MarketIndexInterval,
+        bar_at: datetime,
+        observed_at: datetime,
+        source_kind: MarketIndexSourceKind,
+        revision: int,
+        daily_units: bool,
+    ) -> MarketIndexBar:
+        scale_volume = Decimal(100) if daily_units else Decimal(1)
+        scale_amount = Decimal(1_000) if daily_units else Decimal(1)
+        return MarketIndexBar(
+            index_code=index_code,
+            interval=interval,
+            bar_at=bar_at,
+            open_points=TushareMarketIndexProvider._positive_decimal(row["open"]),
+            high_points=TushareMarketIndexProvider._positive_decimal(row["high"]),
+            low_points=TushareMarketIndexProvider._positive_decimal(row["low"]),
+            close_points=TushareMarketIndexProvider._positive_decimal(row["close"]),
+            volume=TushareMarketIndexProvider._nonnegative_decimal(row["vol"]) * scale_volume,
+            amount=TushareMarketIndexProvider._nonnegative_decimal(row["amount"])
+            * scale_amount,
+            observed_at=observed_at,
+            source_kind=source_kind,
+            provider_revision=revision,
+        )
+
+    @staticmethod
+    def _source_datetime(value: object) -> datetime:
+        if isinstance(value, datetime):
+            parsed = value
+        elif isinstance(value, str):
+            parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        else:
+            raise TypeError("index minute timestamp is invalid")
+        return parsed.replace(tzinfo=_SHANGHAI) if parsed.tzinfo is None else parsed.astimezone(
+            _SHANGHAI
+        )
+
+    @staticmethod
+    def _positive_decimal(value: object) -> Decimal:
+        converted = TushareMarketIndexProvider._nonnegative_decimal(value)
+        if converted <= 0:
+            raise ValueError("index point value must be positive")
+        return converted
+
+    @staticmethod
+    def _nonnegative_decimal(value: object) -> Decimal:
+        if isinstance(value, bool):
+            raise TypeError("index numeric value cannot be bool")
+        converted = Decimal(str(value))
+        if not converted.is_finite() or converted < 0:
+            raise ValueError("index numeric value must be finite and non-negative")
+        return converted
+
+    @staticmethod
+    def _require_columns(frame: pd.DataFrame, required: set[str]) -> None:
+        counts = Counter(frame.columns)
+        if any(counts[column] != 1 for column in required):
+            raise ValueError("index response schema is invalid")
+
+    @staticmethod
+    def _content_revision(minute_frame: pd.DataFrame, daily_frame: pd.DataFrame) -> int:
+        payload = json.dumps(
+            {
+                "daily": daily_frame.to_dict(orient="records"),
+                "minutes": minute_frame.to_dict(orient="records"),
+            },
+            default=str,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        revision = int.from_bytes(hashlib.sha256(payload).digest()[:4], "big") & 0x7FFFFFFF
+        return revision or 1
 
 
 __all__ = [
@@ -122,5 +461,6 @@ __all__ = [
     "TushareMarketIndexProvider",
     "TushareMarketIndexProviderError",
     "TushareMarketIndexSourceTimeLabel",
+    "certified_tushare_market_index_profile",
     "unverified_tushare_market_index_profile",
 ]

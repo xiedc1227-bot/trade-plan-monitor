@@ -289,6 +289,7 @@ def test_official_close_batch_unions_requirements_and_shares_one_snapshot() -> N
 
     provider = OfficialProvider()
     captured: list[object] = []
+    persisted: list[object] = []
     service = RuntimeEvaluationService(
         fetch_minutes=lambda *_args, **_kwargs: [],
         fetch_official_daily=lambda *_args, **_kwargs: [],
@@ -298,6 +299,7 @@ def test_official_close_batch_unions_requirements_and_shares_one_snapshot() -> N
         committed_event_publisher=lambda _event: None,
         market_index_service=RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider)),
     )
+    service._persist_market_index_batch = persisted.append
 
     async def capture_official_close(**kwargs: object) -> str:
         captured.append(kwargs["reference_market_snapshot"])
@@ -317,5 +319,6 @@ def test_official_close_batch_unions_requirements_and_shares_one_snapshot() -> N
 
     assert results == tuple(plan.plan_id for plan in plans)
     assert provider.calls == [(1, 3)]
+    assert len(persisted) == 1
     assert len(captured) == 2
     assert captured[0] is captured[1]
