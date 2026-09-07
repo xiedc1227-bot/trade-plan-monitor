@@ -71,6 +71,7 @@ describe("/alerts route", () => {
       dataAgeSeconds: 0,
       marketIndexes: [],
       observedAt: "2026-08-24T10:05:00+08:00",
+      runtimeGeneration: "00000000-0000-4000-8000-000000000001",
       sequence: 20,
       symbols: [],
     });

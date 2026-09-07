@@ -4,7 +4,10 @@ import { defineComponent, h } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApiClient } from "../../src/api/client";
-import type { DashboardResponse } from "../../src/api/generated";
+import type {
+  DashboardProjectionUnavailableResponse,
+  DashboardResponse,
+} from "../../src/api/generated";
 import { useMonitorStream } from "../../src/composables/useMonitorStream";
 import type { UseMonitorStreamResult } from "../../src/composables/useMonitorStream";
 import { useMonitorStore } from "../../src/stores/monitor";
@@ -22,8 +25,16 @@ const snapshot: DashboardResponse = {
   dataAgeSeconds: 0,
   marketIndexes: [],
   observedAt: "2026-08-24T10:30:00+08:00",
+  runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 7,
   symbols: [],
+};
+
+const unavailable: DashboardProjectionUnavailableResponse = {
+  availability: "UNAVAILABLE",
+  observedAt: "2026-09-04T10:00:00+08:00",
+  reason: "AWAITING_FIRST_EVALUATION",
+  sequence: 0,
 };
 
 class FakeWebSocket extends EventTarget {
@@ -118,6 +129,16 @@ function event(sequence: number) {
   } as const;
 }
 
+function heartbeat(sequence: number) {
+  return {
+    runtimeGeneration: "00000000-0000-4000-8000-000000000001",
+    runtimeLive: true,
+    runtimeStartedAt: "2026-08-24T09:00:00+08:00",
+    sequence,
+    type: "heartbeat",
+  } as const;
+}
+
 afterEach(() => {
   vi.useRealTimers();
   document.body.replaceChildren();
@@ -162,7 +183,7 @@ describe("useMonitorStream", () => {
       label: expect.stringContaining("同步"),
     });
 
-    socket.receive({ type: "heartbeat", sequence: 7 });
+    socket.receive(heartbeat(7));
     expect(stream.connectionState.value).toEqual({
       code: "LIVE",
       label: "实时连接",
@@ -187,7 +208,7 @@ describe("useMonitorStream", () => {
       const socket = sockets.sockets[0];
       if (socket === undefined) throw new Error("expected one socket");
       socket.open();
-      socket.receive({ type: "heartbeat", sequence: 7 });
+      socket.receive(heartbeat(7));
 
       expect(stream.connectionState.value).toEqual({
         code: "STALE",
@@ -197,6 +218,177 @@ describe("useMonitorStream", () => {
       wrapper.unmount();
     },
   );
+
+  it("leaves LIVE when the runtime fails without committing a new event", async () => {
+    vi.useFakeTimers();
+    const apiClient: ApiClient = { getDashboard: vi.fn(async () => snapshot) };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({ apiClient, createSocket: sockets.createSocket });
+    await flushPromises();
+    const socket = sockets.sockets[0];
+    if (socket === undefined) throw new Error("expected one socket");
+    socket.open();
+    socket.receive(heartbeat(7));
+    expect(stream.connectionState.value.code).toBe("LIVE");
+
+    socket.receive({
+      runtimeGeneration: null,
+      runtimeLive: false,
+      runtimeStartedAt: null,
+      sequence: 7,
+      type: "heartbeat",
+    });
+
+    expect(stream.connectionState.value.code).toBe("STALE");
+    expect(apiClient.getDashboard).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("refreshes the snapshot when a heartbeat belongs to a newer runtime", async () => {
+    vi.useFakeTimers();
+    const apiClient: ApiClient = {
+      getDashboard: vi.fn(async () => snapshot),
+    };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({ apiClient, createSocket: sockets.createSocket });
+    await flushPromises();
+    const socket = sockets.sockets[0];
+    if (socket === undefined) throw new Error("expected one socket");
+    socket.open();
+
+    socket.receive({
+      runtimeGeneration: "00000000-0000-4000-8000-000000000002",
+      runtimeLive: true,
+      runtimeStartedAt: "2026-08-24T10:31:00+08:00",
+      sequence: 7,
+      type: "heartbeat",
+    });
+    await flushPromises();
+
+    expect(socket.close).toHaveBeenCalled();
+    expect(apiClient.getDashboard).toHaveBeenCalledTimes(2);
+    expect(stream.connectionState.value.code).toBe("CONNECTING");
+    wrapper.unmount();
+  });
+
+  it("refreshes after reconnect even when the replacement runtime clock moved backward", async () => {
+    vi.useFakeTimers();
+    const replacementSnapshot = deferred<DashboardResponse>();
+    const apiClient: ApiClient = {
+      getDashboard: vi
+        .fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockImplementationOnce(() => replacementSnapshot.promise),
+    };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({
+      apiClient,
+      createSocket: sockets.createSocket,
+      random: () => 0.5,
+    });
+    await flushPromises();
+    const firstSocket = sockets.sockets[0];
+    if (firstSocket === undefined) throw new Error("expected first socket");
+    firstSocket.open();
+    firstSocket.receive(heartbeat(7));
+    expect(stream.connectionState.value.code).toBe("LIVE");
+
+    firstSocket.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const replacementSocket = sockets.sockets[1];
+    if (replacementSocket === undefined) throw new Error("expected replacement socket");
+    replacementSocket.open();
+    replacementSocket.receive({
+      runtimeGeneration: "00000000-0000-4000-8000-000000000002",
+      runtimeLive: true,
+      runtimeStartedAt: "2026-08-24T09:00:00+08:00",
+      sequence: 7,
+      type: "heartbeat",
+    });
+
+    expect(apiClient.getDashboard).toHaveBeenCalledTimes(2);
+    expect(stream.connectionState.value.code).toBe("STALE");
+    replacementSnapshot.resolve({
+      ...snapshot,
+      observedAt: "2026-08-24T10:31:00+08:00",
+    });
+    await flushPromises();
+    expect(sockets.sockets).toHaveLength(3);
+    expect(stream.connectionState.value.code).toBe("CONNECTING");
+    wrapper.unmount();
+  });
+
+  it("refreshes on a seamless runtime generation change despite clock rollback", async () => {
+    vi.useFakeTimers();
+    const replacementSnapshot = deferred<DashboardResponse>();
+    const apiClient: ApiClient = {
+      getDashboard: vi
+        .fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockImplementationOnce(() => replacementSnapshot.promise),
+    };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({ apiClient, createSocket: sockets.createSocket });
+    await flushPromises();
+    const socket = sockets.sockets[0];
+    if (socket === undefined) throw new Error("expected one socket");
+    socket.open();
+    socket.receive(heartbeat(7));
+    expect(stream.connectionState.value.code).toBe("LIVE");
+
+    socket.receive({
+      runtimeGeneration: "00000000-0000-4000-8000-000000000002",
+      runtimeLive: true,
+      runtimeStartedAt: "2026-08-24T09:00:00+08:00",
+      sequence: 7,
+      type: "heartbeat",
+    });
+
+    expect(apiClient.getDashboard).toHaveBeenCalledTimes(2);
+    expect(stream.connectionState.value.code).toBe("STALE");
+    replacementSnapshot.resolve({
+      ...snapshot,
+      runtimeGeneration: "00000000-0000-4000-8000-000000000002",
+    });
+    await flushPromises();
+    expect(sockets.sockets).toHaveLength(2);
+    expect(stream.connectionState.value.code).toBe("CONNECTING");
+    wrapper.unmount();
+  });
+
+  it("refreshes when a live runtime follows a non-live heartbeat on the same socket", async () => {
+    vi.useFakeTimers();
+    const replacementSnapshot = deferred<DashboardResponse>();
+    const apiClient: ApiClient = {
+      getDashboard: vi
+        .fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockImplementationOnce(() => replacementSnapshot.promise),
+    };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({ apiClient, createSocket: sockets.createSocket });
+    await flushPromises();
+    const socket = sockets.sockets[0];
+    if (socket === undefined) throw new Error("expected one socket");
+    socket.open();
+    socket.receive(heartbeat(7));
+    socket.receive({
+      runtimeGeneration: null,
+      runtimeLive: false,
+      runtimeStartedAt: null,
+      sequence: 7,
+      type: "heartbeat",
+    });
+    socket.receive(heartbeat(7));
+
+    expect(apiClient.getDashboard).toHaveBeenCalledTimes(2);
+    expect(stream.connectionState.value.code).toBe("STALE");
+    replacementSnapshot.resolve(snapshot);
+    await flushPromises();
+    expect(sockets.sockets).toHaveLength(2);
+    expect(stream.connectionState.value.code).toBe("CONNECTING");
+    wrapper.unmount();
+  });
 
   it("refreshes the authoritative snapshot when an ordered invalidation arrives", async () => {
     vi.useFakeTimers();
@@ -215,7 +407,7 @@ describe("useMonitorStream", () => {
     const firstSocket = sockets.sockets[0];
     if (firstSocket === undefined) throw new Error("expected one socket");
     firstSocket.open();
-    firstSocket.receive({ type: "heartbeat", sequence: 7 });
+    firstSocket.receive(heartbeat(7));
 
     firstSocket.receive(event(8));
     await flushPromises();
@@ -272,7 +464,7 @@ describe("useMonitorStream", () => {
     const socket = sockets.sockets[0];
     if (socket === undefined) throw new Error("expected one socket");
     socket.open();
-    setTimeout(() => socket.receive({ type: "heartbeat", sequence: 7 }), 20_000);
+    setTimeout(() => socket.receive(heartbeat(7)), 20_000);
 
     await vi.advanceTimersByTimeAsync(20_000);
 
@@ -312,7 +504,7 @@ describe("useMonitorStream", () => {
     const socket = sockets.sockets[0];
     if (socket === undefined) throw new Error("expected one socket");
     socket.open();
-    socket.receive({ type: "heartbeat", sequence: 7 });
+    socket.receive(heartbeat(7));
 
     await vi.advanceTimersByTimeAsync(20_000);
     socket.receive(event(7));
@@ -385,6 +577,75 @@ describe("useMonitorStream", () => {
       marker: "×",
     });
     expect(sockets.sockets).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it("shows typed unavailable monitoring without a health probe or websocket", async () => {
+    vi.useFakeTimers();
+    const apiClient: ApiClient = {
+      getDashboard: vi.fn(async () => unavailable),
+    };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({
+      apiClient,
+      createSocket: sockets.createSocket,
+      random: () => 0.5,
+    });
+    await flushPromises();
+
+    expect(stream.connectionState.value).toEqual({
+      code: "UNAVAILABLE",
+      label: "服务已连接，实时监控未就绪",
+      marker: "!",
+    });
+    expect(sockets.sockets).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it("keeps the disconnected state for a real dashboard transport failure", async () => {
+    vi.useFakeTimers();
+    const apiClient: ApiClient = {
+      getDashboard: vi.fn().mockRejectedValue(new Error("raw dashboard transport detail")),
+    };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({
+      apiClient,
+      createSocket: sockets.createSocket,
+    });
+    await flushPromises();
+
+    expect(stream.connectionState.value).toEqual({
+      code: "DISCONNECTED",
+      label: "连接中断，正在重试",
+      marker: "×",
+    });
+    expect(sockets.sockets).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it("recovers from unavailable monitoring through a fresh authoritative snapshot", async () => {
+    vi.useFakeTimers();
+    const apiClient: ApiClient = {
+      getDashboard: vi
+        .fn()
+        .mockResolvedValueOnce(unavailable)
+        .mockResolvedValueOnce(snapshot),
+    };
+    const sockets = socketFactory();
+    const { stream, wrapper } = createHarness({
+      apiClient,
+      createSocket: sockets.createSocket,
+      random: () => 0.5,
+    });
+    await flushPromises();
+    expect(stream.connectionState.value.code).toBe("UNAVAILABLE");
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await flushPromises();
+
+    expect(apiClient.getDashboard).toHaveBeenCalledTimes(2);
+    expect(sockets.sockets).toHaveLength(1);
+    expect(stream.connectionState.value.code).toBe("CONNECTING");
     wrapper.unmount();
   });
 

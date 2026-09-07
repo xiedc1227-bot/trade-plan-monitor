@@ -1,7 +1,17 @@
 <script setup lang="ts">
+import { CandlestickChart, ScatterChart } from "echarts/charts";
+import {
+  AriaComponent,
+  DataZoomComponent,
+  GridComponent,
+  LegendComponent,
+  MarkLineComponent,
+  TooltipComponent,
+} from "echarts/components";
+import { init, use } from "echarts/core";
+import type { ECharts, EChartsCoreOption } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "vue";
-import type { ECharts, EChartsOption } from "echarts";
-import * as echarts from "echarts";
 
 import type { ChartSeries } from "../../composables/useChartSeries";
 
@@ -30,16 +40,26 @@ const emit = defineEmits<Emits>();
 const container = useTemplateRef<HTMLDivElement>("container");
 const chart = shallowRef<ECharts | null>(null);
 
+use([
+  AriaComponent,
+  CandlestickChart,
+  CanvasRenderer,
+  DataZoomComponent,
+  GridComponent,
+  LegendComponent,
+  MarkLineComponent,
+  ScatterChart,
+  TooltipComponent,
+]);
+
 watch(
   () => props.series,
   () => renderSeries(),
 );
 
 onMounted(() => {
-  if (container.value === null) {
-    return;
-  }
-  chart.value = echarts.init(container.value);
+  if (container.value === null) return;
+  chart.value = init(container.value);
   chart.value.on("datazoom", handleDataZoom);
   window.addEventListener("resize", resizeChart);
   renderSeries();
@@ -88,7 +108,7 @@ function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
-function buildOption(series: ChartSeries): EChartsOption {
+function buildOption(series: ChartSeries): EChartsCoreOption {
   const markLineData = series.priceLevels.map((level) => ({
     label: { formatter: `${level.label} ${level.valueYuan.toFixed(2)}` },
     name: level.label,

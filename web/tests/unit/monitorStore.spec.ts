@@ -22,6 +22,7 @@ const snapshot: DashboardResponse = {
   dataAgeSeconds: 2,
   marketIndexes: [],
   observedAt: "2026-08-24T10:30:00+08:00",
+  runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 7,
   symbols: [
     {
@@ -95,6 +96,7 @@ describe("monitor store", () => {
     store.applySnapshot(snapshot);
 
     expect(store.sequence).toBe(7);
+    expect(store.runtimeGeneration).toBe("00000000-0000-4000-8000-000000000001");
     expect(store.symbolIds).toEqual(["003043.SZ"]);
     expect(store.symbolsById["003043.SZ"]?.name).toBe("华亚智能");
     expect(store.symbols.map((item) => item.symbol)).toEqual(["003043.SZ"]);
@@ -280,6 +282,27 @@ describe("API client", () => {
       "/api/v1/dashboard",
       expect.objectContaining({ headers: { Accept: "application/json" }, method: "GET" }),
     );
+  });
+
+  it("rejects unavailable envelopes from another endpoint scope", async () => {
+    for (const reason of ["NO_ACTIVE_PLAN", "AWAITING_FIRST_EVALUATION_WRONG"] as const) {
+      const client = createApiClient(async () =>
+        new Response(
+          JSON.stringify({
+            availability: "UNAVAILABLE",
+            observedAt: snapshot.observedAt,
+            reason,
+            sequence: snapshot.sequence,
+            symbol: "003043.SZ",
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await expect(client.getDashboard()).rejects.toMatchObject({
+        code: "INVALID_RESPONSE",
+      });
+    }
   });
 
   it("matches the backend integer-second data-age contract", async () => {

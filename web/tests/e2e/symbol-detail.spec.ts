@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import type { Route } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -110,12 +110,53 @@ interface PositionRequests {
 let server: ViteDevServer;
 let baseUrl: string;
 
+interface BrowserAudit {
+  readonly consoleFailures: string[];
+  readonly failedRequests: string[];
+}
+
+const browserAudits = new WeakMap<import("@playwright/test").Page, BrowserAudit>();
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const nativeFetch = globalThis.fetch.bind(globalThis);
+    globalThis.fetch = async (...arguments_: Parameters<typeof fetch>) => {
+      const response = await nativeFetch(...arguments_);
+      const contractStatus = Number(response.headers.get("x-test-contract-status"));
+      if (!Number.isInteger(contractStatus) || contractStatus < 400 || contractStatus > 599) {
+        return response;
+      }
+      const headers = new Headers(response.headers);
+      headers.delete("x-test-contract-status");
+      return new Response(await response.text(), {
+        headers,
+        status: contractStatus,
+      });
+    };
+  });
+  const audit: BrowserAudit = { consoleFailures: [], failedRequests: [] };
+  browserAudits.set(page, audit);
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      audit.consoleFailures.push(`${message.type()}: ${message.text()} @ ${message.location().url}`);
+    }
+  });
+  page.on("requestfailed", (request) => audit.failedRequests.push(request.url()));
+  await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
+});
+
+test.afterEach(({ page }) => {
+  const audit = browserAudits.get(page);
+  expect(audit?.consoleFailures ?? []).toEqual([]);
+  expect(audit?.failedRequests ?? []).toEqual([]);
+});
+
 test.beforeAll(async () => {
   server = await createServer({
     clearScreen: false,
     logLevel: "silent",
     root: process.cwd(),
-    server: { host: "127.0.0.1", port: 0 },
+    server: { hmr: false, host: "127.0.0.1", port: 0 },
   });
   await server.listen();
   const address = server.httpServer?.address();
@@ -401,6 +442,19 @@ async function fulfillApi(
   failIndexHistory = false,
 ): Promise<void> {
   const url = new URL(route.request().url());
+  if (url.pathname === "/api/v1/dashboard") {
+    await route.fulfill({
+      body: JSON.stringify({
+        availability: "UNAVAILABLE",
+        observedAt,
+        reason: "AWAITING_FIRST_EVALUATION",
+        sequence: 0,
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+    return;
+  }
   if (url.pathname === `/api/v1/symbols/${symbol}`) {
     await route.fulfill({ body: JSON.stringify(detail), contentType: "application/json" });
     return;
@@ -441,7 +495,8 @@ async function fulfillApi(
           },
         }),
         contentType: "application/json",
-        status: 503,
+        headers: { "x-test-contract-status": "503" },
+        status: 200,
       });
       return;
     }
@@ -508,7 +563,8 @@ async function fulfillApi(
       error: { code: "SERVICE_UNAVAILABLE", details: [], message: "unavailable", requestId: "a".repeat(32) },
     }),
     contentType: "application/json",
-    status: 503,
+    headers: { "x-test-contract-status": "503" },
+    status: 200,
   });
 }
 
@@ -529,6 +585,7 @@ async function fulfillPositionConflict(route: Route): Promise<void> {
       },
     }),
     contentType: "application/json",
-    status: 409,
+    headers: { "x-test-contract-status": "409" },
+    status: 200,
   });
 }

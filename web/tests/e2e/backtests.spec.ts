@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import type { Browser, Page, Route, TestInfo } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -56,6 +56,7 @@ const dashboard: DashboardResponse = {
   dataAgeSeconds: 0,
   marketIndexes: [],
   observedAt: TIME,
+  runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 1,
   symbols: [],
 };
@@ -433,7 +434,7 @@ test.beforeAll(async () => {
     clearScreen: false,
     logLevel: "silent",
     root: process.cwd(),
-    server: { host: "127.0.0.1", port: 0 },
+    server: { hmr: false, host: "127.0.0.1", port: 0 },
   });
   await server.listen();
   const address = server.httpServer?.address();
@@ -540,7 +541,7 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
     ) {
       audit.externalRequests.push(request.url());
     }
-    if (/echarts|BacktestEquityChart/i.test(request.url())) {
+    if (/echarts|BacktestEquityChart|installCanvasRenderer/i.test(request.url())) {
       audit.chartRequests.push(request.url());
     }
   });
@@ -672,8 +673,8 @@ async function expectNoSeriousAxeViolations(page: Page): Promise<void> {
   expect(violations).toEqual([]);
 }
 
-function expectChromiumProject(testInfo: TestInfo): void {
-  expect(testInfo.project.name).toBe("chromium");
+function expectChromeProject(testInfo: TestInfo): void {
+  expect(testInfo.project.name).toBe("chrome");
 }
 
 function expectCleanAudit(audit: BrowserAudit): void {
@@ -749,7 +750,7 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   );
   await expectNoSeriousAxeViolations(page);
 
-  expectChromiumProject(testInfo);
+  expectChromeProject(testInfo);
   expectCleanAudit(audit);
   await page.close();
 });
@@ -805,7 +806,7 @@ test("submits a complete new run and follows the authoritative job to its result
   });
   expect(audit.runSubmissions[0]?.idempotencyKey).toMatch(/^[A-Za-z0-9._:-]{1,128}$/);
   expect(audit.jobRequestTimes).toHaveLength(2);
-  expectChromiumProject(testInfo);
+  expectChromeProject(testInfo);
   expectCleanAudit(audit);
   await page.close();
 });
@@ -841,7 +842,7 @@ test("keeps 320/768/1024/1440 layouts and 200 percent text inside route boundari
     }
   }
 
-  expectChromiumProject(testInfo);
+  expectChromeProject(testInfo);
   expectCleanAudit(audit);
   await page.close();
 });
@@ -890,7 +891,7 @@ test("enforces request, DOM, polling, and pre-equity ECharts bounds", async ({ b
   await page.waitForTimeout(2_200);
   expect(audit.jobRequestTimes).toHaveLength(1);
 
-  expectChromiumProject(testInfo);
+  expectChromeProject(testInfo);
   expectCleanAudit(audit);
   await page.close();
 });

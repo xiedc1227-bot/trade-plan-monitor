@@ -1,7 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("echarts", () => ({
+vi.mock("echarts/core", () => ({
   init: () => ({
     dispose: vi.fn(),
     off: vi.fn(),
@@ -9,7 +9,18 @@ vi.mock("echarts", () => ({
     resize: vi.fn(),
     setOption: vi.fn(),
   }),
+  use: vi.fn(),
 }));
+vi.mock("echarts/charts", () => ({ CandlestickChart: {}, ScatterChart: {} }));
+vi.mock("echarts/components", () => ({
+  AriaComponent: {},
+  DataZoomComponent: {},
+  GridComponent: {},
+  LegendComponent: {},
+  MarkLineComponent: {},
+  TooltipComponent: {},
+}));
+vi.mock("echarts/renderers", () => ({ CanvasRenderer: {} }));
 
 import type {
   BarPage,

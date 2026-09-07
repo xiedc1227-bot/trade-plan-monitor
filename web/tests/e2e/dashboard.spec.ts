@@ -1,10 +1,13 @@
 import { createRequire } from "node:module";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 
-import type { DashboardResponse } from "../../src/api/generated";
+import type {
+  DashboardProjectionUnavailableResponse,
+  DashboardResponse,
+} from "../../src/api/generated";
 
 const require = createRequire(import.meta.url);
 const axePath = require.resolve("axe-core/axe.min.js");
@@ -50,6 +53,7 @@ const dashboard: DashboardResponse = {
     },
   ],
   observedAt: "2026-09-02T10:35:02+08:00",
+  runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 7,
   symbols: [
     {
@@ -108,6 +112,13 @@ const dashboard: DashboardResponse = {
   ],
 };
 
+const unavailableDashboard: DashboardProjectionUnavailableResponse = {
+  availability: "UNAVAILABLE",
+  observedAt: "2026-09-04T10:00:00+08:00",
+  reason: "AWAITING_FIRST_EVALUATION",
+  sequence: 0,
+};
+
 const firstSymbol = dashboard.symbols?.[0];
 const firstReference = firstSymbol?.referenceMarket;
 if (firstSymbol === undefined || firstReference === undefined || firstReference === null) {
@@ -135,12 +146,37 @@ dashboard.symbols?.push({
 let server: ViteDevServer;
 let baseUrl: string;
 
+interface BrowserAudit {
+  readonly consoleFailures: string[];
+  readonly failedRequests: string[];
+}
+
+const browserAudits = new WeakMap<import("@playwright/test").Page, BrowserAudit>();
+
+test.beforeEach(async ({ page }) => {
+  const audit: BrowserAudit = { consoleFailures: [], failedRequests: [] };
+  browserAudits.set(page, audit);
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      audit.consoleFailures.push(`${message.type()}: ${message.text()} @ ${message.location().url}`);
+    }
+  });
+  page.on("requestfailed", (request) => audit.failedRequests.push(request.url()));
+  await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
+});
+
+test.afterEach(({ page }) => {
+  const audit = browserAudits.get(page);
+  expect(audit?.consoleFailures ?? []).toEqual([]);
+  expect(audit?.failedRequests ?? []).toEqual([]);
+});
+
 test.beforeAll(async () => {
   server = await createServer({
     clearScreen: false,
     logLevel: "silent",
     root: process.cwd(),
-    server: { host: "127.0.0.1", port: 0 },
+    server: { hmr: false, host: "127.0.0.1", port: 0 },
   });
   await server.listen();
   const address = server.httpServer?.address();
@@ -157,9 +193,28 @@ test.afterAll(async () => {
 test("renders the authoritative dashboard and shared board-index summary at the root route", async ({
   page,
 }) => {
+  const chartRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/PriceChart|installCanvasRenderer|echarts/i.test(request.url())) {
+      chartRequests.push(request.url());
+    }
+  });
   await page.route(`${baseUrl}/api/v1/dashboard`, async (route) => {
     await route.fulfill({
       body: JSON.stringify(dashboard),
+      contentType: "application/json; charset=utf-8",
+      status: 200,
+    });
+  });
+  await page.route(`${baseUrl}/api/v1/symbols/688001.SH`, async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        availability: "UNAVAILABLE",
+        observedAt: dashboard.observedAt,
+        reason: "AWAITING_FIRST_EVALUATION",
+        sequence: dashboard.sequence,
+        symbol: "688001.SH",
+      }),
       contentType: "application/json; charset=utf-8",
       status: 200,
     });
@@ -185,6 +240,7 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await expect(rows.nth(1)).toContainText("未满足 2");
   await expect(rows.nth(0)).toContainText("000688.SH");
   await expect(rows.nth(1)).toContainText("000688.SH");
+  expect(chartRequests).toEqual([]);
 
   await page.getByRole("link", { name: "688001.SH" }).click();
   await expect(page).toHaveURL(/\/stocks\/688001\.SH$/);
@@ -232,6 +288,45 @@ test("keeps the shared-index and per-plan dashboard boundary responsive and acce
     );
   });
   expect(seriousViolations).toEqual([]);
+});
+
+test("distinguishes typed unavailable monitoring from a real disconnected service", async ({
+  page,
+}) => {
+  let dashboardRequests = 0;
+  const socketUrls: string[] = [];
+  const consoleFailures: string[] = [];
+  const failedRequests: string[] = [];
+
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleFailures.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("requestfailed", (request) => failedRequests.push(request.url()));
+  await page.route(`${baseUrl}/api/v1/dashboard`, async (route) => {
+    dashboardRequests += 1;
+    await route.fulfill({
+      body: JSON.stringify(unavailableDashboard),
+      contentType: "application/json; charset=utf-8",
+      status: 200,
+    });
+  });
+  await page.routeWebSocket(
+    (url) => url.pathname === "/ws/v1/monitor",
+    (socket) => socketUrls.push(socket.url()),
+  );
+
+  await page.goto(baseUrl);
+
+  const banner = page.locator(".app-shell__connection-banner");
+  await expect(banner).toHaveAttribute("data-connection-state", "UNAVAILABLE");
+  await expect(banner).toContainText("服务已连接，实时监控未就绪");
+  await expect(banner).not.toContainText("连接中断");
+  expect(dashboardRequests).toBeGreaterThanOrEqual(1);
+  expect(socketUrls).toEqual([]);
+  expect(consoleFailures).toEqual([]);
+  expect(failedRequests).toEqual([]);
 });
 
 async function collectOverflowSources(page: import("@playwright/test").Page) {
@@ -326,6 +421,14 @@ test("recovers a sequence gap with a fresh dashboard snapshot before replaying f
     `${baseUrl.replace("http", "ws")}/ws/v1/monitor?after=9`,
   ]);
 
-  sockets[1]?.send(JSON.stringify({ sequence: 9, type: "heartbeat" }));
+  sockets[1]?.send(
+    JSON.stringify({
+      runtimeGeneration: dashboard.runtimeGeneration,
+      runtimeLive: true,
+      runtimeStartedAt: "2026-08-24T09:00:00+08:00",
+      sequence: 9,
+      type: "heartbeat",
+    }),
+  );
   await expect(page.locator('[role="status"]')).toHaveAttribute("data-connection-state", "LIVE");
 });

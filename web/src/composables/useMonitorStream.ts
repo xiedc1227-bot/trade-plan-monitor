@@ -1,7 +1,10 @@
 import { computed, onMounted, onUnmounted, shallowRef } from "vue";
 import type { ComputedRef } from "vue";
 
-import { createApiClient } from "../api/client";
+import {
+  createApiClient,
+  isDashboardProjectionUnavailableResponse,
+} from "../api/client";
 import type { ApiClient } from "../api/client";
 import { useMonitorStore } from "../stores/monitor";
 import type { MonitorEventEnvelope } from "../stores/monitor";
@@ -20,6 +23,7 @@ export type MonitorStreamConnectionCode =
   | "CONNECTING"
   | "LIVE"
   | "STALE"
+  | "UNAVAILABLE"
   | "DISCONNECTED";
 
 export interface MonitorStreamConnectionState {
@@ -54,6 +58,11 @@ const connectionStates = Object.freeze<Record<MonitorStreamConnectionCode, Monit
     label: "数据可能已过期，正在恢复",
     marker: "!",
   }),
+  UNAVAILABLE: Object.freeze({
+    code: "UNAVAILABLE",
+    label: "服务已连接，实时监控未就绪",
+    marker: "!",
+  }),
 });
 
 export function useMonitorStream(
@@ -74,6 +83,7 @@ export function useMonitorStream(
   let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
   let retryAttempt = 0;
   let lifecycleRevision = 0;
+  let requiresAuthoritativeRefresh = false;
   let started = false;
 
   function start(): void {
@@ -131,6 +141,12 @@ export function useMonitorStream(
           return;
         }
         clearSnapshotTimer();
+        if (isDashboardProjectionUnavailableResponse(snapshot)) {
+          store.applyUnavailable(snapshot);
+          connectionCode.value = "UNAVAILABLE";
+          scheduleReconnect("snapshot", revision);
+          return;
+        }
         store.applySnapshot(snapshot);
         connect(store.sequence, revision);
       })
@@ -189,6 +205,20 @@ export function useMonitorStream(
       }
       armSocketTimeout(socket, revision, HEARTBEAT_TIMEOUT_MS);
       retryAttempt = 0;
+      if (!frame.runtimeLive) {
+        requiresAuthoritativeRefresh = true;
+        connectionCode.value = "STALE";
+        return;
+      }
+      if (requiresAuthoritativeRefresh) {
+        requiresAuthoritativeRefresh = false;
+        recoverSnapshot();
+        return;
+      }
+      if (store.runtimeGeneration !== frame.runtimeGeneration) {
+        recoverSnapshot();
+        return;
+      }
       connectionCode.value = store.connectionStatus === "CONNECTED" ? "LIVE" : "STALE";
       return;
     }
@@ -223,6 +253,7 @@ export function useMonitorStream(
     }
     activeSocket = null;
     clearHeartbeatTimer();
+    requiresAuthoritativeRefresh = true;
     markUnavailable();
     scheduleReconnect("socket", revision);
   }
@@ -236,6 +267,7 @@ export function useMonitorStream(
       }
       activeSocket = null;
       socket.close(NORMAL_CLOSE_CODE);
+      requiresAuthoritativeRefresh = true;
       markUnavailable();
       scheduleReconnect("socket", revision);
     }, timeoutMs);
@@ -343,15 +375,68 @@ function parseFrame(value: unknown): Record<string, unknown> | null {
   }
 }
 
-function isHeartbeatFrame(value: Record<string, unknown> | null): value is {
-  sequence: number;
-  type: "heartbeat";
-} {
+function isHeartbeatFrame(
+  value: Record<string, unknown> | null,
+): value is
+  | {
+      runtimeLive: true;
+      runtimeGeneration: string;
+      runtimeStartedAt: string;
+      sequence: number;
+      type: "heartbeat";
+    }
+  | {
+      runtimeLive: false;
+      runtimeGeneration: null;
+      runtimeStartedAt: null;
+      sequence: number;
+      type: "heartbeat";
+    } {
   return (
     value !== null &&
-    hasExactKeys(value, ["sequence", "type"]) &&
+    hasExactKeys(value, [
+      "runtimeGeneration",
+      "runtimeLive",
+      "runtimeStartedAt",
+      "sequence",
+      "type",
+    ]) &&
     value.type === "heartbeat" &&
-    isSafeSequence(value.sequence)
+    isSafeSequence(value.sequence) &&
+    value.runtimeLive === true &&
+    isUuidV4(value.runtimeGeneration) &&
+    isShanghaiDatetime(value.runtimeStartedAt)
+  ) || (
+    value !== null &&
+    hasExactKeys(value, [
+      "runtimeGeneration",
+      "runtimeLive",
+      "runtimeStartedAt",
+      "sequence",
+      "type",
+    ]) &&
+    value.type === "heartbeat" &&
+    isSafeSequence(value.sequence) &&
+    value.runtimeLive === false &&
+    value.runtimeGeneration === null &&
+    value.runtimeStartedAt === null
+  );
+}
+
+function isShanghaiDatetime(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?\+08:00$/.test(value) &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+function isUuidV4(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      value,
+    )
   );
 }
 

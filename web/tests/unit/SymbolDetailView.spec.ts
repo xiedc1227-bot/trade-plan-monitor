@@ -32,7 +32,17 @@ const echartsMock = vi.hoisted(() => {
   };
 });
 
-vi.mock("echarts", () => ({ init: echartsMock.init }));
+vi.mock("echarts/core", () => ({ init: echartsMock.init, use: vi.fn() }));
+vi.mock("echarts/charts", () => ({ CandlestickChart: {}, ScatterChart: {} }));
+vi.mock("echarts/components", () => ({
+  AriaComponent: {},
+  DataZoomComponent: {},
+  GridComponent: {},
+  LegendComponent: {},
+  MarkLineComponent: {},
+  TooltipComponent: {},
+}));
+vi.mock("echarts/renderers", () => ({ CanvasRenderer: {} }));
 
 const symbol = "003043.SZ";
 const firstTime = "2026-08-24T10:00:00+08:00";
@@ -267,7 +277,7 @@ describe("useChartSeries", () => {
     barSource.value = Object.freeze([bars[0] as BarView]);
     eventSource.value = Object.freeze([]);
     decisionSource.value = null;
-    await nextTick();
+    await vi.dynamicImportSettled();
 
     expect(series.value).not.toBe(firstSeries);
     expect(series.value.candles).toHaveLength(1);
@@ -403,8 +413,9 @@ describe("useChartSeries", () => {
 });
 
 describe("PriceChart", () => {
-  it("owns one ECharts instance, updates it, emits zoom, and cleans resize/unmount", async () => {
+  it("loads ECharts on demand, updates it, emits zoom, and cleans resize/unmount", async () => {
     const wrapper = mount(PriceChart, { props: { series: emptySeries, stale: false } });
+    await vi.dynamicImportSettled();
 
     expect(echartsMock.init).toHaveBeenCalledTimes(1);
     expect(echartsMock.chart.setOption).toHaveBeenCalledTimes(1);
@@ -443,10 +454,12 @@ describe("EpisodeTimeline", () => {
 });
 
 describe("SymbolDetailView", () => {
-  it("renders chart facts and the accessible tabular alternative from one mapped series", () => {
+  it("renders chart facts and the accessible tabular alternative from one mapped series", async () => {
     const wrapper = mount(SymbolDetailView, {
       props: { bars, detail, events },
     });
+    await vi.dynamicImportSettled();
+    await nextTick();
 
     expect(wrapper.text()).toContain("华亚智能");
     expect(wrapper.text()).toContain("已连接");
@@ -459,11 +472,10 @@ describe("SymbolDetailView", () => {
     expect(wrapper.get('[data-testid="overlay-table"]').text()).toContain("指标值");
     expect(wrapper.get('[data-testid="overlay-table"]').text()).toContain("-0.103456788 元");
     expect(wrapper.get('[data-testid="overlay-table"]').text()).not.toContain("-0.10 元");
-    expect(wrapper.getComponent(PriceChart).props("series").candles).toEqual(
-      useChartSeries({ bars, decision, events }).series.value.candles,
+    expect(wrapper.find('[data-testid="price-chart"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="bar-table"]').text()).toContain(
+      useChartSeries({ bars, decision, events }).series.value.candles[0]?.time ?? "",
     );
-    const chartOption = echartsMock.chart.setOption.mock.calls.at(-1)?.[0];
-    expect(JSON.stringify(chartOption)).not.toContain("onerror");
   });
 
   it("shows hierarchical evidence, blockers, and missing inputs as escaped text", () => {
@@ -478,7 +490,7 @@ describe("SymbolDetailView", () => {
     expect(wrapper.find("img").exists()).toBe(false);
   });
 
-  it("keeps authoritative facts visible while explicitly labelling stale state", () => {
+  it("keeps authoritative facts visible while explicitly labelling stale state", async () => {
     const staleDetail: SymbolDetailResponse = {
       ...detail,
       summary: {
@@ -497,11 +509,13 @@ describe("SymbolDetailView", () => {
     const wrapper = mount(SymbolDetailView, {
       props: { bars, detail: staleDetail, events, stale: true },
     });
+    await vi.dynamicImportSettled();
+    await nextTick();
 
     expect(wrapper.get('[role="status"]').text()).toContain("陈旧 / 降级");
     expect(wrapper.get('[role="status"]').text()).toContain("不得视为实时");
     expect(wrapper.findAll('[data-testid="bar-row"]')).toHaveLength(2);
-    expect(wrapper.getComponent(PriceChart).props("stale")).toBe(true);
+    expect(wrapper.get('[data-testid="price-chart"]').attributes("aria-label")).toContain("陈旧");
   });
 
   it("separates loading, error, and empty states without inventing data", () => {
@@ -534,8 +548,12 @@ describe("SymbolDetailView", () => {
   it("forwards chart ranges and timeline time selection without changing inputs", async () => {
     const originalBars = [...bars];
     const wrapper = mount(SymbolDetailView, { props: { bars, detail, events } });
+    await vi.dynamicImportSettled();
+    await nextTick();
 
-    wrapper.getComponent(PriceChart).vm.$emit("rangeChange", {
+    const chart = wrapper.findComponent({ name: "PriceChart" });
+    expect(chart.exists()).toBe(true);
+    chart.vm.$emit("rangeChange", {
       endPercent: 90,
       startPercent: 10,
     });

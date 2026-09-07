@@ -716,6 +716,7 @@
           },
           "sequence": {
             "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
             "title": "Sequence",
             "type": "integer"
           },
@@ -5125,6 +5126,44 @@
         "title": "DashboardCounts",
         "type": "object"
       },
+      "DashboardProjectionUnavailableResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "const": "UNAVAILABLE",
+            "title": "Availability",
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "EMPTY_DATABASE",
+              "NO_ACTIVE_PLANS",
+              "AWAITING_FIRST_EVALUATION"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "availability",
+          "observedAt",
+          "reason",
+          "sequence"
+        ],
+        "title": "DashboardProjectionUnavailableResponse",
+        "type": "object"
+      },
       "DashboardResponse": {
         "additionalProperties": false,
         "properties": {
@@ -5159,7 +5198,20 @@
             "title": "Observedat",
             "type": "string"
           },
+          "runtimeGeneration": {
+            "anyOf": [
+              {
+                "format": "uuid4",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimegeneration"
+          },
           "sequence": {
+            "maximum": 9007199254740991.0,
             "minimum": 0.0,
             "title": "Sequence",
             "type": "integer"
@@ -5177,6 +5229,7 @@
         "required": [
           "sequence",
           "observedAt",
+          "runtimeGeneration",
           "connectionStatus",
           "dataAgeSeconds",
           "counts",
@@ -8082,6 +8135,44 @@
         "title": "SmaLookbackIndicatorFactView",
         "type": "object"
       },
+      "SymbolCollectionUnavailableResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "const": "UNAVAILABLE",
+            "title": "Availability",
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "EMPTY_DATABASE",
+              "NO_ACTIVE_PLANS",
+              "AWAITING_FIRST_EVALUATION"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "availability",
+          "observedAt",
+          "reason",
+          "sequence"
+        ],
+        "title": "SymbolCollectionUnavailableResponse",
+        "type": "object"
+      },
       "SymbolDetailResponse": {
         "additionalProperties": false,
         "properties": {
@@ -8121,6 +8212,49 @@
           "summary"
         ],
         "title": "SymbolDetailResponse",
+        "type": "object"
+      },
+      "SymbolDetailUnavailableResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "const": "UNAVAILABLE",
+            "title": "Availability",
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "NO_ACTIVE_PLAN",
+              "AWAITING_FIRST_EVALUATION"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "availability",
+          "observedAt",
+          "reason",
+          "sequence",
+          "symbol"
+        ],
+        "title": "SymbolDetailUnavailableResponse",
         "type": "object"
       },
       "SymbolEventPage": {
@@ -8231,6 +8365,7 @@
             "title": "Resulthash"
           },
           "sequence": {
+            "maximum": 9007199254740991.0,
             "minimum": 0.0,
             "title": "Sequence",
             "type": "integer"
@@ -8325,6 +8460,18 @@
             "maxItems": 240,
             "title": "Gaps",
             "type": "array"
+          },
+          "lastRequiredBucketEnd": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastrequiredbucketend"
           },
           "latestBarEnd": {
             "anyOf": [
@@ -13244,7 +13391,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DashboardResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DashboardResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DashboardProjectionUnavailableResponse"
+                    }
+                  ],
+                  "title": "Response Get Dashboard Api V1 Dashboard Get"
                 }
               }
             },
@@ -15930,7 +16085,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SymbolPage"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SymbolPage"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SymbolCollectionUnavailableResponse"
+                    }
+                  ],
+                  "title": "Response List Symbols Api V1 Symbols Get"
                 }
               }
             },
@@ -16073,7 +16236,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SymbolDetailResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SymbolDetailResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SymbolDetailUnavailableResponse"
+                    }
+                  ],
+                  "title": "Response Get Symbol Api V1 Symbols  Symbol  Get"
                 }
               }
             },

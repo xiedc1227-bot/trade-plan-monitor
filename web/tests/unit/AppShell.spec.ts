@@ -271,4 +271,12 @@ describe("AppShell", () => {
     expect(source).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
     expect(source).toMatch(/transition-duration:\s*0\.01ms/);
   });
+
+  it("styles a reachable service with unavailable monitoring as a warning", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/layouts/AppShell.vue"), "utf8");
+
+    expect(source).toMatch(
+      /\[data-connection-state="UNAVAILABLE"\]\s*\{[^}]*var\(--color-signal-watch-amber\)/s,
+    );
+  });
 });

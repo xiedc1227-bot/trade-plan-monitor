@@ -3,6 +3,7 @@ import type {
   BarPage,
   IndexConditionEvidenceView,
   SymbolDetailResponse,
+  SymbolDetailUnavailableResponse,
   SymbolEventPage,
   SymbolReferenceMarketView,
 } from "./generated";
@@ -34,7 +35,10 @@ export interface SymbolApi {
     query: Readonly<Omit<SymbolHistoryQuery, "interval">>,
     options?: { signal?: AbortSignal },
   ): Promise<SymbolEventPage>;
-  getSymbol(symbol: string, options?: { signal?: AbortSignal }): Promise<SymbolDetailResponse>;
+  getSymbol(
+    symbol: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<SymbolDetailResponse | SymbolDetailUnavailableResponse>;
 }
 
 const intervals = new Set<BarInterval>(["ONE_MINUTE", "FIVE_MINUTES"]);
@@ -109,7 +113,9 @@ export function createSymbolApi(
         `/api/v1/symbols/${encodeURIComponent(symbol)}`,
         requestOptions(options),
       );
-      if (!isSymbolDetail(body, symbol)) throw invalidResponse(status);
+      if (!isSymbolDetail(body, symbol) && !isSymbolDetailUnavailableResponse(body, symbol)) {
+        throw invalidResponse(status);
+      }
       return body;
     },
 
@@ -141,6 +147,21 @@ export function createSymbolApi(
       return body;
     },
   });
+}
+
+export function isSymbolDetailUnavailableResponse(
+  value: unknown,
+  symbol: string,
+): value is SymbolDetailUnavailableResponse {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ["availability", "observedAt", "reason", "sequence", "symbol"]) &&
+    value.availability === "UNAVAILABLE" &&
+    isShanghaiDateTime(value.observedAt) &&
+    isNonnegativeInteger(value.sequence) &&
+    value.symbol === symbol &&
+    (value.reason === "NO_ACTIVE_PLAN" || value.reason === "AWAITING_FIRST_EVALUATION")
+  );
 }
 
 function requestOptions(options?: { signal?: AbortSignal }): RequestInit {

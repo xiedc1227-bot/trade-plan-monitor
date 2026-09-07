@@ -318,6 +318,9 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__backtest-navigation {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100vw;
   padding: 0.5rem 1rem;
   overflow-x: auto;
   background: var(--color-surface-graphite);
@@ -349,6 +352,10 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__connection-banner[data-connection-state="STALE"] {
+  border-inline-start-color: var(--color-signal-watch-amber);
+}
+
+.app-shell__connection-banner[data-connection-state="UNAVAILABLE"] {
   border-inline-start-color: var(--color-signal-watch-amber);
 }
 

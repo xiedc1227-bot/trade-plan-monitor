@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 
@@ -109,6 +109,7 @@ const dashboard: DashboardResponse = {
   dataAgeSeconds: 0,
   marketIndexes: [],
   observedAt: TIME,
+  runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 1,
   symbols: [],
 };
@@ -186,7 +187,7 @@ test.beforeAll(async () => {
     clearScreen: false,
     logLevel: "silent",
     root: process.cwd(),
-    server: { host: "127.0.0.1", port: 0 },
+    server: { hmr: false, host: "127.0.0.1", port: 0 },
   });
   await server.listen();
   const address = server.httpServer?.address();
@@ -211,13 +212,6 @@ test("requires explicit review, save, and backend-approved activation for an AI 
   let activationState: ActivePlanView | null = null;
 
   page.on("console", (message) => {
-    if (
-      message.type() === "error" &&
-      message.text() ===
-        "Failed to load resource: the server responded with a status of 404 (Not Found)"
-    ) {
-      return;
-    }
     if (message.type() === "error" || message.type() === "warning") {
       consoleFailures.push(`${message.type()}:${message.text()}`);
     }
@@ -245,14 +239,10 @@ test("requires explicit review, save, and backend-approved activation for an AI 
       body = storedPlan ?? {};
     } else if (key.startsWith("GET /api/v1/plan-activation-states/")) {
       if (activationState === null) {
-        body = {
-          error: {
-            code: "NOT_FOUND",
-            message: "request not found",
-            requestId: "0".repeat(32),
-          },
-        };
-        status = 404;
+        const symbol = decodeURIComponent(
+          key.slice("GET /api/v1/plan-activation-states/".length),
+        );
+        body = { ...inactiveState, symbol };
       } else {
         body = activationState;
       }
@@ -342,6 +332,12 @@ test("requires explicit review, save, and backend-approved activation for an AI 
 });
 
 test("runs the configured AI and persisted plan workbench flow in isolated Chromium", async ({ page }) => {
+  const chartRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/PriceChart|BacktestEquityChart|installCanvasRenderer|echarts/i.test(request.url())) {
+      chartRequests.push(request.url());
+    }
+  });
   const consoleFailures: string[] = [];
   const externalRequests: string[] = [];
   const failedResponses: string[] = [];
@@ -354,13 +350,6 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
   let persistedVersions: PlanVersionView[] = [];
 
   page.on("console", (message) => {
-    if (
-      message.type() === "error" &&
-      message.text() ===
-        "Failed to load resource: the server responded with a status of 404 (Not Found)"
-    ) {
-      return;
-    }
     if (message.type() === "error" || message.type() === "warning") {
       consoleFailures.push(`${message.type()}:${message.text()}`);
     }
@@ -397,18 +386,7 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
       const symbol = decodeURIComponent(
         key.slice("GET /api/v1/plan-activation-states/".length),
       );
-      if (persistedVersions.some((plan) => plan.symbol === symbol)) {
-        body = { ...inactiveState, symbol };
-      } else {
-        body = {
-          error: {
-            code: "NOT_FOUND",
-            message: "request not found",
-            requestId: "0".repeat(32),
-          },
-        };
-        status = 404;
-      }
+      body = { ...inactiveState, symbol };
     } else if (key === "POST /api/v1/plan-imports") {
       const command = request.postDataJSON() as {
         document?: unknown;
@@ -470,6 +448,7 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
     "aria-selected",
     "true",
   );
+  expect(chartRequests).toEqual([]);
   await expect(page.getByRole("heading", { name: "AI 计划提取审核" })).toBeVisible();
   await page.getByRole("tab", { name: /导入 JSON \/ YAML/ }).click();
   const planViewWidth = await page.locator(".plan-drafting-view").evaluate(
@@ -640,10 +619,8 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
   });
 
   expect(seriousViolations).toEqual([]);
-  expect(failedResponses).toEqual([
-    `404 /api/v1/plan-activation-states/${persistedPlan.symbol}`,
-    `404 /api/v1/plan-activation-states/${CROSS_SYMBOL}`,
-  ]);
+  expect(failedResponses).toEqual([]);
   expect(consoleFailures).toEqual([]);
   expect(externalRequests).toEqual([]);
+  expect(chartRequests).toEqual([]);
 });

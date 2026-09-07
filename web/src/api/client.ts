@@ -1,4 +1,5 @@
 import type {
+  DashboardProjectionUnavailableResponse,
   DashboardResponse,
 } from "./generated";
 import {
@@ -125,9 +126,18 @@ const evidenceUnits = new Set([
   "CODE",
   "POINTS",
 ]);
+const dashboardUnavailableReasons = new Set([
+  "EMPTY_DATABASE",
+  "NO_ACTIVE_PLANS",
+  "AWAITING_FIRST_EVALUATION",
+]);
+
+export type DashboardProjectionResponse =
+  | DashboardResponse
+  | DashboardProjectionUnavailableResponse;
 
 export interface ApiClient {
-  getDashboard(options?: { signal?: AbortSignal }): Promise<DashboardResponse>;
+  getDashboard(options?: { signal?: AbortSignal }): Promise<DashboardProjectionResponse>;
 }
 
 export function createApiClient(
@@ -149,7 +159,7 @@ export function createApiClient(
         request,
       );
       try {
-        if (!isDashboardResponse(body)) {
+        if (!isDashboardProjectionResponse(body)) {
           throw invalidResponse(status);
         }
         return body;
@@ -163,6 +173,25 @@ export function createApiClient(
   });
 }
 
+function isDashboardProjectionResponse(value: unknown): value is DashboardProjectionResponse {
+  return isDashboardResponse(value) || isDashboardProjectionUnavailableResponse(value);
+}
+
+export function isDashboardProjectionUnavailableResponse(
+  value: unknown,
+): value is DashboardProjectionUnavailableResponse {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, ["availability", "observedAt", "reason", "sequence"]) &&
+    hasKeys(value, ["availability", "observedAt", "reason", "sequence"]) &&
+    value.availability === "UNAVAILABLE" &&
+    isShanghaiDateTime(value.observedAt) &&
+    isSafeSequence(value.sequence) &&
+    typeof value.reason === "string" &&
+    dashboardUnavailableReasons.has(value.reason)
+  );
+}
+
 function isDashboardResponse(value: unknown): value is DashboardResponse {
   if (
     !isRecord(value) ||
@@ -172,6 +201,7 @@ function isDashboardResponse(value: unknown): value is DashboardResponse {
       "dataAgeSeconds",
       "marketIndexes",
       "observedAt",
+      "runtimeGeneration",
       "sequence",
       "symbols",
     ])
@@ -190,6 +220,7 @@ function isDashboardResponse(value: unknown): value is DashboardResponse {
       value.connectionStatus === "UNKNOWN") &&
     isNullableNonnegativeInteger(value.dataAgeSeconds) &&
     isShanghaiDateTime(value.observedAt) &&
+    (value.runtimeGeneration === null || isUuidV4(value.runtimeGeneration)) &&
     isSafeSequence(value.sequence) &&
     isDashboardCounts(counts) &&
     isDashboardMarketIndexes(marketIndexes, value.observedAt) &&
@@ -252,8 +283,7 @@ function isSymbolSummary(value: unknown): boolean {
     decision.symbol === value.symbol &&
     (value.satisfiedConditionCount as number) <= (value.totalConditionCount as number) &&
     shanghaiDateTimeKey(value.observedAt) >=
-      shanghaiDateTimeKey(decision.evaluatedAt as string) &&
-    (value.connected || (decision.dataHealth as Record<string, unknown>).status !== "LIVE")
+      shanghaiDateTimeKey(decision.evaluatedAt as string)
   );
 }
 
@@ -829,6 +859,15 @@ function isDecimalString(value: unknown): value is string {
 
 function isSha256(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+function isUuidV4(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      value,
+    )
+  );
 }
 
 function isBoundedString(value: unknown, maximum: number): value is string {

@@ -9,8 +9,8 @@ export default defineConfig({
   outputDir: join(tmpdir(), "trade-plan-monitor-playwright-results"),
   projects: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      name: "chrome",
+      use: { ...devices["Desktop Chrome"], channel: "chrome" },
     },
   ],
   reporter: "line",

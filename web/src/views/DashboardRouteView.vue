@@ -9,7 +9,7 @@ import { useMonitorStore } from "../stores/monitor";
 const router = useRouter();
 const monitor = useMonitorStore();
 
-const isLoadingSnapshot = computed(() => !monitor.hasSnapshot);
+const isLoadingSnapshot = computed(() => !monitor.hasSnapshot && monitor.unavailable === null);
 const marketIndexes = computed<readonly MarketIndexSnapshotView[]>(
   () => monitor.marketIndexes as unknown as readonly MarketIndexSnapshotView[],
 );
@@ -28,6 +28,7 @@ function selectSymbol(symbol: string): void {
     :market-indexes="marketIndexes"
     :observed-at="monitor.observedAt"
     :symbols="monitor.symbols"
+    :unavailable="monitor.unavailable"
     @select-symbol="selectSymbol"
   />
 </template>

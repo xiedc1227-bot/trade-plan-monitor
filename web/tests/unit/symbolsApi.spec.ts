@@ -98,6 +98,32 @@ describe("symbol API", () => {
     await expect(api.getSymbol(symbol)).resolves.toEqual(detail);
   });
 
+  it("accepts only symbol-scoped unavailable reasons and the requested identity", async () => {
+    const valid = {
+      availability: "UNAVAILABLE",
+      observedAt,
+      reason: "NO_ACTIVE_PLAN",
+      sequence: 1,
+      symbol,
+    };
+    const validApi = createSymbolApi(
+      vi.fn(async () => jsonResponse(valid)) as typeof fetch,
+    );
+    await expect(validApi.getSymbol(symbol)).resolves.toEqual(valid);
+
+    for (const body of [
+      { ...valid, reason: "EMPTY_DATABASE" },
+      { ...valid, symbol: "600000.SH" },
+    ]) {
+      const api = createSymbolApi(
+        vi.fn(async () => jsonResponse(body)) as typeof fetch,
+      );
+      await expect(api.getSymbol(symbol)).rejects.toMatchObject({
+        code: "INVALID_RESPONSE",
+      });
+    }
+  });
+
   it("treats absent and null reference-market projections as the same v1 compatibility value", async () => {
     const legacyDetail = {
       ...detail,

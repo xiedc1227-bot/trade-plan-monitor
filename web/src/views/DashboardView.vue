@@ -5,6 +5,7 @@ import type {
   ActionableSignalType,
   ConnectionStatus,
   DashboardCounts,
+  DashboardProjectionUnavailableResponse,
   MarketIndexSnapshotView,
   SignalType,
   SymbolSummaryView,
@@ -28,6 +29,7 @@ interface Props {
   marketIndexes?: readonly MarketIndexSnapshotView[];
   observedAt: string | null;
   symbols: readonly SymbolSummaryView[];
+  unavailable?: DashboardProjectionUnavailableResponse | null;
 }
 
 interface Emits {
@@ -38,6 +40,7 @@ const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
   marketIndexes: () => [],
+  unavailable: null,
 });
 const emit = defineEmits<Emits>();
 defineSlots<{
@@ -202,14 +205,24 @@ function compareText(left: string, right: string): number {
       <span v-if="connectionStatus !== 'CONNECTED'">当前数据不得视为实时</span>
     </section>
 
-    <MarketIndexDataStrip :indexes="marketIndexes" />
+    <p
+      v-if="unavailable !== null"
+      class="dashboard-view__unavailable"
+      data-testid="dashboard-unavailable"
+      role="status"
+      aria-live="polite"
+    >
+      权威监控投影尚未就绪（{{ unavailable.reason }}，序列 {{ unavailable.sequence }}）。
+    </p>
+
+    <MarketIndexDataStrip v-else :indexes="marketIndexes" />
 
     <p v-if="error" class="dashboard-view__error" role="alert">{{ error }}</p>
     <p v-if="loading" class="dashboard-view__loading" role="status" aria-live="polite">
       正在刷新权威快照；已缓存行继续明确显示。
     </p>
 
-    <section class="dashboard-view__counts" aria-label="监控状态计数">
+    <section v-if="unavailable === null" class="dashboard-view__counts" aria-label="监控状态计数">
       <article data-testid="dashboard-count-actionable"><span>可执行</span><strong>{{ counts.actionable }}</strong></article>
       <article><span>低吸观察</span><strong>{{ counts.lowZoneWatch }}</strong></article>
       <article><span>阻断</span><strong>{{ counts.blocked }}</strong></article>
@@ -219,6 +232,7 @@ function compareText(left: string, right: string): number {
     </section>
 
     <WatchlistToolbar
+      v-if="unavailable === null"
       v-model:filter="filter"
       v-model:query="query"
       v-model:sort="sort"
@@ -227,27 +241,27 @@ function compareText(left: string, right: string): number {
     />
 
     <p
-      v-if="!loading && !error && symbols.length === 0"
+      v-if="unavailable === null && !loading && !error && symbols.length === 0"
       class="dashboard-view__empty"
       data-testid="watchlist-empty"
     >
       尚无监控股票。请先激活至少一个计划。
     </p>
     <p
-      v-else-if="symbols.length > 0 && displayRows.length === 0"
+      v-else-if="unavailable === null && symbols.length > 0 && displayRows.length === 0"
       class="dashboard-view__empty"
       data-testid="watchlist-empty"
     >
       没有匹配当前条件的股票。
     </p>
     <WatchlistTable
-      v-else-if="displayRows.length > 0"
+      v-else-if="unavailable === null && displayRows.length > 0"
       :density="viewMode"
       :rows="displayRows"
       @select-symbol="emit('selectSymbol', $event)"
     />
 
-    <aside class="dashboard-view__actionable-rail" aria-labelledby="actionable-rail-title">
+    <aside v-if="unavailable === null" class="dashboard-view__actionable-rail" aria-labelledby="actionable-rail-title">
       <h2 id="actionable-rail-title">可执行提醒栏</h2>
       <slot name="actionableRail" :symbols="actionableSymbols">
         <p>当前有 {{ actionableSymbols.length }} 只股票具备后端权威可执行信号。</p>
@@ -312,7 +326,8 @@ function compareText(left: string, right: string): number {
 
 .dashboard-view__error,
 .dashboard-view__loading,
-.dashboard-view__empty {
+.dashboard-view__empty,
+.dashboard-view__unavailable {
   margin: 0;
   padding: var(--space-4);
   overflow-wrap: anywhere;

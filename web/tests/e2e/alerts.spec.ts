@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import type { Route } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -79,6 +79,7 @@ const dashboard: DashboardResponse = {
   dataAgeSeconds: 0,
   marketIndexes: [],
   observedAt: "2026-08-24T10:05:05+08:00",
+  runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 21,
   symbols: [],
 };
@@ -91,7 +92,7 @@ test.beforeAll(async () => {
     clearScreen: false,
     logLevel: "silent",
     root: process.cwd(),
-    server: { host: "127.0.0.1", port: 0 },
+    server: { hmr: false, host: "127.0.0.1", port: 0 },
   });
   await server.listen();
   const address = server.httpServer?.address();
@@ -111,7 +112,13 @@ test("queries, filters, expands evidence, and acknowledges without a position re
   const alertQueries: Array<Record<string, string>> = [];
   const acknowledgements: unknown[] = [];
   const positionRequests: string[] = [];
+  const chartRequests: string[] = [];
   let acknowledged = false;
+  page.on("request", (request) => {
+    if (/PriceChart|BacktestEquityChart|installCanvasRenderer|echarts/i.test(request.url())) {
+      chartRequests.push(request.url());
+    }
+  });
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -193,6 +200,7 @@ test("queries, filters, expands evidence, and acknowledges without a position re
   await expect(page.getByText("当前筛选条件下暂无提醒。")).toBeVisible();
   expect(acknowledgements).toEqual([{ alertId: eventId, expectedRevision: 0 }]);
   expect(positionRequests).toEqual([]);
+  expect(chartRequests).toEqual([]);
 });
 
 async function fulfillJson(route: Route, body: unknown): Promise<void> {

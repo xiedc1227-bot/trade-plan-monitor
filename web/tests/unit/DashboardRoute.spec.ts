@@ -39,6 +39,7 @@ const snapshot: DashboardResponse = {
     },
   ],
   observedAt: "2026-09-02T10:35:02+08:00",
+  runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 7,
   symbols: [
     {

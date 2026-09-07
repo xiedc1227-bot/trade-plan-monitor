@@ -45,7 +45,7 @@ const rangeError = shallowRef<string | null>(null);
 const positionPage = shallowRef<PositionLotPage | null>(null);
 const positionError = shallowRef<string | null>(null);
 const symbol = computed(() => props.symbol);
-const { bars, detail, error, events, loading, stale } = useSymbolDetail({ api, range, symbol });
+const { bars, detail, error, events, loading, stale, unavailable } = useSymbolDetail({ api, range, symbol });
 const marketIndexQuery = computed<MarketIndexSeriesQuery | null>(() => {
   const currentRange = range.value;
   const reference = detail.value?.referenceMarket ?? detail.value?.summary.referenceMarket ?? null;
@@ -207,6 +207,7 @@ function submitRange(): void {
       :position-operations="positionOperations"
       :position-page="positionPage"
       :stale="stale"
+      :unavailable="unavailable"
     />
   </section>
 </template>

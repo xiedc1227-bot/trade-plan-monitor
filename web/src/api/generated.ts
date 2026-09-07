@@ -792,12 +792,20 @@ export type DashboardCounts = {
   stale: number;
 };
 
+export type DashboardProjectionUnavailableResponse = {
+  availability: "UNAVAILABLE";
+  observedAt: string;
+  reason: "EMPTY_DATABASE" | "NO_ACTIVE_PLANS" | "AWAITING_FIRST_EVALUATION";
+  sequence: number;
+};
+
 export type DashboardResponse = {
   connectionStatus: components["schemas"]["ConnectionStatus"];
   counts: components["schemas"]["DashboardCounts"];
   dataAgeSeconds: (number) | (null);
   marketIndexes: Array<components["schemas"]["MarketIndexSnapshotView"]>;
   observedAt: string;
+  runtimeGeneration: (string) | (null);
   sequence: number;
   symbols?: Array<components["schemas"]["SymbolSummaryView"]>;
 };
@@ -1270,11 +1278,26 @@ export type SmaLookbackIndicatorFactView = {
   value: string;
 };
 
+export type SymbolCollectionUnavailableResponse = {
+  availability: "UNAVAILABLE";
+  observedAt: string;
+  reason: "EMPTY_DATABASE" | "NO_ACTIVE_PLANS" | "AWAITING_FIRST_EVALUATION";
+  sequence: number;
+};
+
 export type SymbolDetailResponse = {
   indexConditionEvidence?: Array<components["schemas"]["IndexConditionEvidenceView"]>;
   positionLots?: Array<components["schemas"]["trade_plan_monitor__web__routers__symbols__PositionLotView"]>;
   referenceMarket?: (components["schemas"]["SymbolReferenceMarketView"]) | (null);
   summary: components["schemas"]["SymbolSummaryView"];
+};
+
+export type SymbolDetailUnavailableResponse = {
+  availability: "UNAVAILABLE";
+  observedAt: string;
+  reason: "NO_ACTIVE_PLAN" | "AWAITING_FIRST_EVALUATION";
+  sequence: number;
+  symbol: string;
 };
 
 export type SymbolEventPage = {
@@ -1308,6 +1331,7 @@ export type SymbolHealthResponse = {
   errorCode: (components["schemas"]["SymbolHealthErrorCode"]) | (null);
   fresh: boolean;
   gaps?: Array<string>;
+  lastRequiredBucketEnd?: (string) | (null);
   latestBarEnd: (string) | (null);
   observedAt: string;
   requiredDataComplete: boolean;
@@ -1481,6 +1505,7 @@ export interface components {
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
     ConnectionStatus: ConnectionStatus;
     DashboardCounts: DashboardCounts;
+    DashboardProjectionUnavailableResponse: DashboardProjectionUnavailableResponse;
     DashboardResponse: DashboardResponse;
     DataHealthStatus: DataHealthStatus;
     DataHealthView: DataHealthView;
@@ -1557,7 +1582,9 @@ export interface components {
     SignalType: SignalType;
     SmaIndicatorFactView: SmaIndicatorFactView;
     SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
+    SymbolCollectionUnavailableResponse: SymbolCollectionUnavailableResponse;
     SymbolDetailResponse: SymbolDetailResponse;
+    SymbolDetailUnavailableResponse: SymbolDetailUnavailableResponse;
     SymbolEventPage: SymbolEventPage;
     SymbolEventType: SymbolEventType;
     SymbolEventView: SymbolEventView;
@@ -3546,7 +3573,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["DashboardResponse"];
+            "application/json": (components["schemas"]["DashboardResponse"]) | (components["schemas"]["DashboardProjectionUnavailableResponse"]);
           };
         };
         "400": {
@@ -4863,7 +4890,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["SymbolPage"];
+            "application/json": (components["schemas"]["SymbolPage"]) | (components["schemas"]["SymbolCollectionUnavailableResponse"]);
           };
         };
         "400": {
@@ -4938,7 +4965,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["SymbolDetailResponse"];
+            "application/json": (components["schemas"]["SymbolDetailResponse"]) | (components["schemas"]["SymbolDetailUnavailableResponse"]);
           };
         };
         "400": {

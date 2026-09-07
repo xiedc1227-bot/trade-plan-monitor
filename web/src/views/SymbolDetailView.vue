@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, shallowRef } from "vue";
+import { computed, defineAsyncComponent, shallowRef } from "vue";
 
 import type {
   BarView,
@@ -9,13 +9,13 @@ import type {
   PositionLotPage,
   PositionPrefillView,
   SymbolDetailResponse,
+  SymbolDetailUnavailableResponse,
   SymbolEventView,
 } from "../api/generated";
 import EpisodeTimeline from "../components/symbol/EpisodeTimeline.vue";
 import MarketIndexChart from "../components/market-index/MarketIndexChart.vue";
 import ReferenceMarketPanel from "../components/market-index/ReferenceMarketPanel.vue";
 import PositionLots from "../components/symbol/PositionLots.vue";
-import PriceChart from "../components/symbol/PriceChart.vue";
 import type { ChartRange } from "../components/symbol/PriceChart.vue";
 import { useChartSeries } from "../composables/useChartSeries";
 import type { PositionOperations } from "../composables/usePositions";
@@ -35,6 +35,7 @@ interface Props {
   positionPage?: PositionLotPage | null;
   positionPrefill?: PositionPrefillView | null;
   stale?: boolean;
+  unavailable?: SymbolDetailUnavailableResponse | null;
 }
 
 interface Emits {
@@ -54,8 +55,10 @@ const props = withDefaults(defineProps<Props>(), {
   positionPage: null,
   positionPrefill: null,
   stale: false,
+  unavailable: null,
 });
 const emit = defineEmits<Emits>();
+const PriceChart = defineAsyncComponent(() => import("../components/symbol/PriceChart.vue"));
 const selectedAt = shallowRef<string | null>(null);
 const referenceMarket = computed(
   () => props.detail?.referenceMarket ?? props.detail?.summary.referenceMarket ?? null,
@@ -217,7 +220,17 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
     </p>
 
     <p
-      v-if="detail === null && !loading && !error"
+      v-if="unavailable !== null"
+      class="symbol-detail__unavailable"
+      data-testid="detail-unavailable"
+      role="status"
+      aria-live="polite"
+    >
+      该股票的权威监控投影尚未就绪（{{ unavailable.reason }}，序列 {{ unavailable.sequence }}）。
+    </p>
+
+    <p
+      v-if="unavailable === null && detail === null && !loading && !error"
       class="symbol-detail__empty"
       data-testid="detail-empty"
     >
@@ -409,6 +422,7 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
 }
 
 .symbol-detail__error,
+.symbol-detail__unavailable,
 .symbol-detail__loading,
 .symbol-detail__stale,
 .symbol-detail__empty {

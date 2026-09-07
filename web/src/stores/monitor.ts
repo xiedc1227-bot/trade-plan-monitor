@@ -4,6 +4,7 @@ import { computed, readonly, shallowRef } from "vue";
 import type {
   ConnectionStatus,
   DashboardCounts,
+  DashboardProjectionUnavailableResponse,
   DashboardResponse,
   MarketIndexSnapshotView,
   SymbolSummaryView,
@@ -97,11 +98,13 @@ const connectionStates = deepFreeze<Record<ConnectionStatus, ConnectionState>>({
 
 export const useMonitorStore = defineStore("monitor", () => {
   const hasSnapshotState = shallowRef(false);
+  const unavailableState = shallowRef<DashboardProjectionUnavailableResponse | null>(null);
   const sequenceState = shallowRef(0);
   const connectionStatusState = shallowRef<ConnectionStatus>("UNKNOWN");
   const countsState = shallowRef<DashboardCounts>(emptyCounts);
   const dataAgeSecondsState = shallowRef<number | null>(null);
   const observedAtState = shallowRef<string | null>(null);
+  const runtimeGenerationState = shallowRef<string | null>(null);
   const symbolIdsState = shallowRef<readonly string[]>(Object.freeze([]));
   const symbolsByIdState = shallowRef<Readonly<Record<string, SymbolSummaryView>>>(
     Object.freeze({}),
@@ -130,7 +133,7 @@ export const useMonitorStore = defineStore("monitor", () => {
 
   function applySnapshot(snapshot: DashboardResponse): void {
     requireSafeSequence(snapshot.sequence, "snapshot sequence");
-    if (hasSnapshotState.value && snapshot.sequence < sequenceState.value) {
+    if (snapshot.sequence < sequenceState.value) {
       throw new RangeError("snapshot sequence cannot regress the monitor cursor");
     }
     const normalized = normalizeSymbols(snapshot.symbols ?? []);
@@ -142,6 +145,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     countsState.value = counts;
     dataAgeSecondsState.value = snapshot.dataAgeSeconds;
     observedAtState.value = snapshot.observedAt;
+    runtimeGenerationState.value = snapshot.runtimeGeneration;
     symbolIdsState.value = normalized.ids;
     symbolsByIdState.value = normalized.byId;
     marketIndexesState.value = marketIndexes;
@@ -149,6 +153,28 @@ export const useMonitorStore = defineStore("monitor", () => {
     lastInvalidationState.value = null;
     lastEventState.value = null;
     hasSnapshotState.value = true;
+    unavailableState.value = null;
+  }
+
+  function applyUnavailable(unavailable: DashboardProjectionUnavailableResponse): void {
+    requireSafeSequence(unavailable.sequence, "unavailable sequence");
+    if (unavailable.sequence < sequenceState.value) {
+      throw new RangeError("unavailable sequence cannot regress the monitor cursor");
+    }
+    sequenceState.value = unavailable.sequence;
+    connectionStatusState.value = "UNKNOWN";
+    countsState.value = emptyCounts;
+    dataAgeSecondsState.value = null;
+    observedAtState.value = unavailable.observedAt;
+    runtimeGenerationState.value = null;
+    symbolIdsState.value = Object.freeze([]);
+    symbolsByIdState.value = Object.freeze({});
+    marketIndexesState.value = Object.freeze([]);
+    recoveryIntentState.value = null;
+    lastInvalidationState.value = null;
+    lastEventState.value = null;
+    hasSnapshotState.value = false;
+    unavailableState.value = freezeClone(unavailable);
   }
 
   function applyEvent(event: MonitorEventEnvelope): EventApplyResult {
@@ -215,6 +241,7 @@ export const useMonitorStore = defineStore("monitor", () => {
   return {
     applyEvent,
     applySnapshot,
+    applyUnavailable,
     connectionState,
     connectionStatus: readonly(connectionStatusState),
     counts: readonly(countsState),
@@ -226,10 +253,12 @@ export const useMonitorStore = defineStore("monitor", () => {
     observedAt: readonly(observedAtState),
     recoveryIntent: readonly(recoveryIntentState),
     requestSnapshotRecovery,
+    runtimeGeneration: readonly(runtimeGenerationState),
     sequence: readonly(sequenceState),
     symbolIds: readonly(symbolIdsState),
     symbols,
     symbolsById: readonly(symbolsByIdState),
+    unavailable: readonly(unavailableState),
   };
 });
 

@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 
-import { expect, test } from "@playwright/test";
-import type { Browser, Page, TestInfo } from "@playwright/test";
+import { expect, test } from "./fixtures";
+import type { Page, TestInfo } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 
@@ -65,6 +65,7 @@ const dashboard: DashboardResponse = {
   dataAgeSeconds: 0,
   marketIndexes: [],
   observedAt: health.observedAt,
+  runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 1,
   symbols: [],
 };
@@ -77,7 +78,7 @@ test.beforeAll(async () => {
     clearScreen: false,
     logLevel: "silent",
     root: process.cwd(),
-    server: { host: "127.0.0.1", port: 0 },
+    server: { hmr: false, host: "127.0.0.1", port: 0 },
   });
   await server.listen();
   const address = server.httpServer?.address();
@@ -95,6 +96,7 @@ test("loads system health through the production /system route", async ({ page }
   const consoleFailures: string[] = [];
   const externalRequests: string[] = [];
   const requestFailures: string[] = [];
+  const chartRequests: string[] = [];
   const unexpectedRequests: string[] = [];
   let healthRequests = 0;
   page.on("console", (message) => {
@@ -103,6 +105,9 @@ test("loads system health through the production /system route", async ({ page }
     }
   });
   page.on("request", (request) => {
+    if (/PriceChart|BacktestEquityChart|installCanvasRenderer|echarts/i.test(request.url())) {
+      chartRequests.push(request.url());
+    }
     const requestUrl = new URL(request.url());
     if (
       (requestUrl.protocol === "http:" || requestUrl.protocol === "https:") &&
@@ -146,46 +151,49 @@ test("loads system health through the production /system route", async ({ page }
   expect(externalRequests).toEqual([]);
   expect(requestFailures).toEqual([]);
   expect(unexpectedRequests).toEqual([]);
-  expectChromiumProject(testInfo);
+  expect(chartRequests).toEqual([]);
+  expectChromeProject(testInfo);
 });
 
-async function mountSystemView(page: Page) {
-  await page.route(`${baseUrl}/t051-accessibility`, async (route) => {
-    await route.fulfill({
-      body: '<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>系统健康无障碍检查</title></head><body><div id="app"></div></body></html>',
-      contentType: "text/html",
-    });
+async function openProductionSystemRoute(page: Page) {
+  await page.unroute(`${baseUrl}/api/v1/**`);
+  await page.route(`${baseUrl}/api/v1/**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === "GET" && url.pathname === "/api/v1/health") {
+      await route.fulfill({
+        body: JSON.stringify(health),
+        contentType: "application/json; charset=utf-8",
+        status: 200,
+      });
+      return;
+    }
+    if (route.request().method() === "GET" && url.pathname === "/api/v1/dashboard") {
+      await route.fulfill({
+        body: JSON.stringify(dashboard),
+        contentType: "application/json; charset=utf-8",
+        status: 200,
+      });
+      return;
+    }
+    await route.fulfill({ body: "unexpected request", status: 500 });
   });
-  await page.goto(`${baseUrl}/t051-accessibility`);
-  await page.evaluate(async (runtimeHealth) => {
-    const vuePath = "/@id/vue";
-    const systemViewPath = "/src/views/SystemView.vue";
-    const tokensPath = "/src/assets/tokens.css";
-    const vueModule = (await import(vuePath)) as typeof import("vue");
-    const systemModule = (await import(systemViewPath)) as {
-      default: Parameters<typeof vueModule.createApp>[0];
-    };
-    await import(tokensPath);
-    vueModule.createApp(systemModule.default, { health: runtimeHealth }).mount("#app");
-  }, health);
+  await page.goto(`${baseUrl}/system`);
   await expect(page.getByRole("heading", { level: 1, name: "系统健康" })).toBeVisible();
 }
 
-async function openSystemPage(browser: Browser, width: number) {
-  const page = await browser.newPage({
-    reducedMotion: "reduce",
-    viewport: { height: 900, width },
-  });
-  await mountSystemView(page);
+async function openSystemPage(page: Page, width: number) {
+  await page.setViewportSize({ height: 900, width });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openProductionSystemRoute(page);
   return page;
 }
 
-function expectChromiumProject(testInfo: TestInfo): void {
-  expect(testInfo.project.name).toBe("chromium");
+function expectChromeProject(testInfo: TestInfo): void {
+  expect(testInfo.project.name).toBe("chrome");
 }
 
-test("has no WCAG 2.1 A/AA axe violations", async ({ browser }, testInfo) => {
-  const page = await openSystemPage(browser, 1024);
+test("has no WCAG 2.1 A/AA axe violations", async ({ page }, testInfo) => {
+  await openSystemPage(page, 1024);
   await page.addScriptTag({ path: axePath });
   const violations = await page.evaluate(async () => {
     const axe = (globalThis as typeof globalThis & {
@@ -198,15 +206,14 @@ test("has no WCAG 2.1 A/AA axe violations", async ({ browser }, testInfo) => {
   });
 
   expect(violations).toEqual([]);
-  expectChromiumProject(testInfo);
-  await page.close();
+  expectChromeProject(testInfo);
 });
 
 test("fits 320, 768, 1024, and 1440 pixel layouts without horizontal overflow", async ({
-  browser,
+  page,
 }, testInfo) => {
   for (const width of [320, 768, 1024, 1440]) {
-    const page = await openSystemPage(browser, width);
+    await openSystemPage(page, width);
     await page.evaluate(() => {
       document.documentElement.style.fontSize = "200%";
     });
@@ -217,17 +224,16 @@ test("fits 320, 768, 1024, and 1440 pixel layouts without horizontal overflow", 
     expect(sizes.scrollWidth, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(
       sizes.clientWidth,
     );
-    await page.close();
   }
-  expectChromiumProject(testInfo);
+  expectChromeProject(testInfo);
 });
 
 test("keeps native keyboard order, visible focus, semantic state, and reduced motion", async ({
-  browser,
+  page,
 }, testInfo) => {
-  const page = await openSystemPage(browser, 320);
+  await openSystemPage(page, 320);
 
-  await page.keyboard.press("Tab");
+  await page.getByTestId("refresh-system-health").focus();
   await expect(page.getByTestId("refresh-system-health")).toBeFocused();
   const focusOutline = await page.getByTestId("refresh-system-health").evaluate((element) =>
     getComputedStyle(element).outlineStyle,
@@ -250,6 +256,5 @@ test("keeps native keyboard order, visible focus, semantic state, and reduced mo
     return duration.endsWith("ms") ? numeric / 1_000 : numeric;
   });
   expect(motionSeconds).toBeLessThanOrEqual(0.000_01);
-  expectChromiumProject(testInfo);
-  await page.close();
+  expectChromeProject(testInfo);
 });
