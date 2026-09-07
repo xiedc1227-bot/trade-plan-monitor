@@ -69,8 +69,9 @@ Copy-Item config\app.example.yaml config\app.yaml
 
 YAML 保存供应商设置以及直接配置的 Tushare/AI 凭证。纳入版本控制的示例使用可替换占位值，
 选择已验证的 Tushare 兼容端点 `https://api.quicksync.cn`，并选择 DeepSeek 的 OpenAI 格式端点
-`https://api.deepseek.com` 和模型 `deepseek-v4-flash`。AI profile、显示名称、Base URL、模型、
-超时、重试次数、输入上限、输出上限、温度和凭证都可以修改。本地副本 `config/app.yaml` 会被
+`https://api.deepseek.com`、主模型 `deepseek-v4-flash` 和附加模型 `deepseek-v4-pro`。AI profile、
+显示名称、Base URL、主模型和附加模型、超时、重试次数、输入上限、输出上限、温度和凭证都可以
+修改。同一 `ai` 配置段下的所有模型共享该段的传输设置和凭证。本地副本 `config/app.yaml` 会被
 Git 忽略。直接替换以下字段：
 
 ```yaml
@@ -82,8 +83,9 @@ ai:
 
 `config/app.yaml` 是唯一凭证来源。不要提交它、数据库、备份或构建输出。
 
-Web 启动时会校验严格 YAML，并为本次服务生命周期创建一份不可变 AI 客户端绑定。通用监控的
-`DEGRADED` 状态与此独立，也不能证明 Tushare 已就绪。
+Web 启动时会校验严格 YAML，并为本次服务生命周期创建不可变的 AI 模型绑定。计划工作台会在
+供应商下拉中列出每个已配置模型。通用监控的 `DEGRADED` 状态与此独立，也不能证明 Tushare
+已就绪。
 
 ### 4. 启动已打包本地 Web 界面
 

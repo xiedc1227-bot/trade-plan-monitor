@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef, watch } from "vue";
+import { computed, shallowRef, watch } from "vue";
 
 import type { AIPlanApi } from "../api/ai";
 import type { PlanApi } from "../api/plans";
@@ -40,6 +40,11 @@ const plans = usePlans({
 });
 const savedExtractionId = shallowRef<string | null>(null);
 const creationMode = shallowRef<PlanCreationMode>("AI");
+const configuredProviders = computed(() => {
+  const runtime = drafting.runtime.value;
+  if (runtime === null) return [];
+  return [runtime, ...(runtime.alternativeProviders ?? [])];
+});
 
 watch(
   () => props.planVersionId,
@@ -138,7 +143,7 @@ async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<voi
           <PlanWorkbench
             :extraction="drafting.extraction.value"
             :initial-provider-id="drafting.runtime.value.providerId"
-            :providers="[drafting.runtime.value]"
+            :providers="configuredProviders"
             :submitting="drafting.submitting.value"
             @stop-waiting="drafting.stopWaiting"
             @submit-extraction="drafting.submitExtraction"

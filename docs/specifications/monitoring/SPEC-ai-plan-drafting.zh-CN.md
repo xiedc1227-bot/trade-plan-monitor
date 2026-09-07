@@ -55,6 +55,7 @@ class AIProvider(Protocol):
 可配置字段包括：
 
 - `providerId`、请求 profile、显示名称、服务类型、Base URL 和模型；
+- 最多九个 `additional_models`，每项具有唯一模型 ID 和显示名称，并共享主配置的传输设置与凭证；
 - 直接 `api_key` 以及“是否已配置密钥”状态；
 - 超时、最大重试次数、最大输入字符、最大输出 Token；
 - 温度默认固定为 0，允许范围 0～0.3；
@@ -64,7 +65,7 @@ class AIProvider(Protocol):
 
 ### 服务适配器契约
 
-适配器使用 Bearer 鉴权发送 `POST {baseUrl}/chat/completions`，绝不发送工具，只把模型内容作为不可信原始文本返回。通用 `OPENAI_COMPATIBLE` profile 使用 `messages`、`temperature`、`max_completion_tokens` 和 `stream=false`。默认 `DEEPSEEK` profile 遵循 DeepSeek 当前契约：使用 `max_tokens`，设置 `thinking={"type":"disabled"}`，提取计划时增加 `response_format={"type":"json_object"}`，并保持 `stream=false`。DeepSeek 默认值为 `https://api.deepseek.com` 和 `deepseek-v4-flash`；用户把密钥放在被忽略的 `config/app.yaml` 的 `ai.api_key` 中。
+适配器使用 Bearer 鉴权发送 `POST {baseUrl}/chat/completions`，绝不发送工具，只把模型内容作为不可信原始文本返回。通用 `OPENAI_COMPATIBLE` profile 使用 `messages`、`temperature`、`max_completion_tokens` 和 `stream=false`。默认 `DEEPSEEK` profile 遵循 DeepSeek 当前契约：使用 `max_tokens`，设置 `thinking={"type":"disabled"}`，提取计划时增加 `response_format={"type":"json_object"}`，并保持 `stream=false`。DeepSeek 默认值为 `https://api.deepseek.com`、主模型 `deepseek-v4-flash` 和已配置的附加模型 `deepseek-v4-pro`；用户把共享密钥放在被忽略的 `config/app.yaml` 的 `ai.api_key` 中。
 
 Web 与 CLI 都使用从 YAML 直接读取的非空 `ai.api_key`，不存在环境变量或独立文件凭证后备。Web 组合在启动时只读取一次配置，并在该次服务生命周期内保持不变，通过 `/plans` 提供提取。维护用途的 CLI 保留 `ai test [--config 路径]` 和 `ai extract [--config 路径] --source 文件`；`test` 发送一次有边界的连通性请求，`extract` 读取严格 UTF-8 普通来源文件、检查字节数和配置字符上限、校验返回草稿并输出，但不会激活计划。
 

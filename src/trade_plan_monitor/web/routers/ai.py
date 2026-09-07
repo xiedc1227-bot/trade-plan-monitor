@@ -51,6 +51,7 @@ class SecretReferenceView(ApiValue):
             pattern=r"^ai/provider/[A-Za-z0-9_-]{1,128}$",
         ),
     ]
+
     def to_domain(self) -> SecretReference:
         return SecretReference(key=self.key)
 
@@ -175,8 +176,8 @@ class AIProviderPage(ApiValue):
         return self
 
 
-class ConfiguredAIRuntimeView(ApiValue):
-    """Read-only non-secret AI settings loaded for the current Web lifetime."""
+class ConfiguredAIProviderRuntimeView(ApiValue):
+    """One read-only non-secret model available for plan extraction."""
 
     provider_id: UUID = Field(strict=False)
     display_name: Annotated[
@@ -193,6 +194,25 @@ class ConfiguredAIRuntimeView(ApiValue):
     max_input_chars: Annotated[int, Field(strict=True, ge=1, le=200_000)]
     max_output_tokens: Annotated[int, Field(strict=True, ge=1, le=16_384)]
     revision: Literal[0] = 0
+
+
+class ConfiguredAIRuntimeView(ConfiguredAIProviderRuntimeView):
+    """Primary AI settings plus optional models loaded for the Web lifetime."""
+
+    alternative_providers: tuple[ConfiguredAIProviderRuntimeView, ...] | None = Field(
+        default=None,
+        max_length=9,
+    )
+
+    @model_validator(mode="after")
+    def require_unique_provider_identities(self) -> Self:
+        identities = (
+            self.provider_id,
+            *(provider.provider_id for provider in self.alternative_providers or ()),
+        )
+        if len(set(identities)) != len(identities):
+            raise ValueError("configured AI provider identities must be unique")
+        return self
 
 
 class AIProviderConfigurationCommand(ApiValue):
@@ -261,7 +281,11 @@ AIServiceDependency = Annotated[
 ]
 
 
-@router.get("/ai-runtime", response_model=ConfiguredAIRuntimeView)
+@router.get(
+    "/ai-runtime",
+    response_model=ConfiguredAIRuntimeView,
+    response_model_exclude_none=True,
+)
 async def get_configured_ai(service: AIServiceDependency) -> ConfiguredAIRuntimeView:
     return validate_api_response(
         await service.get_configured_ai(),
@@ -374,6 +398,7 @@ def _ensure_configuration_matches(
 __all__ = [
     "AIOperationService",
     "AIProviderConfigurationCommand",
+    "ConfiguredAIProviderRuntimeView",
     "ConfiguredAIRuntimeView",
     "AIProviderPage",
     "AIProviderSecretCommand",

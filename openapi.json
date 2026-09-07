@@ -5003,10 +5003,94 @@
         "title": "ConditionOutcome",
         "type": "string"
       },
+      "ConfiguredAIProviderRuntimeView": {
+        "additionalProperties": false,
+        "description": "One read-only non-secret model available for plan extraction.",
+        "properties": {
+          "baseUrl": {
+            "format": "uri",
+            "minLength": 1,
+            "title": "Baseurl",
+            "type": "string"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "displayName": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Displayname",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "maxInputChars": {
+            "maximum": 200000.0,
+            "minimum": 1.0,
+            "title": "Maxinputchars",
+            "type": "integer"
+          },
+          "maxOutputTokens": {
+            "maximum": 16384.0,
+            "minimum": 1.0,
+            "title": "Maxoutputtokens",
+            "type": "integer"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[^\\s\\x00-\\x1f\\x7f]+$",
+            "title": "Model",
+            "type": "string"
+          },
+          "providerId": {
+            "format": "uuid",
+            "title": "Providerid",
+            "type": "string"
+          },
+          "revision": {
+            "const": 0,
+            "default": 0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "providerId",
+          "displayName",
+          "baseUrl",
+          "model",
+          "configured",
+          "enabled",
+          "maxInputChars",
+          "maxOutputTokens"
+        ],
+        "title": "ConfiguredAIProviderRuntimeView",
+        "type": "object"
+      },
       "ConfiguredAIRuntimeView": {
         "additionalProperties": false,
-        "description": "Read-only non-secret AI settings loaded for the current Web lifetime.",
+        "description": "Primary AI settings plus optional models loaded for the Web lifetime.",
         "properties": {
+          "alternativeProviders": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ConfiguredAIProviderRuntimeView"
+                },
+                "maxItems": 9,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternativeproviders"
+          },
           "baseUrl": {
             "format": "uri",
             "minLength": 1,

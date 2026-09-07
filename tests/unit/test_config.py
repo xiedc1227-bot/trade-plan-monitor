@@ -82,6 +82,61 @@ ai:
     assert provider_config.model == "private-chat-model"
 
 
+def test_yaml_accepts_additional_models_with_stable_provider_identities(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """\
+ai:
+  profile: DEEPSEEK
+  display_name: DeepSeek
+  base_url: https://api.deepseek.com
+  model: deepseek-v4-flash
+  api_key: configured-ai-key
+  additional_models:
+    - display_name: DeepSeek Pro
+      model: deepseek-v4-pro
+""",
+        encoding="utf-8",
+    )
+
+    first_load = load_application_config(config_path).ai.to_provider_configs()
+    second_load = load_application_config(config_path).ai.to_provider_configs()
+
+    assert [config.display_name for config in first_load] == [
+        "DeepSeek",
+        "DeepSeek Pro",
+    ]
+    assert [config.model for config in first_load] == [
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+    ]
+    assert len({config.provider_id for config in first_load}) == 2
+    assert [config.provider_id for config in first_load] == [
+        config.provider_id for config in second_load
+    ]
+    assert len({config.secret_ref for config in first_load}) == 1
+
+
+def test_yaml_rejects_duplicate_additional_model_identifiers(tmp_path: Path) -> None:
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """\
+ai:
+  model: deepseek-v4-flash
+  api_key: configured-ai-key
+  additional_models:
+    - display_name: Duplicate Flash
+      model: deepseek-v4-flash
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError):
+        load_application_config(config_path)
+
+
 def test_example_configuration_is_valid_and_contains_direct_placeholders() -> None:
     config = load_application_config(PROJECT_ROOT / "config" / "app.example.yaml")
 
@@ -101,6 +156,7 @@ def test_example_configuration_is_valid_and_contains_direct_placeholders() -> No
     assert provider_config.display_name == "DeepSeek"
     assert str(provider_config.base_url) == "https://api.deepseek.com/"
     assert provider_config.model == "deepseek-v4-flash"
+    assert [model.model for model in config.ai.additional_models] == ["deepseek-v4-pro"]
 
 
 def test_ai_composition_selects_the_configured_profile_without_reading_the_secret() -> None:

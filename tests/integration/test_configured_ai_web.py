@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import httpx
@@ -10,7 +11,7 @@ from fastapi.testclient import TestClient
 from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
 from trade_plan_monitor.web.app import create_app, create_production_app
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
-from trade_plan_monitor.web.routers.ai import AIProviderSecretCommand
+from trade_plan_monitor.web.routers.ai import AIProviderSecretCommand, ConfiguredAIRuntimeView
 from trade_plan_monitor.web.routers.plans import PlanExtractionCommand
 from trade_plan_monitor.web.schemas import MutationContext, OperationKind
 
@@ -138,6 +139,123 @@ ai:
     asyncio.run(scenario())
 
 
+def test_configured_ai_web_lifecycle_lists_and_executes_an_additional_model(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """\
+ai:
+  profile: DEEPSEEK
+  display_name: DeepSeek
+  base_url: https://api.deepseek.com
+  model: deepseek-v4-flash
+  api_key: direct-web-key
+  max_retries: 0
+  additional_models:
+    - display_name: DeepSeek Pro
+      model: deepseek-v4-pro
+""",
+        encoding="utf-8",
+    )
+    requested_models: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_models.append(json.loads(request.content)["model"])
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-web-pro",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "{}"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+
+    async def scenario() -> None:
+        lifecycle = ConfiguredAIWebLifecycle(
+            config_path=config_path,
+            client_factory=lambda: httpx.AsyncClient(
+                transport=httpx.MockTransport(handler),
+                trust_env=False,
+            ),
+        )
+        start_result = await lifecycle.start()
+        try:
+            assert start_result["providerCount"] == 2
+            page = await lifecycle.list_ai_providers(offset=0, limit=20)
+            assert page.total == 2
+            pro_provider = next(
+                provider for provider in page.items if provider.config.model == "deepseek-v4-pro"
+            )
+
+            runtime = await lifecycle.get_configured_ai()
+            assert runtime.alternative_providers is not None
+            assert [provider.model for provider in runtime.alternative_providers] == [
+                "deepseek-v4-pro"
+            ]
+
+            receipt = await lifecycle.submit_plan_extraction(
+                command=PlanExtractionCommand(
+                    provider_id=pro_provider.config.provider_id,
+                    source_text="华亚智能：回踩 20.10 至 20.50 分批关注。",
+                    expected_revision=0,
+                ),
+                context=MutationContext(
+                    idempotency_key="extract-with-deepseek-pro",
+                    request_id="c" * 32,
+                ),
+            )
+            for _attempt in range(100):
+                extraction = await lifecycle.get_plan_extraction(
+                    operation_id=str(receipt.operation_id)
+                )
+                if extraction is not None and extraction.status.value not in {
+                    "QUEUED",
+                    "RUNNING",
+                }:
+                    break
+                await asyncio.sleep(0)
+            assert requested_models == ["deepseek-v4-pro"]
+        finally:
+            await lifecycle.stop()
+
+    asyncio.run(scenario())
+
+
+def test_configured_ai_runtime_rejects_duplicate_provider_identities() -> None:
+    provider = {
+        "provider_id": "00000000-0000-4000-8000-0000000000d5",
+        "display_name": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-v4-flash",
+        "configured": True,
+        "enabled": True,
+        "max_input_chars": 50_000,
+        "max_output_tokens": 4_096,
+        "revision": 0,
+    }
+
+    with pytest.raises(ValueError, match="identities must be unique"):
+        ConfiguredAIRuntimeView(
+            **provider,
+            alternative_providers=(
+                {
+                    **provider,
+                    "display_name": "DeepSeek Pro",
+                    "model": "deepseek-v4-pro",
+                },
+            ),
+        )
+
+
 def test_fastapi_lifespan_exposes_directly_configured_ai_services(tmp_path: Path) -> None:
     config_directory = tmp_path / "config"
     config_directory.mkdir()
@@ -153,6 +271,7 @@ ai:
 """,
         encoding="utf-8",
     )
+
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -254,6 +373,7 @@ ai:
 """,
         encoding="utf-8",
     )
+
     class Runtime:
         async def start(self) -> dict[str, object]:
             return {"status": "DEGRADED"}

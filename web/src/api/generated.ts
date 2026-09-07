@@ -769,7 +769,20 @@ export type Board = "SSE_MAIN" | "SZSE_MAIN" | "CHINEXT" | "STAR_MARKET" | "BSE"
 
 export type ConditionOutcome = "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
 
+export type ConfiguredAIProviderRuntimeView = {
+  baseUrl: string;
+  configured: boolean;
+  displayName: string;
+  enabled: boolean;
+  maxInputChars: number;
+  maxOutputTokens: number;
+  model: string;
+  providerId: string;
+  revision?: 0;
+};
+
 export type ConfiguredAIRuntimeView = {
+  alternativeProviders?: (Array<components["schemas"]["ConfiguredAIProviderRuntimeView"]>) | (null);
   baseUrl: string;
   configured: boolean;
   displayName: string;
@@ -1501,6 +1514,7 @@ export interface components {
     BarView: BarView;
     Board: Board;
     ConditionOutcome: ConditionOutcome;
+    ConfiguredAIProviderRuntimeView: ConfiguredAIProviderRuntimeView;
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
     ConnectionStatus: ConnectionStatus;
     DashboardCounts: DashboardCounts;

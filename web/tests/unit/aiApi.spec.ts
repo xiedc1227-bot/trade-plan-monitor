@@ -88,6 +88,45 @@ describe("AI plan API", () => {
       sourceText: "华亚智能交易计划",
     });
   });
+
+  it("accepts configured alternative model summaries", async () => {
+    const proRuntime = {
+      ...runtime,
+      displayName: "DeepSeek Pro",
+      model: "deepseek-v4-pro",
+      providerId: "b5399495-ef52-58ba-b975-df01c6d65b8c",
+    };
+    const fetchImplementation = vi.fn(async () =>
+      jsonResponse({ ...runtime, alternativeProviders: [proRuntime] }),
+    ) as typeof fetch;
+
+    const configured = await createAIPlanApi(fetchImplementation).getRuntime();
+
+    expect(configured.alternativeProviders).toEqual([proRuntime]);
+  });
+
+  it("rejects extra fields in an alternative model summary", async () => {
+    const fetchImplementation = vi.fn(async () =>
+      jsonResponse({
+        ...runtime,
+        alternativeProviders: [{ ...runtime, apiKey: "must-not-cross-boundary" }],
+      }),
+    ) as typeof fetch;
+
+    await expect(createAIPlanApi(fetchImplementation).getRuntime()).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
+
+  it("rejects duplicate provider identities across runtime summaries", async () => {
+    const fetchImplementation = vi.fn(async () =>
+      jsonResponse({ alternativeProviders: [runtime], ...runtime }),
+    ) as typeof fetch;
+
+    await expect(createAIPlanApi(fetchImplementation).getRuntime()).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
 });
 
 function jsonResponse(body: unknown, status = 200): Response {

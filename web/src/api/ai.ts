@@ -111,7 +111,19 @@ function requestOptions(
 function isConfiguredRuntime(value: unknown): value is ConfiguredAIRuntimeView {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, [
+    !hasKeys(value, [
+      "baseUrl",
+      "configured",
+      "displayName",
+      "enabled",
+      "maxInputChars",
+      "maxOutputTokens",
+      "model",
+      "providerId",
+      "revision",
+    ]) ||
+    !hasOnlyKeys(value, [
+      "alternativeProviders",
       "baseUrl",
       "configured",
       "displayName",
@@ -126,6 +138,31 @@ function isConfiguredRuntime(value: unknown): value is ConfiguredAIRuntimeView {
     return false;
   }
   return (
+    hasConfiguredRuntimeFields(value) &&
+    isAlternativeProviders(value.alternativeProviders, String(value.providerId))
+  );
+}
+
+function isConfiguredRuntimeProvider(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, [
+      "baseUrl",
+      "configured",
+      "displayName",
+      "enabled",
+      "maxInputChars",
+      "maxOutputTokens",
+      "model",
+      "providerId",
+      "revision",
+    ]) &&
+    hasConfiguredRuntimeFields(value)
+  );
+}
+
+function hasConfiguredRuntimeFields(value: Record<string, unknown>): boolean {
+  return (
     isSafeBaseUrl(value.baseUrl) &&
     typeof value.configured === "boolean" &&
     isBoundedText(value.displayName, 100) &&
@@ -136,6 +173,22 @@ function isConfiguredRuntime(value: unknown): value is ConfiguredAIRuntimeView {
     isUuid(value.providerId) &&
     value.revision === 0
   );
+}
+
+function isAlternativeProviders(value: unknown, primaryProviderId: string): boolean {
+  if (value === undefined || value === null) return true;
+  if (
+    !Array.isArray(value) ||
+    value.length > 9 ||
+    !value.every(isConfiguredRuntimeProvider)
+  ) {
+    return false;
+  }
+  const identities = new Set([primaryProviderId]);
+  for (const provider of value) {
+    identities.add(String(provider.providerId));
+  }
+  return identities.size === value.length + 1;
 }
 
 function isOperationReceipt(value: unknown): value is OperationReceipt {

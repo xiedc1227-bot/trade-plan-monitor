@@ -18,6 +18,9 @@ ai:
   display_name: DeepSeek
   base_url: https://api.deepseek.com
   model: deepseek-v4-flash
+  additional_models:
+    - display_name: DeepSeek Pro
+      model: deepseek-v4-pro
   api_key: replace-with-your-deepseek-api-key
   timeout_seconds: 30
   max_retries: 2

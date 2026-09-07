@@ -140,9 +140,11 @@ Copy-Item config\app.example.yaml config\app.yaml
 The YAML file contains provider settings and direct Tushare/AI credentials. The versioned example
 uses replaceable placeholders and selects the verified
 `https://api.quicksync.cn` Tushare-compatible endpoint and the DeepSeek OpenAI-format endpoint
-`https://api.deepseek.com` with model `deepseek-v4-flash`. The AI profile, display name, base URL,
-model, timeout, retry budget, input limit, output limit, temperature, and credentials are
-configurable. The local `config/app.yaml` copy is ignored by Git. Replace these fields directly:
+`https://api.deepseek.com` with primary model `deepseek-v4-flash` and additional model
+`deepseek-v4-pro`. The AI profile, display name, base URL, primary and additional models, timeout,
+retry budget, input limit, output limit, temperature, and credentials are configurable. All models
+under one `ai` section share that section's transport settings and credential. The local
+`config/app.yaml` copy is ignored by Git. Replace these fields directly:
 
 ```yaml
 tushare:
@@ -154,9 +156,9 @@ ai:
 `config/app.yaml` is the only credential source. Do not commit it, databases, backups, or build
 output.
 
-Web startup validates the strict YAML and creates one immutable AI client binding for the server
-lifetime. The general monitoring `DEGRADED` state remains independent and does not prove Tushare
-readiness.
+Web startup validates the strict YAML and creates immutable AI model bindings for the server
+lifetime. The plan workbench lists every configured model in the provider selector. The general
+monitoring `DEGRADED` state remains independent and does not prove Tushare readiness.
 
 ### 4. Start the packaged local Web UI
 

@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from ipaddress import ip_address
 from pathlib import Path
 from typing import Literal, Self
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import yaml
 from pydantic import (
@@ -90,6 +90,21 @@ class TushareConfiguration(_ConfigurationModel):
         return value
 
 
+class AIModelConfiguration(_ConfigurationModel):
+    """One additional model exposed through the configured AI transport."""
+
+    display_name: str = Field(
+        min_length=1,
+        max_length=100,
+        pattern=r"^[^\x00-\x1f\x7f]+$",
+    )
+    model: str = Field(
+        min_length=1,
+        max_length=200,
+        pattern=r"^[^\s\x00-\x1f\x7f]+$",
+    )
+
+
 class AIConfiguration(_ConfigurationModel):
     """Configurable AI transport with DeepSeek as the built-in default."""
 
@@ -116,6 +131,10 @@ class AIConfiguration(_ConfigurationModel):
     max_input_chars: int = Field(default=50_000, ge=1, le=200_000)
     max_output_tokens: int = Field(default=4_096, ge=1, le=16_384)
     temperature: float = Field(default=0, ge=0, le=0.3)
+    additional_models: tuple[AIModelConfiguration, ...] = Field(
+        default=(),
+        max_length=9,
+    )
 
     @model_validator(mode="wrap")
     @classmethod
@@ -139,24 +158,57 @@ class AIConfiguration(_ConfigurationModel):
             raise ValueError("base_url must use HTTPS unless the host is loopback")
         return value
 
+    @field_validator("additional_models", mode="before")
+    @classmethod
+    def normalize_additional_models(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def require_unique_models(self) -> Self:
+        models = (self.model, *(model.model for model in self.additional_models))
+        if len(set(models)) != len(models):
+            raise ValueError("configured AI model identifiers must be unique")
+        return self
+
     def to_provider_config(self) -> AIProviderConfig | None:
         """Build the existing non-secret provider contract when AI is configured."""
 
+        configs = self.to_provider_configs()
+        return configs[0] if configs else None
+
+    def to_provider_configs(self) -> tuple[AIProviderConfig, ...]:
+        """Build every configured model using one shared, write-only credential."""
+
         if self.api_key is None:
-            return None
-        return AIProviderConfig(
-            provider_id=UUID("00000000-0000-4000-8000-0000000000d5"),
-            display_name=self.display_name,
-            base_url=self.base_url,
-            model=self.model,
-            secret_ref=SecretReference(
-                key="ai/provider/configured-default",
+            return ()
+        primary_id = UUID("00000000-0000-4000-8000-0000000000d5")
+        identity_namespace = UUID("00000000-0000-4000-8000-0000000000a1")
+        secret_ref = SecretReference(key="ai/provider/configured-default")
+        models = (
+            (primary_id, self.display_name, self.model),
+            *(
+                (
+                    uuid5(identity_namespace, model.model),
+                    model.display_name,
+                    model.model,
+                )
+                for model in self.additional_models
             ),
-            timeout_seconds=self.timeout_seconds,
-            max_retries=self.max_retries,
-            max_input_chars=self.max_input_chars,
-            max_output_tokens=self.max_output_tokens,
-            temperature=self.temperature,
+        )
+        return tuple(
+            AIProviderConfig(
+                provider_id=provider_id,
+                display_name=display_name,
+                base_url=self.base_url,
+                model=model,
+                secret_ref=secret_ref,
+                timeout_seconds=self.timeout_seconds,
+                max_retries=self.max_retries,
+                max_input_chars=self.max_input_chars,
+                max_output_tokens=self.max_output_tokens,
+                temperature=self.temperature,
+            )
+            for provider_id, display_name, model in models
         )
 
 
@@ -223,6 +275,7 @@ def load_application_config(path: str | Path) -> ApplicationConfiguration:
 
 __all__ = [
     "AIConfiguration",
+    "AIModelConfiguration",
     "ApplicationConfiguration",
     "TushareConfiguration",
     "WebConfiguration",

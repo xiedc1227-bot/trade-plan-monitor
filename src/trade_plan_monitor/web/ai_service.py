@@ -1,4 +1,4 @@
-"""Read-only Web composition for one AI provider in application configuration."""
+"""Read-only Web composition for configured AI models in application configuration."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import httpx
 
 from trade_plan_monitor.ai.composition import (
     ConfiguredAIProviderBinding,
-    compose_configured_ai_provider,
+    compose_configured_ai_providers,
 )
 from trade_plan_monitor.ai.configured_secrets import create_configured_secret_store
 from trade_plan_monitor.ai.extraction import extract_plan
@@ -32,6 +32,7 @@ from trade_plan_monitor.web.routers.ai import (
     AIProviderSecretCommand,
     AIProviderTestCommand,
     AIProviderView,
+    ConfiguredAIProviderRuntimeView,
     ConfiguredAIRuntimeView,
     SecretReferenceView,
     SecretStatusView,
@@ -56,7 +57,7 @@ AIClientFactory = Callable[[], httpx.AsyncClient]
 
 
 class ConfiguredAIWebLifecycle:
-    """Own one immutable directly configured AI binding for a Web server lifetime."""
+    """Own immutable directly configured AI model bindings for a Web lifetime."""
 
     def __init__(
         self,
@@ -72,6 +73,7 @@ class ConfiguredAIWebLifecycle:
         self._settings: AIConfiguration | None = None
         self._secret_store: InMemorySecretStore | None = None
         self._binding: ConfiguredAIProviderBinding | None = None
+        self._bindings: dict[UUID, ConfiguredAIProviderBinding] = {}
         self._configured_at: datetime | None = None
         self._operations: dict[UUID, PlanExtractionView] = {}
         self._receipts: dict[str, tuple[str, OperationReceipt]] = {}
@@ -99,15 +101,17 @@ class ConfiguredAIWebLifecycle:
         self._settings = settings
         self._client = client
         self._secret_store = secret_store
-        self._binding = compose_configured_ai_provider(
+        bindings = compose_configured_ai_providers(
             settings=settings,
             client=client,
             secret_store=secret_store,
         )
+        self._binding = bindings[0] if bindings else None
+        self._bindings = {binding.config.provider_id: binding for binding in bindings}
         self._configured_at = _now()
         return {
             "configured": self._binding is not None,
-            "providerCount": int(self._binding is not None),
+            "providerCount": len(self._bindings),
         }
 
     async def stop(self) -> None:
@@ -124,13 +128,13 @@ class ConfiguredAIWebLifecycle:
         self._settings = None
         self._secret_store = None
         self._binding = None
+        self._bindings = {}
         self._configured_at = None
         if client is not None:
             await client.aclose()
 
     async def list_ai_providers(self, *, offset: int, limit: int) -> AIProviderPage:
-        provider = self._provider_view()
-        items = () if provider is None else (provider,)
+        items = tuple(self._provider_view(binding) for binding in self._bindings.values())
         return AIProviderPage(
             items=items[offset : offset + limit],
             offset=offset,
@@ -144,6 +148,11 @@ class ConfiguredAIWebLifecycle:
         if secret_store is None:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
         config = binding.config
+        alternatives = tuple(
+            self._runtime_provider_view(alternative)
+            for alternative in self._bindings.values()
+            if alternative.config.provider_id != config.provider_id
+        )
         return ConfiguredAIRuntimeView(
             provider_id=config.provider_id,
             display_name=config.display_name,
@@ -154,6 +163,7 @@ class ConfiguredAIWebLifecycle:
             max_input_chars=config.max_input_chars,
             max_output_tokens=config.max_output_tokens,
             revision=0,
+            alternative_providers=alternatives or None,
         )
 
     async def create_ai_provider(
@@ -199,9 +209,7 @@ class ConfiguredAIWebLifecycle:
         command: PlanExtractionCommand,
         context: MutationContext,
     ) -> OperationReceipt:
-        binding = self._require_binding()
-        if command.provider_id != binding.config.provider_id:
-            raise ApiError(ApiErrorCode.NOT_FOUND)
+        binding = self._require_binding(command.provider_id)
         if command.expected_revision != 0:
             raise ApiError(ApiErrorCode.CONFLICT)
         request_hash = _extraction_request_hash(command)
@@ -258,7 +266,7 @@ class ConfiguredAIWebLifecycle:
                     submitted_at=queued.submitted_at,
                     started_at=started_at,
                 )
-                binding = self._require_binding()
+                binding = self._require_binding(queued.provider_id)
                 result = await extract_plan(
                     request_id=operation_id,
                     source_text=source_text,
@@ -293,12 +301,9 @@ class ConfiguredAIWebLifecycle:
                 completed_at=_now(),
             )
 
-    def _provider_view(self) -> AIProviderView | None:
-        binding = self._binding
+    def _provider_view(self, binding: ConfiguredAIProviderBinding) -> AIProviderView:
         configured_at = self._configured_at
         secret_store = self._secret_store
-        if binding is None:
-            return None
         if configured_at is None or secret_store is None:
             raise RuntimeError("configured AI Web lifecycle is not started")
         config = binding.config
@@ -333,12 +338,38 @@ class ConfiguredAIWebLifecycle:
             updated_at=configured_at,
         )
 
-    def _require_binding(self) -> ConfiguredAIProviderBinding:
+    def _runtime_provider_view(
+        self,
+        binding: ConfiguredAIProviderBinding,
+    ) -> ConfiguredAIProviderRuntimeView:
+        secret_store = self._secret_store
+        if secret_store is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        config = binding.config
+        return ConfiguredAIProviderRuntimeView(
+            provider_id=config.provider_id,
+            display_name=config.display_name,
+            base_url=config.base_url,
+            model=config.model,
+            configured=secret_store.status(config.secret_ref).configured,
+            enabled=config.enabled,
+            max_input_chars=config.max_input_chars,
+            max_output_tokens=config.max_output_tokens,
+            revision=0,
+        )
+
+    def _require_binding(
+        self,
+        provider_id: UUID | None = None,
+    ) -> ConfiguredAIProviderBinding:
         if self._client is None:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
-        binding = self._binding
+        binding = self._binding if provider_id is None else self._bindings.get(provider_id)
         if binding is None:
-            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+            error_code = (
+                ApiErrorCode.SERVICE_UNAVAILABLE if provider_id is None else ApiErrorCode.NOT_FOUND
+            )
+            raise ApiError(error_code)
         return binding
 
 

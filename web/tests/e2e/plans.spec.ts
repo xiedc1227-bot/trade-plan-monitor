@@ -20,6 +20,7 @@ import type {
 const require = createRequire(import.meta.url);
 const axePath = require.resolve("axe-core/axe.min.js");
 const PROVIDER_ID = "00000000-0000-4000-8000-0000000000d5";
+const PRO_PROVIDER_ID = "b5399495-ef52-58ba-b975-df01c6d65b8c";
 const OPERATION_ID = "00000000-0000-4000-8000-000000000201";
 const TIME = "2026-09-02T09:00:00.000000+08:00";
 const PLAN_VERSION_ID = "00000000-0000-4000-8000-000000000402";
@@ -115,6 +116,19 @@ const dashboard: DashboardResponse = {
 };
 
 const runtime: ConfiguredAIRuntimeView = {
+  alternativeProviders: [
+    {
+      baseUrl: "https://api.deepseek.com/",
+      configured: true,
+      displayName: "DeepSeek Pro",
+      enabled: true,
+      maxInputChars: 50_000,
+      maxOutputTokens: 4_096,
+      model: "deepseek-v4-pro",
+      providerId: PRO_PROVIDER_ID,
+      revision: 0,
+    },
+  ],
   baseUrl: "https://api.deepseek.com/",
   configured: true,
   displayName: "DeepSeek",
@@ -470,6 +484,12 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
   await page.getByRole("tab", { name: /从原文 AI 提取/ }).click();
   await expect(page.getByText("配置文件只读")).toBeVisible();
   await expect(page.getByText("deepseek-v4-flash", { exact: true })).toBeVisible();
+  const providerSelect = page.getByLabel("已配置供应商");
+  await expect(providerSelect.locator("option")).toHaveCount(2);
+  await expect(providerSelect).toContainText("DeepSeek Pro · deepseek-v4-pro");
+  await providerSelect.selectOption(PRO_PROVIDER_ID);
+  await expect(page.getByText("deepseek-v4-pro", { exact: true })).toBeVisible();
+  await providerSelect.selectOption(PROVIDER_ID);
   await expect(page.locator("#provider-secret")).toHaveCount(0);
 
   const source = "华亚智能：回踩 20.10 至 20.50 分批关注。";

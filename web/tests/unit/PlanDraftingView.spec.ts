@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   ActivePlanView,
+  ConfiguredAIProviderRuntimeView,
   ConfiguredAIRuntimeView,
   OperationReceipt,
   PlanExtractionView,
@@ -28,6 +29,13 @@ const runtime: ConfiguredAIRuntimeView = {
   model: "deepseek-v4-flash",
   providerId: PROVIDER_ID,
   revision: 0,
+};
+
+const proRuntime: ConfiguredAIProviderRuntimeView = {
+  ...runtime,
+  displayName: "DeepSeek Pro",
+  model: "deepseek-v4-pro",
+  providerId: "b5399495-ef52-58ba-b975-df01c6d65b8c",
 };
 
 const receipt: OperationReceipt = {
@@ -263,6 +271,44 @@ describe("PlanDraftingView", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(wrapper.get('[role="alert"]').text()).toContain("AI 输出未通过封闭契约校验");
+    wrapper.unmount();
+  });
+
+  it("lists and submits the configured DeepSeek Pro model", async () => {
+    const submitExtraction = vi.fn().mockResolvedValue(receipt);
+    const wrapper = mount(PlanDraftingView, {
+      props: {
+        api: apiWith({
+          getExtraction: vi.fn().mockResolvedValue(invalidExtraction),
+          getRuntime: vi
+            .fn()
+            .mockResolvedValue({ ...runtime, alternativeProviders: [proRuntime] }),
+          submitExtraction,
+        }),
+        createIdempotencyKey: () => "deepseek-pro-plan-intent",
+        planApi: planApiWith(),
+        pollIntervalMs: 0,
+      },
+    });
+    await flushPromises();
+
+    const providerSelect = wrapper.get<HTMLSelectElement>("#ai-provider");
+    expect(providerSelect.findAll("option")).toHaveLength(2);
+    expect(providerSelect.text()).toContain("DeepSeek Pro · deepseek-v4-pro");
+
+    await providerSelect.setValue(proRuntime.providerId);
+    await wrapper.get<HTMLTextAreaElement>("#plan-source-text").setValue("华亚智能交易计划");
+    await wrapper.get('[data-testid="source-editor"]').trigger("submit");
+
+    expect(submitExtraction).toHaveBeenCalledWith(
+      {
+        expectedRevision: 0,
+        providerId: proRuntime.providerId,
+        sourceText: "华亚智能交易计划",
+      },
+      "deepseek-pro-plan-intent",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     wrapper.unmount();
   });
 
