@@ -102,7 +102,7 @@ web/src/
 - `create_app(read_service=...)` 接收一个明确注入的 `MonitorReadService`，但不构造该服务或启动 I/O。T036 的七个路由都是该服务之上的异步传输适配器；缺少服务时返回 `SERVICE_UNAVAILABLE`。每个服务结果都必须在序列化前通过封闭、不可变的响应模型重新校验；非法内部结果只进入通用错误边界，且不暴露被拒绝的值。
 - T036 在 `/api/v1` 下实现 `GET /dashboard`、`GET /symbols`、`GET /symbols/{symbol}`、`GET /symbols/{symbol}/bars`、`GET /symbols/{symbol}/events`、`GET /health` 和 `GET /health/symbols/{symbol}`。它不实现 T037+ 命令、提醒中心查询、计划/AI 资源、WebSocket 传输、Origin/安全响应头、静态资源提供或生产组合。
 - 列表分页使用 `offset`（默认 `0`，范围 `0..10000`）和 `limit`（默认 `20`，范围 `1..100`），并返回精确的 `items`、`offset`、`limit` 和 `total`。股票总数最多 10，K 线/事件总数最多 10,000。K 线与事件读取必须显式提供 `Asia/Shanghai` 闭区间时间戳 `startAt` 和 `endAt`；范围反转时返回 `BAD_REQUEST`。K 线读取还接受 `interval=ONE_MINUTE|FIVE_MINUTES`。响应中的分页、范围、周期和股票 identity 必须与请求一致。股票格式非法时返回请求校验失败；格式合法但不存在时返回 `NOT_FOUND`。
-- 监控总览返回已提交的 `sequence`、观测/连接/数据年龄状态条、六项已批准统计和最多 10 个相互隔离的股票摘要。每个摘要包含一个权威确定性判断投影，其中保留 `symbol`、`resultHash`、精确计划 identity、判断/行情时间、数据年龄、价格、区间、信号、仓位、阶段/风险状态、强类型证据和下一步。适配器绝不判断条件、修改优先级、重算判断哈希或读取第二套报价流。跨股票 identity、矛盾风险状态、与仓位批次/T+1 可用量不一致以及不一致年龄都封闭失败。
+- 监控总览返回已提交且 JavaScript 安全的 `sequence`、可空 UUIDv4 `runtimeGeneration`、观测/连接/数据年龄状态条、六项已批准统计和最多 10 个相互隔离的股票摘要。每个摘要包含一个权威确定性判断投影，其中保留 `symbol`、`resultHash`、精确计划 identity、判断/行情时间、数据年龄、价格、区间、信号、仓位、阶段/风险状态、强类型证据和下一步。适配器绝不判断条件、修改优先级、重算判断哈希或读取第二套报价流。跨股票 identity、矛盾风险状态、与仓位批次/T+1 可用量不一致以及不一致年龄都封闭失败。
 - K 线响应保留规范化整数分 OHLC、股数、精确元成交额、回执时间和聚合公式 provenance。事件响应保留股票、序号、稳定事件 ID/类型、时间戳、可选信号/结果哈希和有界的服务端纯文本。所有 JSON 字段名均为 camelCase，所有枚举值均为 `UPPER_SNAKE`。
 - 运行时健康只暴露稳定的生命周期/资源/能力状态、重试/冷却/轮询时间、有序缺口、有界执行器计数、数据库/WAL/检查点/备份事实及投递计数。股票健康暴露精确的数据年龄/完整性/新鲜度/缺口事实。`LIVE` 必须具有新鲜、完整且带最新时间戳的数据；断连、陈旧、有缺口、阻断或其他矛盾数据都不能标为实时或可执行。任何响应 Schema 都不包含密钥、授权详情、供应商原始响应体或存储原始错误字段。
 
@@ -137,7 +137,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`882d762abc4872a9970c34e49c06eec4427a286b1a1249a106686d0905ecc4a2`
+OpenAPI 快照 SHA-256：`2b232e1a9237aa88a2de7c3d1ec3fcc692b198cfddeabc41fa88b7d67cdb3a53`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 42 个已批准 REST 路径：27 个实时路径（包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars` 和 `GET /plan-activation-states/{symbol}`）加精确 15 个回测路径，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -246,9 +246,11 @@ Schema 版本 1 封闭每种事件的非空载荷字段集合及 identity 规则
 
 `monitor_event` 是唯一追加式回放来源，`monitor_sequence` 是唯一全局高水位域。状态变更和对应事件追加共享一个事务。事件 UUID 是幂等 identity：相同 ID 及语义返回原序号，语义不同则封闭失败。删除保留期内的行绝不重置序号。默认回放窗口为 7 天，每页最多 1,000 个事件；服务端在发送任何分页前校验完整 `(after, high_water]` 范围，因此页外缺口不能先泄漏部分旧页。
 
-`heartbeat` 和 `snapshot.required` 是传输控制帧，不是已提交业务事件，也不占用持久序号。心跳间隔为 20 秒。缺失、重复、非规范、负数或大于 `2^63-1` 的 `after` 游标以关闭码 `1008` 拒绝。未来游标、保留范围内的序号缺口或回放窗口过期时，服务端发送携带持久高水位的 `snapshot.required` 并正常关闭；不可信的 `monitor_sequence` 无法携带可信高水位，必须以 `1011` 安全失败。内存发布只在精确校验已提交事件后用于唤醒；重连和进程重启从 SQLite 回放。客户端使用带上限的指数退避和抖动重连。断连或陈旧数据必须明确标注，绝不能展示为实时数据。
+`heartbeat` 和 `snapshot.required` 是传输控制帧，不是已提交业务事件，也不占用持久序号。心跳间隔为 20 秒，并携带与当前 lifecycle identity 配对的精确可空 `runtimeGeneration`。缺失、重复、非规范、负数或大于 JavaScript 安全整数上限（`2^53-1`）的 `after` 游标以关闭码 `1008` 拒绝。未来游标、保留范围内的序号缺口、回放窗口过期或无法安全表示的持久高水位都不会发送不安全数字；不可信的 `monitor_sequence` 必须以 `1011` 安全失败。内存发布只在精确校验已提交事件后用于唤醒；重连和进程重启从 SQLite 回放。客户端使用带上限的指数退避和抖动重连。断连或陈旧数据必须明确标注，绝不能展示为实时数据。
 
-T044 浏览器生命周期由 `AppShell` 挂载通过单个 `useMonitorStream` 实例拥有；Socket、定时器和可变行情状态都不是全局对象。它先使用 20 秒 Abort deadline 获取 `GET /api/v1/dashboard`，原子应用该权威快照，然后才使用 `after=<snapshot.sequence>` 打开同源 `ws:`/`wss:` 端点。有序已提交事件只是失效提示，会触发重新获取权威快照；缺口、格式错误帧、游标不匹配及 `snapshot.required` 也会执行相同恢复，且不会把陈旧数据展示为实时。Socket 建连 deadline 为 20 秒。由于服务端每 20 秒发送一次心跳，已打开连接只有在漏掉两次心跳间隔（40 秒）后才视为静默，从而避免相同 deadline 竞态。只有心跳游标匹配且权威总览状态为 `CONNECTED` 时才进入 `LIVE`；否则横幅保持 `STALE`。
+T044 浏览器生命周期由 `AppShell` 挂载通过单个 `useMonitorStream` 实例拥有；Socket、定时器和可变行情状态都不是全局对象。它先使用 20 秒 Abort deadline 获取 `GET /api/v1/dashboard`，原子应用该权威快照，然后才使用 `after=<snapshot.sequence>` 打开同源 `ws:`/`wss:` 端点。有序已提交事件只是失效提示，会触发重新获取权威快照；缺口、格式错误帧、游标或 runtime generation 不匹配及 `snapshot.required` 也会执行相同恢复，且不会把陈旧数据展示为实时。Socket 建连 deadline 为 20 秒。由于服务端每 20 秒发送一次心跳，已打开连接只有在漏掉两次心跳间隔（40 秒）后才视为静默，从而避免相同 deadline 竞态。只有心跳游标和 `runtimeGeneration` 都与已应用快照精确匹配，且权威总览状态为 `CONNECTED` 时才进入 `LIVE`；否则横幅保持 `STALE`。实际重连和每次 false-to-true 传输转换都必须先获取新的 REST 快照，即使服务端时钟回退也不能直接恢复存活状态。
+
+历史说明：WEBF13 曾临时通过有界 Health fallback 解释精确的 Dashboard `503 SERVICE_UNAVAILABLE`。该临时方案及其证据已由 `SPEC-live-production-chain` 与 ADR 0004 取代：正常投影缺失现在是类型化 Dashboard `200` 响应，Vue 不再执行 Health fallback，并且只有经过校验的快照才能打开 WebSocket。
 
 重连的指数基数依次为 1、2、4、8、16 秒，之后最多为 30 秒；先限制该基数再应用 `0.8..1.2` 抖动，最终延迟绝不超过 30 秒。明确恢复会中止当前快照、关闭活动 Socket、清除全部存活/重试 deadline，并从 REST 重新开始。卸载执行相同清理，但不会重连。外壳向强类型连接横幅插槽暴露只读语义状态，并提供包含文字标记和标签的默认礼貌级状态，因此颜色绝不是唯一提示。该生命周期不包含领域规则、API 字段复制、业务视图、持久浏览器状态、T052 资源发现或 T024 判断行为。
 
@@ -258,7 +260,7 @@ T045 `PlanWorkbench` 只通过强类型 props/emits 组合 setup 风格 Vue 组�
 
 `PlanDraftingView` 与 `usePlanDrafting` 负责同源 API 流程。挂载时读取 `GET /api/v1/ai-runtime`；提交时生成一个幂等 Key，调用 `POST /api/v1/plan-extractions`，把 `QUEUED` 回执显示为当前任务，然后轮询 `GET /api/v1/plan-extractions/{operationId}`，直到进入封闭的终态。局部同时只运行一组提交/轮询。卸载会中止请求和计时器。“停止等待”只停止浏览器轮询，并明确说明服务端已经接收的任务可能继续；它不会谎称服务端任务已取消。错误使用固定中文文本，不包含供应商、密钥或传输原始详情。
 
-`SourceTextEditor` 拥有一个局部纯文本模型。上限来自选中的运行配置，按与 Python 一致的 Unicode code point 计数，在第一个被拒绝的 code point 处停止扫描，并原子拒绝超限编辑而不截断。`ExtractionEvidence` 只通过已转义的 Vue 文本插值渲染经过校验的证据、假设、警告、遗漏、校验问题、用量和有界状态。成功的规范草稿保持待审核，直到用户明确选择“进入结构化审核”；该交接没有持久化或启用副作用，并在原文快照过期时被丢弃。任何提取响应本身都不能保存或启用计划。T046 继续负责结构化编辑、后端校验、持久化、差异和启用。
+`SourceTextEditor` 拥有一个局部纯文本模型。上限来自选中的运行配置，按与 Python 一致的 Unicode code point 计数，在第一个被拒绝的 code point 处停止扫描，并原子拒绝超限编辑而不截断。`ExtractionEvidence` 只通过已转义的 Vue 文本插值渲染经过校验的证据、假设、警告、遗漏、校验问题、用量和有界状态。成功的规范草稿保持待审核，直到用户明确选择 `进入结构化审核`；该交接没有持久化或启用副作用，并在原文快照过期时被丢弃。任何提取响应本身都不能保存或启用计划。T046 继续负责结构化编辑、后端校验、持久化、差异和启用。
 
 ### T046 结构化计划编辑与激活边界
 
@@ -312,7 +314,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 - 当没有显式运行时/应用服务时，`create_production_app(...)` 使用惰性的 `create_monitor_composition_factory(config_path, database_path)`。工厂只在 FastAPI lifespan 内调用；它打开并迁移生产计划生命周期使用的同一个 monitor SQLite，构造真实的 `RuntimeLifecycleService`，暴露以后端为权威来源的 `RuntimeHealthSnapshot`，并管理基于数据库的 `CommittedMonitorEventStream`。明确注入的运行时和应用服务继续保持权威，并阻止默认组合构造。
 - 默认组合会在任何密钥或供应商请求前检查获批的实时前置条件。由于实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
-- 真实组合不会捏造缺失的权威投影。尚无持久投影的总览、股票和实时板块指数读取继续以稳定的 `SERVICE_UNAVAILABLE` 封闭失败；WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。持仓可用性由 WEBF09 单独定义，提醒中心可用性由 WEBF10 单独定义。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
+- 真实组合不会捏造缺失的权威投影。ADR 0004 以严格类型化 HTTP `200` unavailable 联合取代总览与股票生命周期缺失原先的通用 `SERVICE_UNAVAILABLE` 行为；真正故障及仍未组合的实时指数读取继续封闭失败。WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。持仓可用性由 WEBF09 单独定义，提醒中心可用性由 WEBF10 单独定义。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
 - 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储或组合错误不得被静默转换成健康响应；只有已知未验证的实时前置条件会产生有界的 `DEGRADED` 状态。
 
 ### WEBF06 监控总览路由边界
@@ -340,10 +342,10 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 ### WEBF11 可按游标恢复的监控事件流边界
 
 - WEBF11 复用既有 T039 已提交监控事件账本、T043 传输契约和 T044 `useMonitorStream` 生命周期；不创建并行事件日志、游标、快照组装器或浏览器状态权威副本。后端仍是唯一业务权威来源，现有 SQLite `monitor_event`/`monitor_sequence` 仍是回放来源和全局高水位域。
-- 初次启动和明确恢复会先获取后端权威总览快照并原子应用，然后打开 `/ws/v1/monitor?after=<snapshot.sequence>`。普通断线重连直接使用已应用 store 的 `sequence` 恢复，SQLite 回放仍是来源。事件序号缺口、心跳游标不匹配、格式错误帧或 `snapshot.required` 都会中止当前流并重复 REST 快照流程；服务端发现未来/过期/范围缺口时通过 `snapshot.required` 报告。非法 `after` 以关闭码 `1008` 拒绝，不可信的持久高水位以 `1011` 安全失败；两者都不能被当作浏览器可恢复的数据。每个恢复 Socket 都使用已应用的权威 `sequence`，绝不使用浏览器自行猜测的游标。服务端在发送分页前校验完整回放范围，因此页内缺口不能掩盖后续缺口。
-- 存活判定必须严格：只有游标与已应用权威快照高水位序号精确匹配、且权威总览状态为 `CONNECTED` 的心跳，才能重置存活 deadline 并进入 `LIVE`。重复、旧、乱序、格式错误或不匹配帧不能重置存活，也不能掩盖两次心跳间隔的超时；断连或陈旧数据继续明确标注。
+- 初次启动、实际重连、false-to-true 传输转换和明确恢复都会先获取后端权威总览快照并原子应用，然后打开 `/ws/v1/monitor?after=<snapshot.sequence>`。SQLite 回放仍是来源。事件序号缺口、心跳游标/runtime generation 不匹配、格式错误帧或 `snapshot.required` 都会中止当前流并重复 REST 快照流程；服务端发现未来/过期/范围缺口时通过 `snapshot.required` 报告。非法 `after` 以关闭码 `1008` 拒绝，不可信或 JavaScript 不安全的持久高水位以 `1011` 安全失败；两者都不能被当作浏览器可恢复的数据。每个恢复 Socket 都使用已应用的权威安全 `sequence`，绝不使用浏览器自行猜测的游标。服务端在发送分页前校验完整回放范围，因此页内缺口不能掩盖后续缺口。
+- 存活判定必须严格：只有游标和 `runtimeGeneration` 都与已应用权威快照精确匹配、且权威总览状态为 `CONNECTED` 的心跳，才能重置存活 deadline 并进入 `LIVE`。重复、旧、乱序、格式错误、generation 不匹配或游标不匹配帧不能重置存活，也不能掩盖两次心跳间隔的超时；断连或陈旧数据继续明确标注。
 - 追加的 `0008_market_index_monitor_event` 迁移沿既有监控事件迁移链执行。它预检 `event_type`，复制现有七列，并在替换原表前校验行数，再使用允许 `market.index.updated` 的 CHECK 约束。若存在任何既有板块指数事件行，必须在 DDL 前拒绝降级；所有既有行、全局序号和事件 identity 保持不变，冻结的 `0006_monitor_event` 绝不被重写。
-- WEBF11 不改变 REST 路径或字段：OpenAPI 快照继续精确为 42 路径，生成 TypeScript 保持不变。默认生产组合缺少权威总览投影时仍返回 `SERVICE_UNAVAILABLE`；WEBF11 绝不伪造快照。它不改变 Schema v1 数据、历史回测结果、既有 hash、判断规则、token 处理或供应商请求，也不实现或声称回测回放期间的策略事件 cursor resume；该边界仍单独延后。
+- WEBF11 在当时没有改变 REST 路径或字段：其 OpenAPI 快照保持精确 42 路径且生成 TypeScript 不变。ADR 0004 后续在不新增路径的情况下增加类型化监控响应联合；缺少权威总览投影时现在返回该类型化 HTTP `200` 响应。WEBF11 绝不伪造快照。Schema v1 数据、历史回测结果、既有 hash、判断规则、token 处理和供应商请求边界保持不变；回测回放期间的策略事件 cursor resume 仍单独延后。
 
 ### WEBF12 共用指数与当前计划展示边界
 
@@ -357,6 +359,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 曾经的占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现在各自解析到真实的惰性 SFC Route View。它们连同既有 `/plans` 路由以及四条有序回测路由（`/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId`）使生产 Router 精确包含 10 条路由。静态回测子路由继续位于动态 `:runId` 路由之前。
 - 单次新建回测的浏览器旅程必须精确为：选择后端列出的不可变计划版本和已校验数据集，提交一个明确的幂等命令，导航至 `/backtests/:runId?jobId=<jobId>`，轮询匹配的持久化任务，仅在 `COMPLETED` 后通过规范替换移除 `jobId`，再读取 materialized 结果。失败或取消的任务保留其任务 identity 以供诊断，绝不伪造结果。
 - 后端继续是计划资格与快照、数据集覆盖、运行 identity、任务状态、完成和 materialized 结果可用性的唯一权威。Vue 只负责生成契约校验、有界请求/重试生命周期、URL 导航、展示和无障碍；它不推断资格、进度完成或结果内容。
+- 历史 WEBF13 可用性横幅证据使用过临时 Health fallback。`SPEC-live-production-chain` 与 ADR 0004 已用以后端为权威来源的类型化投影可用性取代它；WEBF13 不声称当前可用性验收。
 - WEBF13 不改变 REST 路径、OpenAPI 字段、生成 TypeScript 类型、Schema、哈希、供应商边界、token 处理或历史结果。其验证报告只记录实际运行的证据，绝不改写历史验收制品。
 
 ### 已批准的回测扩展边界
@@ -368,7 +371,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - WEBF10 在不增加路由的前提下，把最后一条历史 `/alerts` 占位路由接入其业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
 - 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
-- `create_production_app(...)` 使用 WEBF05 惰性的真实监控组合：实时前置条件仍未验证时，后端健康诚实保持为 `DEGRADED`/只读，没有权威投影的读取继续为 `SERVICE_UNAVAILABLE`。其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
+- `create_production_app(...)` 使用 WEBF05 惰性的真实监控组合：实时前置条件仍未验证时，后端健康诚实保持为 `DEGRADED`/只读，没有权威投影的总览/股票读取返回 ADR 0004 类型化 unavailable 响应。真正的组合或存储故障继续为 `SERVICE_UNAVAILABLE`。其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
 
 ## 信息架构
 

@@ -6,9 +6,9 @@
 
 ## Scope and Evidence Boundary
 
-WEBF13 documents existing real production routing, closes the missing browser-level new-backtest journey evidence, and records the follow-up plan-workspace layout stabilization. Evidence was collected on 2026-09-04 (Asia/Shanghai) from local `main` at `a11f9b181b39b4ff8a25efc94a8772ab8c8ed73b` plus the preserved working-tree UI changes. The environment was Windows with CPython 3.14.7, Node 24.13.1, npm 11.8.0, and the pinned Playwright 1.62.1 Chromium project.
+WEBF13 documents existing real production routing, closes the missing browser-level new-backtest journey evidence, and records the follow-up plan-workspace layout. Initial evidence was collected on 2026-09-04 (Asia/Shanghai). The environment was Windows with CPython 3.14.7, Node 24.13.1, npm 11.8.0, and the pinned Playwright 1.62.1 Chromium project.
 
-This final slice changes the production Vue plan-workspace composition and responsive presentation, its unit/browser tests, and this paired evidence record. It changes no backend business decision, REST path, OpenAPI field, generated TypeScript type, database schema, Schema v1 data, existing hash, provider boundary, token handling, or historical result.
+The temporary WEBF13 dashboard-503 Health-fallback slice is historical only and is superseded by `SPEC-live-production-chain`, ADR 0004, and `live-production-chain-acceptance.md`. This record makes no current projection-availability acceptance claim.
 
 ## Route Evidence
 
@@ -25,6 +25,10 @@ The plan page presents one compact creation area before the persisted version wo
 - Initial RED: the focused Vue test failed because no creation-mode controls or isolated panels existed. GREEN adds an accessible tablist, places AI extraction first and selects it by default, preserves unfinished input through `v-show`, and supports Left/Right/Home/End keyboard selection.
 - Browser RED measured the import panel at `698 px` high and the persisted workspace at only `894 px` wide in the desktop fixture. GREEN keeps the import panel below `400 px` and both major regions above `90%` of the route width without changing request payloads or backend calls.
 - Responsive RED found `81 px` horizontal overflow at a `320 px` viewport. The final browser gate reports no route-level horizontal overflow at `320`, `768`, `1024`, or `1440 px`; narrow headers/actions stack, technical enum values can wrap, and the creation controls remain keyboard-accessible. The plan journey's WCAG 2.1 A/AA serious/critical axe result is empty.
+
+## Historical Availability Note
+
+The temporary WEBF13 dashboard-503 Health fallback is superseded by the live-production-chain typed availability contract. Its old browser observations are not current acceptance evidence; new results belong exclusively in `live-production-chain-acceptance.md`.
 
 ## New-Backtest Journey Evidence
 
@@ -46,7 +50,7 @@ The frozen contract remains exactly 42 REST paths: 27 live paths and 15 backtest
 
 The browser uses generated-contract validation and the backend remains authoritative for plan eligibility/snapshots, dataset coverage, run identity, job state, and materialized results. Verification must use deterministic local fixtures: no token read, provider request, broker call, notification delivery, or external network access is permitted.
 
-- All browser APIs were intercepted by deterministic same-origin fakes. The backtest audit recorded no unexpected request, external request, failed request, API failure, console warning/error, or overlapping request. The new system-route audit recorded the same clean boundary.
+- All browser APIs were intercepted by deterministic same-origin fakes. The backtest and system-route audits recorded no unexpected request, external request, failed request, API failure, console warning/error, or overlapping request. The temporary dashboard-503 availability audit is superseded by the live-production-chain contract and is not current acceptance evidence.
 - No `.env` or credential value was read, no token was printed or returned, and no Tushare, DeepSeek, broker, notification, or other supplier request was made.
 - Vue submits only the generated `BacktestRunCommand` with `planVersionId`; it does not send a plan snapshot or make plan-eligibility, dataset, job-completion, or result-availability decisions. Existing backend integration evidence remains the authority for those decisions.
 
@@ -64,7 +68,7 @@ npm --prefix web run test:e2e
 git diff --check
 ```
 
-Results: Ruff passed; the focused backend collection passed `284` with `1` documented platform skip; the production-fake journey passed `1`; the OpenAPI snapshot passed `14`; generation consistency passed; Vitest passed `40 files / 581 tests`; `vue-tsc` passed; Vite production build passed; Chromium passed `20 tests`; and `git diff --check` passed. Vite retained its existing advisory that generated chunks exceed 500 kB after minification; this layout slice adds no dependency or API surface. Historical Schema v1 data, backtest results, and hashes remain unchanged.
+Results: The historical WEBF13 results remain limited to the original route and backtest scope. The superseded availability follow-up adds no current result count; live-production-chain evidence is recorded only in `live-production-chain-acceptance.md`. Historical Schema v1 data, backtest results, and hashes remain unchanged.
 
 ## Residual Risks
 

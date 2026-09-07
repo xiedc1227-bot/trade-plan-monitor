@@ -6,9 +6,9 @@
 
 ## 范围与证据边界
 
-WEBF13 记录既有真实生产路由、补齐缺失的浏览器级新建回测旅程证据，并记录后续计划工作台布局稳定化。证据于 2026-09-04（Asia/Shanghai）从本地 `main` 的 `a11f9b181b39b4ff8a25efc94a8772ab8c8ed73b` 加保留的工作树 UI 修改收集。环境为 Windows、CPython 3.14.7、Node 24.13.1、npm 11.8.0，以及锁定的 Playwright 1.62.1 Chromium 项目。
+WEBF13 记录既有真实生产路由、补齐缺失的浏览器级新建回测旅程证据，并记录后续计划工作台布局。首轮证据于 2026-09-04（Asia/Shanghai）收集。环境为 Windows、CPython 3.14.7、Node 24.13.1、npm 11.8.0，以及锁定的 Playwright 1.62.1 Chromium 项目。
 
-最终切片改变生产 Vue 计划工作台组合与响应式呈现、对应单元/浏览器测试以及本配对证据记录。它不改变后端业务判断、REST 路径、OpenAPI 字段、生成 TypeScript 类型、数据库 Schema、Schema v1 数据、既有哈希、供应商边界、token 处理或历史结果。
+临时的 WEBF13 Dashboard-503 Health-fallback 切片仅具历史意义，已由 `SPEC-live-production-chain`、ADR 0004 和 `live-production-chain-acceptance.md` 取代。本记录不声称当前投影可用性验收。
 
 ## 路由证据
 
@@ -25,6 +25,10 @@ WEBF13 记录既有真实生产路由、补齐缺失的浏览器级新建回测�
 - 初始 RED：聚焦 Vue 测试因不存在创建方式控件和隔离面板而失败。GREEN 增加可访问 tablist，将 AI 提取置于首位并默认选中，通过 `v-show` 保留未完成输入，并支持 Left/Right/Home/End 键盘选择。
 - 浏览器 RED 在桌面 fixture 中测得导入面板高 `698 px`，持久版本工作区宽仅 `894 px`。GREEN 将导入面板保持在 `400 px` 以下，并让两个主要区域均超过路由宽度的 `90%`，且不改变请求 payload 或后端调用。
 - 响应式 RED 在 `320 px` 视口发现 `81 px` 横向溢出。最终浏览器闸门在 `320`、`768`、`1024`、`1440 px` 均无路由级横向溢出；窄屏标题/操作纵向排列，技术枚举值允许断行，创建控件保持键盘可访问。计划旅程的 WCAG 2.1 A/AA 严重/致命 axe 结果为空。
+
+## 历史可用性说明
+
+临时的 WEBF13 Dashboard-503 Health fallback 已被 live-production-chain 的类型化可用性契约取代。其旧浏览器观察不再构成当前验收证据；新结果只记录在 `live-production-chain-acceptance.md`。
 
 ## 新建回测旅程证据
 
@@ -46,7 +50,7 @@ WEBF13 记录既有真实生产路由、补齐缺失的浏览器级新建回测�
 
 浏览器使用生成契约校验，后端继续是计划资格/快照、数据集覆盖、运行 identity、任务状态和 materialized 结果的权威。验证必须使用确定性本地 fixture：不允许读取 token、请求供应商、调用券商、投递通知或访问外部网络。
 
-- 所有浏览器 API 均由确定性同源 fake 拦截。回测审计没有记录未预期请求、外部请求、失败请求、API 失败、控制台 warning/error 或请求重叠；新增系统路由审计得到相同的干净边界。
+- 所有浏览器 API 均由确定性同源 fake 拦截。回测与系统路由审计没有记录未预期请求、外部请求、失败请求、API 失败、控制台 warning/error 或请求重叠。临时的 Dashboard-503 可用性审计已由 live-production-chain 契约取代，不再构成当前验收证据。
 - 未读取任何 `.env` 或凭据值，未打印或返回 token，也未请求 Tushare、DeepSeek、券商、通知或其他供应商。
 - Vue 只提交带 `planVersionId` 的生成 `BacktestRunCommand`；它不发送计划快照，也不判断计划资格、数据集、任务完成或结果可用性。既有后端集成证据继续作为这些判断的权威。
 
@@ -64,7 +68,7 @@ npm --prefix web run test:e2e
 git diff --check
 ```
 
-结果：Ruff 通过；聚焦后端集合通过 `284` 项并有 `1` 项已记录平台跳过；production-fake 旅程通过 `1` 项；OpenAPI 快照通过 `14` 项；生成一致性通过；Vitest 通过 `40 files / 581 tests`；`vue-tsc` 通过；Vite 生产构建通过；Chromium 通过 `20 tests`；`git diff --check` 通过。Vite 保留既有提示：生成 chunk 压缩后超过 500 kB；本布局切片未增加依赖或 API 表面。历史 Schema v1 数据、回测结果和哈希保持不变。
+结果：历史 WEBF13 结果仍仅覆盖原始路由与回测范围。被取代的可用性后续工作不增加当前结果计数；live-production-chain 证据只记录在 `live-production-chain-acceptance.md`。历史 Schema v1 数据、回测结果和哈希保持不变。
 
 ## 遗留风险
 

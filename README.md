@@ -14,9 +14,11 @@ uses a lazy real monitoring composition: it opens and migrates the shared monito
 backend `RuntimeHealthSnapshot`, and owns the committed event stream. Because live minute
 `SourceTimeLabel` semantics and the live board-index provider remain unverified, startup honestly
 reports read-only `DEGRADED` with `nextPollAt=null` before any token or provider request and creates
-no scheduler run task. Dashboard, symbol, and live-index reads without an
-authoritative persisted projection remain `SERVICE_UNAVAILABLE`; no generic lifecycle placeholder
-or fabricated empty decision state is used. Its `/plans` workflow is usable: startup loads the
+no scheduler run task. Dashboard and symbol reads without an authoritative persisted projection
+return the strict typed HTTP `200` unavailable union; the still-uncomposed live-index read and
+genuine service, storage, migration, corruption, and composition faults remain
+`SERVICE_UNAVAILABLE`.
+No generic lifecycle placeholder or fabricated empty decision state is used. Its `/plans` workflow is usable: startup loads the
 project AI configuration once and injects one backend-authoritative persistent plan service over
 `data/monitor.sqlite3`. Plan save, query, JSON/YAML import, activation, and deactivation therefore
 survive Web process restarts; extraction runs only after the user submits plan text. A successful AI
@@ -39,10 +41,10 @@ Only a strictly matching heartbeat can reset liveness and permit `LIVE`; duplica
 cannot conceal a timeout. The additive `0008_market_index_monitor_event` migration only permits the
 already approved `market.index.updated` event in the existing ledger CHECK constraint; it preserves
 all existing rows, sequences, and identities and never rewrites frozen `0006_monitor_event`.
-The default production composition still returns `SERVICE_UNAVAILABLE` when no authoritative
-dashboard projection exists; WEBF11 never fabricates recovery data. This does not add an OpenAPI
-path or generated TypeScript field, change Schema v1 data, historical backtest results, established
-hashes, or claim strategy-event-cursor resume for backtesting.
+The default production composition now returns the ADR 0004 typed unavailable response when no
+authoritative dashboard projection exists; WEBF11 never fabricates recovery data. This adds no
+OpenAPI path, changes no Schema v1 data, historical backtest result, or established hash, and does
+not claim strategy-event-cursor resume for backtesting.
 
 WEBF12 completes the presentation boundary for shared index data and current-plan conditions.
 The dashboard shows one backend-authoritative shared-index strip and keeps each watchlist row's
@@ -55,12 +57,13 @@ rejects malformed identity/evidence before rendering. This adds no REST/OpenAPI/
 change and changes no Schema v1 data, historical backtest result, established hash, token, or provider
 request boundary.
 
-WEBF13 closes the production-route and new-backtest acceptance gap. The five former placeholders
+WEBF13 historically closed the production-route and new-backtest acceptance gap. The five former placeholders
 `/`, `/stocks/:symbol`, `/plans/:id`, `/alerts`, and `/system` now have explicit lazy-SFC and
 real-browser regression evidence within the exact 10-route map. A deterministic Chromium journey
 also submits the generated run command, follows the authoritative `runId`/`jobId` through polling,
-removes `jobId` only after `COMPLETED`, and then renders the materialized result. The OpenAPI contract
-remains 42 paths (27 live plus 15 backtest), generated TypeScript is unchanged, and no Schema v1,
+removes `jobId` only after `COMPLETED`, and then renders the materialized result. Its 42-path
+contract (27 live plus 15 backtest) remains historical evidence; ADR 0004 later changed the
+existing monitoring response unions and generated TypeScript without adding a path. No Schema v1,
 historical result, established hash, token, or provider boundary changes. See the
 [WEBF13 acceptance report](docs/verification/webf13-acceptance.md).
 
@@ -506,7 +509,7 @@ approved receiver and secret-handling procedure exist.
 |---|---|
 | `WEB_ASSETS_UNAVAILABLE` | The installed distribution lacks a complete Vite build. Run `npm install --include=optional --no-package-lock` and `npm run build` before building/reinstalling the Python package; do not add a cwd fallback. |
 | `Cannot find native binding` from Rolldown | npm omitted Vite's platform-specific optional package. Run `npm install --include=optional --no-package-lock`, then retry `npm run build`. |
-| UI shows `DEGRADED` or a general monitoring API returns `SERVICE_UNAVAILABLE` | Expected while live minute `SourceTimeLabel` semantics or the live board-index provider is unverified, or when an authoritative projection is unavailable. The backend keeps health read-only and does not schedule actionable monitoring; the separately composed plan and persistent position workflows remain available when their stored plan/calendar prerequisites exist. |
+| UI shows `DEGRADED` or typed `UNAVAILABLE` | Expected while live minute `SourceTimeLabel` semantics or the live board-index provider is unverified, or when an authoritative projection has not completed. The backend keeps health read-only and does not schedule actionable monitoring; actual service/storage/composition faults still return `SERVICE_UNAVAILABLE`. The separately composed plan and persistent position workflows remain available when their stored plan/calendar prerequisites exist. |
 | `runtime service factory is not configured` | `validate`, `monitor`, `replay`, or `backup` was invoked before application service composition is wired. |
 | Host validation rejects the listener | Use the exact literal `127.0.0.1`; `localhost`, `::1`, `0.0.0.0`, hostnames, and LAN addresses are intentionally rejected. |
 | Port 8765 is busy | Stop the other local process or choose another unused port from 1–65535, keeping host `127.0.0.1`. |

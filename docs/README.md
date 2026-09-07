@@ -21,6 +21,7 @@ This directory contains the project's design, specification, decision, operating
 - [Notification outbox](specifications/monitoring/SPEC-notification-outbox.md) ([Chinese](specifications/monitoring/SPEC-notification-outbox.zh-CN.md))
 - [Monitor runtime](specifications/monitoring/SPEC-monitor-runtime.md) ([Chinese](specifications/monitoring/SPEC-monitor-runtime.zh-CN.md))
 - [Local Web application](specifications/monitoring/SPEC-local-web.md) ([Chinese](specifications/monitoring/SPEC-local-web.zh-CN.md))
+- [Live production chain](specifications/monitoring/SPEC-live-production-chain.md) ([Chinese](specifications/monitoring/SPEC-live-production-chain.zh-CN.md))
 - [Monitoring index views](specifications/monitoring/SPEC-monitor-index-view.md) ([Chinese](specifications/monitoring/SPEC-monitor-index-view.zh-CN.md))
 
 ## Backtesting Specifications
@@ -40,6 +41,7 @@ This directory contains the project's design, specification, decision, operating
 - [ADR 0001: Isolate durable backtest jobs from deterministic results](decisions/0001-isolate-backtest-jobs-from-results.md) ([Chinese](decisions/0001-isolate-backtest-jobs-from-results.zh-CN.md))
 - [ADR 0002: Use Asia/Shanghai for all backtest time](decisions/0002-use-asia-shanghai-for-backtest-time.md) ([Chinese](decisions/0002-use-asia-shanghai-for-backtest-time.zh-CN.md))
 - [ADR 0003: Share board-index data and let plans own usage](decisions/0003-share-board-index-data-and-let-plans-own-usage.md) ([Chinese](decisions/0003-share-board-index-data-and-let-plans-own-usage.zh-CN.md))
+- [ADR 0004: Authoritative projection availability and atomic live state](decisions/0004-use-authoritative-projection-availability-and-atomic-live-state.md) ([Chinese](decisions/0004-use-authoritative-projection-availability-and-atomic-live-state.zh-CN.md))
 
 ## Approved Proposals
 
@@ -51,6 +53,7 @@ This directory contains the project's design, specification, decision, operating
 
 ## Verification Evidence
 
+- [Live production chain acceptance](verification/live-production-chain-acceptance.md) ([Chinese](verification/live-production-chain-acceptance.zh-CN.md)) — in-progress evidence for the `LPC` repair; live timestamp certification remains market-window gated.
 - [WEBF13 route and new-backtest acceptance](verification/webf13-acceptance.md) ([Chinese](verification/webf13-acceptance.zh-CN.md)) — passed offline route, journey, contract, and security evidence from 2026-09-04; it does not replace historical acceptance reports.
 - [Backtest production-fake acceptance](verification/backtest-acceptance.md) ([Chinese](verification/backtest-acceptance.zh-CN.md))
 - [Tushare live contract acceptance](verification/tushare-live.md) ([Chinese](verification/tushare-live.zh-CN.md))

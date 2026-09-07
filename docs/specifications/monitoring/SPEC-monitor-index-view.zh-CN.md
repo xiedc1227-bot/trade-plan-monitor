@@ -61,7 +61,7 @@ Schema v1 计划的 `referenceMarket=null`。没有指数叶子的 Schema v2 计
 
 ### 失效通知
 
-WebSocket 联合类型增加 `market.index.updated`，准确字段为 `entityId`、`revision` 和 `status`。WEBF11 通过 `0008_market_index_monitor_event` 使该已批准的失效通知经由既有监控事件账本和全局游标持久化；它不是并行序号。浏览器重新获取总览/详情/历史数据，绝不根据事件创建快照或条件结果。普通断线重连从已应用状态的游标恢复；事件缺口、心跳游标不匹配、格式错误帧或 `snapshot.required` 会在恢复前重新获取权威总览快照。总览权威投影缺失时仍为 `SERVICE_UNAVAILABLE`。
+WebSocket 联合类型增加 `market.index.updated`，准确字段为 `entityId`、`revision` 和 `status`。WEBF11 通过 `0008_market_index_monitor_event` 使该已批准的失效通知经由既有监控事件账本和全局游标持久化；它不是并行序号。浏览器重新获取总览/详情/历史数据，绝不根据事件创建快照或条件结果。普通断线重连从已应用状态的游标恢复；事件缺口、心跳游标不匹配、格式错误帧或 `snapshot.required` 会在恢复前重新获取权威总览快照。ADR 0004 取代历史上的最后一句：正常缺少总览投影时使用类型化 HTTP `200` unavailable 联合，真正的服务、存储或组合故障仍为 `SERVICE_UNAVAILABLE`。
 
 ## Vue 组件图与数据流
 

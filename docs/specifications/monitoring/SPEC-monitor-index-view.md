@@ -61,7 +61,7 @@ Symbol detail additionally exposes `indexConditionEvidence`, ordered by exact `p
 
 ### Invalidation
 
-The WebSocket union adds `market.index.updated` with exactly `entityId`, `revision`, and `status`. WEBF11 makes this approved invalidation durable through the existing monitor-event ledger and global cursor using `0008_market_index_monitor_event`; it is not a parallel sequence. The browser refetches dashboard/detail/history data and never constructs a snapshot or condition outcome from the event. Ordinary reconnects resume from the applied store cursor; an event gap, heartbeat cursor mismatch, malformed frame, or `snapshot.required` causes an authoritative dashboard snapshot before resuming. Missing dashboard projections remain `SERVICE_UNAVAILABLE`.
+The WebSocket union adds `market.index.updated` with exactly `entityId`, `revision`, and `status`. WEBF11 makes this approved invalidation durable through the existing monitor-event ledger and global cursor using `0008_market_index_monitor_event`; it is not a parallel sequence. The browser refetches dashboard/detail/history data and never constructs a snapshot or condition outcome from the event. Ordinary reconnects resume from the applied store cursor; an event gap, heartbeat cursor mismatch, malformed frame, or `snapshot.required` causes an authoritative dashboard snapshot before resuming. ADR 0004 supersedes the historical final sentence: normal missing dashboard projections use the typed HTTP `200` unavailable union, while genuine service/storage/composition faults remain `SERVICE_UNAVAILABLE`.
 
 ## Vue Component Map and Data Flow
 

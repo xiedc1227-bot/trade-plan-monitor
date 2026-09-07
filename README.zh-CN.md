@@ -6,18 +6,18 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 ## 产品状态
 
-`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。WEBF05 现在使用惰性的真实监控组合：打开并迁移共用 monitor SQLite，暴露后端 `RuntimeHealthSnapshot`，并管理已提交事件流。由于实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，启动会在任何密钥或供应商请求前诚实报告只读 `DEGRADED` 和 `nextPollAt=null`，且不创建调度运行任务。没有权威持久投影的总览、股票和实时板块指数读取继续返回 `SERVICE_UNAVAILABLE`；不再使用通用生命周期占位组合，也不伪造空判断状态。`/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
+`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。WEBF05 现在使用惰性的真实监控组合：打开并迁移共用 monitor SQLite，暴露后端 `RuntimeHealthSnapshot`，并管理已提交事件流。由于实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，启动会在任何密钥或供应商请求前诚实报告只读 `DEGRADED` 和 `nextPollAt=null`，且不创建调度运行任务。没有权威持久投影的总览和股票读取返回严格类型化的 HTTP `200` unavailable 联合；仍未组合的实时指数读取，以及真正的服务、存储、迁移、损坏及组合故障仍返回 `SERVICE_UNAVAILABLE`。不再使用通用生命周期占位组合，也不伪造空判断状态。`/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
 
 WEBF06 将 `/` 接到既有以后端为权威来源的总览快照：它展示股票判断和共用板块指数事实，并与计划专属指数进度分开；在快照存在前保持诚实的加载状态。它不增加浏览器交易规则或供应商请求。
 
 WEBF09 把个股详情持仓面板接到既有持仓 REST 契约，以及共用 monitor 数据库上的持久服务。只有后端执行已启用计划最大持仓、已存日历 T+1、剩余数量、整手和 revision 规则；浏览器只做输入形状检查和显式确认，绝不预测持仓命令是否符合资格。
 
 WEBF10 把 `/alerts` 接到既有提醒 REST 契约和共用持久出站箱。筛选、规范证据和确认 revision 均由后端权威判断；确认操作幂等且受审计，但绝不记录成交或变更持仓。
-WEBF11 加固既有 T039/T043/T044 监控事件流：普通断线重连直接使用已应用状态的 SQLite 全局游标恢复；只有事件缺口或 `snapshot.required` 帧才会先重新获取以后端为权威来源的总览快照，再使用该快照的 `sequence` 重连。只有严格匹配的心跳才能重置存活状态并允许进入 `LIVE`；重复或旧帧不能掩盖超时。追加的 `0008_market_index_monitor_event` 迁移只扩展既有事件账本 CHECK 约束，使已批准的 `market.index.updated` 真正可落库；保留所有既有行、序号和 identity，绝不重写冻结的 `0006_monitor_event`。默认生产组合缺少权威总览投影时仍返回 `SERVICE_UNAVAILABLE`；WEBF11 绝不伪造恢复数据。本变更不增加 OpenAPI 路径或生成 TypeScript 字段，不改变 Schema v1 数据、历史回测结果、既有 hash，也不声称回测策略事件 cursor resume 已完成。
+WEBF11 加固既有 T039/T043/T044 监控事件流：普通断线重连直接使用已应用状态的 SQLite 全局游标恢复；只有事件缺口或 `snapshot.required` 帧才会先重新获取以后端为权威来源的总览快照，再使用该快照的 `sequence` 重连。只有严格匹配的心跳才能重置存活状态并允许进入 `LIVE`；重复或旧帧不能掩盖超时。追加的 `0008_market_index_monitor_event` 迁移只扩展既有事件账本 CHECK 约束，使已批准的 `market.index.updated` 真正可落库；保留所有既有行、序号和 identity，绝不重写冻结的 `0006_monitor_event`。默认生产组合缺少权威总览投影时现在返回 ADR 0004 类型化 unavailable 响应；WEBF11 绝不伪造恢复数据。本变更不增加 OpenAPI 路径，不改变 Schema v1 数据、历史回测结果或既有 hash，也不声称回测策略事件 cursor resume 已完成。
 
 WEBF12 完成共用指数数据与当前计划条件的展示边界。总览只显示一条以后端为权威来源的共用指数条带，并把自选表每行的计划专属进度分开。个股路由依据后端详情 `referenceMarket` identity，按所选股票历史范围以 `FIVE_MINUTE` 加载既有板块指数 K 线，并具备取消和陈旧 generation 防护。共用参考事实/历史与当前计划 identity/进度/证据明确分区，加载、故障、健康、截止时间和缓存上下文保持可见。Vue 不做映射或结果计算；严格传输校验会在渲染前拒绝错误 identity/证据。本次不增加 REST/OpenAPI/生成 TypeScript 变更，不改变 Schema v1 数据、历史回测结果、既有 hash、token 或供应商请求边界。
 
-WEBF13 完成生产路由与新建回测的验收缺口。曾经的五条占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现已在精确 10 路由地图中具备惰性 SFC 与真实浏览器回归证据。确定性 Chromium 旅程还会提交生成的运行命令，沿后端权威 `runId`/`jobId` 轮询，仅在 `COMPLETED` 后移除 `jobId`，再渲染 materialized 结果。OpenAPI 契约继续为 42 条路径（27 条实时加 15 条回测），生成 TypeScript 保持不变，也不改变 Schema v1、历史结果、既有哈希、token 或供应商边界。详见 [WEBF13 验收报告](docs/verification/webf13-acceptance.zh-CN.md)。
+WEBF13 在历史上完成生产路由与新建回测的验收缺口。曾经的五条占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现已在精确 10 路由地图中具备惰性 SFC 与真实浏览器回归证据。确定性 Chromium 旅程还会提交生成的运行命令，沿后端权威 `runId`/`jobId` 轮询，仅在 `COMPLETED` 后移除 `jobId`，再渲染 materialized 结果。其 42 条路径契约（27 条实时加 15 条回测）继续作为历史证据；ADR 0004 后续改变既有监控响应联合与生成 TypeScript，但没有增加路径。Schema v1、历史结果、既有哈希、token 或供应商边界保持不变。详见 [WEBF13 验收报告](docs/verification/webf13-acceptance.zh-CN.md)。
 
 确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
 
@@ -343,7 +343,7 @@ python -c "import os; from trade_plan_monitor.state.backup import verify_sqlite_
 |---|---|
 | `WEB_ASSETS_UNAVAILABLE` | 安装分发缺少完整 Vite 构建。构建/重装 Python 包前运行 `npm install --include=optional --no-package-lock` 和 `npm run build`；不要增加 cwd fallback。 |
 | Rolldown 报告 `Cannot find native binding` | npm 遗漏了 Vite 的平台专用可选包。运行 `npm install --include=optional --no-package-lock`，再重试 `npm run build`。 |
-| 界面显示 `DEGRADED` 或通用监控 API 返回 `SERVICE_UNAVAILABLE` | 当实时分钟 `SourceTimeLabel` 语义或实时板块指数供应商未验证，或缺少权威投影时，这是预期行为。后端会保持只读健康状态，不调度可操作监控；独立的计划与持久持仓流程在已存计划/日历前置条件存在时仍可使用。 |
+| 界面显示 `DEGRADED` 或类型化 `UNAVAILABLE` | 当实时分钟 `SourceTimeLabel` 语义或实时板块指数供应商未验证，或权威投影尚未完成时，这是预期行为。后端会保持只读健康状态，不调度可操作监控；真正的服务、存储或组合故障仍返回 `SERVICE_UNAVAILABLE`。独立的计划与持久持仓流程在已存计划/日历前置条件存在时仍可使用。 |
 | `runtime service factory is not configured` | 在应用服务组合接通前调用了 `validate`、`monitor`、`replay` 或 `backup`。 |
 | 监听主机校验失败 | 使用精确字面量 `127.0.0.1`；系统有意拒绝 `localhost`、`::1`、`0.0.0.0`、主机名和局域网地址。 |
 | 8765 端口占用 | 停止另一个本地进程，或选择 1～65535 中未占用的其他端口，同时保持主机为 `127.0.0.1`。 |

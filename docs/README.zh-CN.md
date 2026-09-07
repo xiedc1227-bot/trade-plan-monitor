@@ -21,6 +21,7 @@
 - [通知 Outbox](specifications/monitoring/SPEC-notification-outbox.zh-CN.md)（[英文](specifications/monitoring/SPEC-notification-outbox.md)）
 - [监控运行时](specifications/monitoring/SPEC-monitor-runtime.zh-CN.md)（[英文](specifications/monitoring/SPEC-monitor-runtime.md)）
 - [本地 Web 应用](specifications/monitoring/SPEC-local-web.zh-CN.md)（[英文](specifications/monitoring/SPEC-local-web.md)）
+- [实时监控生产链路](specifications/monitoring/SPEC-live-production-chain.zh-CN.md)（[英文](specifications/monitoring/SPEC-live-production-chain.md)）
 - [监控指数视图](specifications/monitoring/SPEC-monitor-index-view.zh-CN.md)（[英文](specifications/monitoring/SPEC-monitor-index-view.md)）
 
 ## 回测规格
@@ -40,6 +41,7 @@
 - [ADR 0001：隔离持久化回测任务与确定性结果](decisions/0001-isolate-backtest-jobs-from-results.zh-CN.md)（[英文](decisions/0001-isolate-backtest-jobs-from-results.md)）
 - [ADR 0002：所有回测时间统一使用 Asia/Shanghai](decisions/0002-use-asia-shanghai-for-backtest-time.zh-CN.md)（[英文](decisions/0002-use-asia-shanghai-for-backtest-time.md)）
 - [ADR 0003：共用板块指数数据，使用方式由交易计划决定](decisions/0003-share-board-index-data-and-let-plans-own-usage.zh-CN.md)（[英文](decisions/0003-share-board-index-data-and-let-plans-own-usage.md)）
+- [ADR 0004：权威投影可用性与原子实时状态](decisions/0004-use-authoritative-projection-availability-and-atomic-live-state.zh-CN.md)（[英文](decisions/0004-use-authoritative-projection-availability-and-atomic-live-state.md)）
 
 ## 已批准提案
 
@@ -51,6 +53,7 @@
 
 ## 验证证据
 
+- [实时生产链路验收](verification/live-production-chain-acceptance.zh-CN.md)（[英文](verification/live-production-chain-acceptance.md)）——`LPC` 修复的进行中证据；实时戳认证继续受市场窗口约束。
 - [WEBF13 路由与新建回测验收](verification/webf13-acceptance.zh-CN.md)（[英文](verification/webf13-acceptance.md)）——已于 2026-09-04 通过离线路由、旅程、契约和安全证据；不替代历史验收报告。
 - [回测生产 fake 验收](verification/backtest-acceptance.zh-CN.md)（[英文](verification/backtest-acceptance.md)）
 - [Tushare 真实契约验收](verification/tushare-live.zh-CN.md)（[英文](verification/tushare-live.md)）
