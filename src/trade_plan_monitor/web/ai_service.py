@@ -1,4 +1,4 @@
-"""Read-only Web composition for one AI provider configured by project files."""
+"""Read-only Web composition for one AI provider in application configuration."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from trade_plan_monitor.ai.composition import (
     ConfiguredAIProviderBinding,
     compose_configured_ai_provider,
 )
+from trade_plan_monitor.ai.configured_secrets import create_configured_secret_store
 from trade_plan_monitor.ai.extraction import extract_plan
-from trade_plan_monitor.ai.file_secrets import create_project_secret_store
 from trade_plan_monitor.ai.models import PlanExtractionResult, PlanExtractionStatus
 from trade_plan_monitor.ai.secrets import InMemorySecretStore
 from trade_plan_monitor.config import AIConfiguration, load_application_config
@@ -56,7 +56,7 @@ AIClientFactory = Callable[[], httpx.AsyncClient]
 
 
 class ConfiguredAIWebLifecycle:
-    """Own one immutable file-configured AI binding for a Web server lifetime."""
+    """Own one immutable directly configured AI binding for a Web server lifetime."""
 
     def __init__(
         self,
@@ -95,10 +95,7 @@ class ConfiguredAIWebLifecycle:
         client = self._client_factory()
         if not isinstance(client, httpx.AsyncClient):
             raise TypeError("client_factory must return an httpx.AsyncClient")
-        secret_store = create_project_secret_store(
-            config_path=self._config_path,
-            settings=settings,
-        )
+        secret_store = create_configured_secret_store(settings=settings)
         self._settings = settings
         self._client = client
         self._secret_store = secret_store
@@ -315,7 +312,6 @@ class ConfiguredAIWebLifecycle:
                 model=config.model,
                 secret_reference=SecretReferenceView(
                     key=config.secret_ref.key,
-                    environment_variable=None,
                 ),
                 timeout_seconds=config.timeout_seconds,
                 max_retries=config.max_retries,

@@ -24,8 +24,9 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
-from trade_plan_monitor.config import TushareConfiguration
+from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.market_data.aggregation import aggregate_provisional_daily_bar
 from trade_plan_monitor.market_data.models import (
     ProviderCapabilities,
@@ -64,6 +65,7 @@ from trade_plan_monitor.runtime.service import RuntimeLifecycleService
 from trade_plan_monitor.web.routers.health import ProviderHealthView
 
 _ROOT = Path(__file__).parents[2]
+_PROJECT_CONFIG = _ROOT / "config" / "app.yaml"
 _REPORTS = (
     _ROOT / "docs" / "verification" / "tushare-live.md",
     _ROOT / "docs" / "verification" / "tushare-live.zh-CN.md",
@@ -71,9 +73,7 @@ _REPORTS = (
 _HEALTH_MATRIX = _ROOT / "web" / "src" / "components" / "health" / "HealthMatrix.vue"
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _AUTHORIZATION_ENV = "TRADE_PLAN_MONITOR_ALLOW_TUSHARE_LIVE"
-_CHILD_ENV = "TRADE_PLAN_MONITOR_TUSHARE_LIVE_CHILD"
 _OBSERVATION_ENV = "T058_REPORT_OBSERVATIONS"
-_TOKEN_ENV = "TUSHARE_TOKEN"
 _ENDPOINT = "https://api.quicksync.cn"
 _PROBE_SYMBOL = "600000.SH"
 _BATCH_SYMBOLS = (
@@ -932,20 +932,16 @@ def _emit_observations(
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
 
 
-def _require_authorized_live_child(
+def _require_authorized_live_run(
     marker_expression: str,
     environment: Mapping[str, str],
 ) -> None:
-    """Validate the explicitly selected one-shot child before reading secret injection."""
+    """Validate the explicitly selected live run before loading configuration."""
 
     if marker_expression.strip() != "live":
         pytest.skip("live Tushare tests require the explicit '-m live' selector")
-    if environment.get(_CHILD_ENV) != "1":
-        pytest.fail("T058_LIVE_ONE_SHOT_CHILD_REQUIRED", pytrace=False)
     if environment.get(_AUTHORIZATION_ENV) != "1":
         pytest.fail("T058_LIVE_NETWORK_AUTHORIZATION_UNAVAILABLE", pytrace=False)
-    if not environment.get(_TOKEN_ENV):
-        pytest.fail("T058_LIVE_TOKEN_REFERENCE_UNAVAILABLE", pytrace=False)
 
 
 @pytest.fixture(scope="session")
@@ -954,18 +950,14 @@ def authorized_live_context(request: pytest.FixtureRequest) -> _LiveContext:
     if not _realtime_contract_window(observed_at, today_open=True):
         pytest.skip("T058_LIVE_NOT_RUN_MARKET_WINDOW")
     marker_expression = str(request.config.getoption("markexpr")).strip()
-    _require_authorized_live_child(marker_expression, os.environ)
+    _require_authorized_live_run(marker_expression, os.environ)
 
-    configuration = TushareConfiguration.model_validate(
-        {
-            "api_url": _ENDPOINT,
-            "timeout_seconds": _TIMEOUT_SECONDS,
-            "token_ref": {"environment_variable": _TOKEN_ENV},
-        }
-    )
     try:
+        configuration = load_application_config(_PROJECT_CONFIG).tushare.model_copy(
+            update={"api_url": _ENDPOINT, "timeout_seconds": _TIMEOUT_SECONDS}
+        )
         raw_client = create_tushare_client(configuration)
-    except TushareClientConfigurationError:
+    except (OSError, ValidationError, TushareClientConfigurationError):
         pytest.fail("T058_LIVE_CLIENT_INITIALIZATION_FAILED", pytrace=False)
     return _LiveContext(
         client=_PacedRecordingClient(raw_client),
@@ -975,13 +967,13 @@ def authorized_live_context(request: pytest.FixtureRequest) -> _LiveContext:
 
 def test_live_harness_offline_safety_contract() -> None:
     with pytest.raises(pytest.skip.Exception):
-        _require_authorized_live_child("not live", _UnreadableEnvironment())
+        _require_authorized_live_run("not live", _UnreadableEnvironment())
 
-    with pytest.raises(pytest.fail.Exception, match="T058_LIVE_ONE_SHOT_CHILD_REQUIRED"):
-        _require_authorized_live_child(
-            "live",
-            {_AUTHORIZATION_ENV: "1", _TOKEN_ENV: "must-not-be-reached"},
-        )
+    with pytest.raises(
+        pytest.fail.Exception,
+        match="T058_LIVE_NETWORK_AUTHORIZATION_UNAVAILABLE",
+    ):
+        _require_authorized_live_run("live", {})
 
     assert _realtime_contract_window(
         datetime(2026, 9, 5, 10, 0, tzinfo=_SHANGHAI),

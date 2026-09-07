@@ -49,7 +49,7 @@ export function usePlanDrafting(options: UsePlanDraftingOptions = {}) {
     } catch {
       if (!controller.signal.aborted) {
         runtime.value = null;
-        errorMessage.value = "AI 配置加载失败，请检查 config/app.yaml 和项目 .env 后重启 Web 服务。";
+        errorMessage.value = "AI 配置加载失败，请检查 config/app.yaml 后重启 Web 服务。";
       }
     } finally {
       if (!controller.signal.aborted) loading.value = false;

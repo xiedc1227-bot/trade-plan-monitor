@@ -28,9 +28,8 @@ ai:
   api_key: replace-with-your-deepseek-api-key
 ```
 
-直接配置的 `tushare.token` 与 `ai.api_key` 优先。迁移期间仍可读取原有 `token_ref` 和
-`api_key_ref` 结构，因此现有个人配置不会立即失效。仓库 `.gitignore` 已排除
-`config/app.yaml`。
+`config/app.yaml` 中的 `tushare.token` 与 `ai.api_key` 是唯一凭证来源。仓库 `.gitignore`
+已排除该文件；程序不读取环境变量或独立凭证文件。
 
 ## 授权运行
 

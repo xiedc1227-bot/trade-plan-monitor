@@ -83,7 +83,7 @@ function handleSelect(event: Event): void {
     </dl>
 
     <p class="provider-selector__hint">
-      修改 config/app.yaml 或项目 .env 后需要重启 Web 服务；页面不会读取或写入密钥原值。
+      修改 config/app.yaml 后需要重启 Web 服务；页面不会读取或写入密钥原值。
     </p>
   </section>
 </template>

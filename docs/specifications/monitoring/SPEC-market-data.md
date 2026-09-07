@@ -36,7 +36,7 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 python -m ruff check src/trade_plan_monitor/market_data tests/unit/test_market_data.py
 ```
 
-The live market-hours contract test requires a real `TUSHARE_TOKEN` and explicit network authorization and is skipped by default.
+The live market-hours contract test requires a real `tushare.token` in `config/app.yaml` and explicit network authorization and is skipped by default.
 
 ## Project Structure
 
@@ -190,7 +190,7 @@ Adapters normalize data and classify errors only; they contain no trading rules.
 ## Boundaries
 
 - Always: validate every third-party response before persistence.
-- Always: redact `TUSHARE_TOKEN` and permission-related error details.
+- Always: keep the configured Tushare token and permission-related error details out of reports.
 - Always: keep historical and realtime capability/timestamp evidence independent; historical retrieval is authorized only for `backtest sync`.
 - Always: fail closed when the trading day is unknown, actual price limits are missing, minutes are stale, or daily history is insufficient.
 - Ask first: change formula version, adjustment policy, default grace, or add a second provider.

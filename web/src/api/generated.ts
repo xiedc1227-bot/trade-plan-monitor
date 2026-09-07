@@ -1239,11 +1239,10 @@ export type RuntimeResourceStatus = "UNVERIFIED" | "READY" | "DEGRADED" | "ERROR
 export type RuntimeServiceStatus = "STARTING" | "RUNNING" | "DEGRADED" | "STOPPING" | "STOPPED";
 
 export type SecretReferenceView = {
-  environmentVariable?: (string) | (null);
   key: string;
 };
 
-export type SecretSource = "NONE" | "STORE" | "ENVIRONMENT";
+export type SecretSource = "NONE" | "STORE";
 
 export type SecretStatusView = {
   configured: boolean;

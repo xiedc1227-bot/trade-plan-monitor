@@ -1,11 +1,6 @@
-from collections.abc import Mapping
-
 import pytest
 
-from trade_plan_monitor.config import (
-    EnvironmentSecretReference,
-    TushareConfiguration,
-)
+from trade_plan_monitor.config import TushareConfiguration
 from trade_plan_monitor.market_data.tushare_client import (
     TushareClientConfigurationError,
     create_tushare_client,
@@ -24,19 +19,14 @@ def _configuration(**overrides: object) -> TushareConfiguration:
     values: dict[str, object] = {
         "api_url": "https://api.quicksync.cn",
         "timeout_seconds": 20,
-        "token_ref": EnvironmentSecretReference(environment_variable="MONITOR_TUSHARE_TOKEN"),
+        "token": TOKEN_SENTINEL,
     }
     return TushareConfiguration.model_validate(values | overrides)
-
-
-def _environment(value: str = TOKEN_SENTINEL) -> Mapping[str, str]:
-    return {"MONITOR_TUSHARE_TOKEN": value}
 
 
 def test_client_factory_configures_one_official_sdk_instance_without_global_mutation() -> None:
     client = create_tushare_client(
         _configuration(),
-        environment=_environment(),
         data_api_factory=StubDataApi,
     )
 
@@ -44,17 +34,6 @@ def test_client_factory_configures_one_official_sdk_instance_without_global_muta
     assert client.received_token == TOKEN_SENTINEL
     assert client.timeout == 20
     assert client._DataApi__http_url == "https://api.quicksync.cn"  # type: ignore[attr-defined]
-
-
-def test_client_factory_prefers_direct_configuration_token() -> None:
-    client = create_tushare_client(
-        _configuration(token="direct-config-token"),
-        environment={"MONITOR_TUSHARE_TOKEN": "legacy-environment-token"},
-        data_api_factory=StubDataApi,
-    )
-
-    assert isinstance(client, StubDataApi)
-    assert client.received_token == "direct-config-token"
 
 
 def test_client_factory_fails_closed_without_an_explicit_https_endpoint() -> None:
@@ -68,21 +47,16 @@ def test_client_factory_fails_closed_without_an_explicit_https_endpoint() -> Non
     with pytest.raises(TushareClientConfigurationError, match="API URL"):
         create_tushare_client(
             TushareConfiguration(),
-            environment=_environment(),
             data_api_factory=factory,
         )
 
     assert called is False
 
 
-@pytest.mark.parametrize("environment", [{}, {"MONITOR_TUSHARE_TOKEN": "   "}])
-def test_client_factory_fails_closed_when_token_is_missing_or_blank(
-    environment: Mapping[str, str],
-) -> None:
+def test_client_factory_fails_closed_when_token_is_missing() -> None:
     with pytest.raises(TushareClientConfigurationError, match="not configured"):
         create_tushare_client(
-            _configuration(),
-            environment=environment,
+            _configuration(token=None),
             data_api_factory=StubDataApi,
         )
 
@@ -92,8 +66,7 @@ def test_client_factory_rejects_control_characters_without_exposing_token() -> N
 
     with pytest.raises(TushareClientConfigurationError) as captured:
         create_tushare_client(
-            _configuration(),
-            environment=_environment(unsafe_token),
+            _configuration(token=unsafe_token),
             data_api_factory=StubDataApi,
         )
 
@@ -108,7 +81,6 @@ def test_client_factory_sanitizes_sdk_initialization_errors() -> None:
     with pytest.raises(TushareClientConfigurationError) as captured:
         create_tushare_client(
             _configuration(),
-            environment=_environment(),
             data_api_factory=failing_factory,
         )
 

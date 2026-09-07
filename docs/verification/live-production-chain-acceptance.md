@@ -116,8 +116,8 @@ reported rather than hidden, skipped, or relaxed.
   trading date during a suitable completed-minute window.
 - Board-index live capability and timestamp evidence require their own authorization/profile;
   stock-provider evidence cannot satisfy that gate.
-- Direct `tushare.token` and `ai.api_key` configuration is implemented, with legacy references
-  retained for migration compatibility. Windows Credential Manager and child-only certification
+- Direct `tushare.token` and `ai.api_key` configuration is implemented as the only credential
+  source. Windows Credential Manager, environment/file references, and child-only certification
   were removed by the user's explicit personal-tool policy. The local `config/app.yaml` has no
   Tushare token, so no provider call was attempted.
 - Hash-protected stock and board-index profiles expire after seven days and fail

@@ -8,8 +8,8 @@ from uuid import uuid4
 import httpx
 
 from trade_plan_monitor.ai.composition import compose_configured_ai_provider
+from trade_plan_monitor.ai.configured_secrets import create_configured_secret_store
 from trade_plan_monitor.ai.extraction import extract_plan
-from trade_plan_monitor.ai.file_secrets import create_project_secret_store
 from trade_plan_monitor.ai.prompts import MAX_SOURCE_TEXT_CHARS
 from trade_plan_monitor.config import load_application_config
 
@@ -28,10 +28,7 @@ class ConfiguredAICommandService:
             binding = compose_configured_ai_provider(
                 settings=settings,
                 client=client,
-                secret_store=create_project_secret_store(
-                    config_path=self._config_path,
-                    settings=settings,
-                ),
+                secret_store=create_configured_secret_store(settings=settings),
             )
             if binding is None:
                 raise RuntimeError("AI provider is not configured")
@@ -44,10 +41,7 @@ class ConfiguredAICommandService:
             binding = compose_configured_ai_provider(
                 settings=settings,
                 client=client,
-                secret_store=create_project_secret_store(
-                    config_path=self._config_path,
-                    settings=settings,
-                ),
+                secret_store=create_configured_secret_store(settings=settings),
             )
             if binding is None:
                 raise RuntimeError("AI provider is not configured")

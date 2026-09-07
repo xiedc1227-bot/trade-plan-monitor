@@ -50,10 +50,6 @@ SecretKeyReference = Annotated[
         pattern=r"^ai/provider/[A-Za-z0-9_-]{1,128}$",
     ),
 ]
-EnvironmentVariableName = Annotated[
-    str,
-    StringConstraints(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$"),
-]
 ExtractionPath = Annotated[
     str,
     StringConstraints(
@@ -94,10 +90,9 @@ class AIProviderProfile(StrEnum):
 
 
 class SecretReference(_AIValue):
-    """Non-secret store key with an optional environment fallback name."""
+    """Non-secret process-local store key."""
 
     key: SecretKeyReference
-    environment_variable: EnvironmentVariableName | None = None
 
 
 class AIProviderConfig(_AIValue):

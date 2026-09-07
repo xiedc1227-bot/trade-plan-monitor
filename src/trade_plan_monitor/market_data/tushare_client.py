@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 
 from trade_plan_monitor.config import TushareConfiguration
 
@@ -17,7 +16,6 @@ class TushareClientConfigurationError(RuntimeError):
 def create_tushare_client[ClientT](
     configuration: TushareConfiguration,
     *,
-    environment: Mapping[str, str] | None = None,
     data_api_factory: Callable[[str, int], ClientT] | None = None,
 ) -> ClientT | object:
     """Build one official SDK client without changing its process-global endpoint."""
@@ -27,10 +25,7 @@ def create_tushare_client[ClientT](
     if configuration.api_url is None:
         raise TushareClientConfigurationError("Tushare API URL is not configured")
 
-    values = os.environ if environment is None else environment
     token = configuration.token
-    if token is None:
-        token = values.get(configuration.token_ref.environment_variable)
     if token is None or not token.strip():
         raise TushareClientConfigurationError("Tushare token is not configured")
     if len(token) > _MAX_TOKEN_LENGTH or any(

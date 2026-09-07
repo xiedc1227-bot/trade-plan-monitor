@@ -10,9 +10,8 @@ from yaml.constructor import ConstructorError
 
 from trade_plan_monitor.ai.command import ConfiguredAICommandService
 from trade_plan_monitor.ai.composition import compose_configured_ai_provider
-from trade_plan_monitor.ai.file_secrets import create_project_secret_store
+from trade_plan_monitor.ai.configured_secrets import create_configured_secret_store
 from trade_plan_monitor.ai.models import AIProviderProfile
-from trade_plan_monitor.ai.provider import AIProviderError, AIProviderErrorCode
 from trade_plan_monitor.ai.secrets import InMemorySecretStore
 from trade_plan_monitor.cli import build_parser
 from trade_plan_monitor.cli import main as run_cli
@@ -21,7 +20,7 @@ from trade_plan_monitor.config import load_application_config
 PROJECT_ROOT = Path(__file__).parents[2]
 
 
-def test_empty_yaml_uses_loopback_web_and_secret_reference_defaults(tmp_path: Path) -> None:
+def test_empty_yaml_uses_loopback_web_and_unconfigured_credentials(tmp_path: Path) -> None:
     config_path = tmp_path / "app.yaml"
     config_path.write_text("{}\n", encoding="utf-8")
 
@@ -32,15 +31,13 @@ def test_empty_yaml_uses_loopback_web_and_secret_reference_defaults(tmp_path: Pa
     assert config.tushare.api_url is None
     assert config.tushare.timeout_seconds == 30
     assert config.tushare.token is None
-    assert config.tushare.token_ref.environment_variable == "TUSHARE_TOKEN"
     assert config.ai.api_key is None
-    assert config.ai.api_key_ref is None
     assert config.ai.profile is AIProviderProfile.DEEPSEEK
     assert str(config.ai.base_url) == "https://api.deepseek.com/"
     assert config.ai.model == "deepseek-v4-flash"
 
 
-def test_yaml_accepts_direct_credentials_and_legacy_references(tmp_path: Path) -> None:
+def test_yaml_accepts_direct_credentials(tmp_path: Path) -> None:
     config_path = tmp_path / "app.yaml"
     config_path.write_text(
         """\
@@ -48,17 +45,12 @@ tushare:
   api_url: https://api.quicksync.cn
   timeout_seconds: 20
   token: configured-tushare-token
-  token_ref:
-    environment_variable: MONITOR_TUSHARE_TOKEN
 ai:
   profile: OPENAI_COMPATIBLE
   display_name: Private compatible service
   base_url: https://ai.example.com/v1
   model: private-chat-model
   api_key: configured-ai-key
-  api_key_ref:
-    file: ../private-secrets.env
-    key: PRIVATE_AI_API_KEY
   timeout_seconds: 45
   max_retries: 1
   max_input_chars: 60000
@@ -73,11 +65,7 @@ ai:
     assert str(config.tushare.api_url) == "https://api.quicksync.cn/"
     assert config.tushare.timeout_seconds == 20
     assert config.tushare.token == "configured-tushare-token"
-    assert config.tushare.token_ref.environment_variable == "MONITOR_TUSHARE_TOKEN"
-    assert config.ai.api_key_ref is not None
     assert config.ai.api_key == "configured-ai-key"
-    assert config.ai.api_key_ref.file == "../private-secrets.env"
-    assert config.ai.api_key_ref.key == "PRIVATE_AI_API_KEY"
     assert config.ai.profile is AIProviderProfile.OPENAI_COMPATIBLE
     assert config.ai.display_name == "Private compatible service"
     assert str(config.ai.base_url) == "https://ai.example.com/v1"
@@ -92,7 +80,6 @@ ai:
     assert provider_config is not None
     assert str(provider_config.base_url) == "https://ai.example.com/v1"
     assert provider_config.model == "private-chat-model"
-    assert provider_config.secret_ref.environment_variable is None
 
 
 def test_example_configuration_is_valid_and_contains_direct_placeholders() -> None:
@@ -103,8 +90,6 @@ def test_example_configuration_is_valid_and_contains_direct_placeholders() -> No
     assert str(config.tushare.api_url) == "https://api.quicksync.cn/"
     assert config.tushare.timeout_seconds == 30
     assert config.tushare.token == "replace-with-your-tushare-token"
-    assert config.tushare.token_ref.environment_variable == "TUSHARE_TOKEN"
-    assert config.ai.api_key_ref is None
     assert config.ai.api_key == "replace-with-your-deepseek-api-key"
     assert config.ai.profile is AIProviderProfile.DEEPSEEK
     assert config.ai.display_name == "DeepSeek"
@@ -116,7 +101,6 @@ def test_example_configuration_is_valid_and_contains_direct_placeholders() -> No
     assert provider_config.display_name == "DeepSeek"
     assert str(provider_config.base_url) == "https://api.deepseek.com/"
     assert provider_config.model == "deepseek-v4-flash"
-    assert provider_config.secret_ref.environment_variable is None
 
 
 def test_ai_composition_selects_the_configured_profile_without_reading_the_secret() -> None:
@@ -127,7 +111,7 @@ def test_ai_composition_selects_the_configured_profile_without_reading_the_secre
         binding = compose_configured_ai_provider(
             settings=settings,
             client=client,
-            secret_store=InMemorySecretStore(environment={}),
+            secret_store=InMemorySecretStore(),
         )
     finally:
         asyncio.run(client.aclose())
@@ -135,7 +119,6 @@ def test_ai_composition_selects_the_configured_profile_without_reading_the_secre
     assert binding is not None
     assert binding.profile is AIProviderProfile.DEEPSEEK
     assert binding.config.model == "deepseek-v4-flash"
-    assert binding.config.secret_ref.environment_variable is None
 
 
 def test_direct_ai_key_drives_provider_without_project_secret_file(
@@ -157,7 +140,7 @@ ai:
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "wrong-process-value")
     settings = load_application_config(config_path).ai
-    store = create_project_secret_store(config_path=config_path, settings=settings)
+    store = create_configured_secret_store(settings=settings)
     captured_authorization: list[str | None] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -196,38 +179,21 @@ ai:
 
 
 @pytest.mark.parametrize(
-    "secret_text",
+    "legacy_yaml",
     [
-        "",
-        "DEEPSEEK_API_KEY=\n",
-        "DEEPSEEK_API_KEY=first\nDEEPSEEK_API_KEY=second\n",
-        "OTHER_KEY=value\n",
+        "tushare:\n  token_ref:\n    environment_variable: TUSHARE_TOKEN\n",
+        "ai:\n  api_key_ref:\n    file: ../.env\n    key: DEEPSEEK_API_KEY\n",
     ],
 )
-def test_project_secret_file_fails_closed_for_missing_empty_or_duplicate_key(
+def test_yaml_rejects_every_legacy_credential_reference(
     tmp_path: Path,
-    secret_text: str,
+    legacy_yaml: str,
 ) -> None:
-    config_directory = tmp_path / "config"
-    config_directory.mkdir()
-    config_path = config_directory / "app.yaml"
-    config_path.write_text(
-        """\
-ai:
-  api_key_ref:
-    file: ../shared-secrets.env
-    key: DEEPSEEK_API_KEY
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "shared-secrets.env").write_text(secret_text, encoding="utf-8")
-    settings = load_application_config(config_path).ai
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(legacy_yaml, encoding="utf-8")
 
-    store = create_project_secret_store(config_path=config_path, settings=settings)
-    provider_config = settings.to_provider_config()
-
-    assert provider_config is not None
-    assert store.status(provider_config.secret_ref).configured is False
+    with pytest.raises(ValidationError):
+        load_application_config(config_path)
 
 
 def test_configured_ai_command_fails_before_network_when_secret_is_absent(
@@ -239,9 +205,8 @@ def test_configured_ai_command_fails_before_network_when_secret_is_absent(
     config_path.write_text(
         """\
 ai:
-  api_key_ref:
-    file: ../missing.env
-    key: DEEPSEEK_API_KEY
+  base_url: https://api.deepseek.com
+  model: deepseek-v4-flash
 """,
         encoding="utf-8",
     )
@@ -249,11 +214,8 @@ ai:
         config_path=config_path,
     )
 
-    with pytest.raises(AIProviderError) as error:
+    with pytest.raises(RuntimeError, match="not configured"):
         asyncio.run(service.test_connection())
-
-    assert error.value.code is AIProviderErrorCode.CONFIGURATION
-    assert error.value.attempts == 0
 
 
 @pytest.mark.parametrize(

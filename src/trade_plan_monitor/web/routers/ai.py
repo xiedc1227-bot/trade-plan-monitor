@@ -51,24 +51,8 @@ class SecretReferenceView(ApiValue):
             pattern=r"^ai/provider/[A-Za-z0-9_-]{1,128}$",
         ),
     ]
-    environment_variable: (
-        Annotated[
-            str,
-            Field(
-                strict=True,
-                min_length=1,
-                max_length=128,
-                pattern=r"^[A-Za-z_][A-Za-z0-9_]*$",
-            ),
-        ]
-        | None
-    ) = None
-
     def to_domain(self) -> SecretReference:
-        return SecretReference(
-            key=self.key,
-            environment_variable=self.environment_variable,
-        )
+        return SecretReference(key=self.key)
 
 
 class AIProviderConfiguration(ApiValue):

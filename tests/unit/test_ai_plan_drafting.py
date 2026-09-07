@@ -67,7 +67,6 @@ def _config_values() -> dict[str, object]:
         "model": "example-chat-model",
         "secret_ref": SecretReference(
             key="ai/provider/8db1318f-7182-4c43-9f1f-e260d46f3f0d",
-            environment_variable="MONITOR_AI_API_KEY",
         ),
     }
 
@@ -185,7 +184,7 @@ def test_ai_config_uses_bounded_non_secret_defaults() -> None:
     assert config.allow_redirects is False
     assert config.enabled is True
     serialized = config.model_dump_json()
-    assert "MONITOR_AI_API_KEY" in serialized
+    assert "environment_variable" not in serialized
     assert "api-key-value" not in serialized
 
 
@@ -309,9 +308,8 @@ def test_secret_store_public_contract_is_write_and_status_only() -> None:
 def test_secret_write_and_replacement_return_masked_status_only() -> None:
     reference = SecretReference(
         key="ai/provider/replacement-test",
-        environment_variable="MONITOR_AI_API_KEY",
     )
-    store = InMemorySecretStore(environment={})
+    store = InMemorySecretStore()
 
     first = store.replace(reference, SecretWrite(value="first-api-key"))
     second = store.replace(reference, SecretWrite(value="second-api-key"))
@@ -326,69 +324,20 @@ def test_secret_write_and_replacement_return_masked_status_only() -> None:
     assert "second-api-key" not in combined_output
 
 
-def test_secret_status_uses_environment_reference_as_fallback() -> None:
-    reference = SecretReference(
-        key="ai/provider/environment-test",
-        environment_variable="MONITOR_AI_API_KEY",
-    )
-    store = InMemorySecretStore(environment={"MONITOR_AI_API_KEY": "environment-key"})
-
-    status = store.status(reference)
-
-    assert status.configured is True
-    assert status.source is SecretSource.ENVIRONMENT
-    assert status.generation == 0
-    assert status.masked_value == "********"
-    assert "environment-key" not in repr(status)
-    assert "environment-key" not in status.model_dump_json()
-
-
-def test_secret_status_ignores_blank_environment_fallback() -> None:
-    reference = SecretReference(
-        key="ai/provider/blank-environment-test",
-        environment_variable="MONITOR_AI_API_KEY",
-    )
-
-    status = InMemorySecretStore(environment={"MONITOR_AI_API_KEY": "   "}).status(reference)
-
-    assert status.configured is False
-    assert status.source is SecretSource.NONE
-
-
-def test_secret_runtime_materialization_prefers_replacement_then_environment() -> None:
-    reference = SecretReference(
-        key="ai/provider/runtime-test",
-        environment_variable="MONITOR_AI_API_KEY",
-    )
-    store = InMemorySecretStore(environment={"MONITOR_AI_API_KEY": "environment-key"})
-
-    environment_value = store._materialize(reference)
-    store.replace(reference, SecretWrite(value="replacement-key"))
-    replacement_value = store._materialize(reference)
-
-    assert environment_value.get_secret_value() == "environment-key"
-    assert replacement_value.get_secret_value() == "replacement-key"
-
-
-def test_stored_secret_takes_precedence_over_environment_fallback() -> None:
-    reference = SecretReference(
-        key="ai/provider/precedence-test",
-        environment_variable="MONITOR_AI_API_KEY",
-    )
-    store = InMemorySecretStore(environment={"MONITOR_AI_API_KEY": "environment-key"})
-
-    store.replace(reference, SecretWrite(value="stored-key"))
-    status = store.status(reference)
-
-    assert status.source is SecretSource.STORE
-    assert status.generation == 1
-    assert "stored-key" not in status.model_dump_json()
+def test_secret_reference_rejects_environment_variable_fallback() -> None:
+    with pytest.raises(ValidationError):
+        SecretReference.model_validate(
+            {
+                "key": "ai/provider/environment-test",
+                "environment_variable": "MONITOR_AI_API_KEY",
+            }
+        )
 
 
 def test_missing_secret_has_unconfigured_masked_state() -> None:
     reference = SecretReference(key="ai/provider/missing-test")
 
-    status = InMemorySecretStore(environment={}).status(reference)
+    status = InMemorySecretStore().status(reference)
 
     assert status.configured is False
     assert status.source is SecretSource.NONE

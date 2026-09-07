@@ -21,7 +21,6 @@ htmlcov/
 config/app.yaml
 .env
 .env.*
-!.env.example
 *.key
 *.pem
 

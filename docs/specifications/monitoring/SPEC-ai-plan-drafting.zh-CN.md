@@ -14,7 +14,7 @@
 - `httpx` 异步 HTTP 客户端
 - Pydantic 2：校验 AI 输出和计划草稿
 - 内部 `AIProvider` 协议，以及明确的 DeepSeek 与通用 OpenAI-compatible 请求 profile
-- `SecretStore` 协议：从应用直接配置装入，同时兼容原文件引用
+- `SecretStore` 协议：只从应用直接配置装入
 - SQLite：只保存非敏感配置和审计元数据
 
 首版不依赖厂商 AI SDK，使用显式 HTTP 适配器降低耦合。
@@ -36,7 +36,7 @@ src/trade_plan_monitor/ai/
 ├── openai_compatible.py  # 有资源上限的 HTTP 适配器
 ├── prompts.py            # 版本化提示词构造
 ├── extraction.py         # 草稿提取、解析和校验流程
-├── file_secrets.py       # 直接配置/原文件引用凭证读取器
+├── configured_secrets.py # 应用直接配置凭证读取器
 └── secrets.py            # SecretStore 协议和实现
 tests/unit/
 └── test_ai_plan_drafting.py
@@ -55,18 +55,18 @@ class AIProvider(Protocol):
 可配置字段包括：
 
 - `providerId`、请求 profile、显示名称、服务类型、Base URL 和模型；
-- 直接 `api_key`、原项目密钥文件/键名引用以及“是否已配置密钥”状态；
+- 直接 `api_key` 以及“是否已配置密钥”状态；
 - 超时、最大重试次数、最大输入字符、最大输出 Token；
 - 温度默认固定为 0，允许范围 0～0.3；
 - 提示词版本和启用状态。
 
-首版稳定范围为：Base URL 最长 2,048 个字符；直接 API Key 最长 8,192 个字符；原项目密钥文件路径最长 1,024 个字符且文件最大 65,536 字节；超时 1～120 秒（默认 30）；重试 0～2 次（默认 2）；输入 1～200,000 个字符（默认 50,000）；输出 1～16,384 Token（默认 4,096）；温度 0～0.3（默认 0）。重定向不可配置且始终禁用。只有字面值 `localhost`、IPv4 回环地址或 IPv6 回环地址可使用 HTTP，其他地址必须使用 HTTPS。包含账号密码、查询字符串或片段的 Base URL 无效。
+首版稳定范围为：Base URL 最长 2,048 个字符；直接 API Key 最长 8,192 个字符；超时 1～120 秒（默认 30）；重试 0～2 次（默认 2）；输入 1～200,000 个字符（默认 50,000）；输出 1～16,384 Token（默认 4,096）；温度 0～0.3（默认 0）。重定向不可配置且始终禁用。只有字面值 `localhost`、IPv4 回环地址或 IPv6 回环地址可使用 HTTP，其他地址必须使用 HTTPS。包含账号密码、查询字符串或片段的 Base URL 无效。
 
 ### 服务适配器契约
 
 适配器使用 Bearer 鉴权发送 `POST {baseUrl}/chat/completions`，绝不发送工具，只把模型内容作为不可信原始文本返回。通用 `OPENAI_COMPATIBLE` profile 使用 `messages`、`temperature`、`max_completion_tokens` 和 `stream=false`。默认 `DEEPSEEK` profile 遵循 DeepSeek 当前契约：使用 `max_tokens`，设置 `thinking={"type":"disabled"}`，提取计划时增加 `response_format={"type":"json_object"}`，并保持 `stream=false`。DeepSeek 默认值为 `https://api.deepseek.com` 和 `deepseek-v4-flash`；用户把密钥放在被忽略的 `config/app.yaml` 的 `ai.api_key` 中。
 
-Web 与 CLI 都优先使用从 YAML 直接读取的非空 `ai.api_key`。迁移期间，如果该字段不存在，仍可相对于 YAML 解析 `api_key_ref`，并从有大小限制的原文件中选择一个赋值。Web 组合在启动时只读取一次配置，并在该次服务生命周期内保持不变，通过 `/plans` 提供提取。维护用途的 CLI 保留 `ai test [--config 路径]` 和 `ai extract [--config 路径] --source 文件`；`test` 发送一次有边界的连通性请求，`extract` 读取严格 UTF-8 普通来源文件、检查字节数和配置字符上限、校验返回草稿并输出，但不会激活计划。
+Web 与 CLI 都使用从 YAML 直接读取的非空 `ai.api_key`，不存在环境变量或独立文件凭证后备。Web 组合在启动时只读取一次配置，并在该次服务生命周期内保持不变，通过 `/plans` 提供提取。维护用途的 CLI 保留 `ai test [--config 路径]` 和 `ai extract [--config 路径] --source 文件`；`test` 发送一次有边界的连通性请求，`extract` 读取严格 UTF-8 普通来源文件、检查字节数和配置字符上限、校验返回草稿并输出，但不会激活计划。
 
 - API Key 从本地配置读取并用于 Authorization Header，而且必须全部为可打印 ASCII 字符。请求发送 `Accept-Encoding: identity`。
 - 每次尝试使用配置的超时，完整操作最多执行 `1 + max_retries` 次。传输故障、超时、HTTP 408、429 和 5xx 可重试；数字型 `Retry-After` 和指数退避均封顶 2 秒。取消操作始终向外传播。
@@ -83,7 +83,7 @@ class SecretStore(Protocol):
     def status(self, reference: SecretReference) -> SecretStatus: ...
 ```
 
-`SecretStatus` 只暴露是否已配置、来源（`STORE`、`ENVIRONMENT` 或 `NONE`）、固定掩码和替换代数。配置文件驱动的 Web 与 CLI 组合把 YAML 直接值放入进程内密钥库；直接值不存在时，才放入从原文件引用选出的值。具体密钥库把运行时物化能力保持为包内私有，使供应商组装能够鉴权而不扩大公共管理协议。
+`SecretStatus` 只暴露是否已配置、来源（`STORE` 或 `NONE`）、固定掩码和替换代数。配置文件驱动的 Web 与 CLI 组合只把 YAML 直接值放入进程内密钥库。具体密钥库把运行时物化能力保持为包内私有，使供应商组装能够鉴权而不扩大公共管理协议。
 
 通用注入式 API 契约可以接收新密钥，但配置文件驱动的生产组合对该变更返回 `METHOD_NOT_ALLOWED`；用户直接修改 `config/app.yaml`，Web 页面不会发送该变更。任何读取接口都不能返回密钥。日志、错误、审计和计划导出只保留非敏感状态，或旧注入式契约确实需要的引用。
 
@@ -208,4 +208,4 @@ async def extract_plan(
 
 ## 待确认事项
 
-无。Web AI 设置编辑明确不在范围内；Web 与 CLI 都优先使用被 Git 忽略的 `config/app.yaml` 中的直接凭证，原文件引用只为迁移兼容而保留。
+无。Web AI 设置编辑明确不在范围内；Web 与 CLI 都只使用被 Git 忽略的 `config/app.yaml` 中的直接凭证。

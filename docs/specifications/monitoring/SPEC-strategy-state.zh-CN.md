@@ -191,7 +191,7 @@ class UnitOfWork(Protocol):
 - 始终：审计计划激活、AI 配置元数据、持仓和提醒确认。
 - 先确认：破坏性迁移、缩短保留期或改用 SQLite 之外的存储。
 - 禁止：直接复制正在使用的 WAL 数据库文件作为备份。
-- 禁止：在 SQLite 中保存 AI Key 或 `TUSHARE_TOKEN`。
+- 禁止：把 `config/app.yaml` 中的供应商凭证复制到 SQLite。
 - 禁止：因为提醒产生或确认而修改仓位。
 - 禁止：在数据库事务内调用网络。
 

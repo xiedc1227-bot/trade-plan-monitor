@@ -61,4 +61,4 @@ This directory contains the project's design, specification, decision, operating
 
 ## Root-Level Entrypoints
 
-The repository root intentionally retains [README.md](../README.md), [README.zh-CN.md](../README.zh-CN.md), `openapi.json`, `pyproject.toml`, `.env.example`, and `.gitignore`. These are project, tool, or machine-contract entrypoints rather than development-process documents.
+The repository root intentionally retains [README.md](../README.md), [README.zh-CN.md](../README.zh-CN.md), `openapi.json`, `pyproject.toml`, and `.gitignore`. These are project, tool, or machine-contract entrypoints rather than development-process documents.

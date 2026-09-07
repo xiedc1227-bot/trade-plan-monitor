@@ -191,7 +191,7 @@ Repositories expose domain operations rather than raw Session access. A database
 - Always: audit plan activation, AI configuration metadata, positions, and alert acknowledgement.
 - Ask first: destructive migration, shorter retention, or storage other than SQLite.
 - Never: copy an in-use WAL database file directly as a backup.
-- Never: store an AI key or `TUSHARE_TOKEN` in SQLite.
+- Never: copy provider credentials from `config/app.yaml` into SQLite.
 - Never: alter a position because an alert was created or acknowledged.
 - Never: call the network inside a database transaction.
 

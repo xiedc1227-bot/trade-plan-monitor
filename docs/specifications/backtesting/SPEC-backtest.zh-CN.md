@@ -42,7 +42,7 @@ python -m trade_plan_monitor backtest list --limit 20 --offset 0
 python -m trade_plan_monitor backtest prune --batch-size 1000
 ```
 
-只有 `sync` 允许使用网络和 `TUSHARE_TOKEN`，并且同时需要用户明确授权和字面量 `--allow-network` 参数；`verify`、`run`、`list` 和 `prune` 均仅限本地。`sync` 与 `verify` 默认把 `warmup_start` 设为 `start` 之前 400 个日历日；显式覆盖时，两条命令必须使用相同值。数据集未冻结并验证、六项费用/滑点输入未全部提供，或没有恰好选择 `--no-event-risk` 与 `--manual-event-risk` 之一时，`run` 必须失败。上述数值只是示例假设，不是默认值。当前 `replay` 命令保留既有监控事件语义。
+只有 `sync` 允许使用网络和配置的 `tushare.token`，并且同时需要用户明确授权和字面量 `--allow-network` 参数；`verify`、`run`、`list` 和 `prune` 均仅限本地。`sync` 与 `verify` 默认把 `warmup_start` 设为 `start` 之前 400 个日历日；显式覆盖时，两条命令必须使用相同值。数据集未冻结并验证、六项费用/滑点输入未全部提供，或没有恰好选择 `--no-event-risk` 与 `--manual-event-risk` 之一时，`run` 必须失败。上述数值只是示例假设，不是默认值。当前 `replay` 命令保留既有监控事件语义。
 
 `OfflineBacktestRunner` 会把不可变 `initial_lots` 纳入 `run_id`，但当前 CLI 只暴露 `--initial-cash-yuan`，因此传入空的初始持仓 tuple。经过校验的公共初始持仓输入/导入仍属于未完成验收工作。
 

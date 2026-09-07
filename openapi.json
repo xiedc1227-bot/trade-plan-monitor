@@ -7910,20 +7910,6 @@
       "SecretReferenceView": {
         "additionalProperties": false,
         "properties": {
-          "environmentVariable": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "minLength": 1,
-                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Environmentvariable"
-          },
           "key": {
             "maxLength": 140,
             "minLength": 13,
@@ -7942,8 +7928,7 @@
         "description": "Non-sensitive source of a configured-secret status.",
         "enum": [
           "NONE",
-          "STORE",
-          "ENVIRONMENT"
+          "STORE"
         ],
         "title": "SecretSource",
         "type": "string"

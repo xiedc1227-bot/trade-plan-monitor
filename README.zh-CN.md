@@ -34,7 +34,7 @@ WEBF13 在历史上完成生产路由与新建回测的验收缺口。曾经的�
 - 价格按整数“分”保存，数量按整数“股”保存，A 股时间戳必须是带 `Asia/Shanghai` 时区的值。
 - 行情缺失、过期、无权限或来源语义未验证时安全阻断。
 - 板块指数数据不会生成统一大盘强弱观点或隐藏交易规则。没有指数条件的计划在参考指数数据缺失时保持原有判断。
-- 这款个人工具允许把供应商凭证直接保存在被 Git 忽略的 `config/app.yaml`；迁移期间继续兼容旧环境变量/文件引用。
+- 这款个人工具的所有供应商凭证都直接保存在被 Git 忽略的 `config/app.yaml`；不读取环境变量或独立凭证文件。
 - Web 监听只接受字面量 `127.0.0.1`；系统未实现登录鉴权。
 
 ## 快速开始
@@ -80,8 +80,7 @@ ai:
   api_key: replace-with-your-deepseek-api-key
 ```
 
-迁移期间仍可读取原有 `token_ref` 和 `api_key_ref`，但直接值优先。不要提交
-`config/app.yaml`、数据库、备份或构建输出。
+`config/app.yaml` 是唯一凭证来源。不要提交它、数据库、备份或构建输出。
 
 Web 启动时会校验严格 YAML，并为本次服务生命周期创建一份不可变 AI 客户端绑定。通用监控的
 `DEGRADED` 状态与此独立，也不能证明 Tushare 已就绪。
@@ -294,7 +293,7 @@ python -m trade_plan_monitor ai extract --source .\plan-source.txt
 
 如需选择其他配置文件，在 `test` 或 `extract` 后增加 `--config <路径>`。命令会拒绝不存在的
 来源文件、目录、非法 UTF-8、超过配置字符上限的文本，以及缺失或为空的已配置 API Key，不会
-把不合格结果当成有效草稿。Web 与 CLI 使用同一应用配置；迁移期间继续支持原文件引用格式。
+把不合格结果当成有效草稿。Web 与 CLI 使用同一应用配置，不存在环境变量或独立文件凭证后备。
 
 T059 增加了可选、fail-closed 的连通性探测。它不属于普通测试，未单独批准真实供应商联网操作时不得运行。先审核一个规范 lowercase HTTPS base URL 和精确 model，再把授权绑定到操作、规范化目标和 model。digest context 是 `trade-plan-monitor:t059:ai-live:test-connection:v1`，并包含下方所示的 3 个换行分隔符，包括最后一个换行：
 

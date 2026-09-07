@@ -29,9 +29,9 @@ ai:
   api_key: replace-with-your-deepseek-api-key
 ```
 
-Direct `tushare.token` and `ai.api_key` values take precedence. The former `token_ref` and
-`api_key_ref` shapes remain readable during migration, so an existing personal configuration does
-not stop working immediately. `config/app.yaml` is excluded by the repository `.gitignore`.
+`tushare.token` and `ai.api_key` in `config/app.yaml` are the only credential source. That file is
+excluded by the repository `.gitignore`; environment variables and separate credential files are
+not read.
 
 ## Authorized Runs
 

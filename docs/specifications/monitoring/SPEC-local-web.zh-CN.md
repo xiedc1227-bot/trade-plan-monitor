@@ -115,7 +115,7 @@ web/src/
 - 计划提取和 AI 供应商测试只接受有界提交命令，并返回带强类型 `QUEUED` 回执的 `202`。路由只等待服务的持久提交边界；既不调用供应商，也不创建或运行提取工作，并且绝不启用计划。提取状态封闭为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`INVALID_OUTPUT`、`PROVIDER_ERROR` 和 `CANCELLED`；成功结果保留恰好一个阻断启用的 `AI_EVIDENCE_REVIEW_REQUIRED`，并且只暴露规范草稿 JSON、有界证据/问题、确定性校验结果、脱敏用量、hash 和时间戳。供应商/模型原始响应体和授权材料没有任何响应字段。
 - AI 供应商创建/更新使用完整的不含密钥配置。`PATCH` 是带修订保护的完整替换，其正文 `providerId` 必须与路径一致。API 通过具体 `AIProviderConfig` 的 class-local 脱敏校验器重新校验配置，包括 HTTPS/回环 URL 策略和资源限制。密钥替换接收现有 class-local `SecretWrite` 值，但响应只包含等价于 `SecretStatus` 的已配置状态、来源、固定掩码和代数元数据。服务返回的配置必须与提交的规范化配置一致；额外密钥或供应商原始字段会封闭失败。
 - 每个 T037 状态变更端点都要求 1～128 个白名单字符组成的 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同意图回放其规范响应。应用服务必须原子完成这些检查与审计写入；路由绝不重建仓储、校验或决策引擎行为。
-- 生产 Web 组合在 FastAPI lifespan 启动时，从 `config/app.yaml` 精确加载一个 AI 供应商，并启动一个持久计划服务。计划服务默认打开并迁移 `data/monitor.sqlite3`，持久化计划文档、原文、审核问题、启用状态、审计、事件和幂等响应，同时作为默认回测计划快照读取器。因此，计划保存、查询、JSON/YAML 导入、启用和停用结果在独立 Web 进程重启后仍然保留。AI 生命周期优先读取直接 `ai.api_key`，迁移期间才回退到原有大小限制的文件引用，然后构造一个供应商客户端，并在关闭前复用这份不可变绑定。`GET /ai-runtime` 只返回供应商 ID、显示名、Base URL、模型、启用/已配置状态、输入/输出上限和固定修订号 `0`；没有密钥值、原密钥路径/键名或 Authorization 字段。通用供应商变更路由仍是注入式适配器契约，但配置驱动的生产服务对创建、更新、密钥替换和供应商测试统一返回 `METHOD_NOT_ALLOWED`。修改 `config/app.yaml` 后必须重启 Web。
+- 生产 Web 组合在 FastAPI lifespan 启动时，从 `config/app.yaml` 精确加载一个 AI 供应商，并启动一个持久计划服务。计划服务默认打开并迁移 `data/monitor.sqlite3`，持久化计划文档、原文、审核问题、启用状态、审计、事件和幂等响应，同时作为默认回测计划快照读取器。因此，计划保存、查询、JSON/YAML 导入、启用和停用结果在独立 Web 进程重启后仍然保留。AI 生命周期只读取直接 `ai.api_key`，然后构造一个供应商客户端，并在关闭前复用这份不可变绑定。`GET /ai-runtime` 只返回供应商 ID、显示名、Base URL、模型、启用/已配置状态、输入/输出上限和固定修订号 `0`；没有密钥值或 Authorization 字段。通用供应商变更路由仍是注入式适配器契约，但配置驱动的生产服务对创建、更新、密钥替换和供应商测试统一返回 `METHOD_NOT_ALLOWED`。修改 `config/app.yaml` 后必须重启 Web。
 
 ### T038 持仓、提醒与诊断边界
 
@@ -137,7 +137,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`2b232e1a9237aa88a2de7c3d1ec3fcc692b198cfddeabc41fa88b7d67cdb3a53`
+OpenAPI 快照 SHA-256：`4bcce686250d374c0b6a44d777ac6ca78dba22ccaefbb14b8ec59e71c0cd40c5`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 42 个已批准 REST 路径：27 个实时路径（包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars` 和 `GET /plan-activation-states/{symbol}`）加精确 15 个回测路径，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -256,7 +256,7 @@ T044 浏览器生命周期由 `AppShell` 挂载通过单个 `useMonitorStream` �
 
 ### T045 AI 计划工作台边界
 
-T045 `PlanWorkbench` 只通过强类型 props/emits 组合 setup 风格 Vue 组件。`AIProviderSelector` 展示只读 `ConfiguredAIRuntimeView`：显示名、模型、安全 Base URL、输入上限、启用状态和密钥是否已加载。页面没有密钥输入、供应商创建/修改、连接测试或浏览器持久化功能。页面明确提示用户修改 `config/app.yaml` 或项目 `.env` 后重启 Web。
+T045 `PlanWorkbench` 只通过强类型 props/emits 组合 setup 风格 Vue 组件。`AIProviderSelector` 展示只读 `ConfiguredAIRuntimeView`：显示名、模型、安全 Base URL、输入上限、启用状态和密钥是否已加载。页面没有密钥输入、供应商创建/修改、连接测试或浏览器持久化功能。页面明确提示用户修改 `config/app.yaml` 后重启 Web。
 
 `PlanDraftingView` 与 `usePlanDrafting` 负责同源 API 流程。挂载时读取 `GET /api/v1/ai-runtime`；提交时生成一个幂等 Key，调用 `POST /api/v1/plan-extractions`，把 `QUEUED` 回执显示为当前任务，然后轮询 `GET /api/v1/plan-extractions/{operationId}`，直到进入封闭的终态。局部同时只运行一组提交/轮询。卸载会中止请求和计时器。“停止等待”只停止浏览器轮询，并明确说明服务端已经接收的任务可能继续；它不会谎称服务端任务已取消。错误使用固定中文文本，不包含供应商、密钥或传输原始详情。
 
@@ -308,7 +308,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - Vite 继续以 `web/index.html` 为文档输入，并继续生成 `web/dist/index.html`。仅构建时启用的插件会用同一份完整 distribution 替换被忽略的 `src/trade_plan_monitor/web/dist` 暂存目录；setuptools 只打包其中的 `index.html` 和本地 `assets/*`。两个生成目录都不纳入版本控制。
 - 生产资源发现通过 `importlib.resources` 在整个服务生命周期内访问 `trade_plan_monitor.web/dist`。它绝不搜索当前工作目录、仓库根目录、`web/dist` 或其他源码树 fallback。缺少目录、`index.html`、`assets/` 或实际资源时，会在 Uvicorn 启动前只以 `WEB_ASSETS_UNAVAILABLE` 和固定文案 `Installed Web assets are unavailable.` 失败；绝不暴露路径、资源异常、context 或 cause。
 - `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 42 个 REST 路径（27 个实时路径加 15 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义仍由一个应用管理。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
-- T052 负责打包启动、资源生命周期、配置驱动的 AI 生命周期和持久计划生命周期。启动顺序是监控运行时、AI、计划、回测，关闭严格反向执行。监控运行时的接线由下方 WEBF05 定义；T052 不构造或替代通用 `_ReadOnlyPackagedLifecycle`。没有显式注入计划服务时，计划启动会打开并迁移 `data/monitor.sqlite3`，在计划 DDL 前拒绝既有回测/行情数据库，把同一个服务注入所有计划路由，并把同一实例提供给默认回测组合。计划关闭只在回测关闭后释放其自有引擎。AI 启动时只读取一次 `config/app.yaml` 并优先使用其中的直接 `ai.api_key`；迁移期间保留原文件引用后备。YAML 非法会导致启动失败；直接凭证和原引用都缺失或为空时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加 CDN、远程运行资源、备用监听器或开发目录 fallback。
+- T052 负责打包启动、资源生命周期、配置驱动的 AI 生命周期和持久计划生命周期。启动顺序是监控运行时、AI、计划、回测，关闭严格反向执行。监控运行时的接线由下方 WEBF05 定义；T052 不构造或替代通用 `_ReadOnlyPackagedLifecycle`。没有显式注入计划服务时，计划启动会打开并迁移 `data/monitor.sqlite3`，在计划 DDL 前拒绝既有回测/行情数据库，把同一个服务注入所有计划路由，并把同一实例提供给默认回测组合。计划关闭只在回测关闭后释放其自有引擎。AI 启动时只读取一次 `config/app.yaml` 并只使用其中的直接 `ai.api_key`。YAML 非法会导致启动失败；凭证缺失或为空时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加 CDN、远程运行资源、备用监听器或开发目录 fallback。
 
 ### WEBF05 真实生产监控组合边界
 

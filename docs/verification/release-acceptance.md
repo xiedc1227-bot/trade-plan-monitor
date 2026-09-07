@@ -1,5 +1,9 @@
 # T059 Release Acceptance Evidence
 
+> Historical evidence notice (2026-09-07): the AI credential procedure recorded below
+> is superseded. `config/app.yaml` is now the only credential source; the application no
+> longer reads `AI_API_KEY` or any other credential environment variable.
+
 **Status:** `ACCEPTED` on 2026-09-01. Every approved internal offline gate is green after the
 separately authorized production-performance remediation. Optional AI connectivity remains
 `NOT_RUN_UNAUTHORIZED`, and the user performed final release acceptance on 2026-09-01.

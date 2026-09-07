@@ -1211,7 +1211,6 @@ def _provider_config_payload() -> dict[str, object]:
         "model": "example-model",
         "secretReference": {
             "key": "ai/provider/local",
-            "environmentVariable": "LOCAL_AI_KEY",
         },
         "timeoutSeconds": 30,
         "maxRetries": 2,

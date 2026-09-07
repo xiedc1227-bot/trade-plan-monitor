@@ -6,8 +6,6 @@ https://docs.pydantic.dev/latest/api/types/#pydantic.types.SecretStr
 
 from __future__ import annotations
 
-import os
-from collections.abc import Mapping
 from enum import StrEnum
 from typing import Literal, Protocol, Self, runtime_checkable
 
@@ -42,7 +40,6 @@ class SecretSource(StrEnum):
 
     NONE = "NONE"
     STORE = "STORE"
-    ENVIRONMENT = "ENVIRONMENT"
 
 
 class SecretWrite(_SecretValue):
@@ -106,10 +103,9 @@ class SecretStore(Protocol):
 
 
 class InMemorySecretStore:
-    """Process-local implementation used until an OS credential adapter is selected."""
+    """Process-local implementation populated from application configuration."""
 
-    def __init__(self, *, environment: Mapping[str, str] | None = None) -> None:
-        self._environment = os.environ if environment is None else environment
+    def __init__(self) -> None:
         self._values: dict[str, SecretStr] = {}
         self._generations: dict[str, int] = {}
 
@@ -125,8 +121,6 @@ class InMemorySecretStore:
                 SecretSource.STORE,
                 generation=self._generations[reference.key],
             )
-        if self._environment_value(reference) is not None:
-            return _configured_status(SecretSource.ENVIRONMENT)
         return SecretStatus(
             configured=False,
             source=SecretSource.NONE,
@@ -140,19 +134,7 @@ class InMemorySecretStore:
         stored_value = self._values.get(reference.key)
         if stored_value is not None:
             return stored_value
-        environment_value = self._environment_value(reference)
-        if environment_value is not None:
-            return environment_value
         raise RuntimeError("AI secret is not configured")
-
-    def _environment_value(self, reference: SecretReference) -> SecretStr | None:
-        environment_name = reference.environment_variable
-        if environment_name is None:
-            return None
-        value = self._environment.get(environment_name)
-        if not isinstance(value, str) or not value.strip():
-            return None
-        return SecretStr(value)
 
 
 def _configured_status(source: SecretSource, *, generation: int = 0) -> SecretStatus:

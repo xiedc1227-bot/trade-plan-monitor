@@ -22,7 +22,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from trade_plan_monitor.ai.file_secrets import create_project_secret_store
+from trade_plan_monitor.ai.configured_secrets import create_configured_secret_store
 from trade_plan_monitor.ai.models import (
     AIProviderConfig,
     AIProviderProfile,
@@ -243,17 +243,14 @@ def authorized_ai_live_target(
 ) -> tuple[AIProviderConfig, InMemorySecretStore]:
     mark_expression = str(request.config.getoption("markexpr"))
 
-    def project_secret_store() -> InMemorySecretStore:
+    def configured_secret_store() -> InMemorySecretStore:
         try:
             settings = load_application_config(_PROJECT_CONFIG).ai
-            return create_project_secret_store(
-                config_path=_PROJECT_CONFIG,
-                settings=settings,
-            )
+            return create_configured_secret_store(settings=settings)
         except OSError, ValidationError:
             _fail("T059_AI_LIVE_PROJECT_CONFIGURATION_UNAVAILABLE")
 
-    return _authorized_live_target(mark_expression, os.environ, project_secret_store)
+    return _authorized_live_target(mark_expression, os.environ, configured_secret_store)
 
 
 def test_ai_live_authorization_is_selector_first_and_target_bound() -> None:
@@ -271,7 +268,7 @@ def test_ai_live_authorization_is_selector_first_and_target_bound() -> None:
         def forbidden_secret_factory() -> InMemorySecretStore:
             nonlocal secret_factory_called
             secret_factory_called = True
-            return InMemorySecretStore(environment={})
+            return InMemorySecretStore()
 
         _authorized_live_target(
             "live",
@@ -290,7 +287,7 @@ def test_ai_live_authorization_is_selector_first_and_target_bound() -> None:
     assert _authorization_digest(first) != _authorization_digest(changed_model)
     assert _authorization_digest(first) != _authorization_digest(changed_endpoint)
 
-    project_store = InMemorySecretStore(environment={})
+    project_store = InMemorySecretStore()
     project_store.replace(first.secret_ref, SecretWrite(value="project-file-test-key"))
     authorized_config, authorized_store = _authorized_live_target(
         "live",

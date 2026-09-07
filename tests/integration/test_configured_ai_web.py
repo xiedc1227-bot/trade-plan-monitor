@@ -15,7 +15,7 @@ from trade_plan_monitor.web.routers.plans import PlanExtractionCommand
 from trade_plan_monitor.web.schemas import MutationContext, OperationKind
 
 
-def test_configured_ai_web_lifecycle_uses_read_only_project_file_configuration(
+def test_configured_ai_web_lifecycle_uses_direct_application_configuration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -29,19 +29,13 @@ ai:
   display_name: DeepSeek Web
   base_url: https://api.deepseek.com
   model: deepseek-v4-flash
-  api_key_ref:
-    file: ../.env
-    key: DEEPSEEK_API_KEY
+  api_key: direct-web-key
   timeout_seconds: 10
   max_retries: 0
   max_input_chars: 50000
   max_output_tokens: 2048
   temperature: 0.0
 """,
-        encoding="utf-8",
-    )
-    (tmp_path / ".env").write_text(
-        "DEEPSEEK_API_KEY=project-file-web-key\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "wrong-process-environment-key")
@@ -137,14 +131,14 @@ ai:
             assert extraction is not None
             assert extraction.status.value == "INVALID_OUTPUT"
             assert extraction.draft_plan_json is None
-            assert authorization_headers == ["Bearer project-file-web-key"]
+            assert authorization_headers == ["Bearer direct-web-key"]
         finally:
             await lifecycle.stop()
 
     asyncio.run(scenario())
 
 
-def test_fastapi_lifespan_exposes_file_configured_ai_services(tmp_path: Path) -> None:
+def test_fastapi_lifespan_exposes_directly_configured_ai_services(tmp_path: Path) -> None:
     config_directory = tmp_path / "config"
     config_directory.mkdir()
     config_path = config_directory / "app.yaml"
@@ -154,15 +148,11 @@ ai:
   profile: DEEPSEEK
   base_url: https://api.deepseek.com
   model: deepseek-v4-flash
-  api_key_ref:
-    file: ../.env
-    key: DEEPSEEK_API_KEY
+  api_key: direct-web-lifespan-key
   max_retries: 0
 """,
         encoding="utf-8",
     )
-    (tmp_path / ".env").write_text("DEEPSEEK_API_KEY=web-lifespan-key\n", encoding="utf-8")
-
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -249,7 +239,7 @@ ai:
     assert provider_clients[0].is_closed
 
 
-def test_production_app_defaults_to_project_file_ai_composition(tmp_path: Path) -> None:
+def test_production_app_defaults_to_direct_ai_configuration(tmp_path: Path) -> None:
     config_directory = tmp_path / "config"
     config_directory.mkdir()
     config_path = config_directory / "app.yaml"
@@ -260,17 +250,10 @@ ai:
   display_name: DeepSeek Production
   base_url: https://api.deepseek.com
   model: deepseek-v4-flash
-  api_key_ref:
-    file: ../.env
-    key: DEEPSEEK_API_KEY
+  api_key: direct-production-key
 """,
         encoding="utf-8",
     )
-    (tmp_path / ".env").write_text(
-        "DEEPSEEK_API_KEY=production-project-file-key\n",
-        encoding="utf-8",
-    )
-
     class Runtime:
         async def start(self) -> dict[str, object]:
             return {"status": "DEGRADED"}

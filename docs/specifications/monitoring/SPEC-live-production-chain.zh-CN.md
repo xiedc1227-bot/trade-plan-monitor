@@ -92,8 +92,8 @@ Dashboard/集合范围不得出现 `symbol`，股票详情范围必须包含 `sy
 ## 真实 Harness 与证据契约
 
 普通测试执行零外部请求。真实 harness 在选定进程中直接运行，并从被忽略的本地 `config/app.yaml`
-读取 `tushare.token`；`ai.api_key` 采用相同的直接配置约定。迁移期间仍可读取原有 `token_ref` 与
-`api_key_ref`，且直接值优先。
+读取 `tushare.token`；`ai.api_key` 采用相同的直接配置约定。这两个字段是唯一凭证来源；程序不读取
+环境变量或独立凭证文件。
 
 真实调用串行、单并发、起点至少相隔 `1.25` 秒、每次 `15` 秒超时且不自动重试。遇到第一个 `429` 后停止所有后续调用。股票和指数观测使用独立报告、授权 context、能力集合和时间戳标签。只有在 `trade_cal` 证明观测日期开市且当前窗口可暴露完整分钟后，才能认证实时分钟标签语义。窗口不合适时结果为 `NOT_RUN_MARKET_WINDOW`，不能猜测映射。禁止调用 DeepSeek 和全部其他 provider。
 
@@ -117,7 +117,7 @@ Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 
 - 迁移测试从每个受支持的旧 revision 开始，保留精确受保护行/hash，并拒绝不安全 downgrade。
 - OpenAPI 快照和生成 TypeScript 必须同步改变并保持逐字节 current。
 - Vue/Vitest 覆盖每种状态转换，并证明已删除 Health fallback。Chrome 覆盖 console/request 清洁、unavailable 不开 WebSocket、路由行为和 chunk 隔离。
-- 配置测试覆盖直接 Tushare/AI 凭证以及旧引用格式兼容性。
+- 配置测试证明直接 Tushare/AI 凭证是唯一接受的来源。
 
 ## 边界
 

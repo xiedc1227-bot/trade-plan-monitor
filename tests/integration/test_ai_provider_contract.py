@@ -49,7 +49,6 @@ def _config(**changes: object) -> AIProviderConfig:
         "model": "test-model",
         "secret_ref": SecretReference(
             key="ai/provider/local-test",
-            environment_variable="AI_PROVIDER_TEST_KEY",
         ),
         "timeout_seconds": 5,
         "max_retries": 2,
@@ -62,7 +61,7 @@ def _config(**changes: object) -> AIProviderConfig:
 
 
 def _secret_store(config: AIProviderConfig) -> InMemorySecretStore:
-    store = InMemorySecretStore(environment={})
+    store = InMemorySecretStore()
     store.replace(config.secret_ref, SecretWrite(value=SECRET_VALUE))
     return store
 
@@ -678,7 +677,7 @@ def test_transport_error_never_exposes_the_authorization_header() -> None:
 def test_missing_or_header_unsafe_secret_fails_before_transport(secret_value: str | None) -> None:
     config = _config()
     calls = 0
-    store = InMemorySecretStore(environment={})
+    store = InMemorySecretStore()
     if secret_value is not None:
         store.replace(config.secret_ref, SecretWrite(value=secret_value))
 
@@ -750,7 +749,7 @@ def test_disabled_provider_fails_before_secret_or_transport_access() -> None:
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             provider = OpenAICompatibleProvider(
                 client=client,
-                secret_store=InMemorySecretStore(environment={}),
+                secret_store=InMemorySecretStore(),
             )
             with pytest.raises(AIProviderError) as captured:
                 await provider.test_connection(config)

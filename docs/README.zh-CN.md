@@ -61,4 +61,4 @@
 
 ## 根目录入口
 
-仓库根目录有意保留 [README.md](../README.md)、[README.zh-CN.md](../README.zh-CN.md)、`openapi.json`、`pyproject.toml`、`.env.example` 和 `.gitignore`。它们是项目、工具或机器契约入口，不属于开发过程文档。
+仓库根目录有意保留 [README.md](../README.md)、[README.zh-CN.md](../README.zh-CN.md)、`openapi.json`、`pyproject.toml` 和 `.gitignore`。它们是项目、工具或机器契约入口，不属于开发过程文档。

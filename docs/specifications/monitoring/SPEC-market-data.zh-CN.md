@@ -36,7 +36,7 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 python -m ruff check src/trade_plan_monitor/market_data tests/unit/test_market_data.py
 ```
 
-实盘时段契约测试需要真实 `TUSHARE_TOKEN` 和明确的联网授权，默认不执行。
+实盘时段契约测试需要在 `config/app.yaml` 中配置真实 `tushare.token` 并获得明确联网授权，默认不执行。
 
 ## 项目结构
 
@@ -190,7 +190,7 @@ class MinuteBar(BaseModel):
 ## 边界
 
 - 始终：所有第三方响应必须校验后才能持久化。
-- 始终：脱敏 `TUSHARE_TOKEN` 和权限相关错误内容。
+- 始终：配置的 Tushare Token 和权限相关错误内容不得进入报告。
 - 始终：历史与实时能力/时间戳证据互相独立；只有 `backtest sync` 可以经授权获取历史数据。
 - 始终：交易日未知、实际涨跌停缺失、分钟过期或日线不足时失败关闭。
 - 先确认：修改公式版本、复权策略、默认宽限时间或增加第二数据源。

@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Literal, Self
 from uuid import UUID
 
 import yaml
@@ -13,7 +13,6 @@ from pydantic import (
     ConfigDict,
     Field,
     ModelWrapValidatorHandler,
-    StringConstraints,
     ValidationError,
     field_validator,
     model_validator,
@@ -24,11 +23,6 @@ from trade_plan_monitor.ai.models import (
     AIProviderProfile,
     SecretReference,
 )
-
-EnvironmentVariableName = Annotated[
-    str,
-    StringConstraints(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$"),
-]
 
 
 class _ConfigurationModel(BaseModel):
@@ -57,23 +51,6 @@ class _ConfigurationModel(BaseModel):
         return type(self).model_validate(values)
 
 
-class EnvironmentSecretReference(_ConfigurationModel):
-    """Reference a secret by environment-variable name without storing its value."""
-
-    environment_variable: EnvironmentVariableName
-
-
-class ProjectSecretFileReference(_ConfigurationModel):
-    """Reference one named assignment in a local project secret file."""
-
-    file: str = Field(
-        min_length=1,
-        max_length=1_024,
-        pattern=r"^[^\x00-\x1f\x7f]+$",
-    )
-    key: EnvironmentVariableName
-
-
 class WebConfiguration(_ConfigurationModel):
     """Local-only Web listener configuration."""
 
@@ -82,15 +59,11 @@ class WebConfiguration(_ConfigurationModel):
 
 
 class TushareConfiguration(_ConfigurationModel):
-    """Tushare transport settings with a direct token and legacy reference."""
+    """Tushare transport settings with one directly configured token."""
 
     api_url: AnyHttpUrl | None = None
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     token: str | None = Field(default=None, min_length=1, max_length=8_192)
-
-    token_ref: EnvironmentSecretReference = Field(
-        default_factory=lambda: EnvironmentSecretReference(environment_variable="TUSHARE_TOKEN")
-    )
 
     @model_validator(mode="wrap")
     @classmethod
@@ -138,7 +111,6 @@ class AIConfiguration(_ConfigurationModel):
         pattern=r"^[^\s\x00-\x1f\x7f]+$",
     )
     api_key: str | None = Field(default=None, min_length=1, max_length=8_192)
-    api_key_ref: ProjectSecretFileReference | None = None
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     max_retries: int = Field(default=2, ge=0, le=2)
     max_input_chars: int = Field(default=50_000, ge=1, le=200_000)
@@ -170,7 +142,7 @@ class AIConfiguration(_ConfigurationModel):
     def to_provider_config(self) -> AIProviderConfig | None:
         """Build the existing non-secret provider contract when AI is configured."""
 
-        if self.api_key is None and self.api_key_ref is None:
+        if self.api_key is None:
             return None
         return AIProviderConfig(
             provider_id=UUID("00000000-0000-4000-8000-0000000000d5"),
@@ -252,8 +224,6 @@ def load_application_config(path: str | Path) -> ApplicationConfiguration:
 __all__ = [
     "AIConfiguration",
     "ApplicationConfiguration",
-    "EnvironmentSecretReference",
-    "ProjectSecretFileReference",
     "TushareConfiguration",
     "WebConfiguration",
     "load_application_config",

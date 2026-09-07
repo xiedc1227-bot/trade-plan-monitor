@@ -42,7 +42,7 @@ python -m trade_plan_monitor backtest list --limit 20 --offset 0
 python -m trade_plan_monitor backtest prune --batch-size 1000
 ```
 
-`sync` is the only command allowed to use the network and `TUSHARE_TOKEN`; it requires both user authorization and the literal `--allow-network` flag. `verify`, `run`, `list`, and `prune` are local-only. `sync` and `verify` default `warmup_start` to 400 calendar days before `start`; an explicit override must match across both commands. `run` fails unless its dataset is frozen and verified, all six fee/slippage inputs are present, and exactly one of `--no-event-risk` or `--manual-event-risk` is selected. The numeric values above are illustrative assumptions, not defaults. The current `replay` command keeps its existing monitor-event semantics.
+`sync` is the only command allowed to use the network and the configured `tushare.token`; it requires both user authorization and the literal `--allow-network` flag. `verify`, `run`, `list`, and `prune` are local-only. `sync` and `verify` default `warmup_start` to 400 calendar days before `start`; an explicit override must match across both commands. `run` fails unless its dataset is frozen and verified, all six fee/slippage inputs are present, and exactly one of `--no-event-risk` or `--manual-event-risk` is selected. The numeric values above are illustrative assumptions, not defaults. The current `replay` command keeps its existing monitor-event semantics.
 
 `OfflineBacktestRunner` includes immutable `initial_lots` in `run_id`, but the current CLI exposes only `--initial-cash-yuan` and therefore supplies an empty initial-lot tuple. A validated public initial-lot input/import remains open acceptance work.
 

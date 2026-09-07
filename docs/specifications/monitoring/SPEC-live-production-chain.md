@@ -91,7 +91,7 @@ The production stock path remains dependency-blocked until a fresh stock capabil
 
 ## Live Harness and Evidence Contract
 
-Ordinary tests make zero external requests. The live harness runs in the selected process and reads `tushare.token` directly from the ignored local `config/app.yaml`. `ai.api_key` follows the same direct-configuration convention. Legacy `token_ref` and `api_key_ref` values remain readable during migration, with direct values taking precedence.
+Ordinary tests make zero external requests. The live harness runs in the selected process and reads `tushare.token` directly from the ignored local `config/app.yaml`. `ai.api_key` follows the same direct-configuration convention. These fields are the only credential source; environment variables and separate credential files are not read.
 
 Real calls are serial, single-concurrency, start at least `1.25` seconds apart, time out after `15` seconds, and have no automatic retry. The first `429` stops all later calls. Stock and index observations use separate reports, authorization contexts, capability sets, and timestamp labels. Realtime-minute label semantics may be certified only after `trade_cal` proves that the observation date is open and the current window can expose completed minutes. Outside that window the outcome is `NOT_RUN_MARKET_WINDOW`, not a guessed mapping. DeepSeek and all other providers are forbidden.
 
@@ -115,7 +115,7 @@ Playwright uses the installed Google Chrome channel (`channel: "chrome"`), one w
 - Migration tests start from every supported prior revision, preserve exact protected rows/hashes, and reject unsafe downgrade.
 - OpenAPI snapshot and generated TypeScript must change together and remain byte-current.
 - Vue/Vitest covers every state transition and proves removal of the Health fallback. Chrome covers console/request cleanliness, no unavailable-state WebSocket, route behavior, and chunk isolation.
-- Configuration tests cover direct Tushare and AI credentials plus legacy-reference compatibility.
+- Configuration tests prove direct Tushare and AI credentials are the only accepted source.
 
 ## Boundaries
 

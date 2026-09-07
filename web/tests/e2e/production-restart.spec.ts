@@ -111,8 +111,6 @@ async function startInstalledServer(): Promise<InstalledServer> {
     throw new Error("installed trade-plan-monitor console entry is unavailable");
   }
   const environment = { ...process.env };
-  delete environment.TUSHARE_TOKEN;
-  delete environment.DEEPSEEK_API_KEY;
   delete environment.TRADE_PLAN_MONITOR_ALLOW_TUSHARE_LIVE;
   delete environment.TRADE_PLAN_MONITOR_TUSHARE_LIVE_CHILD;
   const child = spawn(

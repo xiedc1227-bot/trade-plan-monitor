@@ -99,8 +99,8 @@ condition outcomes, and historical Schema v1 plans/results remain unchanged.
 - Missing, stale, unauthorized, or semantically unverified market data fails closed.
 - Board-index data never creates a global market-strength opinion or hidden trading rule. A plan
   with no index condition keeps its original decision when reference-index data is absent.
-- Provider credentials may be stored directly in ignored `config/app.yaml` for this personal tool;
-  legacy environment/file references remain compatible during migration.
+- All provider credentials are stored directly in the ignored `config/app.yaml` for this personal
+  tool; environment variables and separate credential files are not read.
 - The Web listener accepts only the literal `127.0.0.1`; authentication is not implemented.
 
 ## Quick Start
@@ -151,8 +151,8 @@ ai:
   api_key: replace-with-your-deepseek-api-key
 ```
 
-Legacy `token_ref` and `api_key_ref` entries remain readable during migration, but direct values
-take precedence. Do not commit `config/app.yaml`, databases, backups, or build output.
+`config/app.yaml` is the only credential source. Do not commit it, databases, backups, or build
+output.
 
 Web startup validates the strict YAML and creates one immutable AI client binding for the server
 lifetime. The general monitoring `DEGRADED` state remains independent and does not prove Tushare
@@ -407,7 +407,7 @@ python -m trade_plan_monitor ai extract --source .\plan-source.txt
 Pass `--config <path>` after `test` or `extract` to select another configuration file. The command
 rejects a missing/non-file source, invalid UTF-8, source text above the configured character limit,
 and a missing or empty configured API key before accepting a result. Web and CLI use the same
-application configuration; the former file-reference format remains available during migration.
+application configuration; no environment-variable or separate-file credential fallback exists.
 
 T059 adds an optional, fail-closed connectivity probe. It is not part of ordinary tests and must
 not be run without a separately approved real-provider network operation. Review a canonical

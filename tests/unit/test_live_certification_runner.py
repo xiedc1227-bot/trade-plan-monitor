@@ -69,8 +69,7 @@ def test_runner_fails_before_provider_call_when_config_has_no_token(
 ) -> None:
     config_path = tmp_path / "app.yaml"
     config_path.write_text(
-        "tushare:\n  api_url: https://api.quicksync.cn\n  token_ref:\n"
-        "    environment_variable: UNSET_TEST_TOKEN\n",
+        "tushare:\n  api_url: https://api.quicksync.cn\n",
         encoding="utf-8",
     )
 

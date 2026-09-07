@@ -104,7 +104,7 @@ The Chinese renderer uses the equivalent disclaimer `仅提醒，不会自动下
 ## Confirmed Assumptions
 
 1. “Text required” means both natural-language plan input and complete readable textual alerts.
-2. The first AI integration defaults to DeepSeek through its OpenAI-format HTTP contract. The user configures the request profile, service name, base URL, model, timeout, retries, token limit, and API key directly in the Git-ignored `config/app.yaml`, including switching to another reviewed OpenAI-compatible service. Web loads that configuration once at startup; the former file reference remains readable during migration.
+2. The first AI integration defaults to DeepSeek through its OpenAI-format HTTP contract. The user configures the request profile, service name, base URL, model, timeout, retries, token limit, and API key directly in the Git-ignored `config/app.yaml`, including switching to another reviewed OpenAI-compatible service. Web loads that configuration once at startup; no separate credential source exists.
 3. AI credentials may be stored in local application configuration but are never written into plans, logs, or ordinary API responses. The Web UI is read-only for AI configuration and displays only whether the configured key was loaded, never its value.
 4. Tushare is the only first-release market-data source. Token, symbol batching, pacing, capability probes, and limits for 1–10 symbols are configurable.
 5. The service listens only on the local loopback interface, so the first release has no login system. Origin/CORS restrictions, CSP, input validation, and secret protection still apply.

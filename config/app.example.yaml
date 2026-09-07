@@ -12,8 +12,8 @@ tushare:
 
 ai:
   # DeepSeek uses an OpenAI-compatible Chat Completions endpoint with a few
-  # provider-specific request fields. All values below are non-secret and may
-  # be changed for another reviewed OpenAI-compatible service.
+  # provider-specific request fields. Store the API key directly here and
+  # change the other values for another reviewed OpenAI-compatible service.
   profile: DEEPSEEK
   display_name: DeepSeek
   base_url: https://api.deepseek.com
