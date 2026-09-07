@@ -68,7 +68,10 @@ historical result, established hash, token, or provider boundary changes. See th
 [WEBF13 acceptance report](docs/verification/webf13-acceptance.md).
 
 The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
-Live provider checks remain separately authorized operations.
+Live provider checks remain separately authorized operations. The Windows Credential Manager
+setup, child-only injection boundary, separate stock/index commands, eligible market windows, and
+sanitized evidence format are documented in the
+[live-certification operations guide](docs/operations/live-certification.md).
 
 The local backtest implementation provides isolated `sync`, `verify`, `run`, `list`, and `prune`
 commands, and its BT050 production-fake acceptance is complete. The separately authorized T059

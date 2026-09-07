@@ -25,7 +25,7 @@
 - [ ] `LPC005` — Harden the zero-network/default and one-shot live stock harness.
   - Acceptance: serial single-concurrency, `>=1.25 s` starts, 15-second timeout, no retry, stop on 429, no secret artifact; a stock profile becomes `READY` only from fresh gated evidence with a verified `SourceTimeLabel`, otherwise it remains explicitly blocked or `NOT_RUN_MARKET_WINDOW`.
   - Verify: offline contract tests and candidate secret scan.
-  - Blocked evidence: the offline harness fails closed, but the required child-only secret-store injection adapter and fresh open-market `SourceTimeLabel` evidence do not yet exist; no token was read and no live call was attempted.
+  - Blocked evidence: Windows Credential Manager child-only injection, a secret-blind parent, sanitized seven-day profiles, and the real stock probe are implemented and offline-tested. The local target `trade-plan-monitor/tushare-live` is not provisioned, so no token was read and no open-market call was attempted; fresh `READY`/`SourceTimeLabel` evidence is still required.
 - [ ] `LPC006` — Compose the certified stock provider and one-batch recoverable runtime.
   - Acceptance: depends on a `READY` LPC005 stock profile; reference refresh/recovery/supervisor work; one `rt_min` batch per deadline for at most ten symbols; no evaluation refetch or network in transaction. Until that dependency passes, production stays `DEGRADED` with no token read, provider call, or actionable deadline coordinator.
   - Verify: provider, request-controller, deadline, recovery, restart, and ten-symbol tests.
@@ -36,11 +36,11 @@
 - [ ] `LPC007` — Establish separate live board-index certification evidence.
   - Acceptance: separate authorization/profile/`SourceTimeLabel`; unsuitable market window records `NOT_RUN_MARKET_WINDOW`; no stock evidence is reused.
   - Verify: offline harness tests and, only when gated, the serial live selector.
-  - Blocked evidence: no separately authorized open-market board-index observation was performed.
+  - Blocked evidence: the separate authorization, profile, timestamp-label derivation, and per-index `idx_mins`/`index_daily` probe are implemented and offline-tested. The local credential target is not provisioned, so no separately authorized open-market observation was performed.
 - [ ] `LPC008` — Compose the independent board-index provider and isolated condition failures.
   - Acceptance: each required index is fetched at most once per cutoff; one failure affects only dependent condition paths.
   - Verify: focused market-index runtime and decision tests.
-  - Blocked evidence: offline isolation is implemented, but actionable production composition remains gated by `LPC007`.
+  - Blocked evidence: the independent provider, per-cutoff fetch boundary, and failure isolation are implemented and offline-tested, but actionable production composition remains gated by a fresh `LPC007` profile.
 
 ## Web Availability
 

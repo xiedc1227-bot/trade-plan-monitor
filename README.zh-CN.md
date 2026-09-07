@@ -19,7 +19,9 @@ WEBF12 完成共用指数数据与当前计划条件的展示边界。总览只�
 
 WEBF13 在历史上完成生产路由与新建回测的验收缺口。曾经的五条占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现已在精确 10 路由地图中具备惰性 SFC 与真实浏览器回归证据。确定性 Chromium 旅程还会提交生成的运行命令，沿后端权威 `runId`/`jobId` 轮询，仅在 `COMPLETED` 后移除 `jobId`，再渲染 materialized 结果。其 42 条路径契约（27 条实时加 15 条回测）继续作为历史证据；ADR 0004 后续改变既有监控响应联合与生成 TypeScript，但没有增加路径。Schema v1、历史结果、既有哈希、token 或供应商边界保持不变。详见 [WEBF13 验收报告](docs/verification/webf13-acceptance.zh-CN.md)。
 
-确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的操作。
+确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的
+操作。Windows 凭据管理器配置、仅子进程注入边界、独立股票/指数命令、可用开市窗口和脱敏证据格式
+详见[真实认证运维指南](docs/operations/live-certification.zh-CN.md)。
 
 本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。另行授权的 T059 性能修复现已在不改变阈值的前提下通过 100k-export、ten-symbol/252-day、内存、存储及完整离线闸门。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
 

@@ -3,12 +3,30 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 from collections.abc import Callable
+from datetime import datetime
+from pathlib import Path
 from typing import Final
+from zoneinfo import ZoneInfo
 
+from trade_plan_monitor.config import TushareConfiguration
 from trade_plan_monitor.live_certification import LiveCertificationSurface
+from trade_plan_monitor.market_data.tushare_client import (
+    TushareClientConfigurationError,
+    create_tushare_client,
+)
+from trade_plan_monitor.runtime.clock import SystemClock
+from trade_plan_monitor.runtime.request_control import (
+    create_live_tushare_request_controller,
+)
+from trade_plan_monitor.tushare_live_probe import (
+    LiveProbeWindowError,
+    certify_board_indexes,
+    certify_stock,
+)
 from trade_plan_monitor.windows_credentials import (
     WindowsCredentialError,
     read_windows_generic_credential,
@@ -26,6 +44,9 @@ _MANAGED_ENVIRONMENT_NAMES: Final = (
     _INDEX_CHILD_ENV,
     _INDEX_AUTH_ENV,
 )
+_ENDPOINT: Final = "https://api.quicksync.cn"
+_SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
+_DEFAULT_OUTPUT_DIRECTORY: Final = Path(__file__).parents[2] / "data" / "live-certification"
 
 
 def _zero(value: bytearray) -> None:
@@ -42,12 +63,77 @@ def _token_text(value: bytearray) -> str:
         raise WindowsCredentialError("Windows credential is not a valid provider token") from None
 
 
+async def _certify_surface(
+    surface: LiveCertificationSurface,
+    output_directory: Path,
+) -> dict[str, object]:
+    configuration = TushareConfiguration.model_validate(
+        {
+            "api_url": _ENDPOINT,
+            "timeout_seconds": 15,
+            "token_ref": {"environment_variable": _TOKEN_ENV},
+        }
+    )
+    client = create_tushare_client(configuration)
+    clock = SystemClock()
+    observed_at = datetime.now(_SHANGHAI)
+    controller = create_live_tushare_request_controller(clock=clock)
+    try:
+        if surface is LiveCertificationSurface.STOCK:
+            profile = await certify_stock(
+                client=client,
+                request_controller=controller,
+                observed_at=observed_at,
+                endpoint_url=_ENDPOINT,
+                output_path=output_directory / "tushare-stock-live.json",
+            )
+            return {
+                "outcome": "CERTIFIED" if profile.ready else "CERTIFIED_VISIBLE_BLOCK",
+                "profileId": profile.profile_id,
+                "surface": surface.value,
+            }
+        profile = await certify_board_indexes(
+            client=client,
+            request_controller=controller,
+            observed_at=observed_at,
+            endpoint_url=_ENDPOINT,
+            output_path=output_directory / "tushare-board-index-live.json",
+        )
+        return {
+            "outcome": "CERTIFIED" if profile.ready_indexes else "CERTIFIED_VISIBLE_BLOCK",
+            "profileId": profile.profile_id,
+            "readyIndexCount": len(profile.ready_indexes),
+            "surface": surface.value,
+        }
+    finally:
+        await controller.aclose()
+
+
+def _run_default_certification(
+    surface: LiveCertificationSurface,
+    output_directory: Path,
+) -> int:
+    try:
+        result = asyncio.run(_certify_surface(surface, output_directory))
+    except (LiveProbeWindowError, TushareClientConfigurationError):
+        result = {"outcome": "NOT_RUN_PREREQUISITE", "surface": surface.value}
+        return_code = 2
+    except Exception:
+        result = {"outcome": "CERTIFICATION_FAILED", "surface": surface.value}
+        return_code = 1
+    else:
+        return_code = 0
+    print(json.dumps(result, ensure_ascii=True, sort_keys=True))
+    return return_code
+
+
 def run_live_child(
     *,
     surface: LiveCertificationSurface,
     credential_target: str,
     credential_reader: Callable[[str], bytearray] = read_windows_generic_credential,
-    pytest_main: Callable[[list[str]], int] | None = None,
+    certification_runner: Callable[[LiveCertificationSurface, Path], int] | None = None,
+    output_directory: Path = _DEFAULT_OUTPUT_DIRECTORY,
 ) -> int:
     """Read, use, and erase one token without returning it to the launcher."""
 
@@ -63,18 +149,15 @@ def run_live_child(
         if surface is LiveCertificationSurface.STOCK:
             os.environ[_STOCK_CHILD_ENV] = "1"
             os.environ[_STOCK_AUTH_ENV] = "1"
-            test_path = "tests/contract/test_tushare_live.py"
         else:
             os.environ[_INDEX_CHILD_ENV] = "1"
             os.environ[_INDEX_AUTH_ENV] = "1"
-            test_path = "tests/contract/test_tushare_index_live.py"
-        if pytest_main is None:
-            import pytest
-
-            selected_pytest_main = pytest.main
-        else:
-            selected_pytest_main = pytest_main
-        return int(selected_pytest_main([test_path, "-q", "-m", "live"]))
+        selected_runner = (
+            _run_default_certification
+            if certification_runner is None
+            else certification_runner
+        )
+        return int(selected_runner(surface, output_directory))
     except WindowsCredentialError:
         print(
             json.dumps(

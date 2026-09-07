@@ -115,9 +115,14 @@ reported rather than hidden, skipped, or relaxed.
   trading date during a suitable completed-minute window.
 - Board-index live capability and timestamp evidence require their own authorization/profile;
   stock-provider evidence cannot satisfy that gate.
-- The required OS-backed, child-only secret injection adapter is not implemented. The live
-  launcher therefore fails closed instead of reading a project `.env`, inheriting a token,
-  or starting an actionable coordinator.
+- The OS-backed, child-only secret injection adapter is now implemented with Windows Credential
+  Manager, a secret-blind allowlisted parent environment, mutable-buffer zeroing, and separate
+  stock/index authorization phrases. The local target `trade-plan-monitor/tushare-live` was not
+  provisioned during this verification, so no token was read and no provider call was attempted.
+- Sanitized, hash-protected stock and board-index profiles now expire after seven days and fail
+  closed on tampering, endpoint mismatch, schema mismatch, or cross-surface reuse. Real stock and
+  per-index probes are implemented, including first-429 global stop behavior, but fresh open-market
+  profiles remain outstanding.
 - CPython cannot forcibly terminate an arbitrary non-cooperative synchronous provider
   callable. The real Tushare transport is configured with its own 15-second timeout and
   shutdown is bounded and visible, but `LPC005`/`LPC006` cannot be certified until the gated

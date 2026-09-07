@@ -1,0 +1,285 @@
+"""Offline contracts for sanitized stock and board-index live probes."""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+import pandas as pd
+
+from trade_plan_monitor.market_data.models import ProviderCapabilityStatus
+from trade_plan_monitor.market_data.sessions import SourceTimeLabel
+from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.market_index.tushare import (
+    TushareMarketIndexCapabilityStatus,
+    TushareMarketIndexSourceTimeLabel,
+)
+from trade_plan_monitor.runtime.request_control import TushareOperation
+from trade_plan_monitor.tushare_live_probe import certify_board_indexes, certify_stock
+
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+OBSERVED_AT = datetime(2026, 9, 7, 10, 15, 2, tzinfo=SHANGHAI)
+
+
+class _Controller:
+    def __init__(self) -> None:
+        self.calls: list[TushareOperation] = []
+
+    async def execute(
+        self,
+        operation: TushareOperation,
+        call: object,
+        *,
+        work_key: str,
+        priority: object,
+    ) -> object:
+        del work_key, priority
+        self.calls.append(operation)
+        assert callable(call)
+        return call()
+
+
+class _Client:
+    def __init__(self, *, blocked_index: str | None = None) -> None:
+        self.blocked_index = blocked_index
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    def trade_cal(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("trade_cal", kwargs))
+        return pd.DataFrame(
+            [
+                {
+                    "exchange": "SSE",
+                    "cal_date": "20260904",
+                    "is_open": "1",
+                    "pretrade_date": "20260903",
+                },
+                {
+                    "exchange": "SSE",
+                    "cal_date": "20260907",
+                    "is_open": "1",
+                    "pretrade_date": "20260904",
+                },
+            ]
+        )
+    def stk_limit(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("stk_limit", kwargs))
+        return pd.DataFrame(
+            [
+                {
+                    "trade_date": "20260904",
+                    "ts_code": "600000.SH",
+                    "up_limit": "11",
+                    "down_limit": "9",
+                }
+            ]
+        )
+
+    def daily(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("daily", kwargs))
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "600000.SH",
+                    "trade_date": "20260904",
+                    "open": "10",
+                    "high": "11",
+                    "low": "9",
+                    "close": "10.5",
+                    "vol": "100",
+                    "amount": "200",
+                }
+            ]
+        )
+
+    def rt_min(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("rt_min", kwargs))
+        symbols = str(kwargs["ts_code"]).split(",")
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": symbol,
+                    "time": "2026-09-07 10:14:00",
+                    "open": "10",
+                    "high": "11",
+                    "low": "9",
+                    "close": "10.5",
+                    "vol": "100",
+                    "amount": "200",
+                }
+                for symbol in symbols
+            ]
+        )
+
+    def rt_min_daily(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("rt_min_daily", kwargs))
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "600000.SH",
+                    "freq": "1MIN",
+                    "time": "2026-09-07 09:30:00",
+                    "open": "10",
+                    "high": "11",
+                    "low": "9",
+                    "close": "10.5",
+                    "vol": "100",
+                    "amount": "200",
+                },
+                {
+                    "ts_code": "600000.SH",
+                    "freq": "1MIN",
+                    "time": "2026-09-07 10:14:00",
+                    "open": "10",
+                    "high": "11",
+                    "low": "9",
+                    "close": "10.5",
+                    "vol": "100",
+                    "amount": "200",
+                },
+            ]
+        )
+
+    def idx_mins(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("idx_mins", kwargs))
+        code = str(kwargs["ts_code"])
+        if code == self.blocked_index:
+            raise RuntimeError("permission denied")
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": code,
+                    "trade_time": "2026-09-07 09:35:00",
+                    "open": "100",
+                    "high": "101",
+                    "low": "99",
+                    "close": "100.5",
+                    "vol": "100",
+                    "amount": "200",
+                },
+                {
+                    "ts_code": code,
+                    "trade_time": "2026-09-07 10:15:00",
+                    "open": "100",
+                    "high": "101",
+                    "low": "99",
+                    "close": "100.5",
+                    "vol": "100",
+                    "amount": "200",
+                },
+            ]
+        )
+
+    def index_daily(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("index_daily", kwargs))
+        code = str(kwargs["ts_code"])
+        if code == self.blocked_index:
+            raise RuntimeError("permission denied")
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": code,
+                    "trade_date": "20260904",
+                    "open": "100",
+                    "high": "101",
+                    "low": "99",
+                    "close": "100.5",
+                    "vol": "100",
+                    "amount": "200",
+                }
+            ]
+        )
+
+
+class _RateLimitedStockClient(_Client):
+    def daily(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("daily", kwargs))
+        raise TushareProviderError(TushareErrorCode.RATE_LIMITED, "daily")
+
+
+def test_stock_probe_certifies_all_surfaces_and_start_labeled_minutes(
+    tmp_path: Path,
+) -> None:
+    client = _Client()
+    controller = _Controller()
+
+    profile = asyncio.run(
+        certify_stock(
+            client=client,
+            request_controller=controller,
+            observed_at=OBSERVED_AT,
+            endpoint_url="https://api.quicksync.cn",
+            output_path=tmp_path / "stock.json",
+        )
+    )
+
+    assert profile.ready
+    assert profile.source_time_label is SourceTimeLabel.START
+    assert set(profile.capabilities.model_dump(mode="python").values()) == {
+        ProviderCapabilityStatus.READY
+    }
+    assert controller.calls == [
+        TushareOperation.TRADING_CALENDAR,
+        TushareOperation.DAILY_LIMITS,
+        TushareOperation.DAILY_BARS,
+        TushareOperation.REALTIME_MINUTES,
+        TushareOperation.CURRENT_DAY_MINUTES,
+        TushareOperation.CURRENT_DAY_MINUTES,
+    ]
+    assert (tmp_path / "stock.json").is_file()
+
+
+def test_index_probe_keeps_authorization_and_failures_per_index(tmp_path: Path) -> None:
+    client = _Client(blocked_index=MarketIndexCode.BSE_50.value)
+    controller = _Controller()
+
+    profile = asyncio.run(
+        certify_board_indexes(
+            client=client,
+            request_controller=controller,
+            observed_at=OBSERVED_AT,
+            endpoint_url="https://api.quicksync.cn",
+            output_path=tmp_path / "index.json",
+        )
+    )
+
+    assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.END
+    assert profile.capabilities[MarketIndexCode.BSE_50] is (
+        TushareMarketIndexCapabilityStatus.BLOCKED_PERMISSION
+    )
+    assert all(
+        status is TushareMarketIndexCapabilityStatus.READY
+        for code, status in profile.capabilities.items()
+        if code is not MarketIndexCode.BSE_50
+    )
+    assert controller.calls[0] is TushareOperation.TRADING_CALENDAR
+    assert controller.calls.count(TushareOperation.INDEX_MINUTES) == len(MarketIndexCode)
+    assert controller.calls.count(TushareOperation.INDEX_DAILY) == len(MarketIndexCode)
+    assert (tmp_path / "index.json").is_file()
+
+
+def test_stock_probe_stops_every_later_call_after_first_rate_limit(tmp_path: Path) -> None:
+    client = _RateLimitedStockClient()
+    controller = _Controller()
+
+    profile = asyncio.run(
+        certify_stock(
+            client=client,
+            request_controller=controller,
+            observed_at=OBSERVED_AT,
+            endpoint_url="https://api.quicksync.cn",
+            output_path=tmp_path / "stock.json",
+        )
+    )
+
+    assert profile.capabilities.daily_bars is ProviderCapabilityStatus.RATE_LIMITED
+    assert profile.capabilities.realtime_minutes is ProviderCapabilityStatus.UNVERIFIED
+    assert profile.capabilities.current_day_minutes is ProviderCapabilityStatus.UNVERIFIED
+    assert controller.calls == [
+        TushareOperation.TRADING_CALENDAR,
+        TushareOperation.DAILY_LIMITS,
+        TushareOperation.DAILY_BARS,
+    ]
