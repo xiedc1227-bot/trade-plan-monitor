@@ -70,6 +70,56 @@ const snapshot: DashboardResponse = {
   ],
 };
 
+function crossDayOfficialRiskBreachSnapshot(): DashboardResponse {
+  const value = structuredClone(snapshot);
+  const summary = value.symbols?.[0];
+  if (summary === undefined) {
+    throw new Error("test fixture must contain one symbol");
+  }
+  value.connectionStatus = "DISCONNECTED";
+  value.dataAgeSeconds = 68_400;
+  value.observedAt = "2026-08-25T10:00:00+08:00";
+  summary.connected = false;
+  summary.observedAt = value.observedAt;
+  summary.riskDistanceFen = -580;
+  summary.decision = {
+    ...summary.decision,
+    dataAgeSeconds: 68_400,
+    dataHealth: {
+      dataAgeSeconds: null,
+      fresh: false,
+      latestBarEnd: null,
+      requiredDataComplete: true,
+      status: "STALE",
+    },
+    episodeLowFen: null,
+    episodeStatus: null,
+    evaluatedAt: value.observedAt,
+    evidence: [
+      {
+        children: [],
+        code: "OFFICIAL_CLOSE_BELOW_LEVEL",
+        facts: [
+          { key: "official_close_fen", unit: "FEN", value: 5_500 },
+          { key: "risk_line_fen", unit: "FEN", value: 6_080 },
+          { key: "official_trade_date", unit: "DATE", value: "2026-08-24" },
+        ],
+        kind: "CONDITION",
+        missingInputs: [],
+        outcome: "SATISFIED",
+      },
+    ],
+    marketDataAt: "2026-08-24T15:00:00+08:00",
+    nextStep: { code: "WAIT_FOR_NEXT_TRADING_DAY" },
+    priceFen: 5_500,
+    riskBreachTradeDate: "2026-08-24",
+    riskStatus: "BREACHED_PENDING_CONFIRMATION",
+    signalType: "RISK_BREACH",
+    zone: "BELOW_RISK",
+  };
+  return value;
+}
+
 function event(sequence: number): MonitorEventEnvelope {
   return {
     aggregateId: "003043.SZ",
@@ -282,6 +332,36 @@ describe("API client", () => {
       "/api/v1/dashboard",
       expect.objectContaining({ headers: { Accept: "application/json" }, method: "GET" }),
     );
+  });
+
+  it("accepts a complete stale official-close risk breach restored on the next day", async () => {
+    const restored = crossDayOfficialRiskBreachSnapshot();
+    const client = createApiClient(async () =>
+      new Response(JSON.stringify(restored), { status: 200 }),
+    );
+
+    await expect(client.getDashboard()).resolves.toEqual(restored);
+  });
+
+  it.each([
+    ["a non-official actionable signal", (value: DashboardResponse) => {
+      const decision = value.symbols?.[0]?.decision;
+      if (decision !== undefined) decision.signalType = "BUY_CORE_READY";
+    }],
+    ["incomplete official-close evidence", (value: DashboardResponse) => {
+      const decision = value.symbols?.[0]?.decision;
+      if (decision?.evidence?.[0] !== undefined) {
+        decision.evidence[0].outcome = "UNSATISFIED";
+      }
+    }],
+  ])("rejects stale actionable data for %s", async (_label, mutate) => {
+    const invalid = crossDayOfficialRiskBreachSnapshot();
+    mutate(invalid);
+    const client = createApiClient(async () =>
+      new Response(JSON.stringify(invalid), { status: 200 }),
+    );
+
+    await expect(client.getDashboard()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
 
   it("rejects unavailable envelopes from another endpoint scope", async () => {

@@ -767,7 +767,11 @@ function validateDecisionRelationships(value: Record<string, unknown>): boolean 
     return false;
   }
   const dataHealth = value.dataHealth as Record<string, unknown>;
-  if (actionableSignalTypes.has(value.signalType as string) && dataHealth.status !== "LIVE") {
+  if (
+    actionableSignalTypes.has(value.signalType as string) &&
+    dataHealth.status !== "LIVE" &&
+    !isCertifiedOfficialCloseRiskBreach(value, dataHealth)
+  ) {
     return false;
   }
   const evaluatedAt = shanghaiDateTimeKey(value.evaluatedAt as string);
@@ -798,6 +802,60 @@ function validateDecisionRelationships(value: Record<string, unknown>): boolean 
     return false;
   }
   return true;
+}
+
+function isCertifiedOfficialCloseRiskBreach(
+  value: Record<string, unknown>,
+  dataHealth: Record<string, unknown>,
+): boolean {
+  const marketDataAt = value.marketDataAt;
+  if (
+    value.signalType !== "RISK_BREACH" ||
+    value.zone !== "BELOW_RISK" ||
+    value.riskStatus !== "BREACHED_PENDING_CONFIRMATION" ||
+    typeof marketDataAt !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T15:00:00\+08:00$/.test(marketDataAt) ||
+    value.riskBreachTradeDate !== marketDataAt.slice(0, 10) ||
+    dataHealth.status !== "STALE" ||
+    dataHealth.requiredDataComplete !== true ||
+    dataHealth.fresh !== false ||
+    !isRecord(value.nextStep) ||
+    value.nextStep.code !== "WAIT_FOR_NEXT_TRADING_DAY" ||
+    !Array.isArray(value.evidence)
+  ) {
+    return false;
+  }
+  return value.evidence.some((candidate) => {
+    if (
+      !isRecord(candidate) ||
+      candidate.kind !== "CONDITION" ||
+      candidate.code !== "OFFICIAL_CLOSE_BELOW_LEVEL" ||
+      candidate.outcome !== "SATISFIED" ||
+      (candidate.children !== undefined &&
+        (!Array.isArray(candidate.children) || candidate.children.length !== 0)) ||
+      (candidate.missingInputs !== undefined &&
+        (!Array.isArray(candidate.missingInputs) || candidate.missingInputs.length !== 0)) ||
+      !Array.isArray(candidate.facts)
+    ) {
+      return false;
+    }
+    const facts = new Map(
+      candidate.facts.filter(isRecord).map((fact) => [fact.key, fact] as const),
+    );
+    const officialClose = facts.get("official_close_fen");
+    const riskLine = facts.get("risk_line_fen");
+    const officialDate = facts.get("official_trade_date");
+    return (
+      officialClose?.unit === "FEN" &&
+      typeof officialClose.value === "number" &&
+      officialClose.value === value.priceFen &&
+      riskLine?.unit === "FEN" &&
+      typeof riskLine.value === "number" &&
+      officialClose.value < riskLine.value &&
+      officialDate?.unit === "DATE" &&
+      officialDate.value === value.riskBreachTradeDate
+    );
+  });
 }
 
 function matchesIntegerSecondAge(

@@ -77,6 +77,7 @@ def _shared_snapshot() -> dict[str, object]:
 def _dashboard_payload() -> dict[str, object]:
     return {
         "sequence": 7,
+        "runtimeGeneration": "11111111-1111-4111-8111-111111111111",
         "observedAt": OBSERVED_AT.isoformat(),
         "connectionStatus": "UNKNOWN",
         "dataAgeSeconds": None,

@@ -32,9 +32,7 @@ def test_unverified_index_profile_is_separate_and_fails_before_any_sdk_call() ->
     assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.UNVERIFIED
     assert profile.source_time_label != stock_label
     assert set(profile.capabilities) == set(MarketIndexCode)
-    assert set(profile.capabilities.values()) == {
-        TushareMarketIndexCapabilityStatus.UNVERIFIED
-    }
+    assert set(profile.capabilities.values()) == {TushareMarketIndexCapabilityStatus.UNVERIFIED}
     assert profile.five_minute_endpoint is None
     assert profile.realtime_five_minute_endpoint is None
     assert profile.official_daily_endpoint is None
@@ -178,11 +176,47 @@ class _WrongRealtimeFrequencyClient(_Client):
 
 def _ready_profile():
     return certified_tushare_market_index_profile(
-        capabilities={
-            code: TushareMarketIndexCapabilityStatus.READY for code in MarketIndexCode
-        },
+        capabilities={code: TushareMarketIndexCapabilityStatus.READY for code in MarketIndexCode},
         source_time_label=TushareMarketIndexSourceTimeLabel.END,
     )
+
+
+@pytest.mark.parametrize("conflict_in_required_history", [False, True])
+def test_index_daily_conflicts_are_checked_in_the_exact_required_history(
+    conflict_in_required_history,
+):
+    class Client(_Client):
+        def index_daily(self, **kwargs):
+            frame = super().index_daily(**kwargs)
+            duplicate = frame.iloc[[0]].copy()
+            duplicate["close"] = "99"
+            if not conflict_in_required_history:
+                old = frame.iloc[[0]].copy()
+                old["trade_date"] = "20260801"
+                duplicate["trade_date"] = "20260801"
+                return pd.concat([old, duplicate, frame], ignore_index=True)
+            return pd.concat([frame, duplicate], ignore_index=True)
+
+    provider = TushareMarketIndexProvider(
+        client=Client(),
+        profile=_ready_profile(),
+        request_controller=_Controller(),
+        now=lambda: datetime(2026, 9, 7, 10, 0, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    async def acquire():
+        return await provider.acquire_index_data(
+            index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+            decision_cutoff=datetime(2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            five_minute_bar_count=2,
+            official_daily_bar_count=2,
+        )
+
+    if conflict_in_required_history:
+        with pytest.raises(TushareMarketIndexProviderError):
+            asyncio.run(acquire())
+    else:
+        assert len(asyncio.run(acquire()).official_daily_bars) == 2
 
 
 def test_certified_index_profile_requires_dedicated_evidence_values() -> None:
@@ -243,9 +277,7 @@ def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_unit
     assert batch.official_daily_bars[-1].volume == Decimal("400")
     assert batch.official_daily_bars[-1].amount == Decimal("5000")
     assert all(bar.provider_revision == batch.content_revision for bar in batch.five_minute_bars)
-    assert all(
-        bar.provider_revision == batch.content_revision for bar in batch.official_daily_bars
-    )
+    assert all(bar.provider_revision == batch.content_revision for bar in batch.official_daily_bars)
 
 
 def test_index_provider_rejects_wrong_returned_realtime_frequency() -> None:

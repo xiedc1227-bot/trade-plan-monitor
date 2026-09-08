@@ -417,6 +417,60 @@ class AuthoritativeDecisionView(ReadModel):
     evidence: tuple[DecisionEvidenceView, ...] = Field(default=(), max_length=_MAX_EVIDENCE)
     next_step: NextStepView
 
+    def _is_certified_official_close_risk_breach(self) -> bool:
+        market_data_at = self.market_data_at
+        breach_date = self.risk_breach_trade_date
+        health = self.data_health
+        if (
+            self.signal_type is not SignalType.RISK_BREACH
+            or self.zone is not DecisionZone.BELOW_RISK
+            or self.risk_status is not RiskStatus.BREACHED_PENDING_CONFIRMATION
+            or market_data_at is None
+            or breach_date is None
+            or breach_date != market_data_at.date()
+            or (
+                market_data_at.hour,
+                market_data_at.minute,
+                market_data_at.second,
+                market_data_at.microsecond,
+            )
+            != (15, 0, 0, 0)
+            or health.status is not DataHealthStatus.STALE
+            or not health.required_data_complete
+            or health.fresh
+            or self.next_step.code is not NextStepCode.WAIT_FOR_NEXT_TRADING_DAY
+        ):
+            return False
+        for evidence in self.evidence:
+            if (
+                evidence.kind is not EvidenceKind.CONDITION
+                or evidence.code != "OFFICIAL_CLOSE_BELOW_LEVEL"
+                or evidence.outcome is not ConditionOutcome.SATISFIED
+                or evidence.children
+                or evidence.missing_inputs
+            ):
+                continue
+            facts = {fact.key: fact for fact in evidence.facts}
+            official_close = facts.get("official_close_fen")
+            risk_line = facts.get("risk_line_fen")
+            official_date = facts.get("official_trade_date")
+            if (
+                official_close is not None
+                and official_close.unit is EvidenceUnit.FEN
+                and type(official_close.value) is int
+                and official_close.value == self.price_fen
+                and risk_line is not None
+                and risk_line.unit is EvidenceUnit.FEN
+                and type(risk_line.value) is int
+                and official_close.value < risk_line.value
+                and official_date is not None
+                and official_date.unit is EvidenceUnit.DATE
+                and type(official_date.value) is date
+                and official_date.value == breach_date
+            ):
+                return True
+        return False
+
     @model_validator(mode="after")
     def validate_decision(self) -> Self:
         market_values = (self.market_data_at, self.data_age_seconds, self.price_fen)
@@ -450,6 +504,7 @@ class AuthoritativeDecisionView(ReadModel):
         if (
             self.signal_type.value in actionable
             and self.data_health.status is not DataHealthStatus.LIVE
+            and not self._is_certified_official_close_risk_breach()
         ):
             raise ValueError("actionable decisions require LIVE data")
         return self

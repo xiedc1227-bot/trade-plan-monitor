@@ -62,6 +62,7 @@ from trade_plan_monitor.state.repositories import PositionLotRecord, RepositoryE
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _SYMBOL_PATTERN = re.compile(r"^[0-9]{6}\.(?:SH|SZ|BJ)$")
+_CANONICAL_RESULT_THRESHOLD_PATTERN = re.compile(r'("threshold_ratio":")(-?[0-9]+e-?[0-9]+)(")')
 _MAX_RESULT_JSON_BYTES = 8 * 1024 * 1024
 _MAX_POSITION_LOTS = 200
 _MAX_INDEX_JSON_BYTES = 16 * 1024 * 1024
@@ -465,12 +466,16 @@ class ProjectionRepository:
                 PendingOfficialCloseRow.symbol == identity[1],
             )
         )
-        if existing is not None and (
-            existing.plan_hash,
-            existing.symbol,
-            existing.trade_date,
-            existing.formula_version,
-        ) != identity:
+        if (
+            existing is not None
+            and (
+                existing.plan_hash,
+                existing.symbol,
+                existing.trade_date,
+                existing.formula_version,
+            )
+            != identity
+        ):
             raise ProjectionIdentityConflictError(
                 "Symbol already has another unresolved official-close identity"
             )
@@ -569,9 +574,7 @@ class ProjectionRepository:
         values = _market_index_values(snapshot, provider_revision, snapshot_json)
         statement = sqlite_insert(MarketIndexSnapshotRow).values(**values)
         inserted = self._session.execute(
-            statement.on_conflict_do_nothing(
-                index_elements=[MarketIndexSnapshotRow.snapshot_hash]
-            )
+            statement.on_conflict_do_nothing(index_elements=[MarketIndexSnapshotRow.snapshot_hash])
         )
         self._session.flush()
         self._session.expire_all()
@@ -773,13 +776,48 @@ def _decision_head_rank(result: EvaluationResult) -> tuple[datetime, int, dateti
     return target_at, kind_rank, result.snapshot.evaluated_at
 
 
+def _result_validation_json(value: str) -> str:
+    """Adapt canonical decision decimals to the stricter embedded plan parser."""
+
+    _bounded_json(value, _MAX_RESULT_JSON_BYTES, "evaluation result")
+    remaining_expansion = _MAX_RESULT_JSON_BYTES - len(value.encode("utf-8"))
+
+    def restore(match: re.Match[str]) -> str:
+        nonlocal remaining_expansion
+        encoded = match.group(2)
+        try:
+            decimal = Decimal(encoded)
+        except ArithmeticError, ValueError:  # pragma: no cover - closed regex
+            raise ValueError("canonical result threshold is invalid") from None
+        if not decimal.is_finite() or not Decimal("-1") <= decimal <= Decimal("10"):
+            raise ValueError("canonical result threshold is outside its domain")
+        sign, digits, exponent = decimal.as_tuple()
+        if not isinstance(exponent, int):
+            raise ValueError("canonical result threshold exponent must be finite")
+        coefficient_length = len(digits)
+        decimal_position = coefficient_length + exponent
+        if exponent >= 0:
+            length = coefficient_length + exponent
+        elif decimal_position > 0:
+            length = coefficient_length + 1
+        else:
+            length = 2 - decimal_position + coefficient_length
+        growth = max(0, length + int(bool(sign)) - len(encoded))
+        if growth > remaining_expansion:
+            raise ValueError("canonical result threshold expansion is too large")
+        remaining_expansion -= growth
+        return f"{match.group(1)}{format(decimal, 'f')}{match.group(3)}"
+
+    adapted = _CANONICAL_RESULT_THRESHOLD_PATTERN.sub(restore, value)
+    _bounded_json(adapted, _MAX_RESULT_JSON_BYTES, "evaluation result")
+    return adapted
+
+
 def _result_from_row(row: EvaluationResultRow) -> EvaluationResult:
     try:
-        result = EvaluationResult.model_validate_json(row.result_json)
+        result = EvaluationResult.model_validate_json(_result_validation_json(row.result_json))
         identity = _evaluation_identity(result.evaluation_identity)
-        source_at = (
-            None if row.source_at is None else _market_datetime(row.source_at, "source_at")
-        )
+        source_at = None if row.source_at is None else _market_datetime(row.source_at, "source_at")
         valid = (
             identity
             == (
@@ -795,7 +833,7 @@ def _result_from_row(row: EvaluationResultRow) -> EvaluationResult:
             and row.schema_version == 1
             and canonical_result_json(result) == row.result_json
         )
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         valid = False
     if not valid:
         raise ProjectionError("Stored complete evaluation result is invalid")
@@ -815,8 +853,7 @@ def _validate_position_lots(
         raise ValueError("position lot identities must be unique")
     symbol = result.snapshot.symbol
     if any(
-        lot.symbol != symbol or lot.remaining_qty <= 0 or lot.closed_at is not None
-        for lot in lots
+        lot.symbol != symbol or lot.remaining_qty <= 0 or lot.closed_at is not None for lot in lots
     ):
         raise ValueError("position lots must be open and match the decision symbol")
     ordered = tuple(sorted(lots, key=lambda lot: (lot.acquired_trade_date, lot.id)))
@@ -835,13 +872,9 @@ def _validate_position_lots(
     if (
         sum(lot.remaining_qty for lot in core) != position.core_quantity
         or sum(lot.remaining_qty for lot in tactical) != position.tactical_quantity
-        or sum(
-            lot.remaining_qty for lot in core if lot.acquired_trade_date < trade_date
-        )
+        or sum(lot.remaining_qty for lot in core if lot.acquired_trade_date < trade_date)
         != position.sellable_core_quantity
-        or sum(
-            lot.remaining_qty for lot in tactical if lot.acquired_trade_date < trade_date
-        )
+        or sum(lot.remaining_qty for lot in tactical if lot.acquired_trade_date < trade_date)
         != position.sellable_tactical_quantity
     ):
         raise ValueError("position lots do not match the authoritative decision summary")
@@ -867,7 +900,7 @@ def _position_lots_from_row(
             separators=(",", ":"),
         )
         valid = canonical == row.position_lots_json
-    except (TypeError, ValueError, RecursionError):
+    except TypeError, ValueError, RecursionError:
         valid = False
         lots = ()
     if not valid:
@@ -885,10 +918,9 @@ def _validate_decision_event(row: MonitorEventRow, result: EvaluationResult) -> 
             and payload.get("symbol") == result.snapshot.symbol
             and payload.get("resultHash") == result.result_hash
             and row.schema_version == 1
-            and _market_datetime(row.occurred_at, "occurred_at")
-            == result.snapshot.evaluated_at
+            and _market_datetime(row.occurred_at, "occurred_at") == result.snapshot.evaluated_at
         )
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         valid = False
     if not valid:
         raise ProjectionIdentityConflictError(
@@ -917,7 +949,7 @@ def _health_from_row(row: SymbolHealthProjectionRow) -> SymbolHealthProjectionRe
             and _market_datetime(projection.get("observedAt"), "projection observedAt")
             == record.observed_at
         )
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         valid = False
     if not valid:
         raise ProjectionError("Stored symbol health projection is invalid")
@@ -944,7 +976,7 @@ def _pending_from_row(row: PendingOfficialCloseRow) -> PendingOfficialCloseRecor
             )
             == row.pending_json
         )
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         valid = False
     if not valid:
         raise ProjectionError("Stored pending official close is invalid")
@@ -984,10 +1016,9 @@ def _market_index_from_row(row: MarketIndexSnapshotRow) -> tuple[MarketIndexSnap
         valid = (
             all(getattr(row, name) == value for name, value in values.items())
             and canonical_market_index_json(snapshot) == row.snapshot_json
-            and snapshot.cache_key.provider_content_revision
-            == row.provider_content_revision
+            and snapshot.cache_key.provider_content_revision == row.provider_content_revision
         )
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         valid = False
     if not valid:
         raise ProjectionError("Stored market-index snapshot is invalid")
