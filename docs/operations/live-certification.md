@@ -28,12 +28,13 @@ credential value was printed or recorded.
 | A-share realtime minutes | `rt_min`, `rt_min_daily` | Live stock monitoring and current-day cumulative recovery | `READY` |
 | Index daily bars | `index_daily` | Official board-index daily reference | `READY` |
 | Historical index minutes | `idx_mins` | Historical warm-up for board-index monitoring | `READY` (49 five-minute rows observed) |
-| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring | **`BLOCKED_PERMISSION`** |
+| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring | `READY` for SSE Composite, Shenzhen Component, ChiNext, and STAR 50; BSE 50 returned no rows |
 
-Therefore the only missing data permission required by the current implementation is the
-separately sold **Index realtime minutes** permission. Enabling A-share realtime minutes does not
-grant it. `rt_min_daily` is included with A-share realtime-minute access; the implementation does
-not need a separate permission for that endpoint.
+No required permission remains blocked after Index realtime minutes was activated and probed on
+2026-09-08. Enabling A-share realtime minutes alone would not have granted it. `rt_min_daily` is
+included with A-share realtime-minute access; the implementation does not need a separate
+permission for that endpoint. BSE 50 remains a provider data-availability exception rather than a
+permission failure and is kept isolated from the four ready indices.
 
 The current code does not call auction, realtime daily-bar, ETF, industry-classification realtime,
 Level-2, or tick-by-tick endpoints. Those permissions are not required for the current feature set.
@@ -106,6 +107,11 @@ seconds, and are never retried during certification. The first `RATE_LIMITED` re
 later provider call. A stock profile is actionable only when all five capabilities are `READY`
 and its `SourceTimeLabel` is verified. Index readiness is kept per index, and one blocked index
 does not authorize or disable its peers.
+
+The observed `rt_idx_min_daily(freq="5MIN")` shape contains a standalone `09:30` opening snapshot
+followed by end-labeled five-minute bars. Certification excludes that opening snapshot only while
+determining timestamp-label semantics; runtime normalization already drops it because it is not a
+completed five-minute interval.
 
 ## Authoritative References
 

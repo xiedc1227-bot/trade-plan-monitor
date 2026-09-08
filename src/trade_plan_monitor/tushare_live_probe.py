@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Final
 from zoneinfo import ZoneInfo
@@ -231,6 +231,7 @@ def _index_time_label(
     observed_at: datetime,
 ) -> TushareMarketIndexSourceTimeLabel:
     expected = _index_expected_ends(observed_at.date())
+    opening_snapshot = datetime.combine(observed_at.date(), time(9, 30), _SHANGHAI)
     conclusions: list[TushareMarketIndexSourceTimeLabel] = []
     for sample in samples:
         _require_rows(
@@ -240,18 +241,32 @@ def _index_time_label(
         if not _has_expected_optional_frequency(sample, "5MIN"):
             return TushareMarketIndexSourceTimeLabel.UNVERIFIED
         source = _source_times(sample, "time", observed_at)
+        # The live feed emits a standalone 09:30 opening snapshot; its 09:35 row
+        # aggregates 09:31..09:35 and therefore proves end-label semantics.
+        end_labeled = set(source)
+        end_labeled.discard(opening_snapshot)
+        if (
+            opening_snapshot in source
+            and end_labeled
+            and end_labeled.issubset(expected)
+            and min(expected) in end_labeled
+        ):
+            conclusions.append(TushareMarketIndexSourceTimeLabel.END)
+            continue
         candidates: list[TushareMarketIndexSourceTimeLabel] = []
         for label in (
             TushareMarketIndexSourceTimeLabel.START,
             TushareMarketIndexSourceTimeLabel.END,
         ):
-            normalized = {
-                value + timedelta(minutes=5)
-                if label is TushareMarketIndexSourceTimeLabel.START
-                else value
-                for value in source
-            }
-            if normalized.issubset(expected) and min(expected) in normalized:
+            if label is TushareMarketIndexSourceTimeLabel.START:
+                normalized = {value + timedelta(minutes=5) for value in source}
+            else:
+                normalized = set(source)
+            if (
+                normalized
+                and normalized.issubset(expected)
+                and min(expected) in normalized
+            ):
                 candidates.append(label)
         if len(candidates) != 1:
             return TushareMarketIndexSourceTimeLabel.UNVERIFIED

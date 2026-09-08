@@ -22,6 +22,7 @@ from trade_plan_monitor.tushare_live_probe import certify_board_indexes, certify
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 OBSERVED_AT = datetime(2026, 9, 7, 10, 15, 2, tzinfo=SHANGHAI)
+AFTERNOON_OBSERVED_AT = datetime(2026, 9, 7, 14, 46, 2, tzinfo=SHANGHAI)
 
 
 class _Controller:
@@ -242,6 +243,49 @@ class _WrongIndexFrequencyClient(_Client):
         return frame
 
 
+class _OpeningSnapshotEndLabeledIndexClient(_Client):
+    def rt_idx_min_daily(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("rt_idx_min_daily", kwargs))
+        code = str(kwargs["ts_code"])
+        columns = (
+            "ts_code",
+            "freq",
+            "time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "vol",
+            "amount",
+        )
+        if code == MarketIndexCode.BSE_50.value:
+            return pd.DataFrame(columns=columns)
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": code,
+                    "freq": "5MIN",
+                    "time": f"2026-09-07 {clock_time}:00",
+                    "open": "100",
+                    "high": "101",
+                    "low": "99",
+                    "close": "100.5",
+                    "vol": "100",
+                    "amount": "200",
+                }
+                for clock_time in (
+                    "09:30",
+                    "09:35",
+                    "11:30",
+                    "13:05",
+                    "14:45",
+                    "14:50",
+                )
+            ],
+            columns=columns,
+        )
+
+
 def test_stock_probe_certifies_all_surfaces_and_start_labeled_minutes(
     tmp_path: Path,
 ) -> None:
@@ -336,6 +380,28 @@ def test_index_probe_rejects_wrong_returned_realtime_frequency(tmp_path: Path) -
     assert set(profile.capabilities.values()) == {
         TushareMarketIndexCapabilityStatus.ERROR
     }
+
+
+def test_index_probe_accepts_opening_snapshot_before_end_labeled_bars(
+    tmp_path: Path,
+) -> None:
+    profile = asyncio.run(
+        certify_board_indexes(
+            client=_OpeningSnapshotEndLabeledIndexClient(),
+            request_controller=_Controller(),
+            observed_at=AFTERNOON_OBSERVED_AT,
+            endpoint_url="https://api.quicksync.cn",
+            output_path=tmp_path / "index.json",
+        )
+    )
+
+    assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.END
+    assert profile.capabilities[MarketIndexCode.BSE_50] is (
+        TushareMarketIndexCapabilityStatus.ERROR
+    )
+    assert profile.ready_indexes == frozenset(
+        code for code in MarketIndexCode if code is not MarketIndexCode.BSE_50
+    )
 
 
 def test_stock_probe_stops_every_later_call_after_first_rate_limit(tmp_path: Path) -> None:
