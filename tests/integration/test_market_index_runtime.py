@@ -7,6 +7,8 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from trade_plan_monitor.domain.plan_models import TradePlan
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import (
@@ -136,6 +138,17 @@ class _Provider:
         return self.result
 
 
+class _Clock:
+    def __init__(self, current: datetime) -> None:
+        self.current = current
+
+    def now(self) -> datetime:
+        return self.current
+
+    async def sleep_until(self, deadline: datetime) -> None:
+        self.current = max(self.current, deadline)
+
+
 def test_ten_plans_union_requirements_and_share_one_snapshot_instance() -> None:
     plans = tuple(
         _plan(
@@ -178,6 +191,78 @@ def test_ten_plans_union_requirements_and_share_one_snapshot_instance() -> None:
     latest = service.latest_snapshots()
     assert latest[MarketIndexCode.SHENZHEN_COMPONENT] is snapshots[0]
     assert "plan" not in snapshots[0].model_dump_json().lower()
+
+
+def test_index_snapshot_uses_post_fetch_whole_second_as_future_data_fence() -> None:
+    requested_at = CUTOFF + timedelta(seconds=2)
+    provider_observed_at = requested_at + timedelta(microseconds=250_000)
+    expected_observed_at = CUTOFF + timedelta(seconds=3)
+    clock = _Clock(requested_at)
+    batch = _batch().model_copy(
+        update={
+            "observed_at": provider_observed_at,
+            "five_minute_bars": tuple(
+                bar.model_copy(update={"observed_at": provider_observed_at})
+                for bar in _batch().five_minute_bars
+            ),
+        }
+    )
+
+    class DelayedProvider(_Provider):
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            clock.current = provider_observed_at
+            return await super().acquire_index_data(**kwargs)  # type: ignore[arg-type]
+
+    provider = DelayedProvider(batch)
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider, clock=clock))
+
+    prepared = asyncio.run(
+        service.prepare(
+            plans=(_plan(1, {"type": "NON_DECREASING_CLOSE"}),),
+            decision_cutoff=CUTOFF,
+            observed_no_later_than=requested_at,
+        )
+    )
+    snapshot = next(iter(prepared.snapshots_by_index.values()))
+
+    assert snapshot.health is MarketIndexHealth.LIVE
+    assert snapshot.observed_at == provider_observed_at
+    assert expected_observed_at > snapshot.observed_at
+
+
+def test_evaluation_rejects_index_snapshot_observed_after_its_evaluation_time() -> None:
+    requested_at = CUTOFF + timedelta(seconds=2)
+    provider_observed_at = requested_at + timedelta(seconds=1)
+    clock = _Clock(provider_observed_at)
+    batch = _batch().model_copy(
+        update={
+            "observed_at": provider_observed_at,
+            "five_minute_bars": tuple(
+                bar.model_copy(update={"observed_at": provider_observed_at})
+                for bar in _batch().five_minute_bars
+            ),
+        }
+    )
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda *_args: (),  # type: ignore[arg-type]
+        unit_of_work_factory=lambda: None,
+        context_builder=lambda *_args: None,
+        committed_event_publisher=lambda _event: None,
+        market_index_service=RuntimeMarketIndexService(
+            MarketIndexSnapshotCoordinator(_Provider(batch), clock=clock)
+        ),
+    )
+    service._persist_market_index_batch = lambda _prepared: None
+
+    with pytest.raises(ValueError, match="index snapshot observation"):
+        asyncio.run(
+            service.run_intraday_batch_from_minutes(
+                plans=(_plan(1, {"type": "NON_DECREASING_CLOSE"}),),
+                bucket_end=CUTOFF,
+                evaluated_at=requested_at,
+                minutes_by_symbol={"000001.SZ": ()},
+            )
+        )
 
 
 def test_v2_no_condition_plan_gets_informational_failure_without_a_requirement() -> None:

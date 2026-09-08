@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -18,6 +18,7 @@ from trade_plan_monitor.market_data.aggregation import (
 from trade_plan_monitor.market_data.models import AShareSymbol, MinuteBar, ShanghaiDatetime
 from trade_plan_monitor.market_data.provider import MarketDataProvider
 from trade_plan_monitor.market_data.sessions import session_for_minute_end
+from trade_plan_monitor.runtime.clock import Clock, _canonical_shanghai
 from trade_plan_monitor.runtime.health import (
     SymbolHealthErrorCode,
     SymbolHealthSnapshot,
@@ -41,6 +42,13 @@ PersistMinutes = Callable[[tuple[MinuteBar, ...]], None]
 LoadMinutes = Callable[..., tuple[MinuteBar, ...]]
 PersistFiveMinute = Callable[[FiveMinuteBar], None]
 IsOpenOn = Callable[[date], bool | None]
+
+
+def _ceil_to_whole_second(value: datetime) -> datetime:
+    canonical = _canonical_shanghai(value)
+    if canonical.microsecond:
+        canonical += timedelta(seconds=1)
+    return canonical.replace(microsecond=0)
 
 
 class SymbolHealthRestoreState(BaseModel):
@@ -144,6 +152,7 @@ class SymbolService:
         persist_five_minute: PersistFiveMinute,
         is_open_on: IsOpenOn,
         health_tracker: SymbolHealthTracker,
+        clock: Clock | None = None,
     ) -> None:
         dependencies = (
             active_symbols,
@@ -158,6 +167,8 @@ class SymbolService:
             raise TypeError("request_controller must be a TushareRequestController")
         if not isinstance(health_tracker, SymbolHealthTracker):
             raise TypeError("health_tracker must be a SymbolHealthTracker")
+        if clock is not None and not isinstance(clock, Clock):
+            raise TypeError("clock must implement Clock")
         self._provider = provider
         self._request_controller = request_controller
         self._active_symbols = active_symbols
@@ -166,6 +177,7 @@ class SymbolService:
         self._persist_five_minute = persist_five_minute
         self._is_open_on = is_open_on
         self._health_tracker = health_tracker
+        self._clock = clock
         self._hydrated_generations: dict[str, int] = {}
 
     def restore_health(
@@ -207,6 +219,7 @@ class SymbolService:
 
         if session_for_minute_end(bar_end) is None:
             raise ValueError("bar_end must be a canonical monitoring minute")
+        observed_at = _ceil_to_whole_second(observed_at)
         if observed_at < bar_end:
             raise ValueError("batch observation cannot precede its market target")
         required_bucket = five_minute_bucket_end(bar_end) == bar_end
@@ -216,6 +229,7 @@ class SymbolService:
         )
         self._health_tracker.retain_only(symbols)
         if not symbols:
+            observed_at = await self._post_fetch_observed_at(observed_at)
             return RealtimeBatchResult(
                 bar_end=bar_end,
                 observed_at=observed_at,
@@ -231,6 +245,7 @@ class SymbolService:
                 priority=RequestPriority.MARKET_DEADLINE,
             )
         except RequestControlError:
+            observed_at = await self._post_fetch_observed_at(observed_at)
             return self._blocked_batch(
                 symbols=symbols,
                 bar_end=bar_end,
@@ -238,6 +253,8 @@ class SymbolService:
                 error_code=SymbolHealthErrorCode.PROVIDER_BLOCKED,
                 required_bucket=required_bucket,
             )
+
+        observed_at = await self._post_fetch_observed_at(observed_at)
 
         if type(raw_rows) is not list or len(raw_rows) > _MAX_PROVIDER_ROWS:
             return self._blocked_batch(
@@ -281,6 +298,18 @@ class SymbolService:
             contexts=contexts,
             health=health,
         )
+
+    async def _post_fetch_observed_at(self, requested_at: datetime) -> datetime:
+        observed_at = _ceil_to_whole_second(requested_at)
+        if self._clock is None:
+            return observed_at
+        now = _canonical_shanghai(self._clock.now())
+        observed_at = max(observed_at, _ceil_to_whole_second(now))
+        if now < observed_at:
+            await self._clock.sleep_until(observed_at)
+            if _canonical_shanghai(self._clock.now()) < observed_at:
+                raise RuntimeError("clock returned before the realtime observation boundary")
+        return observed_at
 
     def _build_symbol_context(
         self,
@@ -337,17 +366,11 @@ class SymbolService:
                     )
                 health_minutes = tuple(
                     sorted(
-                        (
-                            minute
-                            for minute in loaded_range
-                            if minute.bar_end in allowed_ends
-                        ),
+                        (minute for minute in loaded_range if minute.bar_end in allowed_ends),
                         key=lambda minute: minute.bar_end,
                     )
                 )
-                loaded = tuple(
-                    minute for minute in health_minutes if minute.bar_end in expected
-                )
+                loaded = tuple(minute for minute in health_minutes if minute.bar_end in expected)
             except TypeError, ValueError:
                 loaded = ()
                 error_code = SymbolHealthErrorCode.INVALID_CONTEXT

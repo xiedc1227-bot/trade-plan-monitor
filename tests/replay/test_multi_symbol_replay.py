@@ -472,8 +472,11 @@ def test_three_symbol_full_system_replay_is_exactly_once_across_restart(
     assert first_results["STALE_DATA"].committed_event is None
     assert [event.event_type for event in publications] == [
         MonitorEventType.ALERT_CREATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
         MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
         MonitorEventType.SYMBOL_SNAPSHOT_UPDATED,
+        MonitorEventType.SYMBOL_HEALTH_UPDATED,
     ]
 
     for plan in scenario_plans.values():
@@ -492,11 +495,11 @@ def test_three_symbol_full_system_replay_is_exactly_once_across_restart(
     assert len(before_restart["alerts"]) == 1
     assert before_restart["alerts"][0].message_text.endswith(DISCLAIMER)
     assert len(before_restart["evaluations"]) == 3
-    assert len(before_restart["events"]) == 7
+    assert len(before_restart["events"]) == 10
     assert before_restart["health"] == (
-        ("000001.SZ", "LIVE", 20, 0, 1),
-        ("000002.SZ", "STALE", 20, 1, 1),
-        ("003043.SZ", "LIVE", 20, 0, 1),
+        ("000001.SZ", "LIVE", 20, 0, 2),
+        ("000002.SZ", "STALE", 20, 2, 2),
+        ("003043.SZ", "LIVE", 20, 0, 2),
     )
     assert before_restart["episodes"] == (
         ("000001.SZ", 6380, 0, "ACTIVE", None, market["bucketEnd"]),

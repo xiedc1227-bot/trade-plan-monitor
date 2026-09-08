@@ -118,6 +118,13 @@ EventIdFactory = Callable[[], UUID]
 ActivePlans = Callable[[], tuple[TradePlan, ...]]
 
 
+def _ceil_to_whole_second(value: datetime) -> datetime:
+    canonical = _SHANGHAI_DATETIME.validate_python(value, strict=True)
+    if canonical.microsecond:
+        canonical += timedelta(seconds=1)
+    return canonical.replace(microsecond=0)
+
+
 class _RuntimeValue(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -451,6 +458,7 @@ class RuntimeEvaluationService:
         event_id_factory: EventIdFactory = uuid4,
         market_index_service: RuntimeMarketIndexService | None = None,
         runtime_generation: UUID = LEGACY_RUNTIME_GENERATION,
+        clock: Clock | None = None,
     ) -> None:
         dependencies = (
             fetch_minutes,
@@ -475,6 +483,8 @@ class RuntimeEvaluationService:
             raise TypeError("runtime_generation must be a UUID")
         if runtime_generation.version != 4:
             raise ValueError("runtime_generation must be a UUIDv4")
+        if clock is not None and not isinstance(clock, Clock):
+            raise TypeError("clock must implement Clock")
         system_clock = SystemClock()
         self._fetch_minutes = fetch_minutes
         self._fetch_official_daily = fetch_official_daily
@@ -489,7 +499,23 @@ class RuntimeEvaluationService:
         self._event_id_factory = event_id_factory
         self._market_index_service = market_index_service
         self._runtime_generation = runtime_generation
+        self._clock = clock
         self._official_serial = asyncio.Lock()
+
+    async def _post_fetch_official_observed_at(
+        self,
+        requested_at: datetime,
+    ) -> datetime:
+        observed_at = _ceil_to_whole_second(self._official_observed_at(requested_at))
+        if self._clock is None:
+            return observed_at
+        now = _canonical_shanghai(self._clock.now())
+        observed_at = max(observed_at, _ceil_to_whole_second(now))
+        if now < observed_at:
+            await self._clock.sleep_until(observed_at)
+            if _canonical_shanghai(self._clock.now()) < observed_at:
+                raise RuntimeError("clock returned before the official observation boundary")
+        return observed_at
 
     async def run_intraday(
         self,
@@ -500,15 +526,13 @@ class RuntimeEvaluationService:
     ) -> IntradayCycleResult:
         """Run one intraday target without provider or publisher work in a transaction."""
 
-        reference_market_snapshot = None
-        if self._market_index_service is not None:
-            prepared = await self._market_index_service.prepare(
-                plans=(plan,),
-                decision_cutoff=bucket_end,
-                observed_no_later_than=evaluated_at,
-            )
-            self._persist_market_index_batch(prepared)
-            reference_market_snapshot = prepared.snapshot_for_plan(plan)
+        evaluated_at = _ceil_to_whole_second(evaluated_at)
+        prepared = await self.prepare_intraday_market_indexes(
+            plans=(plan,),
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+        reference_market_snapshot = None if prepared is None else prepared.snapshot_for_plan(plan)
         return await self._run_intraday_with_snapshot(
             plan=plan,
             bucket_end=bucket_end,
@@ -542,6 +566,7 @@ class RuntimeEvaluationService:
         minutes_by_symbol: Mapping[str, tuple[MinuteBar, ...]],
         health_by_symbol: Mapping[str, SymbolHealthSnapshot] | None = None,
         activation_revisions: Mapping[str, int] | None = None,
+        market_index_batch: RuntimeMarketIndexBatch | None = None,
     ) -> tuple[IntradayCycleResult, ...]:
         """Evaluate one deadline from its single, already acquired stock batch."""
 
@@ -553,7 +578,31 @@ class RuntimeEvaluationService:
             minutes_by_symbol=validated,
             health_by_symbol=health_by_symbol,
             activation_revisions=activation_revisions,
+            market_index_batch=market_index_batch,
         )
+
+    async def prepare_intraday_market_indexes(
+        self,
+        *,
+        plans: tuple[TradePlan, ...],
+        bucket_end: datetime,
+        evaluated_at: datetime,
+    ) -> RuntimeMarketIndexBatch | None:
+        """Acquire and persist one shared index batch before the stock observation."""
+
+        if type(plans) is not tuple or any(not isinstance(plan, TradePlan) for plan in plans):
+            raise TypeError("plans must be a tuple of TradePlan values")
+        if len(plans) > 10:
+            raise ValueError("runtime supports at most 10 active plans")
+        if self._market_index_service is None:
+            return None
+        prepared = await self._market_index_service.prepare(
+            plans=plans,
+            decision_cutoff=expected_five_minute_ends(bucket_end)[-1],
+            observed_no_later_than=_ceil_to_whole_second(evaluated_at),
+        )
+        self._persist_market_index_batch(prepared)
+        return prepared
 
     def load_persisted_symbol_health(
         self,
@@ -586,10 +635,7 @@ class RuntimeEvaluationService:
                     snapshot = None
                 else:
                     projection = _validate_persisted_symbol_health(record.projection)
-                    if (
-                        projection.symbol != symbol
-                        or projection.observed_at != record.observed_at
-                    ):
+                    if projection.symbol != symbol or projection.observed_at != record.observed_at:
                         raise ValueError("persisted symbol health identity is inconsistent")
                     snapshot = projection.snapshot()
                 states.append(
@@ -651,7 +697,9 @@ class RuntimeEvaluationService:
                     error_streak=(
                         0
                         if snapshot.actionable
-                        else 1 if current is None else current.error_streak + 1
+                        else 1
+                        if current is None
+                        else current.error_streak + 1
                     ),
                     expected_revision=0 if current is None else current.revision,
                 )
@@ -670,9 +718,7 @@ class RuntimeEvaluationService:
                         "requiredDataComplete": health.required_data_complete,
                         "fresh": health.fresh,
                         "gaps": snapshot.gaps,
-                        "consecutiveIncompleteBuckets": (
-                            snapshot.consecutive_incomplete_buckets
-                        ),
+                        "consecutiveIncompleteBuckets": (snapshot.consecutive_incomplete_buckets),
                         "lastRequiredBucketEnd": snapshot.last_required_bucket_end,
                         "errorCode": snapshot.error_code,
                         "actionable": snapshot.actionable,
@@ -700,11 +746,13 @@ class RuntimeEvaluationService:
         minutes_by_symbol: Mapping[str, tuple[MinuteBar, ...]] | None,
         health_by_symbol: Mapping[str, SymbolHealthSnapshot] | None = None,
         activation_revisions: Mapping[str, int] | None = None,
+        market_index_batch: RuntimeMarketIndexBatch | None = None,
     ) -> tuple[IntradayCycleResult, ...]:
         if type(plans) is not tuple or any(not isinstance(plan, TradePlan) for plan in plans):
             raise TypeError("plans must be a tuple of TradePlan values")
         if len(plans) > 10:
             raise ValueError("runtime supports at most 10 active plans")
+        evaluated_at = _ceil_to_whole_second(evaluated_at)
         plan_symbols = {plan.symbol for plan in plans}
         if activation_revisions is not None and (
             not isinstance(activation_revisions, Mapping)
@@ -712,17 +760,23 @@ class RuntimeEvaluationService:
             or any(type(value) is not int or value < 1 for value in activation_revisions.values())
         ):
             raise ValueError("activation revisions must match the intraday plans exactly")
-        prepared = (
-            None
-            if self._market_index_service is None
-            else await self._market_index_service.prepare(
+        prepared = market_index_batch
+        if prepared is None:
+            prepared = await self.prepare_intraday_market_indexes(
                 plans=plans,
-                decision_cutoff=bucket_end,
-                observed_no_later_than=evaluated_at,
+                bucket_end=bucket_end,
+                evaluated_at=evaluated_at,
             )
-        )
+        elif not isinstance(prepared, RuntimeMarketIndexBatch):
+            raise TypeError("market_index_batch must be a RuntimeMarketIndexBatch")
         if prepared is not None:
-            self._persist_market_index_batch(prepared)
+            if prepared.decision_cutoff != expected_five_minute_ends(bucket_end)[-1]:
+                raise ValueError("market index batch must match the intraday cutoff")
+            if any(
+                snapshot.observed_at > evaluated_at
+                for snapshot in prepared.snapshots_by_index.values()
+            ):
+                raise ValueError("index snapshot observation cannot follow evaluation time")
         results = await asyncio.gather(
             *(
                 self._run_intraday_with_snapshot(
@@ -739,9 +793,7 @@ class RuntimeEvaluationService:
                         None if minutes_by_symbol is None else minutes_by_symbol[plan.symbol]
                     ),
                     activation_revision=(
-                        None
-                        if activation_revisions is None
-                        else activation_revisions[plan.symbol]
+                        None if activation_revisions is None else activation_revisions[plan.symbol]
                     ),
                 )
                 for plan in plans
@@ -777,10 +829,7 @@ class RuntimeEvaluationService:
         if not isinstance(plan, TradePlan):
             raise TypeError("plan must be a TradePlan")
         canonical_bucket = expected_five_minute_ends(bucket_end)[-1]
-        canonical_evaluated_at = _SHANGHAI_DATETIME.validate_python(
-            evaluated_at,
-            strict=True,
-        )
+        canonical_evaluated_at = _ceil_to_whole_second(evaluated_at)
         if canonical_evaluated_at < canonical_bucket:
             raise ValueError("evaluated_at cannot precede bucket_end")
         if activation_revision is None:
@@ -825,14 +874,23 @@ class RuntimeEvaluationService:
         context = self._context_builder(plan, facts)
         if not isinstance(context, EvaluationContext):
             raise TypeError("context_builder must return an EvaluationContext")
-        context = context.model_copy(
-            update={"reference_market_snapshot": reference_market_snapshot}
-        )
+        context_updates: dict[str, object] = {
+            "reference_market_snapshot": reference_market_snapshot
+        }
+        if health_snapshot is not None:
+            self._validate_runtime_health_snapshot(
+                plan=plan,
+                facts=facts,
+                health_snapshot=health_snapshot,
+            )
+            context_updates["data_health"] = health_snapshot.data_health
+        context = context.model_copy(update=context_updates)
         self._validate_context(
             plan=plan,
             facts=facts,
             context=context,
             reference_market_snapshot=reference_market_snapshot,
+            health_snapshot=health_snapshot,
         )
         result = self._evaluator(context)
         self._validate_result(plan=plan, facts=facts, result=result)
@@ -943,10 +1001,7 @@ class RuntimeEvaluationService:
             raise TypeError("trade_date must be a date")
         if type(close_attempt) is not int or close_attempt < 1:
             raise ValueError("close_attempt must be a positive integer")
-        canonical_evaluated_at = _SHANGHAI_DATETIME.validate_python(
-            evaluated_at,
-            strict=True,
-        )
+        canonical_evaluated_at = _ceil_to_whole_second(evaluated_at)
         cutoff = datetime.combine(
             trade_date,
             time(15, 0),
@@ -992,6 +1047,7 @@ class RuntimeEvaluationService:
     ) -> OfficialCloseCycleResult:
         """Reconcile one official date without provider or publisher I/O in a transaction."""
 
+        evaluated_at = _ceil_to_whole_second(evaluated_at)
         reference_market_snapshot = None
         if self._market_index_service is not None:
             cutoff = datetime.combine(trade_date, time(15, 0), evaluated_at.tzinfo)
@@ -1030,10 +1086,7 @@ class RuntimeEvaluationService:
             raise TypeError("trade_date must be a date")
         if type(close_attempt) is not int or close_attempt < 1:
             raise ValueError("close_attempt must be a positive integer")
-        canonical_evaluated_at = _SHANGHAI_DATETIME.validate_python(
-            evaluated_at,
-            strict=True,
-        )
+        canonical_evaluated_at = _ceil_to_whole_second(evaluated_at)
         source_as_of = datetime.combine(
             trade_date,
             time(15, 0),
@@ -1095,10 +1148,7 @@ class RuntimeEvaluationService:
         except Exception:
             fetched = ()
             fetch_error = OfficialCloseErrorCode.FETCH_FAILED
-        observed_at = _SHANGHAI_DATETIME.validate_python(
-            self._official_observed_at(canonical_evaluated_at),
-            strict=True,
-        )
+        observed_at = await self._post_fetch_official_observed_at(canonical_evaluated_at)
         if observed_at < canonical_evaluated_at:
             raise ValueError("official observation cannot precede its requested evaluation time")
         canonical_evaluated_at = observed_at
@@ -1498,6 +1548,7 @@ class RuntimeEvaluationService:
         facts: IntradayMarketFacts,
         context: object,
         reference_market_snapshot: MarketIndexSnapshot | None,
+        health_snapshot: SymbolHealthSnapshot | None,
     ) -> None:
         if not isinstance(context, EvaluationContext):
             raise TypeError("context_builder must return an EvaluationContext")
@@ -1505,6 +1556,12 @@ class RuntimeEvaluationService:
             raise ValueError("evaluation context must match the requested plan")
         if context.reference_market_snapshot != reference_market_snapshot:
             raise ValueError("evaluation context must retain the shared market-index snapshot")
+        if reference_market_snapshot is not None and (
+            reference_market_snapshot.observed_at > facts.evaluated_at
+        ):
+            raise ValueError("index snapshot observation cannot follow evaluation time")
+        if health_snapshot is not None and context.data_health != health_snapshot.data_health:
+            raise ValueError("evaluation context must retain the captured runtime health")
         if not isinstance(context.target, IntradayEvaluationTarget):
             raise ValueError("intraday runtime requires an intraday evaluation target")
         if (
@@ -1524,6 +1581,22 @@ class RuntimeEvaluationService:
             or snapshot.source_bar != facts.provisional_daily_bar
         ):
             raise ValueError("daily indicators must retain exact provisional provenance")
+
+    @staticmethod
+    def _validate_runtime_health_snapshot(
+        *,
+        plan: TradePlan,
+        facts: IntradayMarketFacts,
+        health_snapshot: SymbolHealthSnapshot,
+    ) -> None:
+        if not isinstance(health_snapshot, SymbolHealthSnapshot):
+            raise TypeError("health snapshot must be a SymbolHealthSnapshot")
+        if (
+            health_snapshot.symbol != plan.symbol
+            or health_snapshot.target_end != facts.bucket_end
+            or health_snapshot.observed_at != facts.evaluated_at
+        ):
+            raise ValueError("runtime health snapshot must match symbol, target, and observation")
 
     @staticmethod
     def _validate_result(
@@ -1635,14 +1708,13 @@ class RuntimeEvaluationService:
         else:
             resume = {
                 "status": (
-                    SymbolHealthStatus.BLOCKED.value
-                    if current is None
-                    else current.status.value
+                    SymbolHealthStatus.BLOCKED.value if current is None else current.status.value
                 ),
                 "gaps": [] if current is None else _json_value(current.gap_json),
                 "errorStreak": 0 if current is None else current.error_streak,
                 "latestBarEnd": (
-                    None if current is None or current.latest_bar_end is None
+                    None
+                    if current is None or current.latest_bar_end is None
                     else current.latest_bar_end.isoformat()
                 ),
                 "dataAgeSeconds": 0 if current is None else current.data_age_seconds,
@@ -1652,9 +1724,7 @@ class RuntimeEvaluationService:
                 None if current_projection is None else current_projection.projection
             )
             resume_projection_generation = (
-                None
-                if current_projection is None
-                else str(current_projection.runtime_generation)
+                None if current_projection is None else str(current_projection.runtime_generation)
             )
         latest_bar_end = None if current is None else current.latest_bar_end
         data_age_seconds = (
@@ -1706,9 +1776,7 @@ class RuntimeEvaluationService:
             trade_date=trade_date,
             formula_version=plan.monitoring.indicator_formula_version,
             pending={
-                "latestBarEnd": (
-                    None if latest_bar_end is None else latest_bar_end.isoformat()
-                ),
+                "latestBarEnd": (None if latest_bar_end is None else latest_bar_end.isoformat()),
                 "resume": resume,
                 "resumeProjection": resume_projection,
                 "resumeProjectionGeneration": resume_projection_generation,
@@ -1786,7 +1854,9 @@ class RuntimeEvaluationService:
         data_age_seconds = (
             max(0, int((evaluated_at - latest_bar_end).total_seconds()))
             if raw_data_age_seconds is None and latest_bar_end is not None
-            else 0 if raw_data_age_seconds is None else cast(int, raw_data_age_seconds)
+            else 0
+            if raw_data_age_seconds is None
+            else cast(int, raw_data_age_seconds)
         )
         after = unit_of_work.health.upsert_symbol(
             symbol=symbol,
@@ -1995,9 +2065,7 @@ class RuntimeEvaluationService:
             raise ValueError("runtime health snapshot must match its evaluation result")
         current_health = unit_of_work.health.get_symbol(result.snapshot.symbol)
         actionable = (
-            health.status.value == "LIVE"
-            and health.required_data_complete
-            and health.fresh
+            health.status.value == "LIVE" and health.required_data_complete and health.fresh
         )
         error_code = None if health_snapshot is None else health_snapshot.error_code
         if not actionable and error_code is None:
@@ -2008,18 +2076,22 @@ class RuntimeEvaluationService:
             }.get(health.status.value, SymbolHealthErrorCode.INVALID_CONTEXT)
         gaps = () if health_snapshot is None else health_snapshot.gaps
         incomplete_streak = (
-            0 if actionable else 1
-        ) if health_snapshot is None else health_snapshot.consecutive_incomplete_buckets
+            (0 if actionable else 1)
+            if health_snapshot is None
+            else health_snapshot.consecutive_incomplete_buckets
+        )
         after = unit_of_work.health.upsert_symbol(
             symbol=result.snapshot.symbol,
             status=SymbolHealthStatus(health.status.value),
             latest_bar_end=health.latest_bar_end,
             data_age_seconds=0 if health.data_age_seconds is None else health.data_age_seconds,
-            gaps=gaps,
+            gaps=tuple(gap.isoformat() for gap in gaps),
             error_streak=(
                 0
                 if actionable
-                else 1 if current_health is None else current_health.error_streak + 1
+                else 1
+                if current_health is None
+                else current_health.error_streak + 1
             ),
             expected_revision=0 if current_health is None else current_health.revision,
         )
@@ -2042,7 +2114,9 @@ class RuntimeEvaluationService:
                 "lastRequiredBucketEnd": (
                     health_snapshot.last_required_bucket_end
                     if health_snapshot is not None
-                    else target_end if incomplete_streak > 0 else None
+                    else target_end
+                    if incomplete_streak > 0
+                    else None
                 ),
                 "errorCode": error_code,
                 "actionable": actionable,
@@ -2174,14 +2248,20 @@ class RuntimeDeadlineCoordinator:
         symbols = tuple(plan.symbol for plan in plans)
         restore_states = self._evaluation_service.load_persisted_symbol_health(symbols)
         self._symbol_service.restore_health(symbols=symbols, states=restore_states)
-        activation_revisions = {
-            state.symbol: state.activation_revision for state in restore_states
-        }
+        activation_revisions = {state.symbol: state.activation_revision for state in restore_states}
+        market_index_batch = None
+        if five_minute_bucket_end(bar_end) == bar_end:
+            market_index_batch = await self._evaluation_service.prepare_intraday_market_indexes(
+                plans=plans,
+                bucket_end=bar_end,
+                evaluated_at=observed_at,
+            )
         batch = await self._symbol_service.run_realtime_batch(
             bar_end=bar_end,
             observed_at=observed_at,
             symbols=symbols,
         )
+        observed_at = batch.observed_at
         if five_minute_bucket_end(bar_end) != bar_end:
             await self._evaluation_service.persist_symbol_health_batch(
                 tuple(context.health for context in batch.contexts),
@@ -2218,15 +2298,14 @@ class RuntimeDeadlineCoordinator:
             plans=due_plans,
             bucket_end=bar_end,
             evaluated_at=observed_at,
-            minutes_by_symbol={
-                plan.symbol: minutes_by_symbol[plan.symbol] for plan in due_plans
-            },
+            minutes_by_symbol={plan.symbol: minutes_by_symbol[plan.symbol] for plan in due_plans},
             health_by_symbol={
                 plan.symbol: complete_contexts[plan.symbol].health for plan in due_plans
             },
             activation_revisions={
                 plan.symbol: activation_revisions[plan.symbol] for plan in due_plans
             },
+            market_index_batch=market_index_batch,
         )
 
     @staticmethod
@@ -2589,9 +2668,7 @@ class RuntimeLifecycleService:
             await asyncio.shield(stop_task)
         except asyncio.CancelledError:
             if stop_task.cancelled():
-                self._record_cleanup_failure(
-                    RuntimeError("runtime cleanup task was cancelled")
-                )
+                self._record_cleanup_failure(RuntimeError("runtime cleanup task was cancelled"))
             raise
         except Exception as error:
             self._record_cleanup_failure(error)
@@ -2865,7 +2942,7 @@ def _validate_persisted_symbol_health(value: object) -> _PersistedSymbolHealth:
             default=_json_wire_default,
         )
         return _PersistedSymbolHealth.model_validate_json(wire_value)
-    except (TypeError, ValueError, RecursionError):
+    except TypeError, ValueError, RecursionError:
         raise ValueError("persisted symbol health projection is invalid") from None
 
 
@@ -2946,9 +3023,7 @@ def _close_pending_payload(value: str) -> tuple[date, dict[str, object]]:
         resume_status = None
     error_streak = resume.get("errorStreak")
     data_age_seconds = resume.get("dataAgeSeconds")
-    if data_age_seconds is not None and (
-        type(data_age_seconds) is not int or data_age_seconds < 0
-    ):
+    if data_age_seconds is not None and (type(data_age_seconds) is not int or data_age_seconds < 0):
         raise ValueError("persisted CLOSE_PENDING health is invalid") from None
     latest_bar_end = resume.get("latestBarEnd")
     _optional_market_datetime(

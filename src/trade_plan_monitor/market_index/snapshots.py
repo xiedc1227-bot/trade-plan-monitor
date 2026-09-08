@@ -36,6 +36,7 @@ from trade_plan_monitor.market_index.requirements import (
     required_bar_counts,
     union_fact_requests,
 )
+from trade_plan_monitor.runtime.clock import Clock, _canonical_shanghai
 
 _PrefetchKey = tuple[str, MarketIndexCode, datetime, str, datetime]
 _SnapshotKey = tuple[str, MarketIndexCode, datetime, str, int]
@@ -44,6 +45,13 @@ _MORNING_CLOSE = time(11, 30)
 _AFTERNOON_OPEN = time(13, 5)
 _SESSION_CLOSE = time(15, 0)
 _SESSION_OPEN = time(9, 35)
+
+
+def _ceil_to_whole_second(value: datetime) -> datetime:
+    canonical = _canonical_shanghai(value)
+    if canonical.microsecond:
+        canonical += timedelta(seconds=1)
+    return canonical.replace(microsecond=0)
 
 
 def _validate_shanghai_timestamp(value: datetime, *, field_name: str) -> None:
@@ -311,8 +319,16 @@ def build_market_index_snapshot(
 class MarketIndexSnapshotCoordinator:
     """Acquire and publish at most one snapshot for each exact prefetch key."""
 
-    def __init__(self, provider: LiveMarketIndexProvider) -> None:
+    def __init__(
+        self,
+        provider: LiveMarketIndexProvider,
+        *,
+        clock: Clock | None = None,
+    ) -> None:
+        if clock is not None and not isinstance(clock, Clock):
+            raise TypeError("clock must implement Clock")
         self._provider = provider
+        self._clock = clock
         self._lock = asyncio.Lock()
         self._inflight: dict[_PrefetchKey, asyncio.Task[MarketIndexSnapshot]] = {}
         self._snapshots: OrderedDict[_SnapshotKey, MarketIndexSnapshot] = OrderedDict()
@@ -415,6 +431,7 @@ class MarketIndexSnapshotCoordinator:
                 official_daily_bar_count=official_daily_count,
             )
         except Exception:
+            observed_no_later_than = self._post_fetch_observed_at(observed_no_later_than)
             return _blocked_snapshot(
                 index_code=index_code,
                 decision_cutoff=decision_cutoff,
@@ -422,6 +439,7 @@ class MarketIndexSnapshotCoordinator:
                 issue=MarketIndexIssueCode.PROVIDER_UNAVAILABLE,
                 observed_at=observed_no_later_than,
             )
+        observed_no_later_than = self._post_fetch_observed_at(observed_no_later_than)
         if type(batch) is not MarketIndexProviderBatch or batch.index_code is not index_code:
             return _blocked_snapshot(
                 index_code=index_code,
@@ -440,6 +458,12 @@ class MarketIndexSnapshotCoordinator:
             observed_at=batch.observed_at,
             observed_no_later_than=observed_no_later_than,
         )
+
+    def _post_fetch_observed_at(self, requested_at: datetime) -> datetime:
+        observed_at = _ceil_to_whole_second(requested_at)
+        if self._clock is None:
+            return observed_at
+        return max(observed_at, _ceil_to_whole_second(self._clock.now()))
 
 
 __all__ = ["MarketIndexSnapshotCoordinator", "build_market_index_snapshot"]
