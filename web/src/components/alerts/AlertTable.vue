@@ -354,7 +354,16 @@ function toLocalInput(value: string | null): string {
 
 .alert-filters label {
   display: grid;
+  min-width: 0;
   gap: var(--space-1);
+}
+
+.alert-filters input,
+.alert-filters select,
+.alert-filters button {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 
 .alert-filters input,

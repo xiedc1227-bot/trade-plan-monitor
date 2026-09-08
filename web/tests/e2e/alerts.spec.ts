@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import type { Route } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 
@@ -167,6 +167,19 @@ test("queries, filters, expands evidence, and acknowledges without a position re
 
   await page.goto(`${baseUrl}/alerts`);
   await expect(page.getByRole("heading", { level: 1, name: "文字提醒中心" })).toBeVisible();
+  const filterControls: ReadonlyArray<readonly [string, Locator]> = [
+    ["股票代码", page.getByLabel("股票代码")],
+    ["信号类型", page.getByLabel("信号类型")],
+    ["确认状态", page.getByLabel("确认状态")],
+    ["开始时间", page.getByLabel("开始时间")],
+    ["结束时间", page.getByLabel("结束时间")],
+    ["应用筛选", page.getByRole("button", { name: "应用筛选" })],
+  ];
+  for (const width of [320, 768, 1_024, 1_440]) {
+    await page.setViewportSize({ height: 900, width });
+    await expectControlsNotToOverlap(page, filterControls);
+  }
+  await page.setViewportSize({ height: 720, width: 1_280 });
   await expect(page.getByText("<script>never execute</script> 服务端权威提醒")).toBeVisible();
   await expect(page.locator("script").filter({ hasText: "never execute" })).toHaveCount(0);
 
@@ -209,4 +222,34 @@ async function fulfillJson(route: Route, body: unknown): Promise<void> {
     contentType: "application/json; charset=utf-8",
     status: 200,
   });
+}
+
+async function expectControlsNotToOverlap(
+  page: Page,
+  controls: ReadonlyArray<readonly [string, Locator]>,
+): Promise<void> {
+  const boxes = await Promise.all(
+    controls.map(async ([name, control]) => {
+      const box = await control.boundingBox();
+      expect(box, `${name}控件应可见并具有布局尺寸`).not.toBeNull();
+      return { box: box!, name };
+    }),
+  );
+
+  for (let leftIndex = 0; leftIndex < boxes.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < boxes.length; rightIndex += 1) {
+      const left = boxes[leftIndex]!;
+      const right = boxes[rightIndex]!;
+      const overlapsHorizontally =
+        left.box.x < right.box.x + right.box.width &&
+        right.box.x < left.box.x + left.box.width;
+      const overlapsVertically =
+        left.box.y < right.box.y + right.box.height &&
+        right.box.y < left.box.y + left.box.height;
+      expect(
+        overlapsHorizontally && overlapsVertically,
+        `${left.name}与${right.name}控件不应互相覆盖（viewport=${page.viewportSize()?.width ?? "unknown"}px）`,
+      ).toBe(false);
+    }
+  }
 }
