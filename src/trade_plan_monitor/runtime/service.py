@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from inspect import isawaitable
+from types import MappingProxyType
 from typing import Self, cast
 from uuid import UUID, uuid4
 
@@ -53,7 +54,9 @@ from trade_plan_monitor.market_data.reconciliation import (
     reconcile_daily_close,
 )
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
-from trade_plan_monitor.market_index.models import MarketIndexSnapshot
+from trade_plan_monitor.market_index.canonical import validate_market_index_snapshot_integrity
+from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.market_index.models import MarketIndexBar, MarketIndexSnapshot
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
 from trade_plan_monitor.runtime.clock import Clock, SystemClock, _canonical_shanghai
@@ -79,6 +82,7 @@ from trade_plan_monitor.state.events import (
     monitor_event_id,
 )
 from trade_plan_monitor.state.models import EvaluationKind, SymbolHealthStatus
+from trade_plan_monitor.state.projections import ProjectionIdentityConflictError
 from trade_plan_monitor.state.repositories import (
     EpisodeIdentityConflictError,
     EpisodeNotFoundError,
@@ -601,7 +605,7 @@ class RuntimeEvaluationService:
             decision_cutoff=expected_five_minute_ends(bucket_end)[-1],
             observed_no_later_than=_ceil_to_whole_second(evaluated_at),
         )
-        self._persist_market_index_batch(prepared)
+        prepared = self._persist_market_index_batch(prepared) or prepared
         return prepared
 
     def load_persisted_symbol_health(
@@ -1017,7 +1021,7 @@ class RuntimeEvaluationService:
             )
         )
         if prepared is not None:
-            self._persist_market_index_batch(prepared)
+            prepared = self._persist_market_index_batch(prepared) or prepared
         results: list[OfficialCloseCycleResult] = []
         async with self._official_serial:
             for plan in plans:
@@ -1056,7 +1060,7 @@ class RuntimeEvaluationService:
                 decision_cutoff=cutoff,
                 observed_no_later_than=evaluated_at,
             )
-            self._persist_market_index_batch(prepared)
+            prepared = self._persist_market_index_batch(prepared) or prepared
             reference_market_snapshot = prepared.snapshot_for_plan(plan)
         async with self._official_serial:
             return await self._run_official_close_unlocked(
@@ -1933,15 +1937,39 @@ class RuntimeEvaluationService:
             )
         )
 
-    def _persist_market_index_batch(self, prepared: RuntimeMarketIndexBatch) -> None:
+    def _persist_market_index_batch(
+        self,
+        prepared: RuntimeMarketIndexBatch,
+    ) -> RuntimeMarketIndexBatch:
         if not isinstance(prepared, RuntimeMarketIndexBatch):
             raise TypeError("prepared must be a RuntimeMarketIndexBatch")
+        canonical: dict[MarketIndexCode, MarketIndexSnapshot] = {}
         with self._unit_of_work_factory() as unit_of_work:
-            for snapshot in sorted(
-                prepared.snapshots_by_index.values(),
-                key=lambda item: item.index_code.value,
+            for index_code, snapshot in sorted(
+                prepared.snapshots_by_index.items(),
+                key=lambda item: item[0].value,
             ):
+                validate_market_index_snapshot_integrity(snapshot)
                 provider_revision = snapshot.cache_key.provider_content_revision
+                stored = unit_of_work.projections.get_market_index_snapshot_revision(
+                    mapping_version=snapshot.mapping_version,
+                    index_code=snapshot.index_code,
+                    decision_cutoff=snapshot.decision_cutoff,
+                    request_set_hash=snapshot.request_set_hash,
+                    provider_content_revision=provider_revision,
+                )
+                if stored is not None:
+                    if not _equivalent_market_index_capture(stored.snapshot, snapshot):
+                        raise ProjectionIdentityConflictError(
+                            "Market-index provider revision changed canonical content"
+                        )
+                    unit_of_work.projections.advance_market_index_head(
+                        stored.snapshot,
+                        provider_content_revision=provider_revision,
+                        observed_at=snapshot.observed_at,
+                    )
+                    canonical[index_code] = stored.snapshot
+                    continue
                 unit_of_work.projections.put_market_index_snapshot(
                     snapshot,
                     provider_content_revision=provider_revision,
@@ -1950,7 +1978,12 @@ class RuntimeEvaluationService:
                     snapshot,
                     provider_content_revision=provider_revision,
                 )
+                canonical[index_code] = snapshot
             unit_of_work.commit()
+        return RuntimeMarketIndexBatch(
+            decision_cutoff=prepared.decision_cutoff,
+            snapshots_by_index=MappingProxyType(canonical),
+        )
 
     @staticmethod
     def _require_evaluated_plan_active(
@@ -2877,6 +2910,82 @@ class RuntimeLifecycleService:
         if age < timedelta(0):
             raise ValueError("health timestamps cannot be in the future")
         return int(age.total_seconds())
+
+
+def _equivalent_market_index_capture(
+    persisted: MarketIndexSnapshot,
+    incoming: MarketIndexSnapshot,
+) -> bool:
+    """Match one provider revision while ignoring only capture-time metadata."""
+
+    validate_market_index_snapshot_integrity(persisted)
+    validate_market_index_snapshot_integrity(incoming)
+    if persisted.observed_at > incoming.observed_at:
+        return False
+
+    def bar_content(bar: MarketIndexBar) -> object:
+        return bar.model_dump(
+            mode="python",
+            round_trip=True,
+            exclude={"observed_at"},
+        )
+
+    persisted_bars = persisted.five_minute_bars + persisted.official_daily_bars
+    incoming_bars = incoming.five_minute_bars + incoming.official_daily_bars
+    if len(persisted_bars) != len(incoming_bars) or any(
+        old.observed_at > new.observed_at or bar_content(old) != bar_content(new)
+        for old, new in zip(persisted_bars, incoming_bars, strict=True)
+    ):
+        return False
+    old_latest = persisted.latest_completed_five_minute
+    new_latest = incoming.latest_completed_five_minute
+    if (old_latest is None) != (new_latest is None) or (
+        old_latest is not None
+        and new_latest is not None
+        and (
+            old_latest.observed_at > new_latest.observed_at
+            or bar_content(old_latest) != bar_content(new_latest)
+        )
+    ):
+        return False
+
+    if len(persisted.indicator_facts) != len(incoming.indicator_facts) or any(
+        old.model_dump(
+            mode="python",
+            round_trip=True,
+            exclude={"source_bar_hash"},
+        )
+        != new.model_dump(
+            mode="python",
+            round_trip=True,
+            exclude={"source_bar_hash"},
+        )
+        for old, new in zip(
+            persisted.indicator_facts,
+            incoming.indicator_facts,
+            strict=True,
+        )
+    ):
+        return False
+
+    excluded = {
+        "bar_set_hash",
+        "five_minute_bars",
+        "indicator_facts",
+        "latest_completed_five_minute",
+        "observed_at",
+        "official_daily_bars",
+        "snapshot_hash",
+    }
+    return persisted.model_dump(
+        mode="python",
+        round_trip=True,
+        exclude=excluded,
+    ) == incoming.model_dump(
+        mode="python",
+        round_trip=True,
+        exclude=excluded,
+    )
 
 
 class MaintenanceCommandService:

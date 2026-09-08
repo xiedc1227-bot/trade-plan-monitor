@@ -141,11 +141,13 @@ class _Provider:
 class _Clock:
     def __init__(self, current: datetime) -> None:
         self.current = current
+        self.sleep_calls: list[datetime] = []
 
     def now(self) -> datetime:
         return self.current
 
     async def sleep_until(self, deadline: datetime) -> None:
+        self.sleep_calls.append(deadline)
         self.current = max(self.current, deadline)
 
 
@@ -227,7 +229,41 @@ def test_index_snapshot_uses_post_fetch_whole_second_as_future_data_fence() -> N
 
     assert snapshot.health is MarketIndexHealth.LIVE
     assert snapshot.observed_at == provider_observed_at
-    assert expected_observed_at > snapshot.observed_at
+    assert clock.sleep_calls == [expected_observed_at]
+    assert snapshot.observed_at <= clock.now()
+
+
+def test_blocked_index_snapshot_is_not_returned_before_observation_boundary() -> None:
+    requested_at = CUTOFF + timedelta(seconds=2)
+    provider_finished_at = requested_at + timedelta(microseconds=250_000)
+    expected_observed_at = CUTOFF + timedelta(seconds=3)
+    clock = _Clock(requested_at)
+
+    class DelayedFailingProvider(_Provider):
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            clock.current = provider_finished_at
+            raise RuntimeError("provider unavailable")
+
+    service = RuntimeMarketIndexService(
+        MarketIndexSnapshotCoordinator(
+            DelayedFailingProvider(RuntimeError("unused")),
+            clock=clock,
+        )
+    )
+
+    prepared = asyncio.run(
+        service.prepare(
+            plans=(_plan(1, {"type": "NON_DECREASING_CLOSE"}),),
+            decision_cutoff=CUTOFF,
+            observed_no_later_than=requested_at,
+        )
+    )
+    snapshot = next(iter(prepared.snapshots_by_index.values()))
+
+    assert snapshot.health is MarketIndexHealth.BLOCKED
+    assert snapshot.observed_at == expected_observed_at
+    assert clock.sleep_calls == [expected_observed_at]
+    assert snapshot.observed_at <= clock.now()
 
 
 def test_evaluation_rejects_index_snapshot_observed_after_its_evaluation_time() -> None:

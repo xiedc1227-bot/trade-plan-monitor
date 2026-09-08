@@ -9,16 +9,19 @@ from contextlib import closing
 from datetime import date, datetime
 from pathlib import Path
 from typing import Protocol
+from uuid import UUID
 
 from anyio import to_thread
-from sqlalchemy import Engine
+from sqlalchemy import Engine, and_, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from trade_plan_monitor.config import load_application_config
+from trade_plan_monitor.live_profiles import load_stock_certification
 from trade_plan_monitor.market_data.models import (
     ProviderCapabilities,
     ProviderCapabilityStatus,
 )
+from trade_plan_monitor.market_data.sessions import SourceTimeLabel
 from trade_plan_monitor.notifications.channels import InAppChannel
 from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
 from trade_plan_monitor.runtime.clock import Clock, SystemClock
@@ -32,6 +35,7 @@ from trade_plan_monitor.runtime.health import (
     RuntimeResourceStatus,
     RuntimeServiceStatus,
 )
+from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
 from trade_plan_monitor.runtime.request_control import (
     TushareRequestController,
     create_live_tushare_request_controller,
@@ -43,7 +47,7 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
-from trade_plan_monitor.state.models import PlanVersionStatus
+from trade_plan_monitor.state.models import AlertEvent, DeliveryAttempt, PlanVersionStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
 from trade_plan_monitor.web.persistent_monitor_read_service import PersistentMonitorReadService
@@ -280,10 +284,7 @@ class MonitorWebComposition:
             if type(cleanup_failed) is not bool or cleanup_failed:
                 self._runner_failed = True
                 return
-            if (
-                not unexpected_exit
-                and exit_health.status is not RuntimeServiceStatus.RUNNING
-            ):
+            if not unexpected_exit and exit_health.status is not RuntimeServiceStatus.RUNNING:
                 self._runner_failed = False
                 return
 
@@ -292,9 +293,8 @@ class MonitorWebComposition:
                 await self._stop_runtime(runtime)
             except Exception:
                 return
-            if (
-                self._runtime_factory is None
-                or self._restart_attempts >= len(_RUNTIME_RESTART_DELAYS_SECONDS)
+            if self._runtime_factory is None or self._restart_attempts >= len(
+                _RUNTIME_RESTART_DELAYS_SECONDS
             ):
                 return
 
@@ -409,6 +409,9 @@ class _ProductionRuntimeState:
         session_factory: sessionmaker[Session],
         clock: Clock,
         request_controller: TushareRequestController,
+        runtime_generation: Callable[[], UUID] | None = None,
+        publisher: Callable[..., object] | None = None,
+        dispatcher: NotificationDispatcher | None = None,
     ) -> None:
         self._config_path = config_path
         self._database_path = database_path.expanduser().resolve()
@@ -420,6 +423,12 @@ class _ProductionRuntimeState:
         self._wal_status = RuntimeResourceStatus.UNVERIFIED
         self._last_checkpoint_at: datetime | None = None
         self._provider_checked_at: datetime | None = None
+        self._capabilities = ProviderCapabilities()
+        self._pipeline: ProductionMonitorPipeline | None = None
+        self._runtime_generation = runtime_generation
+        self._publisher = publisher
+        self._stage_errors: dict[str, str] = {}
+        self._dispatcher = dispatcher
 
     async def validate_configuration(self) -> None:
         await to_thread.run_sync(load_application_config, self._config_path)
@@ -451,16 +460,60 @@ class _ProductionRuntimeState:
         return tuple(sorted(record.symbol for record in records))
 
     def probe_capabilities(self) -> ProviderCapabilities:
-        # The live minute source-time profile is not yet certified. Returning the
-        # closed UNVERIFIED contract here prevents any token read or provider call.
+        self._capabilities = ProviderCapabilities()
+        self._pipeline = None
+        self._stage_errors.clear()
         self._provider_checked_at = self._clock.now()
-        return ProviderCapabilities()
+        configuration = load_application_config(self._config_path).tushare
+        if configuration.api_url is None:
+            return self._capabilities
+        directory = self._config_path.resolve().parent.parent / "data" / "live-certification"
+        evidence = load_stock_certification(
+            directory / "tushare-stock-live.json",
+            now=self._clock.now(),
+            endpoint_url=str(configuration.api_url),
+        )
+        if evidence is None:
+            return self._capabilities
+        self._capabilities = evidence.capabilities
+        if evidence.source_time_label is SourceTimeLabel.UNVERIFIED:
+            self._capabilities = self._capabilities.model_copy(
+                update={
+                    "realtime_minutes": ProviderCapabilityStatus.UNVERIFIED,
+                    "current_day_minutes": ProviderCapabilityStatus.UNVERIFIED,
+                }
+            )
+        if evidence.ready and self._runtime_generation is not None and self._publisher is not None:
+            self._pipeline = ProductionMonitorPipeline(
+                configuration=configuration,
+                certification_directory=directory,
+                stock_certification=evidence,
+                clock=self._clock,
+                request_controller=self._request_controller,
+                unit_of_work_factory=self.unit_of_work_factory,
+                runtime_generation=self._runtime_generation(),
+                publisher=self._publisher,
+            )
+        return self._capabilities
 
-    def refresh_references(self, _trade_date: date) -> None:
-        return None
+    async def refresh_references(self, trade_date: date) -> None:
+        if self._pipeline is not None:
+            try:
+                await self._pipeline.refresh_references(trade_date)
+            except Exception:
+                stage = self._pipeline.reference_stage.value
+                self._stage_errors[stage] = "REFERENCE_REFRESH_FAILED"
+                raise
 
-    def recover_startup(self, _trade_date: date) -> None:
-        return None
+    async def recover_startup(self, trade_date: date) -> None:
+        if self._pipeline is not None:
+            try:
+                await self._pipeline.recover_startup(trade_date)
+            except Exception:
+                self._stage_errors["current_day_minutes"] = "STARTUP_RECOVERY_FAILED"
+                raise
+            if self._dispatcher is not None:
+                await self._dispatcher.dispatch_pending()
 
     def is_open_on(self, trade_date: date) -> bool | None:
         if type(trade_date) is not date:
@@ -473,8 +526,13 @@ class _ProductionRuntimeState:
             raise RuntimeError("stored trading calendar is inconsistent")
         return rows[0].is_open
 
-    def run_deadline(self, _deadline: MarketDeadline) -> None:
-        raise RuntimeError("live monitor execution is unavailable while source time is unverified")
+    async def run_deadline(self, deadline: MarketDeadline) -> object:
+        if self._pipeline is None:
+            raise RuntimeError("live monitor requires a certified production pipeline")
+        result = await self._pipeline.run_deadline(deadline)
+        if self._dispatcher is not None:
+            await self._dispatcher.dispatch_pending()
+        return result
 
     async def checkpoint_wal(self) -> None:
         await to_thread.run_sync(self._checkpoint_wal_sync)
@@ -496,9 +554,14 @@ class _ProductionRuntimeState:
         providers = tuple(
             ProviderHealthSnapshot(
                 capability=capability,
-                status=ProviderCapabilityStatus.UNVERIFIED,
+                status=(
+                    ProviderCapabilityStatus.ERROR
+                    if capability in self._stage_errors
+                    else getattr(self._capabilities, capability)
+                ),
                 checked_at=checked_at,
                 latency_ms=0,
+                error_code=self._stage_errors.get(capability),
             )
             for capability in _PROVIDER_CAPABILITIES
         )
@@ -514,11 +577,52 @@ class _ProductionRuntimeState:
                 wal_status=self._wal_status,
                 last_checkpoint_at=self._last_checkpoint_at,
             ),
-            delivery=DeliveryHealthSnapshot(
+            delivery=self._delivery_health(),
+            cooldown_until=self._request_controller.cooldown_until,
+        )
+
+    def _delivery_health(self) -> DeliveryHealthSnapshot:
+        if self._pipeline is None or self._database_status is not RuntimeResourceStatus.READY:
+            return DeliveryHealthSnapshot(
                 status=RuntimeResourceStatus.UNVERIFIED,
                 pending_count=0,
                 failed_count=0,
-            ),
+            )
+        latest = (
+            select(DeliveryAttempt.event_id, func.max(DeliveryAttempt.attempt).label("attempt"))
+            .where(DeliveryAttempt.channel == "IN_APP")
+            .group_by(DeliveryAttempt.event_id)
+            .subquery()
+        )
+        attempts = (
+            select(DeliveryAttempt)
+            .join(
+                latest,
+                and_(
+                    DeliveryAttempt.event_id == latest.c.event_id,
+                    DeliveryAttempt.attempt == latest.c.attempt,
+                    DeliveryAttempt.channel == "IN_APP",
+                ),
+            )
+            .subquery()
+        )
+        statement = (
+            select(attempts.c.status, func.count(AlertEvent.id))
+            .select_from(AlertEvent)
+            .outerjoin(attempts, attempts.c.event_id == AlertEvent.id)
+            .group_by(attempts.c.status)
+        )
+        with self._session_factory() as session:
+            counts = dict(session.execute(statement).all())
+        failed = counts.get("FAILED", 0)
+        pending = sum(
+            count for status, count in counts.items() if status not in {"DELIVERED", "FAILED"}
+        )
+        return DeliveryHealthSnapshot(
+            status=RuntimeResourceStatus.DEGRADED if failed else RuntimeResourceStatus.READY,
+            pending_count=pending,
+            failed_count=failed,
+            error_code="DELIVERY_FAILED" if failed else None,
         )
 
     def unit_of_work_factory(self) -> SqlAlchemyUnitOfWork:
@@ -554,7 +658,7 @@ def create_monitor_composition(
     config_path: Path,
     database_path: Path,
 ) -> MonitorWebComposition:
-    """Compose local persistence and an honestly degraded live-monitor gate."""
+    """Compose certified providers and the recoverable local monitoring runtime."""
 
     if not isinstance(config_path, Path):
         raise TypeError("config_path must be a Path")
@@ -566,6 +670,13 @@ def create_monitor_composition(
 
     def unit_of_work_factory() -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(session_factory, clock=clock.now)
+
+    health_binding = _HealthBinding()
+    stream = CommittedMonitorEventStream(
+        unit_of_work_factory=unit_of_work_factory,
+        runtime_liveness_provider=health_binding,
+        clock=clock.now,
+    )
 
     def runtime_factory() -> RuntimeLifecycleService:
         request_controller = create_live_tushare_request_controller(clock=clock)
@@ -581,9 +692,12 @@ def create_monitor_composition(
             session_factory=session_factory,
             clock=clock,
             request_controller=request_controller,
+            runtime_generation=lambda: lifecycle.runtime_generation,
+            publisher=stream.publish_committed,
+            dispatcher=dispatcher,
         )
         scheduler = MarketSessionScheduler(clock=clock, is_open_on=state.is_open_on)
-        return RuntimeLifecycleService(
+        lifecycle = RuntimeLifecycleService(
             clock=clock,
             validate_configuration=state.validate_configuration,
             open_database=state.open_database,
@@ -599,9 +713,9 @@ def create_monitor_composition(
             close_database=state.close_database,
             health_details=state.health_details,
         )
+        return lifecycle
 
     runtime = runtime_factory()
-    health_binding = _HealthBinding()
     read_service = PersistentMonitorReadService(
         unit_of_work_factory,
         health_binding,
@@ -611,11 +725,7 @@ def create_monitor_composition(
         runtime=runtime,
         runtime_factory=runtime_factory,
         read_service=read_service,
-        websocket_service=CommittedMonitorEventStream(
-            unit_of_work_factory=unit_of_work_factory,
-            runtime_liveness_provider=health_binding,
-            clock=clock.now,
-        ),
+        websocket_service=stream,
         position_service=PersistentPositionOperationService(
             unit_of_work_factory=unit_of_work_factory,
         ),

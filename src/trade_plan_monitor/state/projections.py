@@ -62,7 +62,9 @@ from trade_plan_monitor.state.repositories import PositionLotRecord, RepositoryE
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _SYMBOL_PATTERN = re.compile(r"^[0-9]{6}\.(?:SH|SZ|BJ)$")
-_CANONICAL_RESULT_THRESHOLD_PATTERN = re.compile(r'("threshold_ratio":")(-?[0-9]+e-?[0-9]+)(")')
+_CANONICAL_RESULT_THRESHOLD_PATTERN = re.compile(
+    r'("threshold_ratio"\s*:\s*")(-?[0-9]+e-?[0-9]+)(")'
+)
 _MAX_RESULT_JSON_BYTES = 8 * 1024 * 1024
 _MAX_POSITION_LOTS = 200
 _MAX_INDEX_JSON_BYTES = 16 * 1024 * 1024
@@ -593,6 +595,7 @@ class ProjectionRepository:
         snapshot: MarketIndexSnapshot,
         *,
         provider_content_revision: int,
+        observed_at: datetime | None = None,
     ) -> MarketIndexHeadRecord:
         if type(snapshot) is not MarketIndexSnapshot:
             raise TypeError("snapshot must be an exact MarketIndexSnapshot")
@@ -610,6 +613,13 @@ class ProjectionRepository:
             raise ProjectionIdentityConflictError(
                 "Market-index head identity differs from its immutable snapshot"
             )
+        head_observed_at = (
+            snapshot.observed_at
+            if observed_at is None
+            else _market_datetime(observed_at, "observed_at")
+        )
+        if head_observed_at < snapshot.observed_at:
+            raise ValueError("market-index head cannot precede its immutable snapshot")
 
         key = (
             snapshot.mapping_version,
@@ -621,7 +631,7 @@ class ProjectionRepository:
         values = {
             "provider_content_revision": provider_revision,
             "snapshot_hash": snapshot.snapshot_hash,
-            "updated_at": snapshot.observed_at.isoformat(),
+            "updated_at": head_observed_at.isoformat(),
         }
         if current is None:
             self._session.add(
@@ -633,13 +643,17 @@ class ProjectionRepository:
                     **values,
                 )
             )
-        elif current.provider_content_revision > provider_revision:
-            raise ProjectionRevisionConflictError(current.provider_content_revision)
         elif current.provider_content_revision == provider_revision:
-            if any(getattr(current, name) != value for name, value in values.items()):
+            if current.snapshot_hash != snapshot.snapshot_hash:
                 raise ProjectionIdentityConflictError(
                     "Market-index revision already names another snapshot head"
                 )
+            current_observed_at = _market_datetime(current.updated_at, "updated_at")
+            if current_observed_at > head_observed_at:
+                raise ProjectionRevisionConflictError(current.provider_content_revision)
+            current.updated_at = head_observed_at.isoformat()
+        elif _market_datetime(current.updated_at, "updated_at") >= head_observed_at:
+            raise ProjectionRevisionConflictError(current.provider_content_revision)
         else:
             for name, value in values.items():
                 setattr(current, name, value)
@@ -662,6 +676,43 @@ class ProjectionRepository:
         row = self._session.get(
             MarketIndexSnapshotRow,
             _sha256(snapshot_hash, "snapshot_hash"),
+        )
+        if row is None:
+            return None
+        snapshot, provider_revision = _market_index_from_row(row)
+        return MarketIndexSnapshotRecord(
+            snapshot=snapshot,
+            provider_content_revision=provider_revision,
+        )
+
+    def get_market_index_snapshot_revision(
+        self,
+        *,
+        mapping_version: str,
+        index_code: str | MarketIndexCode,
+        decision_cutoff: datetime,
+        request_set_hash: str,
+        provider_content_revision: int,
+    ) -> MarketIndexSnapshotRecord | None:
+        try:
+            normalized_index_code = MarketIndexCode(index_code).value
+        except TypeError, ValueError:
+            raise ValueError("index_code is not supported") from None
+        identity = (
+            _token(mapping_version, "mapping_version", maximum=32),
+            normalized_index_code,
+            _market_datetime(decision_cutoff, "decision_cutoff").isoformat(),
+            _sha256(request_set_hash, "request_set_hash"),
+            _positive_integer(provider_content_revision, "provider_content_revision"),
+        )
+        row = self._session.scalar(
+            select(MarketIndexSnapshotRow).where(
+                MarketIndexSnapshotRow.mapping_version == identity[0],
+                MarketIndexSnapshotRow.index_code == identity[1],
+                MarketIndexSnapshotRow.decision_cutoff == identity[2],
+                MarketIndexSnapshotRow.request_set_hash == identity[3],
+                MarketIndexSnapshotRow.provider_content_revision == identity[4],
+            )
         )
         if row is None:
             return None

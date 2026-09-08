@@ -431,7 +431,7 @@ class MarketIndexSnapshotCoordinator:
                 official_daily_bar_count=official_daily_count,
             )
         except Exception:
-            observed_no_later_than = self._post_fetch_observed_at(observed_no_later_than)
+            observed_no_later_than = await self._post_fetch_observed_at(observed_no_later_than)
             return _blocked_snapshot(
                 index_code=index_code,
                 decision_cutoff=decision_cutoff,
@@ -439,7 +439,7 @@ class MarketIndexSnapshotCoordinator:
                 issue=MarketIndexIssueCode.PROVIDER_UNAVAILABLE,
                 observed_at=observed_no_later_than,
             )
-        observed_no_later_than = self._post_fetch_observed_at(observed_no_later_than)
+        observed_no_later_than = await self._post_fetch_observed_at(observed_no_later_than)
         if type(batch) is not MarketIndexProviderBatch or batch.index_code is not index_code:
             return _blocked_snapshot(
                 index_code=index_code,
@@ -459,11 +459,17 @@ class MarketIndexSnapshotCoordinator:
             observed_no_later_than=observed_no_later_than,
         )
 
-    def _post_fetch_observed_at(self, requested_at: datetime) -> datetime:
+    async def _post_fetch_observed_at(self, requested_at: datetime) -> datetime:
         observed_at = _ceil_to_whole_second(requested_at)
         if self._clock is None:
             return observed_at
-        return max(observed_at, _ceil_to_whole_second(self._clock.now()))
+        now = _canonical_shanghai(self._clock.now())
+        observed_at = max(observed_at, _ceil_to_whole_second(now))
+        if now < observed_at:
+            await self._clock.sleep_until(observed_at)
+            if _canonical_shanghai(self._clock.now()) < observed_at:
+                raise RuntimeError("clock returned before the market-index observation boundary")
+        return observed_at
 
 
 __all__ = ["MarketIndexSnapshotCoordinator", "build_market_index_snapshot"]
