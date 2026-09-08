@@ -81,3 +81,48 @@ def test_runner_fails_before_provider_call_when_config_has_no_token(
 
     assert result == 2
     assert '"outcome": "NOT_RUN_CONFIG_UNAVAILABLE"' in capsys.readouterr().out
+
+
+def test_runner_reports_permission_block_without_failing_the_certification_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """\
+tushare:
+  api_url: https://api.quicksync.cn
+  token: configured-live-token
+""",
+        encoding="utf-8",
+    )
+
+    async def certify_board_indexes(**_kwargs: object) -> object:
+        return SimpleNamespace(
+            ready_indexes=frozenset(),
+            profile_id="tushare-board-index-live-v1",
+        )
+
+    monkeypatch.setattr(runner_module, "create_tushare_client", lambda _config: object())
+    monkeypatch.setattr(
+        runner_module,
+        "create_live_tushare_request_controller",
+        lambda **_kwargs: _Controller(),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "certify_board_indexes",
+        certify_board_indexes,
+    )
+
+    result = run_configured_certification(
+        LiveCertificationSurface.BOARD_INDEX,
+        config_path,
+        tmp_path / "evidence",
+    )
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert '"outcome": "CERTIFIED_VISIBLE_BLOCK"' in output
+    assert '"readyIndexCount": 0' in output

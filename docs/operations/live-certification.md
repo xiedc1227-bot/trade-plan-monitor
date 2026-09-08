@@ -13,6 +13,41 @@ two `rt_min_daily` observations. Board-index certification checks historical
 separately for every approved `MarketIndexCode`. The stock “A-share realtime minutes” permission
 does not replace the separately named “Index realtime minutes” permission.
 
+## Required Data Permissions
+
+The implementation calls exactly the following nine Tushare endpoints. The account audit on
+2026-09-08 used the configured token and the configured `https://api.quicksync.cn` endpoint; no
+credential value was printed or recorded.
+
+| Official data/permission name | Endpoints used | Function dependency | Account status |
+|---|---|---|---|
+| Trading calendar | `trade_cal` | Open-day validation for live monitoring and backtest synchronization | `READY` |
+| Daily price limits | `stk_limit` | Stock limit-up/limit-down state and backtest synchronization | `READY` |
+| A-share daily bars | `daily` | Official stock daily reference and backtest synchronization | `READY` |
+| Historical stock minutes | `stk_mins` | Historical stock-minute synchronization for backtests | `READY` (241 rows observed) |
+| A-share realtime minutes | `rt_min`, `rt_min_daily` | Live stock monitoring and current-day cumulative recovery | `READY` |
+| Index daily bars | `index_daily` | Official board-index daily reference | `READY` |
+| Historical index minutes | `idx_mins` | Historical warm-up for board-index monitoring | `READY` (49 five-minute rows observed) |
+| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring | **`BLOCKED_PERMISSION`** |
+
+Therefore the only missing data permission required by the current implementation is the
+separately sold **Index realtime minutes** permission. Enabling A-share realtime minutes does not
+grant it. `rt_min_daily` is included with A-share realtime-minute access; the implementation does
+not need a separate permission for that endpoint.
+
+The current code does not call auction, realtime daily-bar, ETF, industry-classification realtime,
+Level-2, or tick-by-tick endpoints. Those permissions are not required for the current feature set.
+
+### Test and runtime boundary
+
+- The default automated suite uses deterministic fakes; explicitly authorized live contract cases
+  are skipped. Normal test runs therefore do not depend on provider permissions or network access.
+- A completed live probe with unavailable permission writes the capability as
+  `BLOCKED_PERMISSION`, prints `CERTIFIED_VISIBLE_BLOCK`, and exits with code `0`.
+- Only the production function that consumes the unavailable data remains non-actionable. Missing
+  Index realtime minutes therefore blocks live board-index conditions, not the test suite and not
+  unrelated stock or backtest behavior.
+
 ## Configuration
 
 Copy the versioned template once and place credentials directly in the ignored local file:
@@ -74,7 +109,12 @@ does not authorize or disable its peers.
 
 ## Authoritative References
 
+- [Tushare `trade_cal`](https://tushare.pro/document/2?doc_id=26)
+- [Tushare `stk_limit`](https://tushare.pro/document/2?doc_id=183)
+- [Tushare `daily`](https://tushare.pro/document/1?doc_id=27)
+- [Tushare `stk_mins`](https://tushare.pro/document/2?doc_id=370)
+- [Tushare `rt_min`](https://tushare.pro/document/2?doc_id=374)
+- [Tushare `rt_min_daily`](https://tushare.pro/document/2?doc_id=457)
 - [Tushare `idx_mins`](https://tushare.pro/document/2?doc_id=419)
 - [Tushare `rt_idx_min_daily`](https://tushare.pro/document/2?doc_id=420)
 - [Tushare `index_daily`](https://tushare.pro/document/1?doc_id=95)
-- [Tushare `trade_cal`](https://tushare.pro/document/2?doc_id=26)
