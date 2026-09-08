@@ -313,14 +313,15 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 ### WEBF05 真实生产监控组合边界
 
 - 当没有显式运行时/应用服务时，`create_production_app(...)` 使用惰性的 `create_monitor_composition_factory(config_path, database_path)`。工厂只在 FastAPI lifespan 内调用；它打开并迁移生产计划生命周期使用的同一个 monitor SQLite，构造真实的 `RuntimeLifecycleService`，暴露以后端为权威来源的 `RuntimeHealthSnapshot`，并管理基于数据库的 `CommittedMonitorEventStream`。明确注入的运行时和应用服务继续保持权威，并阻止默认组合构造。
-- 默认组合会在任何密钥或供应商请求前检查获批的实时前置条件。由于实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
+- 默认组合加载并校验统一且被忽略的 `config/app.yaml`，随后在构造带凭证的 provider client 或发出 provider 请求前检查获批的真实证据。新鲜 profile 是必要条件，但本身不能让生产变为可执行：composition 必须校验并消费它，绑定对应 provider 与 scheduler，并保留每个指数的失败。在这些检查通过前，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。当前股票 profile 以 `SourceTimeLabel=START` 全部 `READY`；独立指数 profile 以 `SourceTimeLabel=END` 记录四个 `READY` 指数和 `899050.BJ=ERROR`。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
 - 真实组合不会捏造缺失的权威投影。ADR 0004 以严格类型化 HTTP `200` unavailable 联合取代总览与股票生命周期缺失原先的通用 `SERVICE_UNAVAILABLE` 行为；真正故障及仍未组合的实时指数读取继续封闭失败。WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。持仓可用性由 WEBF09 单独定义，提醒中心可用性由 WEBF10 单独定义。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
-- 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储或组合错误不得被静默转换成健康响应；只有已知未验证的实时前置条件会产生有界的 `DEGRADED` 状态。
+- 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储、组合、过期 profile 或必需指数错误不得被静默转换成健康响应；未满足的实时前置条件会按生产链路契约产生有界 `DEGRADED` 状态或隔离的依赖路径失败。
 
 ### WEBF06 监控总览路由边界
 
 - `/` 惰性加载 `DashboardRouteView`，它是既有 `monitor` Pinia store 与 `DashboardView` 之上的薄组合表面。store 只由权威 `GET /api/v1/dashboard` 快照生命周期填充；该路由绝不调用供应商、判断条件、映射板块、计算新鲜度或写入判断。
 - 路由把不可变的后端 `connectionStatus`、统计、数据年龄、观察时间、股票摘要、共用 `marketIndexes` 以及每只股票计划专属的 `referenceMarket.conditionProgress` 直接传给展示组件。因此界面始终分开共用板块指数事实与单计划结果，且不暗示统一市场结论。
+- 路由保留后端认证的官方收盘 `RISK_BREACH` 及其真实 `STALE` 判断健康。只有后端在校验匹配的 15:00 官方 K 线、跌破日期、完整必需数据、风险状态、下一步及已满足的 `OFFICIAL_CLOSE_BELOW_LEVEL` 证据后，才能准入这个狭窄的可执行例外。Vue 既不抑制该信号，也不把它改标为 `LIVE`；其他所有可执行判断在健康不是 `LIVE` 时仍然非法。
 - 在权威快照存在前，路由展示既有加载状态而不是空自选表。选择已渲染股票只会向 `/stocks/:symbol` 发出路由导航意图；它不会修改监控状态，也不会构造详情响应。
 - 本边界不新增 REST 路径、OpenAPI 字段、生成 TypeScript 类型、Schema 迁移、Schema v1 数据变更、历史回测结果变更或 hash 变更。它不暴露 token，也不执行真实供应商请求。
 
@@ -371,7 +372,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - WEBF10 在不增加路由的前提下，把最后一条历史 `/alerts` 占位路由接入其业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
 - 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
-- `create_production_app(...)` 使用 WEBF05 惰性的真实监控组合：实时前置条件仍未验证时，后端健康诚实保持为 `DEGRADED`/只读，没有权威投影的总览/股票读取返回 ADR 0004 类型化 unavailable 响应。真正的组合或存储故障继续为 `SERVICE_UNAVAILABLE`。其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
+- `create_production_app(...)` 使用 WEBF05 惰性的真实监控组合：实时前置条件缺失、过期、无效或尚未被安装式 composition 消费时，后端健康诚实保持为 `DEGRADED`/只读，没有权威投影的总览/股票读取返回 ADR 0004 类型化 unavailable 响应。失败指数不能因其他指数就绪而被升级，并且只影响其依赖路径。真正的组合或存储故障继续为 `SERVICE_UNAVAILABLE`。其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
 
 ## 信息架构
 

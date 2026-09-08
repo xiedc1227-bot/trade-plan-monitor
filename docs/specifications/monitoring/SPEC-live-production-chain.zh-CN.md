@@ -79,15 +79,20 @@ Dashboard/集合范围不得出现 `symbol`，股票详情范围必须包含 `sy
 - `TushareClient` 与股票 provider 只使用经认证的股票 profile。`rt_min(freq="1MIN")` 每个 deadline 只接收一次逗号分隔请求，其中包含全部活动股票且最多十只。判断使用该批次返回/持久化的数据，不能执行第二次报价请求。
 - deadline coordinator 一次性捕获不可变的计划、股票和激活 revision 集合。`SymbolService` 必须使用该精确股票 tuple，不得独立重新读取 active set；之后发生的激活顺延到下一个 deadline，停用/轮换则由最终 revision fence 拒绝。
 - `RequestController` 强制全局物理启动节奏、有界准入、完整 15 秒准入超时及其后独立的完整 15 秒供应商超时、分类冷却/退避和 deadline 优先级。关闭 controller 会唤醒每个排队等待者，使其在 callable 启动前返回 `CLOSED`。数据库工作绝不进入 provider worker，provider/网络工作绝不进入数据库事务。
+- 每次指数 provider 获取后，coordinator 都会先推进到真实整秒边界，再生成可持久化的成功或错误证据；随后重新读取注入时钟，并拒绝任何未来观测。该获取后边界同等适用于成功与失败调用；它不回填证据时间，也不放宽未来时间校验。
 - 存在持久 `pending_official_close` 的股票不能停用，也不能轮换到另一计划。计划写锁和 pending 检查位于同一事务，因此启动恢复始终为该 pending identity 保留一份活动不可变 owner。
-- 启动时独立校验能力、刷新日历/涨跌停/参考历史、重试持久 pending close、串行恢复当日分钟，再启动 deadline supervisor。失败阶段保持可见且可恢复；不得遗留无所有者任务。
+- 启动时独立校验能力、刷新日历/涨跌停/参考历史，并按 pending 交易日期对持久 pending close 分组，使同一必需板块的股票共享该批次 revision-aware 指数快照；随后串行恢复当日分钟，再启动 deadline supervisor。失败阶段保持可见且可恢复；不得遗留无所有者任务。
 - `RuntimeEvaluationService` 对到期股票和指数需求分组，构造不可变输入，对每个完整 5 分钟 identity 判断一次，并通过上述原子边界提交。
+- 自有实时 deadline 完成后，`GAP_REPAIR` 只能消费持久化股票健康快照中的当日缺口。它以串行自有 await 运行，不创建游离任务；当 deadline 工作正在运行/排队，或距下一实时 deadline 至多 `31.25` 秒时必须让路。修复的 K 线只为后续判断持久化；已完成 identity 不会再次判断。
 - deadline coordinator 让下一个行情 deadline 优先于 recovery/background。runtime 一旦进入 `STOPPING` 就立即停止 controller 准入，给予自有工作有界完成/取消窗口，之后才汇合线程池。可恢复 supervisor 报告故障并采用有界重启策略，不能在健康仍显示 `LIVE` 时静默退出。
 - 只有 runtime 健康状态为 `RUNNING` 时观测到的启动后运行循环意外返回或异常才允许重启。每次尝试都创建全新的 runtime；每个 Web composition 生命周期最多重启三次，精确延迟为 `1`、`2`、`4` 秒。进程重启会重置预算。
 - 重启退避期间及预算耗尽后，健康状态为 `DEGRADED`、`read_only=true`、`nextPollAt=null`。stop/取消、启动/配置/迁移失败或清理失败属于终止性错误，绝不重试。每个延迟/runtime 任务均由 composition 持有、可取消并汇合；只有失败 runtime 清理成功后才改变服务绑定。
 - 板块指数 provider 与股票 provider 相互独立，拥有自己的已认证历史 `idx_mins`、当日 `rt_idx_min_daily`、`index_daily` endpoint/profile 和 `SourceTimeLabel`。一个指数失败只为明确依赖该指数的计划路径生成阻断证据；其他指数与无指数条件的计划继续运行。
+- 在单个 deadline 的不可变到期计划批次内，每个必需指数 endpoint 至多调用一次，且所有依赖计划消费同一 revision-aware `snapshot_hash`。已提交 evaluation identity 的重放产生零 provider 请求。15:00 盘中判断与 `OFFICIAL_CLOSE` 仍是不同的判断 kind，因此即使二者切点均为 15:00，且 observed/provider revision 可能不同，也可分别执行各自的 endpoint 调用。若之后的 capture 拥有相同 provider revision 和完全相同的规范行情内容，持久层会复用既有 snapshot/hash，仅推进 capture-time head 元数据；任何规范内容不一致都以 identity conflict 封闭失败。`r1` → `r2` → `r1` 这类 revision 序列会为每个 revision 重新解析到精确的已持久化规范 snapshot，且每项计划结果都绑定该已持久化 snapshot/hash。不得放宽 snapshot 字段、hash 公式或唯一约束。
 
-生产股票路径在新鲜股票能力记录为 `READY` 并选定已验证 `SourceTimeLabel` 前保持依赖阻断。历史 T058 可见阻断结果不是该记录。此闸门通过前，生产 composition 使用真实请求控制限制，但必须保持 `DEGRADED`、不读取 Token、不调用 provider，也不得构造可执行 deadline coordinator。
+生产股票路径在新鲜股票能力记录为 `READY` 并选定已验证 `SourceTimeLabel` 前保持依赖阻断。历史 T058 可见阻断结果不是该记录。启动时可以读取并校验统一且被忽略的 `config/app.yaml`；此证据闸门通过前，生产 composition 使用真实请求控制限制，但必须保持 `DEGRADED`、不构造带凭证的 provider client、不发出 provider 请求，也不得构造可执行 deadline coordinator。当前股票记录以五项能力全部 `READY` 和 `SourceTimeLabel=START` 满足证据闸门，有效至 2026-09-15 09:52:53 Asia/Shanghai；安装式生产仍必须实际校验并消费该记录，之后才能变为可执行。
+
+板块指数闸门按每个必需指数判断，不能根据数据面整体标签升级。当前独立 profile 有效至 2026-09-15 15:16:52 Asia/Shanghai，且 `SourceTimeLabel=END`：`000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 为 `READY`，`899050.BJ` 为 `ERROR`。生产只能准入就绪指数，并必须把失败指数隔离到其显式依赖路径。该证据不认证 `899050.BJ`，组件测试或生成 profile 本身也不能证明生产链路通过验收。
 
 ## 真实 Harness 与证据契约
 
@@ -107,7 +112,7 @@ Dashboard/集合范围不得出现 `symbol`，股票详情范围必须包含 `sy
 | `SymbolRouteView` | 组合详情或类型化 unavailable 展示 | 不重建判断 |
 | `PriceChart` | 惰性 ECharts 渲染和可访问表格 | chart chunk 只在图表路由异步加载 |
 
-浏览器状态机区分 `SNAPSHOT`、`UNAVAILABLE`、`STALE` 和 `DISCONNECTED`。`SNAPSHOT` 表示已存在经过校验的权威响应；存活状态可以细化可见连接标签，但不能伪造数据。`UNAVAILABLE` 只能来自类型化 HTTP `200` 变体，且绝不打开 WebSocket。`STALE` 必须已有此前通过校验的缓存快照。`DISCONNECTED` 只用于没有可用缓存时的传输/超时/非法响应失败。公开 REST 与 WebSocket sequence 以 JavaScript 安全整数上限为界。只有 heartbeat 的精确 sequence 和 `runtimeGeneration` 都与已应用的权威快照一致时，才能建立存活状态；因此 supervisor 替换或进程重启即使时钟回退，也必须强制执行 REST 恢复。
+浏览器状态机区分 `SNAPSHOT`、`UNAVAILABLE`、`STALE` 和 `DISCONNECTED`。`SNAPSHOT` 表示已存在经过校验的权威响应；存活状态可以细化可见连接标签，但不能伪造数据。`UNAVAILABLE` 只能来自类型化 HTTP `200` 变体，且绝不打开 WebSocket。`STALE` 必须已有此前通过校验的缓存快照。`DISCONNECTED` 只用于没有可用缓存时的传输/超时/非法响应失败。后端认证的官方收盘 `RISK_BREACH` 在判断健康为 `STALE` 时仍具权威性：其 15:00 官方 K 线、匹配的跌破日期、完整必需数据、风险状态、下一步及已满足的 `OFFICIAL_CLOSE_BELOW_LEVEL` 证据必须一致。浏览器同时展示该已存判断及其 `STALE` 健康；既不丢弃风险信号，也不把数据改标为 `LIVE`。其他所有可执行判断仍要求 `LIVE` 健康。公开 REST 与 WebSocket sequence 以 JavaScript 安全整数上限为界。只有 heartbeat 的精确 sequence 和 `runtimeGeneration` 都与已应用的权威快照一致时，才能建立存活状态；因此 supervisor 替换或进程重启即使时钟回退，也必须强制执行 REST 恢复。
 
 Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 worker、零 retry；除另行组合的本地生产旅程外，使用确定性同源 fake。安装式旅程分配测试自有回环端口，只有自有 launcher 识别出其 Uvicorn 进程后才接受 readiness，在确认退出前保留两个进程 identity，并为每个优雅/强制清理工具设置上界。每个验收用例要求控制台 error 为零、warning 为零且 `requestfailed` 为零。Firefox 不是门禁。非图表路由不得请求 chart chunk。
 
@@ -132,7 +137,9 @@ Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 
 - 空库/无计划/首次判断状态返回类型化 `200`；真正存储/组合故障返回 `503`。
 - 一次完整已提交判断可跨重启，并生成相同权威 Dashboard/股票投影与高水位 sequence。
 - 每个 deadline 最多启动一次十股票实时批次，任何判断均不执行第二次获取。
+- 只有距下一实时 deadline 超过 `31.25` 秒时，才可修复持久化的当日缺口，且不得延误该 deadline。
 - 一个板块指数故障只影响显式依赖它的计划路径。
+- 经认证的官方收盘 `RISK_BREACH` 跨重启后仍以真实 `STALE` 健康可见；其他可执行判断均不得绕过 `LIVE` 要求。
 - 类型化 unavailable 状态下 Vue 不打开 Socket，且 Chrome 验收保持干净。
 - 非图表路由请求中不存在 ECharts 代码。
 - 全部必需离线闸门通过；只有密钥与市场窗口前置条件满足时才记录真实证据。
@@ -140,5 +147,8 @@ Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 
 ## 审核状态
 
 用户通过明确请求批准实施。2026-09-07，用户针对这款个人工具取消 OS 凭据存储与仅子进程注入
-边界，允许把凭证直接保存到被忽略的本地应用配置中；市场窗口闸门继续保留。实时分钟语义仍未
-认证，直至 `config/app.yaml` 包含 Tushare Token，且之后获授权的开市窗口运行提供新鲜证据。
+边界，允许把凭证直接保存到被忽略的本地应用配置中；市场窗口与七天新鲜度闸门继续保留。经授权的
+2026-09-08 股票运行认证 `SourceTimeLabel=START` 与全部五项股票能力；独立指数运行认证
+`SourceTimeLabel=END` 与四个指数，`899050.BJ` 仍为 `ERROR`。这些记录只满足各自陈述的真实证据
+范围，本身不能批准生产 composition。自然计划的 17:00 官方收盘周期及重启产生的独立安装式生产
+证据现已关闭 LPC006/LPC008；由于 `899050.BJ` 未获认证，LPC007 仍保持未完成。

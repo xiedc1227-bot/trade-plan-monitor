@@ -44,4 +44,4 @@ After every phase, run focused tests, Ruff/type checks for changed surfaces, `gi
 
 ## Open Questions
 
-LPC005 recorded a fresh `READY` stock profile with `SourceTimeLabel=START` on 2026-09-08. LPC006 now needs the installed production composition to consume that profile. LPC007 remains evidence-gated because the separately named Tushare “Index realtime minutes” permission is blocked for `rt_idx_min_daily`; LPC008 remains dependent on LPC007 and production composition binding.
+LPC005 has a stock profile valid through 2026-09-15 09:52:53 Asia/Shanghai with all five capabilities `READY` and `SourceTimeLabel=START`. The separate index profile is valid through 2026-09-15 15:16:52 with `SourceTimeLabel=END`: `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` are `READY`, while `899050.BJ` is `ERROR`. The 2026-09-08 installed-production scheduler/restart proof consumed these profiles and closed LPC006 and LPC008 while preserving the failed-index isolation; LPC007 still does not certify `899050.BJ`.

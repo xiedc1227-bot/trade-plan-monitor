@@ -25,22 +25,22 @@
 - [x] `LPC005` — Harden the zero-network/default and one-shot live stock harness.
   - Acceptance: direct `config/app.yaml` token loading, serial single-concurrency, `>=1.25 s` starts, 15-second timeout, no retry, and stop on 429; a stock profile becomes `READY` only from fresh gated evidence with a verified `SourceTimeLabel`, otherwise it remains explicitly blocked or `NOT_RUN_MARKET_WINDOW`.
   - Verify: offline contract tests and candidate secret scan.
-  - Evidence: the authorized 2026-09-08 09:52 Asia/Shanghai open-market run recorded all five stock capabilities as `READY` and `SourceTimeLabel=START`. QuickSync's omitted fixed `freq` echo is accepted only because the request is fixed to `1MIN`; an explicitly returned non-`1MIN` value still fails closed.
-- [ ] `LPC006` — Compose the certified stock provider and one-batch recoverable runtime.
-  - Acceptance: depends on a `READY` LPC005 stock profile; reference refresh/recovery/supervisor work; one `rt_min` batch per deadline for at most ten symbols; no evaluation refetch or network in transaction. Until that dependency passes, production stays `DEGRADED` with no token read, provider call, or actionable deadline coordinator.
+  - Evidence: the authorized 2026-09-08 09:52:53 Asia/Shanghai open-market run recorded all five stock capabilities as `READY` and `SourceTimeLabel=START`; the profile remains valid through 2026-09-15 09:52:53. QuickSync's omitted fixed `freq` echo is accepted only because the request is fixed to `1MIN`; an explicitly returned non-`1MIN` value still fails closed.
+- [x] `LPC006` — Compose the certified stock provider and one-batch recoverable runtime.
+  - Acceptance: depends on a `READY` LPC005 stock profile; reference refresh/recovery/supervisor work; one `rt_min` batch per deadline for at most ten symbols; no evaluation refetch or network in transaction. Startup may validate the unified ignored `config/app.yaml`, but until that dependency passes production stays `DEGRADED`, constructs no credentialed provider client, makes no provider request, and creates no actionable deadline coordinator.
   - Verify: provider, request-controller, deadline, recovery, restart, and ten-symbol tests.
-  - Blocked evidence: LPC005 is now `READY`, but the installed production composition still exposes its earlier hard-coded `UNVERIFIED` provider state and has not yet bound the certified profile/provider/deadline coordinator.
+  - Evidence: the installed production run started at 2026-09-08 16:54:10.565727 Asia/Shanghai, consumed the fresh five-capability `READY` stock profile, naturally started its scheduled 17:00 deadline at 17:00:00.011473, committed both official-close evaluations, replayed the committed identities with zero results and zero provider requests, and restarted `RUNNING` with Dashboard sequence `11` preserved. This production proof is separate from component tests and live profile generation.
 
 ## Board-Index Runtime
 
 - [ ] `LPC007` — Establish separate live board-index certification evidence.
   - Acceptance: separate authorization/profile/`SourceTimeLabel`; unsuitable market window records `NOT_RUN_MARKET_WINDOW`; no stock evidence is reused.
   - Verify: offline harness tests and, only when gated, the serial live selector.
-  - Blocked evidence: the 2026-09-08 open-market run proved that `idx_mins` is historical and cannot certify current-day index timestamps. The corrected probe separately checks `idx_mins`, `rt_idx_min_daily`, and `index_daily`; all five approved indexes returned `BLOCKED_PERMISSION` for the realtime endpoint, so the separate Tushare permission named “Index realtime minutes” is still required.
-- [ ] `LPC008` — Compose the independent board-index provider and isolated condition failures.
-  - Acceptance: each required index is fetched at most once per cutoff; one failure affects only dependent condition paths.
+  - Current evidence: the authorized 2026-09-08 15:16:52 Asia/Shanghai run selected `SourceTimeLabel=END`. `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` are `READY`; `899050.BJ` is `ERROR`. The profile remains valid through 2026-09-15 15:16:52. This supersedes the earlier blanket permission-block conclusion, but does not certify `899050.BJ` or close LPC007.
+- [x] `LPC008` — Compose the independent board-index provider and isolated condition failures.
+  - Acceptance: within each deadline's immutable due-plan batch, each required index endpoint is called at most once and every dependent plan shares the same `snapshot_hash`; replay of an already committed evaluation identity makes zero provider requests. The 15:00 intraday evaluation and `OFFICIAL_CLOSE` are distinct evaluation kinds and may each make their own revision-aware request even though both cutoffs are 15:00. One index failure affects only dependent condition paths.
   - Verify: focused market-index runtime and decision tests.
-  - Blocked evidence: the provider now merges historical `idx_mins` with current-day `rt_idx_min_daily` and keeps condition failures isolated, but actionable production composition remains gated by a fresh `LPC007` profile and is not yet bound into the installed runtime.
+  - Evidence: the installed production run consumed the independent profile, kept `899050.BJ=ERROR`, shared `LIVE` Shanghai/Shenzhen snapshots within each due-plan batch, committed two `OFFICIAL_CLOSE` evaluations, and proved committed-identity replay with zero provider requests. Its two-stage 15:00 intraday/`OFFICIAL_CLOSE` exercise called each required index endpoint once per distinct evaluation kind, as allowed by the revision-aware contract.
 
 ## Web Availability
 
@@ -59,4 +59,4 @@
 - [ ] `LPC012` — Complete bilingual acceptance report and all gates.
   - Acceptance: exact commands/results/files/risks recorded; all required offline gates and secret scan pass; live results are not overstated.
   - Verify: commands in `tasks/live-production-plan.md`, parity audit, `git diff --check`, and `git status --short`.
-  - Blocked evidence: all live-chain-focused gates and the secret scan pass, but the repository-wide offline pytest gate remains red on the pre-existing 252-day backtest performance budget; real stock and board-index gates also remain intentionally incomplete.
+  - Blocked evidence: the live-chain-focused gates, secret scan, and LPC006/LPC008 installed-production acceptance pass, but the repository-wide offline pytest gate remains red on the pre-existing 252-day backtest performance budget. Stock certification is current; board-index certification remains partial because `899050.BJ` is `ERROR`.

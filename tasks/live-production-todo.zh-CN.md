@@ -25,22 +25,22 @@
 - [x] `LPC005`——加固默认零网络与一次性真实股票 harness。
   - 验收：直接读取 `config/app.yaml` Token、串行单并发、启动间隔 `>=1.25 s`、15 秒超时、零重试且 429 后停止；只有带已验证 `SourceTimeLabel` 的新鲜闸门证据才能把股票 profile 标为 `READY`，否则明确保持阻断或 `NOT_RUN_MARKET_WINDOW`。
   - 验证：离线契约测试与候选密钥扫描。
-  - 证据：经授权的 2026-09-08 09:52 Asia/Shanghai 开市观测将股票五项能力全部记录为 `READY`，并得到 `SourceTimeLabel=START`。仅因请求固定为 `1MIN` 才兼容 QuickSync 不回显固定 `freq`；若明确返回非 `1MIN` 值，仍会安全拒绝。
-- [ ] `LPC006`——组合已认证股票 provider 与单批次可恢复 runtime。
-  - 验收：依赖 `READY` 的 LPC005 股票 profile；reference refresh/recovery/supervisor 工作；每个 deadline 对最多十只股票执行一次 `rt_min` 批次；判断不重新获取，事务内无网络。在该依赖通过前，生产保持 `DEGRADED`，不读取 Token、不调用 provider，也不构造可执行 deadline coordinator。
+  - 证据：经授权的 2026-09-08 09:52:53 Asia/Shanghai 开市观测将股票五项能力全部记录为 `READY`，并得到 `SourceTimeLabel=START`；profile 有效至 2026-09-15 09:52:53。仅因请求固定为 `1MIN` 才兼容 QuickSync 不回显固定 `freq`；若明确返回非 `1MIN` 值，仍会安全拒绝。
+- [x] `LPC006`——组合已认证股票 provider 与单批次可恢复 runtime。
+  - 验收：依赖 `READY` 的 LPC005 股票 profile；reference refresh/recovery/supervisor 工作；每个 deadline 对最多十只股票执行一次 `rt_min` 批次；判断不重新获取，事务内无网络。启动时可以校验统一且被忽略的 `config/app.yaml`，但在该依赖通过前，生产保持 `DEGRADED`，不构造带凭证的 provider client、不发出 provider 请求，也不构造可执行 deadline coordinator。
   - 验证：provider、request-controller、deadline、recovery、restart 和 ten-symbol 测试。
-  - 阻断证据：LPC005 现已 `READY`，但安装式生产 composition 仍暴露早期硬编码的 `UNVERIFIED` provider 状态，尚未绑定已认证 profile/provider/deadline coordinator。
+  - 证据：安装式生产运行于 2026-09-08 16:54:10.565727 Asia/Shanghai 启动，消费五项能力均为 `READY` 的新鲜股票 profile，在 17:00:00.011473 自然启动计划中的 17:00 deadline，提交两项官方收盘判断，以零结果和零 provider 请求重放已提交 identity，并在重启后保持 `RUNNING` 且 Dashboard sequence `11` 不变。该生产证明与组件测试及真实 profile 生成相互独立。
 
 ## 板块指数 Runtime
 
 - [ ] `LPC007`——建立独立实时板块指数认证证据。
   - 验收：独立授权/profile/`SourceTimeLabel`；市场窗口不合适时记录 `NOT_RUN_MARKET_WINDOW`；不复用股票证据。
   - 验证：离线 harness 测试；只有满足闸门时才运行串行 live selector。
-  - 阻断证据：2026-09-08 开市观测证明 `idx_mins` 属于历史数据，不能认证指数当日时间戳。修正后的探针分别检查 `idx_mins`、`rt_idx_min_daily` 与 `index_daily`；五个已批准指数的实时端点均返回 `BLOCKED_PERMISSION`，因此仍需 Tushare 中名为“指数实时分钟”的独立权限。
-- [ ] `LPC008`——组合独立板块指数 provider 与隔离的条件故障。
-  - 验收：每个必需指数每个截止最多获取一次；一个故障只影响依赖条件路径。
+  - 当前证据：经授权的 2026-09-08 15:16:52 Asia/Shanghai 运行选择 `SourceTimeLabel=END`。`000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 为 `READY`；`899050.BJ` 为 `ERROR`。profile 有效至 2026-09-15 15:16:52。该结果取代早先的全量权限阻断结论，但不认证 `899050.BJ`，也不关闭 LPC007。
+- [x] `LPC008`——组合独立板块指数 provider 与隔离的条件故障。
+  - 验收：在每个 deadline 的不可变到期计划批次内，每个必需指数 endpoint 至多调用一次，且所有依赖计划共用同一 `snapshot_hash`；已提交 evaluation identity 的重放产生零 provider 请求。15:00 盘中判断与 `OFFICIAL_CLOSE` 属于不同判断 kind，即使二者切点均为 15:00，也可分别执行各自 revision-aware 请求。一个指数故障只影响依赖条件路径。
   - 验证：聚焦 market-index runtime 与 decision 测试。
-  - 阻断证据：provider 现会合并历史 `idx_mins` 与当日 `rt_idx_min_daily`，并保持条件故障隔离；但可执行生产 composition 仍受新鲜 `LPC007` profile 闸门阻断，且尚未绑定到安装式 runtime。
+  - 证据：安装式生产运行消费独立指数 profile，保持 `899050.BJ=ERROR`，在每个到期计划批次内共享 `LIVE` 上证/深证快照，提交两项 `OFFICIAL_CLOSE` 判断，并证明已提交 identity 重放产生零 provider 请求。其 15:00 盘中/`OFFICIAL_CLOSE` 两阶段演练按 revision-aware 契约，在每个不同判断 kind 内分别对每个必需指数 endpoint 调用一次。
 
 ## Web 可用性
 
@@ -59,4 +59,4 @@
 - [ ] `LPC012`——完成双语验收报告与全部门禁。
   - 验收：记录精确命令/结果/文件/风险；全部必需离线门禁和密钥扫描通过；不夸大真实结果。
   - 验证：`tasks/live-production-plan.md` 中命令、双语一致性审计、`git diff --check` 和 `git status --short`。
-  - 阻断证据：全部 live-chain 聚焦门禁与密钥扫描均通过，但仓库级全量离线 pytest 仍在既有 252 日回测性能预算上为红；真实股票与板块指数闸门也继续有意保持未完成。
+  - 阻断证据：live-chain 聚焦门禁、密钥扫描和 LPC006/LPC008 安装式生产验收均通过，但仓库级全量离线 pytest 仍在既有 252 日回测性能预算上为红。股票认证仍在有效期内；板块指数认证因 `899050.BJ` 为 `ERROR` 而仍只部分通过。

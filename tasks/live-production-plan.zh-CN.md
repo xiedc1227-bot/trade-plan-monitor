@@ -44,4 +44,4 @@
 
 ## 开放问题
 
-LPC005 已于 2026-09-08 记录带 `SourceTimeLabel=START` 的新鲜 `READY` 股票 profile。LPC006 现在需要让安装式生产 composition 消费该 profile。LPC007 仍受证据闸门阻断，因为 Tushare 中单独命名的“指数实时分钟”权限对 `rt_idx_min_daily` 返回阻断；LPC008 继续依赖 LPC007 与生产 composition 绑定。
+LPC005 的股票 profile 有效至 2026-09-15 09:52:53 Asia/Shanghai，五项能力全部为 `READY`，且 `SourceTimeLabel=START`。独立指数 profile 有效至 2026-09-15 15:16:52，且 `SourceTimeLabel=END`：`000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 为 `READY`，`899050.BJ` 为 `ERROR`。2026-09-08 安装式生产 scheduler/重启证明消费了这些 profile，在保持失败指数隔离的同时关闭 LPC006 与 LPC008；LPC007 仍不认证 `899050.BJ`。
