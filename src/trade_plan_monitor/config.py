@@ -62,6 +62,7 @@ class TushareConfiguration(_ConfigurationModel):
     """Tushare transport settings with one directly configured token."""
 
     api_url: AnyHttpUrl | None = None
+    connect_ip: str | None = Field(default=None, min_length=1, max_length=45)
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     token: str | None = Field(default=None, min_length=1, max_length=8_192)
 
@@ -88,6 +89,30 @@ class TushareConfiguration(_ConfigurationModel):
         if value.scheme != "https":
             raise ValueError("api_url must use HTTPS")
         return value
+
+    @field_validator("connect_ip")
+    @classmethod
+    def require_literal_connect_ip(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if "%" in value:
+            raise ValueError("connect_ip must be an unscoped IP literal")
+        address = None
+        try:
+            address = ip_address(value)
+        except ValueError:
+            pass
+        if address is None:
+            raise ValueError("connect_ip must be an IP literal")
+        if address.is_unspecified or address.is_multicast:
+            raise ValueError("connect_ip must identify a unicast address")
+        return str(address)
+
+    @model_validator(mode="after")
+    def require_endpoint_for_connect_ip(self) -> Self:
+        if self.connect_ip is not None and self.api_url is None:
+            raise ValueError("connect_ip requires an HTTPS api_url for TLS verification")
+        return self
 
 
 class AIModelConfiguration(_ConfigurationModel):

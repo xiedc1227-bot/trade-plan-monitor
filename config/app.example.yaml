@@ -7,6 +7,9 @@ web:
 tushare:
   # Verified Tushare-compatible HTTPS endpoint. Never downgrade this to plain HTTP.
   api_url: https://api.quicksync.cn
+  # Optional verified provider IP; bypass DNS/proxies while keeping this URL's TLS identity.
+  # Leave null for the official SDK's default route. Recheck the address if the provider moves.
+  connect_ip: null
   timeout_seconds: 30
   token: replace-with-your-tushare-token
 

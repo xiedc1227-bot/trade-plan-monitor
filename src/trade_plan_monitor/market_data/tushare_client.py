@@ -2,15 +2,117 @@
 
 from __future__ import annotations
 
+import json
+import re
+import ssl
 from collections.abc import Callable
+from typing import Protocol, cast
+from urllib.parse import urlsplit
+
+import pandas as pd
+import requests
+import urllib3
 
 from trade_plan_monitor.config import TushareConfiguration
 
 _MAX_TOKEN_LENGTH = 8_192
+_ENDPOINT_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 
 
 class TushareClientConfigurationError(RuntimeError):
     """Stable, secret-free failure raised before any provider operation."""
+
+
+class _ConfigurableDataApi(Protocol):
+    _DataApi__http_url: str
+    query: Callable[..., pd.DataFrame]
+
+
+class _DirectTushareQuery:
+    """One SDK instance's explicit address route with the original TLS identity.
+
+    urllib3 documents separate connection, SNI, certificate, and Host identities:
+    https://urllib3.readthedocs.io/en/stable/advanced-usage.html#custom-sni-hostname
+    Each call owns its pool so shutdown never leaves an unmanaged persistent socket.
+    """
+
+    def __init__(self, configuration: TushareConfiguration, token: str) -> None:
+        self._endpoint = str(configuration.api_url).rstrip("/")
+        self._address = configuration.connect_ip
+        self._timeout = configuration.timeout_seconds
+        self._token = token
+
+    def __call__(self, api_name: str, fields: str = "", **kwargs: object) -> pd.DataFrame:
+        if not isinstance(api_name, str) or _ENDPOINT_NAME.fullmatch(api_name) is None:
+            raise ValueError("Tushare operation name is invalid")
+        endpoint = urlsplit(self._endpoint)
+        kwargs.setdefault("ts_type_name", self._endpoint)
+        body = json.dumps(
+            {"api_name": api_name, "token": self._token, "params": kwargs, "fields": fields}
+        ).encode("utf-8")
+        failure: Exception | None = None
+        frame: pd.DataFrame | None = None
+        try:
+            with urllib3.HTTPSConnectionPool(
+                host=self._address,
+                port=endpoint.port or 443,
+                server_hostname=endpoint.hostname,
+                assert_hostname=endpoint.hostname,
+                cert_reqs=ssl.CERT_REQUIRED,
+                ca_certs=requests.certs.where(),
+                timeout=urllib3.Timeout(total=self._timeout),
+                retries=False,
+            ) as pool:
+                response = pool.request(
+                    "POST",
+                    f"{endpoint.path}/{api_name}",
+                    body=body,
+                    headers={"Host": endpoint.netloc, "Content-Type": "application/json"},
+                    retries=False,
+                    redirect=False,
+                    assert_same_host=False,
+                )
+            if not 200 <= response.status < 300:
+                safe_response = requests.Response()
+                safe_response.status_code = response.status
+                failure = requests.HTTPError("Tushare HTTP request failed", response=safe_response)
+            else:
+                result = json.loads(response.data)
+                if result["code"] != 0:
+                    failure = _safe_application_failure(api_name, result.get("msg", ""))
+                else:
+                    data = result["data"]
+                    frame = pd.DataFrame(data["items"], columns=data["fields"])
+        except urllib3.exceptions.TimeoutError:
+            failure = requests.Timeout("Tushare request timed out")
+        except urllib3.exceptions.HTTPError:
+            failure = requests.ConnectionError("Tushare connection failed")
+        except Exception:
+            failure = RuntimeError("Tushare response is invalid")
+        if failure is not None:
+            # Raise outside the handler: raw provider errors/bodies cannot become __context__.
+            raise failure
+        if frame is None:
+            raise RuntimeError("Tushare response is invalid")
+        return frame
+
+
+def _safe_application_failure(operation: str, message: object) -> Exception:
+    from trade_plan_monitor.market_data.tushare import (
+        TushareErrorCode,
+        TushareMarketDataProvider,
+    )
+
+    classified = TushareMarketDataProvider._safe_provider_error(
+        operation, RuntimeError(message if isinstance(message, str) else "")
+    )
+    if classified.code is TushareErrorCode.BLOCKED_PERMISSION:
+        return RuntimeError("Tushare permission denied")
+    if classified.code is TushareErrorCode.RATE_LIMITED:
+        return RuntimeError("Tushare rate limit reached")
+    if classified.code is TushareErrorCode.TRANSIENT:
+        return requests.ConnectionError("Tushare connection failed")
+    return RuntimeError("Tushare provider request failed")
 
 
 def create_tushare_client[ClientT](
@@ -45,7 +147,10 @@ def create_tushare_client[ClientT](
     initialization_failed = False
     try:
         client = factory(token, configuration.timeout_seconds)
-        client._DataApi__http_url = endpoint  # type: ignore[attr-defined]
+        configured_client = cast(_ConfigurableDataApi, client)
+        configured_client._DataApi__http_url = endpoint
+        if configuration.connect_ip is not None:
+            configured_client.query = _DirectTushareQuery(configuration, token)
     except Exception:
         initialization_failed = True
     finally:
