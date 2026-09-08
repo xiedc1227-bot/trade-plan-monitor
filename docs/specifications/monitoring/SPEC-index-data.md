@@ -77,7 +77,7 @@ Provider name, raw response ordering, cache hits, plan ids, operational timings,
 
 ## Provider Boundary
 
-`LiveMarketIndexProvider` and `HistoricalMarketIndexProvider` expose explicitly named index operations. Production composition remains `UNVERIFIED` until an authorized capability probe proves all five codes, exact five-minute/daily endpoints, timestamp labels, OHLC/prior-close fields, range, quota, and permission. Until then, the production adapter returns sanitized `PROVIDER_UNAVAILABLE`; it must not guess or reuse a stock endpoint. Tokens, raw responses, permission text, and exception bodies never enter logs, APIs, reports, or exports.
+`LiveMarketIndexProvider` and `HistoricalMarketIndexProvider` expose explicitly named index operations. The Tushare live adapter combines historical `idx_mins(freq="5min")` rows through the prior date with current-day `rt_idx_min_daily(freq="5MIN")` rows, and obtains official daily rows from `index_daily`; the stock `rt_min` endpoint is never an index substitute. Production composition remains `UNVERIFIED` until an authorized capability probe proves all five codes, those exact endpoints, timestamp labels, OHLC/prior-close fields, range, quota, and permission. Until then, the production adapter returns sanitized `PROVIDER_UNAVAILABLE`; it must not guess or reuse a stock endpoint. Tokens, raw responses, permission text, and exception bodies never enter logs, APIs, reports, or exports.
 
 ## Testing Strategy
 

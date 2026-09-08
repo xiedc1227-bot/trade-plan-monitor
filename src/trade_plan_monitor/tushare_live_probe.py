@@ -63,6 +63,9 @@ _DAILY_FIELDS: Final = "ts_code,trade_date,open,high,low,close,vol,amount"
 _MINUTE_FIELDS: Final = "ts_code,time,open,close,high,low,vol,amount"
 _CURRENT_DAY_FIELDS: Final = "ts_code,freq,time,open,close,high,low,vol,amount"
 _INDEX_MINUTE_FIELDS: Final = "ts_code,trade_time,open,close,high,low,vol,amount"
+_INDEX_REALTIME_MINUTE_FIELDS: Final = (
+    "ts_code,freq,time,open,close,high,low,vol,amount"
+)
 _INDEX_DAILY_FIELDS: Final = "ts_code,trade_date,open,high,low,close,vol,amount"
 
 
@@ -116,6 +119,13 @@ def _require_rows(frame: pd.DataFrame, required: set[str]) -> None:
     counts = Counter(str(column) for column in frame.columns)
     if frame.empty or any(counts[column] != 1 for column in required):
         raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "schema")
+
+
+def _has_expected_optional_frequency(frame: pd.DataFrame, expected: str) -> bool:
+    counts = Counter(str(column) for column in frame.columns)
+    return counts["freq"] == 0 or (
+        counts["freq"] == 1 and frame["freq"].astype(str).eq(expected).all()
+    )
 
 
 def _stock_status(error: Exception) -> ProviderCapabilityStatus:
@@ -188,8 +198,10 @@ def _stock_time_label(
     for sample in samples:
         _require_rows(
             sample,
-            {"freq", "time", "open", "close", "high", "low", "vol", "amount"},
+            {"time", "open", "close", "high", "low", "vol", "amount"},
         )
+        if not _has_expected_optional_frequency(sample, "1MIN"):
+            return SourceTimeLabel.UNVERIFIED
         candidates: list[SourceTimeLabel] = []
         for label in (SourceTimeLabel.START, SourceTimeLabel.END):
             try:
@@ -223,9 +235,11 @@ def _index_time_label(
     for sample in samples:
         _require_rows(
             sample,
-            {"ts_code", "trade_time", "open", "close", "high", "low", "vol", "amount"},
+            {"ts_code", "time", "open", "close", "high", "low", "vol", "amount"},
         )
-        source = _source_times(sample, "trade_time", observed_at)
+        if not _has_expected_optional_frequency(sample, "5MIN"):
+            return TushareMarketIndexSourceTimeLabel.UNVERIFIED
+        source = _source_times(sample, "time", observed_at)
         candidates: list[TushareMarketIndexSourceTimeLabel] = []
         for label in (
             TushareMarketIndexSourceTimeLabel.START,
@@ -346,7 +360,7 @@ async def certify_stock(
             symbol_column = "ts_code" if "ts_code" in frame.columns else "code"
             _require_rows(
                 frame,
-                {symbol_column, "freq", "time", "open", "high", "low", "close", "vol", "amount"},
+                {symbol_column, "time", "open", "high", "low", "close", "vol", "amount"},
             )
             samples.append(frame)
         except (RequestControlError, TushareProviderError) as error:
@@ -418,8 +432,8 @@ async def certify_board_indexes(
                 kwargs={
                     "ts_code": code.value,
                     "freq": "5min",
-                    "start_date": f"{now:%Y-%m-%d} 09:30:00",
-                    "end_date": now.strftime("%Y-%m-%d %H:%M:%S"),
+                    "start_date": f"{reference_date:%Y-%m-%d} 09:30:00",
+                    "end_date": f"{reference_date:%Y-%m-%d} 15:00:00",
                     "fields": _INDEX_MINUTE_FIELDS,
                 },
             )
@@ -429,11 +443,53 @@ async def certify_board_indexes(
             )
             if set(minutes["ts_code"].astype(str)) != {code.value}:
                 raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "idx_mins")
-            minute_samples.append(minutes)
             outcomes.append(TushareMarketIndexCapabilityStatus.READY)
         except (RequestControlError, TushareProviderError) as error:
             outcomes.append(_index_status(error))
             stop = _is_rate_limited(error)
+
+        if not stop:
+            try:
+                realtime_minutes = await _call_frame(
+                    client=client,
+                    request_controller=request_controller,
+                    operation=TushareOperation.INDEX_MINUTES,
+                    endpoint="rt_idx_min_daily",
+                    work_key=f"live-index-realtime-minutes-{code.value}",
+                    kwargs={
+                        "ts_code": code.value,
+                        "freq": "5MIN",
+                        "fields": _INDEX_REALTIME_MINUTE_FIELDS,
+                    },
+                )
+                symbol_column = (
+                    "ts_code" if "ts_code" in realtime_minutes.columns else "code"
+                )
+                _require_rows(
+                    realtime_minutes,
+                    {
+                        symbol_column,
+                        "time",
+                        "open",
+                        "high",
+                        "low",
+                        "close",
+                        "vol",
+                        "amount",
+                    },
+                )
+                if set(realtime_minutes[symbol_column].astype(str)) != {code.value}:
+                    raise TushareProviderError(
+                        TushareErrorCode.INVALID_RESPONSE,
+                        "rt_idx_min_daily",
+                    )
+                minute_samples.append(
+                    realtime_minutes.rename(columns={symbol_column: "ts_code"})
+                )
+                outcomes.append(TushareMarketIndexCapabilityStatus.READY)
+            except (RequestControlError, TushareProviderError) as error:
+                outcomes.append(_index_status(error))
+                stop = _is_rate_limited(error)
 
         if not stop:
             try:

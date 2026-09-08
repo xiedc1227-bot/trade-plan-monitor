@@ -85,7 +85,7 @@ Dashboard/集合范围不得出现 `symbol`，股票详情范围必须包含 `sy
 - deadline coordinator 让下一个行情 deadline 优先于 recovery/background。runtime 一旦进入 `STOPPING` 就立即停止 controller 准入，给予自有工作有界完成/取消窗口，之后才汇合线程池。可恢复 supervisor 报告故障并采用有界重启策略，不能在健康仍显示 `LIVE` 时静默退出。
 - 只有 runtime 健康状态为 `RUNNING` 时观测到的启动后运行循环意外返回或异常才允许重启。每次尝试都创建全新的 runtime；每个 Web composition 生命周期最多重启三次，精确延迟为 `1`、`2`、`4` 秒。进程重启会重置预算。
 - 重启退避期间及预算耗尽后，健康状态为 `DEGRADED`、`read_only=true`、`nextPollAt=null`。stop/取消、启动/配置/迁移失败或清理失败属于终止性错误，绝不重试。每个延迟/runtime 任务均由 composition 持有、可取消并汇合；只有失败 runtime 清理成功后才改变服务绑定。
-- 板块指数 provider 与股票 provider 相互独立，拥有自己的已认证 endpoint/profile 和 `SourceTimeLabel`。一个指数失败只为明确依赖该指数的计划路径生成阻断证据；其他指数与无指数条件的计划继续运行。
+- 板块指数 provider 与股票 provider 相互独立，拥有自己的已认证历史 `idx_mins`、当日 `rt_idx_min_daily`、`index_daily` endpoint/profile 和 `SourceTimeLabel`。一个指数失败只为明确依赖该指数的计划路径生成阻断证据；其他指数与无指数条件的计划继续运行。
 
 生产股票路径在新鲜股票能力记录为 `READY` 并选定已验证 `SourceTimeLabel` 前保持依赖阻断。历史 T058 可见阻断结果不是该记录。此闸门通过前，生产 composition 使用真实请求控制限制，但必须保持 `DEGRADED`、不读取 Token、不调用 provider，也不得构造可执行 deadline coordinator。
 

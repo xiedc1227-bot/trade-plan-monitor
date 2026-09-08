@@ -240,7 +240,7 @@ class TushareMarketDataProvider:
         self._require_columns(
             frame,
             "rt_min_daily",
-            {symbol_column, "freq", "time", "open", "close", "high", "low", "vol", "amount"},
+            {symbol_column, "time", "open", "close", "high", "low", "vol", "amount"},
         )
         return self._normalized_minutes(
             frame,
@@ -647,7 +647,8 @@ class TushareMarketDataProvider:
                 )
                 identity = (symbol, bar_end)
                 if require_current_day_frequency and (
-                    row["freq"] != "1MIN" or source_time.date() != received_at.date()
+                    ("freq" in row and row["freq"] != "1MIN")
+                    or source_time.date() != received_at.date()
                 ):
                     raise ValueError("current-day minute row has invalid frequency or date")
                 if not is_minute_usable(

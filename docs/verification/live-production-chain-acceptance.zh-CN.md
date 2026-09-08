@@ -12,12 +12,13 @@ WEBF13 Health fallback 方案；不改写历史 WEBF13 结果，不把 T058 股�
 
 ## 环境
 
-- 日期/时区：2026-09-07，Asia/Shanghai。
-- 市场窗口事实：星期一开盘前 launcher 检查返回 `NOT_RUN_MARKET_WINDOW`；该结果没有认证
-  实时分钟 `SourceTimeLabel` 语义。
-- 网络边界：离线测试与确定性回环浏览器 fixture 不请求 Tushare、DeepSeek、券商、Webhook
-  或其他供应商。
-- 密钥边界：普通闸门不读取凭据文件，任何密钥值都不会写入命令行、报告、日志、数据库或候选源码。
+- 日期/时区：2026-09-08，Asia/Shanghai。
+- 市场窗口事实：星期二 `09:52` 的已授权开市观测认证了股票数据面；`10:04` 的修正后指数
+  观测记录了指数实时权限阻断。
+- 网络边界：两次明确授权的认证运行调用了 Tushare。离线测试与确定性回环浏览器 fixture
+  仍不请求 Tushare、DeepSeek、券商、Webhook 或其他供应商。
+- 凭据边界：选定认证与应用路径只从被忽略的本地 `config/app.yaml` 读取凭据；任何密钥值都
+  不会写入命令行、报告、日志、数据库、profile 或候选源码。
 
 ## 契约与迁移证据
 
@@ -39,15 +40,23 @@ WEBF13 Health fallback 方案；不改写历史 WEBF13 结果，不把 T058 股�
 
 ## 运行时与供应商证据
 
-- 历史离线真实 harness 契约通过 `1 test`，另有 `3` 个 live 测试被取消选择。其子进程边界已于
-  2026-09-07 被“从被忽略的本地应用配置直接读取凭证”取代；开市窗口与精确授权闸门继续保留。
-- 星期一开盘前 launcher 以 `NOT_RUN_MARKET_WINDOW` 成功退出。未使用 Token、外部网络、
-  Tushare、DeepSeek、券商或 Webhook 调用。
+- 修正后的 provider/认证聚焦套件通过 `228 tests`。仅对固定 `1MIN` 请求兼容
+  `rt_min_daily.freq` 不回显；若明确返回错误频率，仍会拒绝。
+- 2026-09-08 `09:52` 股票 profile 将 `realtime_minutes`、`current_day_minutes`、
+  `trading_calendar`、`daily_limits` 与 `daily_bars` 全部记录为 `READY`，且
+  `SourceTimeLabel=START`。LPC005 因此关闭。
+- Tushare 文档与真实观测证明 `idx_mins` 属于历史数据并在盘后更新；它对上一交易日返回
+  `49` 根五分钟线，对当日返回 `0` 行。因此修正后的指数契约会组合 `idx_mins`、
+  `rt_idx_min_daily` 与 `index_daily`，而不是复用股票 `rt_min` endpoint。
+- 2026-09-08 `10:04` 指数 profile 将五个已批准指数全部记录为 `BLOCKED_PERMISSION`，
+  阻断 endpoint 为 `rt_idx_min_daily`，且 `SourceTimeLabel=UNVERIFIED`。LPC007 仍需 Tushare
+  中单独命名的“指数实时分钟”权限。
 - Runtime 测试覆盖每个 deadline 一次不可变的最多十股票批次、判断零重取、分别完整的准入/
   供应商超时、排队请求 `CLOSED` 唤醒、stop 立即停止准入、最终激活 revision fence、持久
   official-close owner，以及有界的新 runtime supervisor。
-- 因没有新鲜股票 profile 为 `READY`，生产继续有意保持 `DEGRADED` 且不可执行。板块指数
-  能力继续作为独立的未满足闸门。
+- 生产继续保持 `DEGRADED` 且不可执行，因为安装式 composition 仍使用硬编码的
+  `UNVERIFIED` provider 状态，尚未消费现已就绪的股票 profile。板块指数能力继续作为独立的
+  未满足闸门。
 
 ## Web 与浏览器证据
 
@@ -98,21 +107,22 @@ git diff --check
 
 ## 遗留风险与延后实时证据
 
-- 实时分钟时间戳语义需要在开放交易日的合适已完成分钟窗口内重新获得授权并采集新证据。
-- 板块指数实时能力和时间戳证据需要独立授权/profile；股票供应商证据不能满足该闸门。
+- 股票实时分钟时间戳语义已认证为 `START`，有效至 2026-09-15 09:52 Asia/Shanghai。
+- 板块指数实时能力和时间戳证据需要 Tushare 单独的“指数实时分钟”权限；A股实时分钟与
+  指数历史分钟均不能满足该闸门。
 - 已实现直接 `tushare.token` 与 `ai.api_key` 配置，并将其作为唯一凭证来源。根据用户针对个人
-  工具的明确策略，已移除 Windows 凭据管理器、环境/文件引用与仅子进程认证。本机 `config/app.yaml` 尚无
-  Tushare Token，因此未尝试供应商调用。
+  工具的明确策略，已移除 Windows 凭据管理器、环境/文件引用与仅子进程认证。已配置 Token
+  仅由明确授权的认证调用使用。
 - 带哈希保护的股票与板块指数 profile 现在会在七天后过期，并在篡改、端点不匹配、schema
   不匹配或跨数据面复用时安全阻断。真实股票探针与逐指数探针已经实现，包括首个 429 后全局停止；
-  但新鲜开市窗口 profile 仍待采集。
+  股票 profile 已就绪；指数 profile 会如实保留权限阻断。
 - CPython 无法强制终止任意不合作的同步 provider callable。真实 Tushare transport 已配置自身
-  15 秒超时，shutdown 有界且可见，但在已配置的真实 runner 证明真实 transport 行为前，
-  `LPC005`/`LPC006` 不能通过认证。
+  15 秒超时，shutdown 有界且可见。当前主机代理会把 `api.quicksync.cn` 映射到拦截地址，
+  因此已授权证据运行使用了进程内直连路由；无人值守生产使用前仍需解决该主机网络问题。
 - 仓库级离线闸门仍被上述无关的 252 日回测性能预算阻断；live-chain 聚焦的 `558` 个测试为绿色。
 
 ## 验收状态
 
-`LIVE_CHAIN_OFFLINE_PASS_REPOSITORY_AND_LIVE_BLOCKED`——限定范围的实现与 Web 可用性闸门
-通过，但仓库级性能及真实股票/指数 readiness 未通过。`LPC005`～`LPC008` 与 `LPC012` 继续
-保持未完成；生产安全保持不可执行和 `DEGRADED`。
+`LIVE_CHAIN_STOCK_CERTIFIED_INDEX_PERMISSION_BLOCKED`——LPC005 已通过真实开市证据。LPC006
+仍未绑定到生产，LPC007 受独立指数实时权限阻断，LPC008 继续依赖 LPC007 与生产绑定。
+LPC006～LPC008 与 LPC012 仍保持未完成；生产安全保持不可执行和 `DEGRADED`。

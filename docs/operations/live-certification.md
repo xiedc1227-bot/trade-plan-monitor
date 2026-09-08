@@ -8,8 +8,10 @@ retain separate authorization phrases, capability sets, timestamp labels, and ev
 they do not require Windows Credential Manager or a child process.
 
 Stock certification covers `trade_cal`, `stk_limit`, `daily`, one ten-symbol `rt_min` batch, and
-two `rt_min_daily` observations. Board-index certification checks `idx_mins(freq="5min")` and
-`index_daily` separately for every approved `MarketIndexCode`.
+two `rt_min_daily` observations. Board-index certification checks historical
+`idx_mins(freq="5min")`, current-day `rt_idx_min_daily(freq="5MIN")`, and `index_daily`
+separately for every approved `MarketIndexCode`. The stock “A-share realtime minutes” permission
+does not replace the separately named “Index realtime minutes” permission.
 
 ## Configuration
 
@@ -73,5 +75,6 @@ does not authorize or disable its peers.
 ## Authoritative References
 
 - [Tushare `idx_mins`](https://tushare.pro/document/2?doc_id=419)
+- [Tushare `rt_idx_min_daily`](https://tushare.pro/document/2?doc_id=420)
 - [Tushare `index_daily`](https://tushare.pro/document/1?doc_id=95)
 - [Tushare `trade_cal`](https://tushare.pro/document/2?doc_id=26)

@@ -152,7 +152,7 @@ class _Client:
             [
                 {
                     "ts_code": code,
-                    "trade_time": "2026-09-07 09:35:00",
+                    "trade_time": "2026-09-04 09:30:00",
                     "open": "100",
                     "high": "101",
                     "low": "99",
@@ -162,7 +162,37 @@ class _Client:
                 },
                 {
                     "ts_code": code,
-                    "trade_time": "2026-09-07 10:15:00",
+                    "trade_time": "2026-09-04 15:00:00",
+                    "open": "100",
+                    "high": "101",
+                    "low": "99",
+                    "close": "100.5",
+                    "vol": "100",
+                    "amount": "200",
+                },
+            ]
+        )
+
+    def rt_idx_min_daily(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("rt_idx_min_daily", kwargs))
+        code = str(kwargs["ts_code"])
+        if code == self.blocked_index:
+            raise RuntimeError("permission denied")
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": code,
+                    "time": "2026-09-07 09:30:00",
+                    "open": "100",
+                    "high": "101",
+                    "low": "99",
+                    "close": "100.5",
+                    "vol": "100",
+                    "amount": "200",
+                },
+                {
+                    "ts_code": code,
+                    "time": "2026-09-07 10:10:00",
                     "open": "100",
                     "high": "101",
                     "low": "99",
@@ -200,6 +230,18 @@ class _RateLimitedStockClient(_Client):
         raise TushareProviderError(TushareErrorCode.RATE_LIMITED, "daily")
 
 
+class _MissingCurrentDayFrequencyClient(_Client):
+    def rt_min_daily(self, **kwargs: object) -> pd.DataFrame:
+        return super().rt_min_daily(**kwargs).drop(columns="freq")
+
+
+class _WrongIndexFrequencyClient(_Client):
+    def rt_idx_min_daily(self, **kwargs: object) -> pd.DataFrame:
+        frame = super().rt_idx_min_daily(**kwargs)
+        frame["freq"] = "1MIN"
+        return frame
+
+
 def test_stock_probe_certifies_all_surfaces_and_start_labeled_minutes(
     tmp_path: Path,
 ) -> None:
@@ -232,6 +274,24 @@ def test_stock_probe_certifies_all_surfaces_and_start_labeled_minutes(
     assert (tmp_path / "stock.json").is_file()
 
 
+def test_stock_probe_accepts_omitted_fixed_current_day_frequency(
+    tmp_path: Path,
+) -> None:
+    profile = asyncio.run(
+        certify_stock(
+            client=_MissingCurrentDayFrequencyClient(),
+            request_controller=_Controller(),
+            observed_at=OBSERVED_AT,
+            endpoint_url="https://api.quicksync.cn",
+            output_path=tmp_path / "stock.json",
+        )
+    )
+
+    assert profile.ready
+    assert profile.source_time_label is SourceTimeLabel.START
+    assert profile.capabilities.current_day_minutes is ProviderCapabilityStatus.READY
+
+
 def test_index_probe_keeps_authorization_and_failures_per_index(tmp_path: Path) -> None:
     client = _Client(blocked_index=MarketIndexCode.BSE_50.value)
     controller = _Controller()
@@ -246,7 +306,7 @@ def test_index_probe_keeps_authorization_and_failures_per_index(tmp_path: Path) 
         )
     )
 
-    assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.END
+    assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.START
     assert profile.capabilities[MarketIndexCode.BSE_50] is (
         TushareMarketIndexCapabilityStatus.BLOCKED_PERMISSION
     )
@@ -256,9 +316,26 @@ def test_index_probe_keeps_authorization_and_failures_per_index(tmp_path: Path) 
         if code is not MarketIndexCode.BSE_50
     )
     assert controller.calls[0] is TushareOperation.TRADING_CALENDAR
-    assert controller.calls.count(TushareOperation.INDEX_MINUTES) == len(MarketIndexCode)
+    assert controller.calls.count(TushareOperation.INDEX_MINUTES) == 2 * len(MarketIndexCode)
     assert controller.calls.count(TushareOperation.INDEX_DAILY) == len(MarketIndexCode)
     assert (tmp_path / "index.json").is_file()
+
+
+def test_index_probe_rejects_wrong_returned_realtime_frequency(tmp_path: Path) -> None:
+    profile = asyncio.run(
+        certify_board_indexes(
+            client=_WrongIndexFrequencyClient(),
+            request_controller=_Controller(),
+            observed_at=OBSERVED_AT,
+            endpoint_url="https://api.quicksync.cn",
+            output_path=tmp_path / "index.json",
+        )
+    )
+
+    assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.UNVERIFIED
+    assert set(profile.capabilities.values()) == {
+        TushareMarketIndexCapabilityStatus.ERROR
+    }
 
 
 def test_stock_probe_stops_every_later_call_after_first_rate_limit(tmp_path: Path) -> None:

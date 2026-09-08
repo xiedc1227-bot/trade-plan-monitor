@@ -22,25 +22,25 @@
 
 ## 股票 Runtime
 
-- [ ] `LPC005`——加固默认零网络与一次性真实股票 harness。
+- [x] `LPC005`——加固默认零网络与一次性真实股票 harness。
   - 验收：直接读取 `config/app.yaml` Token、串行单并发、启动间隔 `>=1.25 s`、15 秒超时、零重试且 429 后停止；只有带已验证 `SourceTimeLabel` 的新鲜闸门证据才能把股票 profile 标为 `READY`，否则明确保持阻断或 `NOT_RUN_MARKET_WINDOW`。
   - 验证：离线契约测试与候选密钥扫描。
-  - 阻断证据：直接配置读取、七天 profile 与真实股票探针均已实现并通过离线测试。本机 `config/app.yaml` 尚无 Tushare Token，因此未尝试开市窗口调用；仍需新鲜 `READY`/`SourceTimeLabel` 证据。
+  - 证据：经授权的 2026-09-08 09:52 Asia/Shanghai 开市观测将股票五项能力全部记录为 `READY`，并得到 `SourceTimeLabel=START`。仅因请求固定为 `1MIN` 才兼容 QuickSync 不回显固定 `freq`；若明确返回非 `1MIN` 值，仍会安全拒绝。
 - [ ] `LPC006`——组合已认证股票 provider 与单批次可恢复 runtime。
   - 验收：依赖 `READY` 的 LPC005 股票 profile；reference refresh/recovery/supervisor 工作；每个 deadline 对最多十只股票执行一次 `rt_min` 批次；判断不重新获取，事务内无网络。在该依赖通过前，生产保持 `DEGRADED`，不读取 Token、不调用 provider，也不构造可执行 deadline coordinator。
   - 验证：provider、request-controller、deadline、recovery、restart 和 ten-symbol 测试。
-  - 阻断证据：runtime 路径已实现并通过离线测试，但生产会有意只暴露不可执行的 `DEGRADED` composition，直至 `LPC005` 变为 `READY`。
+  - 阻断证据：LPC005 现已 `READY`，但安装式生产 composition 仍暴露早期硬编码的 `UNVERIFIED` provider 状态，尚未绑定已认证 profile/provider/deadline coordinator。
 
 ## 板块指数 Runtime
 
 - [ ] `LPC007`——建立独立实时板块指数认证证据。
   - 验收：独立授权/profile/`SourceTimeLabel`；市场窗口不合适时记录 `NOT_RUN_MARKET_WINDOW`；不复用股票证据。
   - 验证：离线 harness 测试；只有满足闸门时才运行串行 live selector。
-  - 阻断证据：独立授权、profile、时间戳标签推导，以及逐指数 `idx_mins`/`index_daily` 探针均已实现并通过离线测试。本机应用配置尚无 Tushare Token，因此未执行单独授权的开市窗口观测。
+  - 阻断证据：2026-09-08 开市观测证明 `idx_mins` 属于历史数据，不能认证指数当日时间戳。修正后的探针分别检查 `idx_mins`、`rt_idx_min_daily` 与 `index_daily`；五个已批准指数的实时端点均返回 `BLOCKED_PERMISSION`，因此仍需 Tushare 中名为“指数实时分钟”的独立权限。
 - [ ] `LPC008`——组合独立板块指数 provider 与隔离的条件故障。
   - 验收：每个必需指数每个截止最多获取一次；一个故障只影响依赖条件路径。
   - 验证：聚焦 market-index runtime 与 decision 测试。
-  - 阻断证据：独立 provider、逐截止获取边界与故障隔离已实现并通过离线测试，但可执行生产 composition 仍受新鲜 `LPC007` profile 闸门阻断。
+  - 阻断证据：provider 现会合并历史 `idx_mins` 与当日 `rt_idx_min_daily`，并保持条件故障隔离；但可执行生产 composition 仍受新鲜 `LPC007` profile 闸门阻断，且尚未绑定到安装式 runtime。
 
 ## Web 可用性
 

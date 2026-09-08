@@ -38,10 +38,10 @@ After every phase, run focused tests, Ruff/type checks for changed surfaces, `gi
 | Duplicate quote fetch | quota and inconsistent evidence | one batch object per deadline, injected into every evaluation |
 | Index failure blocks all plans | violates ADR 0003 | explicit path dependency tests and per-index failure values |
 | Browser uses transport as domain state | misleading availability | typed 200 union; remove Health fallback |
-| Token reaches artifacts | credential compromise | one-shot secret injection, fixed-code failures, content scan |
+| Token reaches artifacts | credential compromise | ignored local configuration, fixed-code failures, content scan |
 | Unsuitable-window certification | false timestamp claim | record `NOT_RUN_MARKET_WINDOW`; defer label decision |
 | Runner exits after healthy startup | health remains falsely live or tasks leak | fresh-runtime supervisor, three restarts after `1`/`2`/`4` seconds, degraded health during backoff/exhaustion, terminal cleanup failures |
 
 ## Open Questions
 
-No offline implementation question is blocking. LPC006 actionable stock composition remains dependency-blocked until LPC005 records a fresh `READY` profile with a verified `SourceTimeLabel`; fresh index readiness remains independently evidence-gated.
+LPC005 recorded a fresh `READY` stock profile with `SourceTimeLabel=START` on 2026-09-08. LPC006 now needs the installed production composition to consume that profile. LPC007 remains evidence-gated because the separately named Tushare “Index realtime minutes” permission is blocked for `rt_idx_min_daily`; LPC008 remains dependent on LPC007 and production composition binding.

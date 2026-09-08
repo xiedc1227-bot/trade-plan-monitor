@@ -1402,6 +1402,55 @@ def _empty_tushare_frames() -> dict[str, DataFrame]:
     }
 
 
+def test_tushare_current_day_minutes_accepts_omitted_fixed_frequency() -> None:
+    frames = _empty_tushare_frames()
+    frames["rt_min_daily"] = DataFrame(
+        [
+            {
+                "ts_code": "003043.SZ",
+                "time": "2026-08-20 09:31:00",
+                "open": "10",
+                "close": "10.5",
+                "high": "11",
+                "low": "9",
+                "vol": "100",
+                "amount": "200",
+            }
+        ]
+    )
+
+    bars = _tushare_provider(_TushareStubClient(frames)).current_day_minutes(
+        "003043.SZ"
+    )
+
+    assert len(bars) == 1
+    assert bars[0].bar_end == _shanghai_time(9, 32, day=20)
+
+
+def test_tushare_current_day_minutes_rejects_wrong_returned_frequency() -> None:
+    frames = _empty_tushare_frames()
+    frames["rt_min_daily"] = DataFrame(
+        [
+            {
+                "ts_code": "003043.SZ",
+                "freq": "5MIN",
+                "time": "2026-08-20 09:31:00",
+                "open": "10",
+                "close": "10.5",
+                "high": "11",
+                "low": "9",
+                "vol": "100",
+                "amount": "200",
+            }
+        ]
+    )
+
+    assert (
+        _tushare_provider(_TushareStubClient(frames)).current_day_minutes("003043.SZ")
+        == []
+    )
+
+
 def test_tushare_unverified_source_time_fails_before_sdk_call() -> None:
     client = _TushareStubClient(_empty_tushare_frames())
     provider = _tushare_provider(

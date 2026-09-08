@@ -77,7 +77,7 @@ tests/integration/test_market_index_snapshots.py
 
 ## 供应商边界
 
-`LiveMarketIndexProvider` 和 `HistoricalMarketIndexProvider` 只公开明确命名的指数操作。生产组合保持 `UNVERIFIED`，直到经授权的能力探测证明五个代码、准确五分钟/日线接口、时间标签、OHLC/昨收字段、范围、限额和权限。在此之前，生产适配器返回脱敏 `PROVIDER_UNAVAILABLE`；禁止猜测或复用股票接口。Token、原始响应、权限文本和异常正文不能进入日志、接口、报告或导出。
+`LiveMarketIndexProvider` 和 `HistoricalMarketIndexProvider` 只公开明确命名的指数操作。Tushare 实时适配器会合并截至前一日期的历史 `idx_mins(freq="5min")` 行与当日 `rt_idx_min_daily(freq="5MIN")` 行，并从 `index_daily` 获取官方日线；股票 `rt_min` 绝不能替代指数接口。生产组合保持 `UNVERIFIED`，直到经授权的能力探测证明五个代码、这些准确 endpoint、时间标签、OHLC/昨收字段、范围、限额和权限。在此之前，生产适配器返回脱敏 `PROVIDER_UNAVAILABLE`；禁止猜测或复用股票接口。Token、原始响应、权限文本和异常正文不能进入日志、接口、报告或导出。
 
 ## 测试策略
 

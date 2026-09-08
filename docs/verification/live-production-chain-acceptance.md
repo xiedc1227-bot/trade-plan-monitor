@@ -14,13 +14,15 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
 
 ## Environment
 
-- Date/time zone: 2026-09-07, Asia/Shanghai.
-- Market-window fact: the Monday pre-window launcher check returned
-  `NOT_RUN_MARKET_WINDOW`; it did not certify realtime-minute `SourceTimeLabel` semantics.
-- Network boundary: offline tests and deterministic loopback browser fixtures make no
-  Tushare, DeepSeek, broker, webhook, or other supplier request.
-- Secret boundary: no credential file is read by ordinary gates and no secret value is
-  written to a command line, report, log, database, or candidate source file.
+- Date/time zone: 2026-09-08, Asia/Shanghai.
+- Market-window fact: an authorized Tuesday open-market run at `09:52` certified the stock
+  surface; a corrected index run at `10:04` recorded the realtime-index permission block.
+- Network boundary: the two explicitly authorized certification runs called Tushare. Offline
+  tests and deterministic loopback browser fixtures still make no Tushare, DeepSeek, broker,
+  webhook, or other supplier request.
+- Credential boundary: the selected certification and application paths read credentials only
+  from ignored local `config/app.yaml`; no secret value is written to a command line, report,
+  log, database, profile, or candidate source file.
 
 ## Contract and Migration Evidence
 
@@ -46,17 +48,26 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
 
 ## Runtime and Provider Evidence
 
-- The historical offline live-harness contract passed `1 test` with `3` live tests deselected.
-  Its child-process boundary was superseded on 2026-09-07 by direct credential loading from the
-  ignored local application configuration; the market-window and exact-authorization gates remain.
-- The Monday pre-window launcher exits successfully with `NOT_RUN_MARKET_WINDOW`. No token,
-  external network, Tushare, DeepSeek, broker, or webhook call was used.
+- The corrected provider/certification focus passes `228 tests`. It accepts a missing
+  `rt_min_daily.freq` echo only for the fixed `1MIN` request and continues to reject an explicitly
+  wrong returned frequency.
+- The 2026-09-08 `09:52` stock profile records `realtime_minutes`, `current_day_minutes`,
+  `trading_calendar`, `daily_limits`, and `daily_bars` as `READY`, with
+  `SourceTimeLabel=START`. This closes LPC005.
+- Tushare documents and live observations show that `idx_mins` is historical and updates after
+  the session; it returned `49` prior-day five-minute rows and `0` current-day rows. The corrected
+  index contract therefore combines `idx_mins`, `rt_idx_min_daily`, and `index_daily` rather than
+  reusing the stock `rt_min` endpoint.
+- The 2026-09-08 `10:04` index profile records all five approved indexes as
+  `BLOCKED_PERMISSION` on `rt_idx_min_daily`, with `SourceTimeLabel=UNVERIFIED`. The separate
+  Tushare permission named “Index realtime minutes” remains required for LPC007.
 - Runtime tests cover one immutable at-most-ten-symbol batch per deadline, no evaluation
   refetch, separate complete admission/provider timeouts, queued `CLOSED` wake-up, immediate
   stop admission, final activation-revision fencing, durable official-close ownership, and
   bounded fresh-runtime supervision.
-- Production remains deliberately `DEGRADED` and non-actionable because no fresh stock
-  profile is `READY`. Board-index capability remains a separate unmet gate.
+- Production remains `DEGRADED` and non-actionable because the installed composition still uses
+  its hard-coded `UNVERIFIED` provider state and has not yet consumed the now-ready stock profile.
+  Board-index capability remains a separate unmet gate.
 
 ## Web and Browser Evidence
 
@@ -112,28 +123,29 @@ reported rather than hidden, skipped, or relaxed.
 
 ## Residual Risks and Deferred Live Evidence
 
-- Realtime-minute timestamp semantics require a fresh, separately authorized run on an open
-  trading date during a suitable completed-minute window.
-- Board-index live capability and timestamp evidence require their own authorization/profile;
-  stock-provider evidence cannot satisfy that gate.
+- Stock realtime-minute timestamp semantics are certified as `START` until the current profile
+  expires at 2026-09-15 09:52 Asia/Shanghai.
+- Board-index live capability and timestamp evidence require the separate Tushare “Index realtime
+  minutes” permission; A-share realtime minutes and index historical minutes cannot satisfy it.
 - Direct `tushare.token` and `ai.api_key` configuration is implemented as the only credential
   source. Windows Credential Manager, environment/file references, and child-only certification
-  were removed by the user's explicit personal-tool policy. The local `config/app.yaml` has no
-  Tushare token, so no provider call was attempted.
+  were removed by the user's explicit personal-tool policy. The configured token was used only by
+  the explicitly authorized certification calls.
 - Hash-protected stock and board-index profiles expire after seven days and fail
   closed on tampering, endpoint mismatch, schema mismatch, or cross-surface reuse. Real stock and
-  per-index probes are implemented, including first-429 global stop behavior, but fresh open-market
-  profiles remain outstanding.
+  per-index probes are implemented, including first-429 global stop behavior. The stock profile is
+  ready; the index profile truthfully preserves its permission block.
 - CPython cannot forcibly terminate an arbitrary non-cooperative synchronous provider
   callable. The real Tushare transport is configured with its own 15-second timeout and
-  shutdown is bounded and visible, but `LPC005`/`LPC006` cannot be certified until the configured
-  live runner proves the real transport behavior.
+  shutdown is bounded and visible. The host proxy currently maps `api.quicksync.cn` to an
+  interception address, so the authorized evidence run required a process-local direct route; this
+  host networking issue must be resolved before unattended production use.
 - The repository-wide offline gate remains blocked by the unrelated 252-day backtest
   performance budget described above; the live-chain-focused `558` tests are green.
 
 ## Acceptance Status
 
-`LIVE_CHAIN_OFFLINE_PASS_REPOSITORY_AND_LIVE_BLOCKED` — the scoped implementation and Web
-availability gates pass, but repository-wide performance and real stock/index readiness do
-not. `LPC005`–`LPC008` and `LPC012` remain open; production safely remains non-actionable and
-`DEGRADED`.
+`LIVE_CHAIN_STOCK_CERTIFIED_INDEX_PERMISSION_BLOCKED` — LPC005 passes with real open-market
+evidence. LPC006 remains unbound in production, LPC007 is blocked by the separate realtime-index
+permission, and LPC008 remains dependent on LPC007 and production binding. LPC006–LPC008 and
+LPC012 remain open; production safely remains non-actionable and `DEGRADED`.

@@ -22,25 +22,25 @@
 
 ## Stock Runtime
 
-- [ ] `LPC005` — Harden the zero-network/default and one-shot live stock harness.
+- [x] `LPC005` — Harden the zero-network/default and one-shot live stock harness.
   - Acceptance: direct `config/app.yaml` token loading, serial single-concurrency, `>=1.25 s` starts, 15-second timeout, no retry, and stop on 429; a stock profile becomes `READY` only from fresh gated evidence with a verified `SourceTimeLabel`, otherwise it remains explicitly blocked or `NOT_RUN_MARKET_WINDOW`.
   - Verify: offline contract tests and candidate secret scan.
-  - Blocked evidence: direct configuration loading, seven-day profiles, and the real stock probe are implemented and offline-tested. The local `config/app.yaml` has no Tushare token, so no open-market call was attempted; fresh `READY`/`SourceTimeLabel` evidence is still required.
+  - Evidence: the authorized 2026-09-08 09:52 Asia/Shanghai open-market run recorded all five stock capabilities as `READY` and `SourceTimeLabel=START`. QuickSync's omitted fixed `freq` echo is accepted only because the request is fixed to `1MIN`; an explicitly returned non-`1MIN` value still fails closed.
 - [ ] `LPC006` — Compose the certified stock provider and one-batch recoverable runtime.
   - Acceptance: depends on a `READY` LPC005 stock profile; reference refresh/recovery/supervisor work; one `rt_min` batch per deadline for at most ten symbols; no evaluation refetch or network in transaction. Until that dependency passes, production stays `DEGRADED` with no token read, provider call, or actionable deadline coordinator.
   - Verify: provider, request-controller, deadline, recovery, restart, and ten-symbol tests.
-  - Blocked evidence: the runtime path is implemented and offline-tested, but production intentionally exposes only the non-actionable `DEGRADED` composition until `LPC005` becomes `READY`.
+  - Blocked evidence: LPC005 is now `READY`, but the installed production composition still exposes its earlier hard-coded `UNVERIFIED` provider state and has not yet bound the certified profile/provider/deadline coordinator.
 
 ## Board-Index Runtime
 
 - [ ] `LPC007` — Establish separate live board-index certification evidence.
   - Acceptance: separate authorization/profile/`SourceTimeLabel`; unsuitable market window records `NOT_RUN_MARKET_WINDOW`; no stock evidence is reused.
   - Verify: offline harness tests and, only when gated, the serial live selector.
-  - Blocked evidence: the separate authorization, profile, timestamp-label derivation, and per-index `idx_mins`/`index_daily` probe are implemented and offline-tested. The local application configuration has no Tushare token, so no separately authorized open-market observation was performed.
+  - Blocked evidence: the 2026-09-08 open-market run proved that `idx_mins` is historical and cannot certify current-day index timestamps. The corrected probe separately checks `idx_mins`, `rt_idx_min_daily`, and `index_daily`; all five approved indexes returned `BLOCKED_PERMISSION` for the realtime endpoint, so the separate Tushare permission named “Index realtime minutes” is still required.
 - [ ] `LPC008` — Compose the independent board-index provider and isolated condition failures.
   - Acceptance: each required index is fetched at most once per cutoff; one failure affects only dependent condition paths.
   - Verify: focused market-index runtime and decision tests.
-  - Blocked evidence: the independent provider, per-cutoff fetch boundary, and failure isolation are implemented and offline-tested, but actionable production composition remains gated by a fresh `LPC007` profile.
+  - Blocked evidence: the provider now merges historical `idx_mins` with current-day `rt_idx_min_daily` and keeps condition failures isolated, but actionable production composition remains gated by a fresh `LPC007` profile and is not yet bound into the installed runtime.
 
 ## Web Availability
 

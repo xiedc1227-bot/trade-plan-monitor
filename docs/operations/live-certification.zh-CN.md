@@ -7,8 +7,9 @@
 不再需要 Windows 凭据管理器或子进程。
 
 股票认证覆盖 `trade_cal`、`stk_limit`、`daily`、一次十股票 `rt_min` 批量调用，以及两次
-`rt_min_daily` 观测。板块指数认证会对每个已批准的 `MarketIndexCode` 分别检查
-`idx_mins(freq="5min")` 与 `index_daily`。
+`rt_min_daily` 观测。板块指数认证会对每个已批准的 `MarketIndexCode` 分别检查历史
+`idx_mins(freq="5min")`、当日 `rt_idx_min_daily(freq="5MIN")` 与 `index_daily`。“A股实时分钟”
+权限不能替代单独命名的“指数实时分钟”权限。
 
 ## 配置
 
@@ -68,5 +69,6 @@ profile 包含端点 identity、SDK 版本、时间戳、能力状态、时间�
 ## 权威参考
 
 - [Tushare `idx_mins`](https://tushare.pro/document/2?doc_id=419)
+- [Tushare `rt_idx_min_daily`](https://tushare.pro/document/2?doc_id=420)
 - [Tushare `index_daily`](https://tushare.pro/document/1?doc_id=95)
 - [Tushare `trade_cal`](https://tushare.pro/document/2?doc_id=26)

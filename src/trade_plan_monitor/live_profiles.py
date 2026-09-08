@@ -103,6 +103,9 @@ class IndexLiveCertification(_LiveCertification):
     capabilities: Mapping[MarketIndexCode, TushareMarketIndexCapabilityStatus]
     source_time_label: TushareMarketIndexSourceTimeLabel
     five_minute_endpoint: Literal["idx_mins"] = "idx_mins"
+    realtime_five_minute_endpoint: Literal["rt_idx_min_daily"] = (
+        "rt_idx_min_daily"
+    )
     official_daily_endpoint: Literal["index_daily"] = "index_daily"
 
     @model_validator(mode="after")

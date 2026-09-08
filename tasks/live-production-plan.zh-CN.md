@@ -38,10 +38,10 @@
 | 重复获取报价 | 浪费限额且证据不一致 | 每个 deadline 一个批次对象，注入全部判断 |
 | 指数故障阻断全部计划 | 违反 ADR 0003 | 显式路径依赖测试和逐指数失败值 |
 | 浏览器把传输当领域状态 | 误导可用性 | 类型化 200 联合；删除 Health fallback |
-| Token 进入制品 | 凭据泄漏 | 一次性密钥注入、固定错误码、内容扫描 |
+| Token 进入制品 | 凭据泄漏 | 被忽略的本地配置、固定错误码、内容扫描 |
 | 不合适窗口执行认证 | 错误时间戳声明 | 记录 `NOT_RUN_MARKET_WINDOW`；延后标签决定 |
 | 健康启动后 runner 退出 | 健康状态错误保持 live 或任务泄漏 | 使用全新 runtime 的 supervisor，按 `1`/`2`/`4` 秒最多重启三次，退避/耗尽期间保持降级，清理失败属于终止性错误 |
 
 ## 开放问题
 
-离线实施没有阻断问题。LPC006 的可执行股票组合继续依赖 LPC005 记录带已验证 `SourceTimeLabel` 的新鲜 `READY` profile；新鲜指数 readiness 仍由独立证据闸门控制。
+LPC005 已于 2026-09-08 记录带 `SourceTimeLabel=START` 的新鲜 `READY` 股票 profile。LPC006 现在需要让安装式生产 composition 消费该 profile。LPC007 仍受证据闸门阻断，因为 Tushare 中单独命名的“指数实时分钟”权限对 `rt_idx_min_daily` 返回阻断；LPC008 继续依赖 LPC007 与生产 composition 绑定。

@@ -1,8 +1,10 @@
 """Certified, fail-closed Tushare board-index provider.
 
-Tushare documents ``idx_mins`` as the index-minute endpoint and
+Tushare documents ``idx_mins`` as the historical index-minute endpoint,
+``rt_idx_min_daily`` as the current-day index-minute endpoint, and
 ``index_daily`` as the official daily endpoint:
 https://tushare.pro/document/2?doc_id=419
+https://tushare.pro/document/2?doc_id=420
 https://tushare.pro/document/1?doc_id=95
 """
 
@@ -39,9 +41,21 @@ from trade_plan_monitor.runtime.request_control import (
 _PROFILE_ID: Final = "tushare-board-index-live-v1"
 _SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
 _INDEX_MINUTE_ENDPOINT: Final = "idx_mins"
+_INDEX_REALTIME_MINUTE_ENDPOINT: Final = "rt_idx_min_daily"
 _INDEX_DAILY_ENDPOINT: Final = "index_daily"
 _INDEX_MINUTE_FIELDS: Final = "ts_code,trade_time,open,close,high,low,vol,amount"
+_INDEX_REALTIME_MINUTE_FIELDS: Final = "ts_code,freq,time,open,close,high,low,vol,amount"
 _INDEX_DAILY_FIELDS: Final = "ts_code,trade_date,open,high,low,close,vol,amount"
+_INDEX_MINUTE_COLUMNS: Final = (
+    "ts_code",
+    "trade_time",
+    "open",
+    "close",
+    "high",
+    "low",
+    "vol",
+    "amount",
+)
 _MAX_REQUESTED_BARS: Final = 8_000
 
 
@@ -71,6 +85,7 @@ class TushareMarketIndexProfile:
     capabilities: Mapping[MarketIndexCode, TushareMarketIndexCapabilityStatus]
     source_time_label: TushareMarketIndexSourceTimeLabel
     five_minute_endpoint: str | None
+    realtime_five_minute_endpoint: str | None
     official_daily_endpoint: str | None
 
     def __post_init__(self) -> None:
@@ -89,6 +104,7 @@ class TushareMarketIndexProfile:
         if unverified:
             if (
                 self.five_minute_endpoint is not None
+                or self.realtime_five_minute_endpoint is not None
                 or self.official_daily_endpoint is not None
                 or any(
                     status is not TushareMarketIndexCapabilityStatus.UNVERIFIED
@@ -98,6 +114,8 @@ class TushareMarketIndexProfile:
                 raise ValueError("unverified market-index profile cannot enable endpoints")
         elif (
             self.five_minute_endpoint != _INDEX_MINUTE_ENDPOINT
+            or self.realtime_five_minute_endpoint
+            != _INDEX_REALTIME_MINUTE_ENDPOINT
             or self.official_daily_endpoint != _INDEX_DAILY_ENDPOINT
             or any(
                 status is TushareMarketIndexCapabilityStatus.UNVERIFIED
@@ -120,6 +138,7 @@ def unverified_tushare_market_index_profile() -> TushareMarketIndexProfile:
         },
         source_time_label=TushareMarketIndexSourceTimeLabel.UNVERIFIED,
         five_minute_endpoint=None,
+        realtime_five_minute_endpoint=None,
         official_daily_endpoint=None,
     )
 
@@ -136,6 +155,7 @@ def certified_tushare_market_index_profile(
         capabilities=capabilities,
         source_time_label=source_time_label,
         five_minute_endpoint=_INDEX_MINUTE_ENDPOINT,
+        realtime_five_minute_endpoint=_INDEX_REALTIME_MINUTE_ENDPOINT,
         official_daily_endpoint=_INDEX_DAILY_ENDPOINT,
     )
 
@@ -210,16 +230,28 @@ class TushareMarketIndexProvider:
                 work_key=f"{work_prefix}:minutes",
                 priority=RequestPriority.MARKET_DEADLINE,
             )
+            realtime_minute_frame = await self._request_controller.execute(
+                TushareOperation.INDEX_MINUTES,
+                lambda: self._fetch_realtime_index_minutes(index_code),
+                work_key=f"{work_prefix}:realtime-minutes",
+                priority=RequestPriority.MARKET_DEADLINE,
+            )
             daily_frame = await self._request_controller.execute(
                 TushareOperation.INDEX_DAILY,
                 lambda: self._fetch_index_daily(index_code, cutoff),
                 work_key=f"{work_prefix}:daily",
                 priority=RequestPriority.MARKET_DEADLINE,
             )
-            if not isinstance(minute_frame, pd.DataFrame) or not isinstance(
-                daily_frame, pd.DataFrame
+            if (
+                not isinstance(minute_frame, pd.DataFrame)
+                or not isinstance(realtime_minute_frame, pd.DataFrame)
+                or not isinstance(daily_frame, pd.DataFrame)
             ):
                 raise ValueError("index provider returned a non-tabular response")
+            minute_frame = self._combined_minute_frame(
+                minute_frame,
+                realtime_minute_frame,
+            )
             observed_at = self._observed_at()
             revision = self._content_revision(minute_frame, daily_frame)
             minute_bars = self._minute_bars(
@@ -256,8 +288,48 @@ class TushareMarketIndexProvider:
             ts_code=index_code.value,
             freq="5min",
             start_date=(decision_cutoff - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
-            end_date=decision_cutoff.strftime("%Y-%m-%d %H:%M:%S"),
+            end_date=datetime.combine(
+                decision_cutoff.date() - timedelta(days=1),
+                time(23, 59, 59),
+                _SHANGHAI,
+            ).strftime("%Y-%m-%d %H:%M:%S"),
             fields=_INDEX_MINUTE_FIELDS,
+        )
+
+    def _fetch_realtime_index_minutes(self, index_code: MarketIndexCode) -> object:
+        endpoint = getattr(self._client, _INDEX_REALTIME_MINUTE_ENDPOINT)
+        return endpoint(
+            ts_code=index_code.value,
+            freq="5MIN",
+            fields=_INDEX_REALTIME_MINUTE_FIELDS,
+        )
+
+    @staticmethod
+    def _combined_minute_frame(
+        historical: pd.DataFrame,
+        realtime: pd.DataFrame,
+    ) -> pd.DataFrame:
+        TushareMarketIndexProvider._require_columns(
+            historical,
+            {"ts_code", "trade_time", "open", "high", "low", "close", "vol", "amount"},
+        )
+        symbol_column = "ts_code" if "ts_code" in realtime.columns else "code"
+        TushareMarketIndexProvider._require_columns(
+            realtime,
+            {symbol_column, "time", "open", "high", "low", "close", "vol", "amount"},
+        )
+        frequency_count = Counter(realtime.columns)["freq"]
+        if frequency_count not in (0, 1) or (
+            frequency_count == 1
+            and not realtime["freq"].astype(str).eq("5MIN").all()
+        ):
+            raise ValueError("realtime index-minute frequency is invalid")
+        current = realtime.rename(
+            columns={symbol_column: "ts_code", "time": "trade_time"}
+        )
+        return pd.concat(
+            [historical[list(_INDEX_MINUTE_COLUMNS)], current[list(_INDEX_MINUTE_COLUMNS)]],
+            ignore_index=True,
         )
 
     def _fetch_index_daily(

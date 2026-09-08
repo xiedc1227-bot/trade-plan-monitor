@@ -36,6 +36,7 @@ def test_unverified_index_profile_is_separate_and_fails_before_any_sdk_call() ->
         TushareMarketIndexCapabilityStatus.UNVERIFIED
     }
     assert profile.five_minute_endpoint is None
+    assert profile.realtime_five_minute_endpoint is None
     assert profile.official_daily_endpoint is None
 
     with pytest.raises(TushareMarketIndexProviderError) as captured:
@@ -81,6 +82,7 @@ class _Controller:
 class _Client:
     def __init__(self) -> None:
         self.idx_calls: list[dict[str, object]] = []
+        self.realtime_idx_calls: list[dict[str, object]] = []
         self.daily_calls: list[dict[str, object]] = []
 
     def idx_mins(self, **kwargs: object) -> pd.DataFrame:
@@ -89,7 +91,36 @@ class _Client:
             [
                 {
                     "ts_code": "399001.SZ",
-                    "trade_time": "2026-09-07 09:55:00",
+                    "trade_time": "2026-09-04 14:55:00",
+                    "open": "101.1",
+                    "high": "102.2",
+                    "low": "100.5",
+                    "close": "102.0",
+                    "vol": "12",
+                    "amount": "34.5",
+                    "ignored": "provider-extension",
+                },
+                {
+                    "ts_code": "399001.SZ",
+                    "trade_time": "2026-09-04 15:00:00",
+                    "open": "102.0",
+                    "high": "103.0",
+                    "low": "101.8",
+                    "close": "102.5",
+                    "vol": "13",
+                    "amount": "35.5",
+                    "ignored": "provider-extension",
+                },
+            ]
+        )
+
+    def rt_idx_min_daily(self, **kwargs: object) -> pd.DataFrame:
+        self.realtime_idx_calls.append(kwargs)
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "399001.SZ",
+                    "time": "2026-09-07 09:55:00",
                     "open": "101.1",
                     "high": "102.2",
                     "low": "100.5",
@@ -99,7 +130,7 @@ class _Client:
                 },
                 {
                     "ts_code": "399001.SZ",
-                    "trade_time": "2026-09-07 10:00:00",
+                    "time": "2026-09-07 10:00:00",
                     "open": "102.0",
                     "high": "103.0",
                     "low": "101.8",
@@ -138,6 +169,13 @@ class _Client:
         )
 
 
+class _WrongRealtimeFrequencyClient(_Client):
+    def rt_idx_min_daily(self, **kwargs: object) -> pd.DataFrame:
+        frame = super().rt_idx_min_daily(**kwargs)
+        frame["freq"] = "1MIN"
+        return frame
+
+
 def _ready_profile():
     return certified_tushare_market_index_profile(
         capabilities={
@@ -152,6 +190,7 @@ def test_certified_index_profile_requires_dedicated_evidence_values() -> None:
 
     assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.END
     assert profile.five_minute_endpoint == "idx_mins"
+    assert profile.realtime_five_minute_endpoint == "rt_idx_min_daily"
     assert profile.official_daily_endpoint == "index_daily"
     assert set(profile.capabilities.values()) == {TushareMarketIndexCapabilityStatus.READY}
 
@@ -184,9 +223,14 @@ def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_unit
 
     assert controller.calls == [
         (TushareOperation.INDEX_MINUTES, "index:399001.SZ:20260907T1000:minutes"),
+        (
+            TushareOperation.INDEX_MINUTES,
+            "index:399001.SZ:20260907T1000:realtime-minutes",
+        ),
         (TushareOperation.INDEX_DAILY, "index:399001.SZ:20260907T1000:daily"),
     ]
     assert len(client.idx_calls) == 1
+    assert len(client.realtime_idx_calls) == 1
     assert len(client.daily_calls) == 1
     assert [bar.bar_at.isoformat(timespec="minutes") for bar in batch.five_minute_bars] == [
         "2026-09-07T09:55+08:00",
@@ -202,6 +246,32 @@ def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_unit
     assert all(
         bar.provider_revision == batch.content_revision for bar in batch.official_daily_bars
     )
+
+
+def test_index_provider_rejects_wrong_returned_realtime_frequency() -> None:
+    provider = TushareMarketIndexProvider(
+        client=_WrongRealtimeFrequencyClient(),
+        profile=_ready_profile(),
+        request_controller=_Controller(),
+        now=lambda: datetime(2026, 9, 7, 10, 0, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    with pytest.raises(TushareMarketIndexProviderError):
+        asyncio.run(
+            provider.acquire_index_data(
+                index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+                decision_cutoff=datetime(
+                    2026,
+                    9,
+                    7,
+                    10,
+                    0,
+                    tzinfo=ZoneInfo("Asia/Shanghai"),
+                ),
+                five_minute_bar_count=2,
+                official_daily_bar_count=2,
+            )
+        )
 
 
 def test_index_provider_fails_before_request_control_for_uncertified_index() -> None:
