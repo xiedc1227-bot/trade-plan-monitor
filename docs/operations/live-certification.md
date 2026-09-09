@@ -88,12 +88,37 @@ Eligible `Asia/Shanghai` windows on a weekday are:
 
 | Surface | Morning | Afternoon | Official-close follow-up |
 |---|---:|---:|---:|
-| Stock | `09:32`–`11:25` | `13:02`–`14:55` | `15:20`–`16:30` |
+| Stock | not eligible | `13:02`–`14:55` | `15:20`–`16:30` |
 | Board index | `09:40`–`11:25` | `13:10`–`14:55` | `15:20`–`16:30` |
 
 The runner additionally requires `trade_cal` to prove the observation date is open. An
 ineligible local window returns `NOT_RUN_MARKET_WINDOW` before loading configuration or calling
 the provider.
+
+Stock certification is intentionally unavailable in the morning. A continuous early-session
+sequence beginning at `09:30` cannot distinguish start-labelled minutes from an independent
+`09:30` opening snapshot followed by end-labelled minutes. The afternoon window can prove the
+`11:30` and `13:01` boundaries; without both boundaries the stock label remains `UNVERIFIED`.
+
+## Current Renewal Evidence
+
+The 2026-09-09 board-index renewal observed at `13:10:41.07832+08` certified
+`000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` as `READY` with
+`SourceTimeLabel=END`, valid through `2026-09-16 13:10:41.07832+08`. `899050.BJ` remains
+`DEFERRED` and made no provider request.
+
+The earlier 2026-09-08 stock `START` conclusion was an insufficient early-market inference. On
+2026-09-09, two 13:10 attempts and bounded retries correctly reported
+`current_day_minutes=ERROR/UNVERIFIED` under the old label logic. Each redacted diagnostic had
+139 rows from `09:30` through `13:18`, included `11:30`, and excluded `13:00`. The strict corrected
+stock run observed at `14:48:40.405317+08` certified all five capabilities `READY` with
+`SourceTimeLabel=END`, valid through `2026-09-16 14:48:40.405317+08`; it proves a standalone
+`09:30` snapshot followed by end-labeled minutes.
+
+Both renewals used `config/app.yaml`. The configured `connect_ip` continued to work without a
+temporary per-run proxy change. A 2026-09-09 13:27 installed-production attempt was rejected
+before network because its scheduled-close window was ineligible; it is not production-chain
+acceptance evidence.
 
 ## Evidence and Failure Semantics
 

@@ -47,6 +47,22 @@ def test_launcher_fails_before_loading_configuration_outside_market_window() -> 
     assert calls == []
 
 
+def test_stock_launcher_rejects_ambiguous_morning_window_before_configuration() -> None:
+    calls: list[object] = []
+
+    result = launch_live_certification(
+        surface=LiveCertificationSurface.STOCK,
+        authorization=required_authorization(LiveCertificationSurface.STOCK),
+        config_path=Path("config/app.yaml"),
+        now=datetime(2026, 9, 7, 10, 0, tzinfo=SHANGHAI),
+        runner=lambda *args: calls.append(args) or 0,
+    )
+
+    assert result.outcome == "NOT_RUN_MARKET_WINDOW"
+    assert result.return_code == 0
+    assert calls == []
+
+
 def test_stock_authorization_cannot_start_index_certification() -> None:
     with pytest.raises(ValueError, match="authorization does not match"):
         launch_live_certification(

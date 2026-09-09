@@ -6,7 +6,7 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 ## 产品状态
 
-`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。WEBF05 现在使用惰性的真实监控组合：打开并迁移共用 monitor SQLite，暴露后端 `RuntimeHealthSnapshot`，并管理已提交事件流。由于实时分钟 `SourceTimeLabel` 语义和实时板块指数供应商仍未验证，启动会在任何密钥或供应商请求前诚实报告只读 `DEGRADED` 和 `nextPollAt=null`，且不创建调度运行任务。没有权威持久投影的总览和股票读取返回严格类型化的 HTTP `200` unavailable 联合；仍未组合的实时指数读取，以及真正的服务、存储、迁移、损坏及组合故障仍返回 `SERVICE_UNAVAILABLE`。不再使用通用生命周期占位组合，也不伪造空判断状态。`/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
+`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。当前实时生产证据已认证股票 profile 的 `SourceTimeLabel=END`，以及当前范围内四个板块指数 `000001.SH`、`399001.SZ`、`399006.SZ` 和 `000688.SH` 的 `SourceTimeLabel=END`。北证50（`899050.BJ`）仍是已知 identity，但为 `DEFERRED`：在没有北交所股票进入范围时，既不认证也不请求。WEBF05 使用惰性的真实监控组合：打开并迁移共用 monitor SQLite，暴露后端 `RuntimeHealthSnapshot`，并管理已提交事件流。只有必需的已认证 profile 缺失、过期、被篡改、端点/schema/范围不匹配，或以其他方式未就绪时，启动才会在任何密钥或供应商请求前诚实报告只读 `DEGRADED` 和 `nextPollAt=null`，且不创建调度运行任务。没有权威持久投影的总览和股票读取返回严格类型化的 HTTP `200` unavailable 联合；仍未组合的实时指数读取，以及真正的服务、存储、迁移、损坏及组合故障仍返回 `SERVICE_UNAVAILABLE`。不再使用通用生命周期占位组合，也不伪造空判断状态。`/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
 
 WEBF06 将 `/` 接到既有以后端为权威来源的总览快照：它展示股票判断和共用板块指数事实，并与计划专属指数进度分开；在快照存在前保持诚实的加载状态。它不增加浏览器交易规则或供应商请求。
 
@@ -23,7 +23,7 @@ WEBF13 在历史上完成生产路由与新建回测的验收缺口。曾经的�
 操作。直接凭证配置、独立股票/指数命令、可用开市窗口和证据格式
 详见[真实认证运维指南](docs/operations/live-certification.zh-CN.md)。
 
-本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。另行授权的 T059 性能修复现已在不改变阈值的前提下通过 100k-export、ten-symbol/252-day、内存、存储及完整离线闸门。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
+本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；这些结论适用于该历史发布候选。可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。当前仓库级门禁和 LPC012 状态以[实时生产链路验收报告](docs/verification/live-production-chain-acceptance.zh-CN.md)为权威记录，不由这份历史 T059 证据断言。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
 
 已批准的板块指数扩展现已在监控与回测中实现。`board-index-map-v1` 根据每个已校验的 A 股代码推导固定板块参考；相同指数和截止时间共用不可变数据快照，每个 Schema v2 计划只独立计算自身指数条件。界面把共用指数事实与计划条件结果分区展示，历史 Schema v1 计划和结果保持不变。
 
@@ -93,7 +93,7 @@ Web 启动时会校验严格 YAML，并为本次服务生命周期创建不可�
 trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765
 ```
 
-在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。当实时分钟 `SourceTimeLabel` 语义或实时板块指数供应商仍未验证时，监控标题会诚实显示 `DEGRADED`、只读状态和没有下次轮询；打开 `/plans` 可使用 AI 草稿与持久计划管理。首次 lifespan 启动会创建或升级 `data/monitor.sqlite3`；之后启动时，计划保存、查询、导入、启用和停用都使用同一 SQLite 文件。数据库及其 WAL/SHM 伴随文件必须保持私密，且不得直接复制正在使用的 WAL 数据库作为备份。修改 `config/app.yaml` 后，必须重启 Web 才能更改 AI 设置。
+在同一台计算机上打开 `http://127.0.0.1:8765/`。使用 `Ctrl+C` 停止前台进程。必需的已认证 profile 缺失、过期、被篡改、端点/schema/范围不匹配或未就绪时，监控标题会诚实显示 `DEGRADED`、只读状态和没有下次轮询；打开 `/plans` 可使用 AI 草稿与持久计划管理。首次 lifespan 启动会创建或升级 `data/monitor.sqlite3`；之后启动时，计划保存、查询、导入、启用和停用都使用同一 SQLite 文件。数据库及其 WAL/SHM 伴随文件必须保持私密，且不得直接复制正在使用的 WAL 数据库作为备份。修改 `config/app.yaml` 后，必须重启 Web 才能更改 AI 设置。
 
 ### 5. 离线验证
 

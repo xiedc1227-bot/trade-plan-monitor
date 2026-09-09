@@ -1,12 +1,15 @@
 # T059 Release Acceptance Evidence
 
-> Historical evidence notice (2026-09-07): the AI credential procedure recorded below
-> is superseded. `config/app.yaml` is now the only credential source; the application no
-> longer reads `AI_API_KEY` or any other credential environment variable.
+> Historical evidence notice (as of 2026-09-01): this report records the T059/C24 release
+> decision for its candidate and does not assert the current repository-wide gate. The AI
+> credential procedure recorded below is superseded: `config/app.yaml` is now the only credential
+> source; the application no longer reads `AI_API_KEY` or any other credential environment variable.
 
-**Status:** `ACCEPTED` on 2026-09-01. Every approved internal offline gate is green after the
-separately authorized production-performance remediation. Optional AI connectivity remains
-`NOT_RUN_UNAUTHORIZED`, and the user performed final release acceptance on 2026-09-01.
+**Status:** `ACCEPTED` on 2026-09-01. Every approved internal offline gate for that
+release candidate was green after the separately authorized production-performance remediation.
+Optional AI connectivity remained `NOT_RUN_UNAUTHORIZED`, and the user performed final release
+acceptance on 2026-09-01. Current repository-wide gate and LPC012 status are recorded separately
+by live-production-chain acceptance.
 
 ## 1. Decision and evidence boundary
 
@@ -18,11 +21,14 @@ and regression files. They are the bilingual README pair, this bilingual report 
 focused regression files. No dependency, migration, database schema, API path, generated contract,
 provider configuration, or approved performance threshold changed.
 
-The release decision is `ACCEPTED`. The earlier `BLOCKED_OFFLINE_PERFORMANCE_GATE` decision was valid
-for the failed fresh gate and was superseded by the RED-first remediation and new complete passing
-gate recorded below. `PENDING_FINAL_USER_ACCEPTANCE` was then valid until the user explicitly
-accepted the release on 2026-09-01. Business time remains `Asia/Shanghai` with explicit `+08:00`
-semantics. `C24` is complete at 4 of 4, and T059 is Complete.
+The release decision is `ACCEPTED`. This decision is the historical result recorded as of
+2026-09-01. The earlier
+`BLOCKED_OFFLINE_PERFORMANCE_GATE` decision was valid for the failed fresh gate and was superseded
+for this candidate by the RED-first remediation and complete passing gate recorded below.
+`PENDING_FINAL_USER_ACCEPTANCE` was then valid until the user explicitly accepted the release on
+2026-09-01. Business time remains `Asia/Shanghai` with explicit `+08:00` semantics. For this
+release candidate, `C24` is complete at 4 of 4 and T059 is Complete; this does not assert the
+current repository-wide gate.
 
 ## 2. RED and optional AI live gate
 
@@ -56,7 +62,7 @@ No such authorization was given for this T059 run, so the canonical result is
 bounded Chat Completions envelope connectivity, not model identity, plan quality, safe activation,
 or trading correctness.
 
-## 3. Fresh offline results
+## 3. Fresh offline results for the historical release candidate
 
 All formal Python inputs were constructed from Git-tracked paths, with the new T059 contract test
 named explicitly. The five protected validation-only files were excluded from every formal test,
@@ -127,14 +133,14 @@ unpromised no-GIL/alternate-interpreter concurrency contract.
 
 ## 6. Approved evidence mapping
 
-| Approved boundary | Evidence and current decision |
+| Approved boundary | Evidence and decision as of 2026-09-01 |
 |---|---|
 | `P18` / `T058` live Tushare | `d8b28b2`: authorized visible-block branch; five capabilities mapped to visible `ERROR`, application remained `DEGRADED` and read-only |
 | `BT008` / `BC01` | `eee65fd`: deterministic two-symbol journey, live-state zero-diff, zero provider/notification/WebSocket calls, recovery, retention, pin/unpin, and initial-lot evidence; `BC01` remains Complete |
 | AI provider boundary | 106 offline contracts pass; optional live connection is `NOT_RUN_UNAUTHORIZED` |
 | Browser/accessibility | 484 unit tests, 6 allowed Chromium E2E tests, and accepted NVDA evidence |
 | Backup/restore | 9 fresh tracked tests plus accepted BT050 migration/restore evidence |
-| Complete release gate | All approved internal gates pass; the user accepted the release on 2026-09-01, so all four C24 checks are closed |
+| Complete release gate | All approved internal gates for this candidate passed; the user accepted the release on 2026-09-01, so all four C24 checks closed for that historical release decision |
 
 ## 7. Backup, rollback, and operating boundary
 
@@ -152,7 +158,7 @@ order path, or live AI decision path is accepted.
 ## 8. Known limitations and open decisions
 
 - `ACCEPTED`: the user explicitly confirmed final release acceptance on 2026-09-01; all C24 checks
-  are closed.
+  are closed for that historical release decision, not as a statement about the current repository-wide gate.
 - `NOT_RUN_UNAUTHORIZED`: optional AI connectivity was not called; a future call needs a new exact
   authorization and configured target/secret references.
 - T058 accepted a visible-block result, not provider readiness; current real Tushare availability is
@@ -163,11 +169,14 @@ order path, or live AI decision path is accepted.
 
 ## 9. C24 release checklist
 
-- [x] Complete offline backend/frontend/replay/browser/security/accessibility/soak/restore gates pass.
+- [x] Complete offline backend/frontend/replay/browser/security/accessibility/soak/restore gates passed for the 2026-09-01 release candidate.
 - [x] `BC01` remains complete with live-state isolation and bounded-retention evidence.
 - [x] Authorized live-contract evidence is bilingual, and optional AI connectivity remains honestly
   `NOT_RUN_UNAUTHORIZED` without weakening deterministic monitoring.
 - [x] The user confirmed final acceptance on 2026-09-01.
+
+This checklist applies to the 2026-09-01 release candidate. Current repository-wide gate and
+LPC012 status remain outside this historical report.
 
 <!-- T059-CANONICAL-EVIDENCE-START -->
 ```json

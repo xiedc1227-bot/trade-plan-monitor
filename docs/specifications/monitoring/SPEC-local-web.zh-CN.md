@@ -313,7 +313,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 ### WEBF05 真实生产监控组合边界
 
 - 当没有显式运行时/应用服务时，`create_production_app(...)` 使用惰性的 `create_monitor_composition_factory(config_path, database_path)`。工厂只在 FastAPI lifespan 内调用；它打开并迁移生产计划生命周期使用的同一个 monitor SQLite，构造真实的 `RuntimeLifecycleService`，暴露以后端为权威来源的 `RuntimeHealthSnapshot`，并管理基于数据库的 `CommittedMonitorEventStream`。明确注入的运行时和应用服务继续保持权威，并阻止默认组合构造。
-- 默认组合加载并校验统一且被忽略的 `config/app.yaml`，随后在构造带凭证的 provider client 或发出 provider 请求前检查获批的真实证据。新鲜 profile 是必要条件，但本身不能让生产变为可执行：composition 必须校验并消费它，绑定对应 provider 与 scheduler，并保留每个指数的失败。在这些检查通过前，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。当前股票 profile 以 `SourceTimeLabel=START` 全部 `READY`；独立指数 profile 以 `SourceTimeLabel=END` 将当前范围内四个指数全部记录为 `READY`。已知 `899050.BJ` identity 为 `DEFERRED`，不能进入请求控制器。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
+- 默认组合加载并校验统一且被忽略的 `config/app.yaml`，随后在构造带凭证的 provider client 或发出 provider 请求前检查获批的真实证据。新鲜 profile 是必要条件，但本身不能让生产变为可执行：composition 必须校验并消费它，绑定对应 provider 与 scheduler，并保留每个指数的失败。在这些检查通过前，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。当前股票 profile 以 `SourceTimeLabel=END` 全部 `READY`；独立指数 profile 以 `SourceTimeLabel=END` 将当前范围内四个指数全部记录为 `READY`。已知 `899050.BJ` identity 为 `DEFERRED`，不能进入请求控制器。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
 - 真实组合不会捏造缺失的权威投影。ADR 0004 以严格类型化 HTTP `200` unavailable 联合取代总览与股票生命周期缺失原先的通用 `SERVICE_UNAVAILABLE` 行为；真正故障及仍未组合的实时指数读取继续封闭失败。WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。持仓可用性由 WEBF09 单独定义，提醒中心可用性由 WEBF10 单独定义。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
 - 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储、组合、过期 profile 或必需指数错误不得被静默转换成健康响应；未满足的实时前置条件会按生产链路契约产生有界 `DEGRADED` 状态或隔离的依赖路径失败。
 

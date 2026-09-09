@@ -164,9 +164,9 @@ INP 为零表示观察事件低于 Chromium PerformanceEventTiming 报告下限�
 
 明确将 `BC01` 重评为 PASS：四项已记录检查现已全部满足。双股票/多日可操作 fills、持久 lease/恢复、从起点重放、LIVE-STATE-ZERO-DIFF、NOTIFICATION-ZERO-CALLS、资源上限、置顶/取消置顶及 initial-lot/公共结果路径均有覆盖。历史获取继续与真实 Tushare 验收分离，任何模拟记录均不呈现为券商成交或实时提醒。策略事件 cursor resume 保持既有延期，不作静默声称。
 
-`T058` 保持 Open 且受外部闸门阻断：未授权或运行真实 Tushare contract。`T059` 保持 Open 且部分受外部闸门阻断：未运行可选真实 AI 闸门。`C24` 保持 Open，因为真实 contract/最终用户发布验收不属于 BT050。上述不变状态不作为 BT050 失败。
+在 BT050 的决定时点，`T058` 保持 Open 且受外部闸门阻断，因为未授权或运行真实 Tushare contract。在同一时点，`T059` 与 `C24` 保持 Open，因为可选真实 AI、真实 contract 和最终用户发布验收不属于 BT050。T059 与 C24 随后于 2026-09-01 通过验收；其历史发布决定不认证当前仓库级门禁。这些有时间边界的状态不作为 BT050 失败。
 
-`BC19 / I4` 已完成。最终离线闸门中，排除受保护文件的后端套件以 `1,941 passed, 1 skipped` 通过，前端单元套件以 `484 passed` 通过，允许的 Chromium E2E 套件以 `6 passed` 通过；Ruff check/format、`compileall`、`pip check`、OpenAPI/TypeScript generator `--check`、type-check、生产构建与空白检查也全部通过。最终新鲜上下文对抗审核覆盖正确性、安全、架构、性能、兼容性、测试充分性与双语证据，未发现未解决 P0～P2 问题。两项仅可维护性的 P3 观察已修正，随后受影响后端闸门以 `302 tests` 通过。
+`BC19 / I4` 对这份历史验收证据已完成。在其决定时点，最终离线闸门中，排除受保护文件的后端套件以 `1,941 passed, 1 skipped` 通过，前端单元套件以 `484 passed` 通过，允许的 Chromium E2E 套件以 `6 passed` 通过；Ruff check/format、`compileall`、`pip check`、OpenAPI/TypeScript generator `--check`、type-check、生产构建与空白检查也全部通过。最终新鲜上下文对抗审核覆盖正确性、安全、架构、性能、兼容性、测试充分性与双语证据，未发现未解决 P0～P2 问题。两项仅可维护性的 P3 观察已修正，随后受影响后端闸门以 `302 tests` 通过。当前仓库级门禁和 LPC012 状态由实时生产链路验收单独记录。
 
 ## 已知警告与制品策略
 

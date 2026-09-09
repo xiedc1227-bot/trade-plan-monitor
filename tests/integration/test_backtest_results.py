@@ -541,6 +541,36 @@ def test_result_store_is_wal_isolated_canonical_and_conflict_closed(tmp_path: Pa
     assert run_json.index('"assumptions"') < run_json.index('"blockers"')
 
 
+def test_result_store_creates_fill_verification_index_without_temporary_sort(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "fill-verification-index.sqlite3"
+    BacktestResultStore(path)
+    with sqlite3.connect(path) as connection:
+        index_columns = tuple(
+            str(row[2])
+            for row in connection.execute('PRAGMA index_xinfo("ix_backtest_fill_verification")')
+            if int(row[5]) == 1
+        )
+        query_plan = tuple(
+            str(row[3])
+            for row in connection.execute(
+                """
+                EXPLAIN QUERY PLAN
+                SELECT fill_id, run_id, filled_at, content_domain, content_hash, payload_json
+                FROM backtest_fill
+                WHERE run_id = ?
+                ORDER BY fill_id
+                """,
+                ("a" * 64,),
+            )
+        )
+
+    assert index_columns == ("run_id", "fill_id")
+    assert any("ix_backtest_fill_verification" in step for step in query_plan)
+    assert all("TEMP B-TREE" not in step for step in query_plan)
+
+
 def test_materialization_cannot_be_bypassed_or_publish_tampered_staged_rows(
     tmp_path: Path,
 ) -> None:

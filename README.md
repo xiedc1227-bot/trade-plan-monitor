@@ -9,12 +9,16 @@ not place orders.
 ## Product Status
 
 Tasks `T001` through `T059` and `BT001` through `BT050` are implemented and accepted. The packaged
-command can serve the built Vue SPA, REST API, and WebSocket routes on exact loopback. WEBF05 now
-uses a lazy real monitoring composition: it opens and migrates the shared monitor SQLite, exposes
-backend `RuntimeHealthSnapshot`, and owns the committed event stream. Because live minute
-`SourceTimeLabel` semantics and the live board-index provider remain unverified, startup honestly
-reports read-only `DEGRADED` with `nextPollAt=null` before any token or provider request and creates
-no scheduler run task. Dashboard and symbol reads without an authoritative persisted projection
+command can serve the built Vue SPA, REST API, and WebSocket routes on exact loopback. The current
+live-production evidence certifies the stock profile with `SourceTimeLabel=END` and the four
+in-scope board indexes `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` with
+`SourceTimeLabel=END`. BSE 50 (`899050.BJ`) remains a known identity but is `DEFERRED`: it is neither
+certified nor requested while no BSE stocks are in scope. WEBF05 uses a lazy real monitoring
+composition: it opens and migrates the shared monitor SQLite, exposes backend
+`RuntimeHealthSnapshot`, and owns the committed event stream. Startup honestly reports read-only
+`DEGRADED` with `nextPollAt=null` before any token or provider request and creates no scheduler run
+task only when the required certified profile is missing, expired, tampered, endpoint/schema/scope
+mismatched, or otherwise not ready. Dashboard and symbol reads without an authoritative persisted projection
 return the strict typed HTTP `200` unavailable union; the still-uncomposed live-index read and
 genuine service, storage, migration, corruption, and composition faults remain
 `SERVICE_UNAVAILABLE`.
@@ -73,11 +77,14 @@ separate stock/index commands, eligible market windows, and the evidence format 
 [live-certification operations guide](docs/operations/live-certification.md).
 
 The local backtest implementation provides isolated `sync`, `verify`, `run`, `list`, and `prune`
-commands, and its BT050 production-fake acceptance is complete. The separately authorized T059
-performance remediation now passes the unchanged 100k-export, ten-symbol/252-day, memory, storage,
-and complete offline gates. T059 completed final user acceptance on 2026-09-01, and C24 is complete
-at 4 of 4. The optional AI live probe remains `NOT_RUN_UNAUTHORIZED`. See
-[the bilingual T059 evidence](docs/verification/release-acceptance.md). Historical sync
+commands, and its BT050 production-fake acceptance is complete.
+T059 completed final user acceptance on 2026-09-01, and C24 is complete at 4 of 4 for that release
+candidate.
+The optional AI live probe remains `NOT_RUN_UNAUTHORIZED`. The current repository-wide gate and
+LPC012 status are recorded authoritatively by
+[the live-production-chain acceptance report](docs/verification/live-production-chain-acceptance.md),
+not by this historical T059 evidence. See [the bilingual T059 evidence](docs/verification/release-acceptance.md).
+Historical sync
 availability and the accepted visible-block T058 result do not imply current live Tushare
 readiness.
 
@@ -167,8 +174,8 @@ trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765
 ```
 
 Open `http://127.0.0.1:8765/` on the same computer. Stop the foreground process with `Ctrl+C`.
-The monitoring header honestly reports `DEGRADED` while live minute `SourceTimeLabel` semantics or
-the live board-index provider remain unverified; it also shows read-only state and no next poll.
+The monitoring header honestly reports `DEGRADED` with read-only state and no next poll when a
+required certified profile is missing, expired, tampered, endpoint/schema/scope mismatched, or not ready.
 Open `/plans` to use AI drafting and persistent plan management. The first lifespan startup creates
 or upgrades `data/monitor.sqlite3`; saving, querying, importing, activating, and deactivating plans
 uses that same SQLite file on later starts. Keep the database and its WAL/SHM companions private

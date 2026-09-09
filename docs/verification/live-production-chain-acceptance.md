@@ -14,12 +14,14 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
 
 ## Environment
 
-- Date/time zone: 2026-09-08, Asia/Shanghai.
-- Market-window fact: an authorized Tuesday open-market run at `09:52:53` certified the stock
-  surface with `SourceTimeLabel=START`; a separate post-session index run at `15:16:52`
-  selected `SourceTimeLabel=END` and certified four indexes while recording `899050.BJ` as
-  `ERROR`. On 2026-09-09 the trading scope was narrowed to those four indexes; BSE 50 is now
-  `DEFERRED`, and the historical observation remains unchanged.
+- Date/time zone: 2026-09-09, Asia/Shanghai.
+- Market-window fact: the 2026-09-08 `09:52:53` stock `START` conclusion was an insufficient
+  early-market inference. The strict 2026-09-09 stock renewal observed at
+  `14:48:40.405317+08` certified all five capabilities `READY` with `SourceTimeLabel=END`, valid
+  through `2026-09-16 14:48:40.405317+08`. The independent index renewal observed at
+  `13:10:41.07832+08` certified four in-scope indexes `READY` with `SourceTimeLabel=END`, valid
+  through `2026-09-16 13:10:41.07832+08`. BSE 50 is `DEFERRED` and receives no request; its
+  historical `ERROR` observation remains unchanged.
 - Network boundary: the two explicitly authorized certification runs and the explicitly authorized
   LPC006/LPC008 installed-production acceptance called Tushare. Offline tests and deterministic
   loopback browser fixtures still make no Tushare, DeepSeek, broker, webhook, or other supplier
@@ -56,6 +58,15 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
   provider request and prove that `899050.BJ` cannot enter request control.
 - The post-amendment functional backend rerun passes `2309 tests` with `1 skipped` and `1 warning`
   in `213.43s` over the same offline scope. It makes no external provider request.
+- The performance repair removes the repeated all-day-minute scan in
+  `EvaluationContext.current_bucket_minutes`. A first-symbol `cProfile` recorded `833,504,828`
+  calls, `35.57s` cumulative attribute time, and `7,493,472` `five_minute_bucket_end` calls. The
+  repaired path reads the final five values directly from validated ordered complete five-minute
+  buckets; the regression is old `105` calls versus new `<=2`. The exact capacity node passes as
+  `1 passed, 1 warning in 1443.66s`, proving ten symbols each `<=120s` and the resource ceilings.
+  Before the later stock-probe correction, the first complete unexcluded gate passed as
+  `2318 passed, 1 skipped, 1 warning in 2668.54s`. After the correction, the final identical
+  command passes as `2326 passed, 1 skipped, 1 warning in 2761.04s`, closing LPC012.
 - OpenAPI SHA-256 is
   `2b232e1a9237aa88a2de7c3d1ec3fcc692b198cfddeabc41fa88b7d67cdb3a53` and generated
   TypeScript is byte-current.
@@ -77,21 +88,22 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
   `rt_min_daily.freq` echo only for the fixed `1MIN` request and continues to reject an explicitly
   wrong returned frequency. This is component evidence, separate from live certification and
   installed-production-chain acceptance.
-- The 2026-09-08 `09:52:53` stock profile records `realtime_minutes`, `current_day_minutes`,
-  `trading_calendar`, `daily_limits`, and `daily_bars` as `READY`, with
-  `SourceTimeLabel=START`. It remains valid through 2026-09-15 09:52:53 Asia/Shanghai and
-  closes LPC005.
+- Two 2026-09-09 13:10 stock attempts and bounded retries correctly recorded
+  `current_day_minutes=ERROR/UNVERIFIED` under the old label logic. Each redacted diagnostic had
+  139 rows from `09:30` through `13:18`, included `11:30`, and excluded `13:00`. The strict
+  corrected run at `14:48:40.405317+08` records `realtime_minutes`, `current_day_minutes`,
+  `trading_calendar`, `daily_limits`, and `daily_bars` as `READY`, selects
+  `SourceTimeLabel=END`, and is valid through `2026-09-16 14:48:40.405317+08`. It proves an
+  independent `09:30` snapshot followed by end-labeled minutes and closes LPC005.
 - Tushare documents and live observations show that `idx_mins` is historical and updates after
   the session; it returned `49` prior-day five-minute rows and `0` current-day rows. The corrected
   index contract therefore combines `idx_mins`, `rt_idx_min_daily`, and `index_daily` rather than
   reusing the stock `rt_min` endpoint.
-- The separate 2026-09-08 `15:16:52` index profile selects `SourceTimeLabel=END` and remains
-  valid through 2026-09-15 15:16:52 Asia/Shanghai. `000001.SH`, `399001.SZ`, `399006.SZ`, and
-  `000688.SH` are `READY`; `899050.BJ` is `ERROR`. This supersedes the earlier blanket
-  `BLOCKED_PERMISSION` conclusion. These four ready indexes constitute the current trading scope.
-  BSE 50 is deferred until BSE stocks enter scope; future certification writes `DEFERRED` and makes
-  no `idx_mins`, `rt_idx_min_daily`, or `index_daily` request for `899050.BJ`. LPC007 is complete
-  for the current scope without rewriting the historical profile.
+- The separate index renewal at `13:10:41.07832+08` selects `SourceTimeLabel=END` and is valid
+  through `2026-09-16 13:10:41.07832+08`. `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH`
+  are `READY`. These four indexes constitute the current trading scope. BSE 50 is `DEFERRED` until
+  BSE stocks enter scope and makes no `idx_mins`, `rt_idx_min_daily`, or `index_daily` request for
+  `899050.BJ`. LPC007 is complete for the current scope without rewriting historical evidence.
 - Runtime tests cover one immutable at-most-ten-symbol batch per deadline, no evaluation
   refetch, separate complete admission/provider timeouts, queued `CLOSED` wake-up, immediate
   stop admission, final activation-revision fencing, durable official-close ownership, and
@@ -186,8 +198,9 @@ were current-change regressions: two legacy Web fixtures missing `runtimeGenerat
 test referencing an old snapshot name, and one replay assertion missing the new persisted
 data-health events. Those four were corrected and focused regressions pass. The unchanged 252-day
 capacity failure is retained and its threshold was not relaxed. The intermediate rerun excluded
-that one measured case; the final frozen functional rerun excluded the entire unchanged
-`test_backtest_acceptance.py` file after it had already run twice. LPC012 therefore remains open.
+that one measured case; the frozen functional rerun excluded the entire unchanged
+`test_backtest_acceptance.py` file after it had already run twice. LPC012 therefore remained open
+at that checkpoint.
 
 An intermediate filtered rerun used this explicit filter and completed in `1221.40s` with
 `2306 passed, 1 failed, 1 skipped, 1 deselected`. The malicious-decimal helper failed because it
@@ -206,26 +219,44 @@ unchanged capacity suite had already run twice:
 .\.venv\Scripts\python.exe -m pytest tests/unit tests/integration tests/replay -q --tb=short -m 'not live' --ignore=tests/integration/test_backtest_acceptance.py
 ```
 
-Latest result: `2309 passed, 1 skipped, 1 warning in 213.43s`. The retained full-scope capacity failure
-still keeps LPC012 open.
+That historical result was `2309 passed, 1 skipped, 1 warning in 213.43s`. The retained full-scope
+capacity failure still kept LPC012 open at that checkpoint.
+
+The capacity repair above subsequently passed its exact node, and the first complete unexcluded
+gate passed as `2318 passed, 1 skipped, 1 warning in 2668.54s` before the stock-probe correction.
+An intervening final-candidate run exposed an independent 100,000-fill export tail failure:
+`1 failed, 2324 passed, 1 skipped, 1 warning in 2845.26s`, with the slowest of 30 exports at
+`4.823 MiB/s` against the unchanged `5 MiB/s` floor. Repetition and profiling showed that the
+complete publication proof sorted 100,000 rows through a temporary SQLite B-tree and that the
+same read snapshot repeated timestamp/domain checks. The repair adds the exact
+`(run_id, fill_id)` verification index and removes only that second redundant check; the complete
+content-hash, JSON-identity, canonical-time, and set-hash proof still precedes the first fill row.
+The unchanged export capacity node then passed with minimum/median throughput
+`7.485/7.963 MiB/s`, `299.645 MiB` database plus WAL, and `36,864` bytes export-memory growth.
+The final identical repository-wide command passed as
+`2326 passed, 1 skipped, 1 warning in 2761.04s`. This final result includes the capacity file,
+export repair, and corrected stock-probe tests, so LPC012 is complete. The earlier excluded
+functional results, component tests, live certification, and installed-production proof did not
+substitute for it.
 
 ## Residual Risks and Deferred Live Evidence
 
-- Stock realtime-minute timestamp semantics are certified as `START` until the current profile
-  expires at 2026-09-15 09:52:53 Asia/Shanghai.
-- Board-index timestamp semantics are certified as `END` until the current profile expires at
-  2026-09-15 15:16:52 Asia/Shanghai. Only `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH`
-  are in scope and `READY`. The historical file retains `899050.BJ=ERROR`; current policy treats
-  BSE 50 as `DEFERRED`, never as certified.
+- Stock realtime-minute timestamp semantics are certified as `END` until
+  `2026-09-16 14:48:40.405317+08`; the prior `START` inference is superseded.
+- Board-index timestamp semantics are certified as `END` until `2026-09-16 13:10:41.07832+08`.
+  Only `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` are in scope and `READY`; BSE 50 is
+  `DEFERRED`, never certified, and never requested.
 - Direct `tushare.token` and `ai.api_key` configuration is implemented as the only credential
   source. Windows Credential Manager, environment/file references, and child-only certification
   were removed by the user's explicit personal-tool policy. The configured token was used only by
-  the explicitly authorized certification and LPC006/LPC008 production-acceptance calls.
+  the explicitly authorized certification and LPC006/LPC008 production-acceptance calls. Both
+  current renewals use `config/app.yaml` and the configured `connect_ip` without a temporary
+  per-run proxy change.
 - Hash-protected stock and board-index profiles expire after seven days and fail
   closed on tampering, endpoint mismatch, schema mismatch, or cross-surface reuse. Real stock and
   per-index probes are implemented, including first-429 global stop behavior. The stock profile is
-  fully ready; the index profile truthfully preserves the historical `899050.BJ` error alongside
-  four ready indexes. New probes skip BSE 50 and record `DEFERRED`.
+  fully ready. The historical index profile preserves `899050.BJ=ERROR`; the current index profile
+  records four ready indexes and BSE 50 as `DEFERRED` without requesting it.
 - CPython cannot forcibly terminate an arbitrary non-cooperative synchronous provider
   callable. The real Tushare transport is configured with its own 15-second timeout and
   shutdown is bounded and visible. On this host, WinINET uses `127.0.0.1:7897` and TUN fake DNS
@@ -236,14 +267,18 @@ still keeps LPC012 open.
   ignored local setting `tushare.connect_ip=111.229.23.244` powered both production passes without
   per-run proxy environment changes. This public address is an operator setting, is not hard-coded
   in source, and remains bounded by the real endpoint certificate.
-- The repository-wide offline gate remains blocked by the unrelated 252-day backtest
-  performance budget described above; focused live-chain, frontend, and browser gates are green.
+- The exact capacity node and final repository-wide rerun pass; the final backend result is
+  `2326 passed, 1 skipped, 1 warning in 2761.04s`. Focused live-chain certification/production
+  tests (`28 passed`) and browser E2E (`22 passed`) are separate green evidence. The 2026-09-09 13:27
+  installed-production attempt was rejected before network because its scheduled-close window was
+  ineligible, so the 2026-09-08 scheduler/restart proof remains the authoritative production-chain
+  evidence.
 
 ## Acceptance Status
 
-`LIVE_CHAIN_PRODUCTION_ACCEPTED_BSE_DEFERRED` — LPC005 through LPC008 pass for the current trading
-scope with separate live-certification and installed-production evidence. The independent index run
-certifies all four in-scope indexes and `SourceTimeLabel=END`. BSE 50 remains a known identity but is
-explicitly `DEFERRED`; it is neither certified nor requested until BSE stocks enter scope. LPC012
-remains open on the unchanged repository-wide 252-day capacity gate. No completion claim is based
-only on component tests or profile generation.
+`LIVE_CHAIN_PRODUCTION_COMPLETE_BSE_DEFERRED` — LPC001 through LPC012 are complete. LPC005 through
+LPC008 pass for the current trading scope with separate component, live-certification, and
+installed-production evidence. Stock and all four in-scope indexes are currently certified with
+`SourceTimeLabel=END`; BSE 50 remains `DEFERRED` and is neither certified nor requested until BSE
+stocks enter scope. LPC012 closes on the complete unexcluded repository gate, not on component
+tests, profile generation, focused production tests, or browser E2E alone.

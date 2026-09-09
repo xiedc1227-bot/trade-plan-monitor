@@ -191,6 +191,8 @@ CREATE TABLE IF NOT EXISTS backtest_fill (
 );
 CREATE INDEX IF NOT EXISTS ix_backtest_fill_run
     ON backtest_fill (run_id, filled_at, fill_id);
+CREATE INDEX IF NOT EXISTS ix_backtest_fill_verification
+    ON backtest_fill (run_id, fill_id);
 
 CREATE TABLE IF NOT EXISTS backtest_detail (
     detail_id TEXT PRIMARY KEY,
@@ -954,6 +956,7 @@ class BacktestResultStore:
                 rows = cursor.fetchmany(_MAX_BATCH_SIZE)
                 if not rows:
                     break
+                # The complete proof above validated these rows in this unchanged snapshot.
                 batch = tuple(
                     _load_preverified_export_fill_row(
                         tuple(row),
@@ -961,12 +964,6 @@ class BacktestResultStore:
                     )
                     for row in rows
                 )
-                if any(
-                    _datetime_text(record.filled_at, version="v2") != str(row[2])
-                    or str(row[3]) != _FILL_DOMAINS["v2"]
-                    for record, row in zip(batch, rows, strict=True)
-                ):
-                    raise RuntimeError("materialized v2 fill ledger contains a non-v2 row")
                 yielded += len(batch)
                 yield batch
             if yielded != expected_count:

@@ -846,11 +846,9 @@ class EvaluationContext(_DecisionValue):
             if isinstance(self.target, IntradayEvaluationTarget)
             else five_minute_bucket_end(self.current_day_minutes[-1].bar_end)
         )
-        return tuple(
-            minute
-            for minute in self.current_day_minutes
-            if five_minute_bucket_end(minute.bar_end) == bucket_end
-        )
+        if five_minute_bucket_end(self.current_day_minutes[-1].bar_end) != bucket_end:
+            return ()
+        return self.current_day_minutes[-5:]
 
     @property
     def daily_indicators(self) -> IndicatorSeries | None:

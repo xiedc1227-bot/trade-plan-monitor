@@ -257,6 +257,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 
 .run-filters__field {
   display: grid;
+  min-width: 0;
   gap: var(--space-2);
 }
 
@@ -270,6 +271,13 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
   color: var(--color-text-muted);
   font-size: 0.875rem;
   font-weight: 400;
+}
+
+.run-filters input,
+.run-filters select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 
 .run-filters input,

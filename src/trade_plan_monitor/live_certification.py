@@ -42,11 +42,11 @@ def market_window_is_eligible(surface: LiveCertificationSurface, now: datetime) 
     if local.weekday() >= 5:
         return False
     current = local.time()
-    intraday_start = time(9, 32) if surface is LiveCertificationSurface.STOCK else time(9, 40)
-    afternoon_start = time(13, 2) if surface is LiveCertificationSurface.STOCK else time(13, 10)
+    if surface is LiveCertificationSurface.STOCK:
+        return time(13, 2) <= current <= time(14, 55) or time(15, 20) <= current <= time(16, 30)
     return (
-        intraday_start <= current <= time(11, 25)
-        or afternoon_start <= current <= time(14, 55)
+        time(9, 40) <= current <= time(11, 25)
+        or time(13, 10) <= current <= time(14, 55)
         or time(15, 20) <= current <= time(16, 30)
     )
 

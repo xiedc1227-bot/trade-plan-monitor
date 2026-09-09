@@ -1,10 +1,12 @@
 # T059 发布验收证据
 
-> 历史证据说明（2026-09-07）：下文记录的 AI 凭证流程已被取代。`config/app.yaml` 现在是
-> 唯一凭证来源；应用不再读取 `AI_API_KEY` 或任何其他凭证环境变量。
+> 历史证据说明（截至 2026-09-01）：本报告记录该候选的 T059/C24 发布决定，不声明当前仓库级
+> 门禁。下文记录的 AI 凭证流程已被取代：`config/app.yaml` 现在是唯一凭证来源；应用不再读取
+> `AI_API_KEY` 或任何其他凭证环境变量。
 
-**状态：**2026-09-01 为 `ACCEPTED`。经另行授权的生产性能修复后，全部已批准内部离线闸门均为
-绿色。可选 AI 连通性继续为 `NOT_RUN_UNAUTHORIZED`，用户已于 2026-09-01 完成最终发布验收。
+**状态：**2026-09-01 为 `ACCEPTED`。经另行授权的生产性能修复后，该发布候选的全部已批准
+内部离线闸门均为绿色。可选 AI 连通性继续为 `NOT_RUN_UNAUTHORIZED`，用户已于 2026-09-01 完成
+最终发布验收。当前仓库级门禁和 LPC012 状态由实时生产链路验收单独记录。
 
 ## 1. 决策与证据边界
 
@@ -14,10 +16,11 @@
 `tests/contract/test_ai_live.py`、`src/trade_plan_monitor/` 下的 4 个生产模块及 3 个聚焦回归文件。
 依赖、迁移、数据库 schema、API 路径、生成契约、供应商配置及任何已批准性能阈值均未改变。
 
-发布决策为 `ACCEPTED`。先前的 `BLOCKED_OFFLINE_PERFORMANCE_GATE` 决策对当时失败的新鲜闸门
-有效，并由下文记录的 RED-first 修复及新的完整通过闸门取代；随后
-`PENDING_FINAL_USER_ACCEPTANCE` 在用户于 2026-09-01 明确验收发布前保持有效。业务时间继续使用
-`Asia/Shanghai` 与显式 `+08:00` 语义。`C24` 已完成 4/4 项，T059 已完成。
+发布决策为 `ACCEPTED`。这是本报告截至 2026-09-01 记录的历史决定。先前的
+`BLOCKED_OFFLINE_PERFORMANCE_GATE` 决策对当时失败的新鲜闸门有效，并针对该候选由下文记录的
+RED-first 修复及完整通过闸门取代；随后 `PENDING_FINAL_USER_ACCEPTANCE` 在用户于 2026-09-01
+明确验收发布前保持有效。业务时间继续使用 `Asia/Shanghai` 与显式 `+08:00` 语义。对该发布候选，
+`C24` 已完成 4/4 项，T059 已完成；这不声明当前仓库级门禁。
 
 ## 2. RED 与可选 AI live 闸门
 
@@ -46,7 +49,7 @@ HTTP client。真实连接需要 4 个仅存在于当前进程的值：`TRADE_PL
 未来通过也只能证明有界 Chat Completions envelope 连通性，不能证明 model identity、计划质量、
 安全激活或交易正确性。
 
-## 3. 新鲜离线结果
+## 3. 历史发布候选的新鲜离线结果
 
 全部正式 Python 输入均由 Git 跟踪路径构造，并显式加入新的 T059 契约测试。5 个受保护的仅验证
 文件均从所有正式 test、lint、format 与 compile 输入中排除。
@@ -111,14 +114,14 @@ no-GIL/其他解释器并发契约。
 
 ## 6. 已批准证据映射
 
-| 已批准边界 | 证据与当前决策 |
+| 已批准边界 | 截至 2026-09-01 的证据与决定 |
 |---|---|
 | `P18` / `T058` 真实 Tushare | `d8b28b2`：授权 visible-block 分支；5 项能力映射为可见 `ERROR`，应用保持 `DEGRADED` 和只读 |
 | `BT008` / `BC01` | `eee65fd`：确定性两股票旅程、live-state zero-diff、零 provider/notification/WebSocket 调用、恢复、保留、pin/unpin 与 initial-lot 证据；`BC01` 继续为 Complete |
 | AI provider 边界 | 106 项离线契约通过；可选 live 连接为 `NOT_RUN_UNAUTHORIZED` |
 | 浏览器/无障碍 | 484 项单元测试、6 项允许的 Chromium E2E 及已验收 NVDA 证据 |
 | Backup/restore | 9 项新鲜已跟踪测试，加已验收 BT050 migration/restore 证据 |
-| 完整发布闸门 | 全部已批准内部闸门通过；用户已于 2026-09-01 验收发布，C24 四项检查全部关闭 |
+| 完整发布闸门 | 该候选的全部已批准内部闸门均通过；用户已于 2026-09-01 验收发布，C24 四项检查对该历史发布决定全部关闭 |
 
 ## 7. 备份、回滚与运行边界
 
@@ -133,7 +136,7 @@ order path 或 live AI decision path 被验收。
 
 ## 8. 已知限制与开放决策
 
-- `ACCEPTED`：用户已于 2026-09-01 明确确认最终发布验收；C24 四项检查全部关闭。
+- `ACCEPTED`：用户已于 2026-09-01 明确确认最终发布验收；C24 四项检查对该历史发布决定全部关闭，不能作为当前仓库级门禁的声明。
 - `NOT_RUN_UNAUTHORIZED`：没有调用可选 AI 连通性；未来调用需要新的精确授权和已配置 target/secret
   reference。
 - T058 验收的是 visible-block 结果，不是 provider readiness；不声称当前真实 Tushare 可用。
@@ -143,11 +146,13 @@ order path 或 live AI decision path 被验收。
 
 ## 9. C24 发布清单
 
-- [x] 完整离线 backend/frontend/replay/browser/security/accessibility/soak/restore 闸门通过。
+- [x] 完整离线 backend/frontend/replay/browser/security/accessibility/soak/restore 闸门对 2026-09-01 发布候选通过。
 - [x] `BC01` 继续完成，并具有 live-state isolation 和 bounded-retention 证据。
 - [x] 授权 live-contract 证据为双语，可选 AI 连通性继续如实为 `NOT_RUN_UNAUTHORIZED`，且没有削弱
   确定性监控。
 - [x] 用户已于 2026-09-01 确认最终验收。
+
+本清单适用于 2026-09-01 发布候选。当前仓库级门禁和 LPC012 状态不属于本历史报告。
 
 <!-- T059-CANONICAL-EVIDENCE-START -->
 ```json

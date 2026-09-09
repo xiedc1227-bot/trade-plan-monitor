@@ -192,7 +192,11 @@ def _stock_time_label(
     samples: tuple[pd.DataFrame, pd.DataFrame],
     observed_at: datetime,
 ) -> SourceTimeLabel:
-    expected = set(expected_minute_ends(observed_at.date(), is_open=True))
+    expected_minutes = expected_minute_ends(observed_at.date(), is_open=True)
+    expected = set(expected_minutes)
+    opening_snapshot = datetime.combine(observed_at.date(), time(9, 30), _SHANGHAI)
+    morning_close = datetime.combine(observed_at.date(), time(11, 30), _SHANGHAI)
+    afternoon_open = datetime.combine(observed_at.date(), time(13, 1), _SHANGHAI)
     conclusions: list[SourceTimeLabel] = []
     for sample in samples:
         _require_rows(
@@ -201,12 +205,24 @@ def _stock_time_label(
         )
         if not _has_expected_optional_frequency(sample, "1MIN"):
             return SourceTimeLabel.UNVERIFIED
+        source = _source_times(sample, "time", observed_at)
+        if opening_snapshot in source:
+            end_labeled = tuple(value for value in source if value != opening_snapshot)
+            if (
+                source.count(opening_snapshot) == 1
+                and end_labeled
+                and morning_close in end_labeled
+                and afternoon_open in end_labeled
+                and set(end_labeled).issubset(expected)
+            ):
+                conclusions.append(SourceTimeLabel.END)
+                continue
+            return SourceTimeLabel.UNVERIFIED
         candidates: list[SourceTimeLabel] = []
         for label in (SourceTimeLabel.START, SourceTimeLabel.END):
             try:
                 normalized = {
-                    normalize_source_minute(value, label=label, is_open=True)
-                    for value in _source_times(sample, "time", observed_at)
+                    normalize_source_minute(value, label=label, is_open=True) for value in source
                 }
             except ValueError:
                 continue

@@ -1853,6 +1853,26 @@ def test_evaluation_context_exposes_complete_current_day_minutes_and_calendar_hi
     assert context.trading_calendar[-1] == context.trading_day
 
 
+def test_current_bucket_lookup_does_not_rescan_the_complete_session(monkeypatch) -> None:
+    context = _context()
+    original = decision_models_module.five_minute_bucket_end
+    observed_calls = 0
+
+    def observed_bucket_end(value):
+        nonlocal observed_calls
+        observed_calls += 1
+        return original(value)
+
+    monkeypatch.setattr(
+        decision_models_module,
+        "five_minute_bucket_end",
+        observed_bucket_end,
+    )
+
+    assert context.current_bucket_minutes == context.current_day_minutes[-5:]
+    assert observed_calls <= 2
+
+
 def test_evaluation_context_accepts_exactly_240_current_day_minutes_and_rejects_241() -> None:
     bars = tuple(_bar(bar_end) for bar_end in _session_bar_ends(TRADE_DATE))
     target_end = bars[-1].bar_end

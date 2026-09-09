@@ -254,6 +254,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
 .run-form__field {
   display: grid;
   align-content: start;
+  min-width: 0;
   gap: var(--space-2);
 }
 
@@ -269,6 +270,13 @@ function focusErrorField(field: string, event: MouseEvent): void {
   color: var(--color-text-muted);
   font-size: 0.875rem;
   font-weight: 400;
+}
+
+.run-form input,
+.run-form select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 
 .run-form input,
