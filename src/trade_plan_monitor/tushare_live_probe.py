@@ -33,6 +33,7 @@ from trade_plan_monitor.market_data.tushare import (
 )
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.tushare import (
+    LIVE_TUSHARE_INDEX_CODES,
     TushareMarketIndexCapabilityStatus,
     TushareMarketIndexSourceTimeLabel,
 )
@@ -63,9 +64,7 @@ _DAILY_FIELDS: Final = "ts_code,trade_date,open,high,low,close,vol,amount"
 _MINUTE_FIELDS: Final = "ts_code,time,open,close,high,low,vol,amount"
 _CURRENT_DAY_FIELDS: Final = "ts_code,freq,time,open,close,high,low,vol,amount"
 _INDEX_MINUTE_FIELDS: Final = "ts_code,trade_time,open,close,high,low,vol,amount"
-_INDEX_REALTIME_MINUTE_FIELDS: Final = (
-    "ts_code,freq,time,open,close,high,low,vol,amount"
-)
+_INDEX_REALTIME_MINUTE_FIELDS: Final = "ts_code,freq,time,open,close,high,low,vol,amount"
 _INDEX_DAILY_FIELDS: Final = "ts_code,trade_date,open,high,low,close,vol,amount"
 
 
@@ -262,11 +261,7 @@ def _index_time_label(
                 normalized = {value + timedelta(minutes=5) for value in source}
             else:
                 normalized = set(source)
-            if (
-                normalized
-                and normalized.issubset(expected)
-                and min(expected) in normalized
-            ):
+            if normalized and normalized.issubset(expected) and min(expected) in normalized:
                 candidates.append(label)
         if len(candidates) != 1:
             return TushareMarketIndexSourceTimeLabel.UNVERIFIED
@@ -352,9 +347,9 @@ async def certify_stock(
                 kwargs=kwargs,
             )
             _require_rows(frame, required)
-            if field == "realtime_minutes" and set(
-                frame["ts_code"].astype(str)
-            ) != set(_STOCK_SYMBOLS):
+            if field == "realtime_minutes" and set(frame["ts_code"].astype(str)) != set(
+                _STOCK_SYMBOLS
+            ):
                 raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint)
             statuses[field] = ProviderCapabilityStatus.READY
         except (RequestControlError, TushareProviderError) as error:
@@ -411,7 +406,7 @@ async def certify_board_indexes(
     endpoint_url: str,
     output_path: Path,
 ) -> IndexLiveCertification:
-    """Probe every approved index independently and persist sanitized evidence."""
+    """Probe every in-scope live index independently and persist sanitized evidence."""
 
     now = _canonical_observed_at(observed_at)
     calendar = await _call_frame(
@@ -429,11 +424,16 @@ async def certify_board_indexes(
     )
     _, reference_date = _calendar_dates(calendar, now.date())
     statuses = {
-        code: TushareMarketIndexCapabilityStatus.UNVERIFIED for code in MarketIndexCode
+        code: (
+            TushareMarketIndexCapabilityStatus.DEFERRED
+            if code is MarketIndexCode.BSE_50
+            else TushareMarketIndexCapabilityStatus.UNVERIFIED
+        )
+        for code in MarketIndexCode
     }
     minute_samples: list[pd.DataFrame] = []
     stop = False
-    for code in MarketIndexCode:
+    for code in LIVE_TUSHARE_INDEX_CODES:
         if stop:
             break
         outcomes: list[TushareMarketIndexCapabilityStatus] = []
@@ -477,9 +477,7 @@ async def certify_board_indexes(
                         "fields": _INDEX_REALTIME_MINUTE_FIELDS,
                     },
                 )
-                symbol_column = (
-                    "ts_code" if "ts_code" in realtime_minutes.columns else "code"
-                )
+                symbol_column = "ts_code" if "ts_code" in realtime_minutes.columns else "code"
                 _require_rows(
                     realtime_minutes,
                     {
@@ -498,9 +496,7 @@ async def certify_board_indexes(
                         TushareErrorCode.INVALID_RESPONSE,
                         "rt_idx_min_daily",
                     )
-                minute_samples.append(
-                    realtime_minutes.rename(columns={symbol_column: "ts_code"})
-                )
+                minute_samples.append(realtime_minutes.rename(columns={symbol_column: "ts_code"}))
                 outcomes.append(TushareMarketIndexCapabilityStatus.READY)
             except (RequestControlError, TushareProviderError) as error:
                 outcomes.append(_index_status(error))

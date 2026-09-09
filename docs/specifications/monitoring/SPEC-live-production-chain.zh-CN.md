@@ -87,12 +87,12 @@ Dashboard/集合范围不得出现 `symbol`，股票详情范围必须包含 `sy
 - deadline coordinator 让下一个行情 deadline 优先于 recovery/background。runtime 一旦进入 `STOPPING` 就立即停止 controller 准入，给予自有工作有界完成/取消窗口，之后才汇合线程池。可恢复 supervisor 报告故障并采用有界重启策略，不能在健康仍显示 `LIVE` 时静默退出。
 - 只有 runtime 健康状态为 `RUNNING` 时观测到的启动后运行循环意外返回或异常才允许重启。每次尝试都创建全新的 runtime；每个 Web composition 生命周期最多重启三次，精确延迟为 `1`、`2`、`4` 秒。进程重启会重置预算。
 - 重启退避期间及预算耗尽后，健康状态为 `DEGRADED`、`read_only=true`、`nextPollAt=null`。stop/取消、启动/配置/迁移失败或清理失败属于终止性错误，绝不重试。每个延迟/runtime 任务均由 composition 持有、可取消并汇合；只有失败 runtime 清理成功后才改变服务绑定。
-- 板块指数 provider 与股票 provider 相互独立，拥有自己的已认证历史 `idx_mins`、当日 `rt_idx_min_daily`、`index_daily` endpoint/profile 和 `SourceTimeLabel`。一个指数失败只为明确依赖该指数的计划路径生成阻断证据；其他指数与无指数条件的计划继续运行。
+- 板块指数 provider 与股票 provider 相互独立，拥有自己的已认证历史 `idx_mins`、当日 `rt_idx_min_daily`、`index_daily` endpoint/profile 和 `SourceTimeLabel`。当前实时范围包含 `000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH`。已知 `899050.BJ` identity 保持 `DEFERRED`；认证不会为其调用上述任一 endpoint，provider 获取也会在进入请求控制器前拒绝。一个指数失败只为明确依赖该指数的计划路径生成阻断证据；其他指数与无指数条件的计划继续运行。
 - 在单个 deadline 的不可变到期计划批次内，每个必需指数 endpoint 至多调用一次，且所有依赖计划消费同一 revision-aware `snapshot_hash`。已提交 evaluation identity 的重放产生零 provider 请求。15:00 盘中判断与 `OFFICIAL_CLOSE` 仍是不同的判断 kind，因此即使二者切点均为 15:00，且 observed/provider revision 可能不同，也可分别执行各自的 endpoint 调用。若之后的 capture 拥有相同 provider revision 和完全相同的规范行情内容，持久层会复用既有 snapshot/hash，仅推进 capture-time head 元数据；任何规范内容不一致都以 identity conflict 封闭失败。`r1` → `r2` → `r1` 这类 revision 序列会为每个 revision 重新解析到精确的已持久化规范 snapshot，且每项计划结果都绑定该已持久化 snapshot/hash。不得放宽 snapshot 字段、hash 公式或唯一约束。
 
 生产股票路径在新鲜股票能力记录为 `READY` 并选定已验证 `SourceTimeLabel` 前保持依赖阻断。历史 T058 可见阻断结果不是该记录。启动时可以读取并校验统一且被忽略的 `config/app.yaml`；此证据闸门通过前，生产 composition 使用真实请求控制限制，但必须保持 `DEGRADED`、不构造带凭证的 provider client、不发出 provider 请求，也不得构造可执行 deadline coordinator。当前股票记录以五项能力全部 `READY` 和 `SourceTimeLabel=START` 满足证据闸门，有效至 2026-09-15 09:52:53 Asia/Shanghai；安装式生产仍必须实际校验并消费该记录，之后才能变为可执行。
 
-板块指数闸门按每个必需指数判断，不能根据数据面整体标签升级。当前独立 profile 有效至 2026-09-15 15:16:52 Asia/Shanghai，且 `SourceTimeLabel=END`：`000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 为 `READY`，`899050.BJ` 为 `ERROR`。生产只能准入就绪指数，并必须把失败指数隔离到其显式依赖路径。该证据不认证 `899050.BJ`，组件测试或生成 profile 本身也不能证明生产链路通过验收。
+板块指数闸门按当前范围内每个必需指数判断，不能根据数据面整体标签升级。当前独立 profile 有效至 2026-09-15 15:16:52 Asia/Shanghai，且 `SourceTimeLabel=END`；`000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 为 `READY`。历史 profile 保留实测 `899050.BJ=ERROR`，但北证50已退出当前交易范围。后续 profile 会在不调用 provider 的情况下将其记录为 `DEFERRED`。若要把北交所股票纳入范围，必须先形成新规范并完成真实认证，之后才可生产准入。
 
 ## 真实 Harness 与证据契约
 
@@ -149,6 +149,6 @@ Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 
 用户通过明确请求批准实施。2026-09-07，用户针对这款个人工具取消 OS 凭据存储与仅子进程注入
 边界，允许把凭证直接保存到被忽略的本地应用配置中；市场窗口与七天新鲜度闸门继续保留。经授权的
 2026-09-08 股票运行认证 `SourceTimeLabel=START` 与全部五项股票能力；独立指数运行认证
-`SourceTimeLabel=END` 与四个指数，`899050.BJ` 仍为 `ERROR`。这些记录只满足各自陈述的真实证据
-范围，本身不能批准生产 composition。自然计划的 17:00 官方收盘周期及重启产生的独立安装式生产
-证据现已关闭 LPC006/LPC008；由于 `899050.BJ` 未获认证，LPC007 仍保持未完成。
+`SourceTimeLabel=END` 与当前交易范围内全部四个指数。历史 `899050.BJ=ERROR` 观测继续作为不可变
+证据保留；2026-09-09 的范围决定延期北证50，并取消后续对它的认证调用。自然计划的 17:00 官方收盘
+周期及重启产生的独立安装式生产证据已为当前范围关闭 LPC006～LPC008。

@@ -176,7 +176,14 @@ class _WrongRealtimeFrequencyClient(_Client):
 
 def _ready_profile():
     return certified_tushare_market_index_profile(
-        capabilities={code: TushareMarketIndexCapabilityStatus.READY for code in MarketIndexCode},
+        capabilities={
+            code: (
+                TushareMarketIndexCapabilityStatus.DEFERRED
+                if code is MarketIndexCode.BSE_50
+                else TushareMarketIndexCapabilityStatus.READY
+            )
+            for code in MarketIndexCode
+        },
         source_time_label=TushareMarketIndexSourceTimeLabel.END,
     )
 
@@ -226,7 +233,14 @@ def test_certified_index_profile_requires_dedicated_evidence_values() -> None:
     assert profile.five_minute_endpoint == "idx_mins"
     assert profile.realtime_five_minute_endpoint == "rt_idx_min_daily"
     assert profile.official_daily_endpoint == "index_daily"
-    assert set(profile.capabilities.values()) == {TushareMarketIndexCapabilityStatus.READY}
+    assert profile.capabilities[MarketIndexCode.BSE_50] is (
+        TushareMarketIndexCapabilityStatus.DEFERRED
+    )
+    assert all(
+        status is TushareMarketIndexCapabilityStatus.READY
+        for code, status in profile.capabilities.items()
+        if code is not MarketIndexCode.BSE_50
+    )
 
 
 def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_units() -> None:
@@ -310,7 +324,7 @@ def test_index_provider_fails_before_request_control_for_uncertified_index() -> 
     profile = certified_tushare_market_index_profile(
         capabilities={
             code: (
-                TushareMarketIndexCapabilityStatus.BLOCKED_PERMISSION
+                TushareMarketIndexCapabilityStatus.DEFERRED
                 if code is MarketIndexCode.BSE_50
                 else TushareMarketIndexCapabilityStatus.READY
             )
@@ -344,3 +358,13 @@ def test_index_provider_fails_before_request_control_for_uncertified_index() -> 
         )
 
     assert controller.calls == []
+
+
+def test_certified_index_profile_rejects_ready_bse_50_while_live_scope_is_deferred() -> None:
+    with pytest.raises(ValueError, match="BSE 50 live index is deferred"):
+        certified_tushare_market_index_profile(
+            capabilities={
+                code: TushareMarketIndexCapabilityStatus.READY for code in MarketIndexCode
+            },
+            source_time_label=TushareMarketIndexSourceTimeLabel.END,
+        )

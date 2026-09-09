@@ -46,6 +46,12 @@ _INDEX_DAILY_ENDPOINT: Final = "index_daily"
 _INDEX_MINUTE_FIELDS: Final = "ts_code,trade_time,open,close,high,low,vol,amount"
 _INDEX_REALTIME_MINUTE_FIELDS: Final = "ts_code,freq,time,open,close,high,low,vol,amount"
 _INDEX_DAILY_FIELDS: Final = "ts_code,trade_date,open,high,low,close,vol,amount"
+LIVE_TUSHARE_INDEX_CODES: Final = (
+    MarketIndexCode.SSE_COMPOSITE,
+    MarketIndexCode.SHENZHEN_COMPONENT,
+    MarketIndexCode.CHINEXT,
+    MarketIndexCode.STAR_50,
+)
 _INDEX_MINUTE_COLUMNS: Final = (
     "ts_code",
     "trade_time",
@@ -63,6 +69,7 @@ class TushareMarketIndexCapabilityStatus(StrEnum):
     """Index-only certification state; it is not a stock-provider capability."""
 
     UNVERIFIED = "UNVERIFIED"
+    DEFERRED = "DEFERRED"
     READY = "READY"
     BLOCKED_PERMISSION = "BLOCKED_PERMISSION"
     RATE_LIMITED = "RATE_LIMITED"
@@ -100,6 +107,8 @@ class TushareMarketIndexProfile:
             for index_code, status in capabilities.items()
         ):
             raise TypeError("market-index capabilities use dedicated enum values")
+        if capabilities[MarketIndexCode.BSE_50] is TushareMarketIndexCapabilityStatus.READY:
+            raise ValueError("BSE 50 live index is deferred")
         unverified = self.source_time_label is TushareMarketIndexSourceTimeLabel.UNVERIFIED
         if unverified:
             if (
@@ -539,6 +548,7 @@ class TushareMarketIndexProvider:
 
 
 __all__ = [
+    "LIVE_TUSHARE_INDEX_CODES",
     "TushareMarketIndexCapabilityStatus",
     "TushareMarketIndexProfile",
     "TushareMarketIndexProvider",

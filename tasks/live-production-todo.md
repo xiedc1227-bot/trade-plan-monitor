@@ -33,14 +33,14 @@
 
 ## Board-Index Runtime
 
-- [ ] `LPC007` — Establish separate live board-index certification evidence.
-  - Acceptance: separate authorization/profile/`SourceTimeLabel`; unsuitable market window records `NOT_RUN_MARKET_WINDOW`; no stock evidence is reused.
+- [x] `LPC007` — Establish separate live board-index certification evidence for the current trading scope.
+  - Acceptance: separate authorization/profile/`SourceTimeLabel`; unsuitable market window records `NOT_RUN_MARKET_WINDOW`; no stock evidence is reused. The current scope contains `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH`. `899050.BJ` remains a known identity but is `DEFERRED` until BSE stocks enter the trading scope, and certification makes no provider request for it.
   - Verify: offline harness tests and, only when gated, the serial live selector.
-  - Current evidence: the authorized 2026-09-08 15:16:52 Asia/Shanghai run selected `SourceTimeLabel=END`. `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` are `READY`; `899050.BJ` is `ERROR`. The profile remains valid through 2026-09-15 15:16:52. This supersedes the earlier blanket permission-block conclusion, but does not certify `899050.BJ` or close LPC007.
+  - Evidence: the authorized 2026-09-08 15:16:52 Asia/Shanghai run selected `SourceTimeLabel=END` and recorded all four in-scope indexes as `READY`; the profile remains valid through 2026-09-15 15:16:52. Its historical `899050.BJ=ERROR` observation is retained as evidence, but BSE 50 is now outside the current trading scope and future profiles record it as `DEFERRED` without calling `idx_mins`, `rt_idx_min_daily`, or `index_daily` for that code.
 - [x] `LPC008` — Compose the independent board-index provider and isolated condition failures.
   - Acceptance: within each deadline's immutable due-plan batch, each required index endpoint is called at most once and every dependent plan shares the same `snapshot_hash`; replay of an already committed evaluation identity makes zero provider requests. The 15:00 intraday evaluation and `OFFICIAL_CLOSE` are distinct evaluation kinds and may each make their own revision-aware request even though both cutoffs are 15:00. One index failure affects only dependent condition paths.
   - Verify: focused market-index runtime and decision tests.
-  - Evidence: the installed production run consumed the independent profile, kept `899050.BJ=ERROR`, shared `LIVE` Shanghai/Shenzhen snapshots within each due-plan batch, committed two `OFFICIAL_CLOSE` evaluations, and proved committed-identity replay with zero provider requests. Its two-stage 15:00 intraday/`OFFICIAL_CLOSE` exercise called each required index endpoint once per distinct evaluation kind, as allowed by the revision-aware contract.
+  - Evidence: the installed production run consumed the independent profile, shared `LIVE` Shanghai/Shenzhen snapshots within each due-plan batch, committed two `OFFICIAL_CLOSE` evaluations, and proved committed-identity replay with zero provider requests. Its two-stage 15:00 intraday/`OFFICIAL_CLOSE` exercise called each required index endpoint once per distinct evaluation kind, as allowed by the revision-aware contract. A deferred BSE 50 profile fails before request control if requested.
 
 ## Web Availability
 
@@ -59,4 +59,4 @@
 - [ ] `LPC012` — Complete bilingual acceptance report and all gates.
   - Acceptance: exact commands/results/files/risks recorded; all required offline gates and secret scan pass; live results are not overstated.
   - Verify: commands in `tasks/live-production-plan.md`, parity audit, `git diff --check`, and `git status --short`.
-  - Blocked evidence: the live-chain-focused gates, secret scan, and LPC006/LPC008 installed-production acceptance pass, but the repository-wide offline pytest gate remains red on the pre-existing 252-day backtest performance budget. Stock certification is current; board-index certification remains partial because `899050.BJ` is `ERROR`.
+  - Blocked evidence: the live-chain-focused gates, secret scan, current-scope stock/index certification, and LPC006/LPC008 installed-production acceptance pass, but the repository-wide offline pytest gate remains red on the pre-existing 252-day backtest performance budget.

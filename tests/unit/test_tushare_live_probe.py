@@ -66,6 +66,7 @@ class _Client:
                 },
             ]
         )
+
     def stk_limit(self, **kwargs: object) -> pd.DataFrame:
         self.calls.append(("stk_limit", kwargs))
         return pd.DataFrame(
@@ -337,7 +338,7 @@ def test_stock_probe_accepts_omitted_fixed_current_day_frequency(
 
 
 def test_index_probe_keeps_authorization_and_failures_per_index(tmp_path: Path) -> None:
-    client = _Client(blocked_index=MarketIndexCode.BSE_50.value)
+    client = _Client(blocked_index=MarketIndexCode.STAR_50.value)
     controller = _Controller()
 
     profile = asyncio.run(
@@ -351,17 +352,25 @@ def test_index_probe_keeps_authorization_and_failures_per_index(tmp_path: Path) 
     )
 
     assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.START
-    assert profile.capabilities[MarketIndexCode.BSE_50] is (
+    assert profile.capabilities[MarketIndexCode.STAR_50] is (
         TushareMarketIndexCapabilityStatus.BLOCKED_PERMISSION
+    )
+    assert profile.capabilities[MarketIndexCode.BSE_50] is (
+        TushareMarketIndexCapabilityStatus.DEFERRED
     )
     assert all(
         status is TushareMarketIndexCapabilityStatus.READY
         for code, status in profile.capabilities.items()
-        if code is not MarketIndexCode.BSE_50
+        if code not in {MarketIndexCode.STAR_50, MarketIndexCode.BSE_50}
     )
     assert controller.calls[0] is TushareOperation.TRADING_CALENDAR
-    assert controller.calls.count(TushareOperation.INDEX_MINUTES) == 2 * len(MarketIndexCode)
-    assert controller.calls.count(TushareOperation.INDEX_DAILY) == len(MarketIndexCode)
+    assert controller.calls.count(TushareOperation.INDEX_MINUTES) == 2 * (len(MarketIndexCode) - 1)
+    assert controller.calls.count(TushareOperation.INDEX_DAILY) == len(MarketIndexCode) - 1
+    assert all(
+        kwargs.get("ts_code") != MarketIndexCode.BSE_50.value
+        for endpoint, kwargs in client.calls
+        if endpoint in {"idx_mins", "rt_idx_min_daily", "index_daily"}
+    )
     assert (tmp_path / "index.json").is_file()
 
 
@@ -378,7 +387,8 @@ def test_index_probe_rejects_wrong_returned_realtime_frequency(tmp_path: Path) -
 
     assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.UNVERIFIED
     assert set(profile.capabilities.values()) == {
-        TushareMarketIndexCapabilityStatus.ERROR
+        TushareMarketIndexCapabilityStatus.ERROR,
+        TushareMarketIndexCapabilityStatus.DEFERRED,
     }
 
 
@@ -397,7 +407,7 @@ def test_index_probe_accepts_opening_snapshot_before_end_labeled_bars(
 
     assert profile.source_time_label is TushareMarketIndexSourceTimeLabel.END
     assert profile.capabilities[MarketIndexCode.BSE_50] is (
-        TushareMarketIndexCapabilityStatus.ERROR
+        TushareMarketIndexCapabilityStatus.DEFERRED
     )
     assert profile.ready_indexes == frozenset(
         code for code in MarketIndexCode if code is not MarketIndexCode.BSE_50

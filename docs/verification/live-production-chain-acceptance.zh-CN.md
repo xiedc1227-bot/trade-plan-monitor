@@ -15,7 +15,8 @@ WEBF13 Health fallback 方案；不改写历史 WEBF13 结果，不把 T058 股�
 - 日期/时区：2026-09-08，Asia/Shanghai。
 - 市场窗口事实：星期二 `09:52:53` 的已授权开市观测以 `SourceTimeLabel=START` 认证了股票
   数据面；独立的 `15:16:52` 盘后指数运行选择 `SourceTimeLabel=END`，认证四个指数，并把
-  `899050.BJ` 记录为 `ERROR`。
+  `899050.BJ` 记录为 `ERROR`。2026-09-09，交易范围收窄为上述四个指数；北证50现为
+  `DEFERRED`，历史观测保持不变。
 - 网络边界：两次明确授权的认证运行和明确授权的 LPC006/LPC008 安装式生产验收调用了 Tushare。
   离线测试与确定性回环浏览器 fixture 仍不请求 Tushare、DeepSeek、券商、Webhook 或其他供应商。
 - 凭据边界：选定认证与应用路径只从被忽略的本地 `config/app.yaml` 读取凭据；任何密钥值都
@@ -40,6 +41,11 @@ WEBF13 Health fallback 方案；不改写历史 WEBF13 结果，不把 T058 股�
   包含单独保留的 120 秒容量失败。日志为
   `data/live-certification/frozen-production-functional-pytest.log`。这是功能范围绿色，不代表仓库全量
   门禁绿色。
+- 2026-09-09 的北证50延期修订在 `41.00s` 内通过 `56 tests`，覆盖认证 profile 与 launcher、
+  Tushare 指数 provider/探针、生产 composition、认证过期/篡改闸门、共享 snapshot 和 market-index
+  runtime。这些测试不调用外部 provider，并证明 `899050.BJ` 不能进入请求控制器。
+- 修订后的功能后端回归在同一离线范围内于 `213.43s` 通过 `2309 tests`，并有 `1 skipped`、
+  `1 warning`；该回归不调用外部 provider。
 - OpenAPI SHA-256 为
   `2b232e1a9237aa88a2de7c3d1ec3fcc692b198cfddeabc41fa88b7d67cdb3a53`，生成的 TypeScript
   保持逐字节 current。
@@ -68,14 +74,15 @@ WEBF13 Health fallback 方案；不改写历史 WEBF13 结果，不把 T058 股�
 - 独立的 2026-09-08 `15:16:52` 指数 profile 选择 `SourceTimeLabel=END`，有效至
   2026-09-15 15:16:52 Asia/Shanghai。`000001.SH`、`399001.SZ`、`399006.SZ` 与
   `000688.SH` 为 `READY`；`899050.BJ` 为 `ERROR`。该结果取代早先的全量
-  `BLOCKED_PERMISSION` 结论，但既不认证 `899050.BJ`，也不认证安装式生产链路；LPC007
-  仍待完整验收证据，因此保持未完成。
+  `BLOCKED_PERMISSION` 结论。当前交易范围由这四个已就绪指数构成。北证50在北交所股票进入
+  范围前延期；后续认证写入 `DEFERRED`，且不为 `899050.BJ` 请求 `idx_mins`、
+  `rt_idx_min_daily` 或 `index_daily`。无需改写历史 profile，LPC007 已按当前范围完成。
 - Runtime 测试覆盖每个 deadline 一次不可变的最多十股票批次、判断零重取、分别完整的准入/
   供应商超时、排队请求 `CLOSED` 唤醒、stop 立即停止准入、最终激活 revision fence、持久
   official-close owner，以及有界的新 runtime supervisor。
 - 安装式生产验收于 `16:54:10.565727` 启动，并在 scheduler 于 `17:00:00.011473` 自然启动
   `17:00:00` deadline 前报告 `waitingForScheduledClose`。它消费五项能力均为 `READY` 的股票
-  profile，保持 `899050.BJ=ERROR`，暴露 `LIVE` 上证/深证指数快照，并提交两项官方收盘判断。
+  profile，保留历史 `899050.BJ=ERROR` 证据，暴露 `LIVE` 上证/深证指数快照，并提交两项官方收盘判断。
   重放这些已提交 identity 时返回零结果且产生零 provider 请求。Dashboard sequence `11` 和已提交
   判断在重启进入 `RUNNING` 后完整保留；运行于 `17:00:18.114695` 结束。
 - 在每个到期计划批次内，依赖计划对每个必需指数 endpoint 共享一个 revision-aware 快照。15:00
@@ -167,20 +174,21 @@ git diff --check
 .\.venv\Scripts\python.exe -m pytest tests/unit tests/integration tests/replay -q --tb=short -m 'not live' --ignore=tests/integration/test_backtest_acceptance.py
 ```
 
-结果：`2307 passed, 1 skipped, 1 warning in 181.42s`。保留的全范围容量失败仍使 LPC012 保持未完成。
+最新结果：`2309 passed, 1 skipped, 1 warning in 213.43s`。保留的全范围容量失败仍使 LPC012 保持未完成。
 
 ## 遗留风险与延后实时证据
 
 - 股票实时分钟时间戳语义已认证为 `START`，有效至 2026-09-15 09:52:53 Asia/Shanghai。
 - 板块指数时间戳语义已认证为 `END`，有效至 2026-09-15 15:16:52 Asia/Shanghai。只有
-  `000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 为 `READY`；`899050.BJ` 仍为
-  `ERROR`，不得报告为已认证。
+  `000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 位于当前范围且为 `READY`。历史文件
+  保留 `899050.BJ=ERROR`；当前策略把北证50视为 `DEFERRED`，绝不视为已认证。
 - 已实现直接 `tushare.token` 与 `ai.api_key` 配置，并将其作为唯一凭证来源。根据用户针对个人
   工具的明确策略，已移除 Windows 凭据管理器、环境/文件引用与仅子进程认证。已配置 Token
   仅由明确授权的认证与 LPC006/LPC008 生产验收调用使用。
 - 带哈希保护的股票与板块指数 profile 现在会在七天后过期，并在篡改、端点不匹配、schema
   不匹配或跨数据面复用时安全阻断。真实股票探针与逐指数探针已经实现，包括首个 429 后全局停止；
-  股票 profile 全部就绪；指数 profile 如实保留 `899050.BJ` 错误和其他四个就绪指数。
+  股票 profile 全部就绪；指数 profile 如实保留历史 `899050.BJ` 错误和其他四个就绪指数。新探针
+  会跳过北证50并记录 `DEFERRED`。
 - CPython 无法强制终止任意不合作的同步 provider callable。真实 Tushare transport 已配置自身
   15 秒超时，shutdown 有界且可见。该主机 WinINET 使用 `127.0.0.1:7897`，TUN fake DNS
   `198.18.0.2` 把 `api.quicksync.cn` 解析为 `198.18.0.42`；默认 Requests、`trust_env=False` 与
@@ -192,7 +200,7 @@ git diff --check
 
 ## 验收状态
 
-`LIVE_CHAIN_PRODUCTION_ACCEPTED_INDEX_CERTIFICATION_PARTIAL`——LPC005、LPC006 与 LPC008 已分别
-通过真实认证及安装式生产证据。独立指数运行认证四个指数和 `SourceTimeLabel=END`，但
-`899050.BJ` 仍为 `ERROR`；因此 LPC007 保持未完成，且不认证北证50。LPC012 也因未改变的
-仓库级 252 日容量门保持未完成。不得仅凭组件测试或生成 profile 声称完成。
+`LIVE_CHAIN_PRODUCTION_ACCEPTED_BSE_DEFERRED`——LPC005～LPC008 已按当前交易范围通过独立真实
+认证及安装式生产证据。独立指数运行认证当前范围内全部四个指数和 `SourceTimeLabel=END`。北证50
+保留为已知 identity，但明确标为 `DEFERRED`；在北交所股票进入范围前既不认证，也不请求。LPC012
+仍因未改变的仓库级 252 日容量门保持未完成。不得仅凭组件测试或生成 profile 声称完成。

@@ -18,7 +18,8 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
 - Market-window fact: an authorized Tuesday open-market run at `09:52:53` certified the stock
   surface with `SourceTimeLabel=START`; a separate post-session index run at `15:16:52`
   selected `SourceTimeLabel=END` and certified four indexes while recording `899050.BJ` as
-  `ERROR`.
+  `ERROR`. On 2026-09-09 the trading scope was narrowed to those four indexes; BSE 50 is now
+  `DEFERRED`, and the historical observation remains unchanged.
 - Network boundary: the two explicitly authorized certification runs and the explicitly authorized
   LPC006/LPC008 installed-production acceptance called Tushare. Offline tests and deterministic
   loopback browser fixtures still make no Tushare, DeepSeek, broker, webhook, or other supplier
@@ -49,6 +50,12 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
   capacity failure. The log is
   `data/live-certification/frozen-production-functional-pytest.log`. This is a green functional
   scope, not a claim that the full repository gate is green.
+- The 2026-09-09 BSE-deferral amendment passes `56 tests` in `41.00s`, covering certification
+  profiles and launchers, the Tushare index provider/probe, production composition, certification
+  expiry/tamper gates, shared snapshots, and market-index runtime. These tests make no external
+  provider request and prove that `899050.BJ` cannot enter request control.
+- The post-amendment functional backend rerun passes `2309 tests` with `1 skipped` and `1 warning`
+  in `213.43s` over the same offline scope. It makes no external provider request.
 - OpenAPI SHA-256 is
   `2b232e1a9237aa88a2de7c3d1ec3fcc692b198cfddeabc41fa88b7d67cdb3a53` and generated
   TypeScript is byte-current.
@@ -81,8 +88,10 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
 - The separate 2026-09-08 `15:16:52` index profile selects `SourceTimeLabel=END` and remains
   valid through 2026-09-15 15:16:52 Asia/Shanghai. `000001.SH`, `399001.SZ`, `399006.SZ`, and
   `000688.SH` are `READY`; `899050.BJ` is `ERROR`. This supersedes the earlier blanket
-  `BLOCKED_PERMISSION` conclusion. It certifies neither `899050.BJ` nor the installed production
-  chain, so LPC007 remains open pending complete acceptance evidence.
+  `BLOCKED_PERMISSION` conclusion. These four ready indexes constitute the current trading scope.
+  BSE 50 is deferred until BSE stocks enter scope; future certification writes `DEFERRED` and makes
+  no `idx_mins`, `rt_idx_min_daily`, or `index_daily` request for `899050.BJ`. LPC007 is complete
+  for the current scope without rewriting the historical profile.
 - Runtime tests cover one immutable at-most-ten-symbol batch per deadline, no evaluation
   refetch, separate complete admission/provider timeouts, queued `CLOSED` wake-up, immediate
   stop admission, final activation-revision fencing, durable official-close ownership, and
@@ -90,7 +99,7 @@ backtest stores, DeepSeek behavior, and all existing local Web routes.
 - The installed production acceptance started at `16:54:10.565727` and reported
   `waitingForScheduledClose` before the scheduler naturally started the `17:00:00` deadline at
   `17:00:00.011473`. It consumed the five-capability `READY` stock profile, kept
-  `899050.BJ=ERROR`, exposed `LIVE` Shanghai/Shenzhen index snapshots, and committed two
+  the historical `899050.BJ=ERROR` evidence, exposed `LIVE` Shanghai/Shenzhen index snapshots, and committed two
   official-close evaluations. Replaying those committed identities returned zero results and
   made zero provider requests. Dashboard sequence `11` and the committed decisions survived a
   restart into `RUNNING`; the run finished at `17:00:18.114695`.
@@ -197,7 +206,7 @@ unchanged capacity suite had already run twice:
 .\.venv\Scripts\python.exe -m pytest tests/unit tests/integration tests/replay -q --tb=short -m 'not live' --ignore=tests/integration/test_backtest_acceptance.py
 ```
 
-Result: `2307 passed, 1 skipped, 1 warning in 181.42s`. The retained full-scope capacity failure
+Latest result: `2309 passed, 1 skipped, 1 warning in 213.43s`. The retained full-scope capacity failure
 still keeps LPC012 open.
 
 ## Residual Risks and Deferred Live Evidence
@@ -206,7 +215,8 @@ still keeps LPC012 open.
   expires at 2026-09-15 09:52:53 Asia/Shanghai.
 - Board-index timestamp semantics are certified as `END` until the current profile expires at
   2026-09-15 15:16:52 Asia/Shanghai. Only `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH`
-  are `READY`; `899050.BJ` remains `ERROR` and must not be reported as certified.
+  are in scope and `READY`. The historical file retains `899050.BJ=ERROR`; current policy treats
+  BSE 50 as `DEFERRED`, never as certified.
 - Direct `tushare.token` and `ai.api_key` configuration is implemented as the only credential
   source. Windows Credential Manager, environment/file references, and child-only certification
   were removed by the user's explicit personal-tool policy. The configured token was used only by
@@ -214,8 +224,8 @@ still keeps LPC012 open.
 - Hash-protected stock and board-index profiles expire after seven days and fail
   closed on tampering, endpoint mismatch, schema mismatch, or cross-surface reuse. Real stock and
   per-index probes are implemented, including first-429 global stop behavior. The stock profile is
-  fully ready; the index profile truthfully preserves the `899050.BJ` error alongside four ready
-  indexes.
+  fully ready; the index profile truthfully preserves the historical `899050.BJ` error alongside
+  four ready indexes. New probes skip BSE 50 and record `DEFERRED`.
 - CPython cannot forcibly terminate an arbitrary non-cooperative synchronous provider
   callable. The real Tushare transport is configured with its own 15-second timeout and
   shutdown is bounded and visible. On this host, WinINET uses `127.0.0.1:7897` and TUN fake DNS
@@ -231,9 +241,9 @@ still keeps LPC012 open.
 
 ## Acceptance Status
 
-`LIVE_CHAIN_PRODUCTION_ACCEPTED_INDEX_CERTIFICATION_PARTIAL` — LPC005, LPC006, and LPC008 pass
-with separate live-certification and installed-production evidence. The independent index run
-certifies four indexes and `SourceTimeLabel=END`, but `899050.BJ` remains `ERROR`; LPC007 therefore
-remains open and does not certify the Beijing Stock Exchange 50 index. LPC012 also remains open on
-the unchanged repository-wide 252-day capacity gate. No completion claim is based only on
-component tests or profile generation.
+`LIVE_CHAIN_PRODUCTION_ACCEPTED_BSE_DEFERRED` — LPC005 through LPC008 pass for the current trading
+scope with separate live-certification and installed-production evidence. The independent index run
+certifies all four in-scope indexes and `SourceTimeLabel=END`. BSE 50 remains a known identity but is
+explicitly `DEFERRED`; it is neither certified nor requested until BSE stocks enter scope. LPC012
+remains open on the unchanged repository-wide 252-day capacity gate. No completion claim is based
+only on component tests or profile generation.

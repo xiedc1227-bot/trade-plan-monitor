@@ -33,14 +33,14 @@
 
 ## 板块指数 Runtime
 
-- [ ] `LPC007`——建立独立实时板块指数认证证据。
-  - 验收：独立授权/profile/`SourceTimeLabel`；市场窗口不合适时记录 `NOT_RUN_MARKET_WINDOW`；不复用股票证据。
+- [x] `LPC007`——为当前交易范围建立独立实时板块指数认证证据。
+  - 验收：独立授权/profile/`SourceTimeLabel`；市场窗口不合适时记录 `NOT_RUN_MARKET_WINDOW`；不复用股票证据。当前范围包含 `000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH`。`899050.BJ` 保留为已知 identity，但在北交所股票进入交易范围前标为 `DEFERRED`，认证不会为其发出 provider 请求。
   - 验证：离线 harness 测试；只有满足闸门时才运行串行 live selector。
-  - 当前证据：经授权的 2026-09-08 15:16:52 Asia/Shanghai 运行选择 `SourceTimeLabel=END`。`000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 为 `READY`；`899050.BJ` 为 `ERROR`。profile 有效至 2026-09-15 15:16:52。该结果取代早先的全量权限阻断结论，但不认证 `899050.BJ`，也不关闭 LPC007。
+  - 证据：经授权的 2026-09-08 15:16:52 Asia/Shanghai 运行选择 `SourceTimeLabel=END`，并把当前范围内四个指数全部记录为 `READY`；profile 有效至 2026-09-15 15:16:52。历史 `899050.BJ=ERROR` 观测继续作为证据保留，但北证50现已退出当前交易范围；后续 profile 将其记录为 `DEFERRED`，且不会为该代码调用 `idx_mins`、`rt_idx_min_daily` 或 `index_daily`。
 - [x] `LPC008`——组合独立板块指数 provider 与隔离的条件故障。
   - 验收：在每个 deadline 的不可变到期计划批次内，每个必需指数 endpoint 至多调用一次，且所有依赖计划共用同一 `snapshot_hash`；已提交 evaluation identity 的重放产生零 provider 请求。15:00 盘中判断与 `OFFICIAL_CLOSE` 属于不同判断 kind，即使二者切点均为 15:00，也可分别执行各自 revision-aware 请求。一个指数故障只影响依赖条件路径。
   - 验证：聚焦 market-index runtime 与 decision 测试。
-  - 证据：安装式生产运行消费独立指数 profile，保持 `899050.BJ=ERROR`，在每个到期计划批次内共享 `LIVE` 上证/深证快照，提交两项 `OFFICIAL_CLOSE` 判断，并证明已提交 identity 重放产生零 provider 请求。其 15:00 盘中/`OFFICIAL_CLOSE` 两阶段演练按 revision-aware 契约，在每个不同判断 kind 内分别对每个必需指数 endpoint 调用一次。
+  - 证据：安装式生产运行消费独立指数 profile，在每个到期计划批次内共享 `LIVE` 上证/深证快照，提交两项 `OFFICIAL_CLOSE` 判断，并证明已提交 identity 重放产生零 provider 请求。其 15:00 盘中/`OFFICIAL_CLOSE` 两阶段演练按 revision-aware 契约，在每个不同判断 kind 内分别对每个必需指数 endpoint 调用一次。若请求已延期的北证50，profile 会在进入请求控制器前失败。
 
 ## Web 可用性
 
@@ -59,4 +59,4 @@
 - [ ] `LPC012`——完成双语验收报告与全部门禁。
   - 验收：记录精确命令/结果/文件/风险；全部必需离线门禁和密钥扫描通过；不夸大真实结果。
   - 验证：`tasks/live-production-plan.md` 中命令、双语一致性审计、`git diff --check` 和 `git status --short`。
-  - 阻断证据：live-chain 聚焦门禁、密钥扫描和 LPC006/LPC008 安装式生产验收均通过，但仓库级全量离线 pytest 仍在既有 252 日回测性能预算上为红。股票认证仍在有效期内；板块指数认证因 `899050.BJ` 为 `ERROR` 而仍只部分通过。
+  - 阻断证据：live-chain 聚焦门禁、密钥扫描、当前范围的股票/指数认证和 LPC006/LPC008 安装式生产验收均通过，但仓库级全量离线 pytest 仍在既有 252 日回测性能预算上为红。

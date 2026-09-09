@@ -44,4 +44,4 @@
 
 ## 开放问题
 
-LPC005 的股票 profile 有效至 2026-09-15 09:52:53 Asia/Shanghai，五项能力全部为 `READY`，且 `SourceTimeLabel=START`。独立指数 profile 有效至 2026-09-15 15:16:52，且 `SourceTimeLabel=END`：`000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH` 为 `READY`，`899050.BJ` 为 `ERROR`。2026-09-08 安装式生产 scheduler/重启证明消费了这些 profile，在保持失败指数隔离的同时关闭 LPC006 与 LPC008；LPC007 仍不认证 `899050.BJ`。
+LPC005 的股票 profile 有效至 2026-09-15 09:52:53 Asia/Shanghai，五项能力全部为 `READY`，且 `SourceTimeLabel=START`。独立指数 profile 有效至 2026-09-15 15:16:52，且 `SourceTimeLabel=END`；当前交易范围内四个指数（`000001.SH`、`399001.SZ`、`399006.SZ` 与 `000688.SH`）全部为 `READY`。历史 profile 保留 `899050.BJ=ERROR`；北证50现在明确标为 `DEFERRED`，后续认证不再请求它，等北交所股票进入交易范围时再重新评估。2026-09-08 安装式生产 scheduler/重启证明消费了这些 profile，并为当前范围关闭 LPC006～LPC008。

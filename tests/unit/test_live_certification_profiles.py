@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from trade_plan_monitor.live_profiles import (
     CERTIFICATION_MAX_AGE,
     StockLiveCertification,
@@ -96,12 +98,10 @@ def test_modified_profile_fails_closed(tmp_path: Path) -> None:
     payload["sourceTimeLabel"] = "START"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
-    assert (
-        load_stock_certification(path, now=OBSERVED_AT, endpoint_url=ENDPOINT) is None
-    )
+    assert load_stock_certification(path, now=OBSERVED_AT, endpoint_url=ENDPOINT) is None
 
 
-def test_index_profile_is_independent_and_can_classify_one_index_as_blocked(
+def test_index_profile_is_independent_and_can_defer_bse_50(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "index.json"
@@ -110,7 +110,7 @@ def test_index_profile_is_independent_and_can_classify_one_index_as_blocked(
         endpoint_url=ENDPOINT,
         capabilities={
             code: (
-                TushareMarketIndexCapabilityStatus.BLOCKED_PERMISSION
+                TushareMarketIndexCapabilityStatus.DEFERRED
                 if code is MarketIndexCode.BSE_50
                 else TushareMarketIndexCapabilityStatus.READY
             )
@@ -131,3 +131,15 @@ def test_index_profile_is_independent_and_can_classify_one_index_as_blocked(
         code for code in MarketIndexCode if code is not MarketIndexCode.BSE_50
     )
     assert load_stock_certification(path, now=OBSERVED_AT, endpoint_url=ENDPOINT) is None
+
+
+def test_index_certification_rejects_ready_bse_50_while_live_scope_is_deferred() -> None:
+    with pytest.raises(ValueError, match="BSE 50 live index is deferred"):
+        create_index_certification(
+            observed_at=OBSERVED_AT,
+            endpoint_url=ENDPOINT,
+            capabilities={
+                code: TushareMarketIndexCapabilityStatus.READY for code in MarketIndexCode
+            },
+            source_time_label=TushareMarketIndexSourceTimeLabel.END,
+        )

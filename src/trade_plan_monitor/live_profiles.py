@@ -19,6 +19,7 @@ from trade_plan_monitor.market_data.models import (
 from trade_plan_monitor.market_data.sessions import SourceTimeLabel
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.tushare import (
+    LIVE_TUSHARE_INDEX_CODES,
     TushareMarketIndexCapabilityStatus,
     TushareMarketIndexSourceTimeLabel,
 )
@@ -103,15 +104,18 @@ class IndexLiveCertification(_LiveCertification):
     capabilities: Mapping[MarketIndexCode, TushareMarketIndexCapabilityStatus]
     source_time_label: TushareMarketIndexSourceTimeLabel
     five_minute_endpoint: Literal["idx_mins"] = "idx_mins"
-    realtime_five_minute_endpoint: Literal["rt_idx_min_daily"] = (
-        "rt_idx_min_daily"
-    )
+    realtime_five_minute_endpoint: Literal["rt_idx_min_daily"] = "rt_idx_min_daily"
     official_daily_endpoint: Literal["index_daily"] = "index_daily"
 
     @model_validator(mode="after")
     def validate_capability_set(self) -> Self:
         if set(self.capabilities) != set(MarketIndexCode):
-            raise ValueError("index certification must classify every approved index")
+            raise ValueError("index certification must classify every known index")
+        if any(
+            self.capabilities[code] is TushareMarketIndexCapabilityStatus.READY
+            for code in set(MarketIndexCode) - set(LIVE_TUSHARE_INDEX_CODES)
+        ):
+            raise ValueError("BSE 50 live index is deferred")
         return self
 
     @property
@@ -226,7 +230,7 @@ def _load_profile[CertificationT: _LiveCertification](
         if len(document.encode("utf-8")) > _MAX_PROFILE_BYTES:
             return None
         profile = profile_type.model_validate_json(document)
-    except (OSError, UnicodeError, ValueError):
+    except OSError, UnicodeError, ValueError:
         return None
     if (
         profile.evidence_hash != profile.calculated_hash()

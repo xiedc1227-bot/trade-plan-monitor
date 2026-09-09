@@ -66,6 +66,8 @@ def validate_reference_market_binding(symbol: str, binding: ReferenceMarketBindi
 | `.SH` and prefix is `688` or `689` | `STAR_MARKET` | `000688.SH` | `科创50` |
 | `.BJ` | `BSE` | `899050.BJ` | `北证50` |
 
+This mapping preserves plan and stored-data identity; it does not imply current live-provider support. BSE 50 is `DEFERRED` while no BSE stocks are traded. Live certification and production provider acquisition make no request for `899050.BJ`; bringing BSE stocks into scope requires a separate specification and certification change.
+
 The input must first match the existing canonical stock pattern `^[0-9]{6}\.(SH|SZ|BJ)$`. Classification uses only the code and suffix. Company names, AI output, index membership, remote classification, and fallback indices are forbidden. Invalid or unclassifiable input raises a stable validation error before any provider call.
 
 ## Plan and Hash Boundary

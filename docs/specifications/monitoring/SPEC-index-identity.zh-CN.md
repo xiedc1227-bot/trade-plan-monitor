@@ -66,6 +66,8 @@ def validate_reference_market_binding(symbol: str, binding: ReferenceMarketBindi
 | `.SH` 且前缀为 `688` 或 `689` | `STAR_MARKET` | `000688.SH` | `科创50` |
 | `.BJ` | `BSE` | `899050.BJ` | `北证50` |
 
+该映射用于保留计划与已存数据 identity，不表示当前实时 provider 已支持。当前不交易北交所股票，因此北证50为 `DEFERRED`。真实认证与生产 provider 获取都不会请求 `899050.BJ`；若要把北交所股票纳入范围，必须另行修改规范并完成认证。
+
 输入必须先匹配现有规范股票格式 `^[0-9]{6}\.(SH|SZ|BJ)$`。分类只使用代码和后缀。禁止使用公司名称、AI 输出、指数成分股身份、远程分类或回退指数。非法或无法分类的输入必须在任何供应商调用前返回稳定校验错误。
 
 ## 计划与哈希边界
