@@ -46,7 +46,7 @@ The four cards are always present, independent of which boards are referenced by
 - Existing Python runtime, market-index snapshot coordinator, persistence, dashboard projection, and signed history endpoint.
 
 ```powershell
-python -m pytest tests/unit/test_monitor_runtime.py tests/integration/test_market_index_web.py -q
+python -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_tushare_market_index.py tests/integration/test_market_index_web.py tests/integration/test_persistent_market_index_history.py tests/integration/test_persistent_monitor_read_service.py -q
 python scripts/generate_frontend_types.py --check
 npm --prefix web run type-check
 npm --prefix web run test -- --run
@@ -56,6 +56,7 @@ npm --prefix web run test:e2e -- dashboard.spec.ts
 
 ```text
 src/trade_plan_monitor/runtime/market_indexes.py       # fixed display-interest acquisition
+src/trade_plan_monitor/web/persistent_market_index_history.py
 src/trade_plan_monitor/web/persistent_monitor_read_service.py
 web/src/views/DashboardRouteView.vue                   # composition and API injection
 web/src/components/market-index/
@@ -85,7 +86,17 @@ Display interest requests raw completed bars and prior close only. It must not i
 
 When no plan evaluation is due—including when there are no active plans—the production deadline still prepares and persists the four display-only indexes at completed five-minute boundaries. Official-close attempt one also refreshes them. Stock evaluation and display-only index acquisition remain independent outcomes.
 
-The dashboard read service projects the latest snapshot for all four display codes and computes `mappedSymbolCount` separately. Therefore a card may validly show `mappedSymbolCount=0`. When the dashboard projection itself is unavailable, the frontend still renders the four fixed identities and empty charts. Missing acquisition never removes the cards or affects any plan decision.
+The dashboard read service reads display snapshots before checking plan state, projects the latest snapshot for all four display codes, and computes `mappedSymbolCount` separately. Therefore a card may validly show `mappedSymbolCount=0`. If display snapshots exist while the database has no plans, has no active plans, or awaits the first plan evaluation, the dashboard returns those indexes with an empty symbol collection. When no display snapshot exists, the frontend still renders the four fixed identities and empty charts. Missing acquisition never removes the cards or affects any plan decision.
+
+### Persistent current-day trend source
+
+The production composition binds `GET /api/v1/market-indexes/{indexCode}/bars` to a persistent history source. The source reads immutable snapshots named by current SQLite heads within the requested cutoff range, selects bars for the requested interval, resolves duplicate `barAt` values by the same newest-snapshot ordering used by the projection layer, and returns a strictly increasing series. A canonical content hash freezes each traversal and the existing installation-local signed cursor prevents range or identity rebinding. Missing bars return the existing not-found result, which the four-card UI renders as an empty/error chart without removing the card.
+
+The source does not call Tushare and does not turn a historical query into a provider request. It reconstructs the current-day line only from bars that the live runtime has already validated and committed.
+
+### Provider request economy
+
+`rt_idx_min_daily` remains the hot path and is refreshed at each completed five-minute cutoff. The previous-session `idx_mins` frame and the intraday `index_daily` reference frame are stable for the trading day, so the provider caches one validated raw frame per index and trade date and reuses defensive copies during later cutoffs. At or after `15:00`, `index_daily` bypasses the intraday cache so official-close reconciliation always performs a fresh provider read. This changes no endpoint or data semantics while reducing a normal index from three provider calls per cutoff to one hot request after its daily warm-up, plus the official-close refresh.
 
 ### Existing API reuse
 
@@ -95,7 +106,7 @@ No new endpoint or response field is required:
 - Trend bars: existing `GET /api/v1/market-indexes/{indexCode}/bars`.
 - Refresh: a newer dashboard snapshot or native retry triggers a bounded refetch of the current-day cards.
 
-The browser issues at most four concurrent trend requests for the current Shanghai trading day. Each query uses `interval=FIVE_MINUTE` and `limit=64`, below the existing `2,000`-point endpoint limit. Requests use canonical `Asia/Shanghai` day boundaries, `AbortController`, generation guards, and no automatic pagination.
+The browser issues at most four concurrent trend requests for the current Shanghai trading day while the dashboard connection is `CONNECTED`. Each query uses `interval=FIVE_MINUTE` and `limit=64`, below the existing `2,000`-point endpoint limit. Requests accept canonical `Asia/Shanghai` timestamps with zero to six fractional-second digits, use `AbortController` and generation guards, and do not paginate automatically.
 
 ## Vue Component and State Design
 
@@ -143,10 +154,12 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 - `LOADING` with cache: keep the prior chart, add “刷新中” and preserve its cutoff.
 - `LOADING` without cache: show an explicit loading status and index identity.
 - `EMPTY`: keep the labelled empty chart area and show “该时段暂无已完成指数点位”; never draw a zero line.
+- Before any summary exists, label the card “暂无快照” and the chart “当前暂无当日五分钟数据”; do not imply that a request is indefinitely waiting.
 - `ERROR` with cache: keep the chart, mark it stale/error, and expose a native retry button.
 - `ERROR` without cache: keep the card and summary health; show “走势暂不可用”.
 - Failure or delay of one index never blocks the other three.
 - A disconnected dashboard never labels cached charts as real-time.
+- A disconnected or unknown dashboard does not start new trend requests; cached points may remain visible and are labelled “已缓存”.
 
 ## Performance and Economic Constraints
 

@@ -46,7 +46,7 @@
 - 复用现有 Python 运行时、指数快照协调器、持久化、总览投影和带签名历史接口。
 
 ```powershell
-python -m pytest tests/unit/test_monitor_runtime.py tests/integration/test_market_index_web.py -q
+python -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_tushare_market_index.py tests/integration/test_market_index_web.py tests/integration/test_persistent_market_index_history.py tests/integration/test_persistent_monitor_read_service.py -q
 python scripts/generate_frontend_types.py --check
 npm --prefix web run type-check
 npm --prefix web run test -- --run
@@ -56,6 +56,7 @@ npm --prefix web run test:e2e -- dashboard.spec.ts
 
 ```text
 src/trade_plan_monitor/runtime/market_indexes.py       # 固定展示兴趣采集
+src/trade_plan_monitor/web/persistent_market_index_history.py
 src/trade_plan_monitor/web/persistent_monitor_read_service.py
 web/src/views/DashboardRouteView.vue                   # 组合与 API 注入
 web/src/components/market-index/
@@ -85,7 +86,17 @@ web/tests/e2e/dashboard.spec.ts
 
 没有计划判断到期时（包括没有活跃计划），生产运行时仍在已完成五分钟边界准备并持久化四个纯展示指数。官方收盘第一次尝试也会刷新这些指数。股票判断与纯展示指数采集保持结果独立。
 
-总览读取服务投影四个展示代码的最新快照，并单独计算 `mappedSymbolCount`。因此卡片显示 `mappedSymbolCount=0` 是合法状态。即使总览投影本身不可用，前端仍显示四个固定 identity 和空走势图。采集缺失绝不能删除卡片或影响任何计划判断。
+总览读取服务在检查计划状态之前读取展示快照，投影四个展示代码的最新快照，并单独计算 `mappedSymbolCount`。因此卡片显示 `mappedSymbolCount=0` 是合法状态。如果展示快照已经存在，而数据库没有计划、没有活跃计划或计划仍在等待首次评估，总览会返回这些指数和空的股票集合。没有任何展示快照时，前端仍显示四个固定 identity 和空走势图。采集缺失绝不能删除卡片或影响任何计划判断。
+
+### 持久化当日走势源
+
+生产组合把 `GET /api/v1/market-indexes/{indexCode}/bars` 绑定到持久化历史源。该数据源读取请求截止范围内由 SQLite 当前 head 指向的不可变快照，选取所请求周期的 K 线，使用与投影层相同的最新快照顺序解决重复 `barAt`，并返回严格递增的序列。规范内容哈希冻结每次遍历，现有安装级本地签名游标阻止范围或 identity 被重新绑定。缺少 K 线时沿用现有未找到结果，四卡 UI 会把它显示为空图/错误图，但不会移除卡片。
+
+该数据源不会调用 Tushare，也不会把历史查询转换成供应商请求。它只使用实时运行时已经校验并提交的 K 线重建当日折线。
+
+### 供应商请求经济性
+
+`rt_idx_min_daily` 继续作为热路径，在每个已完成五分钟截止刷新。上一交易时段的 `idx_mins` 数据帧和盘中的 `index_daily` 参考数据帧在同一交易日内保持稳定，因此供应商按指数与交易日期各缓存一份已校验原始数据帧，并在后续截止使用防御性副本。`15:00` 及之后的 `index_daily` 绕过盘中缓存，确保官方收盘校正始终执行新的供应商读取。该策略不改变端点或数据语义，同时让正常指数在每日预热之后，从每个截止三次供应商调用降为一次热请求，另加官方收盘刷新。
 
 ### 复用现有 API
 
@@ -95,7 +106,7 @@ web/tests/e2e/dashboard.spec.ts
 - 走势 K 线：现有 `GET /api/v1/market-indexes/{indexCode}/bars`。
 - 刷新：新的总览快照或原生重试触发当日卡片的受限重新获取。
 
-浏览器针对上海当前交易日最多并发四个走势请求。每个查询使用 `interval=FIVE_MINUTE` 和 `limit=64`，低于现有端点的 `2,000` 点限制。请求使用规范 `Asia/Shanghai` 当日边界、`AbortController`、请求代次保护，并且不自动翻页。
+总览连接为 `CONNECTED` 时，浏览器针对上海当前交易日最多并发四个走势请求。每个查询使用 `interval=FIVE_MINUTE` 和 `limit=64`，低于现有端点的 `2,000` 点限制。请求接受带零到六位小数秒的规范 `Asia/Shanghai` 时间戳，使用 `AbortController` 和请求代次保护，并且不自动翻页。
 
 ## Vue 组件与状态设计
 
@@ -143,10 +154,12 @@ const orderedCards = computed(() =>
 - 有缓存的 `LOADING`：保留上次图表，增加“刷新中”，并保留原截止时间。
 - 无缓存的 `LOADING`：显示明确的加载状态和指数 identity。
 - `EMPTY`：保留带标签的空走势图区域并显示“该时段暂无已完成指数点位”；绝不绘制零值线。
+- 尚无摘要时把卡片标为“暂无快照”，图表显示“当前暂无当日五分钟数据”；不得暗示请求正在无限等待。
 - 有缓存的 `ERROR`：保留图表，标为陈旧/错误，并提供原生重试按钮。
 - 无缓存的 `ERROR`：保留卡片和摘要健康，显示“走势暂不可用”。
 - 一个指数故障或延迟不能阻断另外三个指数。
 - 总览断开连接时，缓存图表不能标为实时。
+- 总览断开或连接未知时不发起新的走势请求；可继续显示缓存点位，并标为“已缓存”。
 
 ## 性能与经济性约束
 
