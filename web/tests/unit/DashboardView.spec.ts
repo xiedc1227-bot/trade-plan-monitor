@@ -297,7 +297,7 @@ describe("DashboardView", () => {
 
     expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(4);
     expect(wrapper.findAll('[data-testid="market-index-sparkline"]')).toHaveLength(4);
-    expect(wrapper.text()).toContain("等待当日行情数据");
+    expect(wrapper.text()).toContain("当前暂无当日五分钟数据");
   });
 
   it("renders distinct empty and no-match states", async () => {

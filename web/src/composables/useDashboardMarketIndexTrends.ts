@@ -2,6 +2,7 @@ import { shallowReadonly, shallowRef, toRef, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, ShallowRef } from "vue";
 
 import type {
+  ConnectionStatus,
   MarketIndexBarPage,
   MarketIndexCode,
   MarketIndexSnapshotView,
@@ -18,6 +19,7 @@ export interface DashboardMarketIndexTrend {
 
 interface UseDashboardMarketIndexTrendsOptions {
   api: MarketIndexApi;
+  connectionStatus: MaybeRefOrGetter<ConnectionStatus>;
   observedAt: MaybeRefOrGetter<string | null>;
   summaries: MaybeRefOrGetter<readonly MarketIndexSnapshotView[]>;
 }
@@ -39,6 +41,7 @@ export function useDashboardMarketIndexTrends(
   options: UseDashboardMarketIndexTrendsOptions,
 ): UseDashboardMarketIndexTrendsResult {
   const observedAt = toRef(options.observedAt);
+  const connectionStatus = toRef(options.connectionStatus);
   const summaries = toRef(options.summaries);
   const refreshIndex = shallowRef<MarketIndexCode | null>(null);
   const refreshVersion = shallowRef(0);
@@ -48,7 +51,7 @@ export function useDashboardMarketIndexTrends(
   let generation = 0;
 
   watch(
-    [observedAt, summaries, refreshVersion],
+    [connectionStatus, observedAt, summaries, refreshVersion],
     async (_value, _previous, onCleanup) => {
       generation += 1;
       const requestGeneration = generation;
@@ -58,6 +61,10 @@ export function useDashboardMarketIndexTrends(
         ? dashboardMarketIndexCodes
         : [refreshIndex.value];
       refreshIndex.value = null;
+      if (toValue(options.connectionStatus) !== "CONNECTED") {
+        trends.value = withStatuses(trends.value, requestedCodes, "IDLE", null);
+        return;
+      }
       const queries = requestedCodes.flatMap((indexCode) => {
         const summary = currentSummaries.find((item) => item.indexCode === indexCode) ?? null;
         const endAt = summary?.completedBucketAt ?? currentObservedAt;
@@ -111,7 +118,10 @@ export function buildCurrentDayQuery(
   indexCode: MarketIndexCode,
   endAt: string | null,
 ): MarketIndexHistoryQuery | null {
-  if (endAt === null || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/.test(endAt)) {
+  if (
+    endAt === null
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\+08:00$/.test(endAt)
+  ) {
     return null;
   }
   const startAt = `${endAt.slice(0, 10)}T09:30:00+08:00`;

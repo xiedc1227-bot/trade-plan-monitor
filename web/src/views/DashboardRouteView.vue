@@ -17,6 +17,7 @@ const marketIndexes = computed<readonly MarketIndexSnapshotView[]>(
 );
 const marketIndexTrends = useDashboardMarketIndexTrends({
   api: createMarketIndexApi(),
+  connectionStatus: computed(() => monitor.connectionStatus),
   observedAt: computed(() => monitor.observedAt),
   summaries: marketIndexes,
 });

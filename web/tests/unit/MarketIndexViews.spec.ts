@@ -20,6 +20,7 @@ import {
   type MarketIndexSeriesQuery,
 } from "../../src/composables/useMarketIndexSeries";
 import {
+  buildCurrentDayQuery,
   emptyDashboardMarketIndexTrends,
   useDashboardMarketIndexTrends,
 } from "../../src/composables/useDashboardMarketIndexTrends";
@@ -128,7 +129,11 @@ enableAutoUnmount(afterEach);
 describe("market index monitor views", () => {
   it("always renders four fixed current-day index cards and leaves a failed index visible", () => {
     const wrapper = mount(MarketIndexDataStrip, {
-      props: { indexes: [snapshot, blockedSnapshot], trends: emptyDashboardMarketIndexTrends },
+      props: {
+        connectionStatus: "CONNECTED",
+        indexes: [snapshot, blockedSnapshot],
+        trends: emptyDashboardMarketIndexTrends,
+      },
     });
 
     expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(4);
@@ -137,12 +142,13 @@ describe("market index monitor views", () => {
     expect(wrapper.text()).toContain("深证成指");
     expect(wrapper.text()).toContain("创业板指");
     expect(wrapper.text()).toContain("PROVIDER_UNAVAILABLE");
-    expect(wrapper.text()).toContain("等待当日行情数据");
+    expect(wrapper.text()).toContain("当前暂无当日五分钟数据");
   });
 
   it("keeps cached chart data visible while exposing a later trend refresh error", () => {
     const wrapper = mount(MarketIndexTrendCard, {
       props: {
+        connectionStatus: "CONNECTED",
         identity: { board: "STAR_MARKET", displayName: "科创50", indexCode: "000688.SH" },
         summary: snapshot,
         trend: {
@@ -157,6 +163,30 @@ describe("market index monitor views", () => {
     expect(wrapper.get('[role="alert"]').text()).toContain("当日指数走势暂不可用");
     expect(wrapper.get("button").text()).toBe("重试");
     expect(wrapper.get("table").text()).toContain("1234.56");
+  });
+
+  it("labels absent and disconnected snapshots without claiming live data", () => {
+    const absent = mount(MarketIndexTrendCard, {
+      props: {
+        connectionStatus: "UNKNOWN",
+        identity: { board: "STAR_MARKET", displayName: "科创50", indexCode: "000688.SH" },
+        summary: null,
+        trend: emptyDashboardMarketIndexTrends["000688.SH"],
+      },
+    });
+    const cached = mount(MarketIndexTrendCard, {
+      props: {
+        connectionStatus: "DISCONNECTED",
+        identity: { board: "STAR_MARKET", displayName: "科创50", indexCode: "000688.SH" },
+        summary: snapshot,
+        trend: emptyDashboardMarketIndexTrends["000688.SH"],
+      },
+    });
+
+    expect(absent.text()).toContain("暂无快照");
+    expect(absent.text()).not.toContain("等待快照");
+    expect(cached.text()).toContain("已缓存");
+    expect(cached.text()).not.toContain("实时 ●");
   });
 
   it("distinguishes an unused plan from satisfied index conditions", () => {
@@ -245,6 +275,7 @@ describe("useDashboardMarketIndexTrends", () => {
     }));
     const result = useDashboardMarketIndexTrends({
       api: { getBars: (query, _options) => loader(query) },
+      connectionStatus: "CONNECTED",
       observedAt,
       summaries: shallowRef([snapshot]),
     });
@@ -281,6 +312,7 @@ describe("useDashboardMarketIndexTrends", () => {
     });
     const result = useDashboardMarketIndexTrends({
       api: { getBars: (query, _options) => loader(query) },
+      connectionStatus: "CONNECTED",
       observedAt: at,
       summaries: [snapshot],
     });
@@ -290,6 +322,32 @@ describe("useDashboardMarketIndexTrends", () => {
     expect(result.trends.value["399006.SZ"].status).toBe("ERROR");
     expect(result.trends.value["399006.SZ"].error).toBe("当日指数走势暂不可用");
     expect(result.trends.value["000688.SH"].status).toBe("READY");
+  });
+
+  it("accepts canonical timestamps with fractional seconds", () => {
+    expect(
+      buildCurrentDayQuery("000001.SH", "2026-09-02T10:35:02.123456+08:00"),
+    ).toEqual({
+      endAt: "2026-09-02T10:35:02.123456+08:00",
+      indexCode: "000001.SH",
+      interval: "FIVE_MINUTE",
+      limit: 64,
+      startAt: "2026-09-02T09:30:00+08:00",
+    });
+  });
+
+  it("does not request trends while the dashboard connection is unavailable", async () => {
+    const loader = vi.fn();
+    useDashboardMarketIndexTrends({
+      api: { getBars: loader },
+      connectionStatus: "DISCONNECTED",
+      observedAt: at,
+      summaries: [snapshot],
+    });
+
+    await flushPromises();
+
+    expect(loader).not.toHaveBeenCalled();
   });
 });
 

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { MarketIndexSnapshotView } from "../../api/generated";
+import type { ConnectionStatus, MarketIndexSnapshotView } from "../../api/generated";
 import { dashboardMarketIndexIdentities } from "../../api/marketIndexIdentity";
 import type { DashboardMarketIndexTrend } from "../../composables/useDashboardMarketIndexTrends";
 import MarketIndexTrendCard from "./MarketIndexTrendCard.vue";
 
 interface Props {
+  connectionStatus: ConnectionStatus;
   indexes: readonly MarketIndexSnapshotView[];
   trends: Readonly<Record<MarketIndexSnapshotView["indexCode"], DashboardMarketIndexTrend>>;
 }
@@ -32,6 +33,7 @@ const summariesByCode = computed(() =>
       <MarketIndexTrendCard
         v-for="identity in dashboardMarketIndexIdentities"
         :key="identity.indexCode"
+        :connection-status="connectionStatus"
         :identity="identity"
         :summary="summariesByCode.get(identity.indexCode) ?? null"
         :trend="trends[identity.indexCode]"

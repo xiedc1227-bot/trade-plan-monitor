@@ -225,6 +225,7 @@ function compareText(left: string, right: string): number {
     </p>
 
     <MarketIndexDataStrip
+      :connection-status="connectionStatus"
       :indexes="marketIndexes"
       :trends="marketIndexTrends"
       @retry-index="emit('retryMarketIndex', $event)"

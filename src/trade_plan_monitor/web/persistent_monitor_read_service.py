@@ -208,7 +208,11 @@ class PersistentMonitorReadService:
             sequence=sequence,
             observed_at=observed_at,
             runtime_generation=(None if runtime_identity is None else runtime_identity[1]),
-            connection_status=ConnectionStatus.UNKNOWN,
+            connection_status=(
+                ConnectionStatus.UNKNOWN
+                if runtime_identity is None
+                else ConnectionStatus.CONNECTED
+            ),
             data_age_seconds=None,
             counts=_dashboard_counts(()),
             symbols=(),

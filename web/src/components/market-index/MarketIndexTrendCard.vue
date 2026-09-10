@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { MarketIndexSnapshotView } from "../../api/generated";
+import type { ConnectionStatus, MarketIndexSnapshotView } from "../../api/generated";
 import type { CanonicalMarketIndexIdentity } from "../../api/marketIndexIdentity";
 import type { DashboardMarketIndexTrend } from "../../composables/useDashboardMarketIndexTrends";
 import MarketIndexSparkline from "./MarketIndexSparkline.vue";
 
 interface Props {
+  connectionStatus: ConnectionStatus;
   identity: CanonicalMarketIndexIdentity & {
     readonly indexCode: MarketIndexSnapshotView["indexCode"];
   };
@@ -27,9 +28,15 @@ const healthLabels = Object.freeze({
   LIVE: "实时 ●",
   STALE: "陈旧 !",
 } as const);
+const displayedHealth = computed(() => {
+  if (props.summary === null) return "暂无快照";
+  if (props.summary.health === "LIVE" && props.connectionStatus !== "CONNECTED") {
+    return "已缓存";
+  }
+  return healthLabels[props.summary.health];
+});
 const chartLabel = computed(() => {
-  const health = props.summary === null ? "等待快照" : healthLabels[props.summary.health];
-  return `${props.identity.displayName}当日五分钟指数走势，最新点位 ${props.summary?.closePoints ?? "未知"}，会话涨跌 ${formatSessionChange(props.summary?.sessionChangeRatio ?? null)}，数据截止 ${props.summary?.completedBucketAt ?? "未知"}，${health}，虚线为昨收点位`;
+  return `${props.identity.displayName}当日五分钟指数走势，最新点位 ${props.summary?.closePoints ?? "未知"}，会话涨跌 ${formatSessionChange(props.summary?.sessionChangeRatio ?? null)}，数据截止 ${props.summary?.completedBucketAt ?? "未知"}，${displayedHealth.value}，虚线为昨收点位`;
 });
 
 function formatSessionChange(value: string | null): string {
@@ -53,7 +60,7 @@ function formatSessionChange(value: string | null): string {
         <h3>{{ identity.displayName }}</h3>
         <code>{{ identity.indexCode }}</code>
       </div>
-      <strong>{{ summary === null ? "等待快照" : healthLabels[summary.health] }}</strong>
+      <strong>{{ displayedHealth }}</strong>
     </header>
     <MarketIndexSparkline
       :ariaLabel="chartLabel"
@@ -77,7 +84,7 @@ function formatSessionChange(value: string | null): string {
     >
       当前时段暂无已完成的五分钟数据。
     </p>
-    <p v-else-if="bars.length === 0" class="market-index-trend-card__status">等待当日行情数据。</p>
+    <p v-else-if="bars.length === 0" class="market-index-trend-card__status">当前暂无当日五分钟数据。</p>
     <dl class="market-index-trend-card__facts">
       <div><dt>最新点位</dt><dd>{{ summary?.closePoints ?? "—" }}</dd></div>
       <div>

@@ -42,12 +42,13 @@ watch(
 );
 
 onMounted(() => {
-  if (container.value === null || container.value.clientWidth === 0) return;
-  chart.value = init(container.value);
-  resizeObserver.value = new ResizeObserver(resizeChart);
-  resizeObserver.value.observe(container.value);
+  if (container.value === null) return;
+  if (typeof ResizeObserver !== "undefined") {
+    resizeObserver.value = new ResizeObserver(ensureChart);
+    resizeObserver.value.observe(container.value);
+  }
   window.addEventListener("resize", resizeChart);
-  renderSeries();
+  ensureChart();
 });
 
 onBeforeUnmount(() => {
@@ -63,7 +64,15 @@ function renderSeries(): void {
 }
 
 function resizeChart(): void {
+  ensureChart();
   chart.value?.resize();
+}
+
+function ensureChart(): void {
+  const element = container.value;
+  if (element === null || element.clientWidth === 0 || chart.value !== null) return;
+  chart.value = init(element);
+  renderSeries();
 }
 
 function buildOption(
