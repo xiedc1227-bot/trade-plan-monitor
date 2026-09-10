@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BacktestMarketIndexPointView, MarketIndexBarView } from "../../api/generated";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   bars?: readonly MarketIndexBarView[];
@@ -56,7 +57,7 @@ const emit = defineEmits<{
             <th scope="row">
               <button type="button" :data-trade-date="point.tradeDate" @click="emit('select-date', point.tradeDate)">{{ point.tradeDate }}</button>
             </th>
-            <td><time :datetime="point.dataAt">{{ point.dataAt }}</time></td>
+            <td><time :datetime="point.dataAt">{{ formatDisplayDateTime(point.dataAt) }}</time></td>
             <td>{{ point.closePoints }}</td>
             <td>
               <ul>
@@ -79,7 +80,7 @@ const emit = defineEmits<{
         </thead>
         <tbody>
           <tr v-for="bar in bars" :key="`${bar.indexCode}:${bar.interval}:${bar.barAt}`">
-            <th scope="row"><time :datetime="bar.barAt">{{ bar.barAt }}</time></th>
+            <th scope="row"><time :datetime="bar.barAt">{{ formatDisplayDateTime(bar.barAt) }}</time></th>
             <td>{{ bar.openPoints }}</td><td>{{ bar.highPoints }}</td><td>{{ bar.lowPoints }}</td><td>{{ bar.closePoints }}</td><td>{{ bar.sourceKind }}</td>
           </tr>
         </tbody>

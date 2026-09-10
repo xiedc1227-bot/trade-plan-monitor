@@ -99,7 +99,7 @@ describe("/system route", () => {
     await flushPromises();
 
     expect(getHealth).toHaveBeenCalledTimes(2);
-    expect(wrapper.text()).toContain("2026-08-24T10:01:00+08:00");
+    expect(wrapper.text()).toContain("2026-08-24 10:01:00");
   });
 
   it("keeps the cached health snapshot and uses a fixed error message on refresh failure", async () => {

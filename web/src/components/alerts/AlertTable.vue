@@ -8,6 +8,7 @@ import type {
   DecisionEvidenceView,
 } from "../../api/generated";
 import type { AlertQuery } from "../../views/AlertsView.vue";
+import { formatDisplayDateTime, formatDisplayFactValue } from "../../formatters/dateTime";
 
 interface Props {
   busy: boolean;
@@ -134,7 +135,7 @@ function evidenceRows(items: readonly DecisionEvidenceView[]): readonly Evidence
 
 function factText(evidence: DecisionEvidenceView): string {
   return (evidence.facts ?? [])
-    .map((fact) => `${fact.key}=${String(fact.value)} ${fact.unit}`)
+    .map((fact) => `${fact.key}=${formatDisplayFactValue(fact.value, fact.unit)} ${fact.unit}`)
     .join("；");
 }
 
@@ -228,7 +229,7 @@ function toLocalInput(value: string | null): string {
                 <pre class="alert-history__message">{{ item.messageText }}</pre>
               </td>
               <td>
-                <time :datetime="item.createdAt">{{ item.createdAt }}</time>
+                <time :datetime="item.createdAt">{{ formatDisplayDateTime(item.createdAt) }}</time>
                 <code class="alert-history__event-id">{{ item.eventId }}</code>
                 <a
                   :href="chartHref(item)"

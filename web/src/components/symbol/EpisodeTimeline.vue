@@ -2,6 +2,7 @@
 import { computed } from "vue";
 
 import type { SymbolEventView } from "../../api/generated";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   events: readonly SymbolEventView[];
@@ -40,7 +41,7 @@ const timelineEvents = computed<readonly SymbolEventView[]>(() =>
         >
           <span class="episode-timeline__type">{{ event.eventType }}</span>
           <time class="episode-timeline__time" :datetime="event.occurredAt">
-            {{ event.occurredAt }}
+            {{ formatDisplayDateTime(event.occurredAt) }}
           </time>
           <span class="episode-timeline__message">{{ event.messageText ?? "状态发生变化" }}</span>
         </button>

@@ -10,6 +10,7 @@ import type {
 import ConditionProgress from "./ConditionProgress.vue";
 import IndexConditionProgress from "../market-index/IndexConditionProgress.vue";
 import type { WatchlistViewMode } from "./WatchlistToolbar.vue";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   density: WatchlistViewMode;
@@ -152,7 +153,7 @@ function isBlocked(signal: SignalType): boolean {
               class="watchlist-table__time"
               :datetime="row.decision.marketDataAt ?? row.observedAt"
             >
-              {{ row.decision.marketDataAt ?? row.observedAt }}
+              {{ formatDisplayDateTime(row.decision.marketDataAt ?? row.observedAt) }}
             </time>
           </td>
           <td class="watchlist-table__cell">

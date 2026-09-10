@@ -88,7 +88,7 @@ Form values preserve exact backend contracts. Money is entered with explicit yua
 
 `/backtests/new` obtains real immutable choices only from server-paginated `GET /plan-versions?canActivate=true&offset=<n>&limit=20`. It renders the returned summary identity and pages without combining status queries or filtering an incomplete page in the browser. An eligible inactive version remains selectable; the backend revalidates eligibility when the user explicitly submits the exact `planVersionId`. Before returning the accepted run receipt, the application service persists the selected version's canonical plan snapshot and hash inside the durable job input. Later plan edits create other versions and cannot rewrite that frozen input, an old result, or an existing run hash. Idempotent replay uses the already persisted binding and does not re-read a newer plan. The browser never caches or submits `planJson` for this flow and exposes fixed secret-safe loading, empty, failure, retry, and paging states.
 
-URL datetime filters, server-echoed filters, tables, chart labels, and `<time datetime>` values preserve canonical China time. Visible text uses `zh-CN` with `timeZone: "Asia/Shanghai"`; the machine-readable `datetime` keeps the fixed-six-digit `+08:00` value even when fractional seconds are omitted visually. Backtest code never calls `Date.toISOString()` for a contract value and never converts through the host/browser timezone.
+URL datetime filters, server-echoed filters, and `<time datetime>` values preserve canonical China time. User-visible table and chart timestamps use `YYYY-MM-DD HH:mm:ss` while preserving the source wall-clock fields; the machine-readable `datetime` keeps the fixed-six-digit `+08:00` value. Backtest code never calls `Date.toISOString()` for a contract value and never converts through the host/browser timezone.
 
 ## Asynchronous Interaction Contract
 
@@ -163,7 +163,7 @@ Browser tests cover the complete fake-provider data-sync → verify → submit �
 - Duplicate click/timeout retry creates no duplicate job or run.
 - Refresh/share/back/forward preserve URL-selected filters, sort, page, tab, and correctly mapped `jobId` without stale-request overwrite.
 - All JSON and errors pass through the one bounded transport; exact `FenText` never loses precision.
-- Every API/URL/machine-readable datetime remains canonical `Asia/Shanghai`/`+08:00`, and visible time never depends on the host/browser timezone.
+- Every API/URL/machine-readable datetime remains canonical `Asia/Shanghai`/`+08:00`; user-visible datetimes use `YYYY-MM-DD HH:mm:ss` and never depend on the host/browser timezone.
 - Summary-first, independently paginated result loading stays below 4 MiB and 100 DOM rows per page.
 - Simulation, expiry, data limitations, and server state are always represented truthfully with text, not color alone.
 - Keyboard, focus, manual NVDA, responsive, reduced-motion, 200%-text, axe, unit, type-check, build, and real-browser gates pass.

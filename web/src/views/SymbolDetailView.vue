@@ -19,6 +19,7 @@ import PositionLots from "../components/symbol/PositionLots.vue";
 import type { ChartRange } from "../components/symbol/PriceChart.vue";
 import { useChartSeries } from "../composables/useChartSeries";
 import type { PositionOperations } from "../composables/usePositions";
+import { formatDisplayDateTime, formatDisplayFactValue } from "../formatters/dateTime";
 
 interface Props {
   bars: readonly BarView[];
@@ -107,21 +108,21 @@ const overlayRows = computed<readonly AccessibleOverlayRow[]>(() => {
       id: level.id,
       kind: "价格线",
       label: level.label,
-      time: props.detail?.summary.decision.marketDataAt ?? "—",
+      time: formatDisplayDateTime(props.detail?.summary.decision.marketDataAt),
       value: `${level.valueYuan.toFixed(2)} 元`,
     })),
     ...series.value.indicators.map((indicator) => ({
       id: indicator.id,
       kind: "指标证据",
       label: indicator.label,
-      time: indicator.time ?? "未知",
+      time: formatDisplayDateTime(indicator.time, "未知"),
       value: `${indicator.valueText} 元`,
     })),
     ...series.value.alertMarkers.map((marker) => ({
       id: marker.eventId,
       kind: "提醒标记",
       label: marker.signalType ?? "提醒",
-      time: marker.time,
+      time: formatDisplayDateTime(marker.time),
       value: marker.messageText ?? marker.label,
     })),
   ];
@@ -147,7 +148,7 @@ function evidenceLabel(depth: number, code: string): string {
 }
 
 function formatFact(fact: EvidenceFactView): string {
-  return `${fact.key}=${String(fact.value)} ${fact.unit}`;
+  return `${fact.key}=${formatDisplayFactValue(fact.value, fact.unit)} ${fact.unit}`;
 }
 
 function forwardRange(range: ChartRange): void {
@@ -190,7 +191,7 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
         <div class="symbol-detail__meta-item">
           <dt>行情时间</dt>
           <dd class="symbol-detail__meta-value">
-            {{ detail.summary.decision.marketDataAt ?? "未知" }}
+            {{ formatDisplayDateTime(detail.summary.decision.marketDataAt, "未知") }}
           </dd>
         </div>
         <div class="symbol-detail__meta-item">
@@ -275,7 +276,7 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
             <tbody>
               <tr v-for="candle in series.candles" :key="candle.time" data-testid="bar-row">
                 <th class="symbol-detail__cell" scope="row">
-                  <time :datetime="candle.time">{{ candle.time }}</time>
+                  <time :datetime="candle.time">{{ formatDisplayDateTime(candle.time) }}</time>
                 </th>
                 <td class="symbol-detail__cell">{{ candle.openYuan.toFixed(2) }}</td>
                 <td class="symbol-detail__cell">{{ candle.highYuan.toFixed(2) }}</td>

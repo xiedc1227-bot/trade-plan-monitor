@@ -159,7 +159,7 @@ describe("DashboardView", () => {
     expect(rows[0]?.text()).toContain("核心买入就绪");
     expect(rows[0]?.text()).toContain("总计 0");
     expect(rows[0]?.text()).toContain("+1.00 元");
-    expect(rows[0]?.text()).toContain("2026-08-24T10:20:00+08:00");
+    expect(rows[0]?.text()).toContain("2026-08-24 10:20:00");
     expect(rows[9]?.text()).toContain("降级");
     expect(rows[4]?.text()).toContain("监控股票5");
     expect(rows[4]?.text()).toContain("实时");
@@ -173,7 +173,7 @@ describe("DashboardView", () => {
     expect(wrapper.get('[data-testid="market-status-strip"]').text()).toContain("已连接");
     expect(wrapper.get('[data-testid="market-status-strip"]').text()).toContain("数据年龄 2 秒");
     expect(wrapper.get('[data-testid="market-status-strip"]').text()).toContain(
-      "2026-08-24T10:30:00+08:00",
+      "2026-08-24 10:30:00",
     );
   });
 

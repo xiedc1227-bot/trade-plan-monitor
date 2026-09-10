@@ -4,6 +4,7 @@ import type {
   RuntimeHealthResponse,
   RuntimeResourceStatus,
 } from "../../api/generated";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   health: RuntimeHealthResponse;
@@ -57,7 +58,7 @@ function safeErrorCode(value: string | null) {
 }
 
 function optionalTime(value: string | null) {
-  return value ?? "—";
+  return formatDisplayDateTime(value);
 }
 </script>
 
@@ -116,7 +117,7 @@ function optionalTime(value: string | null) {
                 {{ providerStatus(provider.status).label }}
               </td>
               <td class="numeric-data">{{ provider.latencyMs }} 毫秒</td>
-              <td class="numeric-data">{{ provider.checkedAt }}</td>
+              <td class="numeric-data">{{ formatDisplayDateTime(provider.checkedAt) }}</td>
               <td class="numeric-data">{{ safeErrorCode(provider.errorCode) }}</td>
               <td class="numeric-data">{{ optionalTime(provider.nextRetryAt) }}</td>
             </tr>
@@ -269,7 +270,7 @@ function optionalTime(value: string | null) {
                   <span class="health-matrix__visually-hidden">查看股票健康</span>
                 </a>
               </th>
-              <td class="numeric-data">{{ gap.barEnd }}</td>
+              <td class="numeric-data">{{ formatDisplayDateTime(gap.barEnd) }}</td>
             </tr>
           </tbody>
         </table>

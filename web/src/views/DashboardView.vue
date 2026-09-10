@@ -23,6 +23,7 @@ import type {
   WatchlistSort,
   WatchlistViewMode,
 } from "../components/dashboard/WatchlistToolbar.vue";
+import { formatDisplayDateTime } from "../formatters/dateTime";
 
 interface Props {
   connectionStatus: ConnectionStatus;
@@ -210,7 +211,7 @@ function compareText(left: string, right: string): number {
     >
       <strong>{{ connectionLabels[connectionStatus] }}</strong>
       <span>{{ dataAgeSeconds === null ? "数据年龄未知" : `数据年龄 ${dataAgeSeconds} 秒` }}</span>
-      <span>快照时间 {{ observedAt ?? "未知" }}</span>
+      <span>快照时间 {{ formatDisplayDateTime(observedAt, "未知") }}</span>
       <span v-if="connectionStatus !== 'CONNECTED'">当前数据不得视为实时</span>
     </section>
 

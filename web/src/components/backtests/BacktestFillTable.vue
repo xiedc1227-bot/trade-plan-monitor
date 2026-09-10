@@ -3,6 +3,7 @@ import { computed, type DeepReadonly } from "vue";
 
 import type { BacktestFillView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   items: DeepReadonly<BacktestFillView[]>;
@@ -10,10 +11,6 @@ interface Props {
 
 const props = defineProps<Props>();
 const visibleItems = computed(() => props.items.slice(0, 100));
-
-function visibleShanghaiTime(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 19)} +08:00`;
-}
 
 function visibleFen(value: string | null): string {
   return value === null ? "—" : formatFenAsYuan(value);
@@ -57,7 +54,7 @@ function visibleFen(value: string | null): string {
         >
           <td>模拟成交（仅供研究）</td>
           <td>
-            <time :datetime="item.filledAt">{{ visibleShanghaiTime(item.filledAt) }}</time>
+            <time :datetime="item.filledAt">{{ formatDisplayDateTime(item.filledAt) }}</time>
           </td>
           <td>{{ item.fillId }}</td>
           <td>{{ item.symbol }}</td>

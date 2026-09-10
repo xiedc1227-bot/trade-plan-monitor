@@ -242,6 +242,8 @@ describe("market index monitor views", () => {
     expect(wrapper.text()).toContain("INDEX_CLOSE_GTE_MA");
     expect(wrapper.text()).toContain("1234.56");
     expect(wrapper.text()).toContain("1212.34");
+    expect(wrapper.text()).toContain("2026-09-02 10:35:00");
+    expect(wrapper.text()).not.toContain(at);
   });
 
   it("shows exact point text in an accessible index-only table", () => {
@@ -249,6 +251,8 @@ describe("market index monitor views", () => {
 
     expect(wrapper.get("caption").text()).toContain("板块指数点位");
     expect(wrapper.get("table").text()).toContain("1234.56");
+    expect(wrapper.get("table").text()).toContain("2026-09-02 10:35:00");
+    expect(wrapper.get("time").attributes("datetime")).toBe(at);
     expect(wrapper.text()).not.toContain("元");
   });
 

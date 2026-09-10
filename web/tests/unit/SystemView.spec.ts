@@ -89,16 +89,16 @@ describe("SystemView", () => {
 
     expect(strip.text()).toContain("降级");
     expect(strip.text()).toContain("只读");
-    expect(strip.text()).toContain("2026-08-24T10:00:00+08:00");
-    expect(strip.text()).toContain("启动时间 2026-08-24T09:00:00+08:00");
+    expect(strip.text()).toContain("2026-08-24 10:00:00");
+    expect(strip.text()).toContain("启动时间 2026-08-24 09:00:00");
     expect(strip.text()).toContain("停止时间 —");
-    expect(strip.text()).toContain("最后分钟时点 2026-08-24T09:59:00+08:00");
+    expect(strip.text()).toContain("最后分钟时点 2026-08-24 09:59:00");
     expect(strip.text()).toContain("最后分钟 60 秒前");
-    expect(strip.text()).toContain("最近判断时点 2026-08-24T09:55:00+08:00");
+    expect(strip.text()).toContain("最近判断时点 2026-08-24 09:55:00");
     expect(strip.text()).toContain("最近判断 300 秒前");
-    expect(strip.text()).toContain("下次轮询 2026-08-24T10:00:12+08:00");
-    expect(strip.text()).toContain("下次重试 2026-08-24T10:01:00+08:00");
-    expect(strip.text()).toContain("冷却至 2026-08-24T10:05:00+08:00");
+    expect(strip.text()).toContain("下次轮询 2026-08-24 10:00:12");
+    expect(strip.text()).toContain("下次重试 2026-08-24 10:01:00");
+    expect(strip.text()).toContain("冷却至 2026-08-24 10:05:00");
   });
 
   it("renders capability status, latency, observation, retry, and safe error codes", () => {
@@ -111,7 +111,7 @@ describe("SystemView", () => {
     expect(rows[0]?.text()).toContain("◆");
     expect(rows[0]?.text()).toContain("125 毫秒");
     expect(rows[0]?.text()).toContain("RATE_LIMITED");
-    expect(rows[0]?.text()).toContain("2026-08-24T10:01:00+08:00");
+    expect(rows[0]?.text()).toContain("2026-08-24 10:01:00");
     expect(rows[1]?.text()).toContain("就绪");
     expect(rows[1]?.text()).toContain("●");
   });
@@ -124,10 +124,10 @@ describe("SystemView", () => {
     expect(wrapper.get('[data-testid="database-health"]').text()).toContain("数据库 就绪");
     expect(wrapper.get('[data-testid="database-health"]').text()).toContain("WAL 就绪");
     expect(wrapper.get('[data-testid="database-health"]').text()).toContain(
-      "2026-08-24T09:50:00+08:00",
+      "2026-08-24 09:50:00",
     );
     expect(wrapper.get('[data-testid="database-health"]').text()).toContain(
-      "2026-08-24T08:00:00+08:00",
+      "2026-08-24 08:00:00",
     );
     expect(wrapper.get('[data-testid="delivery-health"]').text()).toContain("待投递 2");
     expect(wrapper.get('[data-testid="delivery-health"]').text()).toContain("失败 1");
@@ -167,7 +167,7 @@ describe("SystemView", () => {
     expect(links[0]?.attributes("href")).toBe("/stocks/600000.SH");
     expect(links[0]?.text()).toContain("600000.SH");
     expect(links[0]?.element.closest("tr")?.textContent).toContain(
-      "2026-08-24T09:58:00+08:00",
+      "2026-08-24 09:58:00",
     );
     links[0]?.element.focus();
     expect(document.activeElement).toBe(links[0]?.element);

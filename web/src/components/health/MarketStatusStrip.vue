@@ -5,6 +5,7 @@ import type {
   RuntimeHealthResponse,
   RuntimeServiceStatus,
 } from "../../api/generated";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   health: RuntimeHealthResponse;
@@ -40,7 +41,7 @@ function ageLabel(label: string, value: number | null) {
 }
 
 function timeLabel(label: string, value: string | null) {
-  return value === null ? `${label} —` : `${label} ${value}`;
+  return `${label} ${formatDisplayDateTime(value)}`;
 }
 </script>
 
@@ -70,7 +71,7 @@ function timeLabel(label: string, value: string | null) {
     <dl class="market-status-strip__facts">
       <div class="market-status-strip__fact">
         <dt>观察时间</dt>
-        <dd>{{ props.health.observedAt }}</dd>
+        <dd>{{ formatDisplayDateTime(props.health.observedAt) }}</dd>
       </div>
       <div class="market-status-strip__fact">
         <dt>生命周期</dt>

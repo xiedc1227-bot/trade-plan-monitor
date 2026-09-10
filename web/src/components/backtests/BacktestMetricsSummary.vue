@@ -3,6 +3,7 @@ import type { DeepReadonly } from "vue";
 
 import type { BacktestRunView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   run: DeepReadonly<BacktestRunView>;
@@ -42,9 +43,6 @@ function limitationDescription(token: string): string {
   return limitationDescriptions[token] ?? "服务端声明的研究局限；本页保留原始 token。";
 }
 
-function visibleShanghaiTime(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 19)} +08:00`;
-}
 </script>
 
 <template>
@@ -76,7 +74,7 @@ function visibleShanghaiTime(value: string): string {
       </div>
       <div>
         <dt>完成时间</dt>
-        <dd><time :datetime="run.completedAt">{{ visibleShanghaiTime(run.completedAt) }}</time></dd>
+        <dd><time :datetime="run.completedAt">{{ formatDisplayDateTime(run.completedAt) }}</time></dd>
       </div>
       <div>
         <dt>数据集哈希</dt>

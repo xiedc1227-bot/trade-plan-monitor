@@ -14,6 +14,7 @@ import { CanvasRenderer } from "echarts/renderers";
 
 import type { BacktestEquityPointView } from "../../api/generated";
 import { formatFenAsYuan, parseFenText } from "../../api/backtestValues";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   items: DeepReadonly<BacktestEquityPointView[]>;
@@ -71,7 +72,7 @@ function loadChart(): void {
 
 function renderChart(): void {
   if (chart.value === null) return;
-  const labels = visibleItems.value.map((item) => visibleShanghaiTime(item.markedAt));
+  const labels = visibleItems.value.map((item) => formatDisplayDateTime(item.markedAt));
   chart.value.setOption({
     animation: false,
     grid: { containLabel: true, left: 12, right: 16, top: 24, bottom: 12 },
@@ -111,9 +112,6 @@ function safeChartYuan(value: string): number | null {
   return Number.parseFloat(formatFenAsYuan(fen));
 }
 
-function visibleShanghaiTime(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 19)} +08:00`;
-}
 </script>
 
 <template>

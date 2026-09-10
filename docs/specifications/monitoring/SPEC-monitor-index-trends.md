@@ -148,7 +148,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 - The shared chart is approximately `288px` high on desktop and `224px` on narrow screens; animation is disabled and reduced-motion is respected.
 - Chinese market convention may color positive values red and negative values green, but direction must also be expressed with sign, text, and chart labeling. Neutral/unknown uses the normal text color.
 - Apply that direction color consistently to selector change, current value, session change, chart line/area, and latest-value label. Compare the displayed session high and low independently with prior close using the same rule; do not assign color from the metric name.
-- Display the selected index cutoff in the common `YYYY-MM-DD HH:mm:ss` form without converting the authoritative source time zone; API values remain offset-aware ISO 8601 strings.
+- Display the selected index cutoff and chart tooltip timestamp in the common `YYYY-MM-DD HH:mm:ss` form without converting the authoritative source time zone; the compact intraday x-axis remains `HH:mm`, and API values remain offset-aware ISO 8601 strings.
 - Each selector is a native button with `aria-pressed`; the chart has an accessible name containing index name, “current trading day,” latest value, change, cutoff, and health.
 - Y axes use independent point scales. No overlay suggests that raw point levels are directly comparable.
 

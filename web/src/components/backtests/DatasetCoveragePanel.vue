@@ -4,6 +4,7 @@ import type {
   BacktestDatasetView,
 } from "../../api/generated";
 import type { BacktestDataQueryState } from "../../composables/useBacktestData";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   datasets: readonly BacktestDatasetView[];
@@ -123,8 +124,8 @@ const countLabels: ReadonlyArray<{
 
         <div class="dataset-coverage__metadata">
           <p>Schema：{{ item.schemaVersion }}</p>
-          <p>创建：<time :datetime="item.createdAt">{{ item.createdAt }}</time></p>
-          <p>验证：<time :datetime="item.verifiedAt">{{ item.verifiedAt }}</time></p>
+          <p>创建：<time :datetime="item.createdAt">{{ formatDisplayDateTime(item.createdAt) }}</time></p>
+          <p>验证：<time :datetime="item.verifiedAt">{{ formatDisplayDateTime(item.verifiedAt) }}</time></p>
         </div>
 
         <section class="dataset-coverage__blockers" aria-label="服务端阻断项">

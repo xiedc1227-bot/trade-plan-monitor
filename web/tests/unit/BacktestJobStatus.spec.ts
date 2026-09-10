@@ -74,6 +74,8 @@ describe("BacktestJobStatus", () => {
     expect(wrapper.text()).toContain("正在同步历史数据");
     expect(wrapper.text()).toContain("job-status-001");
     expect(wrapper.text()).toContain("2 / 4 项");
+    expect(wrapper.text()).toContain("2026-08-29 10:00:00");
+    expect(wrapper.get("time").attributes("datetime")).toBe(TIME);
     expect(wrapper.text()).toContain("仅供研究，不会自动下单");
     expect(wrapper.get("progress").attributes()).toMatchObject({ max: "4", value: "2" });
   });

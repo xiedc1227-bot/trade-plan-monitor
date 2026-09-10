@@ -171,6 +171,7 @@ describe("AlertsView", () => {
     expect(wrapper.text()).toContain("<img src=x onerror=alert(1)>服务端提醒");
     expect(wrapper.find("img").exists()).toBe(false);
     expect(wrapper.text()).toContain(firstId);
+    expect(wrapper.text()).toContain("2026-08-24 10:05:05");
     expect(wrapper.get('a[aria-label="在图表中查看华亚智能提醒时间"]').attributes("href")).toBe(
       "/stocks/003043.SZ?at=2026-08-24T10%3A05%3A00%2B08%3A00",
     );

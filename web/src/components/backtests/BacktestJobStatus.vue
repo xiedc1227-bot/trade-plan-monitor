@@ -6,6 +6,7 @@ import type {
   BacktestCancellationState,
   BacktestJobRequestState,
 } from "../../composables/useBacktestJob";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   cancellationState: BacktestCancellationState;
@@ -228,7 +229,7 @@ function handleDialogKeydown(event: KeyboardEvent): void {
         </div>
         <div>
           <dt>最近更新</dt>
-          <dd><time :datetime="props.job.updatedAt">{{ props.job.updatedAt }}</time></dd>
+          <dd><time :datetime="props.job.updatedAt">{{ formatDisplayDateTime(props.job.updatedAt) }}</time></dd>
         </div>
       </dl>
 

@@ -2,6 +2,7 @@
 import type { BacktestRunSummaryView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
 import type { BacktestRunsQueryState } from "../../composables/useBacktestRuns";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   errorMessage: string | null;
@@ -20,9 +21,6 @@ interface Emits {
 defineProps<Props>();
 const emit = defineEmits<Emits>();
 
-function visibleShanghaiTime(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 19)}`;
-}
 </script>
 
 <template>
@@ -88,7 +86,7 @@ function visibleShanghaiTime(value: string): string {
         <tbody>
           <tr v-for="run in items" :key="run.runId" data-testid="backtest-run-row">
             <td>
-              <time :datetime="run.completedAt">{{ visibleShanghaiTime(run.completedAt) }}</time>
+              <time :datetime="run.completedAt">{{ formatDisplayDateTime(run.completedAt) }}</time>
             </td>
             <td>{{ run.symbol }}</td>
             <td>

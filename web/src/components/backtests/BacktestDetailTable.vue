@@ -3,6 +3,7 @@ import { computed, type DeepReadonly } from "vue";
 
 import type { BacktestDetailPage, BacktestDetailView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   items: DeepReadonly<BacktestDetailView[]>;
@@ -19,10 +20,6 @@ const captions: Record<BacktestDetailPage["kind"], string> = {
   EXECUTION_OUTCOME: "当前页执行结果明细",
   SIGNAL: "当前页信号明细",
 };
-
-function visibleShanghaiTime(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 19)} +08:00`;
-}
 
 function optional(value: string | number | null): string | number {
   return value === null ? "—" : value;
@@ -81,7 +78,7 @@ function optional(value: string | number | null): string | number {
             v-if="item.kind === 'DECISION'"
             data-testid="backtest-detail-row"
           >
-            <td><time :datetime="item.eventAt">{{ visibleShanghaiTime(item.eventAt) }}</time></td>
+            <td><time :datetime="item.eventAt">{{ formatDisplayDateTime(item.eventAt) }}</time></td>
             <td>{{ item.detailId }}</td>
             <td>{{ item.decision.symbol }}</td>
             <td>{{ item.decision.signalType }}</td>
@@ -96,7 +93,7 @@ function optional(value: string | number | null): string | number {
                   <code>{{ item.decision.referenceMarket.indexCode }}</code> ·
                   {{ item.decision.referenceMarket.health }} ·
                   <time v-if="item.decision.referenceMarket.dataAt !== null" :datetime="item.decision.referenceMarket.dataAt">
-                    {{ visibleShanghaiTime(item.decision.referenceMarket.dataAt) }}
+                    {{ formatDisplayDateTime(item.decision.referenceMarket.dataAt) }}
                   </time>
                 </p>
                 <ul>
@@ -104,7 +101,7 @@ function optional(value: string | number | null): string | number {
                     <code>{{ evidence.planPath }}</code> ·
                     <code>{{ evidence.conditionType }}</code> · {{ evidence.outcome }}；
                     实际 {{ optional(evidence.actualValue) }} / 对比 {{ optional(evidence.comparisonValue) }} {{ evidence.unit }}；
-                    数据截止 {{ optional(evidence.dataCutoff) }}
+                    数据截止 {{ formatDisplayDateTime(evidence.dataCutoff) }}
                     <span v-if="(evidence.missingInputs ?? []).length > 0">
                       ；缺失 {{ (evidence.missingInputs ?? []).join("、") }}
                     </span>
@@ -117,7 +114,7 @@ function optional(value: string | number | null): string | number {
             v-else-if="item.kind === 'SIGNAL'"
             data-testid="backtest-detail-row"
           >
-            <td><time :datetime="item.eventAt">{{ visibleShanghaiTime(item.eventAt) }}</time></td>
+            <td><time :datetime="item.eventAt">{{ formatDisplayDateTime(item.eventAt) }}</time></td>
             <td>{{ item.detailId }}</td>
             <td>{{ item.symbol }}</td>
             <td>{{ item.signalType }}</td>
@@ -130,7 +127,7 @@ function optional(value: string | number | null): string | number {
             v-else
             data-testid="backtest-detail-row"
           >
-            <td><time :datetime="item.eventAt">{{ visibleShanghaiTime(item.eventAt) }}</time></td>
+            <td><time :datetime="item.eventAt">{{ formatDisplayDateTime(item.eventAt) }}</time></td>
             <td>{{ item.detailId }}</td>
             <td>{{ item.status }}</td>
             <td>{{ optional(item.reason) }}</td>

@@ -432,7 +432,7 @@ describe("BT046 equity review", () => {
     expect(rows).toHaveLength(2_000);
     expect(rows[0]?.text()).toContain("snapshot-0000");
     expect(rows[0]?.text()).toContain("90071992547409931.23");
-    expect(rows[0]?.text()).toContain("+08:00");
+    expect(rows[0]?.text()).toContain("2026-08-01 15:00:00");
     expect(rows[1]?.text()).toContain("snapshot-0001");
     expect(rows[1]?.get("time").attributes("datetime")).toBe(
       "2026-08-02T15:00:00.000000+08:00",
@@ -457,8 +457,8 @@ describe("BT046 equity review", () => {
       xAxis: { data: string[] };
     };
     expect(option.xAxis.data).toEqual([
-      "2026-08-01 15:00:00 +08:00",
-      "2026-08-02 15:00:00 +08:00",
+      "2026-08-01 15:00:00",
+      "2026-08-02 15:00:00",
     ]);
     expect(option.series[0]?.data).toEqual([1000.01, null]);
 

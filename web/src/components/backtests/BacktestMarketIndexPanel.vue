@@ -2,6 +2,7 @@
 import type { BacktestMarketIndexSeriesView } from "../../api/generated";
 import MarketIndexChart from "../market-index/MarketIndexChart.vue";
 import BacktestIndexConditionSummary from "./BacktestIndexConditionSummary.vue";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   series: BacktestMarketIndexSeriesView;
@@ -39,7 +40,7 @@ const emit = defineEmits<{
           <p v-if="series.healthTimeline.length === 0" role="status">没有保留健康时间点。</p>
           <ul v-else>
             <li v-for="point in series.healthTimeline" :key="point.dataAt">
-              <time :datetime="point.dataAt">{{ point.dataAt }}</time>：{{ point.health }}
+              <time :datetime="point.dataAt">{{ formatDisplayDateTime(point.dataAt) }}</time>：{{ point.health }}
               <span v-if="point.issues.length > 0">（{{ point.issues.join("、") }}）</span>
             </li>
           </ul>

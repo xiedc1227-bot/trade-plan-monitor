@@ -3,6 +3,7 @@ import { computed, type DeepReadonly } from "vue";
 
 import type { BacktestEquityPointView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   items: DeepReadonly<BacktestEquityPointView[]>;
@@ -11,9 +12,6 @@ interface Props {
 const props = defineProps<Props>();
 const visibleItems = computed(() => props.items.slice(0, 2_000));
 
-function visibleShanghaiTime(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 19)} +08:00`;
-}
 </script>
 
 <template>
@@ -48,7 +46,7 @@ function visibleShanghaiTime(value: string): string {
           data-testid="backtest-equity-row"
         >
           <td>
-            <time :datetime="item.markedAt">{{ visibleShanghaiTime(item.markedAt) }}</time>
+            <time :datetime="item.markedAt">{{ formatDisplayDateTime(item.markedAt) }}</time>
           </td>
           <td>{{ item.snapshotId }}</td>
           <td>{{ item.symbol }}</td>

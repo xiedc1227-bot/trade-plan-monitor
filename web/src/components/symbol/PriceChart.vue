@@ -14,6 +14,7 @@ import { CanvasRenderer } from "echarts/renderers";
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "vue";
 
 import type { ChartSeries } from "../../composables/useChartSeries";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 export interface ChartRange {
   endPercent: number;
@@ -168,8 +169,18 @@ function buildOption(series: ChartSeries): EChartsCoreOption {
         type: "scatter",
       },
     ],
-    tooltip: { renderMode: "richText", trigger: "axis" },
+    tooltip: {
+      axisPointer: {
+        label: {
+          formatter: (parameters: { value: string | number }) =>
+            formatDisplayDateTime(String(parameters.value)),
+        },
+      },
+      renderMode: "richText",
+      trigger: "axis",
+    },
     xAxis: {
+      axisLabel: { formatter: (value: string) => formatDisplayDateTime(value) },
       data: series.candles.map((candle) => candle.time),
       type: "category",
     },

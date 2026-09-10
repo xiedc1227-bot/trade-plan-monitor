@@ -17,6 +17,7 @@ import {
   calculateIndexAxisBounds,
   marketIndexDirectionColor,
 } from "./marketIndexChartOptions";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   ariaLabel: string;
@@ -126,7 +127,14 @@ function buildOption(
       },
     ],
     tooltip: {
-      axisPointer: { lineStyle: { color: "#62b7d1", type: "dashed" }, type: "line" },
+      axisPointer: {
+        label: {
+          formatter: (parameters: { value: string | number }) =>
+            formatDisplayDateTime(String(parameters.value)),
+        },
+        lineStyle: { color: "#62b7d1", type: "dashed" },
+        type: "line",
+      },
       backgroundColor: "#1c282d",
       borderColor: "#405158",
       renderMode: "richText",

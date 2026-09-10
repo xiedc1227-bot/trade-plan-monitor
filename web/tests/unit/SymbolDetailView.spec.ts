@@ -464,7 +464,7 @@ describe("SymbolDetailView", () => {
     expect(wrapper.text()).toContain("华亚智能");
     expect(wrapper.text()).toContain("已连接");
     expect(wrapper.text()).toContain("数据年龄 5 秒");
-    expect(wrapper.text()).toContain(secondTime);
+    expect(wrapper.text()).toContain("2026-08-24 10:05:00");
     expect(wrapper.get('[data-testid="bar-table"]').text()).toContain("12.00");
     expect(wrapper.get('[data-testid="bar-table"]').text()).toContain("12.20");
     expect(wrapper.get('[data-testid="overlay-table"]').text()).toContain("风险线");
@@ -473,9 +473,7 @@ describe("SymbolDetailView", () => {
     expect(wrapper.get('[data-testid="overlay-table"]').text()).toContain("-0.103456788 元");
     expect(wrapper.get('[data-testid="overlay-table"]').text()).not.toContain("-0.10 元");
     expect(wrapper.find('[data-testid="price-chart"]').exists()).toBe(true);
-    expect(wrapper.get('[data-testid="bar-table"]').text()).toContain(
-      useChartSeries({ bars, decision, events }).series.value.candles[0]?.time ?? "",
-    );
+    expect(wrapper.get('[data-testid="bar-table"]').text()).toContain("2026-08-24 10:00:00");
   });
 
   it("shows hierarchical evidence, blockers, and missing inputs as escaped text", () => {

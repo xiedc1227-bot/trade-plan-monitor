@@ -297,6 +297,7 @@ describe("backtest result tables", () => {
     const rows = wrapper.findAll('[data-testid="backtest-fill-row"]');
     expect(rows).toHaveLength(100);
     expect(rows[0]?.text()).toContain("90071992547409931.23");
+    expect(rows[0]?.text()).toContain("2026-08-29 12:00:00");
     expect(rows.every((row) => row.text().includes("模拟成交（仅供研究）"))).toBe(true);
     expect(wrapper.get("time").attributes("datetime")).toBe(TIME);
   });
@@ -309,6 +310,9 @@ describe("backtest result tables", () => {
     const wrapper = mount(BacktestDetailTable, { props: { items: [item], kind } });
 
     expect(wrapper.get('[data-testid="backtest-detail-row"]').text()).toContain(copy);
+    expect(wrapper.get('[data-testid="backtest-detail-row"]').text()).toContain(
+      "2026-08-29 12:00:00",
+    );
     expect(wrapper.get("time").attributes("datetime")).toBe(TIME);
   });
 

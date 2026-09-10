@@ -6,6 +6,7 @@ import type {
   SymbolReferenceMarketView,
 } from "../../api/generated";
 import IndexConditionProgress from "./IndexConditionProgress.vue";
+import { formatDisplayDateTime, formatDisplayFactValue } from "../../formatters/dateTime";
 
 interface Props {
   evidence?: readonly IndexConditionEvidenceView[];
@@ -16,7 +17,7 @@ interface Props {
 withDefaults(defineProps<Props>(), { evidence: () => [] });
 
 function formatFact(fact: EvidenceFactView): string {
-  return `${fact.key}=${String(fact.value)} ${fact.unit}`;
+  return `${fact.key}=${formatDisplayFactValue(fact.value, fact.unit)} ${fact.unit}`;
 }
 </script>
 
@@ -30,7 +31,7 @@ function formatFact(fact: EvidenceFactView): string {
           <div><dt>板块</dt><dd>{{ reference.board }}</dd></div>
           <div><dt>映射版本</dt><dd>{{ reference.mappingVersion }}</dd></div>
           <div><dt>快照哈希</dt><dd>{{ reference.snapshotHash ?? "不可用" }}</dd></div>
-          <div><dt>数据截止</dt><dd>{{ reference.dataAt ?? "不可用" }}</dd></div>
+          <div><dt>数据截止</dt><dd>{{ formatDisplayDateTime(reference.dataAt, "不可用") }}</dd></div>
           <div><dt>健康</dt><dd>{{ reference.health }}</dd></div>
         </dl>
         <p v-if="reference.issues.length > 0">
