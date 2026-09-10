@@ -14,16 +14,27 @@ const directionColors: Readonly<Record<MarketIndexDirection, string>> = Object.f
 export function marketIndexDirection(
   sessionChangeRatio: string | null | undefined,
 ): MarketIndexDirection {
-  if (sessionChangeRatio === null || sessionChangeRatio === undefined) return "flat";
-  const ratio = Number(sessionChangeRatio);
-  if (!Number.isFinite(ratio) || ratio === 0) return "flat";
-  return ratio > 0 ? "up" : "down";
+  return marketIndexValueDirection(sessionChangeRatio, 0);
 }
 
 export function marketIndexDirectionColor(
   sessionChangeRatio: string | null | undefined,
 ): string {
   return directionColors[marketIndexDirection(sessionChangeRatio)];
+}
+
+export function marketIndexValueDirection(
+  value: string | number | null | undefined,
+  reference: string | number | null | undefined,
+): MarketIndexDirection {
+  if (value === null || value === undefined || reference === null || reference === undefined) {
+    return "flat";
+  }
+  const numericValue = Number(value);
+  const numericReference = Number(reference);
+  if (!Number.isFinite(numericValue) || !Number.isFinite(numericReference)) return "flat";
+  if (numericValue === numericReference) return "flat";
+  return numericValue > numericReference ? "up" : "down";
 }
 
 export function calculateIndexAxisBounds(

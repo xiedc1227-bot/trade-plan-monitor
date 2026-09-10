@@ -272,7 +272,7 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await expect(indexCards).toContainText("3400.12");
   expect(await indexCards.locator(".market-index-trend-card__high").evaluate(
     (element) => getComputedStyle(element).color,
-  )).toBe("rgb(228, 93, 67)");
+  )).toBe("rgb(103, 183, 165)");
   expect(await indexCards.locator(".market-index-trend-card__low").evaluate(
     (element) => getComputedStyle(element).color,
   )).toBe("rgb(103, 183, 165)");

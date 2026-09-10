@@ -4,6 +4,7 @@ import {
   calculateIndexAxisBounds,
   marketIndexDirection,
   marketIndexDirectionColor,
+  marketIndexValueDirection,
 } from "../../src/components/market-index/marketIndexChartOptions";
 
 describe("market index chart options", () => {
@@ -30,5 +31,15 @@ describe("market index chart options", () => {
   ] as const)("maps session change %s to %s and its market color", (ratio, direction, color) => {
     expect(marketIndexDirection(ratio)).toBe(direction);
     expect(marketIndexDirectionColor(ratio)).toBe(color);
+  });
+
+  it.each([
+    ["99", "100", "down"],
+    ["101", "100", "up"],
+    ["100", "100", "flat"],
+    [null, "100", "flat"],
+    ["101", null, "flat"],
+  ] as const)("compares point %s directly with prior close %s", (value, priorClose, direction) => {
+    expect(marketIndexValueDirection(value, priorClose)).toBe(direction);
   });
 });

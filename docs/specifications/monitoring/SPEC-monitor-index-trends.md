@@ -147,7 +147,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 - The selector row uses four equal columns and becomes an internally scrollable strip on narrow screens. At `320px`, facts wrap without page-level horizontal overflow.
 - The shared chart is approximately `288px` high on desktop and `224px` on narrow screens; animation is disabled and reduced-motion is respected.
 - Chinese market convention may color positive values red and negative values green, but direction must also be expressed with sign, text, and chart labeling. Neutral/unknown uses the normal text color.
-- Apply that direction color consistently to selector change, current value, session change, chart line/area, and latest-value label. Use red for the displayed session high and green for the displayed session low as fixed scan aids.
+- Apply that direction color consistently to selector change, current value, session change, chart line/area, and latest-value label. Compare the displayed session high and low independently with prior close using the same rule; do not assign color from the metric name.
 - Each selector is a native button with `aria-pressed`; the chart has an accessible name containing index name, “current trading day,” latest value, change, cutoff, and health. The disclosure table is the exact non-visual equivalent for the selected index.
 - Y axes use independent point scales. No overlay suggests that raw point levels are directly comparable.
 

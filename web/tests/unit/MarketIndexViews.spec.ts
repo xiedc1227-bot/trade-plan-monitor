@@ -171,7 +171,9 @@ describe("market index monitor views", () => {
     expect(wrapper.get('[data-testid="market-index-sparkline"]').attributes("aria-label")).toContain("科创50");
     expect(wrapper.get('[data-testid="market-index-trend-card"]').attributes("data-direction")).toBe("up");
     expect(wrapper.get(".market-index-trend-card__high").text()).toBe("1235.20");
+    expect(wrapper.get(".market-index-trend-card__high").attributes("data-direction")).toBe("up");
     expect(wrapper.get(".market-index-trend-card__low").text()).toBe("1229.90");
+    expect(wrapper.get(".market-index-trend-card__low").attributes("data-direction")).toBe("up");
     expect(wrapper.get('[role="alert"]').text()).toContain("当日指数走势暂不可用");
     expect(wrapper.get("button").text()).toBe("重试");
     expect(wrapper.get("table").text()).toContain("1234.56");

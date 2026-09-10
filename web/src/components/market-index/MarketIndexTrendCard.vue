@@ -4,7 +4,7 @@ import { computed } from "vue";
 import type { ConnectionStatus, MarketIndexSnapshotView } from "../../api/generated";
 import type { CanonicalMarketIndexIdentity } from "../../api/marketIndexIdentity";
 import type { DashboardMarketIndexTrend } from "../../composables/useDashboardMarketIndexTrends";
-import { marketIndexDirection } from "./marketIndexChartOptions";
+import { marketIndexDirection, marketIndexValueDirection } from "./marketIndexChartOptions";
 import MarketIndexSparkline from "./MarketIndexSparkline.vue";
 
 interface Props {
@@ -25,6 +25,18 @@ const emit = defineEmits<Emits>();
 const bars = computed(() => props.trend.page?.items ?? []);
 const highPoints = computed(() => extrema("highPoints", Math.max));
 const lowPoints = computed(() => extrema("lowPoints", Math.min));
+const currentDirection = computed(() => marketIndexValueDirection(
+  props.summary?.closePoints,
+  props.summary?.priorClosePoints,
+));
+const highDirection = computed(() => marketIndexValueDirection(
+  highPoints.value,
+  props.summary?.priorClosePoints,
+));
+const lowDirection = computed(() => marketIndexValueDirection(
+  lowPoints.value,
+  props.summary?.priorClosePoints,
+));
 const turnover = computed(() => {
   const amounts = bars.value
     .map((bar) => bar.amount === null ? Number.NaN : Number(bar.amount))
@@ -83,7 +95,7 @@ function extrema(
     class="market-index-trend-card"
     data-testid="market-index-trend-card"
     :data-health="summary?.health ?? 'BLOCKED'"
-    :data-direction="marketIndexDirection(summary?.sessionChangeRatio ?? null)"
+    :data-direction="currentDirection"
   >
     <header class="market-index-trend-card__header">
       <div>
@@ -94,10 +106,10 @@ function extrema(
     </header>
     <dl class="market-index-trend-card__market-facts">
       <div class="market-index-trend-card__primary-fact">
-        <dt>当前</dt><dd>{{ formatPoints(summary?.closePoints ?? null) }}</dd>
+        <dt>当前</dt><dd :data-direction="currentDirection">{{ formatPoints(summary?.closePoints ?? null) }}</dd>
       </div>
-      <div><dt>最高</dt><dd class="market-index-trend-card__high">{{ formatPoints(highPoints) }}</dd></div>
-      <div><dt>最低</dt><dd class="market-index-trend-card__low">{{ formatPoints(lowPoints) }}</dd></div>
+      <div><dt>最高</dt><dd class="market-index-trend-card__high" :data-direction="highDirection">{{ formatPoints(highPoints) }}</dd></div>
+      <div><dt>最低</dt><dd class="market-index-trend-card__low" :data-direction="lowDirection">{{ formatPoints(lowPoints) }}</dd></div>
       <div><dt>成交额</dt><dd>{{ turnover }}</dd></div>
     </dl>
     <MarketIndexSparkline
@@ -179,12 +191,11 @@ function extrema(
 .market-index-trend-card__market-facts dd,
 .market-index-trend-card__facts dd { margin: 0; font-family: var(--font-numeric); }
 .market-index-trend-card__primary-fact dd { font-size: 1.2rem; font-weight: 700; }
-.market-index-trend-card[data-direction="down"] .market-index-trend-card__primary-fact dd { color: var(--color-signal-live-sea-glass); }
-.market-index-trend-card[data-direction="up"] .market-index-trend-card__primary-fact dd { color: var(--color-signal-risk-vermilion); }
-.market-index-trend-card__high,
+.market-index-trend-card__market-facts dd[data-direction="up"],
 .market-index-trend-card__change[data-direction="up"] { color: var(--color-signal-risk-vermilion); }
-.market-index-trend-card__low,
+.market-index-trend-card__market-facts dd[data-direction="down"],
 .market-index-trend-card__change[data-direction="down"] { color: var(--color-signal-live-sea-glass); }
+.market-index-trend-card__market-facts dd[data-direction="flat"],
 .market-index-trend-card__change[data-direction="flat"] { color: var(--color-text-mineral); }
 .market-index-trend-card__table { min-width: 0; }
 .market-index-trend-card__table table {
