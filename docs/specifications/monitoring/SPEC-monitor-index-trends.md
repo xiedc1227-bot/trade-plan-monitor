@@ -31,7 +31,7 @@ The four index selectors are always present, independent of which boards are ref
 - Every selector shows the index name and signed session change. The selected panel shows code, current/high/low points, aggregated returned-bar turnover, prior close, data cutoff, health, and one large line chart.
 - When no index bars exist yet, all four selectors remain visible and the selected index renders an empty labelled chart area instead of disappearing.
 - Chart annotations: prior-close dashed baseline when supplied by the authoritative snapshot, latest-value end label, right-side point axis, “current trading day” label, and explicit health text/icon. The Y-axis extent includes prior close so the baseline cannot be clipped.
-- One expandable accessible data table for the selected index contains the exact returned time and close values.
+- Exact per-bar values remain available through the chart tooltip; the overview does not render a duplicate point table.
 - Cached bars remain visible during refresh or isolated failure, with the original cutoff and stale/error state visible.
 
 ### Excluded from the first version
@@ -115,7 +115,7 @@ The browser issues at most four concurrent trend requests for the current Shangh
 |---|---|---|
 | `DashboardRouteView.vue` | Compose the existing dashboard snapshot, market-index API, and trend feature | Pass readonly data down; no chart mapping |
 | `MarketIndexDataStrip.vue` | Render four ordered selectors and own the selected index | Props: summaries and per-code trend states; emit `retry` |
-| `MarketIndexTrendCard.vue` | Render the selected index's summary, chart state, and accessible table disclosure | Typed props for identity, snapshot, bars, loading, error |
+| `MarketIndexTrendCard.vue` | Render the selected index's summary and chart state | Typed props for identity, snapshot, bars, loading, error |
 | `MarketIndexSparkline.vue` | Render exact bar time/close coordinates and annotations | No requests, health policy, indicators, or trade inference |
 | `marketIndexChartOptions.ts` | Calculate a padded Y-axis extent containing bars and prior close | Pure finite-number input and immutable bounds output |
 | `useDashboardMarketIndexTrends.ts` | Build fixed current-day queries, fetch four pages, retain successful state during refresh, cancel stale generations | Returns readonly per-code `IDLE|LOADING|READY|EMPTY|ERROR` state |
@@ -148,7 +148,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 - The shared chart is approximately `288px` high on desktop and `224px` on narrow screens; animation is disabled and reduced-motion is respected.
 - Chinese market convention may color positive values red and negative values green, but direction must also be expressed with sign, text, and chart labeling. Neutral/unknown uses the normal text color.
 - Apply that direction color consistently to selector change, current value, session change, chart line/area, and latest-value label. Compare the displayed session high and low independently with prior close using the same rule; do not assign color from the metric name.
-- Each selector is a native button with `aria-pressed`; the chart has an accessible name containing index name, “current trading day,” latest value, change, cutoff, and health. The disclosure table is the exact non-visual equivalent for the selected index.
+- Each selector is a native button with `aria-pressed`; the chart has an accessible name containing index name, “current trading day,” latest value, change, cutoff, and health.
 - Y axes use independent point scales. No overlay suggests that raw point levels are directly comparable.
 
 ## Loading, Empty, and Failure States
@@ -174,13 +174,13 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 ## Testing Strategy
 
 - Python unit/integration tests prove all four display codes are acquired without active plans, once per cutoff, deduplicated with plan interest, projected even with zero mapped symbols, persisted for history, and isolated on provider failure.
-- Vitest proves fixed selector ordering, selected-index switching, a prior-close-inclusive Y-axis, current-day query boundaries, four-request cap, cancellation/generation guards, retained success/error state, decimal conversion fail-closed behavior, annotation copy, table equivalence, and all state combinations.
+- Vitest proves fixed selector ordering, selected-index switching, a prior-close-inclusive Y-axis, current-day query boundaries, four-request cap, cancellation/generation guards, retained success/error state, decimal conversion fail-closed behavior, annotation copy, omission of the duplicate point table, and all state combinations.
 - Playwright proves four visible selectors and one selected current-day chart at `320/768/1024/1440`, isolated index failure, no page overflow at 200% text, keyboard operation, reduced motion, and zero serious/critical axe findings.
 - Build and generated-contract checks must pass. The change must add no API field, provider endpoint, browser policy calculation, or new dependency.
 
 ## Boundaries
 
-- **Always:** show all four identities as selectors, source cutoff, health, “current trading day,” exact selected-index table alternative, and isolated errors; reuse validated bars and existing contracts.
+- **Always:** show all four identities as selectors, source cutoff, health, “current trading day,” chart tooltip values, and isolated errors; reuse validated bars and existing contracts.
 - **Ask first:** change the four-code list, add a historical range, change interval/refresh cadence, endpoint/schema, provider quota profile, or add a calculated/interpretive annotation.
 - **Never:** synthesize missing points, use unfinished quotes, normalize/compare raw point levels, hide a failed index, infer market strength, alter plan decisions, or render provider error text.
 
@@ -191,7 +191,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 3. One unavailable index selector remains visible and does not prevent other index data from loading, updating, or being selected.
 4. With zero active plans, completed five-minute deadlines still acquire and persist the four display-only indexes; they do not affect any plan's fact requirements, evidence, hash, or decision.
 5. The feature adds no public API contract or dependency and passes the commands listed above.
-6. Keyboard, screen-reader/table alternative, reduced-motion, responsive layout, and 200% text acceptance checks pass.
+6. Keyboard controls, screen-reader chart labeling, reduced-motion, responsive layout, and 200% text acceptance checks pass.
 
 ## Open Questions
 

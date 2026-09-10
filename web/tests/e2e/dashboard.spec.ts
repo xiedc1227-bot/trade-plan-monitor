@@ -280,6 +280,7 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await page.getByTestId("market-index-selector").filter({ hasText: "科创50" }).click();
   await expect(indexCards).toContainText("科创50");
   await expect(indexCards).toContainText("实时 ●");
+  await expect(page.getByText("查看当日点位数据")).toHaveCount(0);
   const rows = page.getByTestId("watchlist-row");
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText("满足 1");

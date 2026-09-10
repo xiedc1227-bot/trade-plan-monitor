@@ -147,16 +147,6 @@ function extrema(
       <div><dt>昨收点位</dt><dd>{{ formatPoints(summary?.priorClosePoints ?? null) }}</dd></div>
       <div><dt>数据截止</dt><dd>{{ summary?.completedBucketAt ?? "不可用" }}</dd></div>
     </dl>
-    <details v-if="bars.length > 0" class="market-index-trend-card__table">
-      <summary>查看当日点位数据</summary>
-      <table>
-        <caption>{{ identity.displayName }}已完成五分钟点位</caption>
-        <thead><tr><th scope="col">时间</th><th scope="col">收盘点位</th></tr></thead>
-        <tbody>
-          <tr v-for="bar in bars" :key="bar.barAt"><td>{{ bar.barAt }}</td><td>{{ bar.closePoints }}</td></tr>
-        </tbody>
-      </table>
-    </details>
     <p v-if="(summary?.issues ?? []).length > 0" class="market-index-trend-card__issues">
       问题：{{ summary?.issues.join("、") }}
     </p>
@@ -197,23 +187,6 @@ function extrema(
 .market-index-trend-card__change[data-direction="down"] { color: var(--color-signal-live-sea-glass); }
 .market-index-trend-card__market-facts dd[data-direction="flat"],
 .market-index-trend-card__change[data-direction="flat"] { color: var(--color-text-mineral); }
-.market-index-trend-card__table { min-width: 0; }
-.market-index-trend-card__table table {
-  width: 100%;
-  margin-block-start: var(--space-2);
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-family: var(--font-numeric);
-}
-
-.market-index-trend-card__table th,
-.market-index-trend-card__table td {
-  padding: var(--space-1);
-  overflow-wrap: anywhere;
-  text-align: start;
-  border-block-start: var(--border-technical);
-}
-
 @media (max-width: 39.999rem) {
   .market-index-trend-card { padding-inline: var(--space-3); }
   .market-index-trend-card__market-facts,

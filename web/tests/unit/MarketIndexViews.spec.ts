@@ -154,7 +154,7 @@ describe("market index monitor views", () => {
     expect(wrapper.get('[data-testid="market-index-trend-card"]').text()).toContain("1234.56");
   });
 
-  it("keeps cached chart data visible while exposing a later trend refresh error", () => {
+  it("keeps cached chart data visible without a duplicate point table while exposing a later refresh error", () => {
     const wrapper = mount(MarketIndexTrendCard, {
       props: {
         connectionStatus: "CONNECTED",
@@ -176,7 +176,8 @@ describe("market index monitor views", () => {
     expect(wrapper.get(".market-index-trend-card__low").attributes("data-direction")).toBe("up");
     expect(wrapper.get('[role="alert"]').text()).toContain("当日指数走势暂不可用");
     expect(wrapper.get("button").text()).toBe("重试");
-    expect(wrapper.get("table").text()).toContain("1234.56");
+    expect(wrapper.find("details").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("查看当日点位数据");
   });
 
   it("labels absent and disconnected snapshots without claiming live data", () => {
