@@ -29,6 +29,7 @@ The four cards are always present, independent of which boards are referenced by
 - One fixed current-trading-day view with no range selector.
 - The current-day trend uses certified completed `FIVE_MINUTE` closes only.
 - Each card shows name, code, latest completed value, session change ratio, data cutoff, health, and a compact line chart.
+- When no index bars exist yet, all four cards still render an empty labelled chart area instead of disappearing.
 - Chart annotations: prior-close dashed baseline when supplied by the authoritative snapshot, latest-point marker, “current trading day” label, and explicit health text/icon.
 - One expandable accessible data table per card containing the exact returned time and close values.
 - Cached bars remain visible during refresh or isolated failure, with the original cutoff and stale/error state visible.
@@ -82,7 +83,9 @@ four dashboard codes + distinct active-plan reference codes
 
 Display interest requests raw completed bars and prior close only. It must not introduce indicator fact requests into a plan or make a plan depend on an otherwise informational index. Acquisition remains deduplicated per `(indexCode, cutoff)` and isolated per index.
 
-The dashboard read service projects the latest snapshot for all four display codes and computes `mappedSymbolCount` separately. Therefore a card may validly show `mappedSymbolCount=0`. Missing acquisition produces a visible blocked/unavailable card; it does not remove the card or affect any plan decision.
+When no plan evaluation is due—including when there are no active plans—the production deadline still prepares and persists the four display-only indexes at completed five-minute boundaries. Official-close attempt one also refreshes them. Stock evaluation and display-only index acquisition remain independent outcomes.
+
+The dashboard read service projects the latest snapshot for all four display codes and computes `mappedSymbolCount` separately. Therefore a card may validly show `mappedSymbolCount=0`. When the dashboard projection itself is unavailable, the frontend still renders the four fixed identities and empty charts. Missing acquisition never removes the cards or affects any plan decision.
 
 ### Existing API reuse
 
@@ -139,7 +142,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 
 - `LOADING` with cache: keep the prior chart, add “刷新中” and preserve its cutoff.
 - `LOADING` without cache: show an explicit loading status and index identity.
-- `EMPTY`: show “该时段暂无已完成指数点位”; never draw a zero line.
+- `EMPTY`: keep the labelled empty chart area and show “该时段暂无已完成指数点位”; never draw a zero line.
 - `ERROR` with cache: keep the chart, mark it stale/error, and expose a native retry button.
 - `ERROR` without cache: keep the card and summary health; show “走势暂不可用”.
 - Failure or delay of one index never blocks the other three.
@@ -155,7 +158,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 
 ## Testing Strategy
 
-- Python unit/integration tests prove all four display codes are acquired once per cutoff, deduplicated with plan interest, projected even with zero mapped symbols, persisted for history, and isolated on provider failure.
+- Python unit/integration tests prove all four display codes are acquired without active plans, once per cutoff, deduplicated with plan interest, projected even with zero mapped symbols, persisted for history, and isolated on provider failure.
 - Vitest proves fixed ordering, current-day query boundaries, four-request cap, cancellation/generation guards, retained success/error state, decimal conversion fail-closed behavior, annotation copy, table equivalence, and all state combinations.
 - Playwright proves four visible current-day cards and charts at `320/768/1024/1440`, one failed card beside three healthy cards, no page overflow at 200% text, keyboard operation, reduced motion, and zero serious/critical axe findings.
 - Build and generated-contract checks must pass. The change must add no API field, provider endpoint, browser policy calculation, or new dependency.
@@ -168,10 +171,10 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 
 ## Success Criteria
 
-1. Monitoring Overview always contains exactly four ordered cards for `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` when the dashboard projection is available.
+1. Monitoring Overview always contains exactly four ordered cards and chart areas for `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH`, including when the dashboard projection or index bars are not yet available.
 2. Each healthy card renders the current trading day's visible trend from authoritative completed five-minute bars, plus latest value, signed session change, cutoff, and health.
 3. One unavailable index remains visible and does not prevent the other charts from loading or updating.
-4. A display-only index with zero mapped stocks does not affect any plan's fact requirements, evidence, hash, or decision.
+4. With zero active plans, completed five-minute deadlines still acquire and persist the four display-only indexes; they do not affect any plan's fact requirements, evidence, hash, or decision.
 5. The feature adds no public API contract or dependency and passes the commands listed above.
 6. Keyboard, screen-reader/table alternative, reduced-motion, responsive layout, and 200% text acceptance checks pass.
 
