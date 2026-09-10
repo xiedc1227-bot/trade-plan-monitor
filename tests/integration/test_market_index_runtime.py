@@ -19,7 +19,10 @@ from trade_plan_monitor.market_index.models import (
 )
 from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
-from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexService
+from trade_plan_monitor.runtime.market_indexes import (
+    DASHBOARD_INDEX_CODES,
+    RuntimeMarketIndexService,
+)
 from trade_plan_monitor.runtime.service import RuntimeEvaluationService
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -138,6 +141,37 @@ class _Provider:
         return self.result
 
 
+class _DashboardProvider:
+    def __init__(self) -> None:
+        self.calls: list[MarketIndexCode] = []
+
+    async def acquire_index_data(
+        self,
+        *,
+        index_code: MarketIndexCode,
+        decision_cutoff: datetime,
+        five_minute_bar_count: int,
+        official_daily_bar_count: int,
+    ) -> MarketIndexProviderBatch:
+        assert decision_cutoff == CUTOFF
+        assert (five_minute_bar_count, official_daily_bar_count) == (1, 1)
+        self.calls.append(index_code)
+        original = _batch()
+        return MarketIndexProviderBatch(
+            index_code=index_code,
+            five_minute_bars=tuple(
+                bar.model_copy(update={"index_code": index_code})
+                for bar in original.five_minute_bars
+            ),
+            official_daily_bars=tuple(
+                bar.model_copy(update={"index_code": index_code})
+                for bar in original.official_daily_bars
+            ),
+            content_revision=original.content_revision,
+            observed_at=original.observed_at,
+        )
+
+
 class _Clock:
     def __init__(self, current: datetime) -> None:
         self.current = current
@@ -195,6 +229,27 @@ def test_ten_plans_union_requirements_and_share_one_snapshot_instance() -> None:
     assert "plan" not in snapshots[0].model_dump_json().lower()
 
 
+def test_dashboard_indexes_are_acquired_without_active_plans() -> None:
+    provider = _DashboardProvider()
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+
+    prepared = asyncio.run(
+        service.prepare(
+            plans=(),
+            decision_cutoff=CUTOFF,
+            observed_no_later_than=OBSERVED_AT,
+        )
+    )
+
+    assert set(provider.calls) == set(DASHBOARD_INDEX_CODES)
+    assert set(prepared.snapshots_by_index) == set(DASHBOARD_INDEX_CODES)
+    assert all(
+        snapshot.health is MarketIndexHealth.LIVE
+        and snapshot.fact_requests == ()
+        for snapshot in prepared.snapshots_by_index.values()
+    )
+
+
 def test_index_snapshot_uses_post_fetch_whole_second_as_future_data_fence() -> None:
     requested_at = CUTOFF + timedelta(seconds=2)
     provider_observed_at = requested_at + timedelta(microseconds=250_000)
@@ -225,11 +280,11 @@ def test_index_snapshot_uses_post_fetch_whole_second_as_future_data_fence() -> N
             observed_no_later_than=requested_at,
         )
     )
-    snapshot = next(iter(prepared.snapshots_by_index.values()))
+    snapshot = prepared.snapshots_by_index[MarketIndexCode.SHENZHEN_COMPONENT]
 
     assert snapshot.health is MarketIndexHealth.LIVE
     assert snapshot.observed_at == provider_observed_at
-    assert clock.sleep_calls == [expected_observed_at]
+    assert clock.sleep_calls == [expected_observed_at] * len(DASHBOARD_INDEX_CODES)
     assert snapshot.observed_at <= clock.now()
 
 
@@ -258,11 +313,11 @@ def test_blocked_index_snapshot_is_not_returned_before_observation_boundary() ->
             observed_no_later_than=requested_at,
         )
     )
-    snapshot = next(iter(prepared.snapshots_by_index.values()))
+    snapshot = prepared.snapshots_by_index[MarketIndexCode.SHENZHEN_COMPONENT]
 
     assert snapshot.health is MarketIndexHealth.BLOCKED
     assert snapshot.observed_at == expected_observed_at
-    assert clock.sleep_calls == [expected_observed_at]
+    assert clock.sleep_calls == [expected_observed_at] * len(DASHBOARD_INDEX_CODES)
     assert snapshot.observed_at <= clock.now()
 
 
@@ -321,8 +376,8 @@ def test_v2_no_condition_plan_gets_informational_failure_without_a_requirement()
     assert snapshot.fact_requests == ()
 
 
-def test_schema_v1_plans_do_not_trigger_index_acquisition() -> None:
-    provider = _Provider(_batch())
+def test_schema_v1_plans_do_not_add_plan_owned_index_requirements() -> None:
+    provider = _DashboardProvider()
     service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
     plan = _plan(1, {"type": "NON_DECREASING_CLOSE"}, schema_version=1)
 
@@ -334,7 +389,7 @@ def test_schema_v1_plans_do_not_trigger_index_acquisition() -> None:
         )
     )
 
-    assert provider.calls == []
+    assert set(provider.calls) == set(DASHBOARD_INDEX_CODES)
     assert prepared.snapshot_for_plan(plan) is None
 
 

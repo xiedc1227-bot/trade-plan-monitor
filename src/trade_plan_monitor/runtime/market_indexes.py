@@ -21,6 +21,14 @@ from trade_plan_monitor.market_index.requirements import (
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
 
 
+DASHBOARD_INDEX_CODES = (
+    MarketIndexCode.SSE_COMPOSITE,
+    MarketIndexCode.SHENZHEN_COMPONENT,
+    MarketIndexCode.CHINEXT,
+    MarketIndexCode.STAR_50,
+)
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeMarketIndexBatch:
     """One immutable set of shared snapshots prepared for a runtime cutoff."""
@@ -38,7 +46,7 @@ class RuntimeMarketIndexBatch:
 
 
 class RuntimeMarketIndexService:
-    """Union active-plan requests before acquiring each board index once."""
+    """Acquire fixed dashboard indexes and union any plan-owned requirements once."""
 
     def __init__(self, coordinator: MarketIndexSnapshotCoordinator) -> None:
         if not isinstance(coordinator, MarketIndexSnapshotCoordinator):
@@ -62,7 +70,9 @@ class RuntimeMarketIndexService:
             raise TypeError("plans must be a tuple of TradePlan values")
         if len(plans) > 10:
             raise ValueError("runtime supports at most 10 active plans")
-        grouped: dict[MarketIndexCode, list[tuple[MarketIndexFactRequest, ...]]] = {}
+        grouped: dict[MarketIndexCode, list[tuple[MarketIndexFactRequest, ...]]] = {
+            index_code: [()] for index_code in DASHBOARD_INDEX_CODES
+        }
         for plan in plans:
             binding = plan.reference_market
             if plan.schema_version == 1 or binding is None:
@@ -104,4 +114,8 @@ class RuntimeMarketIndexService:
         )
 
 
-__all__ = ["RuntimeMarketIndexBatch", "RuntimeMarketIndexService"]
+__all__ = [
+    "DASHBOARD_INDEX_CODES",
+    "RuntimeMarketIndexBatch",
+    "RuntimeMarketIndexService",
+]
