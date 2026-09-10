@@ -376,12 +376,15 @@ onBeforeUnmount(() => {
   padding: 1rem;
 }
 
-.app-shell__main:focus-visible,
 .app-shell__brand:focus-visible,
 .app-shell__navigation-link:focus-visible,
 .app-shell__mobile-toggle:focus-visible {
   outline: 0.1875rem solid var(--color-focus-ring);
   outline-offset: 0.1875rem;
+}
+
+.app-shell__main:focus-visible {
+  outline: none;
 }
 
 @media (min-width: 48rem) {

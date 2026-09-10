@@ -253,6 +253,11 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await page.goto(baseUrl);
 
   await expect(page.getByRole("heading", { level: 1, name: "监控总览" })).toBeVisible();
+  const mainContent = page.locator("#main-content");
+  await mainContent.focus();
+  expect(
+    await mainContent.evaluate((element) => getComputedStyle(element).outlineStyle),
+  ).toBe("none");
   await expect(page.getByText("华兴源创")).toBeVisible();
   await expect(page.getByText("主要指数走势 · 当日")).toBeVisible();
   await expect(page.getByText("科创50").first()).toBeVisible();

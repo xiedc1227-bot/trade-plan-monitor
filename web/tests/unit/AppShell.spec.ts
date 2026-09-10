@@ -272,6 +272,14 @@ describe("AppShell", () => {
     expect(source).toMatch(/transition-duration:\s*0\.01ms/);
   });
 
+  it("suppresses the full-page focus ring on the programmatically focused main region", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/layouts/AppShell.vue"), "utf8");
+
+    expect(source).toMatch(
+      /\.app-shell__main:focus-visible\s*\{[^}]*outline:\s*none;/s,
+    );
+  });
+
   it("styles a reachable service with unavailable monitoring as a warning", () => {
     const source = readFileSync(resolve(process.cwd(), "src/layouts/AppShell.vue"), "utf8");
 
