@@ -285,7 +285,7 @@ def test_provider_response_order_does_not_change_snapshot_content() -> None:
     assert first.official_daily_bars == second.official_daily_bars
 
 
-def test_snapshot_retains_only_the_exact_unioned_history_window() -> None:
+def test_snapshot_retains_provider_minute_history_and_exact_official_window() -> None:
     provider = _FakeProvider({MarketIndexCode.CHINEXT: _batch(MarketIndexCode.CHINEXT)})
     coordinator = MarketIndexSnapshotCoordinator(provider)
 
@@ -299,7 +299,7 @@ def test_snapshot_retains_only_the_exact_unioned_history_window() -> None:
     )
 
     assert snapshot.health is MarketIndexHealth.LIVE
-    assert snapshot.five_minute_bars == (_batch(MarketIndexCode.CHINEXT).five_minute_bars[-1],)
+    assert snapshot.five_minute_bars == _batch(MarketIndexCode.CHINEXT).five_minute_bars
     assert snapshot.official_daily_bars == _batch(MarketIndexCode.CHINEXT).official_daily_bars[-3:]
 
 

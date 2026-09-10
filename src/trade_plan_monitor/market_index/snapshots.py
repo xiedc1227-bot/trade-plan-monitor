@@ -261,9 +261,10 @@ def build_market_index_snapshot(
             observed_at=batch.observed_at,
             batch=batch,
         )
+    required_five_minute_bars = batch.five_minute_bars[-five_minute_count:]
     batch = MarketIndexProviderBatch.model_construct(
         index_code=index_code,
-        five_minute_bars=batch.five_minute_bars[-five_minute_count:],
+        five_minute_bars=batch.five_minute_bars,
         official_daily_bars=batch.official_daily_bars[-official_daily_count:],
         content_revision=content_revision,
         observed_at=observed_at,
@@ -278,7 +279,7 @@ def build_market_index_snapshot(
             batch=batch,
             health=MarketIndexHealth.STALE,
         )
-    if _has_five_minute_gap(batch.five_minute_bars):
+    if _has_five_minute_gap(required_five_minute_bars):
         return _blocked_snapshot(
             index_code=index_code,
             decision_cutoff=decision_cutoff,

@@ -264,13 +264,17 @@ class TushareMarketIndexProvider:
             )
             observed_at = self._observed_at()
             revision = self._content_revision(minute_frame, daily_frame)
-            minute_bars = self._minute_bars(
-                minute_frame,
-                index_code=index_code,
+            minute_bars = self._retain_current_day_minutes(
+                self._minute_bars(
+                    minute_frame,
+                    index_code=index_code,
+                    decision_cutoff=cutoff,
+                    observed_at=observed_at,
+                    revision=revision,
+                ),
                 decision_cutoff=cutoff,
-                observed_at=observed_at,
-                revision=revision,
-            )[-five_minute_bar_count:]
+                minimum_count=five_minute_bar_count,
+            )
             daily_bars = self._daily_bars(
                 daily_frame,
                 index_code=index_code,
@@ -476,6 +480,24 @@ class TushareMarketIndexProvider:
                 raise ValueError("duplicate index-minute identity")
             candidates[bar_at] = bar
         return tuple(candidates[key] for key in sorted(candidates))
+
+    @staticmethod
+    def _retain_current_day_minutes(
+        bars: tuple[MarketIndexBar, ...],
+        *,
+        decision_cutoff: datetime,
+        minimum_count: int,
+    ) -> tuple[MarketIndexBar, ...]:
+        current_day = tuple(
+            bar for bar in bars if bar.bar_at.date() == decision_cutoff.date()
+        )
+        previous_count = max(0, minimum_count - len(current_day))
+        if previous_count == 0:
+            return current_day
+        previous = tuple(
+            bar for bar in bars if bar.bar_at.date() < decision_cutoff.date()
+        )
+        return previous[-previous_count:] + current_day
 
     def _daily_bars(
         self,

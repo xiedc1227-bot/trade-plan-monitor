@@ -264,7 +264,7 @@ def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_unit
                 0,
                 tzinfo=ZoneInfo("Asia/Shanghai"),
             ),
-            five_minute_bar_count=2,
+            five_minute_bar_count=1,
             official_daily_bar_count=2,
         )
     )
