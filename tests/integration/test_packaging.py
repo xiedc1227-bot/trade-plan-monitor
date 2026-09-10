@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tomllib
 from contextlib import nullcontext
 from importlib import metadata, resources
 from pathlib import Path
@@ -73,6 +74,13 @@ def test_installed_console_entry_loads_the_production_cli() -> None:
 
     assert entry_point.value == "trade_plan_monitor.cli:console_main"
     assert entry_point.load().__name__ == "console_main"
+
+
+def test_production_dependencies_include_a_websocket_protocol_implementation() -> None:
+    pyproject = Path(__file__).parents[2] / "pyproject.toml"
+    project = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]
+
+    assert "websockets==17.1" in project["dependencies"]
 
 
 def test_built_vue_distribution_is_discoverable_as_package_data() -> None:

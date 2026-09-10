@@ -19,6 +19,7 @@ dependencies = [
     "tushare==1.4.29",
     "urllib3==2.7.0",
     "uvicorn==0.52.3",
+    "websockets==17.1",
 ]
 
 [project.optional-dependencies]
