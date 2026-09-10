@@ -20,7 +20,6 @@ from trade_plan_monitor.market_index.requirements import (
 )
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
 
-
 DASHBOARD_INDEX_CODES = (
     MarketIndexCode.SSE_COMPOSITE,
     MarketIndexCode.SHENZHEN_COMPONENT,

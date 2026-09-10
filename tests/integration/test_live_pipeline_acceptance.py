@@ -41,7 +41,7 @@ from trade_plan_monitor.market_index.tushare import (
 )
 from trade_plan_monitor.runtime.clock import SHANGHAI
 from trade_plan_monitor.runtime.health import RuntimeResourceStatus, RuntimeServiceStatus
-from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexBatch
+from trade_plan_monitor.runtime.market_indexes import DASHBOARD_INDEX_CODES, RuntimeMarketIndexBatch
 from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
 from trade_plan_monitor.runtime.request_control import create_live_tushare_request_controller
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
@@ -915,8 +915,7 @@ def test_startup_batches_persisted_pending_closes_by_date_and_shared_index(
             assert index_calls
             assert all(count == 1 for count in Counter(index_calls).values())
             assert {code for _name, code in index_calls} == {
-                MarketIndexCode.SHENZHEN_COMPONENT.value,
-                MarketIndexCode.SSE_COMPOSITE.value,
+                index_code.value for index_code in DASHBOARD_INDEX_CODES
             }
             remaining = tuple(
                 recovery.evaluations.pending_close_date(plan.symbol) for plan in plans
@@ -1140,14 +1139,10 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
                 {
                     (name, code.value): 1
                     for name in ("idx_mins", "rt_idx_min_daily", "index_daily")
-                    for code in (
-                        MarketIndexCode.SHENZHEN_COMPONENT,
-                        MarketIndexCode.SSE_COMPOSITE,
-                    )
+                    for code in DASHBOARD_INDEX_CODES
                 }
             )
             assert all(code != MarketIndexCode.BSE_50.value for _, code in index_calls)
-            assert all(code != MarketIndexCode.CHINEXT.value for _, code in index_calls)
 
             calls_before_invalidation = tuple(index_calls)
             certification = tmp_path / "data/live-certification/tushare-board-index-live.json"

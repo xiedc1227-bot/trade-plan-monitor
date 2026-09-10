@@ -13,11 +13,16 @@ import { createMarketIndexApi } from "../../src/api/marketIndexes";
 import IndexConditionProgress from "../../src/components/market-index/IndexConditionProgress.vue";
 import MarketIndexChart from "../../src/components/market-index/MarketIndexChart.vue";
 import MarketIndexDataStrip from "../../src/components/market-index/MarketIndexDataStrip.vue";
+import MarketIndexTrendCard from "../../src/components/market-index/MarketIndexTrendCard.vue";
 import ReferenceMarketPanel from "../../src/components/market-index/ReferenceMarketPanel.vue";
 import {
   useMarketIndexSeries,
   type MarketIndexSeriesQuery,
 } from "../../src/composables/useMarketIndexSeries";
+import {
+  emptyDashboardMarketIndexTrends,
+  useDashboardMarketIndexTrends,
+} from "../../src/composables/useDashboardMarketIndexTrends";
 
 const hash = "a".repeat(64);
 const at = "2026-09-02T10:35:00+08:00";
@@ -121,17 +126,37 @@ const bars: readonly MarketIndexBarView[] = Object.freeze([
 enableAutoUnmount(afterEach);
 
 describe("market index monitor views", () => {
-  it("keeps shared facts separate and leaves a failed board visible", () => {
+  it("always renders four fixed current-day index cards and leaves a failed index visible", () => {
     const wrapper = mount(MarketIndexDataStrip, {
-      props: { indexes: [snapshot, blockedSnapshot] },
+      props: { indexes: [snapshot, blockedSnapshot], trends: emptyDashboardMarketIndexTrends },
     });
 
-    expect(wrapper.findAll('[data-testid="market-index-card"]')).toHaveLength(2);
-    expect(wrapper.text()).toContain("参考板块指数：共用数据");
-    expect(wrapper.text()).toContain("SMA 20");
+    expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(4);
+    expect(wrapper.text()).toContain("主要指数走势 · 当日");
+    expect(wrapper.text()).toContain("上证指数");
+    expect(wrapper.text()).toContain("深证成指");
+    expect(wrapper.text()).toContain("创业板指");
     expect(wrapper.text()).toContain("PROVIDER_UNAVAILABLE");
-    expect(wrapper.text()).not.toContain("允许买入");
-    expect(wrapper.text()).not.toContain("计划条件");
+    expect(wrapper.text()).toContain("等待当日行情数据");
+  });
+
+  it("keeps cached chart data visible while exposing a later trend refresh error", () => {
+    const wrapper = mount(MarketIndexTrendCard, {
+      props: {
+        identity: { board: "STAR_MARKET", displayName: "科创50", indexCode: "000688.SH" },
+        summary: snapshot,
+        trend: {
+          error: "当日指数走势暂不可用",
+          page: { hasMore: false, items: [...bars], limit: 64, nextCursor: null, snapshotHash: hash },
+          status: "ERROR",
+        },
+      },
+    });
+
+    expect(wrapper.get('[data-testid="market-index-sparkline"]').attributes("aria-label")).toContain("科创50");
+    expect(wrapper.get('[role="alert"]').text()).toContain("当日指数走势暂不可用");
+    expect(wrapper.get("button").text()).toBe("重试");
+    expect(wrapper.get("table").text()).toContain("1234.56");
   });
 
   it("distinguishes an unused plan from satisfied index conditions", () => {
@@ -205,6 +230,66 @@ describe("market index monitor views", () => {
     expect(errorWrapper.find(".index-chart__scroller").exists()).toBe(false);
     expect(loadingWrapper.find("table").exists()).toBe(false);
     expect(errorWrapper.find("table").exists()).toBe(false);
+  });
+});
+
+describe("useDashboardMarketIndexTrends", () => {
+  it("loads four independent current-day five-minute series from the dashboard cutoff", async () => {
+    const observedAt = shallowRef("2026-09-02T10:35:02+08:00");
+    const loader = vi.fn(async (query: MarketIndexSeriesQuery) => ({
+      hasMore: false,
+      items: [{ ...bars[0]!, indexCode: query.indexCode }],
+      limit: query.limit,
+      nextCursor: null,
+      snapshotHash: hash,
+    }));
+    const result = useDashboardMarketIndexTrends({
+      api: { getBars: (query, _options) => loader(query) },
+      observedAt,
+      summaries: shallowRef([snapshot]),
+    });
+
+    await flushPromises();
+
+    expect(loader).toHaveBeenCalledTimes(4);
+    expect(loader.mock.calls.map(([query]) => query.indexCode)).toEqual([
+      "000001.SH", "399001.SZ", "399006.SZ", "000688.SH",
+    ]);
+    expect(loader).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endAt: "2026-09-02T10:35:00+08:00",
+        indexCode: "000688.SH",
+        interval: "FIVE_MINUTE",
+        limit: 64,
+        startAt: "2026-09-02T09:30:00+08:00",
+      }),
+    );
+    expect(result.trends.value["000688.SH"].status).toBe("READY");
+    expect(result.trends.value["000001.SH"].page?.items?.[0]?.indexCode).toBe("000001.SH");
+  });
+
+  it("keeps successful index data visible when only one trend request fails", async () => {
+    const loader = vi.fn(async (query: MarketIndexSeriesQuery) => {
+      if (query.indexCode === "399006.SZ") throw new Error("provider unavailable");
+      return {
+        hasMore: false,
+        items: [{ ...bars[0]!, indexCode: query.indexCode }],
+        limit: query.limit,
+        nextCursor: null,
+        snapshotHash: hash,
+      };
+    });
+    const result = useDashboardMarketIndexTrends({
+      api: { getBars: (query, _options) => loader(query) },
+      observedAt: at,
+      summaries: [snapshot],
+    });
+
+    await flushPromises();
+
+    expect(result.trends.value["399006.SZ"].status).toBe("ERROR");
+    expect(result.trends.value["399006.SZ"].error).toBe("当日指数走势暂不可用");
+    expect(result.trends.value["000688.SH"].status).toBe("READY");
   });
 });
 

@@ -18,6 +18,23 @@ const dashboard: DashboardResponse = {
   dataAgeSeconds: 2,
   marketIndexes: [
     {
+      board: "SSE_MAIN",
+      closePoints: "3400.12",
+      completedBucketAt: "2026-09-02T10:35:00+08:00",
+      displayName: "上证指数",
+      health: "LIVE",
+      indexCode: "000001.SH",
+      indicatorFacts: [],
+      issues: [],
+      mappedSymbolCount: 0,
+      mappingVersion: "board-index-map-v1",
+      observedAt: "2026-09-02T10:35:02+08:00",
+      priorClosePoints: "3388.10",
+      revision: 43,
+      sessionChangeRatio: "0.003547",
+      snapshotHash: "f".repeat(64),
+    },
+    {
       board: "STAR_MARKET",
       closePoints: "1234.56",
       completedBucketAt: "2026-09-02T10:35:00+08:00",
@@ -35,21 +52,16 @@ const dashboard: DashboardResponse = {
       snapshotHash: "a".repeat(64),
     },
     {
-      board: "BSE",
-      closePoints: null,
-      completedBucketAt: null,
-      displayName: "北证50",
-      health: "BLOCKED",
-      indexCode: "899050.BJ",
-      indicatorFacts: [],
-      issues: ["PROVIDER_UNAVAILABLE"],
-      mappedSymbolCount: 0,
-      mappingVersion: "board-index-map-v1",
-      observedAt: "2026-09-02T10:35:02+08:00",
-      priorClosePoints: null,
-      revision: 43,
-      sessionChangeRatio: null,
-      snapshotHash: "f".repeat(64),
+      board: "SZSE_MAIN", closePoints: "10800.24", completedBucketAt: "2026-09-02T10:35:00+08:00",
+      displayName: "深证成指", health: "LIVE", indexCode: "399001.SZ", indicatorFacts: [], issues: [],
+      mappedSymbolCount: 0, mappingVersion: "board-index-map-v1", observedAt: "2026-09-02T10:35:02+08:00",
+      priorClosePoints: "10788.20", revision: 44, sessionChangeRatio: "0.001116", snapshotHash: "b".repeat(64),
+    },
+    {
+      board: "CHINEXT", closePoints: "2210.11", completedBucketAt: "2026-09-02T10:35:00+08:00",
+      displayName: "创业板指", health: "LIVE", indexCode: "399006.SZ", indicatorFacts: [], issues: [],
+      mappedSymbolCount: 0, mappingVersion: "board-index-map-v1", observedAt: "2026-09-02T10:35:02+08:00",
+      priorClosePoints: "2200.10", revision: 45, sessionChangeRatio: "0.004550", snapshotHash: "c".repeat(64),
     },
   ],
   observedAt: "2026-09-02T10:35:02+08:00",
@@ -163,6 +175,24 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("requestfailed", (request) => audit.failedRequests.push(request.url()));
   await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
+  await page.route(/\/api\/v1\/market-indexes\/[^/]+\/bars\?/, async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const indexCode = decodeURIComponent(requestUrl.pathname.split("/")[4] ?? "");
+    await route.fulfill({
+      body: JSON.stringify({
+        hasMore: false,
+        items: [{
+          amount: null, barAt: "2026-09-02T10:35:00+08:00", closePoints: "1234.56",
+          highPoints: "1235.20", indexCode, interval: "FIVE_MINUTE",
+          lowPoints: "1229.90", observedAt: "2026-09-02T10:35:02+08:00", openPoints: "1230.10",
+          providerRevision: 3, sourceKind: "PROVISIONAL", volume: "1000",
+        }],
+        limit: 64, nextCursor: null, snapshotHash: "a".repeat(64),
+      }),
+      contentType: "application/json; charset=utf-8",
+      status: 200,
+    });
+  });
 });
 
 test.afterEach(({ page }) => {
@@ -224,14 +254,14 @@ test("renders the authoritative dashboard and shared board-index summary at the 
 
   await expect(page.getByRole("heading", { level: 1, name: "监控总览" })).toBeVisible();
   await expect(page.getByText("华兴源创")).toBeVisible();
-  await expect(page.getByText("参考板块指数：共用数据")).toBeVisible();
+  await expect(page.getByText("主要指数走势 · 当日")).toBeVisible();
   await expect(page.getByText("科创50").first()).toBeVisible();
   await expect(page.getByText("计划指数条件")).toBeVisible();
-  const indexCards = page.getByTestId("market-index-card");
-  await expect(indexCards).toHaveCount(2);
+  const indexCards = page.getByTestId("market-index-trend-card");
+  await expect(indexCards).toHaveCount(4);
   await expect(indexCards.filter({ hasText: "科创50" })).toContainText("实时 ●");
-  await expect(indexCards.filter({ hasText: "北证50" })).toContainText("阻断 ×");
-  await expect(indexCards.filter({ hasText: "北证50" })).toContainText("PROVIDER_UNAVAILABLE");
+  await expect(indexCards.filter({ hasText: "上证指数" })).toContainText("3400.12");
+  await expect(page.getByTestId("market-index-sparkline")).toHaveCount(4);
   const rows = page.getByTestId("watchlist-row");
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText("满足 1");
@@ -240,7 +270,7 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await expect(rows.nth(1)).toContainText("未满足 2");
   await expect(rows.nth(0)).toContainText("000688.SH");
   await expect(rows.nth(1)).toContainText("000688.SH");
-  expect(chartRequests).toEqual([]);
+  expect(chartRequests.some((url) => /echarts_core|installCanvasRenderer/.test(url))).toBe(true);
 
   await page.getByRole("link", { name: "688001.SH" }).click();
   await expect(page).toHaveURL(/\/stocks\/688001\.SH$/);
@@ -264,6 +294,9 @@ test("keeps the shared-index and per-plan dashboard boundary responsive and acce
     await page.evaluate(() => {
       document.documentElement.style.fontSize = "200%";
     });
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
     const sizes = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,

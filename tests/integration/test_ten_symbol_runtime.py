@@ -88,7 +88,10 @@ from trade_plan_monitor.runtime.health import (
     SymbolHealthSnapshot,
     SymbolHealthTracker,
 )
-from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexService
+from trade_plan_monitor.runtime.market_indexes import (
+    DASHBOARD_INDEX_CODES,
+    RuntimeMarketIndexService,
+)
 from trade_plan_monitor.runtime.production_context import ProductionContextBuilder
 from trade_plan_monitor.runtime.recovery import (
     RecoveryErrorCode,
@@ -1394,11 +1397,12 @@ def test_intraday_service_injects_one_validated_reference_snapshot(
     ]
 
     def index_bar(
+        index_code: MarketIndexCode,
         interval: MarketIndexInterval,
         bar_at: datetime,
     ) -> MarketIndexBar:
         return MarketIndexBar(
-            index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+            index_code=index_code,
             interval=interval,
             bar_at=bar_at,
             open_points=Decimal("100"),
@@ -1431,14 +1435,16 @@ def test_intraday_service_injects_one_validated_reference_snapshot(
             official_daily_bar_count: int,
         ) -> MarketIndexProviderBatch:
             self.call_count += 1
-            assert index_code is MarketIndexCode.SHENZHEN_COMPONENT
             assert decision_cutoff == bucket_end
             assert (five_minute_bar_count, official_daily_bar_count) == (1, 2)
             return MarketIndexProviderBatch(
                 index_code=index_code,
-                five_minute_bars=(index_bar(MarketIndexInterval.FIVE_MINUTE, bucket_end),),
+                five_minute_bars=(
+                    index_bar(index_code, MarketIndexInterval.FIVE_MINUTE, bucket_end),
+                ),
                 official_daily_bars=tuple(
                     index_bar(
+                        index_code,
                         MarketIndexInterval.OFFICIAL_DAILY,
                         datetime(2026, 8, day, 15, 0, tzinfo=SHANGHAI),
                     )
@@ -1481,7 +1487,7 @@ def test_intraday_service_injects_one_validated_reference_snapshot(
     )
 
     assert result.status is IntradayCycleStatus.COMMITTED
-    assert provider.call_count == 1
+    assert provider.call_count == len(DASHBOARD_INDEX_CODES)
     assert len(captured) == 1
     snapshot = captured[0].reference_market_snapshot
     assert snapshot is not None

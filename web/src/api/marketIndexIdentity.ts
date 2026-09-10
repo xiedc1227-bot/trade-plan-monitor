@@ -1,6 +1,6 @@
 import type { Board, MarketIndexCode } from "./generated";
 
-interface CanonicalMarketIndexIdentity {
+export interface CanonicalMarketIndexIdentity {
   readonly board: Board;
   readonly displayName: string;
 }
@@ -14,6 +14,19 @@ const canonicalMarketIndexIdentities: Readonly<
   "000688.SH": Object.freeze({ board: "STAR_MARKET", displayName: "科创50" }),
   "899050.BJ": Object.freeze({ board: "BSE", displayName: "北证50" }),
 });
+
+export const dashboardMarketIndexCodes = Object.freeze([
+  "000001.SH",
+  "399001.SZ",
+  "399006.SZ",
+  "000688.SH",
+] satisfies readonly MarketIndexCode[]);
+
+export const dashboardMarketIndexIdentities = Object.freeze(
+  dashboardMarketIndexCodes.map((indexCode) =>
+    Object.freeze({ indexCode, ...canonicalMarketIndexIdentities[indexCode] }),
+  ),
+);
 
 export function isCanonicalMarketIndexIdentity(value: unknown): boolean {
   if (

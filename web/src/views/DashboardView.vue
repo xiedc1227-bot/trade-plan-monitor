@@ -13,6 +13,10 @@ import type {
 import WatchlistTable from "../components/dashboard/WatchlistTable.vue";
 import WatchlistToolbar from "../components/dashboard/WatchlistToolbar.vue";
 import MarketIndexDataStrip from "../components/market-index/MarketIndexDataStrip.vue";
+import {
+  emptyDashboardMarketIndexTrends,
+  type DashboardMarketIndexTrend,
+} from "../composables/useDashboardMarketIndexTrends";
 import type {
   SortDirection,
   WatchlistFilter,
@@ -27,12 +31,16 @@ interface Props {
   error?: string | null;
   loading?: boolean;
   marketIndexes?: readonly MarketIndexSnapshotView[];
+  marketIndexTrends?: Readonly<
+    Record<MarketIndexSnapshotView["indexCode"], DashboardMarketIndexTrend>
+  >;
   observedAt: string | null;
   symbols: readonly SymbolSummaryView[];
   unavailable?: DashboardProjectionUnavailableResponse | null;
 }
 
 interface Emits {
+  retryMarketIndex: [indexCode: MarketIndexSnapshotView["indexCode"]];
   selectSymbol: [symbol: string];
 }
 
@@ -40,6 +48,7 @@ const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
   marketIndexes: () => [],
+  marketIndexTrends: () => emptyDashboardMarketIndexTrends,
   unavailable: null,
 });
 const emit = defineEmits<Emits>();
@@ -215,7 +224,12 @@ function compareText(left: string, right: string): number {
       权威监控投影尚未就绪（{{ unavailable.reason }}，序列 {{ unavailable.sequence }}）。
     </p>
 
-    <MarketIndexDataStrip v-else :indexes="marketIndexes" />
+    <MarketIndexDataStrip
+      v-else
+      :indexes="marketIndexes"
+      :trends="marketIndexTrends"
+      @retry-index="emit('retryMarketIndex', $event)"
+    />
 
     <p v-if="error" class="dashboard-view__error" role="alert">{{ error }}</p>
     <p v-if="loading" class="dashboard-view__loading" role="status" aria-live="polite">

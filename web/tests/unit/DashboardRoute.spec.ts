@@ -115,7 +115,7 @@ describe("DashboardRouteView", () => {
 
     expect(wrapper.text()).toContain("华兴源创");
     expect(wrapper.text()).toContain("低吸观察");
-    expect(wrapper.text()).toContain("参考板块指数：共用数据");
+    expect(wrapper.text()).toContain("主要指数走势 · 当日");
     expect(wrapper.text()).toContain("科创50");
     expect(wrapper.text()).toContain("计划指数条件");
 
