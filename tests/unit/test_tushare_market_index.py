@@ -174,6 +174,36 @@ class _WrongRealtimeFrequencyClient(_Client):
         return frame
 
 
+class _OverlappingCurrentDayClient(_Client):
+    def idx_mins(self, **kwargs: object) -> pd.DataFrame:
+        historical = super().idx_mins(**kwargs)
+        current = pd.DataFrame(
+            [
+                {
+                    "ts_code": "399001.SZ",
+                    "trade_time": "2026-09-07 09:35:00",
+                    "open": "100.0",
+                    "high": "101.0",
+                    "low": "99.5",
+                    "close": "100.5",
+                    "vol": "10",
+                    "amount": "30",
+                },
+                {
+                    "ts_code": "399001.SZ",
+                    "trade_time": "2026-09-07 09:55:00",
+                    "open": "100.5",
+                    "high": "101.5",
+                    "low": "100.0",
+                    "close": "101.0",
+                    "vol": "11",
+                    "amount": "31",
+                },
+            ]
+        )
+        return pd.concat([historical, current], ignore_index=True)
+
+
 def _ready_profile():
     return certified_tushare_market_index_profile(
         capabilities={
@@ -280,6 +310,7 @@ def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_unit
     assert len(client.idx_calls) == 1
     assert len(client.realtime_idx_calls) == 1
     assert len(client.daily_calls) == 1
+    assert client.idx_calls[0]["end_date"] == "2026-09-07 10:00:00"
     assert [bar.bar_at.isoformat(timespec="minutes") for bar in batch.five_minute_bars] == [
         "2026-09-07T09:55+08:00",
         "2026-09-07T10:00+08:00",
@@ -292,6 +323,31 @@ def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_unit
     assert batch.official_daily_bars[-1].amount == Decimal("5000")
     assert all(bar.provider_revision == batch.content_revision for bar in batch.five_minute_bars)
     assert all(bar.provider_revision == batch.content_revision for bar in batch.official_daily_bars)
+
+
+def test_index_provider_backfills_current_day_and_prefers_realtime_overlap() -> None:
+    provider = TushareMarketIndexProvider(
+        client=_OverlappingCurrentDayClient(),
+        profile=_ready_profile(),
+        request_controller=_Controller(),
+        now=lambda: datetime(2026, 9, 7, 10, 0, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    batch = asyncio.run(
+        provider.acquire_index_data(
+            index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+            decision_cutoff=datetime(2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            five_minute_bar_count=1,
+            official_daily_bar_count=1,
+        )
+    )
+
+    assert [bar.bar_at.isoformat(timespec="minutes") for bar in batch.five_minute_bars] == [
+        "2026-09-07T09:35+08:00",
+        "2026-09-07T09:55+08:00",
+        "2026-09-07T10:00+08:00",
+    ]
+    assert batch.five_minute_bars[1].close_points == Decimal("102.0")
 
 
 def test_index_provider_reuses_stable_reference_frames_during_intraday_refresh() -> None:

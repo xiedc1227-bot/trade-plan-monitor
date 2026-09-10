@@ -369,11 +369,7 @@ class TushareMarketIndexProvider:
             ts_code=index_code.value,
             freq="5min",
             start_date=(decision_cutoff - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
-            end_date=datetime.combine(
-                decision_cutoff.date() - timedelta(days=1),
-                time(23, 59, 59),
-                _SHANGHAI,
-            ).strftime("%Y-%m-%d %H:%M:%S"),
+            end_date=decision_cutoff.strftime("%Y-%m-%d %H:%M:%S"),
             fields=_INDEX_MINUTE_FIELDS,
         )
 
@@ -404,9 +400,17 @@ class TushareMarketIndexProvider:
             frequency_count == 1 and not realtime["freq"].astype(str).eq("5MIN").all()
         ):
             raise ValueError("realtime index-minute frequency is invalid")
-        current = realtime.rename(columns={symbol_column: "ts_code", "time": "trade_time"})
+        historical = historical[list(_INDEX_MINUTE_COLUMNS)]
+        current = realtime.rename(columns={symbol_column: "ts_code", "time": "trade_time"})[
+            list(_INDEX_MINUTE_COLUMNS)
+        ]
+        current_identities = pd.MultiIndex.from_frame(current[["ts_code", "trade_time"]])
+        historical_identities = pd.MultiIndex.from_frame(
+            historical[["ts_code", "trade_time"]]
+        )
+        historical = historical.loc[~historical_identities.isin(current_identities)]
         return pd.concat(
-            [historical[list(_INDEX_MINUTE_COLUMNS)], current[list(_INDEX_MINUTE_COLUMNS)]],
+            [historical, current],
             ignore_index=True,
         )
 
