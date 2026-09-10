@@ -193,6 +193,12 @@ class TushareMarketIndexProvider:
         self._client = client
         self._request_controller = request_controller
         self._now = now
+        self._historical_minute_cache: dict[
+            tuple[MarketIndexCode, date], pd.DataFrame
+        ] = {}
+        self._intraday_daily_cache: dict[
+            tuple[MarketIndexCode, date], pd.DataFrame
+        ] = {}
 
     @property
     def profile(self) -> TushareMarketIndexProfile:
@@ -230,11 +236,10 @@ class TushareMarketIndexProvider:
         cutoff = decision_cutoff.astimezone(_SHANGHAI)
         work_prefix = f"index:{index_code.value}:{cutoff.strftime('%Y%m%dT%H%M')}"
         try:
-            minute_frame = await self._request_controller.execute(
-                TushareOperation.INDEX_MINUTES,
-                lambda: self._fetch_index_minutes(index_code, cutoff),
+            minute_frame = await self._historical_minutes(
+                index_code=index_code,
+                cutoff=cutoff,
                 work_key=f"{work_prefix}:minutes",
-                priority=RequestPriority.MARKET_DEADLINE,
             )
             realtime_minute_frame = await self._request_controller.execute(
                 TushareOperation.INDEX_MINUTES,
@@ -242,11 +247,10 @@ class TushareMarketIndexProvider:
                 work_key=f"{work_prefix}:realtime-minutes",
                 priority=RequestPriority.MARKET_DEADLINE,
             )
-            daily_frame = await self._request_controller.execute(
-                TushareOperation.INDEX_DAILY,
-                lambda: self._fetch_index_daily(index_code, cutoff),
+            daily_frame = await self._official_daily(
+                index_code=index_code,
+                cutoff=cutoff,
                 work_key=f"{work_prefix}:daily",
-                priority=RequestPriority.MARKET_DEADLINE,
             )
             if (
                 not isinstance(minute_frame, pd.DataFrame)
@@ -284,6 +288,70 @@ class TushareMarketIndexProvider:
             )
         except Exception:
             raise TushareMarketIndexProviderError from None
+
+    async def _historical_minutes(
+        self,
+        *,
+        index_code: MarketIndexCode,
+        cutoff: datetime,
+        work_key: str,
+    ) -> object:
+        cache_key = index_code, cutoff.date()
+        cached = self._historical_minute_cache.get(cache_key)
+        if cached is not None:
+            return cached.copy(deep=True)
+        frame = await self._request_controller.execute(
+            TushareOperation.INDEX_MINUTES,
+            lambda: self._fetch_index_minutes(index_code, cutoff),
+            work_key=work_key,
+            priority=RequestPriority.MARKET_DEADLINE,
+        )
+        if isinstance(frame, pd.DataFrame):
+            self._replace_index_cache_entry(
+                self._historical_minute_cache,
+                cache_key=cache_key,
+                frame=frame,
+            )
+        return frame
+
+    async def _official_daily(
+        self,
+        *,
+        index_code: MarketIndexCode,
+        cutoff: datetime,
+        work_key: str,
+    ) -> object:
+        cache_key = index_code, cutoff.date()
+        intraday = cutoff.timetz().replace(tzinfo=None) < time(15)
+        cached = self._intraday_daily_cache.get(cache_key) if intraday else None
+        if cached is not None:
+            return cached.copy(deep=True)
+        frame = await self._request_controller.execute(
+            TushareOperation.INDEX_DAILY,
+            lambda: self._fetch_index_daily(index_code, cutoff),
+            work_key=work_key,
+            priority=RequestPriority.MARKET_DEADLINE,
+        )
+        if intraday and isinstance(frame, pd.DataFrame):
+            self._replace_index_cache_entry(
+                self._intraday_daily_cache,
+                cache_key=cache_key,
+                frame=frame,
+            )
+        return frame
+
+    @staticmethod
+    def _replace_index_cache_entry(
+        cache: dict[tuple[MarketIndexCode, date], pd.DataFrame],
+        *,
+        cache_key: tuple[MarketIndexCode, date],
+        frame: pd.DataFrame,
+    ) -> None:
+        index_code, _trade_date = cache_key
+        for previous in tuple(cache):
+            if previous[0] is index_code and previous != cache_key:
+                del cache[previous]
+        cache[cache_key] = frame.copy(deep=True)
 
     def _fetch_index_minutes(
         self,

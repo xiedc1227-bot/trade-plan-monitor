@@ -294,6 +294,45 @@ def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_unit
     assert all(bar.provider_revision == batch.content_revision for bar in batch.official_daily_bars)
 
 
+def test_index_provider_reuses_stable_reference_frames_during_intraday_refresh() -> None:
+    client = _Client()
+    controller = _Controller()
+    provider = TushareMarketIndexProvider(
+        client=client,
+        profile=_ready_profile(),
+        request_controller=controller,
+        now=lambda: datetime(2026, 9, 7, 10, 5, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    async def scenario() -> None:
+        for minute in (0, 5):
+            await provider.acquire_index_data(
+                index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+                decision_cutoff=datetime(
+                    2026,
+                    9,
+                    7,
+                    10,
+                    minute,
+                    tzinfo=ZoneInfo("Asia/Shanghai"),
+                ),
+                five_minute_bar_count=2,
+                official_daily_bar_count=2,
+            )
+
+    asyncio.run(scenario())
+
+    assert len(client.realtime_idx_calls) == 2
+    assert len(client.idx_calls) == 1
+    assert len(client.daily_calls) == 1
+    assert [operation for operation, _work_key in controller.calls] == [
+        TushareOperation.INDEX_MINUTES,
+        TushareOperation.INDEX_MINUTES,
+        TushareOperation.INDEX_DAILY,
+        TushareOperation.INDEX_MINUTES,
+    ]
+
+
 def test_index_provider_rejects_wrong_returned_realtime_frequency() -> None:
     provider = TushareMarketIndexProvider(
         client=_WrongRealtimeFrequencyClient(),
