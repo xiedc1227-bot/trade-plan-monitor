@@ -55,13 +55,13 @@ const dashboard: DashboardResponse = {
       board: "SZSE_MAIN", closePoints: "10800.24", completedBucketAt: "2026-09-02T10:35:00+08:00",
       displayName: "深证成指", health: "LIVE", indexCode: "399001.SZ", indicatorFacts: [], issues: [],
       mappedSymbolCount: 0, mappingVersion: "board-index-map-v1", observedAt: "2026-09-02T10:35:02+08:00",
-      priorClosePoints: "10788.20", revision: 44, sessionChangeRatio: "0.001116", snapshotHash: "b".repeat(64),
+      priorClosePoints: "10788.20", revision: 44, sessionChangeRatio: "-0.001116", snapshotHash: "b".repeat(64),
     },
     {
       board: "CHINEXT", closePoints: "2210.11", completedBucketAt: "2026-09-02T10:35:00+08:00",
       displayName: "创业板指", health: "LIVE", indexCode: "399006.SZ", indicatorFacts: [], issues: [],
       mappedSymbolCount: 0, mappingVersion: "board-index-map-v1", observedAt: "2026-09-02T10:35:02+08:00",
-      priorClosePoints: "2200.10", revision: 45, sessionChangeRatio: "0.004550", snapshotHash: "c".repeat(64),
+      priorClosePoints: "2200.10", revision: 45, sessionChangeRatio: "0", snapshotHash: "c".repeat(64),
     },
   ],
   observedAt: "2026-09-02T10:35:02+08:00",
@@ -258,10 +258,24 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await expect(page.getByText("科创50").first()).toBeVisible();
   await expect(page.getByText("计划指数条件")).toBeVisible();
   await expect(page.getByTestId("market-index-selector")).toHaveCount(4);
+  const selectorColor = async (name: string) => page
+    .getByTestId("market-index-selector")
+    .filter({ hasText: name })
+    .locator("strong")
+    .evaluate((element) => getComputedStyle(element).color);
+  expect(await selectorColor("上证指数")).toBe("rgb(228, 93, 67)");
+  expect(await selectorColor("深证成指")).toBe("rgb(103, 183, 165)");
+  expect(await selectorColor("创业板指")).toBe("rgb(238, 241, 232)");
   const indexCards = page.getByTestId("market-index-trend-card");
   await expect(indexCards).toHaveCount(1);
   await expect(indexCards).toContainText("上证指数");
   await expect(indexCards).toContainText("3400.12");
+  expect(await indexCards.locator(".market-index-trend-card__high").evaluate(
+    (element) => getComputedStyle(element).color,
+  )).toBe("rgb(228, 93, 67)");
+  expect(await indexCards.locator(".market-index-trend-card__low").evaluate(
+    (element) => getComputedStyle(element).color,
+  )).toBe("rgb(103, 183, 165)");
   await expect(page.getByTestId("market-index-sparkline")).toHaveCount(1);
   await page.getByTestId("market-index-selector").filter({ hasText: "科创50" }).click();
   await expect(indexCards).toContainText("科创50");

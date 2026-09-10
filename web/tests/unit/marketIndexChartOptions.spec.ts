@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateIndexAxisBounds } from "../../src/components/market-index/marketIndexChartOptions";
+import {
+  calculateIndexAxisBounds,
+  marketIndexDirection,
+  marketIndexDirectionColor,
+} from "../../src/components/market-index/marketIndexChartOptions";
 
 describe("market index chart options", () => {
   it("keeps a prior close above the intraday range inside the visible y-axis", () => {
@@ -15,5 +19,16 @@ describe("market index chart options", () => {
 
     expect(bounds?.minimum).toBeLessThan(3000);
     expect(bounds?.maximum).toBeGreaterThan(3000);
+  });
+
+  it.each([
+    ["0.0123", "up", "#e45d43"],
+    ["-0.0123", "down", "#67b7a5"],
+    ["0", "flat", "#eef1e8"],
+    [null, "flat", "#eef1e8"],
+    ["invalid", "flat", "#eef1e8"],
+  ] as const)("maps session change %s to %s and its market color", (ratio, direction, color) => {
+    expect(marketIndexDirection(ratio)).toBe(direction);
+    expect(marketIndexDirectionColor(ratio)).toBe(color);
   });
 });

@@ -4,6 +4,7 @@ import { computed } from "vue";
 import type { ConnectionStatus, MarketIndexSnapshotView } from "../../api/generated";
 import type { CanonicalMarketIndexIdentity } from "../../api/marketIndexIdentity";
 import type { DashboardMarketIndexTrend } from "../../composables/useDashboardMarketIndexTrends";
+import { marketIndexDirection } from "./marketIndexChartOptions";
 import MarketIndexSparkline from "./MarketIndexSparkline.vue";
 
 interface Props {
@@ -75,11 +76,6 @@ function extrema(
   return values.length === 0 ? null : String(reducer(...values));
 }
 
-function trendDirection(value: string | null): "down" | "flat" | "up" {
-  const ratio = Number(value);
-  if (!Number.isFinite(ratio) || ratio === 0) return "flat";
-  return ratio > 0 ? "up" : "down";
-}
 </script>
 
 <template>
@@ -87,7 +83,7 @@ function trendDirection(value: string | null): "down" | "flat" | "up" {
     class="market-index-trend-card"
     data-testid="market-index-trend-card"
     :data-health="summary?.health ?? 'BLOCKED'"
-    :data-direction="trendDirection(summary?.sessionChangeRatio ?? null)"
+    :data-direction="marketIndexDirection(summary?.sessionChangeRatio ?? null)"
   >
     <header class="market-index-trend-card__header">
       <div>
@@ -100,8 +96,8 @@ function trendDirection(value: string | null): "down" | "flat" | "up" {
       <div class="market-index-trend-card__primary-fact">
         <dt>当前</dt><dd>{{ formatPoints(summary?.closePoints ?? null) }}</dd>
       </div>
-      <div><dt>最高</dt><dd>{{ formatPoints(highPoints) }}</dd></div>
-      <div><dt>最低</dt><dd>{{ formatPoints(lowPoints) }}</dd></div>
+      <div><dt>最高</dt><dd class="market-index-trend-card__high">{{ formatPoints(highPoints) }}</dd></div>
+      <div><dt>最低</dt><dd class="market-index-trend-card__low">{{ formatPoints(lowPoints) }}</dd></div>
       <div><dt>成交额</dt><dd>{{ turnover }}</dd></div>
     </dl>
     <MarketIndexSparkline
@@ -131,7 +127,10 @@ function trendDirection(value: string | null): "down" | "flat" | "up" {
     <dl class="market-index-trend-card__facts">
       <div>
         <dt>会话涨跌</dt>
-        <dd>{{ formatSessionChange(summary?.sessionChangeRatio ?? null) }}</dd>
+        <dd
+          class="market-index-trend-card__change"
+          :data-direction="marketIndexDirection(summary?.sessionChangeRatio ?? null)"
+        >{{ formatSessionChange(summary?.sessionChangeRatio ?? null) }}</dd>
       </div>
       <div><dt>昨收点位</dt><dd>{{ formatPoints(summary?.priorClosePoints ?? null) }}</dd></div>
       <div><dt>数据截止</dt><dd>{{ summary?.completedBucketAt ?? "不可用" }}</dd></div>
@@ -182,6 +181,11 @@ function trendDirection(value: string | null): "down" | "flat" | "up" {
 .market-index-trend-card__primary-fact dd { font-size: 1.2rem; font-weight: 700; }
 .market-index-trend-card[data-direction="down"] .market-index-trend-card__primary-fact dd { color: var(--color-signal-live-sea-glass); }
 .market-index-trend-card[data-direction="up"] .market-index-trend-card__primary-fact dd { color: var(--color-signal-risk-vermilion); }
+.market-index-trend-card__high,
+.market-index-trend-card__change[data-direction="up"] { color: var(--color-signal-risk-vermilion); }
+.market-index-trend-card__low,
+.market-index-trend-card__change[data-direction="down"] { color: var(--color-signal-live-sea-glass); }
+.market-index-trend-card__change[data-direction="flat"] { color: var(--color-text-mineral); }
 .market-index-trend-card__table { min-width: 0; }
 .market-index-trend-card__table table {
   width: 100%;

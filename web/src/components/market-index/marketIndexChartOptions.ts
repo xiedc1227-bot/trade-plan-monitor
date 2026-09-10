@@ -3,6 +3,29 @@ export interface IndexAxisBounds {
   readonly minimum: number;
 }
 
+export type MarketIndexDirection = "down" | "flat" | "up";
+
+const directionColors: Readonly<Record<MarketIndexDirection, string>> = Object.freeze({
+  down: "#67b7a5",
+  flat: "#eef1e8",
+  up: "#e45d43",
+});
+
+export function marketIndexDirection(
+  sessionChangeRatio: string | null | undefined,
+): MarketIndexDirection {
+  if (sessionChangeRatio === null || sessionChangeRatio === undefined) return "flat";
+  const ratio = Number(sessionChangeRatio);
+  if (!Number.isFinite(ratio) || ratio === 0) return "flat";
+  return ratio > 0 ? "up" : "down";
+}
+
+export function marketIndexDirectionColor(
+  sessionChangeRatio: string | null | undefined,
+): string {
+  return directionColors[marketIndexDirection(sessionChangeRatio)];
+}
+
 export function calculateIndexAxisBounds(
   values: readonly number[],
   priorClose: number | null,

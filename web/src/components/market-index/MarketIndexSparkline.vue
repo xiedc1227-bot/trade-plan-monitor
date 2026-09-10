@@ -13,7 +13,10 @@ import { CanvasRenderer } from "echarts/renderers";
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "vue";
 
 import type { MarketIndexBarView } from "../../api/generated";
-import { calculateIndexAxisBounds } from "./marketIndexChartOptions";
+import {
+  calculateIndexAxisBounds,
+  marketIndexDirectionColor,
+} from "./marketIndexChartOptions";
 
 interface Props {
   ariaLabel: string;
@@ -89,7 +92,7 @@ function buildOption(
   const priorClose = priorClosePoints === null ? null : Number(priorClosePoints);
   const values = visibleBars.map((bar) => Number(bar.closePoints));
   const bounds = calculateIndexAxisBounds(values, Number.isFinite(priorClose) ? priorClose : null);
-  const trendColor = Number(sessionChangeRatio) > 0 ? "#e45d43" : "#67b7a5";
+  const trendColor = marketIndexDirectionColor(sessionChangeRatio);
   return {
     animation: false,
     aria: { enabled: true },

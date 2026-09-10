@@ -4,6 +4,7 @@ import { computed, shallowRef } from "vue";
 import type { ConnectionStatus, MarketIndexSnapshotView } from "../../api/generated";
 import { dashboardMarketIndexIdentities } from "../../api/marketIndexIdentity";
 import type { DashboardMarketIndexTrend } from "../../composables/useDashboardMarketIndexTrends";
+import { marketIndexDirection } from "./marketIndexChartOptions";
 import MarketIndexTrendCard from "./MarketIndexTrendCard.vue";
 
 interface Props {
@@ -40,11 +41,6 @@ function formatSessionChange(value: string | null | undefined): string {
   }).format(Number(value));
 }
 
-function trendDirection(value: string | null | undefined): "down" | "flat" | "up" {
-  const ratio = Number(value);
-  if (!Number.isFinite(ratio) || ratio === 0) return "flat";
-  return ratio > 0 ? "up" : "down";
-}
 </script>
 
 <template>
@@ -62,7 +58,7 @@ function trendDirection(value: string | null | undefined): "down" | "flat" | "up
           class="index-strip__selector"
           data-testid="market-index-selector"
           :aria-pressed="selectedIndexCode === identity.indexCode"
-          :data-direction="trendDirection(summariesByCode.get(identity.indexCode)?.sessionChangeRatio)"
+          :data-direction="marketIndexDirection(summariesByCode.get(identity.indexCode)?.sessionChangeRatio)"
           :data-health="summariesByCode.get(identity.indexCode)?.health ?? 'BLOCKED'"
           @click="selectedIndexCode = identity.indexCode"
         >
@@ -172,6 +168,10 @@ function trendDirection(value: string | null | undefined): "down" | "flat" | "up
 
 .index-strip__selector[data-direction="up"] strong {
   color: var(--color-signal-risk-vermilion);
+}
+
+.index-strip__selector[data-direction="flat"] strong {
+  color: var(--color-text-mineral);
 }
 
 .index-strip__selector[data-health="BLOCKED"] strong,
