@@ -41,6 +41,7 @@ from trade_plan_monitor.runtime.request_control import (
 )
 from trade_plan_monitor.runtime.scheduler import (
     DEFAULT_OFFICIAL_CLOSE_ATTEMPTS,
+    DeadlineKind,
     MarketDeadline,
 )
 from trade_plan_monitor.runtime.service import (
@@ -485,6 +486,7 @@ class ProductionMonitorPipeline:
                     continue
                 selected.append(plan)
         if not selected:
+            await self._refresh_dashboard_indexes(deadline)
             return ()
         if self._reference_key != reference_key:
             await self.refresh_references(deadline.trade_date)
@@ -501,3 +503,27 @@ class ProductionMonitorPipeline:
         finally:
             self._running_deadline = False
             self._deadline_plans = None
+
+    async def _refresh_dashboard_indexes(self, deadline: MarketDeadline) -> None:
+        """Persist display-only index snapshots when no plan evaluation is due."""
+
+        observed_at = max(self._clock.now(), deadline.due_at)
+        if deadline.kind is DeadlineKind.REALTIME_MINUTE:
+            if (
+                deadline.bar_end is None
+                or five_minute_bucket_end(deadline.bar_end) != deadline.bar_end
+            ):
+                return
+            await self.evaluations.prepare_intraday_market_indexes(
+                plans=(),
+                bucket_end=deadline.bar_end,
+                evaluated_at=observed_at,
+            )
+            return
+        if deadline.close_attempt == 1:
+            await self.evaluations.run_official_close_batch(
+                plans=(),
+                trade_date=deadline.trade_date,
+                evaluated_at=observed_at,
+                close_attempt=deadline.close_attempt,
+            )

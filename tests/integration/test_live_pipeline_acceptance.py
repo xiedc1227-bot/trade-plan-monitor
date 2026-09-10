@@ -497,6 +497,74 @@ def test_market_index_persistence_reuses_an_older_canonical_content_revision(
         engine.dispose()
 
 
+def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import trade_plan_monitor.runtime.production as production
+
+    async def scenario() -> None:
+        clock = ControlledClock(INDEX_CUTOFF + timedelta(seconds=12))
+        database = tmp_path / "monitor.sqlite3"
+        config = _write_configuration_and_evidence(
+            tmp_path,
+            observed_at=clock.now(),
+            include_index=True,
+        )
+        sdk = OfflineSDK(clock, ())
+        monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
+        pace = VirtualPace()
+        controller = create_live_tushare_request_controller(
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
+        )
+        engine, work_factory = _work_factory(database, clock)
+        upgrade_database(engine)
+        pipeline = ProductionMonitorPipeline(
+            configuration=load_application_config(config).tushare,
+            certification_directory=tmp_path / "data" / "live-certification",
+            stock_certification=create_stock_certification(
+                observed_at=clock.now(),
+                endpoint_url=ENDPOINT,
+                capabilities=_ready_stock_capabilities(),
+                source_time_label=SourceTimeLabel.START,
+            ),
+            clock=clock,
+            request_controller=controller,
+            unit_of_work_factory=work_factory,
+            runtime_generation=uuid4(),
+            publisher=lambda _event: None,
+        )
+        try:
+            result = await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=INDEX_CUTOFF.date(),
+                    due_at=clock.now(),
+                    bar_end=INDEX_CUTOFF,
+                )
+            )
+
+            assert result == ()
+            assert set(pipeline.index_service.latest_snapshots()) == set(
+                DASHBOARD_INDEX_CODES
+            )
+            with work_factory() as work:
+                snapshots = work.projections.list_latest_market_index_snapshots(
+                    mapping_version="board-index-map-v1",
+                    index_codes=DASHBOARD_INDEX_CODES,
+                )
+            assert tuple(
+                snapshot.snapshot.index_code for snapshot in snapshots
+            ) == DASHBOARD_INDEX_CODES
+        finally:
+            await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
