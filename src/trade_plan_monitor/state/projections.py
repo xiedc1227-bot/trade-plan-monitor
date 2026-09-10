@@ -685,6 +685,54 @@ class ProjectionRepository:
             provider_content_revision=provider_revision,
         )
 
+    def list_latest_market_index_snapshots(
+        self,
+        *,
+        mapping_version: str,
+        index_codes: tuple[MarketIndexCode, ...],
+    ) -> tuple[MarketIndexSnapshotRecord, ...]:
+        if (
+            type(index_codes) is not tuple
+            or len(set(index_codes)) != len(index_codes)
+            or any(not isinstance(index_code, MarketIndexCode) for index_code in index_codes)
+        ):
+            raise TypeError("index_codes must be a tuple of unique MarketIndexCode values")
+        normalized_mapping_version = _token(
+            mapping_version,
+            "mapping_version",
+            maximum=32,
+        )
+        if not index_codes:
+            return ()
+        heads = self._session.scalars(
+            select(MarketIndexSnapshotHeadRow).where(
+                MarketIndexSnapshotHeadRow.mapping_version == normalized_mapping_version,
+                MarketIndexSnapshotHeadRow.index_code.in_(
+                    tuple(index_code.value for index_code in index_codes)
+                ),
+            )
+        ).all()
+        latest_by_index: dict[MarketIndexCode, MarketIndexSnapshotRecord] = {}
+        for head in heads:
+            record = self.get_market_index_snapshot(head.snapshot_hash)
+            if record is None:  # pragma: no cover - foreign key protects this
+                raise ProjectionMissingDependencyError(
+                    "Market-index head names a missing immutable snapshot"
+                )
+            index_code = record.snapshot.index_code
+            current = latest_by_index.get(index_code)
+            incoming_rank = _market_index_snapshot_rank(record.snapshot)
+            current_rank = (
+                None if current is None else _market_index_snapshot_rank(current.snapshot)
+            )
+            if current_rank is None or incoming_rank > current_rank:
+                latest_by_index[index_code] = record
+        return tuple(
+            latest_by_index[index_code]
+            for index_code in index_codes
+            if index_code in latest_by_index
+        )
+
     def get_market_index_snapshot_revision(
         self,
         *,
@@ -825,6 +873,19 @@ def _decision_head_rank(result: EvaluationResult) -> tuple[datetime, int, dateti
     else:  # pragma: no cover - closed EvaluationIdentity union
         raise TypeError("identity must be an evaluation identity")
     return target_at, kind_rank, result.snapshot.evaluated_at
+
+
+def _market_index_snapshot_rank(
+    snapshot: MarketIndexSnapshot,
+) -> tuple[datetime, datetime, bool, int, int, str]:
+    return (
+        snapshot.decision_cutoff,
+        snapshot.observed_at,
+        snapshot.health.value == "LIVE",
+        len(snapshot.fact_requests),
+        snapshot.revision,
+        snapshot.snapshot_hash,
+    )
 
 
 def _result_validation_json(value: str) -> str:

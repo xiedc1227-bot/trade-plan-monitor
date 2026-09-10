@@ -36,6 +36,7 @@ from trade_plan_monitor.market_index.models import (
     SmaLookbackFactRequest,
 )
 from trade_plan_monitor.runtime.health import live_runtime_identity
+from trade_plan_monitor.runtime.market_indexes import DASHBOARD_INDEX_CODES
 from trade_plan_monitor.state.events import MonitorEventError
 from trade_plan_monitor.state.projections import ProjectionError
 from trade_plan_monitor.state.repositories import PlanVersionDetailsRecord, RepositoryError
@@ -150,7 +151,17 @@ class PersistentMonitorReadService:
                     sequence=sequence,
                 )
             summaries = tuple(item.summary for item in projections)
-            market_indexes = _dashboard_market_indexes(projections)
+            display_snapshots = tuple(
+                record.snapshot
+                for record in work.projections.list_latest_market_index_snapshots(
+                    mapping_version=MAPPING_VERSION,
+                    index_codes=DASHBOARD_INDEX_CODES,
+                )
+            )
+            market_indexes = _dashboard_market_indexes(
+                projections,
+                display_snapshots=display_snapshots,
+            )
             return DashboardResponse(
                 sequence=sequence,
                 observed_at=observed_at,
@@ -764,8 +775,10 @@ def _index_evidence_view(value: IndexConditionEvidence) -> IndexConditionEvidenc
 
 def _dashboard_market_indexes(
     projections: tuple[_SymbolProjection, ...],
+    *,
+    display_snapshots: tuple[MarketIndexSnapshot, ...] = (),
 ) -> tuple[MarketIndexSnapshotView, ...]:
-    snapshots: dict[str, MarketIndexSnapshot] = {}
+    snapshots = {snapshot.index_code.value: snapshot for snapshot in display_snapshots}
     mapped_counts: dict[str, int] = {}
     for item in projections:
         snapshot = item.market_index
@@ -789,7 +802,7 @@ def _dashboard_market_indexes(
     return tuple(
         sorted(
             (
-                _market_index_view(snapshot, mapped_symbol_count=mapped_counts[index_code])
+                _market_index_view(snapshot, mapped_symbol_count=mapped_counts.get(index_code, 0))
                 for index_code, snapshot in snapshots.items()
             ),
             key=lambda item: str(item.index_code),

@@ -30,10 +30,12 @@ from trade_plan_monitor.decision.models import (
 from trade_plan_monitor.domain.plan_codec import load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+from trade_plan_monitor.market_index.snapshots import build_market_index_snapshot
 from trade_plan_monitor.runtime.health import (
     LEGACY_RUNTIME_GENERATION,
     RuntimeServiceStatus,
 )
+from trade_plan_monitor.runtime.market_indexes import DASHBOARD_INDEX_CODES
 from trade_plan_monitor.runtime.service import RuntimeEvaluationService
 from trade_plan_monitor.state.database import (
     create_session_factory,
@@ -274,6 +276,30 @@ def _seed_claim(unit_of_work_factory, *, complete: bool) -> EvaluationResult:
     return result
 
 
+def _seed_dashboard_index_snapshots(unit_of_work_factory) -> None:
+    with unit_of_work_factory() as work:
+        for index, index_code in enumerate(DASHBOARD_INDEX_CODES):
+            snapshot = build_market_index_snapshot(
+                index_code=index_code,
+                decision_cutoff=_BUCKET_END,
+                requests=(),
+                five_minute_bars=(),
+                official_daily_bars=(),
+                content_revision=index + 1,
+                observed_at=_NOW,
+                observed_no_later_than=_NOW,
+            )
+            work.projections.put_market_index_snapshot(
+                snapshot,
+                provider_content_revision=snapshot.cache_key.provider_content_revision,
+            )
+            work.projections.advance_market_index_head(
+                snapshot,
+                provider_content_revision=snapshot.cache_key.provider_content_revision,
+            )
+        work.commit()
+
+
 def _put_public_health(
     unit_of_work_factory,
     *,
@@ -356,6 +382,24 @@ def test_empty_database_returns_typed_unavailable_and_delegates_runtime_health(
         )
         assert asyncio.run(service.get_symbol(symbol="003043.SZ")) is None
         assert asyncio.run(service.get_health()) == health
+    finally:
+        engine.dispose()
+
+
+def test_dashboard_includes_fixed_display_indexes_without_plan_bindings(tmp_path: Path) -> None:
+    engine, factory, service, _health = _setup(tmp_path)
+    try:
+        _seed_plan(factory, active=True)
+        _seed_claim(factory, complete=True)
+        _seed_dashboard_index_snapshots(factory)
+
+        dashboard = asyncio.run(service.get_dashboard())
+
+        assert isinstance(dashboard, DashboardResponse)
+        assert tuple(item.index_code for item in dashboard.market_indexes) == tuple(
+            sorted(DASHBOARD_INDEX_CODES, key=lambda item: item.value)
+        )
+        assert all(item.mapped_symbol_count == 0 for item in dashboard.market_indexes)
     finally:
         engine.dispose()
 

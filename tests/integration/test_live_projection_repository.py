@@ -29,6 +29,7 @@ from trade_plan_monitor.domain.plan_codec import load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.snapshots import build_market_index_snapshot
+from trade_plan_monitor.runtime.market_indexes import DASHBOARD_INDEX_CODES
 from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
@@ -546,5 +547,48 @@ def test_market_index_snapshot_and_head_preserve_every_hash_and_revision(tmp_pat
                 restored.snapshot.formula_definition_hash
                 == snapshot.formula_definition_hash
             )
+    finally:
+        engine.dispose()
+
+
+def test_latest_dashboard_index_snapshots_are_loaded_in_display_order(tmp_path: Path) -> None:
+    engine, factory = _unit_of_work(tmp_path / "monitor.db")
+    snapshots = tuple(
+        build_market_index_snapshot(
+            index_code=index_code,
+            decision_cutoff=_BUCKET_END,
+            requests=(),
+            five_minute_bars=(),
+            official_daily_bars=(),
+            content_revision=index + 1,
+            observed_at=_EVALUATED_AT,
+            observed_no_later_than=_EVALUATED_AT,
+        )
+        for index, index_code in enumerate(DASHBOARD_INDEX_CODES[:2])
+    )
+
+    try:
+        with factory() as work:
+            for snapshot in snapshots:
+                work.projections.put_market_index_snapshot(
+                    snapshot,
+                    provider_content_revision=snapshot.cache_key.provider_content_revision,
+                )
+                work.projections.advance_market_index_head(
+                    snapshot,
+                    provider_content_revision=snapshot.cache_key.provider_content_revision,
+                )
+            work.commit()
+
+        with factory() as restarted:
+            restored = restarted.projections.list_latest_market_index_snapshots(
+                mapping_version=snapshots[0].mapping_version,
+                index_codes=DASHBOARD_INDEX_CODES,
+            )
+
+        assert tuple(record.snapshot.index_code for record in restored) == DASHBOARD_INDEX_CODES[:2]
+        assert tuple(record.snapshot.snapshot_hash for record in restored) == tuple(
+            snapshot.snapshot_hash for snapshot in snapshots
+        )
     finally:
         engine.dispose()
