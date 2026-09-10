@@ -123,8 +123,21 @@ class PersistentMonitorReadService:
         observed_at = _observed_at(self._clock())
         with self._unit_of_work_factory() as work:
             sequence = work.events.current_sequence()
+            display_snapshots = tuple(
+                record.snapshot
+                for record in work.projections.list_latest_market_index_snapshots(
+                    mapping_version=MAPPING_VERSION,
+                    index_codes=DASHBOARD_INDEX_CODES,
+                )
+            )
             details = _list_plan_details(work)
             if not details:
+                if display_snapshots:
+                    return self._index_only_dashboard(
+                        display_snapshots,
+                        observed_at=observed_at,
+                        sequence=sequence,
+                    )
                 return _dashboard_unavailable(
                     ProjectionUnavailableReason.EMPTY_DATABASE,
                     observed_at=observed_at,
@@ -132,6 +145,12 @@ class PersistentMonitorReadService:
                 )
             active = _active_plan_details(work, details)
             if not active:
+                if display_snapshots:
+                    return self._index_only_dashboard(
+                        display_snapshots,
+                        observed_at=observed_at,
+                        sequence=sequence,
+                    )
                 return _dashboard_unavailable(
                     ProjectionUnavailableReason.NO_ACTIVE_PLANS,
                     observed_at=observed_at,
@@ -145,19 +164,19 @@ class PersistentMonitorReadService:
                 runtime_identity=runtime_identity,
             )
             if projections is None:
+                if display_snapshots:
+                    return self._index_only_dashboard(
+                        display_snapshots,
+                        observed_at=observed_at,
+                        sequence=sequence,
+                        runtime_identity=runtime_identity,
+                    )
                 return _dashboard_unavailable(
                     ProjectionUnavailableReason.AWAITING_FIRST_EVALUATION,
                     observed_at=observed_at,
                     sequence=sequence,
                 )
             summaries = tuple(item.summary for item in projections)
-            display_snapshots = tuple(
-                record.snapshot
-                for record in work.projections.list_latest_market_index_snapshots(
-                    mapping_version=MAPPING_VERSION,
-                    index_codes=DASHBOARD_INDEX_CODES,
-                )
-            )
             market_indexes = _dashboard_market_indexes(
                 projections,
                 display_snapshots=display_snapshots,
@@ -174,6 +193,30 @@ class PersistentMonitorReadService:
                 symbols=summaries,
                 market_indexes=market_indexes,
             )
+
+    def _index_only_dashboard(
+        self,
+        display_snapshots: tuple[MarketIndexSnapshot, ...],
+        *,
+        observed_at: datetime,
+        sequence: int,
+        runtime_identity: tuple[datetime, UUID] | None = None,
+    ) -> DashboardResponse:
+        if runtime_identity is None:
+            runtime_identity = self._runtime_identity(observed_at=observed_at)
+        return DashboardResponse(
+            sequence=sequence,
+            observed_at=observed_at,
+            runtime_generation=(None if runtime_identity is None else runtime_identity[1]),
+            connection_status=ConnectionStatus.UNKNOWN,
+            data_age_seconds=None,
+            counts=_dashboard_counts(()),
+            symbols=(),
+            market_indexes=_dashboard_market_indexes(
+                (),
+                display_snapshots=display_snapshots,
+            ),
+        )
 
     async def list_symbols(
         self,

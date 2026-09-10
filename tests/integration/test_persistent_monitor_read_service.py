@@ -404,6 +404,29 @@ def test_dashboard_includes_fixed_display_indexes_without_plan_bindings(tmp_path
         engine.dispose()
 
 
+@pytest.mark.parametrize("seed_inactive_plan", (False, True))
+def test_dashboard_indexes_remain_available_without_active_plans(
+    tmp_path: Path,
+    seed_inactive_plan: bool,
+) -> None:
+    engine, factory, service, _health = _setup(tmp_path)
+    try:
+        if seed_inactive_plan:
+            _seed_plan(factory, active=False)
+        _seed_dashboard_index_snapshots(factory)
+
+        dashboard = asyncio.run(service.get_dashboard())
+
+        assert isinstance(dashboard, DashboardResponse)
+        assert dashboard.symbols == ()
+        assert set(dashboard.counts.model_dump().values()) == {0}
+        assert tuple(item.index_code for item in dashboard.market_indexes) == tuple(
+            sorted(DASHBOARD_INDEX_CODES, key=lambda item: item.value)
+        )
+    finally:
+        engine.dispose()
+
+
 def test_known_inactive_and_active_legacy_symbols_have_exact_unavailable_reasons(
     tmp_path: Path,
 ) -> None:
