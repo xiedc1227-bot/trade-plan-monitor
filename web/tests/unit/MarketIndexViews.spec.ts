@@ -288,7 +288,7 @@ describe("useDashboardMarketIndexTrends", () => {
     ]);
     expect(loader).toHaveBeenCalledWith(
       expect.objectContaining({
-        endAt: "2026-09-02T10:35:00+08:00",
+        endAt: "2026-09-02T10:35:02+08:00",
         indexCode: "000688.SH",
         interval: "FIVE_MINUTE",
         limit: 64,
@@ -297,6 +297,32 @@ describe("useDashboardMarketIndexTrends", () => {
     );
     expect(result.trends.value["000688.SH"].status).toBe("READY");
     expect(result.trends.value["000001.SH"].page?.items?.[0]?.indexCode).toBe("000001.SH");
+  });
+
+  it("anchors the current-day range to dashboard time instead of a prior-day summary", async () => {
+    const loader = vi.fn(async (query: MarketIndexSeriesQuery) => ({
+      hasMore: false,
+      items: [],
+      limit: query.limit,
+      nextCursor: null,
+      snapshotHash: hash,
+    }));
+    useDashboardMarketIndexTrends({
+      api: { getBars: (query, _options) => loader(query) },
+      connectionStatus: "CONNECTED",
+      observedAt: "2026-09-03T09:40:02+08:00",
+      summaries: [snapshot],
+    });
+
+    await flushPromises();
+
+    expect(loader).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endAt: "2026-09-03T09:40:02+08:00",
+        indexCode: "000688.SH",
+        startAt: "2026-09-03T09:30:00+08:00",
+      }),
+    );
   });
 
   it("keeps successful index data visible when only one trend request fails", async () => {

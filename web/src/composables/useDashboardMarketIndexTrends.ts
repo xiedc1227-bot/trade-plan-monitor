@@ -56,7 +56,6 @@ export function useDashboardMarketIndexTrends(
       generation += 1;
       const requestGeneration = generation;
       const currentObservedAt = toValue(options.observedAt);
-      const currentSummaries = toValue(options.summaries);
       const requestedCodes = refreshIndex.value === null
         ? dashboardMarketIndexCodes
         : [refreshIndex.value];
@@ -66,9 +65,7 @@ export function useDashboardMarketIndexTrends(
         return;
       }
       const queries = requestedCodes.flatMap((indexCode) => {
-        const summary = currentSummaries.find((item) => item.indexCode === indexCode) ?? null;
-        const endAt = summary?.completedBucketAt ?? currentObservedAt;
-        const query = buildCurrentDayQuery(indexCode, endAt);
+        const query = buildCurrentDayQuery(indexCode, currentObservedAt);
         return query === null ? [] : [{ indexCode, query }];
       });
       if (queries.length === 0) {
