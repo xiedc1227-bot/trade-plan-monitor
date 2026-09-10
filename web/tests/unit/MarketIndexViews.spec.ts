@@ -176,6 +176,10 @@ describe("market index monitor views", () => {
     expect(wrapper.get(".market-index-trend-card__low").attributes("data-direction")).toBe("up");
     expect(wrapper.get('[role="alert"]').text()).toContain("当日指数走势暂不可用");
     expect(wrapper.get("button").text()).toBe("重试");
+    const cutoffFact = wrapper
+      .findAll(".market-index-trend-card__facts > div")
+      .find((fact) => fact.text().includes("数据截止"));
+    expect(cutoffFact?.text()).toBe("数据截止2026-09-02 10:35:00");
     expect(wrapper.find("details").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("查看当日点位数据");
   });

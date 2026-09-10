@@ -270,6 +270,7 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await expect(indexCards).toHaveCount(1);
   await expect(indexCards).toContainText("上证指数");
   await expect(indexCards).toContainText("3400.12");
+  await expect(indexCards).toContainText("数据截止2026-09-02 10:35:00");
   expect(await indexCards.locator(".market-index-trend-card__high").evaluate(
     (element) => getComputedStyle(element).color,
   )).toBe("rgb(103, 183, 165)");

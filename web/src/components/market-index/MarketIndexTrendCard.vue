@@ -59,8 +59,13 @@ const displayedHealth = computed(() => {
   return healthLabels[props.summary.health];
 });
 const chartLabel = computed(() => {
-  return `${props.identity.displayName}当日五分钟指数走势，最新点位 ${props.summary?.closePoints ?? "未知"}，会话涨跌 ${formatSessionChange(props.summary?.sessionChangeRatio ?? null)}，数据截止 ${props.summary?.completedBucketAt ?? "未知"}，${displayedHealth.value}，虚线为昨收点位`;
+  return `${props.identity.displayName}当日五分钟指数走势，最新点位 ${props.summary?.closePoints ?? "未知"}，会话涨跌 ${formatSessionChange(props.summary?.sessionChangeRatio ?? null)}，数据截止 ${formatDateTime(props.summary?.completedBucketAt ?? null, "未知")}，${displayedHealth.value}，虚线为昨收点位`;
 });
+
+function formatDateTime(value: string | null, fallback = "不可用"): string {
+  const match = value?.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})/);
+  return match === undefined || match === null ? fallback : `${match[1]} ${match[2]}`;
+}
 
 function formatSessionChange(value: string | null): string {
   if (value === null || !Number.isFinite(Number(value))) return "—";
@@ -145,7 +150,7 @@ function extrema(
         >{{ formatSessionChange(summary?.sessionChangeRatio ?? null) }}</dd>
       </div>
       <div><dt>昨收点位</dt><dd>{{ formatPoints(summary?.priorClosePoints ?? null) }}</dd></div>
-      <div><dt>数据截止</dt><dd>{{ summary?.completedBucketAt ?? "不可用" }}</dd></div>
+      <div><dt>数据截止</dt><dd>{{ formatDateTime(summary?.completedBucketAt ?? null) }}</dd></div>
     </dl>
     <p v-if="(summary?.issues ?? []).length > 0" class="market-index-trend-card__issues">
       问题：{{ summary?.issues.join("、") }}
