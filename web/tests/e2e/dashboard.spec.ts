@@ -356,6 +356,8 @@ test("distinguishes typed unavailable monitoring from a real disconnected servic
   await expect(banner).toHaveAttribute("data-connection-state", "UNAVAILABLE");
   await expect(banner).toContainText("服务已连接，实时监控未就绪");
   await expect(banner).not.toContainText("连接中断");
+  await expect(page.getByTestId("market-index-trend-card")).toHaveCount(4);
+  await expect(page.getByTestId("market-index-sparkline")).toHaveCount(4);
   expect(dashboardRequests).toBeGreaterThanOrEqual(1);
   expect(socketUrls).toEqual([]);
   expect(consoleFailures).toEqual([]);

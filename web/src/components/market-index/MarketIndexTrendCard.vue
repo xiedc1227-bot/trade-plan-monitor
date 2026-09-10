@@ -56,7 +56,6 @@ function formatSessionChange(value: string | null): string {
       <strong>{{ summary === null ? "等待快照" : healthLabels[summary.health] }}</strong>
     </header>
     <MarketIndexSparkline
-      v-if="bars.length > 0"
       :ariaLabel="chartLabel"
       :bars="bars"
       :display-name="identity.displayName"

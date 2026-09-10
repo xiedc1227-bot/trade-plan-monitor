@@ -225,7 +225,6 @@ function compareText(left: string, right: string): number {
     </p>
 
     <MarketIndexDataStrip
-      v-else
       :indexes="marketIndexes"
       :trends="marketIndexTrends"
       @retry-index="emit('retryMarketIndex', $event)"

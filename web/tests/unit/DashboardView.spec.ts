@@ -284,6 +284,22 @@ describe("DashboardView", () => {
     expect(failed.get('[role="alert"]').text()).toContain("快照不可用");
   });
 
+  it("keeps four empty index charts visible while the monitor projection is unavailable", async () => {
+    const wrapper = await mountDashboard({
+      symbols: [],
+      unavailable: {
+        availability: "UNAVAILABLE",
+        observedAt: "2026-09-10T10:48:49+08:00",
+        reason: "EMPTY_DATABASE",
+        sequence: 0,
+      },
+    });
+
+    expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-testid="market-index-sparkline"]')).toHaveLength(4);
+    expect(wrapper.text()).toContain("等待当日行情数据");
+  });
+
   it("renders distinct empty and no-match states", async () => {
     const empty = await mountDashboard({ symbols: [] });
     expect(empty.get('[data-testid="watchlist-empty"]').text()).toContain("尚无监控股票");
