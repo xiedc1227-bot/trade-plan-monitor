@@ -13,12 +13,14 @@ import { CanvasRenderer } from "echarts/renderers";
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "vue";
 
 import type { MarketIndexBarView } from "../../api/generated";
+import { calculateIndexAxisBounds } from "./marketIndexChartOptions";
 
 interface Props {
   ariaLabel: string;
   bars: readonly MarketIndexBarView[];
   displayName: string;
   priorClosePoints: string | null;
+  sessionChangeRatio: string | null;
 }
 
 const props = defineProps<Props>();
@@ -37,7 +39,7 @@ use([
 ]);
 
 watch(
-  () => [props.bars, props.priorClosePoints] as const,
+  () => [props.bars, props.priorClosePoints, props.sessionChangeRatio] as const,
   () => renderSeries(),
 );
 
@@ -60,7 +62,10 @@ onBeforeUnmount(() => {
 });
 
 function renderSeries(): void {
-  chart.value?.setOption(buildOption(props.bars, props.priorClosePoints), { notMerge: true });
+  chart.value?.setOption(
+    buildOption(props.bars, props.priorClosePoints, props.sessionChangeRatio),
+    { notMerge: true },
+  );
 }
 
 function resizeChart(): void {
@@ -78,44 +83,74 @@ function ensureChart(): void {
 function buildOption(
   bars: readonly MarketIndexBarView[],
   priorClosePoints: string | null,
+  sessionChangeRatio: string | null,
 ): EChartsCoreOption {
   const visibleBars = bars.filter((bar) => Number.isFinite(Number(bar.closePoints)));
   const priorClose = priorClosePoints === null ? null : Number(priorClosePoints);
+  const values = visibleBars.map((bar) => Number(bar.closePoints));
+  const bounds = calculateIndexAxisBounds(values, Number.isFinite(priorClose) ? priorClose : null);
+  const trendColor = Number(sessionChangeRatio) > 0 ? "#e45d43" : "#67b7a5";
   return {
     animation: false,
     aria: { enabled: true },
-    grid: { bottom: 30, left: 48, right: 16, top: 14 },
+    grid: { bottom: 28, left: 12, right: 72, top: 14 },
     series: [
       {
-        areaStyle: { opacity: 0.1 },
-        data: visibleBars.map((bar) => Number(bar.closePoints)),
-        lineStyle: { width: 2 },
+        areaStyle: { color: trendColor, opacity: 0.08 },
+        data: values,
+        endLabel: {
+          backgroundColor: trendColor,
+          borderRadius: 2,
+          color: "#0b1114",
+          formatter: (parameters: { value: number }) => Number(parameters.value).toFixed(2),
+          padding: [2, 4],
+          show: visibleBars.length > 0,
+        },
+        emphasis: { disabled: true },
+        lineStyle: { color: trendColor, width: 2 },
         markLine: Number.isFinite(priorClose)
           ? {
-              data: [{ label: { formatter: "昨收" }, yAxis: priorClose }],
-              lineStyle: { type: "dashed" },
+              data: [{ label: { formatter: "昨收", position: "insideEndTop" }, yAxis: priorClose }],
+              label: { color: "#a8b4b3" },
+              lineStyle: { color: "#a8b4b3", opacity: 0.8, type: "dashed" },
               silent: true,
               symbol: ["none", "none"],
             }
           : undefined,
-        markPoint: visibleBars.length === 0
-          ? undefined
-          : {
-              data: [{ coord: [visibleBars.length - 1, Number(visibleBars.at(-1)?.closePoints)], name: "最新" }],
-              symbolSize: 8,
-            },
         name: props.displayName,
         showSymbol: false,
         type: "line",
       },
     ],
-    tooltip: { renderMode: "richText", trigger: "axis" },
+    tooltip: {
+      axisPointer: { lineStyle: { color: "#62b7d1", type: "dashed" }, type: "line" },
+      backgroundColor: "#1c282d",
+      borderColor: "#405158",
+      renderMode: "richText",
+      textStyle: { color: "#eef1e8" },
+      trigger: "axis",
+      valueFormatter: (value: unknown) => Number(value).toFixed(2),
+    },
     xAxis: {
-      axisLabel: { formatter: (value: string) => value.slice(11, 16) },
+      axisLabel: { color: "#a8b4b3", formatter: (value: string) => value.slice(11, 16) },
+      axisLine: { lineStyle: { color: "#405158" } },
+      axisTick: { show: false },
+      boundaryGap: false,
       data: visibleBars.map((bar) => bar.barAt),
       type: "category",
     },
-    yAxis: { scale: true, type: "value" },
+    yAxis: {
+      axisLabel: { color: "#a8b4b3", formatter: (value: number) => value.toFixed(2) },
+      axisLine: { show: false },
+      axisTick: { show: false },
+      max: bounds?.maximum,
+      min: bounds?.minimum,
+      position: "right",
+      scale: true,
+      splitLine: { lineStyle: { color: "rgba(151, 171, 176, 0.12)" } },
+      splitNumber: 4,
+      type: "value",
+    },
   };
 }
 </script>
@@ -131,5 +166,9 @@ function buildOption(
 </template>
 
 <style scoped>
-.market-index-sparkline { width: 100%; min-height: 12rem; }
+.market-index-sparkline { width: 100%; min-height: 18rem; }
+
+@media (max-width: 39.999rem) {
+  .market-index-sparkline { min-height: 14rem; }
+}
 </style>

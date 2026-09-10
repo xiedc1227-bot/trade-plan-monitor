@@ -127,7 +127,7 @@ const bars: readonly MarketIndexBarView[] = Object.freeze([
 enableAutoUnmount(afterEach);
 
 describe("market index monitor views", () => {
-  it("always renders four fixed current-day index cards and leaves a failed index visible", () => {
+  it("renders four fixed index selectors with one current-day chart panel", async () => {
     const wrapper = mount(MarketIndexDataStrip, {
       props: {
         connectionStatus: "CONNECTED",
@@ -136,13 +136,22 @@ describe("market index monitor views", () => {
       },
     });
 
-    expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-testid="market-index-selector"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(1);
+    expect(wrapper.findAll('[data-testid="market-index-sparkline"]')).toHaveLength(1);
     expect(wrapper.text()).toContain("主要指数走势 · 当日");
     expect(wrapper.text()).toContain("上证指数");
     expect(wrapper.text()).toContain("深证成指");
     expect(wrapper.text()).toContain("创业板指");
-    expect(wrapper.text()).toContain("PROVIDER_UNAVAILABLE");
     expect(wrapper.text()).toContain("当前暂无当日五分钟数据");
+
+    const scienceTechnology = wrapper
+      .findAll('[data-testid="market-index-selector"]')
+      .find((item) => item.text().includes("科创50"));
+    await scienceTechnology?.trigger("click");
+
+    expect(scienceTechnology?.attributes("aria-pressed")).toBe("true");
+    expect(wrapper.get('[data-testid="market-index-trend-card"]').text()).toContain("1234.56");
   });
 
   it("keeps cached chart data visible while exposing a later trend refresh error", () => {

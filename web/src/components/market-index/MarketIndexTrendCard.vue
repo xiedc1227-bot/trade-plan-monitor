@@ -22,6 +22,16 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const bars = computed(() => props.trend.page?.items ?? []);
+const highPoints = computed(() => extrema("highPoints", Math.max));
+const lowPoints = computed(() => extrema("lowPoints", Math.min));
+const turnover = computed(() => {
+  const amounts = bars.value
+    .map((bar) => bar.amount === null ? Number.NaN : Number(bar.amount))
+    .filter(Number.isFinite);
+  if (amounts.length === 0) return "—";
+  const totalYi = amounts.reduce((sum, value) => sum + value, 0) / 100_000_000;
+  return `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(totalYi)}亿`;
+});
 const healthLabels = Object.freeze({
   BLOCKED: "阻断 ×",
   GAPPED: "缺口 !",
@@ -47,6 +57,29 @@ function formatSessionChange(value: string | null): string {
     style: "percent",
   }).format(Number(value));
 }
+
+function formatPoints(value: string | null): string {
+  if (value === null || !Number.isFinite(Number(value))) return "—";
+  return new Intl.NumberFormat("zh-CN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    useGrouping: false,
+  }).format(Number(value));
+}
+
+function extrema(
+  field: "highPoints" | "lowPoints",
+  reducer: (...values: number[]) => number,
+): string | null {
+  const values = bars.value.map((bar) => Number(bar[field])).filter(Number.isFinite);
+  return values.length === 0 ? null : String(reducer(...values));
+}
+
+function trendDirection(value: string | null): "down" | "flat" | "up" {
+  const ratio = Number(value);
+  if (!Number.isFinite(ratio) || ratio === 0) return "flat";
+  return ratio > 0 ? "up" : "down";
+}
 </script>
 
 <template>
@@ -54,6 +87,7 @@ function formatSessionChange(value: string | null): string {
     class="market-index-trend-card"
     data-testid="market-index-trend-card"
     :data-health="summary?.health ?? 'BLOCKED'"
+    :data-direction="trendDirection(summary?.sessionChangeRatio ?? null)"
   >
     <header class="market-index-trend-card__header">
       <div>
@@ -62,11 +96,20 @@ function formatSessionChange(value: string | null): string {
       </div>
       <strong>{{ displayedHealth }}</strong>
     </header>
+    <dl class="market-index-trend-card__market-facts">
+      <div class="market-index-trend-card__primary-fact">
+        <dt>当前</dt><dd>{{ formatPoints(summary?.closePoints ?? null) }}</dd>
+      </div>
+      <div><dt>最高</dt><dd>{{ formatPoints(highPoints) }}</dd></div>
+      <div><dt>最低</dt><dd>{{ formatPoints(lowPoints) }}</dd></div>
+      <div><dt>成交额</dt><dd>{{ turnover }}</dd></div>
+    </dl>
     <MarketIndexSparkline
       :ariaLabel="chartLabel"
       :bars="bars"
       :display-name="identity.displayName"
       :prior-close-points="summary?.priorClosePoints ?? null"
+      :session-change-ratio="summary?.sessionChangeRatio ?? null"
     />
     <p
       v-if="trend.status === 'LOADING'"
@@ -86,12 +129,11 @@ function formatSessionChange(value: string | null): string {
     </p>
     <p v-else-if="bars.length === 0" class="market-index-trend-card__status">当前暂无当日五分钟数据。</p>
     <dl class="market-index-trend-card__facts">
-      <div><dt>最新点位</dt><dd>{{ summary?.closePoints ?? "—" }}</dd></div>
       <div>
         <dt>会话涨跌</dt>
         <dd>{{ formatSessionChange(summary?.sessionChangeRatio ?? null) }}</dd>
       </div>
-      <div><dt>昨收点位</dt><dd>{{ summary?.priorClosePoints ?? "—" }}</dd></div>
+      <div><dt>昨收点位</dt><dd>{{ formatPoints(summary?.priorClosePoints ?? null) }}</dd></div>
       <div><dt>数据截止</dt><dd>{{ summary?.completedBucketAt ?? "不可用" }}</dd></div>
     </dl>
     <details v-if="bars.length > 0" class="market-index-trend-card__table">
@@ -115,9 +157,8 @@ function formatSessionChange(value: string | null): string {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-6) var(--space-3);
   background: var(--color-surface-graphite);
-  border: var(--border-technical);
   border-inline-start: .25rem solid var(--color-signal-live-sea-glass);
 }
 
@@ -126,12 +167,21 @@ function formatSessionChange(value: string | null): string {
 .market-index-trend-card[data-health="STALE"] { border-inline-start-color: var(--color-signal-watch-amber); }
 .market-index-trend-card > *, .market-index-trend-card__header > *, .market-index-trend-card__facts > div { min-width: 0; }
 .market-index-trend-card__header { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: baseline; justify-content: space-between; }
+.market-index-trend-card__header h3 { display: inline; margin-inline-end: var(--space-2); }
 .market-index-trend-card__header h3, .market-index-trend-card__header code, .market-index-trend-card__status, .market-index-trend-card__issues, .market-index-trend-card__facts dd { overflow-wrap: anywhere; }
 .market-index-trend-card__status, .market-index-trend-card__issues { margin: 0; color: var(--color-text-muted); }
 .market-index-trend-card__status button { margin-inline-start: var(--space-2); }
-.market-index-trend-card__facts, .market-index-trend-card__facts div { display: grid; gap: var(--space-1); }
-.market-index-trend-card__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.market-index-trend-card__market-facts,
+.market-index-trend-card__facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin: 0; }
+.market-index-trend-card__market-facts div,
+.market-index-trend-card__facts div { display: flex; gap: var(--space-2); align-items: baseline; min-width: 0; }
+.market-index-trend-card__market-facts dt,
+.market-index-trend-card__facts dt { color: var(--color-text-muted); }
+.market-index-trend-card__market-facts dd,
 .market-index-trend-card__facts dd { margin: 0; font-family: var(--font-numeric); }
+.market-index-trend-card__primary-fact dd { font-size: 1.2rem; font-weight: 700; }
+.market-index-trend-card[data-direction="down"] .market-index-trend-card__primary-fact dd { color: var(--color-signal-live-sea-glass); }
+.market-index-trend-card[data-direction="up"] .market-index-trend-card__primary-fact dd { color: var(--color-signal-risk-vermilion); }
 .market-index-trend-card__table { min-width: 0; }
 .market-index-trend-card__table table {
   width: 100%;
@@ -147,5 +197,11 @@ function formatSessionChange(value: string | null): string {
   overflow-wrap: anywhere;
   text-align: start;
   border-block-start: var(--border-technical);
+}
+
+@media (max-width: 39.999rem) {
+  .market-index-trend-card { padding-inline: var(--space-3); }
+  .market-index-trend-card__market-facts,
+  .market-index-trend-card__facts { gap-inline: var(--space-4); }
 }
 </style>

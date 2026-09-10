@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, shallowRef } from "vue";
 
 import type { ConnectionStatus, MarketIndexSnapshotView } from "../../api/generated";
 import { dashboardMarketIndexIdentities } from "../../api/marketIndexIdentity";
@@ -18,9 +18,33 @@ interface Emits {
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
+const defaultIdentity = dashboardMarketIndexIdentities[0];
+if (defaultIdentity === undefined) throw new Error("dashboard index identities cannot be empty");
 const summariesByCode = computed(() =>
   new Map(props.indexes.map((item) => [item.indexCode, item] as const)),
 );
+const selectedIndexCode = shallowRef(defaultIdentity.indexCode);
+const selectedIdentity = computed(
+  () => dashboardMarketIndexIdentities.find(
+    (identity) => identity.indexCode === selectedIndexCode.value,
+  ) ?? defaultIdentity,
+);
+
+function formatSessionChange(value: string | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "—";
+  return new Intl.NumberFormat("zh-CN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    signDisplay: "always",
+    style: "percent",
+  }).format(Number(value));
+}
+
+function trendDirection(value: string | null | undefined): "down" | "flat" | "up" {
+  const ratio = Number(value);
+  if (!Number.isFinite(ratio) || ratio === 0) return "flat";
+  return ratio > 0 ? "up" : "down";
+}
 </script>
 
 <template>
@@ -29,14 +53,29 @@ const summariesByCode = computed(() =>
       <h2 id="market-index-strip-title">主要指数走势 · 当日</h2>
       <p>上证、深证、创业板、科创50 · 已完成五分钟数据 · 虚线为昨收</p>
     </header>
-    <div class="index-strip__grid">
+    <div class="index-strip__surface">
+      <div class="index-strip__selectors" role="group" aria-label="选择要查看的主要指数">
+        <button
+          v-for="identity in dashboardMarketIndexIdentities"
+          :key="identity.indexCode"
+          type="button"
+          class="index-strip__selector"
+          data-testid="market-index-selector"
+          :aria-pressed="selectedIndexCode === identity.indexCode"
+          :data-direction="trendDirection(summariesByCode.get(identity.indexCode)?.sessionChangeRatio)"
+          :data-health="summariesByCode.get(identity.indexCode)?.health ?? 'BLOCKED'"
+          @click="selectedIndexCode = identity.indexCode"
+        >
+          <span>{{ identity.displayName }}</span>
+          <strong>{{ formatSessionChange(summariesByCode.get(identity.indexCode)?.sessionChangeRatio) }}</strong>
+        </button>
+      </div>
       <MarketIndexTrendCard
-        v-for="identity in dashboardMarketIndexIdentities"
-        :key="identity.indexCode"
+        :key="selectedIdentity.indexCode"
         :connection-status="connectionStatus"
-        :identity="identity"
-        :summary="summariesByCode.get(identity.indexCode) ?? null"
-        :trend="trends[identity.indexCode]"
+        :identity="selectedIdentity"
+        :summary="summariesByCode.get(selectedIdentity.indexCode) ?? null"
+        :trend="trends[selectedIdentity.indexCode]"
         @retry="emit('retryIndex', $event)"
       />
     </div>
@@ -74,15 +113,75 @@ const summariesByCode = computed(() =>
   overflow-wrap: anywhere;
 }
 
-.index-strip__grid {
+.index-strip__surface {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--color-surface-graphite);
+  border: var(--border-technical);
+}
+
+.index-strip__selectors {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(4, minmax(8rem, 1fr));
+  gap: 1px;
+  min-width: 0;
+  overflow-x: auto;
+  background: var(--color-border-quiet);
+  border-block-end: var(--border-technical);
+}
+
+.index-strip__selector {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 8rem;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-mineral);
+  text-align: start;
+  cursor: pointer;
+  background: var(--color-surface-graphite);
+  border: 0;
+}
+
+.index-strip__selector::after {
+  position: absolute;
+  inset-inline: var(--space-3);
+  inset-block-end: 0;
+  height: .1875rem;
+  content: "";
+  background: transparent;
+}
+
+.index-strip__selector[aria-pressed="true"] {
+  background: var(--color-surface-raised);
+}
+
+.index-strip__selector[aria-pressed="true"]::after {
+  background: var(--color-signal-info-cyan);
+}
+
+.index-strip__selector strong {
+  color: var(--color-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 1.05rem;
+}
+
+.index-strip__selector[data-direction="down"] strong {
+  color: var(--color-signal-live-sea-glass);
+}
+
+.index-strip__selector[data-direction="up"] strong {
+  color: var(--color-signal-risk-vermilion);
+}
+
+.index-strip__selector[data-health="BLOCKED"] strong,
+.index-strip__selector[data-health="GAPPED"] strong {
+  text-decoration: underline dotted;
 }
 
 @media (max-width: 39.999rem) {
-  .index-strip__grid {
-    grid-template-columns: minmax(0, 1fr);
+  .index-strip__selectors {
+    grid-template-columns: repeat(4, minmax(7.5rem, 1fr));
   }
 }
 </style>

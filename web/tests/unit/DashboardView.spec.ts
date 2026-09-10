@@ -291,7 +291,7 @@ describe("DashboardView", () => {
     expect(failed.get('[role="alert"]').text()).toContain("快照不可用");
   });
 
-  it("keeps four empty index charts visible while the monitor projection is unavailable", async () => {
+  it("keeps four index selectors and one empty chart visible while the monitor projection is unavailable", async () => {
     const wrapper = await mountDashboard({
       symbols: [],
       unavailable: {
@@ -302,8 +302,9 @@ describe("DashboardView", () => {
       },
     });
 
-    expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(4);
-    expect(wrapper.findAll('[data-testid="market-index-sparkline"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-testid="market-index-selector"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(1);
+    expect(wrapper.findAll('[data-testid="market-index-sparkline"]')).toHaveLength(1);
     expect(wrapper.text()).toContain("当前暂无当日五分钟数据");
   });
 
