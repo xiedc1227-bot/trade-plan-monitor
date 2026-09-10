@@ -770,13 +770,26 @@ class ProjectionRepository:
                 MarketIndexSnapshotHeadRow.request_set_hash,
             )
         ).all()
+        snapshot_rows = self._session.scalars(
+            select(MarketIndexSnapshotRow).where(
+                MarketIndexSnapshotRow.snapshot_hash.in_(
+                    tuple(head.snapshot_hash for head in heads)
+                )
+            )
+        ).all()
+        rows_by_hash = {row.snapshot_hash: row for row in snapshot_rows}
         records: list[MarketIndexSnapshotRecord] = []
         for head in heads:
-            record = self.get_market_index_snapshot(head.snapshot_hash)
-            if record is None:  # pragma: no cover - foreign key protects this
+            row = rows_by_hash.get(head.snapshot_hash)
+            if row is None:  # pragma: no cover - foreign key protects this
                 raise ProjectionMissingDependencyError(
                     "Market-index head names a missing immutable snapshot"
                 )
+            snapshot, provider_revision = _market_index_from_row(row)
+            record = MarketIndexSnapshotRecord(
+                snapshot=snapshot,
+                provider_content_revision=provider_revision,
+            )
             snapshot = record.snapshot
             if (
                 snapshot.mapping_version != normalized_mapping_version

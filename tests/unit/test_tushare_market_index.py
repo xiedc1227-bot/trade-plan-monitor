@@ -333,6 +333,48 @@ def test_index_provider_reuses_stable_reference_frames_during_intraday_refresh()
     ]
 
 
+def test_index_provider_does_not_cache_reference_frames_from_a_failed_batch() -> None:
+    class FlakyRealtimeClient(_Client):
+        def rt_idx_min_daily(self, **kwargs: object) -> pd.DataFrame:
+            frame = super().rt_idx_min_daily(**kwargs)
+            if len(self.realtime_idx_calls) == 1:
+                frame["freq"] = "1MIN"
+            return frame
+
+    client = FlakyRealtimeClient()
+    provider = TushareMarketIndexProvider(
+        client=client,
+        profile=_ready_profile(),
+        request_controller=_Controller(),
+        now=lambda: datetime(2026, 9, 7, 10, 5, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(TushareMarketIndexProviderError):
+            await provider.acquire_index_data(
+                index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+                decision_cutoff=datetime(
+                    2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")
+                ),
+                five_minute_bar_count=2,
+                official_daily_bar_count=2,
+            )
+        await provider.acquire_index_data(
+            index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+            decision_cutoff=datetime(
+                2026, 9, 7, 10, 5, tzinfo=ZoneInfo("Asia/Shanghai")
+            ),
+            five_minute_bar_count=2,
+            official_daily_bar_count=2,
+        )
+
+    asyncio.run(scenario())
+
+    assert len(client.realtime_idx_calls) == 2
+    assert len(client.idx_calls) == 2
+    assert len(client.daily_calls) == 2
+
+
 def test_index_provider_rejects_wrong_returned_realtime_frequency() -> None:
     provider = TushareMarketIndexProvider(
         client=_WrongRealtimeFrequencyClient(),

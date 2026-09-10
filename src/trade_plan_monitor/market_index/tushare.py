@@ -236,7 +236,7 @@ class TushareMarketIndexProvider:
         cutoff = decision_cutoff.astimezone(_SHANGHAI)
         work_prefix = f"index:{index_code.value}:{cutoff.strftime('%Y%m%dT%H%M')}"
         try:
-            minute_frame = await self._historical_minutes(
+            historical_minute_frame, cache_historical_minutes = await self._historical_minutes(
                 index_code=index_code,
                 cutoff=cutoff,
                 work_key=f"{work_prefix}:minutes",
@@ -247,19 +247,19 @@ class TushareMarketIndexProvider:
                 work_key=f"{work_prefix}:realtime-minutes",
                 priority=RequestPriority.MARKET_DEADLINE,
             )
-            daily_frame = await self._official_daily(
+            daily_frame, cache_intraday_daily = await self._official_daily(
                 index_code=index_code,
                 cutoff=cutoff,
                 work_key=f"{work_prefix}:daily",
             )
             if (
-                not isinstance(minute_frame, pd.DataFrame)
+                not isinstance(historical_minute_frame, pd.DataFrame)
                 or not isinstance(realtime_minute_frame, pd.DataFrame)
                 or not isinstance(daily_frame, pd.DataFrame)
             ):
                 raise ValueError("index provider returned a non-tabular response")
             minute_frame = self._combined_minute_frame(
-                minute_frame,
+                historical_minute_frame,
                 realtime_minute_frame,
             )
             observed_at = self._observed_at()
@@ -279,13 +279,27 @@ class TushareMarketIndexProvider:
                 revision=revision,
                 required_bar_count=official_daily_bar_count,
             )
-            return MarketIndexProviderBatch(
+            batch = MarketIndexProviderBatch(
                 index_code=index_code,
                 five_minute_bars=minute_bars,
                 official_daily_bars=daily_bars,
                 content_revision=revision,
                 observed_at=observed_at,
             )
+            cache_key = index_code, cutoff.date()
+            if cache_historical_minutes:
+                self._replace_index_cache_entry(
+                    self._historical_minute_cache,
+                    cache_key=cache_key,
+                    frame=historical_minute_frame,
+                )
+            if cache_intraday_daily:
+                self._replace_index_cache_entry(
+                    self._intraday_daily_cache,
+                    cache_key=cache_key,
+                    frame=daily_frame,
+                )
+            return batch
         except Exception:
             raise TushareMarketIndexProviderError from None
 
@@ -295,24 +309,18 @@ class TushareMarketIndexProvider:
         index_code: MarketIndexCode,
         cutoff: datetime,
         work_key: str,
-    ) -> object:
+    ) -> tuple[object, bool]:
         cache_key = index_code, cutoff.date()
         cached = self._historical_minute_cache.get(cache_key)
         if cached is not None:
-            return cached.copy(deep=True)
+            return cached.copy(deep=True), False
         frame = await self._request_controller.execute(
             TushareOperation.INDEX_MINUTES,
             lambda: self._fetch_index_minutes(index_code, cutoff),
             work_key=work_key,
             priority=RequestPriority.MARKET_DEADLINE,
         )
-        if isinstance(frame, pd.DataFrame):
-            self._replace_index_cache_entry(
-                self._historical_minute_cache,
-                cache_key=cache_key,
-                frame=frame,
-            )
-        return frame
+        return frame, isinstance(frame, pd.DataFrame)
 
     async def _official_daily(
         self,
@@ -320,25 +328,19 @@ class TushareMarketIndexProvider:
         index_code: MarketIndexCode,
         cutoff: datetime,
         work_key: str,
-    ) -> object:
+    ) -> tuple[object, bool]:
         cache_key = index_code, cutoff.date()
         intraday = cutoff.timetz().replace(tzinfo=None) < time(15)
         cached = self._intraday_daily_cache.get(cache_key) if intraday else None
         if cached is not None:
-            return cached.copy(deep=True)
+            return cached.copy(deep=True), False
         frame = await self._request_controller.execute(
             TushareOperation.INDEX_DAILY,
             lambda: self._fetch_index_daily(index_code, cutoff),
             work_key=work_key,
             priority=RequestPriority.MARKET_DEADLINE,
         )
-        if intraday and isinstance(frame, pd.DataFrame):
-            self._replace_index_cache_entry(
-                self._intraday_daily_cache,
-                cache_key=cache_key,
-                frame=frame,
-            )
-        return frame
+        return frame, intraday and isinstance(frame, pd.DataFrame)
 
     @staticmethod
     def _replace_index_cache_entry(
