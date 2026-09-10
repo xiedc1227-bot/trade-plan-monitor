@@ -733,6 +733,64 @@ class ProjectionRepository:
             if index_code in latest_by_index
         )
 
+    def list_market_index_snapshot_heads(
+        self,
+        *,
+        mapping_version: str,
+        index_code: MarketIndexCode,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> tuple[MarketIndexSnapshotRecord, ...]:
+        """Return immutable payloads named by current heads in one cutoff range."""
+
+        if not isinstance(index_code, MarketIndexCode):
+            raise TypeError("index_code must be a MarketIndexCode")
+        normalized_mapping_version = _token(
+            mapping_version,
+            "mapping_version",
+            maximum=32,
+        )
+        normalized_start = _market_datetime(start_at, "start_at")
+        normalized_end = _market_datetime(end_at, "end_at")
+        if normalized_start > normalized_end:
+            raise ValueError("start_at cannot follow end_at")
+        heads = self._session.scalars(
+            select(MarketIndexSnapshotHeadRow)
+            .where(
+                MarketIndexSnapshotHeadRow.mapping_version
+                == normalized_mapping_version,
+                MarketIndexSnapshotHeadRow.index_code == index_code.value,
+                MarketIndexSnapshotHeadRow.decision_cutoff
+                >= normalized_start.isoformat(),
+                MarketIndexSnapshotHeadRow.decision_cutoff
+                <= normalized_end.isoformat(),
+            )
+            .order_by(
+                MarketIndexSnapshotHeadRow.decision_cutoff,
+                MarketIndexSnapshotHeadRow.request_set_hash,
+            )
+        ).all()
+        records: list[MarketIndexSnapshotRecord] = []
+        for head in heads:
+            record = self.get_market_index_snapshot(head.snapshot_hash)
+            if record is None:  # pragma: no cover - foreign key protects this
+                raise ProjectionMissingDependencyError(
+                    "Market-index head names a missing immutable snapshot"
+                )
+            snapshot = record.snapshot
+            if (
+                snapshot.mapping_version != normalized_mapping_version
+                or snapshot.index_code is not index_code
+                or snapshot.decision_cutoff.isoformat() != head.decision_cutoff
+                or snapshot.request_set_hash != head.request_set_hash
+                or snapshot.revision != head.provider_content_revision
+            ):
+                raise ProjectionIdentityConflictError(
+                    "Market-index head identity does not match its immutable snapshot"
+                )
+            records.append(record)
+        return tuple(records)
+
     def get_market_index_snapshot_revision(
         self,
         *,

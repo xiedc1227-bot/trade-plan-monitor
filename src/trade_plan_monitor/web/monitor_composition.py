@@ -50,9 +50,15 @@ from trade_plan_monitor.state.database import (
 from trade_plan_monitor.state.models import AlertEvent, DeliveryAttempt, PlanVersionStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
+from trade_plan_monitor.web.backtest_pagination import BacktestApiCursorSigner
+from trade_plan_monitor.web.cursor_keys import load_or_create_cursor_key
+from trade_plan_monitor.web.persistent_market_index_history import (
+    PersistentMarketIndexHistorySource,
+)
 from trade_plan_monitor.web.persistent_monitor_read_service import PersistentMonitorReadService
 from trade_plan_monitor.web.plan_service import _reject_incompatible_database
 from trade_plan_monitor.web.position_service import PersistentPositionOperationService
+from trade_plan_monitor.web.routers.market_indexes import SignedMarketIndexHistoryService
 from trade_plan_monitor.web.websocket import CommittedMonitorEventStream
 
 _RUNNER_SHUTDOWN_SECONDS = 5.0
@@ -721,6 +727,12 @@ def create_monitor_composition(
         health_binding,
         clock=clock.now,
     )
+    market_index_read_service = SignedMarketIndexHistoryService(
+        source=PersistentMarketIndexHistorySource(unit_of_work_factory),
+        cursor_signer=BacktestApiCursorSigner(
+            load_or_create_cursor_key(database_path.with_suffix(".cursor.key"))
+        ),
+    )
     composition = MonitorWebComposition(
         runtime=runtime,
         runtime_factory=runtime_factory,
@@ -732,6 +744,7 @@ def create_monitor_composition(
         alert_service=PersistentAlertOperationService(
             unit_of_work_factory=unit_of_work_factory,
         ),
+        market_index_read_service=market_index_read_service,
     )
     health_binding.bind(composition.health)
     return composition

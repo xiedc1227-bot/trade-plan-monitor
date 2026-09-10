@@ -10,7 +10,6 @@ from decimal import Decimal
 from enum import Enum
 from functools import partial
 from pathlib import Path
-from secrets import token_bytes
 from typing import Protocol
 from uuid import UUID
 
@@ -110,6 +109,7 @@ from trade_plan_monitor.web.backtest_pagination import (
     BacktestCursorState,
     BacktestMembershipConflictError,
 )
+from trade_plan_monitor.web.cursor_keys import load_or_create_cursor_key
 from trade_plan_monitor.web.backtest_schemas import (
     BacktestDatasetFiltersView,
     BacktestDatasetPage,
@@ -1110,17 +1110,11 @@ async def _run_sync[ResultT](
 def _load_or_create_cursor_key(path: Path) -> bytes:
     """Load one local 256-bit cursor key, creating it with owner-only mode."""
 
-    absolute = path.absolute()
-    absolute.parent.mkdir(parents=True, exist_ok=True)
-    if absolute.exists() or absolute.is_symlink():
-        return _read_cursor_key(absolute)
-
-    key = token_bytes(32)
-    try:
-        create_cursor_key_file(absolute, key)
-    except FileExistsError:
-        return _read_cursor_key(absolute)
-    return key
+    return load_or_create_cursor_key(
+        path,
+        create=create_cursor_key_file,
+        read=_read_cursor_key,
+    )
 
 
 def _read_cursor_key(path: Path) -> bytes:
