@@ -687,7 +687,6 @@ ReadServiceDependency = Annotated[
 @router.get(
     "/dashboard",
     response_model=DashboardProjectionResponse,
-    response_model_exclude_none=True,
 )
 async def get_dashboard(
     service: ReadServiceDependency,

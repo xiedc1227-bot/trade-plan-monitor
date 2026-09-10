@@ -74,6 +74,22 @@ def _shared_snapshot() -> dict[str, object]:
     }
 
 
+def _blocked_shared_snapshot() -> dict[str, object]:
+    snapshot = _shared_snapshot()
+    snapshot.update(
+        {
+            "closePoints": None,
+            "priorClosePoints": None,
+            "sessionChangeRatio": None,
+            "completedBucketAt": None,
+            "health": "BLOCKED",
+            "issues": ["PROVIDER_UNAVAILABLE"],
+            "indicatorFacts": [],
+        }
+    )
+    return snapshot
+
+
 def _dashboard_payload() -> dict[str, object]:
     return {
         "sequence": 7,
@@ -178,6 +194,27 @@ def test_dashboard_keeps_shared_index_facts_plan_neutral() -> None:
     assert item["indicatorFacts"][0]["period"] == 20
     forbidden = {"planId", "conditionProgress", "entryAllowed", "decisionEffect"}
     assert forbidden.isdisjoint(item)
+
+
+def test_dashboard_serializes_required_nullable_fields_explicitly() -> None:
+    class BlockedIndexReadService:
+        async def get_dashboard(self) -> object:
+            payload = _dashboard_payload()
+            payload["marketIndexes"] = [_blocked_shared_snapshot()]
+            return payload
+
+    response = TestClient(create_app(read_service=BlockedIndexReadService())).get(
+        "/api/v1/dashboard"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dataAgeSeconds"] is None
+    blocked = body["marketIndexes"][0]
+    assert blocked["closePoints"] is None
+    assert blocked["priorClosePoints"] is None
+    assert blocked["sessionChangeRatio"] is None
+    assert blocked["completedBucketAt"] is None
 
 
 def test_shared_snapshot_requires_sorted_unique_items_and_canonical_identity() -> None:
