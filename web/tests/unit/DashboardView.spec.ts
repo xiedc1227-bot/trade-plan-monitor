@@ -260,6 +260,13 @@ describe("DashboardView", () => {
     expect(rail.text()).not.toContain("000005.SZ");
   });
 
+  it("hides the actionable rail when no stocks are being monitored", async () => {
+    const wrapper = await mountDashboard({ symbols: [] });
+
+    expect(wrapper.find("#actionable-rail-title").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("具备后端权威可执行信号");
+  });
+
   it("keeps stale cached rows visible beside loading and escaped error states", async () => {
     const hostile = '<img src=x onerror="globalThis.compromised=true">';
     const wrapper = await mountDashboard({

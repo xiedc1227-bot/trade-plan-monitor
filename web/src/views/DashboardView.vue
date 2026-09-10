@@ -275,7 +275,11 @@ function compareText(left: string, right: string): number {
       @select-symbol="emit('selectSymbol', $event)"
     />
 
-    <aside v-if="unavailable === null" class="dashboard-view__actionable-rail" aria-labelledby="actionable-rail-title">
+    <aside
+      v-if="unavailable === null && symbols.length > 0"
+      class="dashboard-view__actionable-rail"
+      aria-labelledby="actionable-rail-title"
+    >
       <h2 id="actionable-rail-title">可执行提醒栏</h2>
       <slot name="actionableRail" :symbols="actionableSymbols">
         <p>当前有 {{ actionableSymbols.length }} 只股票具备后端权威可执行信号。</p>
