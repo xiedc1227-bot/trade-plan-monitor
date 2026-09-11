@@ -4,6 +4,7 @@ import {
   calculateIndexAxisBounds,
   marketIndexDirection,
   marketIndexDirectionColor,
+  marketIndexShowSymbol,
   marketIndexValueDirection,
 } from "../../src/components/market-index/marketIndexChartOptions";
 
@@ -20,6 +21,12 @@ describe("market index chart options", () => {
 
     expect(bounds?.minimum).toBeLessThan(3000);
     expect(bounds?.maximum).toBeGreaterThan(3000);
+  });
+
+  it("shows the only point in a one-bar series without cluttering longer trends", () => {
+    expect(marketIndexShowSymbol(0)).toBe(false);
+    expect(marketIndexShowSymbol(1)).toBe(true);
+    expect(marketIndexShowSymbol(2)).toBe(false);
   });
 
   it.each([

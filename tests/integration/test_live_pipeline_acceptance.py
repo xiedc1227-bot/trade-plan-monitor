@@ -60,6 +60,7 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
+from trade_plan_monitor.state.events import MonitorEvent, MonitorEventType
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.monitor_composition import create_monitor_composition
 from trade_plan_monitor.web.persistent_monitor_read_service import PersistentMonitorReadService
@@ -284,6 +285,17 @@ class OfflineSDK:
         )
 
 
+class DelayedIndexSDK(OfflineSDK):
+    """Expose a just-completed index bar from the following minute onward."""
+
+    def _index_minutes(self, kwargs: dict[str, object]) -> pd.DataFrame:
+        frame = super()._index_minutes(kwargs)
+        cutoff = self.clock.now().replace(second=0, microsecond=0)
+        if cutoff.minute % 5:
+            return frame
+        return frame.loc[frame["time"] < cutoff.strftime("%Y-%m-%d %H:%M:%S")]
+
+
 def _ready_stock_capabilities() -> ProviderCapabilities:
     return ProviderCapabilities(
         **{key: ProviderCapabilityStatus.READY for key in ProviderCapabilities.model_fields}
@@ -479,9 +491,18 @@ def test_market_index_persistence_reuses_an_older_canonical_content_revision(
         )
 
     try:
-        first = service._persist_market_index_batch(batch(17, INDEX_CUTOFF + timedelta(minutes=1)))
-        service._persist_market_index_batch(batch(18, INDEX_CUTOFF + timedelta(minutes=2)))
-        reused = service._persist_market_index_batch(batch(17, INDEX_CUTOFF + timedelta(minutes=3)))
+        first, first_events = service._persist_market_index_batch(
+            batch(17, INDEX_CUTOFF + timedelta(minutes=1))
+        )
+        _, second_events = service._persist_market_index_batch(
+            batch(18, INDEX_CUTOFF + timedelta(minutes=2))
+        )
+        reused, reused_events = service._persist_market_index_batch(
+            batch(17, INDEX_CUTOFF + timedelta(minutes=3))
+        )
+        _, duplicate_events = service._persist_market_index_batch(
+            batch(17, INDEX_CUTOFF + timedelta(minutes=3))
+        )
         first_snapshot = first.snapshots_by_index[MarketIndexCode.SHENZHEN_COMPONENT]
         reused_snapshot = reused.snapshots_by_index[MarketIndexCode.SHENZHEN_COMPONENT]
 
@@ -494,9 +515,13 @@ def test_market_index_persistence_reuses_an_older_canonical_content_revision(
                 decision_cutoff=first_snapshot.decision_cutoff,
                 request_set_hash=first_snapshot.request_set_hash,
             )
+            events = work.events.replay_page_after(0).events
         assert head is not None
         assert head.snapshot.snapshot_hash == first_snapshot.snapshot_hash
         assert head.updated_at == INDEX_CUTOFF + timedelta(minutes=3)
+        assert tuple(map(len, (first_events, second_events, reused_events))) == (1, 1, 1)
+        assert duplicate_events == ()
+        assert tuple(event.sequence for event in events) == (1, 2, 3)
     finally:
         engine.dispose()
 
@@ -525,6 +550,7 @@ def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
         )
         engine, work_factory = _work_factory(database, clock)
         upgrade_database(engine)
+        published: list[MonitorEvent] = []
         pipeline = ProductionMonitorPipeline(
             configuration=load_application_config(config).tushare,
             certification_directory=tmp_path / "data" / "live-certification",
@@ -538,7 +564,7 @@ def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
             request_controller=controller,
             unit_of_work_factory=work_factory,
             runtime_generation=uuid4(),
-            publisher=lambda _event: None,
+            publisher=published.append,
         )
         try:
             result = await pipeline.run_deadline(
@@ -559,9 +585,104 @@ def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
                     mapping_version="board-index-map-v1",
                     index_codes=DASHBOARD_INDEX_CODES,
                 )
+                events = work.events.replay_page_after(0).events
             assert tuple(
                 snapshot.snapshot.index_code for snapshot in snapshots
             ) == DASHBOARD_INDEX_CODES
+            assert tuple(event.event_type for event in events) == (
+                MonitorEventType.MARKET_INDEX_UPDATED,
+            ) * len(ALWAYS_ON_INDEX_CODES)
+            assert {event.aggregate_id for event in events} == {
+                code.value for code in ALWAYS_ON_INDEX_CODES
+            }
+            assert published == list(events)
+        finally:
+            await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_production_pipeline_retries_a_late_index_bucket_once_on_the_next_minute(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import trade_plan_monitor.runtime.production as production
+
+    async def scenario() -> None:
+        clock = ControlledClock(INDEX_CUTOFF + timedelta(seconds=12))
+        database = tmp_path / "monitor.sqlite3"
+        config = _write_configuration_and_evidence(
+            tmp_path,
+            observed_at=clock.now(),
+            include_index=True,
+        )
+        sdk = DelayedIndexSDK(clock, ())
+        monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
+        pace = VirtualPace()
+        controller = create_live_tushare_request_controller(
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
+        )
+        engine, work_factory = _work_factory(database, clock)
+        upgrade_database(engine)
+        pipeline = ProductionMonitorPipeline(
+            configuration=load_application_config(config).tushare,
+            certification_directory=tmp_path / "data" / "live-certification",
+            stock_certification=create_stock_certification(
+                observed_at=clock.now(),
+                endpoint_url=ENDPOINT,
+                capabilities=_ready_stock_capabilities(),
+                source_time_label=SourceTimeLabel.START,
+            ),
+            clock=clock,
+            request_controller=controller,
+            unit_of_work_factory=work_factory,
+            runtime_generation=uuid4(),
+            publisher=lambda _event: None,
+        )
+        try:
+            await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=INDEX_CUTOFF.date(),
+                    due_at=clock.now(),
+                    bar_end=INDEX_CUTOFF,
+                )
+            )
+            assert (
+                pipeline.index_service.latest_snapshots()[MarketIndexCode.STAR_50].health
+                is MarketIndexHealth.STALE
+            )
+            calls_after_initial_attempt = len(sdk.calls)
+
+            clock.current = INDEX_CUTOFF + timedelta(minutes=1, seconds=12)
+            await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=INDEX_CUTOFF.date(),
+                    due_at=clock.now(),
+                    bar_end=INDEX_CUTOFF + timedelta(minutes=1),
+                )
+            )
+            assert len(sdk.calls) > calls_after_initial_attempt
+            assert (
+                pipeline.index_service.latest_snapshots()[MarketIndexCode.STAR_50].health
+                is MarketIndexHealth.LIVE
+            )
+
+            calls_after_retry = len(sdk.calls)
+            clock.current = INDEX_CUTOFF + timedelta(minutes=2, seconds=12)
+            await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=INDEX_CUTOFF.date(),
+                    due_at=clock.now(),
+                    bar_end=INDEX_CUTOFF + timedelta(minutes=2),
+                )
+            )
+            assert len(sdk.calls) == calls_after_retry
         finally:
             await controller.aclose()
             engine.dispose()

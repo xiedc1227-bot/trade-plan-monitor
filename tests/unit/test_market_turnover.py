@@ -11,6 +11,7 @@ from trade_plan_monitor.market_index.models import (
     MarketIndexBar,
     MarketIndexHealth,
     MarketIndexInterval,
+    MarketIndexIssueCode,
     MarketIndexSnapshot,
     MarketIndexSourceKind,
 )
@@ -140,6 +141,36 @@ def test_close_estimate_equals_actual_turnover() -> None:
     assert summary is not None
     assert summary.current_amount == Decimal("14400")
     assert summary.estimated_full_day_amount == summary.current_amount
+
+
+def test_uses_last_complete_aligned_bucket_during_one_bucket_publication_lag() -> None:
+    sse = _snapshot(
+        MarketIndexCode.SSE_COMPOSITE,
+        amount_per_bucket="100",
+        prior_amount="1000",
+    )
+    shenzhen = _snapshot(
+        MarketIndexCode.SHENZHEN_A_SHARE,
+        amount_per_bucket="200",
+        prior_amount="2000",
+    )
+    delayed_cutoff = sse.decision_cutoff + timedelta(minutes=5)
+    delayed = tuple(
+        snapshot.model_copy(
+            update={
+                "decision_cutoff": delayed_cutoff,
+                "health": MarketIndexHealth.STALE,
+                "issues": (MarketIndexIssueCode.STALE_DATA,),
+            }
+        )
+        for snapshot in (sse, shenzhen)
+    )
+
+    summary = build_market_turnover_summary(delayed)
+
+    assert summary is not None
+    assert summary.current_amount == Decimal("1800")
+    assert summary.completed_bucket_at == sse.completed_bucket_at
 
 
 def test_completed_bucket_count_covers_lunch_break_and_close() -> None:

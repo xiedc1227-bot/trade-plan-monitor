@@ -192,17 +192,19 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 3. One unavailable index selector remains visible and does not prevent other index data from loading, updating, or being selected.
 4. With zero active plans, completed five-minute deadlines still acquire and persist the four display-only indexes; they do not affect any plan's fact requirements, evidence, hash, or decision.
 5. The feature adds no dependency; the nullable additive `marketTurnover` dashboard field remains backward-compatible and passes the commands listed above.
-6. Keyboard controls, screen-reader chart labeling, reduced-motion, responsive layout, and 200% text acceptance checks pass.
+6. Keyboard controls, screen-reader chart labeling, reduced-motion, responsive layout with non-overlapping section spacing, and 200% text acceptance checks pass.
+7. Every changed persisted index head appends `market.index.updated` in the same transaction and publishes it only after commit, so an already-open dashboard refreshes through the existing authoritative snapshot recovery path without frontend polling.
+8. A snapshot missing only a just-completed five-minute bucket may be reacquired once on the immediately following minute; permission, quota, provider, identity, formula, and gap failures never enter this publication-lag retry. A one-point series renders a visible symbol while longer series remain uncluttered.
 
 ## Market Turnover Extension
 
 - The four visible selectors remain unchanged. A hidden always-on `399107.SZ` (Shenzhen A-share Index) benchmark is collected with `000001.SH`; it is never rendered as a fifth selector.
 - Whole-market turnover is defined as Shanghai Composite turnover plus Shenzhen A-share turnover. `399001.SZ` is not used because its turnover covers only Shenzhen Component constituents rather than the full Shenzhen market.
 - `currentAmount` is the exact sum of all available completed current-day five-minute amounts for the two benchmarks. `previousAmount` is their sum on the latest shared official trading day before today, and `changeAmount = currentAmount - previousAmount`.
-- `estimatedFullDayAmount = currentAmount * 48 / completedBucketCount`, rounded to whole yuan. The UI labels this as a linear estimate and displays the latest completed five-minute cutoff; at the official close the estimate equals the current amount.
-- Calculation fails closed unless both snapshots are `LIVE`, share one cutoff, contain every expected completed bucket with non-null amount, and contain prior official daily amounts. The nullable `DashboardResponse.marketTurnover` is then omitted as `null`, while all four index charts remain usable.
+- `estimatedFullDayAmount = currentAmount * 48 / completedBucketCount`, rounded to whole yuan. The field label already identifies it as an estimated full-day amount, so the compact card does not render an additional formula or cutoff footer; at the official close the estimate equals the current amount.
+- Calculation accepts either two aligned `LIVE` snapshots or two aligned snapshots delayed by exactly one five-minute publication bucket with only `STALE_DATA`. In both cases every expected bucket through the shared `completedBucketAt` must exist with non-null amount and prior official daily amounts must exist. Any larger delay, gap, provider failure, unequal cutoff, or incomplete amount still fails closed to `DashboardResponse.marketTurnover=null`, while all four index charts remain usable.
 - Existing four-index certification profiles remain loadable. The added benchmark defaults to `UNVERIFIED` until a separately authorized recertification proves `399107.SZ`; this affects only the turnover card, not the four existing charts.
-- The card is placed to the right of the selected chart on wide screens and below it on narrower screens. It shows current amount, change from the previous trading day, and estimated full-day amount; unavailable data uses placeholders rather than hiding the card.
+- The card is placed to the right of the selected chart on wide screens and below it on narrower screens. It labels the current value as today's cumulative amount and shows the change from the previous trading day plus the estimated full-day amount, without a separate explanatory footer; unavailable data uses placeholders rather than hiding the card.
 - The implementation reuses `rt_idx_min_daily(freq="5MIN")` and `index_daily`, adds no provider endpoint or frontend chart dependency, and extends unit, integration, contract, store, component, responsive, and accessibility coverage.
 
 ## Open Questions

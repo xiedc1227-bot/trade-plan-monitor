@@ -9,7 +9,11 @@ from typing import Annotated, Literal, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from trade_plan_monitor.market_index.identity import MarketIndexCode
-from trade_plan_monitor.market_index.models import MarketIndexHealth, MarketIndexSnapshot
+from trade_plan_monitor.market_index.models import (
+    MarketIndexHealth,
+    MarketIndexIssueCode,
+    MarketIndexSnapshot,
+)
 
 MARKET_TURNOVER_INDEX_CODES = (
     MarketIndexCode.SSE_COMPOSITE,
@@ -51,7 +55,7 @@ class MarketTurnoverSummary(BaseModel):
 def build_market_turnover_summary(
     snapshots: tuple[MarketIndexSnapshot, ...],
 ) -> MarketTurnoverSummary | None:
-    """Return a summary only when both benchmark snapshots are complete and aligned."""
+    """Return a summary when both benchmarks share one complete usable cutoff."""
 
     if type(snapshots) is not tuple or any(
         type(snapshot) is not MarketIndexSnapshot for snapshot in snapshots
@@ -61,15 +65,16 @@ def build_market_turnover_summary(
     if set(by_code) != set(MARKET_TURNOVER_INDEX_CODES):
         return None
     selected = tuple(by_code[code] for code in MARKET_TURNOVER_INDEX_CODES)
-    if any(snapshot.health is not MarketIndexHealth.LIVE for snapshot in selected):
+    if any(not _is_turnover_snapshot_usable(snapshot) for snapshot in selected):
+        return None
+    decision_cutoffs = {snapshot.decision_cutoff for snapshot in selected}
+    if len(decision_cutoffs) != 1:
         return None
     cutoffs = {snapshot.completed_bucket_at for snapshot in selected}
     if len(cutoffs) != 1 or None in cutoffs:
         return None
     completed_bucket_at = next(iter(cutoffs))
     assert completed_bucket_at is not None
-    if any(snapshot.decision_cutoff != completed_bucket_at for snapshot in selected):
-        return None
     expected = _expected_bucket_ends(completed_bucket_at)
     if not expected:
         return None
@@ -114,6 +119,19 @@ def build_market_turnover_summary(
         change_amount=current_amount - previous_amount,
         estimated_full_day_amount=estimated,
         completed_bucket_at=completed_bucket_at,
+    )
+
+
+def _is_turnover_snapshot_usable(snapshot: MarketIndexSnapshot) -> bool:
+    completed_bucket_at = snapshot.completed_bucket_at
+    if completed_bucket_at is None:
+        return False
+    if snapshot.health is MarketIndexHealth.LIVE:
+        return snapshot.decision_cutoff == completed_bucket_at
+    return (
+        snapshot.health is MarketIndexHealth.STALE
+        and snapshot.issues == (MarketIndexIssueCode.STALE_DATA,)
+        and snapshot.decision_cutoff - completed_bucket_at == timedelta(minutes=5)
     )
 
 

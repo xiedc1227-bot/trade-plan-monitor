@@ -23,6 +23,10 @@ export function marketIndexDirectionColor(
   return directionColors[marketIndexDirection(sessionChangeRatio)];
 }
 
+export function marketIndexShowSymbol(pointCount: number): boolean {
+  return pointCount === 1;
+}
+
 export function marketIndexValueDirection(
   value: string | number | null | undefined,
   reference: string | number | null | undefined,

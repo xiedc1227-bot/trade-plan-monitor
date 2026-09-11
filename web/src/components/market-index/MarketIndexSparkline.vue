@@ -16,6 +16,7 @@ import type { MarketIndexBarView } from "../../api/generated";
 import {
   calculateIndexAxisBounds,
   marketIndexDirectionColor,
+  marketIndexShowSymbol,
 } from "./marketIndexChartOptions";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 
@@ -122,7 +123,8 @@ function buildOption(
             }
           : undefined,
         name: props.displayName,
-        showSymbol: false,
+        showSymbol: marketIndexShowSymbol(visibleBars.length),
+        symbolSize: 6,
         type: "line",
       },
     ],

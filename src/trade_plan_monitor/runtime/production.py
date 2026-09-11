@@ -499,24 +499,46 @@ class ProductionMonitorPipeline:
                 deadline=deadline,
                 plans=tuple(selected),
             )
+            if deadline.kind is DeadlineKind.REALTIME_MINUTE:
+                await self._refresh_dashboard_indexes(deadline, exact_boundary=False)
             return result
         finally:
             self._running_deadline = False
             self._deadline_plans = None
 
-    async def _refresh_dashboard_indexes(self, deadline: MarketDeadline) -> None:
+    async def _refresh_dashboard_indexes(
+        self,
+        deadline: MarketDeadline,
+        *,
+        exact_boundary: bool = True,
+    ) -> None:
         """Persist display-only index snapshots when no plan evaluation is due."""
 
         observed_at = max(self._clock.now(), deadline.due_at)
         if deadline.kind is DeadlineKind.REALTIME_MINUTE:
-            if (
-                deadline.bar_end is None
-                or five_minute_bucket_end(deadline.bar_end) != deadline.bar_end
-            ):
+            if deadline.bar_end is None:
                 return
+            if five_minute_bucket_end(deadline.bar_end) == deadline.bar_end:
+                if not exact_boundary:
+                    return
+                bucket_end = deadline.bar_end
+            else:
+                candidate = deadline.bar_end - timedelta(minutes=1)
+                try:
+                    follows_five_minute_boundary = (
+                        five_minute_bucket_end(candidate) == candidate
+                    )
+                except ValueError:
+                    follows_five_minute_boundary = False
+                if (
+                    not follows_five_minute_boundary
+                    or not self.index_service.claim_publication_lag_retry(candidate)
+                ):
+                    return
+                bucket_end = candidate
             await self.evaluations.prepare_intraday_market_indexes(
                 plans=(),
-                bucket_end=deadline.bar_end,
+                bucket_end=bucket_end,
                 evaluated_at=observed_at,
             )
             return

@@ -2,7 +2,6 @@
 import { computed } from "vue";
 
 import type { MarketTurnoverSummaryView } from "../../api/generated";
-import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   summary: MarketTurnoverSummaryView | null;
@@ -44,7 +43,7 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
     <h3 id="market-turnover-title">沪深市场成交额</h3>
     <dl>
       <div>
-        <dt>今日实时成交额</dt>
+        <dt>今日累计成交额</dt>
         <dd class="market-turnover-card__primary">{{ formatAmount(summary?.currentAmount) }}</dd>
       </div>
       <div>
@@ -56,11 +55,7 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
         <dd>{{ formatAmount(summary?.estimatedFullDayAmount) }}</dd>
       </div>
     </dl>
-    <p v-if="summary === null" class="market-turnover-card__note">暂无成交额数据</p>
-    <p v-else class="market-turnover-card__note">
-      按已完成五分钟时段线性估算<br>
-      截至 {{ formatDisplayDateTime(summary.completedBucketAt, "未知") }}
-    </p>
+    <p v-if="summary === null" class="market-turnover-card__empty">暂无成交额数据</p>
   </aside>
 </template>
 
@@ -78,7 +73,7 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
 .market-turnover-card h3,
 .market-turnover-card dl,
 .market-turnover-card dd,
-.market-turnover-card__note {
+.market-turnover-card__empty {
   margin: 0;
 }
 
@@ -93,7 +88,7 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
 }
 
 .market-turnover-card dt,
-.market-turnover-card__note {
+.market-turnover-card__empty {
   color: var(--color-text-muted);
 }
 
@@ -126,7 +121,7 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
   color: var(--color-text-mineral);
 }
 
-.market-turnover-card__note {
+.market-turnover-card__empty {
   font-size: .85rem;
   line-height: 1.5;
 }

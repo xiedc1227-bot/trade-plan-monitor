@@ -605,7 +605,8 @@ class RuntimeEvaluationService:
             decision_cutoff=expected_five_minute_ends(bucket_end)[-1],
             observed_no_later_than=_ceil_to_whole_second(evaluated_at),
         )
-        prepared = self._persist_market_index_batch(prepared) or prepared
+        prepared, events = self._persist_market_index_batch(prepared)
+        await self._publish_committed_events(events)
         return prepared
 
     def load_persisted_symbol_health(
@@ -1021,7 +1022,8 @@ class RuntimeEvaluationService:
             )
         )
         if prepared is not None:
-            prepared = self._persist_market_index_batch(prepared) or prepared
+            prepared, events = self._persist_market_index_batch(prepared)
+            await self._publish_committed_events(events)
         results: list[OfficialCloseCycleResult] = []
         async with self._official_serial:
             for plan in plans:
@@ -1060,7 +1062,8 @@ class RuntimeEvaluationService:
                 decision_cutoff=cutoff,
                 observed_no_later_than=evaluated_at,
             )
-            prepared = self._persist_market_index_batch(prepared) or prepared
+            prepared, events = self._persist_market_index_batch(prepared)
+            await self._publish_committed_events(events)
             reference_market_snapshot = prepared.snapshot_for_plan(plan)
         async with self._official_serial:
             return await self._run_official_close_unlocked(
@@ -1940,10 +1943,11 @@ class RuntimeEvaluationService:
     def _persist_market_index_batch(
         self,
         prepared: RuntimeMarketIndexBatch,
-    ) -> RuntimeMarketIndexBatch:
+    ) -> tuple[RuntimeMarketIndexBatch, tuple[MonitorEvent, ...]]:
         if not isinstance(prepared, RuntimeMarketIndexBatch):
             raise TypeError("prepared must be a RuntimeMarketIndexBatch")
         canonical: dict[MarketIndexCode, MarketIndexSnapshot] = {}
+        events: list[MonitorEvent] = []
         with self._unit_of_work_factory() as unit_of_work:
             for index_code, snapshot in sorted(
                 prepared.snapshots_by_index.items(),
@@ -1958,6 +1962,12 @@ class RuntimeEvaluationService:
                     request_set_hash=snapshot.request_set_hash,
                     provider_content_revision=provider_revision,
                 )
+                current_head = unit_of_work.projections.get_market_index_head(
+                    mapping_version=snapshot.mapping_version,
+                    index_code=snapshot.index_code,
+                    decision_cutoff=snapshot.decision_cutoff,
+                    request_set_hash=snapshot.request_set_hash,
+                )
                 if stored is not None:
                     if not _equivalent_market_index_capture(stored.snapshot, snapshot):
                         raise ProjectionIdentityConflictError(
@@ -1969,20 +1979,50 @@ class RuntimeEvaluationService:
                         observed_at=snapshot.observed_at,
                     )
                     canonical[index_code] = stored.snapshot
-                    continue
-                unit_of_work.projections.put_market_index_snapshot(
-                    snapshot,
-                    provider_content_revision=provider_revision,
-                )
-                unit_of_work.projections.advance_market_index_head(
-                    snapshot,
-                    provider_content_revision=provider_revision,
-                )
-                canonical[index_code] = snapshot
+                else:
+                    unit_of_work.projections.put_market_index_snapshot(
+                        snapshot,
+                        provider_content_revision=provider_revision,
+                    )
+                    unit_of_work.projections.advance_market_index_head(
+                        snapshot,
+                        provider_content_revision=provider_revision,
+                    )
+                    canonical[index_code] = snapshot
+                canonical_snapshot = canonical[index_code]
+                if (
+                    current_head is None
+                    or current_head.snapshot.snapshot_hash != canonical_snapshot.snapshot_hash
+                ):
+                    events.append(
+                        unit_of_work.events.append(
+                            MonitorEventDraft(
+                                event_id=monitor_event_id(
+                                    MonitorEventType.MARKET_INDEX_UPDATED,
+                                    canonical_snapshot.index_code.value,
+                                    canonical_snapshot.decision_cutoff.isoformat(),
+                                    canonical_snapshot.request_set_hash,
+                                    canonical_snapshot.snapshot_hash,
+                                    snapshot.observed_at.isoformat(),
+                                ),
+                                event_type=MonitorEventType.MARKET_INDEX_UPDATED,
+                                aggregate_id=canonical_snapshot.index_code.value,
+                                payload=MonitorEventPayload(
+                                    entity_id=canonical_snapshot.index_code.value,
+                                    revision=canonical_snapshot.revision,
+                                    status=canonical_snapshot.health.value,
+                                ),
+                                occurred_at=snapshot.observed_at,
+                            )
+                        )
+                    )
             unit_of_work.commit()
-        return RuntimeMarketIndexBatch(
-            decision_cutoff=prepared.decision_cutoff,
-            snapshots_by_index=MappingProxyType(canonical),
+        return (
+            RuntimeMarketIndexBatch(
+                decision_cutoff=prepared.decision_cutoff,
+                snapshots_by_index=MappingProxyType(canonical),
+            ),
+            tuple(events),
         )
 
     @staticmethod

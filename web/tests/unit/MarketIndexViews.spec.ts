@@ -139,23 +139,24 @@ const bars: readonly MarketIndexBarView[] = Object.freeze([
 enableAutoUnmount(afterEach);
 
 describe("market index monitor views", () => {
-  it("renders the market-wide turnover summary with an explicit estimate label", () => {
+  it("renders the market-wide turnover summary without explanatory footer text", () => {
     const wrapper = mount(MarketTurnoverCard, {
       props: { summary: marketTurnover },
     });
 
-    expect(wrapper.get('[data-testid="market-turnover-card"]').text()).toContain("今日实时成交额");
+    expect(wrapper.get('[data-testid="market-turnover-card"]').text()).toContain("今日累计成交额");
     expect(wrapper.text()).toContain("1.66万亿");
     expect(wrapper.text()).toContain("较上一日");
     expect(wrapper.text()).toContain("-2107亿");
     expect(wrapper.text()).toContain("预测全天成交额");
-    expect(wrapper.text()).toContain("按已完成五分钟时段线性估算");
+    expect(wrapper.text()).not.toContain("按最近完整五分钟时段线性估算");
+    expect(wrapper.text()).not.toContain("截至 2026-09-02 10:35:00");
   });
 
   it("keeps the turnover card visible with placeholders before data is available", () => {
     const wrapper = mount(MarketTurnoverCard, { props: { summary: null } });
 
-    expect(wrapper.text()).toContain("今日实时成交额");
+    expect(wrapper.text()).toContain("今日累计成交额");
     expect(wrapper.text()).toContain("暂无成交额数据");
     expect(wrapper.text()).toContain("—");
   });

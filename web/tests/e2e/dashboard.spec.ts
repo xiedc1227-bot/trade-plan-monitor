@@ -293,11 +293,18 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   )).toBe("rgb(103, 183, 165)");
   await expect(page.getByTestId("market-index-sparkline")).toHaveCount(1);
   const turnoverCard = page.getByTestId("market-turnover-card");
-  await expect(turnoverCard).toContainText("今日实时成交额");
+  await expect(turnoverCard).toContainText("今日累计成交额");
   await expect(turnoverCard).toContainText("1.66万亿");
   await expect(turnoverCard).toContainText("-2107亿");
   await expect(turnoverCard).toContainText("1.88万亿");
-  await expect(turnoverCard).toContainText("线性估算");
+  await expect(turnoverCard).not.toContainText("线性估算");
+  await expect(turnoverCard).not.toContainText("截至 2026-09-02 10:35:00");
+  const countStripBox = await page.locator(".dashboard-view__counts").boundingBox();
+  const toolbarBox = await page.locator(".watchlist-toolbar").boundingBox();
+  expect(countStripBox).not.toBeNull();
+  expect(toolbarBox).not.toBeNull();
+  expect((toolbarBox?.y ?? 0) - ((countStripBox?.y ?? 0) + (countStripBox?.height ?? 0)))
+    .toBeGreaterThanOrEqual(16);
   await page.getByTestId("market-index-selector").filter({ hasText: "科创50" }).click();
   await expect(indexCards).toContainText("科创50");
   await expect(indexCards).toContainText("实时 ●");

@@ -30,10 +30,11 @@ credential value was printed or recorded.
 | A-share realtime minutes | `rt_min`, `rt_min_daily` | Live stock monitoring and current-day cumulative recovery | `READY` |
 | Index daily bars | `index_daily` | Official board-index daily reference | `READY` |
 | Historical index minutes | `idx_mins` | Historical warm-up for board-index monitoring | `READY` (49 five-minute rows observed) |
-| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring and turnover | `READY` for SSE Composite, Shenzhen Component, ChiNext, and STAR 50; `399107.SZ` requires a newly authorized certification; BSE 50 is `DEFERRED` |
+| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring and turnover | `READY` for SSE Composite, Shenzhen Component, Shenzhen A-share, ChiNext, and STAR 50; BSE 50 is `DEFERRED` |
 
 No previously certified permission remains blocked after Index realtime minutes was activated and probed on
-2026-09-08. The new `399107.SZ` benchmark still requires an authorized recertification before its turnover is actionable. Enabling A-share realtime minutes alone would not have granted it. `rt_min_daily` is
+2026-09-08. The separately authorized 2026-09-11 renewal also certified the `399107.SZ`
+turnover benchmark. Enabling A-share realtime minutes alone would not have granted it. `rt_min_daily` is
 included with A-share realtime-minute access; the implementation does not need a separate
 permission for that endpoint. The 2026-09-08 probe historically observed no BSE 50 realtime rows;
 the current product scope now defers BSE 50 entirely. Future certification profiles retain its
@@ -102,9 +103,9 @@ sequence beginning at `09:30` cannot distinguish start-labelled minutes from an 
 
 ## Current Renewal Evidence
 
-The 2026-09-09 board-index renewal observed at `13:10:41.07832+08` certified
-`000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` as `READY` with
-`SourceTimeLabel=END`, valid through `2026-09-16 13:10:41.07832+08`. `899050.BJ` remains
+The 2026-09-11 board-index renewal observed at `10:20:44.522358+08` certified
+`000001.SH`, `399001.SZ`, `399107.SZ`, `399006.SZ`, and `000688.SH` as `READY` with
+`SourceTimeLabel=END`, valid through `2026-09-18 10:20:44.522358+08`. `899050.BJ` remains
 `DEFERRED` and made no provider request.
 
 The earlier 2026-09-08 stock `START` conclusion was an insufficient early-market inference. On

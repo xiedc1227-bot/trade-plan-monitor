@@ -12,6 +12,7 @@ from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import (
     MarketIndexFactRequest,
     MarketIndexHealth,
+    MarketIndexIssueCode,
     MarketIndexSnapshot,
 )
 from trade_plan_monitor.market_index.requirements import (
@@ -32,6 +33,12 @@ DASHBOARD_INDEX_CODES = (
 )
 ALWAYS_ON_INDEX_CODES = tuple(
     dict.fromkeys(DASHBOARD_INDEX_CODES + MARKET_TURNOVER_INDEX_CODES)
+)
+_PUBLICATION_LAG_ISSUES = frozenset(
+    {
+        MarketIndexIssueCode.MISSING_FIVE_MINUTE_BAR,
+        MarketIndexIssueCode.STALE_DATA,
+    }
 )
 
 
@@ -59,11 +66,36 @@ class RuntimeMarketIndexService:
             raise TypeError("coordinator must be a MarketIndexSnapshotCoordinator")
         self._coordinator = coordinator
         self._latest_by_index: dict[MarketIndexCode, MarketIndexSnapshot] = {}
+        self._publication_lag_retry_cutoffs: set[datetime] = set()
 
     def latest_snapshots(self) -> Mapping[MarketIndexCode, MarketIndexSnapshot]:
         """Return an immutable plan-neutral view of the latest shared data."""
 
         return MappingProxyType(dict(self._latest_by_index))
+
+    def claim_publication_lag_retry(self, decision_cutoff: datetime) -> bool:
+        """Claim one bounded retry when the latest bucket appears not yet published."""
+
+        if not isinstance(decision_cutoff, datetime) or decision_cutoff.tzinfo is None:
+            raise TypeError("decision_cutoff must be a timezone-aware datetime")
+        self._publication_lag_retry_cutoffs = {
+            cutoff
+            for cutoff in self._publication_lag_retry_cutoffs
+            if cutoff.date() == decision_cutoff.date()
+        }
+        if decision_cutoff in self._publication_lag_retry_cutoffs:
+            return False
+        retryable = any(
+            snapshot.decision_cutoff == decision_cutoff
+            and snapshot.health is not MarketIndexHealth.LIVE
+            and bool(snapshot.issues)
+            and set(snapshot.issues).issubset(_PUBLICATION_LAG_ISSUES)
+            for snapshot in self._latest_by_index.values()
+        )
+        if not retryable:
+            return False
+        self._publication_lag_retry_cutoffs.add(decision_cutoff)
+        return True
 
     async def prepare(
         self,

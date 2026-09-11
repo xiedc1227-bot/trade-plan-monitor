@@ -15,6 +15,7 @@ from trade_plan_monitor.market_index.models import (
     MarketIndexBar,
     MarketIndexHealth,
     MarketIndexInterval,
+    MarketIndexIssueCode,
     MarketIndexSourceKind,
 )
 from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
@@ -307,6 +308,41 @@ def test_dashboard_indexes_are_acquired_without_active_plans() -> None:
     )
 
 
+def test_publication_lag_retry_is_not_claimed_for_provider_unavailability() -> None:
+    service = RuntimeMarketIndexService(
+        MarketIndexSnapshotCoordinator(_Provider(RuntimeError("provider unavailable")))
+    )
+
+    prepared = asyncio.run(
+        service.prepare(
+            plans=(),
+            decision_cutoff=CUTOFF,
+            observed_no_later_than=OBSERVED_AT,
+        )
+    )
+
+    assert all(
+        snapshot.health is MarketIndexHealth.BLOCKED
+        for snapshot in prepared.snapshots_by_index.values()
+    )
+    assert service.claim_publication_lag_retry(CUTOFF) is False
+
+    provider_failure = next(iter(prepared.snapshots_by_index.values()))
+    service._latest_by_index = {
+        provider_failure.index_code: provider_failure.model_copy(
+            update={
+                "health": MarketIndexHealth.STALE,
+                "issues": (
+                    MarketIndexIssueCode.STALE_DATA,
+                    MarketIndexIssueCode.PROVIDER_UNAVAILABLE,
+                ),
+            }
+        )
+    }
+
+    assert service.claim_publication_lag_retry(CUTOFF) is False
+
+
 def test_index_snapshot_uses_post_fetch_whole_second_as_future_data_fence() -> None:
     requested_at = CUTOFF + timedelta(seconds=2)
     provider_observed_at = requested_at + timedelta(microseconds=250_000)
@@ -400,7 +436,7 @@ def test_evaluation_rejects_index_snapshot_observed_after_its_evaluation_time() 
             MarketIndexSnapshotCoordinator(_Provider(batch), clock=clock)
         ),
     )
-    service._persist_market_index_batch = lambda _prepared: None
+    service._persist_market_index_batch = lambda prepared: (prepared, ())
 
     with pytest.raises(ValueError, match="index snapshot observation"):
         asyncio.run(
@@ -534,7 +570,11 @@ def test_official_close_batch_unions_requirements_and_shares_one_snapshot() -> N
         committed_event_publisher=lambda _event: None,
         market_index_service=RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider)),
     )
-    service._persist_market_index_batch = persisted.append
+    def persist(prepared: object):
+        persisted.append(prepared)
+        return prepared, ()
+
+    service._persist_market_index_batch = persist
 
     async def capture_official_close(**kwargs: object) -> str:
         captured.append(kwargs["reference_market_snapshot"])
