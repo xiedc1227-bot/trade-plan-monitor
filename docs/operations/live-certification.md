@@ -10,8 +10,8 @@ they do not require Windows Credential Manager or a child process.
 Stock certification covers `trade_cal`, `stk_limit`, `daily`, one ten-symbol `rt_min` batch, and
 two `rt_min_daily` observations. Board-index certification checks historical
 `idx_mins(freq="5min")`, current-day `rt_idx_min_daily(freq="5MIN")`, and `index_daily`
-separately for the four indexes in the current trading scope: `000001.SH`, `399001.SZ`,
-`399006.SZ`, and `000688.SH`. The known BSE 50 identity `899050.BJ` is `DEFERRED` and receives
+separately for the four visible indexes `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH`,
+plus the hidden whole-Shenzhen turnover benchmark `399107.SZ`. The known BSE 50 identity `899050.BJ` is `DEFERRED` and receives
 no certification request until BSE stocks enter scope. The stock “A-share realtime minutes”
 permission does not replace the separately named “Index realtime minutes” permission.
 
@@ -30,10 +30,10 @@ credential value was printed or recorded.
 | A-share realtime minutes | `rt_min`, `rt_min_daily` | Live stock monitoring and current-day cumulative recovery | `READY` |
 | Index daily bars | `index_daily` | Official board-index daily reference | `READY` |
 | Historical index minutes | `idx_mins` | Historical warm-up for board-index monitoring | `READY` (49 five-minute rows observed) |
-| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring | `READY` for SSE Composite, Shenzhen Component, ChiNext, and STAR 50; BSE 50 is `DEFERRED` |
+| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring and turnover | `READY` for SSE Composite, Shenzhen Component, ChiNext, and STAR 50; `399107.SZ` requires a newly authorized certification; BSE 50 is `DEFERRED` |
 
-No required permission remains blocked after Index realtime minutes was activated and probed on
-2026-09-08. Enabling A-share realtime minutes alone would not have granted it. `rt_min_daily` is
+No previously certified permission remains blocked after Index realtime minutes was activated and probed on
+2026-09-08. The new `399107.SZ` benchmark still requires an authorized recertification before its turnover is actionable. Enabling A-share realtime minutes alone would not have granted it. `rt_min_daily` is
 included with A-share realtime-minute access; the implementation does not need a separate
 permission for that endpoint. The 2026-09-08 probe historically observed no BSE 50 realtime rows;
 the current product scope now defers BSE 50 entirely. Future certification profiles retain its

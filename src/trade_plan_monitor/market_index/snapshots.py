@@ -38,8 +38,8 @@ from trade_plan_monitor.market_index.requirements import (
 )
 from trade_plan_monitor.runtime.clock import Clock, _canonical_shanghai
 
-_PrefetchKey = tuple[str, MarketIndexCode, datetime, str, datetime]
-_SnapshotKey = tuple[str, MarketIndexCode, datetime, str, int]
+_PrefetchKey = tuple[str, MarketIndexCode, datetime, str, int, int, datetime]
+_SnapshotKey = tuple[str, MarketIndexCode, datetime, str, int, int, int]
 _MAX_SNAPSHOT_CACHE_ENTRIES = 512
 _MORNING_CLOSE = time(11, 30)
 _AFTERNOON_OPEN = time(13, 5)
@@ -172,6 +172,8 @@ def build_market_index_snapshot(
     content_revision: int,
     observed_at: datetime,
     observed_no_later_than: datetime,
+    minimum_five_minute_bar_count: int = 1,
+    minimum_official_daily_bar_count: int = 1,
 ) -> MarketIndexSnapshot:
     """Build the shared validated snapshot used by live and offline replay paths."""
 
@@ -182,6 +184,12 @@ def build_market_index_snapshot(
         field_name="observed_no_later_than",
     )
     normalized_requests = union_fact_requests(requests)
+    for name, value in (
+        ("minimum_five_minute_bar_count", minimum_five_minute_bar_count),
+        ("minimum_official_daily_bar_count", minimum_official_daily_bar_count),
+    ):
+        if type(value) is not int or not 1 <= value <= 8_000:
+            raise ValueError(f"{name} must be between 1 and 8000")
     if (
         not isinstance(index_code, MarketIndexCode)
         or type(five_minute_bars) is not tuple
@@ -242,7 +250,17 @@ def build_market_index_snapshot(
             issue=MarketIndexIssueCode.FUTURE_DATA,
             observed_at=observed_no_later_than,
         )
-    five_minute_count, official_daily_count = required_bar_counts(normalized_requests)
+    requested_five_minute_count, requested_official_daily_count = required_bar_counts(
+        normalized_requests
+    )
+    five_minute_count = max(
+        requested_five_minute_count,
+        minimum_five_minute_bar_count,
+    )
+    official_daily_count = max(
+        requested_official_daily_count,
+        minimum_official_daily_bar_count,
+    )
     if len(batch.five_minute_bars) < five_minute_count:
         return _blocked_snapshot(
             index_code=index_code,
@@ -341,6 +359,8 @@ class MarketIndexSnapshotCoordinator:
         decision_cutoff: datetime,
         requests: tuple[MarketIndexFactRequest, ...],
         observed_no_later_than: datetime,
+        minimum_five_minute_bar_count: int = 1,
+        minimum_official_daily_bar_count: int = 1,
     ) -> MarketIndexSnapshot:
         _validate_shanghai_timestamp(decision_cutoff, field_name="decision_cutoff")
         _validate_shanghai_timestamp(
@@ -348,12 +368,20 @@ class MarketIndexSnapshotCoordinator:
             field_name="observed_no_later_than",
         )
         normalized_requests = union_fact_requests(requests)
+        for name, value in (
+            ("minimum_five_minute_bar_count", minimum_five_minute_bar_count),
+            ("minimum_official_daily_bar_count", minimum_official_daily_bar_count),
+        ):
+            if type(value) is not int or not 1 <= value <= 8_000:
+                raise ValueError(f"{name} must be between 1 and 8000")
         request_hash = market_index_request_set_hash(normalized_requests)
         prefetch_key = (
             MAPPING_VERSION,
             index_code,
             decision_cutoff,
             request_hash,
+            minimum_five_minute_bar_count,
+            minimum_official_daily_bar_count,
             observed_no_later_than,
         )
         async with self._lock:
@@ -365,6 +393,8 @@ class MarketIndexSnapshotCoordinator:
                         decision_cutoff=decision_cutoff,
                         requests=normalized_requests,
                         observed_no_later_than=observed_no_later_than,
+                        minimum_five_minute_bar_count=minimum_five_minute_bar_count,
+                        minimum_official_daily_bar_count=minimum_official_daily_bar_count,
                     )
                 )
                 self._inflight[prefetch_key] = task
@@ -383,6 +413,8 @@ class MarketIndexSnapshotCoordinator:
             decision_cutoff,
             request_hash,
             snapshot.revision,
+            minimum_five_minute_bar_count,
+            minimum_official_daily_bar_count,
         )
         async with self._lock:
             cached = self._snapshots.get(snapshot_key)
@@ -400,8 +432,12 @@ class MarketIndexSnapshotCoordinator:
         requirements: Mapping[MarketIndexCode, tuple[MarketIndexFactRequest, ...]],
         decision_cutoff: datetime,
         observed_no_later_than: datetime,
+        minimum_bar_counts: Mapping[MarketIndexCode, tuple[int, int]] | None = None,
     ) -> Mapping[MarketIndexCode, MarketIndexSnapshot]:
         codes = tuple(sorted(requirements, key=lambda item: item.value))
+        selected_minimums = {} if minimum_bar_counts is None else dict(minimum_bar_counts)
+        if not set(selected_minimums).issubset(requirements):
+            raise ValueError("minimum bar counts must name requested indexes")
         snapshots = await asyncio.gather(
             *(
                 self.get_snapshot(
@@ -409,6 +445,8 @@ class MarketIndexSnapshotCoordinator:
                     decision_cutoff=decision_cutoff,
                     requests=requirements[index_code],
                     observed_no_later_than=observed_no_later_than,
+                    minimum_five_minute_bar_count=selected_minimums.get(index_code, (1, 1))[0],
+                    minimum_official_daily_bar_count=selected_minimums.get(index_code, (1, 1))[1],
                 )
                 for index_code in codes
             )
@@ -422,8 +460,18 @@ class MarketIndexSnapshotCoordinator:
         decision_cutoff: datetime,
         requests: tuple[MarketIndexFactRequest, ...],
         observed_no_later_than: datetime,
+        minimum_five_minute_bar_count: int,
+        minimum_official_daily_bar_count: int,
     ) -> MarketIndexSnapshot:
-        five_minute_count, official_daily_count = required_bar_counts(requests)
+        requested_five_minute_count, requested_official_daily_count = required_bar_counts(requests)
+        five_minute_count = max(
+            requested_five_minute_count,
+            minimum_five_minute_bar_count,
+        )
+        official_daily_count = max(
+            requested_official_daily_count,
+            minimum_official_daily_bar_count,
+        )
         try:
             batch = await self._provider.acquire_index_data(
                 index_code=index_code,
@@ -458,6 +506,8 @@ class MarketIndexSnapshotCoordinator:
             content_revision=batch.content_revision,
             observed_at=batch.observed_at,
             observed_no_later_than=observed_no_later_than,
+            minimum_five_minute_bar_count=minimum_five_minute_bar_count,
+            minimum_official_daily_bar_count=minimum_official_daily_bar_count,
         )
 
     async def _post_fetch_observed_at(self, requested_at: datetime) -> datetime:

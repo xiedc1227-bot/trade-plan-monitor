@@ -27,6 +27,7 @@ class MarketIndexCode(StrEnum):
 
     SSE_COMPOSITE = "000001.SH"
     SHENZHEN_COMPONENT = "399001.SZ"
+    SHENZHEN_A_SHARE = "399107.SZ"
     CHINEXT = "399006.SZ"
     STAR_50 = "000688.SH"
     BSE_50 = "899050.BJ"
@@ -61,12 +62,20 @@ class ResolvedMarketIndexIdentity(_IdentityValue):
         return ReferenceMarketBinding(index_code=self.index_code)
 
 
+_REFERENCE_INDEX_BY_BOARD = {
+    Board.SSE_MAIN: MarketIndexCode.SSE_COMPOSITE,
+    Board.SZSE_MAIN: MarketIndexCode.SHENZHEN_COMPONENT,
+    Board.CHINEXT: MarketIndexCode.CHINEXT,
+    Board.STAR_MARKET: MarketIndexCode.STAR_50,
+    Board.BSE: MarketIndexCode.BSE_50,
+}
 _INDEX_METADATA = {
-    Board.SSE_MAIN: (MarketIndexCode.SSE_COMPOSITE, "上证指数"),
-    Board.SZSE_MAIN: (MarketIndexCode.SHENZHEN_COMPONENT, "深证成指"),
-    Board.CHINEXT: (MarketIndexCode.CHINEXT, "创业板指"),
-    Board.STAR_MARKET: (MarketIndexCode.STAR_50, "科创50"),
-    Board.BSE: (MarketIndexCode.BSE_50, "北证50"),
+    MarketIndexCode.SSE_COMPOSITE: (Board.SSE_MAIN, "上证指数"),
+    MarketIndexCode.SHENZHEN_COMPONENT: (Board.SZSE_MAIN, "深证成指"),
+    MarketIndexCode.SHENZHEN_A_SHARE: (Board.SZSE_MAIN, "深证A指"),
+    MarketIndexCode.CHINEXT: (Board.CHINEXT, "创业板指"),
+    MarketIndexCode.STAR_50: (Board.STAR_MARKET, "科创50"),
+    MarketIndexCode.BSE_50: (Board.BSE, "北证50"),
 }
 
 
@@ -77,10 +86,7 @@ def identity_for_index_code(
 
     if not isinstance(index_code, MarketIndexCode):
         raise TypeError("index_code must be a MarketIndexCode")
-    for board, (candidate, display_name) in _INDEX_METADATA.items():
-        if candidate is index_code:
-            return board, display_name
-    raise ValueError("unsupported market-index code")  # pragma: no cover
+    return _INDEX_METADATA[index_code]
 
 
 def _classify_board(symbol: str) -> Board:
@@ -104,7 +110,8 @@ def resolve_board_reference(symbol: str) -> ResolvedMarketIndexIdentity:
     ):
         raise ValueError("symbol must be a canonical A-share stock code")
     board = _classify_board(symbol)
-    index_code, display_name = _INDEX_METADATA[board]
+    index_code = _REFERENCE_INDEX_BY_BOARD[board]
+    _identity_board, display_name = _INDEX_METADATA[index_code]
     return ResolvedMarketIndexIdentity(
         symbol=symbol,
         board=board,

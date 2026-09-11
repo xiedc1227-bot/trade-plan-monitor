@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 
-import type { MarketIndexSnapshotView } from "../api/generated";
+import type { MarketIndexSnapshotView, MarketTurnoverSummaryView } from "../api/generated";
 import { createMarketIndexApi } from "../api/marketIndexes";
 import { useDashboardMarketIndexTrends } from "../composables/useDashboardMarketIndexTrends";
 import DashboardView from "./DashboardView.vue";
@@ -14,6 +14,9 @@ const monitor = useMonitorStore();
 const isLoadingSnapshot = computed(() => !monitor.hasSnapshot && monitor.unavailable === null);
 const marketIndexes = computed<readonly MarketIndexSnapshotView[]>(
   () => monitor.marketIndexes as unknown as readonly MarketIndexSnapshotView[],
+);
+const marketTurnover = computed<MarketTurnoverSummaryView | null>(
+  () => monitor.marketTurnover as unknown as MarketTurnoverSummaryView | null,
 );
 const marketIndexTrends = useDashboardMarketIndexTrends({
   api: createMarketIndexApi(),
@@ -35,6 +38,7 @@ function selectSymbol(symbol: string): void {
     :loading="isLoadingSnapshot"
     :market-indexes="marketIndexes"
     :market-index-trends="marketIndexTrends.trends.value"
+    :market-turnover="marketTurnover"
     :observed-at="monitor.observedAt"
     :symbols="monitor.symbols"
     :unavailable="monitor.unavailable"

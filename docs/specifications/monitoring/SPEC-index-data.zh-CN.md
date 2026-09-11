@@ -61,7 +61,7 @@ tests/integration/test_market_index_snapshots.py
 
 每次获取截止时间前，协调器按派生 `indexCode` 对活动 Schema v2 计划分组，只提取计划中的指数事实需求并进行合并去重。随后每个指数供应商表面在该截止时间最多调用一次，并为该分组发布一份快照。计划读取同一对象/哈希，但分别判断。
 
-完成快照的缓存键为 `(mappingVersion, indexCode, decisionCutoff, requestSetHash, providerContentRevision)`。由于不能在获取前猜测供应商修订号，内部 `(mappingVersion, indexCode, decisionCutoff, requestSetHash, observedNoLaterThan)` 预取键只去重并发获取，并在任务完成时删除。可用的完成快照不可变，并在有界的 512 项缓存中驻留；后续调用会先重新获取，因此不会遮蔽新的供应商修订号。不可用快照不保留。一个指数失败会发布该指数的阻断健康状态，但不会取消或替换其他指数。实时监控可以为没有指数条件的计划提供信息性快照，但其判断不要求该快照；回测也不为该计划强制要求指数历史覆盖。
+完成快照的缓存键为 `(mappingVersion, indexCode, decisionCutoff, requestSetHash, providerContentRevision, minimumFiveMinuteBarCount, minimumOfficialDailyBarCount)`。由于不能在获取前猜测供应商修订号，内部 `(mappingVersion, indexCode, decisionCutoff, requestSetHash, minimumFiveMinuteBarCount, minimumOfficialDailyBarCount, observedNoLaterThan)` 预取键只去重并发获取，并在任务完成时删除。最小数量属于成交额投影使用的已校验采集要求，不会构造虚假的事实请求，也不影响计划 hash。可用的完成快照不可变，并在有界的 512 项缓存中驻留；后续调用会先重新获取，因此不会遮蔽新的供应商修订号。不可用快照不保留。一个指数失败会发布该指数的阻断健康状态，但不会取消或替换其他指数。实时监控可以为没有指数条件的计划提供信息性快照，但其判断不要求该快照；回测也不为该计划强制要求指数历史覆盖。
 
 ## 规范化与哈希规则
 
@@ -77,7 +77,7 @@ tests/integration/test_market_index_snapshots.py
 
 ## 供应商边界
 
-`LiveMarketIndexProvider` 和 `HistoricalMarketIndexProvider` 只公开明确命名的指数操作。Tushare 实时适配器会合并截至前一日期的历史 `idx_mins(freq="5min")` 行与当日 `rt_idx_min_daily(freq="5MIN")` 行，并从 `index_daily` 获取官方日线；股票 `rt_min` 绝不能替代指数接口。生产组合保持 `UNVERIFIED`，直到经授权的能力探测证明五个代码、这些准确 endpoint、时间标签、OHLC/昨收字段、范围、限额和权限。在此之前，生产适配器返回脱敏 `PROVIDER_UNAVAILABLE`；禁止猜测或复用股票接口。Token、原始响应、权限文本和异常正文不能进入日志、接口、报告或导出。
+`LiveMarketIndexProvider` 和 `HistoricalMarketIndexProvider` 只公开明确命名的指数操作。Tushare 实时适配器会合并截至前一日期的历史 `idx_mins(freq="5min")` 行与当日 `rt_idx_min_daily(freq="5MIN")` 行，并从 `index_daily` 获取官方日线；股票 `rt_min` 绝不能替代指数接口。生产组合保持 `UNVERIFIED`，直到经授权的能力探测证明五个板块参考 identity 加隐藏成交额基准 `399107.SZ`、这些准确 endpoint、时间标签、OHLC/昨收/成交额字段、范围、限额和权限。缺少 `399107.SZ` 的旧 profile 对原有四张总览走势图仍然有效，但成交额基准保持 `UNVERIFIED`。相关能力就绪前，生产适配器返回脱敏 `PROVIDER_UNAVAILABLE`；禁止猜测或复用股票接口。Token、原始响应、权限文本和异常正文不能进入日志、接口、报告或导出。
 
 ## 测试策略
 

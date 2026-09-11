@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
@@ -30,6 +31,12 @@ from trade_plan_monitor.decision.models import (
 from trade_plan_monitor.domain.plan_codec import load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.market_index.models import (
+    MarketIndexBar,
+    MarketIndexInterval,
+    MarketIndexSourceKind,
+)
 from trade_plan_monitor.market_index.snapshots import build_market_index_snapshot
 from trade_plan_monitor.runtime.health import (
     LEGACY_RUNTIME_GENERATION,
@@ -300,6 +307,71 @@ def _seed_dashboard_index_snapshots(unit_of_work_factory) -> None:
         work.commit()
 
 
+def _seed_market_turnover_snapshots(unit_of_work_factory) -> None:
+    bucket_ends = tuple(
+        datetime(2026, 9, 5, 9, 35, tzinfo=_ZONE) + timedelta(minutes=5 * index)
+        for index in range(6)
+    )
+    with unit_of_work_factory() as work:
+        for revision, (index_code, amount, previous_amount) in enumerate(
+            (
+                (MarketIndexCode.SSE_COMPOSITE, Decimal("100"), Decimal("1000")),
+                (MarketIndexCode.SHENZHEN_A_SHARE, Decimal("200"), Decimal("2000")),
+            ),
+            start=1,
+        ):
+            five_minute_bars = tuple(
+                MarketIndexBar(
+                    index_code=index_code,
+                    interval=MarketIndexInterval.FIVE_MINUTE,
+                    bar_at=bar_at,
+                    open_points=Decimal("100"),
+                    high_points=Decimal("101"),
+                    low_points=Decimal("99"),
+                    close_points=Decimal("100"),
+                    volume=Decimal("10"),
+                    amount=amount,
+                    observed_at=_NOW,
+                    source_kind=MarketIndexSourceKind.PROVISIONAL,
+                    provider_revision=revision,
+                )
+                for bar_at in bucket_ends
+            )
+            daily = MarketIndexBar(
+                index_code=index_code,
+                interval=MarketIndexInterval.OFFICIAL_DAILY,
+                bar_at=datetime(2026, 9, 4, 15, 0, tzinfo=_ZONE),
+                open_points=Decimal("100"),
+                high_points=Decimal("101"),
+                low_points=Decimal("99"),
+                close_points=Decimal("100"),
+                volume=Decimal("100"),
+                amount=previous_amount,
+                observed_at=_NOW,
+                source_kind=MarketIndexSourceKind.OFFICIAL,
+                provider_revision=revision,
+            )
+            snapshot = build_market_index_snapshot(
+                index_code=index_code,
+                decision_cutoff=_BUCKET_END,
+                requests=(),
+                five_minute_bars=five_minute_bars,
+                official_daily_bars=(daily,),
+                content_revision=revision,
+                observed_at=_NOW,
+                observed_no_later_than=_NOW,
+            )
+            work.projections.put_market_index_snapshot(
+                snapshot,
+                provider_content_revision=revision,
+            )
+            work.projections.advance_market_index_head(
+                snapshot,
+                provider_content_revision=revision,
+            )
+        work.commit()
+
+
 def _put_public_health(
     unit_of_work_factory,
     *,
@@ -400,6 +472,26 @@ def test_dashboard_includes_fixed_display_indexes_without_plan_bindings(tmp_path
             sorted(DASHBOARD_INDEX_CODES, key=lambda item: item.value)
         )
         assert all(item.mapped_symbol_count == 0 for item in dashboard.market_indexes)
+    finally:
+        engine.dispose()
+
+
+def test_dashboard_includes_market_wide_turnover_without_active_plans(tmp_path: Path) -> None:
+    engine, factory, service, _health = _setup(tmp_path)
+    try:
+        _seed_market_turnover_snapshots(factory)
+
+        dashboard = asyncio.run(service.get_dashboard())
+
+        assert isinstance(dashboard, DashboardResponse)
+        assert dashboard.market_turnover is not None
+        assert dashboard.market_turnover.current_amount == Decimal("1800")
+        assert dashboard.market_turnover.previous_amount == Decimal("3000")
+        assert dashboard.market_turnover.change_amount == Decimal("-1200")
+        assert dashboard.market_turnover.estimated_full_day_amount == Decimal("14400")
+        assert tuple(item.index_code for item in dashboard.market_indexes) == (
+            MarketIndexCode.SSE_COMPOSITE,
+        )
     finally:
         engine.dispose()
 

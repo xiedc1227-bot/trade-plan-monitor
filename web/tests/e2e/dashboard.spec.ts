@@ -64,6 +64,15 @@ const dashboard: DashboardResponse = {
       priorClosePoints: "2200.10", revision: 45, sessionChangeRatio: "0", snapshotHash: "c".repeat(64),
     },
   ],
+  marketTurnover: {
+    benchmarkCodes: ["000001.SH", "399107.SZ"],
+    changeAmount: "-210700000000",
+    completedBucketAt: "2026-09-02T10:35:00+08:00",
+    currentAmount: "1660000000000",
+    estimateMethod: "LINEAR_COMPLETED_FIVE_MINUTE_BUCKETS",
+    estimatedFullDayAmount: "1880000000000",
+    previousAmount: "1870700000000",
+  },
   observedAt: "2026-09-02T10:35:02+08:00",
   runtimeGeneration: "00000000-0000-4000-8000-000000000001",
   sequence: 7,
@@ -283,6 +292,12 @@ test("renders the authoritative dashboard and shared board-index summary at the 
     (element) => getComputedStyle(element).color,
   )).toBe("rgb(103, 183, 165)");
   await expect(page.getByTestId("market-index-sparkline")).toHaveCount(1);
+  const turnoverCard = page.getByTestId("market-turnover-card");
+  await expect(turnoverCard).toContainText("今日实时成交额");
+  await expect(turnoverCard).toContainText("1.66万亿");
+  await expect(turnoverCard).toContainText("-2107亿");
+  await expect(turnoverCard).toContainText("1.88万亿");
+  await expect(turnoverCard).toContainText("线性估算");
   await page.getByTestId("market-index-selector").filter({ hasText: "科创50" }).click();
   await expect(indexCards).toContainText("科创50");
   await expect(indexCards).toContainText("实时 ●");

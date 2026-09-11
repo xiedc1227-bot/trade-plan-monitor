@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue";
 
-import type { ConnectionStatus, MarketIndexSnapshotView } from "../../api/generated";
+import type {
+  ConnectionStatus,
+  MarketIndexSnapshotView,
+  MarketTurnoverSummaryView,
+} from "../../api/generated";
 import { dashboardMarketIndexIdentities } from "../../api/marketIndexIdentity";
 import type { DashboardMarketIndexTrend } from "../../composables/useDashboardMarketIndexTrends";
 import { marketIndexDirection } from "./marketIndexChartOptions";
 import MarketIndexTrendCard from "./MarketIndexTrendCard.vue";
+import MarketTurnoverCard from "./MarketTurnoverCard.vue";
 
 interface Props {
   connectionStatus: ConnectionStatus;
   indexes: readonly MarketIndexSnapshotView[];
+  marketTurnover?: MarketTurnoverSummaryView | null;
   trends: Readonly<Record<MarketIndexSnapshotView["indexCode"], DashboardMarketIndexTrend>>;
 }
 
@@ -17,7 +23,9 @@ interface Emits {
   retryIndex: [indexCode: MarketIndexSnapshotView["indexCode"]];
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  marketTurnover: null,
+});
 const emit = defineEmits<Emits>();
 const defaultIdentity = dashboardMarketIndexIdentities[0];
 if (defaultIdentity === undefined) throw new Error("dashboard index identities cannot be empty");
@@ -66,14 +74,17 @@ function formatSessionChange(value: string | null | undefined): string {
           <strong>{{ formatSessionChange(summariesByCode.get(identity.indexCode)?.sessionChangeRatio) }}</strong>
         </button>
       </div>
-      <MarketIndexTrendCard
-        :key="selectedIdentity.indexCode"
-        :connection-status="connectionStatus"
-        :identity="selectedIdentity"
-        :summary="summariesByCode.get(selectedIdentity.indexCode) ?? null"
-        :trend="trends[selectedIdentity.indexCode]"
-        @retry="emit('retryIndex', $event)"
-      />
+      <div class="index-strip__content">
+        <MarketIndexTrendCard
+          :key="selectedIdentity.indexCode"
+          :connection-status="connectionStatus"
+          :identity="selectedIdentity"
+          :summary="summariesByCode.get(selectedIdentity.indexCode) ?? null"
+          :trend="trends[selectedIdentity.indexCode]"
+          @retry="emit('retryIndex', $event)"
+        />
+        <MarketTurnoverCard :summary="marketTurnover" />
+      </div>
     </div>
   </section>
 </template>
@@ -124,6 +135,12 @@ function formatSessionChange(value: string | null | undefined): string {
   overflow-x: auto;
   background: var(--color-border-quiet);
   border-block-end: var(--border-technical);
+}
+
+.index-strip__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
+  min-width: 0;
 }
 
 .index-strip__selector {
@@ -182,6 +199,12 @@ function formatSessionChange(value: string | null | undefined): string {
 @media (max-width: 39.999rem) {
   .index-strip__selectors {
     grid-template-columns: repeat(4, minmax(7.5rem, 1fr));
+  }
+}
+
+@media (max-width: 69.999rem) {
+  .index-strip__content {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

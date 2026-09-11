@@ -7,6 +7,7 @@ import type {
   DashboardCounts,
   DashboardProjectionUnavailableResponse,
   MarketIndexSnapshotView,
+  MarketTurnoverSummaryView,
   SignalType,
   SymbolSummaryView,
 } from "../api/generated";
@@ -32,6 +33,7 @@ interface Props {
   error?: string | null;
   loading?: boolean;
   marketIndexes?: readonly MarketIndexSnapshotView[];
+  marketTurnover?: MarketTurnoverSummaryView | null;
   marketIndexTrends?: Readonly<
     Record<MarketIndexSnapshotView["indexCode"], DashboardMarketIndexTrend>
   >;
@@ -49,6 +51,7 @@ const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
   marketIndexes: () => [],
+  marketTurnover: null,
   marketIndexTrends: () => emptyDashboardMarketIndexTrends,
   unavailable: null,
 });
@@ -228,6 +231,7 @@ function compareText(left: string, right: string): number {
     <MarketIndexDataStrip
       :connection-status="connectionStatus"
       :indexes="marketIndexes"
+      :market-turnover="marketTurnover"
       :trends="marketIndexTrends"
       @retry-index="emit('retryMarketIndex', $event)"
     />

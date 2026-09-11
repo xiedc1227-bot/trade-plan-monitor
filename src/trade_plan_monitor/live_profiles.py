@@ -109,7 +109,10 @@ class IndexLiveCertification(_LiveCertification):
 
     @model_validator(mode="after")
     def validate_capability_set(self) -> Self:
-        if set(self.capabilities) != set(MarketIndexCode):
+        missing = set(MarketIndexCode) - set(self.capabilities)
+        if set(self.capabilities) - set(MarketIndexCode) or missing - {
+            MarketIndexCode.SHENZHEN_A_SHARE
+        }:
             raise ValueError("index certification must classify every known index")
         if any(
             self.capabilities[code] is TushareMarketIndexCapabilityStatus.READY

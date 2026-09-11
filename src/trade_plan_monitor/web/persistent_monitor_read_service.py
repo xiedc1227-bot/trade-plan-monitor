@@ -35,8 +35,15 @@ from trade_plan_monitor.market_index.models import (
     SmaFactRequest,
     SmaLookbackFactRequest,
 )
+from trade_plan_monitor.market_index.turnover import (
+    MARKET_TURNOVER_INDEX_CODES,
+    build_market_turnover_summary,
+)
 from trade_plan_monitor.runtime.health import live_runtime_identity
-from trade_plan_monitor.runtime.market_indexes import DASHBOARD_INDEX_CODES
+from trade_plan_monitor.runtime.market_indexes import (
+    ALWAYS_ON_INDEX_CODES,
+    DASHBOARD_INDEX_CODES,
+)
 from trade_plan_monitor.state.events import MonitorEventError
 from trade_plan_monitor.state.projections import ProjectionError
 from trade_plan_monitor.state.repositories import PlanVersionDetailsRecord, RepositoryError
@@ -57,6 +64,7 @@ from trade_plan_monitor.web.routers.dashboard import (
     IndexConditionProgressView,
     MarketIndexIndicatorFactView,
     MarketIndexSnapshotView,
+    MarketTurnoverSummaryView,
     NextStepView,
     PositionSummaryView,
     ProjectionUnavailableReason,
@@ -123,11 +131,36 @@ class PersistentMonitorReadService:
         observed_at = _observed_at(self._clock())
         with self._unit_of_work_factory() as work:
             sequence = work.events.current_sequence()
-            display_snapshots = tuple(
+            stored_snapshots = tuple(
                 record.snapshot
                 for record in work.projections.list_latest_market_index_snapshots(
                     mapping_version=MAPPING_VERSION,
-                    index_codes=DASHBOARD_INDEX_CODES,
+                    index_codes=ALWAYS_ON_INDEX_CODES,
+                )
+            )
+            stored_by_code = {
+                snapshot.index_code: snapshot for snapshot in stored_snapshots
+            }
+            display_snapshots = tuple(
+                stored_by_code[index_code]
+                for index_code in DASHBOARD_INDEX_CODES
+                if index_code in stored_by_code
+            )
+            turnover_summary = build_market_turnover_summary(
+                tuple(
+                    stored_by_code[index_code]
+                    for index_code in MARKET_TURNOVER_INDEX_CODES
+                    if index_code in stored_by_code
+                )
+            )
+            market_turnover = (
+                None
+                if turnover_summary is None
+                else MarketTurnoverSummaryView.model_validate(
+                    {
+                        **turnover_summary.model_dump(mode="python", round_trip=True),
+                        "benchmark_codes": MARKET_TURNOVER_INDEX_CODES,
+                    }
                 )
             )
             details = _list_plan_details(work)
@@ -137,6 +170,7 @@ class PersistentMonitorReadService:
                         display_snapshots,
                         observed_at=observed_at,
                         sequence=sequence,
+                        market_turnover=market_turnover,
                     )
                 return _dashboard_unavailable(
                     ProjectionUnavailableReason.EMPTY_DATABASE,
@@ -150,6 +184,7 @@ class PersistentMonitorReadService:
                         display_snapshots,
                         observed_at=observed_at,
                         sequence=sequence,
+                        market_turnover=market_turnover,
                     )
                 return _dashboard_unavailable(
                     ProjectionUnavailableReason.NO_ACTIVE_PLANS,
@@ -170,6 +205,7 @@ class PersistentMonitorReadService:
                         observed_at=observed_at,
                         sequence=sequence,
                         runtime_identity=runtime_identity,
+                        market_turnover=market_turnover,
                     )
                 return _dashboard_unavailable(
                     ProjectionUnavailableReason.AWAITING_FIRST_EVALUATION,
@@ -192,6 +228,7 @@ class PersistentMonitorReadService:
                 counts=_dashboard_counts(summaries),
                 symbols=summaries,
                 market_indexes=market_indexes,
+                market_turnover=market_turnover,
             )
 
     def _index_only_dashboard(
@@ -201,6 +238,7 @@ class PersistentMonitorReadService:
         observed_at: datetime,
         sequence: int,
         runtime_identity: tuple[datetime, UUID] | None = None,
+        market_turnover: MarketTurnoverSummaryView | None = None,
     ) -> DashboardResponse:
         if runtime_identity is None:
             runtime_identity = self._runtime_identity(observed_at=observed_at)
@@ -220,6 +258,7 @@ class PersistentMonitorReadService:
                 (),
                 display_snapshots=display_snapshots,
             ),
+            market_turnover=market_turnover,
         )
 
     async def list_symbols(

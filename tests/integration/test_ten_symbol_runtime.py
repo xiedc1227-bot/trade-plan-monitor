@@ -89,7 +89,7 @@ from trade_plan_monitor.runtime.health import (
     SymbolHealthTracker,
 )
 from trade_plan_monitor.runtime.market_indexes import (
-    DASHBOARD_INDEX_CODES,
+    ALWAYS_ON_INDEX_CODES,
     RuntimeMarketIndexService,
 )
 from trade_plan_monitor.runtime.production_context import ProductionContextBuilder
@@ -1487,7 +1487,7 @@ def test_intraday_service_injects_one_validated_reference_snapshot(
     )
 
     assert result.status is IntradayCycleStatus.COMMITTED
-    assert provider.call_count == len(DASHBOARD_INDEX_CODES)
+    assert provider.call_count == len(ALWAYS_ON_INDEX_CODES)
     assert len(captured) == 1
     snapshot = captured[0].reference_market_snapshot
     assert snapshot is not None

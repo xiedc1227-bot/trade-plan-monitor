@@ -49,6 +49,7 @@ _INDEX_DAILY_FIELDS: Final = "ts_code,trade_date,open,high,low,close,vol,amount"
 LIVE_TUSHARE_INDEX_CODES: Final = (
     MarketIndexCode.SSE_COMPOSITE,
     MarketIndexCode.SHENZHEN_COMPONENT,
+    MarketIndexCode.SHENZHEN_A_SHARE,
     MarketIndexCode.CHINEXT,
     MarketIndexCode.STAR_50,
 )
@@ -125,10 +126,12 @@ class TushareMarketIndexProfile:
             self.five_minute_endpoint != _INDEX_MINUTE_ENDPOINT
             or self.realtime_five_minute_endpoint != _INDEX_REALTIME_MINUTE_ENDPOINT
             or self.official_daily_endpoint != _INDEX_DAILY_ENDPOINT
-            or any(
-                status is TushareMarketIndexCapabilityStatus.UNVERIFIED
-                for status in capabilities.values()
-            )
+            or {
+                code
+                for code, status in capabilities.items()
+                if status is TushareMarketIndexCapabilityStatus.UNVERIFIED
+            }
+            - {MarketIndexCode.SHENZHEN_A_SHARE}
             or TushareMarketIndexCapabilityStatus.READY not in capabilities.values()
         ):
             raise ValueError("market-index profile requires independent live certification")
@@ -158,9 +161,16 @@ def certified_tushare_market_index_profile(
 ) -> TushareMarketIndexProfile:
     """Build the strict profile shape accepted only after index-specific evidence."""
 
+    normalized_capabilities = {
+        index_code: capabilities.get(
+            index_code,
+            TushareMarketIndexCapabilityStatus.UNVERIFIED,
+        )
+        for index_code in MarketIndexCode
+    }
     return TushareMarketIndexProfile(
         profile_id=_PROFILE_ID,
-        capabilities=capabilities,
+        capabilities=normalized_capabilities,
         source_time_label=source_time_label,
         five_minute_endpoint=_INDEX_MINUTE_ENDPOINT,
         realtime_five_minute_endpoint=_INDEX_REALTIME_MINUTE_ENDPOINT,

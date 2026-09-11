@@ -191,8 +191,19 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 2. Each healthy selected index renders the current trading day's visible trend from authoritative completed five-minute bars, plus current/high/low points, returned-bar turnover, prior close, signed session change, cutoff, and health.
 3. One unavailable index selector remains visible and does not prevent other index data from loading, updating, or being selected.
 4. With zero active plans, completed five-minute deadlines still acquire and persist the four display-only indexes; they do not affect any plan's fact requirements, evidence, hash, or decision.
-5. The feature adds no public API contract or dependency and passes the commands listed above.
+5. The feature adds no dependency; the nullable additive `marketTurnover` dashboard field remains backward-compatible and passes the commands listed above.
 6. Keyboard controls, screen-reader chart labeling, reduced-motion, responsive layout, and 200% text acceptance checks pass.
+
+## Market Turnover Extension
+
+- The four visible selectors remain unchanged. A hidden always-on `399107.SZ` (Shenzhen A-share Index) benchmark is collected with `000001.SH`; it is never rendered as a fifth selector.
+- Whole-market turnover is defined as Shanghai Composite turnover plus Shenzhen A-share turnover. `399001.SZ` is not used because its turnover covers only Shenzhen Component constituents rather than the full Shenzhen market.
+- `currentAmount` is the exact sum of all available completed current-day five-minute amounts for the two benchmarks. `previousAmount` is their sum on the latest shared official trading day before today, and `changeAmount = currentAmount - previousAmount`.
+- `estimatedFullDayAmount = currentAmount * 48 / completedBucketCount`, rounded to whole yuan. The UI labels this as a linear estimate and displays the latest completed five-minute cutoff; at the official close the estimate equals the current amount.
+- Calculation fails closed unless both snapshots are `LIVE`, share one cutoff, contain every expected completed bucket with non-null amount, and contain prior official daily amounts. The nullable `DashboardResponse.marketTurnover` is then omitted as `null`, while all four index charts remain usable.
+- Existing four-index certification profiles remain loadable. The added benchmark defaults to `UNVERIFIED` until a separately authorized recertification proves `399107.SZ`; this affects only the turnover card, not the four existing charts.
+- The card is placed to the right of the selected chart on wide screens and below it on narrower screens. It shows current amount, change from the previous trading day, and estimated full-day amount; unavailable data uses placeholders rather than hiding the card.
+- The implementation reuses `rt_idx_min_daily(freq="5MIN")` and `index_daily`, adds no provider endpoint or frontend chart dependency, and extends unit, integration, contract, store, component, responsive, and accessibility coverage.
 
 ## Open Questions
 

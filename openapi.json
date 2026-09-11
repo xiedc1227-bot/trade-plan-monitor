@@ -5277,6 +5277,16 @@
             "title": "Marketindexes",
             "type": "array"
           },
+          "marketTurnover": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketTurnoverSummaryView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "observedAt": {
             "format": "date-time",
             "title": "Observedat",
@@ -6404,6 +6414,7 @@
         "enum": [
           "000001.SH",
           "399001.SZ",
+          "399107.SZ",
           "399006.SZ",
           "000688.SH",
           "899050.BJ"
@@ -6614,6 +6625,62 @@
         ],
         "title": "MarketIndexSourceKind",
         "type": "string"
+      },
+      "MarketTurnoverSummaryView": {
+        "additionalProperties": false,
+        "description": "Whole-market turnover and one explicitly labelled deterministic estimate.",
+        "properties": {
+          "benchmarkCodes": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexCode"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Benchmarkcodes",
+            "type": "array"
+          },
+          "changeAmount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Changeamount",
+            "type": "string"
+          },
+          "completedBucketAt": {
+            "format": "date-time",
+            "title": "Completedbucketat",
+            "type": "string"
+          },
+          "currentAmount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Currentamount",
+            "type": "string"
+          },
+          "estimateMethod": {
+            "const": "LINEAR_COMPLETED_FIVE_MINUTE_BUCKETS",
+            "title": "Estimatemethod",
+            "type": "string"
+          },
+          "estimatedFullDayAmount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Estimatedfulldayamount",
+            "type": "string"
+          },
+          "previousAmount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Previousamount",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentAmount",
+          "previousAmount",
+          "changeAmount",
+          "estimatedFullDayAmount",
+          "completedBucketAt",
+          "estimateMethod",
+          "benchmarkCodes"
+        ],
+        "title": "MarketTurnoverSummaryView",
+        "type": "object"
       },
       "MissingInputCode": {
         "description": "Closed reasons why a condition cannot be evaluated safely.",

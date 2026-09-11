@@ -19,8 +19,9 @@ from trade_plan_monitor.market_index.models import (
 )
 from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
+from trade_plan_monitor.market_index.turnover import MARKET_TURNOVER_INDEX_CODES
 from trade_plan_monitor.runtime.market_indexes import (
-    DASHBOARD_INDEX_CODES,
+    ALWAYS_ON_INDEX_CODES,
     RuntimeMarketIndexService,
 )
 from trade_plan_monitor.runtime.service import RuntimeEvaluationService
@@ -187,12 +188,16 @@ class _DashboardProvider:
         return MarketIndexProviderBatch(
             index_code=index_code,
             five_minute_bars=tuple(
-                bar.model_copy(update={"index_code": index_code})
-                for bar in original.five_minute_bars
+                _bar(
+                    interval=MarketIndexInterval.FIVE_MINUTE,
+                    bar_at=CUTOFF - timedelta(minutes=5 * offset),
+                    close=str(100 - offset),
+                ).model_copy(update={"index_code": index_code})
+                for offset in reversed(range(five_minute_bar_count))
             ),
             official_daily_bars=tuple(
                 bar.model_copy(update={"index_code": index_code})
-                for bar in original.official_daily_bars
+                for bar in original.official_daily_bars[-official_daily_bar_count:]
             ),
             content_revision=original.content_revision,
             observed_at=original.observed_at,
@@ -247,15 +252,19 @@ def test_ten_plans_union_requirements_and_share_one_snapshot_instance() -> None:
 
     snapshots = tuple(prepared.snapshot_for_plan(plan) for plan in plans)
     assert provider.calls == [(3, 5)]
-    assert {request[0] for request in provider.requests} == set(DASHBOARD_INDEX_CODES)
+    assert {request[0] for request in provider.requests} == set(ALWAYS_ON_INDEX_CODES)
     assert all(request[1] == CUTOFF for request in provider.requests)
     assert {
         request[0]: request[2:] for request in provider.requests
     } == {
         index_code: (
-            (3, 5) if index_code is MarketIndexCode.SHENZHEN_COMPONENT else (1, 1)
+            (3, 5)
+            if index_code is MarketIndexCode.SHENZHEN_COMPONENT
+            else (13, 2)
+            if index_code in MARKET_TURNOVER_INDEX_CODES
+            else (1, 1)
         )
-        for index_code in DASHBOARD_INDEX_CODES
+        for index_code in ALWAYS_ON_INDEX_CODES
     }
     assert all(snapshot is snapshots[0] for snapshot in snapshots)
     assert snapshots[0] is not None
@@ -278,10 +287,11 @@ def test_dashboard_indexes_are_acquired_without_active_plans() -> None:
         )
     )
 
-    assert set(provider.calls) == set(DASHBOARD_INDEX_CODES)
+    assert set(provider.calls) == set(ALWAYS_ON_INDEX_CODES)
     assert all(
         decision_cutoff == CUTOFF
-        and (five_minute_count, official_daily_count) == (1, 1)
+        and (five_minute_count, official_daily_count)
+        == ((13, 2) if _index_code in MARKET_TURNOVER_INDEX_CODES else (1, 1))
         for (
             _index_code,
             decision_cutoff,
@@ -289,7 +299,7 @@ def test_dashboard_indexes_are_acquired_without_active_plans() -> None:
             official_daily_count,
         ) in provider.requests
     )
-    assert set(prepared.snapshots_by_index) == set(DASHBOARD_INDEX_CODES)
+    assert set(prepared.snapshots_by_index) == set(ALWAYS_ON_INDEX_CODES)
     assert all(
         snapshot.health is MarketIndexHealth.LIVE
         and snapshot.fact_requests == ()
@@ -331,7 +341,7 @@ def test_index_snapshot_uses_post_fetch_whole_second_as_future_data_fence() -> N
 
     assert snapshot.health is MarketIndexHealth.LIVE
     assert snapshot.observed_at == provider_observed_at
-    assert clock.sleep_calls == [expected_observed_at] * len(DASHBOARD_INDEX_CODES)
+    assert clock.sleep_calls == [expected_observed_at] * len(ALWAYS_ON_INDEX_CODES)
     assert snapshot.observed_at <= clock.now()
 
 
@@ -364,7 +374,7 @@ def test_blocked_index_snapshot_is_not_returned_before_observation_boundary() ->
 
     assert snapshot.health is MarketIndexHealth.BLOCKED
     assert snapshot.observed_at == expected_observed_at
-    assert clock.sleep_calls == [expected_observed_at] * len(DASHBOARD_INDEX_CODES)
+    assert clock.sleep_calls == [expected_observed_at] * len(ALWAYS_ON_INDEX_CODES)
     assert snapshot.observed_at <= clock.now()
 
 
@@ -418,7 +428,7 @@ def test_v2_no_condition_plan_gets_informational_failure_without_a_requirement()
     snapshot = prepared.snapshot_for_plan(plan)
 
     assert provider.calls == [(1, 1)]
-    assert {request[0] for request in provider.requests} == set(DASHBOARD_INDEX_CODES)
+    assert {request[0] for request in provider.requests} == set(ALWAYS_ON_INDEX_CODES)
     assert all(request[1] == CUTOFF for request in provider.requests)
     assert snapshot is not None
     assert snapshot.health is MarketIndexHealth.BLOCKED
@@ -438,7 +448,7 @@ def test_schema_v1_plans_do_not_add_plan_owned_index_requirements() -> None:
         )
     )
 
-    assert set(provider.calls) == set(DASHBOARD_INDEX_CODES)
+    assert set(provider.calls) == set(ALWAYS_ON_INDEX_CODES)
     assert prepared.snapshot_for_plan(plan) is None
 
 

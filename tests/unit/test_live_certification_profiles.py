@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -131,6 +132,48 @@ def test_index_profile_is_independent_and_can_defer_bse_50(
         code for code in MarketIndexCode if code is not MarketIndexCode.BSE_50
     )
     assert load_stock_certification(path, now=OBSERVED_AT, endpoint_url=ENDPOINT) is None
+
+
+def test_legacy_index_profile_remains_valid_without_turnover_benchmark(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "legacy-index.json"
+    profile = create_index_certification(
+        observed_at=OBSERVED_AT,
+        endpoint_url=ENDPOINT,
+        capabilities={
+            code: (
+                TushareMarketIndexCapabilityStatus.DEFERRED
+                if code is MarketIndexCode.BSE_50
+                else TushareMarketIndexCapabilityStatus.READY
+            )
+            for code in MarketIndexCode
+        },
+        source_time_label=TushareMarketIndexSourceTimeLabel.END,
+    )
+    payload = profile.model_dump(mode="json", by_alias=True)
+    del payload["capabilities"][MarketIndexCode.SHENZHEN_A_SHARE.value]
+    payload_without_hash = {
+        key: value for key, value in payload.items() if key != "evidenceHash"
+    }
+    encoded = json.dumps(
+        payload_without_hash,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    payload["evidenceHash"] = sha256(encoded).hexdigest()
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_index_certification(
+        path,
+        now=OBSERVED_AT + timedelta(hours=1),
+        endpoint_url=ENDPOINT,
+    )
+
+    assert loaded is not None
+    assert MarketIndexCode.SHENZHEN_A_SHARE not in loaded.capabilities
+    assert MarketIndexCode.SHENZHEN_A_SHARE not in loaded.ready_indexes
 
 
 def test_index_certification_rejects_ready_bse_50_while_live_scope_is_deferred() -> None:

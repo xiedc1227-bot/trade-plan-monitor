@@ -137,7 +137,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`1fe2a1b74503e2bbd101626bc3cfca33239e8b320bc8fc34edaeaea6e171fadd`
+OpenAPI 快照 SHA-256：`d05fb26a24735bbed877b5dc9382456ce3a1c71a00c76e62d7817a10fb08dca9`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 42 个已批准 REST 路径：27 个实时路径（包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars` 和 `GET /plan-activation-states/{symbol}`）加精确 15 个回测路径，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -315,17 +315,17 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 ### WEBF05 真实生产监控组合边界
 
 - 当没有显式运行时/应用服务时，`create_production_app(...)` 使用惰性的 `create_monitor_composition_factory(config_path, database_path)`。工厂只在 FastAPI lifespan 内调用；它打开并迁移生产计划生命周期使用的同一个 monitor SQLite，构造真实的 `RuntimeLifecycleService`，暴露以后端为权威来源的 `RuntimeHealthSnapshot`，并管理基于数据库的 `CommittedMonitorEventStream`。明确注入的运行时和应用服务继续保持权威，并阻止默认组合构造。
-- 默认组合加载并校验统一且被忽略的 `config/app.yaml`，随后在构造带凭证的 provider client 或发出 provider 请求前检查获批的真实证据。新鲜 profile 是必要条件，但本身不能让生产变为可执行：composition 必须校验并消费它，绑定对应 provider 与 scheduler，并保留每个指数的失败。在这些检查通过前，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。当前股票 profile 以 `SourceTimeLabel=END` 全部 `READY`；独立指数 profile 以 `SourceTimeLabel=END` 将当前范围内四个指数全部记录为 `READY`。已知 `899050.BJ` identity 为 `DEFERRED`，不能进入请求控制器。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
+- 默认组合加载并校验统一且被忽略的 `config/app.yaml`，随后在构造带凭证的 provider client 或发出 provider 请求前检查获批的真实证据。新鲜 profile 是必要条件，但本身不能让生产变为可执行：composition 必须校验并消费它，绑定对应 provider 与 scheduler，并保留每个指数的失败。在这些检查通过前，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。当前股票 profile 以 `SourceTimeLabel=END` 全部 `READY`；独立的旧指数 profile 以 `SourceTimeLabel=END` 将四个可见指数全部记录为 `READY`。隐藏成交额基准 `399107.SZ` 在新的授权认证完成前保持 `UNVERIFIED`，但不会禁用四张可见走势图。已知 `899050.BJ` identity 为 `DEFERRED`，不能进入请求控制器。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
 - 真实组合不会捏造缺失的权威投影。ADR 0004 以严格类型化 HTTP `200` unavailable 联合取代总览与股票生命周期缺失原先的通用 `SERVICE_UNAVAILABLE` 行为；真正故障及仍未组合的实时指数读取继续封闭失败。WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。持仓可用性由 WEBF09 单独定义，提醒中心可用性由 WEBF10 单独定义。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
 - 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储、组合、过期 profile 或必需指数错误不得被静默转换成健康响应；未满足的实时前置条件会按生产链路契约产生有界 `DEGRADED` 状态或隔离的依赖路径失败。
 
 ### WEBF06 监控总览路由边界
 
 - `/` 惰性加载 `DashboardRouteView`，它是既有 `monitor` Pinia store 与 `DashboardView` 之上的薄组合表面。store 只由权威 `GET /api/v1/dashboard` 快照生命周期填充；该路由绝不调用供应商、判断条件、映射板块、计算新鲜度或写入判断。
-- 路由把不可变的后端 `connectionStatus`、统计、数据年龄、观察时间、股票摘要、共用 `marketIndexes` 以及每只股票计划专属的 `referenceMarket.conditionProgress` 直接传给展示组件。因此界面始终分开共用板块指数事实与单计划结果，且不暗示统一市场结论。
+- 路由把不可变的后端 `connectionStatus`、统计、数据年龄、观察时间、股票摘要、共用 `marketIndexes`、后端计算的可空 `marketTurnover` 以及每只股票计划专属的 `referenceMarket.conditionProgress` 直接传给展示组件。因此界面始终分开共用板块指数事实与单计划结果，且不暗示统一市场结论。成交额使用 `000001.SH + 399107.SZ`；线性全天预估有明确标注，且绝不进入计划判断。
 - 路由保留后端认证的官方收盘 `RISK_BREACH` 及其真实 `STALE` 判断健康。只有后端在校验匹配的 15:00 官方 K 线、跌破日期、完整必需数据、风险状态、下一步及已满足的 `OFFICIAL_CLOSE_BELOW_LEVEL` 证据后，才能准入这个狭窄的可执行例外。Vue 既不抑制该信号，也不把它改标为 `LIVE`；其他所有可执行判断在健康不是 `LIVE` 时仍然非法。
 - 在权威快照存在前，路由展示既有加载状态而不是空自选表。选择已渲染股票只会向 `/stocks/:symbol` 发出路由导航意图；它不会修改监控状态，也不会构造详情响应。
-- 本边界不新增 REST 路径、OpenAPI 字段、生成 TypeScript 类型、Schema 迁移、Schema v1 数据变更、历史回测结果变更或 hash 变更。它不暴露 token，也不执行真实供应商请求。
+- 本边界不新增 REST 路径、Schema 迁移、Schema v1 数据变更、历史回测结果变更或判断 hash 变更。它只增加向后兼容的可空 `marketTurnover` OpenAPI 字段及对应生成 TypeScript 类型。它不暴露 token，也不执行真实供应商请求。
 
 ### WEBF09 个股持仓批次生产边界
 
@@ -538,4 +538,4 @@ const emit = defineEmits<Emits>()
 
 WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。WEBF13 记录当前真实路由和新建回测旅程边界，不改变冻结契约；其配对离线验收证据已于 2026-09-04 通过。
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到既有以后端为权威来源的总览快照和共用指数投影，但不改变其契约。WEBF09 组合既有持仓 API 和真实个股详情路由，同时把所有 T+1 与持仓策略判断保留在后端。WEBF10 组合既有提醒 API 和真实 `/alerts` 路由，同时把筛选成员归属、规范提醒和确认 revision 保留在后端。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，且全部接入真实视图。提交、推送、依赖安装和联网访问继续需要分别授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到以后端为权威来源的总览快照和共用指数投影；后续成交额扩展只增加可空的 `marketTurnover` 字段。WEBF09 组合既有持仓 API 和真实个股详情路由，同时把所有 T+1 与持仓策略判断保留在后端。WEBF10 组合既有提醒 API 和真实 `/alerts` 路由，同时把筛选成员归属、规范提醒和确认 revision 保留在后端。当前 OpenAPI 契约精确包含 42 条路径，其中 27 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，且全部接入真实视图。提交、推送、依赖安装和联网访问继续需要分别授权。

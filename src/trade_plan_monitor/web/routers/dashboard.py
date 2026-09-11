@@ -40,6 +40,7 @@ from trade_plan_monitor.market_index.models import (
     MarketIndexIssueCode,
     ReturnWindow,
 )
+from trade_plan_monitor.market_index.turnover import MarketTurnoverSummary
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 
 if TYPE_CHECKING:
@@ -544,6 +545,36 @@ class DashboardCounts(ReadModel):
     normal: NonNegativeInteger
 
 
+class MarketTurnoverSummaryView(ReadModel):
+    """Whole-market turnover and one explicitly labelled deterministic estimate."""
+
+    current_amount: Annotated[Decimal, Field(strict=True, ge=0, allow_inf_nan=False)]
+    previous_amount: Annotated[Decimal, Field(strict=True, ge=0, allow_inf_nan=False)]
+    change_amount: FiniteDecimal
+    estimated_full_day_amount: Annotated[
+        Decimal,
+        Field(strict=True, ge=0, allow_inf_nan=False),
+    ]
+    completed_bucket_at: ShanghaiDatetime
+    estimate_method: Literal["LINEAR_COMPLETED_FIVE_MINUTE_BUCKETS"]
+    benchmark_codes: tuple[MarketIndexCode, ...] = Field(min_length=2, max_length=2)
+
+    @model_validator(mode="after")
+    def validate_turnover(self) -> Self:
+        if self.benchmark_codes != (
+            MarketIndexCode.SSE_COMPOSITE,
+            MarketIndexCode.SHENZHEN_A_SHARE,
+        ):
+            raise ValueError("market-turnover benchmark codes are invalid")
+        MarketTurnoverSummary.model_validate(
+            {
+                **self.model_dump(mode="python", round_trip=True),
+                "benchmark_codes": tuple(code.value for code in self.benchmark_codes),
+            }
+        )
+        return self
+
+
 class ProjectionUnavailableReason(StrEnum):
     """Stable, non-sensitive reasons that a read projection does not exist yet."""
 
@@ -594,6 +625,7 @@ class DashboardResponse(ReadModel):
     counts: DashboardCounts
     symbols: tuple[SymbolSummaryView, ...] = Field(default=(), max_length=_MAX_SYMBOLS)
     market_indexes: tuple[MarketIndexSnapshotView, ...] = Field(max_length=5)
+    market_turnover: MarketTurnoverSummaryView | None = None
 
     @model_validator(mode="after")
     def validate_dashboard(self) -> Self:
@@ -616,6 +648,11 @@ class DashboardResponse(ReadModel):
             raise ValueError("dashboard market indexes must be sorted by indexCode")
         if any(item.observed_at > self.observed_at for item in self.market_indexes):
             raise ValueError("market-index observation cannot follow dashboard observation")
+        if (
+            self.market_turnover is not None
+            and self.market_turnover.completed_bucket_at > self.observed_at
+        ):
+            raise ValueError("market-turnover cutoff cannot follow dashboard observation")
         return self
 
 
@@ -703,6 +740,7 @@ __all__ = [
     "IndexConditionEvidenceView",
     "IndexConditionProgressView",
     "MarketIndexSnapshotView",
+    "MarketTurnoverSummaryView",
     "MonitorReadService",
     "ReadModel",
     "ReadServiceDependency",

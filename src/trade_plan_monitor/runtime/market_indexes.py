@@ -19,12 +19,19 @@ from trade_plan_monitor.market_index.requirements import (
     union_fact_requests,
 )
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
+from trade_plan_monitor.market_index.turnover import (
+    MARKET_TURNOVER_INDEX_CODES,
+    completed_market_turnover_bucket_count,
+)
 
 DASHBOARD_INDEX_CODES = (
     MarketIndexCode.SSE_COMPOSITE,
     MarketIndexCode.SHENZHEN_COMPONENT,
     MarketIndexCode.CHINEXT,
     MarketIndexCode.STAR_50,
+)
+ALWAYS_ON_INDEX_CODES = tuple(
+    dict.fromkeys(DASHBOARD_INDEX_CODES + MARKET_TURNOVER_INDEX_CODES)
 )
 
 
@@ -70,7 +77,7 @@ class RuntimeMarketIndexService:
         if len(plans) > 10:
             raise ValueError("runtime supports at most 10 active plans")
         grouped: dict[MarketIndexCode, list[tuple[MarketIndexFactRequest, ...]]] = {
-            index_code: [()] for index_code in DASHBOARD_INDEX_CODES
+            index_code: [()] for index_code in ALWAYS_ON_INDEX_CODES
         }
         for plan in plans:
             binding = plan.reference_market
@@ -80,10 +87,18 @@ class RuntimeMarketIndexService:
         requirements = {
             index_code: union_fact_requests(*groups) for index_code, groups in grouped.items()
         }
+        turnover_bucket_count = max(
+            1,
+            completed_market_turnover_bucket_count(decision_cutoff),
+        )
         snapshots = await self._coordinator.get_snapshots(
             requirements=requirements,
             decision_cutoff=decision_cutoff,
             observed_no_later_than=observed_no_later_than,
+            minimum_bar_counts={
+                index_code: (turnover_bucket_count, 2)
+                for index_code in MARKET_TURNOVER_INDEX_CODES
+            },
         )
         for index_code, snapshot in snapshots.items():
             current = self._latest_by_index.get(index_code)
@@ -114,6 +129,7 @@ class RuntimeMarketIndexService:
 
 
 __all__ = [
+    "ALWAYS_ON_INDEX_CODES",
     "DASHBOARD_INDEX_CODES",
     "RuntimeMarketIndexBatch",
     "RuntimeMarketIndexService",

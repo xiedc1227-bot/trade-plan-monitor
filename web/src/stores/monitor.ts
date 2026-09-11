@@ -7,6 +7,7 @@ import type {
   DashboardProjectionUnavailableResponse,
   DashboardResponse,
   MarketIndexSnapshotView,
+  MarketTurnoverSummaryView,
   SymbolSummaryView,
 } from "../api/generated";
 
@@ -112,6 +113,7 @@ export const useMonitorStore = defineStore("monitor", () => {
   const marketIndexesState = shallowRef<readonly MarketIndexSnapshotView[]>(
     Object.freeze([]),
   );
+  const marketTurnoverState = shallowRef<MarketTurnoverSummaryView | null>(null);
   const recoveryIntentState = shallowRef<SnapshotRecoveryIntent | null>(null);
   const lastInvalidationState = shallowRef<MonitorInvalidation | null>(null);
   const lastEventState = shallowRef<MonitorEventEnvelope | null>(null);
@@ -139,6 +141,9 @@ export const useMonitorStore = defineStore("monitor", () => {
     const normalized = normalizeSymbols(snapshot.symbols ?? []);
     const counts = freezeClone(snapshot.counts);
     const marketIndexes = normalizeMarketIndexes(snapshot.marketIndexes);
+    const marketTurnover = snapshot.marketTurnover === null || snapshot.marketTurnover === undefined
+      ? null
+      : freezeClone(snapshot.marketTurnover);
 
     sequenceState.value = snapshot.sequence;
     connectionStatusState.value = snapshot.connectionStatus;
@@ -149,6 +154,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     symbolIdsState.value = normalized.ids;
     symbolsByIdState.value = normalized.byId;
     marketIndexesState.value = marketIndexes;
+    marketTurnoverState.value = marketTurnover;
     recoveryIntentState.value = null;
     lastInvalidationState.value = null;
     lastEventState.value = null;
@@ -170,6 +176,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     symbolIdsState.value = Object.freeze([]);
     symbolsByIdState.value = Object.freeze({});
     marketIndexesState.value = Object.freeze([]);
+    marketTurnoverState.value = null;
     recoveryIntentState.value = null;
     lastInvalidationState.value = null;
     lastEventState.value = null;
@@ -250,6 +257,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     lastInvalidation: readonly(lastInvalidationState),
     lastEvent: readonly(lastEventState),
     marketIndexes: readonly(marketIndexesState),
+    marketTurnover: readonly(marketTurnoverState),
     observedAt: readonly(observedAtState),
     recoveryIntent: readonly(recoveryIntentState),
     requestSnapshotRecovery,

@@ -817,6 +817,7 @@ export type DashboardResponse = {
   counts: components["schemas"]["DashboardCounts"];
   dataAgeSeconds: (number) | (null);
   marketIndexes: Array<components["schemas"]["MarketIndexSnapshotView"]>;
+  marketTurnover?: (components["schemas"]["MarketTurnoverSummaryView"]) | (null);
   observedAt: string;
   runtimeGeneration: (string) | (null);
   sequence: number;
@@ -994,7 +995,7 @@ export type MarketIndexBarView = {
   volume: (string) | (null);
 };
 
-export type MarketIndexCode = "000001.SH" | "399001.SZ" | "399006.SZ" | "000688.SH" | "899050.BJ";
+export type MarketIndexCode = "000001.SH" | "399001.SZ" | "399107.SZ" | "399006.SZ" | "000688.SH" | "899050.BJ";
 
 export type MarketIndexFactUnit = "POINTS" | "RATIO";
 
@@ -1023,6 +1024,16 @@ export type MarketIndexSnapshotView = {
 };
 
 export type MarketIndexSourceKind = "PROVISIONAL" | "OFFICIAL";
+
+export type MarketTurnoverSummaryView = {
+  benchmarkCodes: Array<components["schemas"]["MarketIndexCode"]>;
+  changeAmount: string;
+  completedBucketAt: string;
+  currentAmount: string;
+  estimateMethod: "LINEAR_COMPLETED_FIVE_MINUTE_BUCKETS";
+  estimatedFullDayAmount: string;
+  previousAmount: string;
+};
 
 export type MissingInputCode = "COMPLETE_MINUTE_BAR" | "PREVIOUS_MINUTE_BAR" | "COMPLETE_5M_BAR" | "PREVIOUS_5M_BAR" | "COMPLETE_5M_BAR_WINDOW" | "ROLLING_VOLUME_WINDOW" | "SESSION_BARS" | "DAILY_INDICATORS" | "PROVISIONAL_DAILY_BAR" | "FIVE_MINUTE_INDICATORS" | "INDICATOR_VALUE" | "OFFICIAL_DAILY_CLOSE" | "TRADING_CALENDAR" | "DAILY_LIMIT" | "MANUAL_EVENT_RISK" | "INDEX_SNAPSHOT" | "INDEX_IDENTITY" | "INDEX_CUTOFF" | "INDEX_HEALTH" | "INDEX_FACT" | "INDEX_HISTORY" | "INDEX_FORMULA";
 
@@ -1553,6 +1564,7 @@ export interface components {
     MarketIndexIssueCode: MarketIndexIssueCode;
     MarketIndexSnapshotView: MarketIndexSnapshotView;
     MarketIndexSourceKind: MarketIndexSourceKind;
+    MarketTurnoverSummaryView: MarketTurnoverSummaryView;
     MissingInputCode: MissingInputCode;
     NextStepCode: NextStepCode;
     NextStepView: NextStepView;

@@ -200,6 +200,7 @@ function isDashboardResponse(value: unknown): value is DashboardResponse {
       "counts",
       "dataAgeSeconds",
       "marketIndexes",
+      "marketTurnover",
       "observedAt",
       "runtimeGeneration",
       "sequence",
@@ -213,6 +214,7 @@ function isDashboardResponse(value: unknown): value is DashboardResponse {
   }
   const counts = value.counts;
   const marketIndexes = value.marketIndexes;
+  const marketTurnover = value.marketTurnover;
   const symbols = value.symbols;
   return (
     (value.connectionStatus === "CONNECTED" ||
@@ -224,8 +226,39 @@ function isDashboardResponse(value: unknown): value is DashboardResponse {
     isSafeSequence(value.sequence) &&
     isDashboardCounts(counts) &&
     isDashboardMarketIndexes(marketIndexes, value.observedAt) &&
+    (marketTurnover === undefined ||
+      marketTurnover === null ||
+      isMarketTurnoverSummary(marketTurnover, value.observedAt)) &&
     isDashboardSymbols(symbols, value.connectionStatus, value.observedAt)
   );
+}
+
+function isMarketTurnoverSummary(value: unknown, dashboardObservedAt: string): boolean {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "benchmarkCodes",
+      "changeAmount",
+      "completedBucketAt",
+      "currentAmount",
+      "estimateMethod",
+      "estimatedFullDayAmount",
+      "previousAmount",
+    ]) ||
+    !Array.isArray(value.benchmarkCodes) ||
+    value.benchmarkCodes.length !== 2 ||
+    value.benchmarkCodes[0] !== "000001.SH" ||
+    value.benchmarkCodes[1] !== "399107.SZ" ||
+    !isDecimalString(value.changeAmount) ||
+    !isNonnegativeDecimalString(value.currentAmount) ||
+    !isNonnegativeDecimalString(value.previousAmount) ||
+    !isNonnegativeDecimalString(value.estimatedFullDayAmount) ||
+    !isShanghaiDateTime(value.completedBucketAt) ||
+    value.estimateMethod !== "LINEAR_COMPLETED_FIVE_MINUTE_BUCKETS"
+  ) {
+    return false;
+  }
+  return shanghaiDateTimeKey(value.completedBucketAt) <= shanghaiDateTimeKey(dashboardObservedAt);
 }
 
 function isDashboardCounts(value: unknown): boolean {
@@ -913,6 +946,10 @@ function isDecimalString(value: unknown): value is string {
     digits += 1;
   }
   return digits > 0;
+}
+
+function isNonnegativeDecimalString(value: unknown): value is string {
+  return isDecimalString(value) && !value.startsWith("-");
 }
 
 function isSha256(value: unknown): value is string {

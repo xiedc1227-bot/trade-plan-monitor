@@ -749,8 +749,10 @@ def test_dashboard_returns_authoritative_decision_evidence_and_data_age() -> Non
         "counts",
         "symbols",
         "marketIndexes",
+        "marketTurnover",
     }
     assert payload["marketIndexes"] == []
+    assert payload["marketTurnover"] is None
     assert payload["connectionStatus"] == "CONNECTED"
     decision = payload["symbols"][0]["decision"]
     assert decision["resultHash"] == "a" * 64

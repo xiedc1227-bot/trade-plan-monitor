@@ -136,6 +136,7 @@ function createTrendRecord(): Readonly<Record<MarketIndexCode, DashboardMarketIn
   return Object.freeze({
     "000001.SH": emptyTrend,
     "399001.SZ": emptyTrend,
+    "399107.SZ": emptyTrend,
     "399006.SZ": emptyTrend,
     "000688.SH": emptyTrend,
     "899050.BJ": emptyTrend,

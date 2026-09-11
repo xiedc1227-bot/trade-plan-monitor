@@ -7,6 +7,7 @@ import type {
   MarketIndexBarPage,
   MarketIndexBarView,
   MarketIndexSnapshotView,
+  MarketTurnoverSummaryView,
   SymbolReferenceMarketView,
 } from "../../src/api/generated";
 import { createMarketIndexApi } from "../../src/api/marketIndexes";
@@ -14,6 +15,7 @@ import IndexConditionProgress from "../../src/components/market-index/IndexCondi
 import MarketIndexChart from "../../src/components/market-index/MarketIndexChart.vue";
 import MarketIndexDataStrip from "../../src/components/market-index/MarketIndexDataStrip.vue";
 import MarketIndexTrendCard from "../../src/components/market-index/MarketIndexTrendCard.vue";
+import MarketTurnoverCard from "../../src/components/market-index/MarketTurnoverCard.vue";
 import ReferenceMarketPanel from "../../src/components/market-index/ReferenceMarketPanel.vue";
 import {
   useMarketIndexSeries,
@@ -69,6 +71,16 @@ const blockedSnapshot: MarketIndexSnapshotView = Object.freeze({
   sessionChangeRatio: null,
   snapshotHash: "d".repeat(64),
 } satisfies MarketIndexSnapshotView);
+
+const marketTurnover: MarketTurnoverSummaryView = {
+  benchmarkCodes: ["000001.SH", "399107.SZ"],
+  changeAmount: "-210700000000",
+  completedBucketAt: "2026-09-02T10:35:00+08:00",
+  currentAmount: "1660000000000",
+  estimateMethod: "LINEAR_COMPLETED_FIVE_MINUTE_BUCKETS",
+  estimatedFullDayAmount: "1660000000000",
+  previousAmount: "1870700000000",
+};
 
 const reference: SymbolReferenceMarketView = Object.freeze({
   board: "STAR_MARKET",
@@ -127,6 +139,27 @@ const bars: readonly MarketIndexBarView[] = Object.freeze([
 enableAutoUnmount(afterEach);
 
 describe("market index monitor views", () => {
+  it("renders the market-wide turnover summary with an explicit estimate label", () => {
+    const wrapper = mount(MarketTurnoverCard, {
+      props: { summary: marketTurnover },
+    });
+
+    expect(wrapper.get('[data-testid="market-turnover-card"]').text()).toContain("今日实时成交额");
+    expect(wrapper.text()).toContain("1.66万亿");
+    expect(wrapper.text()).toContain("较上一日");
+    expect(wrapper.text()).toContain("-2107亿");
+    expect(wrapper.text()).toContain("预测全天成交额");
+    expect(wrapper.text()).toContain("按已完成五分钟时段线性估算");
+  });
+
+  it("keeps the turnover card visible with placeholders before data is available", () => {
+    const wrapper = mount(MarketTurnoverCard, { props: { summary: null } });
+
+    expect(wrapper.text()).toContain("今日实时成交额");
+    expect(wrapper.text()).toContain("暂无成交额数据");
+    expect(wrapper.text()).toContain("—");
+  });
+
   it("renders four fixed index selectors with one current-day chart panel", async () => {
     const wrapper = mount(MarketIndexDataStrip, {
       props: {
