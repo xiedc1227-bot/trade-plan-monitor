@@ -103,7 +103,6 @@ export const useMonitorStore = defineStore("monitor", () => {
   const sequenceState = shallowRef(0);
   const connectionStatusState = shallowRef<ConnectionStatus>("UNKNOWN");
   const countsState = shallowRef<DashboardCounts>(emptyCounts);
-  const dataAgeSecondsState = shallowRef<number | null>(null);
   const observedAtState = shallowRef<string | null>(null);
   const runtimeGenerationState = shallowRef<string | null>(null);
   const symbolIdsState = shallowRef<readonly string[]>(Object.freeze([]));
@@ -148,7 +147,6 @@ export const useMonitorStore = defineStore("monitor", () => {
     sequenceState.value = snapshot.sequence;
     connectionStatusState.value = snapshot.connectionStatus;
     countsState.value = counts;
-    dataAgeSecondsState.value = snapshot.dataAgeSeconds;
     observedAtState.value = snapshot.observedAt;
     runtimeGenerationState.value = snapshot.runtimeGeneration;
     symbolIdsState.value = normalized.ids;
@@ -170,7 +168,6 @@ export const useMonitorStore = defineStore("monitor", () => {
     sequenceState.value = unavailable.sequence;
     connectionStatusState.value = "UNKNOWN";
     countsState.value = emptyCounts;
-    dataAgeSecondsState.value = null;
     observedAtState.value = unavailable.observedAt;
     runtimeGenerationState.value = null;
     symbolIdsState.value = Object.freeze([]);
@@ -252,7 +249,6 @@ export const useMonitorStore = defineStore("monitor", () => {
     connectionState,
     connectionStatus: readonly(connectionStatusState),
     counts: readonly(countsState),
-    dataAgeSeconds: readonly(dataAgeSecondsState),
     hasSnapshot: readonly(hasSnapshotState),
     lastInvalidation: readonly(lastInvalidationState),
     lastEvent: readonly(lastEventState),

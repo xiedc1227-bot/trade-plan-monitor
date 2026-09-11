@@ -18,7 +18,6 @@ const snapshot: DashboardResponse = {
     risk: 0,
     stale: 0,
   },
-  dataAgeSeconds: 2,
   marketIndexes: [
     {
       board: "STAR_MARKET",

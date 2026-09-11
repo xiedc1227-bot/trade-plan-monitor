@@ -77,6 +77,31 @@ class _Controller:
         return call()
 
 
+class _SingleLaneController:
+    max_concurrency = 1
+
+    def __init__(self) -> None:
+        self.busy = False
+
+    async def execute(
+        self,
+        _operation: object,
+        call,
+        *,
+        work_key: str,
+        priority: object,
+    ) -> object:
+        del work_key, priority
+        if self.busy:
+            raise TimeoutError
+        self.busy = True
+        try:
+            await asyncio.sleep(0)
+            return call()
+        finally:
+            self.busy = False
+
+
 class _Client:
     def __init__(self) -> None:
         self.idx_calls: list[dict[str, object]] = []
@@ -165,6 +190,53 @@ class _Client:
                 },
             ]
         )
+
+
+class _PerCodeClient(_Client):
+    @staticmethod
+    def _with_requested_code(frame: pd.DataFrame, kwargs: dict[str, object]) -> pd.DataFrame:
+        result = frame.copy(deep=True)
+        result["ts_code"] = str(kwargs["ts_code"])
+        return result
+
+    def idx_mins(self, **kwargs: object) -> pd.DataFrame:
+        return self._with_requested_code(super().idx_mins(**kwargs), kwargs)
+
+    def rt_idx_min_daily(self, **kwargs: object) -> pd.DataFrame:
+        return self._with_requested_code(super().rt_idx_min_daily(**kwargs), kwargs)
+
+    def index_daily(self, **kwargs: object) -> pd.DataFrame:
+        return self._with_requested_code(super().index_daily(**kwargs), kwargs)
+
+
+def test_index_provider_limits_batch_parallelism_to_request_controller_capacity() -> None:
+    provider = TushareMarketIndexProvider(
+        client=_PerCodeClient(),
+        profile=_ready_profile(),
+        request_controller=_SingleLaneController(),
+        now=lambda: datetime(2026, 9, 7, 10, 0, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    async def acquire(index_code: MarketIndexCode):
+        return await provider.acquire_index_data(
+            index_code=index_code,
+            decision_cutoff=datetime(2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            five_minute_bar_count=1,
+            official_daily_bar_count=1,
+        )
+
+    async def scenario():
+        return await asyncio.gather(
+            acquire(MarketIndexCode.SHENZHEN_COMPONENT),
+            acquire(MarketIndexCode.CHINEXT),
+        )
+
+    batches = asyncio.run(scenario())
+
+    assert tuple(batch.index_code for batch in batches) == (
+        MarketIndexCode.SHENZHEN_COMPONENT,
+        MarketIndexCode.CHINEXT,
+    )
 
 
 class _WrongRealtimeFrequencyClient(_Client):

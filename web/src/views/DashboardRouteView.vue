@@ -34,12 +34,10 @@ function selectSymbol(symbol: string): void {
   <DashboardView
     :connection-status="monitor.connectionStatus"
     :counts="monitor.counts"
-    :data-age-seconds="monitor.dataAgeSeconds"
     :loading="isLoadingSnapshot"
     :market-indexes="marketIndexes"
     :market-index-trends="marketIndexTrends.trends.value"
     :market-turnover="marketTurnover"
-    :observed-at="monitor.observedAt"
     :symbols="monitor.symbols"
     :unavailable="monitor.unavailable"
     @select-symbol="selectSymbol"

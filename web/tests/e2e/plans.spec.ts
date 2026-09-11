@@ -107,7 +107,6 @@ function planSummary(plan: PlanVersionView): PlanVersionSummary {
 const dashboard: DashboardResponse = {
   connectionStatus: "CONNECTED",
   counts: { actionable: 0, blocked: 0, lowZoneWatch: 0, normal: 0, risk: 0, stale: 0 },
-  dataAgeSeconds: 0,
   marketIndexes: [],
   observedAt: TIME,
   runtimeGeneration: "00000000-0000-4000-8000-000000000001",

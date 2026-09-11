@@ -621,7 +621,6 @@ class DashboardResponse(ReadModel):
     observed_at: ShanghaiDatetime
     runtime_generation: UUID4 | None
     connection_status: ConnectionStatus
-    data_age_seconds: NonNegativeInteger | None
     counts: DashboardCounts
     symbols: tuple[SymbolSummaryView, ...] = Field(default=(), max_length=_MAX_SYMBOLS)
     market_indexes: tuple[MarketIndexSnapshotView, ...] = Field(max_length=5)

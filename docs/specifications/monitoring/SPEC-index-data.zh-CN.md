@@ -77,13 +77,14 @@ tests/integration/test_market_index_snapshots.py
 
 ## 供应商边界
 
-`LiveMarketIndexProvider` 和 `HistoricalMarketIndexProvider` 只公开明确命名的指数操作。Tushare 实时适配器会合并截至前一日期的历史 `idx_mins(freq="5min")` 行与当日 `rt_idx_min_daily(freq="5MIN")` 行，并从 `index_daily` 获取官方日线；股票 `rt_min` 绝不能替代指数接口。生产组合保持 `UNVERIFIED`，直到经授权的能力探测证明五个板块参考 identity 加隐藏成交额基准 `399107.SZ`、这些准确 endpoint、时间标签、OHLC/昨收/成交额字段、范围、限额和权限。缺少 `399107.SZ` 的旧 profile 对原有四张总览走势图仍然有效，但成交额基准保持 `UNVERIFIED`。相关能力就绪前，生产适配器返回脱敏 `PROVIDER_UNAVAILABLE`；禁止猜测或复用股票接口。Token、原始响应、权限文本和异常正文不能进入日志、接口、报告或导出。
+`LiveMarketIndexProvider` 和 `HistoricalMarketIndexProvider` 只公开明确命名的指数操作。Tushare 实时适配器会合并截至前一日期的历史 `idx_mins(freq="5min")` 行与当日 `rt_idx_min_daily(freq="5MIN")` 行，并从 `index_daily` 获取官方日线；股票 `rt_min` 绝不能替代指数接口。并发指数批次只按请求控制器的实际并发容量准入，避免一个批次的三次有序读取让后续指数耗尽控制器入场超时。生产组合保持 `UNVERIFIED`，直到经授权的能力探测证明五个板块参考 identity 加隐藏成交额基准 `399107.SZ`、这些准确 endpoint、时间标签、OHLC/昨收/成交额字段、范围、限额和权限。缺少 `399107.SZ` 的旧 profile 对原有四张总览走势图仍然有效，但成交额基准保持 `UNVERIFIED`。相关能力就绪前，生产适配器返回脱敏 `PROVIDER_UNAVAILABLE`；禁止猜测或复用股票接口。Token、原始响应、权限文本和异常正文不能进入日志、接口、报告或导出。
 
 ## 测试策略
 
 - 校验准确十进制、时间戳、身份、OHLC、重复、缺口、未来数据和供应商故障隔离。
 - 黄金测试覆盖 SMA、回看 SMA 和两类涨跌幅窗口，包括最小/最大参数和历史不足。
 - 证明十只股票共用一个指数和截止时间时只发生一次供应商获取并产生一个快照哈希。
+- 证明并发指数批次遵守请求控制器的实际并发容量，不会把后续指数错误阻断。
 - 证明需求合并与顺序无关，两份不同计划收到同一不可变快照对象/哈希。
 - 证明任一 K 线、公式、请求或修订变化会改变对应哈希；运行元数据不会。
 - 证明没有指数条件的计划在快照缺失或阻断时保持原判断。

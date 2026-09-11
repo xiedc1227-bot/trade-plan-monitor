@@ -198,7 +198,6 @@ function isDashboardResponse(value: unknown): value is DashboardResponse {
     !hasOnlyKeys(value, [
       "connectionStatus",
       "counts",
-      "dataAgeSeconds",
       "marketIndexes",
       "marketTurnover",
       "observedAt",
@@ -220,7 +219,6 @@ function isDashboardResponse(value: unknown): value is DashboardResponse {
     (value.connectionStatus === "CONNECTED" ||
       value.connectionStatus === "DISCONNECTED" ||
       value.connectionStatus === "UNKNOWN") &&
-    isNullableNonnegativeInteger(value.dataAgeSeconds) &&
     isShanghaiDateTime(value.observedAt) &&
     (value.runtimeGeneration === null || isUuidV4(value.runtimeGeneration)) &&
     isSafeSequence(value.sequence) &&

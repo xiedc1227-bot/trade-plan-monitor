@@ -24,12 +24,10 @@ import type {
   WatchlistSort,
   WatchlistViewMode,
 } from "../components/dashboard/WatchlistToolbar.vue";
-import { formatDisplayDateTime } from "../formatters/dateTime";
 
 interface Props {
   connectionStatus: ConnectionStatus;
   counts: DashboardCounts;
-  dataAgeSeconds: number | null;
   error?: string | null;
   loading?: boolean;
   marketIndexes?: readonly MarketIndexSnapshotView[];
@@ -37,7 +35,6 @@ interface Props {
   marketIndexTrends?: Readonly<
     Record<MarketIndexSnapshotView["indexCode"], DashboardMarketIndexTrend>
   >;
-  observedAt: string | null;
   symbols: readonly SymbolSummaryView[];
   unavailable?: DashboardProjectionUnavailableResponse | null;
 }
@@ -79,12 +76,6 @@ const riskSignalSet = new Set<SignalType>([
   "RISK_EXIT_READY",
   "RISK_EXIT_PENDING_SETTLEMENT",
 ]);
-
-const connectionLabels: Readonly<Record<ConnectionStatus, string>> = {
-  CONNECTED: "已连接",
-  DISCONNECTED: "连接中断",
-  UNKNOWN: "连接未知",
-};
 
 const actionableSymbols = computed<readonly SymbolSummaryView[]>(() =>
   Object.freeze(props.symbols.filter((row) => actionableSignalSet.has(row.decision.signalType))),
@@ -200,23 +191,10 @@ function compareText(left: string, right: string): number {
   <section class="dashboard-view" aria-labelledby="dashboard-title">
     <header class="dashboard-view__header">
       <div>
-        <p class="dashboard-view__eyebrow">TEN-SYMBOL MONITOR</p>
         <h1 id="dashboard-title">监控总览</h1>
       </div>
       <p>只读权威快照 · 序列由监控 store 管理</p>
     </header>
-
-    <section
-      class="dashboard-view__market-status"
-      data-testid="market-status-strip"
-      :data-connection="connectionStatus"
-      aria-label="行情与连接状态"
-    >
-      <strong>{{ connectionLabels[connectionStatus] }}</strong>
-      <span>{{ dataAgeSeconds === null ? "数据年龄未知" : `数据年龄 ${dataAgeSeconds} 秒` }}</span>
-      <span>快照时间 {{ formatDisplayDateTime(observedAt, "未知") }}</span>
-      <span v-if="connectionStatus !== 'CONNECTED'">当前数据不得视为实时</span>
-    </section>
 
     <p
       v-if="unavailable !== null"
@@ -317,34 +295,9 @@ function compareText(left: string, right: string): number {
   border-block-end: var(--border-technical);
 }
 
-.dashboard-view__eyebrow {
-  color: var(--color-signal-watch-amber);
-  font-family: var(--font-numeric);
-}
-
-.dashboard-view__eyebrow,
 .dashboard-view__header h1,
 .dashboard-view__header p {
   overflow-wrap: anywhere;
-}
-
-.dashboard-view__market-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-raised);
-  border-inline-start: 0.25rem solid var(--color-signal-live-sea-glass);
-}
-
-.dashboard-view__market-status > * {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.dashboard-view__market-status[data-connection="DISCONNECTED"],
-.dashboard-view__market-status[data-connection="UNKNOWN"] {
-  border-inline-start-color: var(--color-signal-risk-vermilion);
 }
 
 .dashboard-view__error,

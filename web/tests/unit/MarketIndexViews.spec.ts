@@ -202,7 +202,12 @@ describe("market index monitor views", () => {
       },
     });
 
-    expect(wrapper.get('[data-testid="market-index-sparkline"]').attributes("aria-label")).toContain("科创50");
+    const chartLabel = wrapper
+      .get('[data-testid="market-index-sparkline"]')
+      .attributes("aria-label");
+    expect(chartLabel).toContain("科创50");
+    expect(chartLabel).toContain("涨跌 1.18%");
+    expect(chartLabel).not.toContain("会话涨跌");
     expect(wrapper.get('[data-testid="market-index-trend-card"]').attributes("data-direction")).toBe("up");
     expect(wrapper.get(".market-index-trend-card__high").text()).toBe("1235.20");
     expect(wrapper.get(".market-index-trend-card__high").attributes("data-direction")).toBe("up");
@@ -214,8 +219,34 @@ describe("market index monitor views", () => {
       .findAll(".market-index-trend-card__facts > div")
       .find((fact) => fact.text().includes("数据截止"));
     expect(cutoffFact?.text()).toBe("数据截止2026-09-02 10:35:00");
+    expect(wrapper.findAll("dt").map((term) => term.text())).toContain("涨跌");
+    expect(wrapper.findAll("dt").map((term) => term.text())).not.toContain("会话涨跌");
     expect(wrapper.find("details").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("查看当日点位数据");
+  });
+
+  it("restarts a one-shot live pulse only when a new healthy snapshot arrives", async () => {
+    const wrapper = mount(MarketIndexTrendCard, {
+      props: {
+        connectionStatus: "CONNECTED",
+        identity: { board: "STAR_MARKET", displayName: "科创50", indexCode: "000688.SH" },
+        summary: snapshot,
+        trend: emptyDashboardMarketIndexTrends["000688.SH"],
+      },
+    });
+
+    const initialDot = wrapper.get('[data-testid="market-index-health-symbol"]');
+    expect(wrapper.get('[data-testid="market-index-health"]').text()).toContain("实时");
+    expect(initialDot.text()).toBe("●");
+    expect(initialDot.classes()).toContain("market-index-trend-card__health-symbol--live");
+
+    await wrapper.setProps({
+      summary: { ...snapshot, snapshotHash: "e".repeat(64) },
+    });
+
+    expect(wrapper.get('[data-testid="market-index-health-symbol"]').element).not.toBe(
+      initialDot.element,
+    );
   });
 
   it("labels absent and disconnected snapshots without claiming live data", () => {
@@ -240,6 +271,8 @@ describe("market index monitor views", () => {
     expect(absent.text()).not.toContain("等待快照");
     expect(cached.text()).toContain("已缓存");
     expect(cached.text()).not.toContain("实时 ●");
+    expect(cached.get('[data-testid="market-index-health-symbol"]').text()).toBe("○");
+    expect(cached.find(".market-index-trend-card__health-symbol--live").exists()).toBe(false);
   });
 
   it("distinguishes an unused plan from satisfied index conditions", () => {

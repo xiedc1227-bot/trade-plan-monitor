@@ -19,7 +19,6 @@ const snapshot: DashboardResponse = {
     risk: 0,
     stale: 0,
   },
-  dataAgeSeconds: 2,
   marketIndexes: [],
   observedAt: "2026-08-24T10:30:00+08:00",
   runtimeGeneration: "00000000-0000-4000-8000-000000000001",
@@ -77,7 +76,6 @@ function crossDayOfficialRiskBreachSnapshot(): DashboardResponse {
     throw new Error("test fixture must contain one symbol");
   }
   value.connectionStatus = "DISCONNECTED";
-  value.dataAgeSeconds = 68_400;
   value.observedAt = "2026-08-25T10:00:00+08:00";
   summary.connected = false;
   summary.observedAt = value.observedAt;

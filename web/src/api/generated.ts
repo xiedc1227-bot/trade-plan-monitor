@@ -815,7 +815,6 @@ export type DashboardProjectionUnavailableResponse = {
 export type DashboardResponse = {
   connectionStatus: components["schemas"]["ConnectionStatus"];
   counts: components["schemas"]["DashboardCounts"];
-  dataAgeSeconds: (number) | (null);
   marketIndexes: Array<components["schemas"]["MarketIndexSnapshotView"]>;
   marketTurnover?: (components["schemas"]["MarketTurnoverSummaryView"]) | (null);
   observedAt: string;

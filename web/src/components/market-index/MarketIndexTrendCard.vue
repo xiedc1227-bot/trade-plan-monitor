@@ -47,20 +47,39 @@ const turnover = computed(() => {
   return `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(totalYi)}亿`;
 });
 const healthLabels = Object.freeze({
-  BLOCKED: "阻断 ×",
-  GAPPED: "缺口 !",
-  LIVE: "实时 ●",
-  STALE: "陈旧 !",
+  BLOCKED: "阻断",
+  GAPPED: "缺口",
+  LIVE: "实时",
+  STALE: "陈旧",
 } as const);
+const healthSymbols = Object.freeze({
+  BLOCKED: "×",
+  CACHED: "○",
+  GAPPED: "!",
+  LIVE: "●",
+  NONE: "",
+  STALE: "!",
+} as const);
+const displayedHealthState = computed<keyof typeof healthSymbols>(() => {
+  if (props.summary === null) return "NONE";
+  if (props.summary.health === "LIVE" && props.connectionStatus !== "CONNECTED") {
+    return "CACHED";
+  }
+  return props.summary.health;
+});
 const displayedHealth = computed(() => {
   if (props.summary === null) return "暂无快照";
-  if (props.summary.health === "LIVE" && props.connectionStatus !== "CONNECTED") {
-    return "已缓存";
-  }
+  if (displayedHealthState.value === "CACHED") return "已缓存";
   return healthLabels[props.summary.health];
 });
+const displayedHealthSymbol = computed(() => healthSymbols[displayedHealthState.value]);
+const shouldPulseLive = computed(() => displayedHealthState.value === "LIVE");
+const healthSymbolKey = computed(() => {
+  if (shouldPulseLive.value) return props.summary?.snapshotHash ?? "live";
+  return displayedHealthState.value;
+});
 const chartLabel = computed(() => {
-  return `${props.identity.displayName}当日五分钟指数走势，最新点位 ${props.summary?.closePoints ?? "未知"}，会话涨跌 ${formatSessionChange(props.summary?.sessionChangeRatio ?? null)}，数据截止 ${formatDisplayDateTime(props.summary?.completedBucketAt ?? null, "未知")}，${displayedHealth.value}，虚线为昨收点位`;
+  return `${props.identity.displayName}当日五分钟指数走势，最新点位 ${props.summary?.closePoints ?? "未知"}，涨跌 ${formatSessionChange(props.summary?.sessionChangeRatio ?? null)}，数据截止 ${formatDisplayDateTime(props.summary?.completedBucketAt ?? null, "未知")}，${displayedHealth.value}，虚线为昨收点位`;
 });
 
 function formatSessionChange(value: string | null): string {
@@ -95,7 +114,7 @@ function extrema(
   <article
     class="market-index-trend-card"
     data-testid="market-index-trend-card"
-    :data-health="summary?.health ?? 'BLOCKED'"
+    :data-health="displayedHealthState"
     :data-direction="currentDirection"
   >
     <header class="market-index-trend-card__header">
@@ -103,7 +122,21 @@ function extrema(
         <h3>{{ identity.displayName }}</h3>
         <code>{{ identity.indexCode }}</code>
       </div>
-      <strong>{{ displayedHealth }}</strong>
+      <strong
+        class="market-index-trend-card__health"
+        data-testid="market-index-health"
+        :data-health="displayedHealthState"
+      >
+        <span>{{ displayedHealth }}</span>
+        <span
+          v-if="displayedHealthSymbol"
+          :key="healthSymbolKey"
+          aria-hidden="true"
+          class="market-index-trend-card__health-symbol"
+          :class="{ 'market-index-trend-card__health-symbol--live': shouldPulseLive }"
+          data-testid="market-index-health-symbol"
+        >{{ displayedHealthSymbol }}</span>
+      </strong>
     </header>
     <dl class="market-index-trend-card__market-facts">
       <div class="market-index-trend-card__primary-fact">
@@ -139,7 +172,7 @@ function extrema(
     <p v-else-if="bars.length === 0" class="market-index-trend-card__status">当前暂无当日五分钟数据。</p>
     <dl class="market-index-trend-card__facts">
       <div>
-        <dt>会话涨跌</dt>
+        <dt>涨跌</dt>
         <dd
           class="market-index-trend-card__change"
           :data-direction="marketIndexDirection(summary?.sessionChangeRatio ?? null)"
@@ -167,9 +200,23 @@ function extrema(
 .market-index-trend-card[data-health="BLOCKED"],
 .market-index-trend-card[data-health="GAPPED"] { border-inline-start-color: var(--color-signal-risk-vermilion); }
 .market-index-trend-card[data-health="STALE"] { border-inline-start-color: var(--color-signal-watch-amber); }
+.market-index-trend-card[data-health="CACHED"],
+.market-index-trend-card[data-health="NONE"] { border-inline-start-color: var(--color-border-quiet); }
 .market-index-trend-card > *, .market-index-trend-card__header > *, .market-index-trend-card__facts > div { min-width: 0; }
 .market-index-trend-card__header { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: baseline; justify-content: space-between; }
 .market-index-trend-card__header h3 { display: inline; margin-inline-end: var(--space-2); }
+.market-index-trend-card__health { display: inline-flex; gap: var(--space-1); align-items: center; }
+.market-index-trend-card__health[data-health="LIVE"] { color: var(--color-signal-live-sea-glass); }
+.market-index-trend-card__health[data-health="BLOCKED"],
+.market-index-trend-card__health[data-health="GAPPED"] { color: var(--color-signal-risk-vermilion); }
+.market-index-trend-card__health[data-health="STALE"] { color: var(--color-signal-watch-amber); }
+.market-index-trend-card__health[data-health="CACHED"],
+.market-index-trend-card__health[data-health="NONE"] { color: var(--color-text-muted); }
+.market-index-trend-card__health-symbol { display: inline-block; }
+.market-index-trend-card__health-symbol--live {
+  transform-origin: center;
+  animation: market-index-live-pulse 600ms ease-out 1;
+}
 .market-index-trend-card__header h3, .market-index-trend-card__header code, .market-index-trend-card__status, .market-index-trend-card__issues, .market-index-trend-card__facts dd { overflow-wrap: anywhere; }
 .market-index-trend-card__status, .market-index-trend-card__issues { margin: 0; color: var(--color-text-muted); }
 .market-index-trend-card__status button { margin-inline-start: var(--space-2); }
@@ -188,6 +235,14 @@ function extrema(
 .market-index-trend-card__change[data-direction="down"] { color: var(--color-signal-live-sea-glass); }
 .market-index-trend-card__market-facts dd[data-direction="flat"],
 .market-index-trend-card__change[data-direction="flat"] { color: var(--color-text-mineral); }
+@keyframes market-index-live-pulse {
+  0% { opacity: .45; transform: scale(.75); }
+  45% { opacity: 1; transform: scale(1.35); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .market-index-trend-card__health-symbol--live { animation: none; }
+}
 @media (max-width: 39.999rem) {
   .market-index-trend-card { padding-inline: var(--space-3); }
   .market-index-trend-card__market-facts,

@@ -102,7 +102,7 @@ web/src/
 - `create_app(read_service=...)` 接收一个明确注入的 `MonitorReadService`，但不构造该服务或启动 I/O。T036 的七个路由都是该服务之上的异步传输适配器；缺少服务时返回 `SERVICE_UNAVAILABLE`。每个服务结果都必须在序列化前通过封闭、不可变的响应模型重新校验；非法内部结果只进入通用错误边界，且不暴露被拒绝的值。
 - T036 在 `/api/v1` 下实现 `GET /dashboard`、`GET /symbols`、`GET /symbols/{symbol}`、`GET /symbols/{symbol}/bars`、`GET /symbols/{symbol}/events`、`GET /health` 和 `GET /health/symbols/{symbol}`。它不实现 T037+ 命令、提醒中心查询、计划/AI 资源、WebSocket 传输、Origin/安全响应头、静态资源提供或生产组合。
 - 列表分页使用 `offset`（默认 `0`，范围 `0..10000`）和 `limit`（默认 `20`，范围 `1..100`），并返回精确的 `items`、`offset`、`limit` 和 `total`。股票总数最多 10，K 线/事件总数最多 10,000。K 线与事件读取必须显式提供 `Asia/Shanghai` 闭区间时间戳 `startAt` 和 `endAt`；范围反转时返回 `BAD_REQUEST`。K 线读取还接受 `interval=ONE_MINUTE|FIVE_MINUTES`。响应中的分页、范围、周期和股票 identity 必须与请求一致。股票格式非法时返回请求校验失败；格式合法但不存在时返回 `NOT_FOUND`。
-- 监控总览返回已提交且 JavaScript 安全的 `sequence`、可空 UUIDv4 `runtimeGeneration`、观测/连接/数据年龄状态条、六项已批准统计和最多 10 个相互隔离的股票摘要。每个摘要包含一个权威确定性判断投影，其中保留 `symbol`、`resultHash`、精确计划 identity、判断/行情时间、数据年龄、价格、区间、信号、仓位、阶段/风险状态、强类型证据和下一步。适配器绝不判断条件、修改优先级、重算判断哈希或读取第二套报价流。跨股票 identity、矛盾风险状态、与仓位批次/T+1 可用量不一致以及不一致年龄都封闭失败。
+- 监控总览返回已提交且 JavaScript 安全的 `sequence`、可空 UUIDv4 `runtimeGeneration`、信封级 `observedAt`、连接状态、六项已批准统计和最多 10 个相互隔离的股票摘要；不再暴露冗余的总览级 `dataAgeSeconds`。每个摘要包含一个权威确定性判断投影，其中保留 `symbol`、`resultHash`、精确计划 identity、判断/行情时间、单只股票数据年龄、价格、区间、信号、仓位、阶段/风险状态、强类型证据和下一步。适配器绝不判断条件、修改优先级、重算判断哈希或读取第二套报价流。跨股票 identity、矛盾风险状态、与仓位批次/T+1 可用量不一致以及不一致年龄都封闭失败。
 - K 线响应保留规范化整数分 OHLC、股数、精确元成交额、回执时间和聚合公式 provenance。事件响应保留股票、序号、稳定事件 ID/类型、时间戳、可选信号/结果哈希和有界的服务端纯文本。所有 JSON 字段名均为 camelCase，所有枚举值均为 `UPPER_SNAKE`。
 - 运行时健康只暴露稳定的生命周期/资源/能力状态、重试/冷却/轮询时间、有序缺口、有界执行器计数、数据库/WAL/检查点/备份事实及投递计数。股票健康暴露精确的数据年龄/完整性/新鲜度/缺口事实。`LIVE` 必须具有新鲜、完整且带最新时间戳的数据；断连、陈旧、有缺口、阻断或其他矛盾数据都不能标为实时或可执行。任何响应 Schema 都不包含密钥、授权详情、供应商原始响应体或存储原始错误字段。
 
@@ -137,7 +137,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`d05fb26a24735bbed877b5dc9382456ce3a1c71a00c76e62d7817a10fb08dca9`
+OpenAPI 快照 SHA-256：`89e2279a1aa6bcf649602a65424a675e222056adf2c55a4091691c25b73e6034`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 42 个已批准 REST 路径：27 个实时路径（包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars` 和 `GET /plan-activation-states/{symbol}`）加精确 15 个回测路径，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -322,7 +322,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 ### WEBF06 监控总览路由边界
 
 - `/` 惰性加载 `DashboardRouteView`，它是既有 `monitor` Pinia store 与 `DashboardView` 之上的薄组合表面。store 只由权威 `GET /api/v1/dashboard` 快照生命周期填充；该路由绝不调用供应商、判断条件、映射板块、计算新鲜度或写入判断。
-- 路由把不可变的后端 `connectionStatus`、统计、数据年龄、观察时间、股票摘要、共用 `marketIndexes`、后端计算的可空 `marketTurnover` 以及每只股票计划专属的 `referenceMarket.conditionProgress` 直接传给展示组件。因此界面始终分开共用板块指数事实与单计划结果，且不暗示统一市场结论。成交额使用 `000001.SH + 399107.SZ`；线性全天预估有明确标注，且绝不进入计划判断。
+- 路由把不可变的后端 `connectionStatus`、统计、股票摘要、共用 `marketIndexes`、后端计算的可空 `marketTurnover` 以及每只股票计划专属的 `referenceMarket.conditionProgress` 直接传给展示组件。信封级 `observedAt` 继续作为走势图查询边界，但不作为展示文案。应用外壳是全局实时传输状态的唯一展示入口，因此总览不再渲染重复的独立连接状态条；它仍将 `connectionStatus` 传给指数组件，用于局部实时、缓存和阻断健康判断。指数健康通过文字、符号、状态色以及支持减少动画的一次性新快照脉冲表达。因此界面始终分开共用板块指数事实与单计划结果，且不暗示统一市场结论。成交额使用 `000001.SH + 399107.SZ`；线性全天预估有明确标注，且绝不进入计划判断。
 - 路由保留后端认证的官方收盘 `RISK_BREACH` 及其真实 `STALE` 判断健康。只有后端在校验匹配的 15:00 官方 K 线、跌破日期、完整必需数据、风险状态、下一步及已满足的 `OFFICIAL_CLOSE_BELOW_LEVEL` 证据后，才能准入这个狭窄的可执行例外。Vue 既不抑制该信号，也不把它改标为 `LIVE`；其他所有可执行判断在健康不是 `LIVE` 时仍然非法。
 - 在权威快照存在前，路由展示既有加载状态而不是空自选表。选择已渲染股票只会向 `/stocks/:symbol` 发出路由导航意图；它不会修改监控状态，也不会构造详情响应。
 - 本边界不新增 REST 路径、Schema 迁移、Schema v1 数据变更、历史回测结果变更或判断 hash 变更。它只增加向后兼容的可空 `marketTurnover` OpenAPI 字段及对应生成 TypeScript 类型。它不暴露 token，也不执行真实供应商请求。
@@ -380,7 +380,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 ### `/` — 监控总览
 
-- 行情、数据供应商、连接和数据年龄状态条。
+- 由应用外壳统一展示一个实时传输状态，总览不再重复连接状态条；仅在诊断确有意义的位置保留单只股票连接状态和数据年龄。
 - 可执行、低吸观察、阻断、风险、陈旧和正常状态的数量统计。
 - 最多 10 只股票的紧凑可排序自选表：价格、区间、条件进度、信号、持仓、风险距离、行情时间及健康状态。
 - 搜索与筛选，以及独立的可执行提醒栏。

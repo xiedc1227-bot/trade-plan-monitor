@@ -15,7 +15,6 @@ const axePath = require.resolve("axe-core/axe.min.js");
 const dashboard: DashboardResponse = {
   connectionStatus: "CONNECTED",
   counts: { actionable: 0, blocked: 0, lowZoneWatch: 2, normal: 0, risk: 0, stale: 0 },
-  dataAgeSeconds: 2,
   marketIndexes: [
     {
       board: "SSE_MAIN",
@@ -232,6 +231,7 @@ test.afterAll(async () => {
 test("renders the authoritative dashboard and shared board-index summary at the root route", async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   const chartRequests: string[] = [];
   page.on("request", (request) => {
     if (/PriceChart|installCanvasRenderer|echarts/i.test(request.url())) {
@@ -262,12 +262,15 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await page.goto(baseUrl);
 
   await expect(page.getByRole("heading", { level: 1, name: "监控总览" })).toBeVisible();
+  await expect(page.getByText("TEN-SYMBOL MONITOR")).toHaveCount(0);
+  await expect(page.locator(".app-shell__connection-banner")).toBeVisible();
   const mainContent = page.locator("#main-content");
   await mainContent.focus();
   expect(
     await mainContent.evaluate((element) => getComputedStyle(element).outlineStyle),
   ).toBe("none");
   await expect(page.getByText("华兴源创")).toBeVisible();
+  await expect(page.getByTestId("market-status-strip")).toHaveCount(0);
   await expect(page.getByText("主要指数走势 · 当日")).toBeVisible();
   await expect(page.getByText("科创50").first()).toBeVisible();
   await expect(page.getByText("计划指数条件")).toBeVisible();
@@ -285,6 +288,9 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await expect(indexCards).toContainText("上证指数");
   await expect(indexCards).toContainText("3400.12");
   await expect(indexCards).toContainText("数据截止2026-09-02 10:35:00");
+  expect(await page.getByTestId("market-index-health-symbol").evaluate(
+    (element) => getComputedStyle(element).animationName,
+  )).toBe("none");
   expect(await indexCards.locator(".market-index-trend-card__high").evaluate(
     (element) => getComputedStyle(element).color,
   )).toBe("rgb(103, 183, 165)");
@@ -307,7 +313,8 @@ test("renders the authoritative dashboard and shared board-index summary at the 
     .toBeGreaterThanOrEqual(16);
   await page.getByTestId("market-index-selector").filter({ hasText: "科创50" }).click();
   await expect(indexCards).toContainText("科创50");
-  await expect(indexCards).toContainText("实时 ●");
+  await expect(page.getByTestId("market-index-health")).toContainText("实时");
+  await expect(page.getByTestId("market-index-health-symbol")).toHaveText("●");
   await expect(page.getByText("查看当日点位数据")).toHaveCount(0);
   const rows = page.getByTestId("watchlist-row");
   await expect(rows).toHaveCount(2);
@@ -514,4 +521,6 @@ test("recovers a sequence gap with a fresh dashboard snapshot before replaying f
     }),
   );
   await expect(page.locator('[role="status"]')).toHaveAttribute("data-connection-state", "LIVE");
+  await expect(page.locator(".app-shell__connection-banner")).toContainText("实时连接");
+  await expect(page.getByTestId("market-status-strip")).toHaveCount(0);
 });

@@ -74,7 +74,6 @@ class _DashboardService:
             observed_at=NOW,
             runtime_generation=LEGACY_RUNTIME_GENERATION,
             connection_status=ConnectionStatus.CONNECTED,
-            data_age_seconds=0,
             counts=DashboardCounts(
                 actionable=0,
                 low_zone_watch=0,

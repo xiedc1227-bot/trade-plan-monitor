@@ -62,7 +62,6 @@ const dashboard: DashboardResponse = {
     risk: 0,
     stale: 0,
   },
-  dataAgeSeconds: 0,
   marketIndexes: [],
   observedAt: health.observedAt,
   runtimeGeneration: "00000000-0000-4000-8000-000000000001",

@@ -214,7 +214,6 @@ def _dashboard_payload() -> dict[str, object]:
         "observedAt": datetime(2026, 8, 24, 10, 5, tzinfo=_SHANGHAI),
         "runtimeGeneration": "00000000-0000-4000-8000-000000000001",
         "connectionStatus": "CONNECTED",
-        "dataAgeSeconds": 60,
         "counts": {
             "actionable": 1,
             "lowZoneWatch": 0,
@@ -742,10 +741,9 @@ def test_dashboard_returns_authoritative_decision_evidence_and_data_age() -> Non
     payload = response.json()
     assert set(payload) == {
         "sequence",
-            "observedAt",
-            "runtimeGeneration",
-            "connectionStatus",
-        "dataAgeSeconds",
+        "observedAt",
+        "runtimeGeneration",
+        "connectionStatus",
         "counts",
         "symbols",
         "marketIndexes",

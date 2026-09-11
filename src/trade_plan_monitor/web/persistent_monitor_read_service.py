@@ -224,7 +224,6 @@ class PersistentMonitorReadService:
                     None if runtime_identity is None else runtime_identity[1]
                 ),
                 connection_status=_connection_status(summaries),
-                data_age_seconds=_dashboard_data_age(summaries, observed_at),
                 counts=_dashboard_counts(summaries),
                 symbols=summaries,
                 market_indexes=market_indexes,
@@ -251,7 +250,6 @@ class PersistentMonitorReadService:
                 if runtime_identity is None
                 else ConnectionStatus.CONNECTED
             ),
-            data_age_seconds=None,
             counts=_dashboard_counts(()),
             symbols=(),
             market_indexes=_dashboard_market_indexes(
@@ -1124,23 +1122,6 @@ def _connection_status(summaries: tuple[SymbolSummaryView, ...]) -> ConnectionSt
     if connected == 0:
         return ConnectionStatus.DISCONNECTED
     return ConnectionStatus.UNKNOWN
-
-
-def _dashboard_data_age(
-    summaries: tuple[SymbolSummaryView, ...],
-    observed_at: datetime,
-) -> int | None:
-    timestamps = tuple(
-        item.decision.market_data_at
-        for item in summaries
-        if item.decision.market_data_at is not None
-    )
-    if not timestamps:
-        return None
-    ages = tuple(int((observed_at - timestamp).total_seconds()) for timestamp in timestamps)
-    if any(age < 0 for age in ages):
-        raise ProjectionError("Market data is newer than the read observation")
-    return max(ages)
 
 
 def _pagination(offset: int, limit: int) -> None:

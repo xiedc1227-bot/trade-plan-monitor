@@ -76,7 +76,6 @@ const alert: AlertView = {
 const dashboard: DashboardResponse = {
   connectionStatus: "CONNECTED",
   counts: { actionable: 1, blocked: 0, lowZoneWatch: 0, normal: 0, risk: 0, stale: 0 },
-  dataAgeSeconds: 0,
   marketIndexes: [],
   observedAt: "2026-08-24T10:05:05+08:00",
   runtimeGeneration: "00000000-0000-4000-8000-000000000001",

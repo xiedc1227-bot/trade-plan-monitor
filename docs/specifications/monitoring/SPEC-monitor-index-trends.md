@@ -25,10 +25,10 @@ The four index selectors are always present, independent of which boards are ref
 
 ### Included in the first version
 
-- A fixed four-index selector row and one shared chart panel below the connection/data-age strip and above monitor counts.
+- A fixed four-index selector row and one shared chart panel below the overview header and above monitor counts. The overview renders no standalone connection strip because the app shell already owns the global real-time transport status.
 - One fixed current-trading-day view with no range selector.
 - The current-day trend uses certified completed `FIVE_MINUTE` closes only.
-- Every selector shows the index name and signed session change. The selected panel shows code, current/high/low points, aggregated returned-bar turnover, prior close, data cutoff, health, and one large line chart.
+- Every selector shows the index name and signed change. The selected panel shows code, current/high/low points, aggregated returned-bar turnover, prior close, data cutoff, health, and one large line chart.
 - When no index bars exist yet, all four selectors remain visible and the selected index renders an empty labelled chart area instead of disappearing.
 - Chart annotations: prior-close dashed baseline when supplied by the authoritative snapshot, latest-value end label, right-side point axis, “current trading day” label, and explicit health text/icon. The Y-axis extent includes prior close so the baseline cannot be clipped.
 - Exact per-bar values remain available through the chart tooltip; the overview does not render a duplicate point table.
@@ -140,14 +140,14 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 │ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ 昨收 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  3,113.20 │
 │        ╭─╮      ╭────╮                                          │
 │ ───────╯ ╰──────╯    ╰─────────────── 3,126.45              │
-│ 会话涨跌 +0.42%  昨收点位 3,113.20  数据截止 10:35 [查看数据] │
+│ 涨跌 +0.42%  昨收点位 3,113.20  数据截止 10:35 [查看数据] │
 └───────────────────────────────────────────────────────────────┘
 ```
 
 - The selector row uses four equal columns and becomes an internally scrollable strip on narrow screens. At `320px`, facts wrap without page-level horizontal overflow.
 - The shared chart is approximately `288px` high on desktop and `224px` on narrow screens; animation is disabled and reduced-motion is respected.
 - Chinese market convention may color positive values red and negative values green, but direction must also be expressed with sign, text, and chart labeling. Neutral/unknown uses the normal text color.
-- Apply that direction color consistently to selector change, current value, session change, chart line/area, and latest-value label. Compare the displayed session high and low independently with prior close using the same rule; do not assign color from the metric name.
+- Apply that direction color consistently to selector change, current value, displayed change, chart line/area, and latest-value label. Compare the displayed session high and low independently with prior close using the same rule; do not assign color from the metric name.
 - Display the selected index cutoff and chart tooltip timestamp in the common `YYYY-MM-DD HH:mm:ss` form without converting the authoritative source time zone; the compact intraday x-axis remains `HH:mm`, and API values remain offset-aware ISO 8601 strings.
 - Each selector is a native button with `aria-pressed`; the chart has an accessible name containing index name, “current trading day,” latest value, change, cutoff, and health.
 - Y axes use independent point scales. No overlay suggests that raw point levels are directly comparable.
@@ -163,6 +163,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 - Failure or delay of one index never blocks the other three.
 - A disconnected dashboard never labels cached charts as real-time.
 - A disconnected or unknown dashboard does not start new trend requests; cached points may remain visible and are labelled “已缓存”.
+- Health is always conveyed by text, symbol, and state color. A connected `LIVE` dot pulses once for `600 ms` when a new `snapshotHash` is rendered; it never blinks continuously. `prefers-reduced-motion: reduce` disables the pulse without hiding the status.
 
 ## Performance and Economic Constraints
 
@@ -177,7 +178,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 - Python unit/integration tests prove all four display codes are acquired without active plans, once per cutoff, deduplicated with plan interest, projected even with zero mapped symbols, persisted for history, and isolated on provider failure.
 - Vitest proves fixed selector ordering, selected-index switching, a prior-close-inclusive Y-axis, current-day query boundaries, four-request cap, cancellation/generation guards, retained success/error state, decimal conversion fail-closed behavior, annotation copy, omission of the duplicate point table, and all state combinations.
 - Playwright proves four visible selectors and one selected current-day chart at `320/768/1024/1440`, isolated index failure, no page overflow at 200% text, keyboard operation, reduced motion, and zero serious/critical axe findings.
-- Build and generated-contract checks must pass. The change must add no API field, provider endpoint, browser policy calculation, or new dependency.
+- Build and generated-contract checks must pass. The dashboard-level `dataAgeSeconds` field is removed because it has no remaining consumer; per-symbol decision/health ages remain authoritative. Envelope `observedAt` remains the internal chronology and trend-query boundary but is not rendered in the overview strip. The change adds no provider endpoint, browser policy calculation, or dependency.
 
 ## Boundaries
 
@@ -188,10 +189,10 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 ## Success Criteria
 
 1. Monitoring Overview always contains exactly four ordered selectors for `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH`, plus one selected-index chart area, including when the dashboard projection or index bars are not yet available.
-2. Each healthy selected index renders the current trading day's visible trend from authoritative completed five-minute bars, plus current/high/low points, returned-bar turnover, prior close, signed session change, cutoff, and health.
+2. Each healthy selected index renders the current trading day's visible trend from authoritative completed five-minute bars, plus current/high/low points, returned-bar turnover, prior close, signed change, cutoff, and health.
 3. One unavailable index selector remains visible and does not prevent other index data from loading, updating, or being selected.
 4. With zero active plans, completed five-minute deadlines still acquire and persist the four display-only indexes; they do not affect any plan's fact requirements, evidence, hash, or decision.
-5. The feature adds no dependency; the nullable additive `marketTurnover` dashboard field remains backward-compatible and passes the commands listed above.
+5. The feature adds no dependency; `marketTurnover` remains nullable, the obsolete dashboard-level `dataAgeSeconds` field is absent, and all commands listed above pass.
 6. Keyboard controls, screen-reader chart labeling, reduced-motion, responsive layout with non-overlapping section spacing, and 200% text acceptance checks pass.
 7. Every changed persisted index head appends `market.index.updated` in the same transaction and publishes it only after commit, so an already-open dashboard refreshes through the existing authoritative snapshot recovery path without frontend polling.
 8. A snapshot missing only a just-completed five-minute bucket may be reacquired once on the immediately following minute; permission, quota, provider, identity, formula, and gap failures never enter this publication-lag retry. A one-point series renders a visible symbol while longer series remain uncluttered.

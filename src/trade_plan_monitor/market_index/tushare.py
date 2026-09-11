@@ -10,6 +10,7 @@ https://tushare.pro/document/1?doc_id=95
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from collections import Counter
@@ -203,6 +204,10 @@ class TushareMarketIndexProvider:
         self._client = client
         self._request_controller = request_controller
         self._now = now
+        controller_capacity = getattr(request_controller, "max_concurrency", 1)
+        if type(controller_capacity) is not int or not 1 <= controller_capacity <= 2:
+            controller_capacity = 1
+        self._batch_slots = asyncio.Semaphore(controller_capacity)
         self._historical_minute_cache: dict[
             tuple[MarketIndexCode, date], pd.DataFrame
         ] = {}
@@ -242,6 +247,24 @@ class TushareMarketIndexProvider:
             or self._now is None
         ):
             raise TushareMarketIndexProviderError from None
+
+        async with self._batch_slots:
+            return await self._acquire_certified_index_data(
+                index_code=index_code,
+                decision_cutoff=decision_cutoff,
+                five_minute_bar_count=five_minute_bar_count,
+                official_daily_bar_count=official_daily_bar_count,
+            )
+
+    async def _acquire_certified_index_data(
+        self,
+        *,
+        index_code: MarketIndexCode,
+        decision_cutoff: datetime,
+        five_minute_bar_count: int,
+        official_daily_bar_count: int,
+    ) -> MarketIndexProviderBatch:
+        """Keep one index batch within the controller's physical request capacity."""
 
         cutoff = decision_cutoff.astimezone(_SHANGHAI)
         work_prefix = f"index:{index_code.value}:{cutoff.strftime('%Y%m%dT%H%M')}"

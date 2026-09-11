@@ -96,7 +96,6 @@ def _dashboard_payload() -> dict[str, object]:
         "runtimeGeneration": "11111111-1111-4111-8111-111111111111",
         "observedAt": OBSERVED_AT.isoformat(),
         "connectionStatus": "UNKNOWN",
-        "dataAgeSeconds": None,
         "counts": {
             "actionable": 0,
             "lowZoneWatch": 0,
@@ -209,7 +208,7 @@ def test_dashboard_serializes_required_nullable_fields_explicitly() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["dataAgeSeconds"] is None
+    assert "dataAgeSeconds" not in body
     blocked = body["marketIndexes"][0]
     assert blocked["closePoints"] is None
     assert blocked["priorClosePoints"] is None

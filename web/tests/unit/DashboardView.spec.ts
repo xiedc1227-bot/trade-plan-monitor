@@ -139,8 +139,6 @@ async function mountDashboard(
     props: {
       connectionStatus: "CONNECTED",
       counts,
-      dataAgeSeconds: 2,
-      observedAt: "2026-08-24T10:30:00+08:00",
       symbols,
       ...props,
     },
@@ -165,16 +163,15 @@ describe("DashboardView", () => {
     expect(rows[4]?.text()).toContain("实时");
   });
 
-  it("shows server counts and explicit non-color connection/freshness labels", async () => {
+  it("shows server counts without duplicating the app-shell connection status", async () => {
     const wrapper = await mountDashboard();
 
+    expect(wrapper.text()).not.toContain("TEN-SYMBOL MONITOR");
     expect(wrapper.get('[data-testid="dashboard-count-actionable"]').text()).toContain("5");
     expect(wrapper.get('[data-testid="dashboard-count-stale"]').text()).toContain("1");
-    expect(wrapper.get('[data-testid="market-status-strip"]').text()).toContain("已连接");
-    expect(wrapper.get('[data-testid="market-status-strip"]').text()).toContain("数据年龄 2 秒");
-    expect(wrapper.get('[data-testid="market-status-strip"]').text()).toContain(
-      "2026-08-24 10:30:00",
-    );
+    expect(wrapper.find('[data-testid="market-status-strip"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("数据年龄");
+    expect(wrapper.text()).not.toContain("快照时间");
   });
 
   it("searches by symbol or name without mutating the readonly rows", async () => {
@@ -279,7 +276,7 @@ describe("DashboardView", () => {
     expect(wrapper.find("img").exists()).toBe(false);
     expect(wrapper.get('[role="status"]').text()).toContain("正在刷新");
     expect(wrapper.findAll('[data-testid="watchlist-row"]')).toHaveLength(10);
-    expect(wrapper.text()).toContain("连接中断");
+    expect(wrapper.find('[data-testid="market-status-strip"]').exists()).toBe(false);
   });
 
   it("does not misreport unavailable data as an empty watchlist", async () => {
