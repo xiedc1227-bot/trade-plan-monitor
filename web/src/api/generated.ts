@@ -972,6 +972,29 @@ export type IntradayDiagnosticIdentityView = {
   symbol: string;
 };
 
+export type ManualEventRiskConfirmationCommand = {
+  expectedRevision: number;
+  expiresOn: string;
+  status: components["schemas"]["ManualEventRiskStatus"];
+  symbol: string;
+};
+
+export type ManualEventRiskStatus = "CLEAR" | "RISK_PRESENT";
+
+export type ManualEventRiskUnknownReason = "NO_ACTIVE_PLAN" | "MISSING_CONFIRMATION" | "PLAN_CHANGED" | "EXPIRED";
+
+export type ManualEventRiskView = {
+  confirmedAt?: (string) | (null);
+  expiresOn?: (string) | (null);
+  planVersionId?: (string) | (null);
+  reason?: (components["schemas"]["ManualEventRiskUnknownReason"]) | (null);
+  revision: number;
+  status: components["schemas"]["ManualEventRiskViewStatus"];
+  symbol: string;
+};
+
+export type ManualEventRiskViewStatus = "UNKNOWN" | "CLEAR" | "RISK_PRESENT";
+
 export type MarketIndexBarPage = {
   hasMore: boolean;
   items?: Array<components["schemas"]["MarketIndexBarView"]>;
@@ -1556,6 +1579,11 @@ export interface components {
     IndexConditionEvidenceView: IndexConditionEvidenceView;
     IndexConditionProgressView: IndexConditionProgressView;
     IntradayDiagnosticIdentityView: IntradayDiagnosticIdentityView;
+    ManualEventRiskConfirmationCommand: ManualEventRiskConfirmationCommand;
+    ManualEventRiskStatus: ManualEventRiskStatus;
+    ManualEventRiskUnknownReason: ManualEventRiskUnknownReason;
+    ManualEventRiskView: ManualEventRiskView;
+    ManualEventRiskViewStatus: ManualEventRiskViewStatus;
     MarketIndexBarPage: MarketIndexBarPage;
     MarketIndexBarView: MarketIndexBarView;
     MarketIndexCode: MarketIndexCode;
@@ -3827,6 +3855,160 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["SymbolHealthResponse"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/manual-event-risk": {
+    get: {
+      parameters: {
+        query: {
+          symbol: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ManualEventRiskView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/manual-event-risk-confirmations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["ManualEventRiskConfirmationCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ManualEventRiskView"];
           };
         };
         "400": {

@@ -30,6 +30,7 @@ RuntimeLifecycleFactory = Callable[[], RuntimeLifecycle]
 _MONITOR_SERVICE_BINDINGS = (
     ("read_service", "monitor_read_service"),
     ("position_service", "position_operation_service"),
+    ("manual_event_risk_service", "manual_event_risk_operation_service"),
     ("alert_service", "alert_operation_service"),
     ("websocket_service", "monitor_websocket_service"),
     ("market_index_read_service", "market_index_read_service"),

@@ -7,6 +7,7 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
+from enum import StrEnum
 from hashlib import sha256
 from typing import Self
 from uuid import UUID
@@ -61,6 +62,7 @@ from trade_plan_monitor.state.models import (
     EvaluationLedger,
     IdempotencyStatus,
     LatestQuote,
+    ManualEventRisk,
     PendingOfficialClose,
     PlanActivationState,
     PlanReviewOrigin,
@@ -344,6 +346,26 @@ class RiskStateRecord(BaseModel):
     prior_close_fen: int
     revision: int
     updated_at: datetime
+
+
+class ManualEventRiskStatus(StrEnum):
+    """The two explicit user outcomes; absent or stale records remain unknown."""
+
+    CLEAR = "CLEAR"
+    RISK_PRESENT = "RISK_PRESENT"
+
+
+class ManualEventRiskRecord(BaseModel):
+    """An audited user confirmation that production may consume only in scope."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    plan_hash: str
+    status: ManualEventRiskStatus
+    expires_on: date
+    confirmed_at: datetime
+    revision: int
 
 
 class EvaluationRecord(BaseModel):
@@ -1744,6 +1766,100 @@ class RiskRepository:
         self._session.flush()
 
 
+class ManualEventRiskRepository:
+    """Persist explicit manual-event-risk confirmations with optimistic revisions."""
+
+    def __init__(self, session: Session, *, clock: Clock, id_factory: IdFactory) -> None:
+        self._session = session
+        self._clock = clock
+        self._id_factory = id_factory
+
+    def get(self, symbol: str) -> ManualEventRiskRecord | None:
+        model = self._session.get(ManualEventRisk, _symbol(symbol))
+        return None if model is None else _manual_event_risk_record(model)
+
+    def upsert(
+        self,
+        *,
+        symbol: str,
+        plan_hash: str,
+        status: ManualEventRiskStatus,
+        expires_on: date,
+        expected_revision: int,
+    ) -> ManualEventRiskRecord:
+        normalized_symbol = _symbol(symbol)
+        normalized_hash = _sha256_hash(plan_hash, "plan_hash")
+        if not isinstance(status, ManualEventRiskStatus):
+            raise TypeError("status must be a ManualEventRiskStatus")
+        normalized_expiry = _calendar_date(expires_on, "expires_on")
+        normalized_revision = _nonnegative_integer(expected_revision, "expected_revision")
+        before = self.get(normalized_symbol)
+        if before is None and normalized_revision != 0:
+            raise RevisionConflictError(0)
+        confirmed_at = _aware_now(self._clock)
+        statement = sqlite_insert(ManualEventRisk).values(
+            symbol=normalized_symbol,
+            plan_hash=normalized_hash,
+            status=status.value,
+            expires_on=normalized_expiry,
+            confirmed_at=confirmed_at.isoformat(),
+            revision=1,
+        )
+        statement = statement.on_conflict_do_update(
+            index_elements=[ManualEventRisk.symbol],
+            set_={
+                "plan_hash": normalized_hash,
+                "status": status.value,
+                "expires_on": normalized_expiry,
+                "confirmed_at": confirmed_at.isoformat(),
+                "revision": ManualEventRisk.revision + 1,
+            },
+            where=ManualEventRisk.revision == normalized_revision,
+        )
+        result = self._session.execute(statement)
+        if result.rowcount != 1:
+            self._session.expire_all()
+            current = self.get(normalized_symbol)
+            raise RevisionConflictError(0 if current is None else current.revision)
+        self._session.flush()
+        self._session.expire_all()
+        after = self.get(normalized_symbol)
+        if after is None:  # pragma: no cover - protected by successful upsert
+            raise RepositoryError("Manual event risk could not be reloaded")
+        self._append_audit(before=before, after=after)
+        return after
+
+    def _append_audit(
+        self,
+        *,
+        before: ManualEventRiskRecord | None,
+        after: ManualEventRiskRecord,
+    ) -> None:
+        self._session.add(
+            AuditLog(
+                id=self._id_factory(),
+                action="MANUAL_EVENT_RISK_CONFIRMED",
+                entity_type="MANUAL_EVENT_RISK",
+                entity_id=after.symbol,
+                before_hash=(
+                    None if before is None else _manual_event_risk_hash(before)
+                ),
+                after_hash=_manual_event_risk_hash(after),
+                details_json=_canonical_json(
+                    {
+                        "expiresOn": after.expires_on.isoformat(),
+                        "planHash": after.plan_hash,
+                        "revision": after.revision,
+                        "status": after.status.value,
+                        "symbol": after.symbol,
+                    }
+                ),
+                created_at=after.confirmed_at.isoformat(),
+            )
+        )
+        self._session.flush()
+
+
 class EvaluationRepository:
     """Claim complete-bar evaluation identities exactly once."""
 
@@ -2899,6 +3015,29 @@ def _risk_state_hash(record: RiskStateRecord) -> str:
         "status": record.status,
         "symbol": record.symbol,
         "updatedAt": record.updated_at.isoformat(),
+    }
+    return sha256(_canonical_json(snapshot).encode("utf-8")).hexdigest()
+
+
+def _manual_event_risk_record(model: ManualEventRisk) -> ManualEventRiskRecord:
+    return ManualEventRiskRecord(
+        symbol=model.symbol,
+        plan_hash=model.plan_hash,
+        status=ManualEventRiskStatus(model.status),
+        expires_on=model.expires_on,
+        confirmed_at=datetime.fromisoformat(model.confirmed_at),
+        revision=model.revision,
+    )
+
+
+def _manual_event_risk_hash(record: ManualEventRiskRecord) -> str:
+    snapshot = {
+        "confirmedAt": record.confirmed_at.isoformat(),
+        "expiresOn": record.expires_on.isoformat(),
+        "planHash": record.plan_hash,
+        "revision": record.revision,
+        "status": record.status.value,
+        "symbol": record.symbol,
     }
     return sha256(_canonical_json(snapshot).encode("utf-8")).hexdigest()
 

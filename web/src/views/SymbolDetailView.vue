@@ -12,10 +12,12 @@ import type {
   SymbolDetailUnavailableResponse,
   SymbolEventView,
 } from "../api/generated";
+import type { ManualEventRiskApi } from "../api/manualEventRisk";
 import EpisodeTimeline from "../components/symbol/EpisodeTimeline.vue";
 import MarketIndexChart from "../components/market-index/MarketIndexChart.vue";
 import ReferenceMarketPanel from "../components/market-index/ReferenceMarketPanel.vue";
 import PositionLots from "../components/symbol/PositionLots.vue";
+import ManualEventRiskPanel from "../components/symbol/ManualEventRiskPanel.vue";
 import type { ChartRange } from "../components/symbol/PriceChart.vue";
 import { useChartSeries } from "../composables/useChartSeries";
 import type { PositionOperations } from "../composables/usePositions";
@@ -27,6 +29,7 @@ interface Props {
   error?: string | null;
   events: readonly SymbolEventView[];
   loading?: boolean;
+  manualEventRiskApi?: ManualEventRiskApi | null;
   indexBars?: readonly MarketIndexBarView[];
   indexHistoryError?: string | null;
   indexHistoryLoading?: boolean;
@@ -47,6 +50,7 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
+  manualEventRiskApi: null,
   indexBars: () => [],
   indexHistoryError: null,
   indexHistoryLoading: false,
@@ -362,6 +366,11 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
         :operations="positionOperations"
         :prefill="positionPrefill"
         :summary-lots="detail.positionLots ?? []"
+      />
+
+      <ManualEventRiskPanel
+        :api="manualEventRiskApi"
+        :symbol="detail.summary.symbol"
       />
 
       <EpisodeTimeline

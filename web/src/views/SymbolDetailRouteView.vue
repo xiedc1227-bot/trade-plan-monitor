@@ -3,6 +3,7 @@ import { computed, shallowRef, watch } from "vue";
 
 import type { PositionLotPage } from "../api/generated";
 import { createMarketIndexApi, type MarketIndexApi } from "../api/marketIndexes";
+import { createManualEventRiskApi, type ManualEventRiskApi } from "../api/manualEventRisk";
 import { createPositionApi, type PositionApi } from "../api/positions";
 import { isShanghaiDateTime, shanghaiDateTimeKey } from "../api/shanghaiTime";
 import { createSymbolApi, type SymbolApi } from "../api/symbols";
@@ -20,6 +21,7 @@ import SymbolDetailView from "./SymbolDetailView.vue";
 interface Props {
   readonly api?: SymbolApi;
   readonly marketIndexApi?: MarketIndexApi;
+  readonly manualEventRiskApi?: ManualEventRiskApi;
   readonly positionApi?: PositionApi;
   readonly symbol: string;
 }
@@ -27,6 +29,7 @@ interface Props {
 const props = defineProps<Props>();
 const api = props.api ?? createSymbolApi();
 const marketIndexApi = props.marketIndexApi ?? createMarketIndexApi();
+const manualEventRiskApi = props.manualEventRiskApi ?? createManualEventRiskApi();
 const positionApi = props.positionApi ?? createPositionApi();
 const positionOperations: PositionOperations = Object.freeze({
   closePosition: (request: Parameters<PositionOperations["closePosition"]>[0]) =>
@@ -203,6 +206,7 @@ function submitRange(): void {
       :index-history-loading="indexHistoryStatus === 'LOADING'"
       :index-history-snapshot-hash="indexHistoryPage?.snapshotHash ?? null"
       :loading="loading"
+      :manual-event-risk-api="manualEventRiskApi"
       :position-as-of-trade-date="positionAsOfTradeDate"
       :position-operations="positionOperations"
       :position-page="positionPage"

@@ -147,6 +147,12 @@ T038 诊断判断是该同一公共 `evaluate(context)` 契约的只读应用服
 
 T022 在 DSL 证据之外返回有界结构性阻断记录，使后续结果组装能够保留阻止动作的原因。稳定代码为 `DATA_NOT_READY`、`DAILY_LIMIT_UNKNOWN`、`EPISODE_HISTORY_GAP`、`BEARISH_VOLUME_EXPANSION` 和 `RISK_PENDING`；每条记录都包含非满足 outcome、明确的数值/状态事实，并在 outcome 为 `MISSING_INPUT` 时包含所需缺失输入代码。仅当最新完整 5 分钟 K 线收盘低于开盘，且成交股数严格超过显式合取 `ALL` 买入路径上的 `VOLUME_TO_MEDIAN_LTE` 阈值时，`BEARISH_VOLUME_EXPANSION` 才生效；位于任一 `ANY` 备选下的阈值不是全局阻断。等于阈值或阳线均不激活该结构阻断。华亚样例 blocker 树保持为有序 `ALL`：`MANUAL_EVENT_RISK_CLEAR`、`DISTANCE_FROM_LIMIT_DOWN_GTE(minimum_ratio=0.01)` 和 `LOWER_BAND_HITS_LTE(max_hits=2, window_bars=4)`。T024 负责把这些记录映射为最终 `BLOCKED_DATA`/`BLOCKED_RISK` 结果优先级，不改变 T022 事件进度。
 
+### R07 人工事件风险确认
+
+`MANUAL_EVENT_RISK_CLEAR` 由一条可持久化、可审计的确认记录支持；其范围同时限定为单只股票、当前已启用不可变计划的内容哈希和包含边界的到期交易日。其权威输入严格为三态：明确 `CLEAR` 投影为 `False`，明确 `RISK_PRESENT` 投影为 `True`，缺失、计划已变更、已到期或在 cutoff 后才确认的记录投影为 `None`。`None` 必须保持未知并失败关闭，绝不能默认或强制转换为 `False`。
+
+生产 context 在构造 `EvaluationContext` 前，使用与计划及风险事实相同的 SQLite 工作单元读取该记录。因此，计划内容哈希变更、到期或重启均不能保留此前的无风险确认。每次被接受的确认都会记录 revision、确认时间、到期日期、状态、计划哈希和审计动作；乐观 revision 与幂等机制使同一语义命令的重试返回原有回执，而不产生第二条审计事件。该记录不是官方收盘风险确认，不能削弱该独立且失败关闭的状态。
+
 `LOWER_BAND_HITS_LTE` 选择截至判断目标的最近 `window_bars` 根相邻完整 5 分钟 K 线。每根 K 线必须恰好对应一个具有相同 `(symbol, bar_end, formula_version)` 的 `ta-v1` 5 分钟 `IndicatorPoint`。当 `bar.close_fen / 100 <= point.boll_lower_yuan` 时记一次命中；相等也算命中。禁止复用同一个下轨、使用日线下轨、向前填充，或仅按位置而不核对 identity 对齐。下轨证据缺失、重复、错位或为 `None` 都会阻断判断；否则仅当 `hit_count <= max_hits` 时满足。
 
 `RETREAT_FROM_SESSION_HIGH_GTE` 要求经过认证且无缺口的当日分钟切片。它使用截至目标的全部完整当日 K 线与分钟中的最高价，并且仅在 `(session_high_fen - latest_close_fen) / session_high_fen >= minimum_ratio` 时满足；缺少当日历史时返回 `SESSION_BARS`。任何跨交易日的滚动 5 分钟窗口都必须根据所提供的有界交易日历历史证明相邻关系。缺少当前日期日历行时返回 `TRADING_CALENDAR`；已知日历错配仍属于不完整 K 线窗口。

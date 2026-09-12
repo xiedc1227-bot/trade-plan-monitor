@@ -40,6 +40,8 @@ from trade_plan_monitor.web.routers.backtest_runs import router as backtest_runs
 from trade_plan_monitor.web.routers.dashboard import MonitorReadService
 from trade_plan_monitor.web.routers.dashboard import router as dashboard_router
 from trade_plan_monitor.web.routers.health import router as health_router
+from trade_plan_monitor.web.routers.manual_event_risk import ManualEventRiskOperationService
+from trade_plan_monitor.web.routers.manual_event_risk import router as manual_event_risk_router
 from trade_plan_monitor.web.routers.market_indexes import MarketIndexReadService
 from trade_plan_monitor.web.routers.market_indexes import router as market_indexes_router
 from trade_plan_monitor.web.routers.plans import PlanOperationService
@@ -126,6 +128,7 @@ def create_production_app(
     ai_service: AIOperationService | None = None,
     ai_lifecycle_factory: AIWebLifecycleFactory | None = None,
     position_service: PositionOperationService | None = None,
+    manual_event_risk_service: ManualEventRiskOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
     market_index_read_service: MarketIndexReadService | None = None,
@@ -147,6 +150,7 @@ def create_production_app(
         for service in (
             read_service,
             position_service,
+            manual_event_risk_service,
             alert_service,
             websocket_service,
             market_index_read_service,
@@ -199,6 +203,7 @@ def create_production_app(
             ai_service=ai_service,
             ai_lifecycle_factory=ai_lifecycle_factory,
             position_service=position_service,
+            manual_event_risk_service=manual_event_risk_service,
             alert_service=alert_service,
             websocket_service=websocket_service,
             market_index_read_service=market_index_read_service,
@@ -217,6 +222,7 @@ def create_app(
     ai_service: AIOperationService | None = None,
     ai_lifecycle_factory: AIWebLifecycleFactory | None = None,
     position_service: PositionOperationService | None = None,
+    manual_event_risk_service: ManualEventRiskOperationService | None = None,
     alert_service: AlertOperationService | None = None,
     websocket_service: MonitorWebSocketService | None = None,
     market_index_read_service: MarketIndexReadService | None = None,
@@ -263,6 +269,8 @@ def create_app(
         app.state.ai_operation_service = ai_service
     if position_service is not None:
         app.state.position_operation_service = position_service
+    if manual_event_risk_service is not None:
+        app.state.manual_event_risk_operation_service = manual_event_risk_service
     if alert_service is not None:
         app.state.alert_operation_service = alert_service
     if websocket_service is not None:
@@ -279,6 +287,7 @@ def create_app(
     app.include_router(plans_router)
     app.include_router(ai_router)
     app.include_router(positions_router)
+    app.include_router(manual_event_risk_router)
     app.include_router(alerts_router)
     app.include_router(websocket_router)
     app.include_router(market_indexes_router)

@@ -340,6 +340,29 @@ class RiskState(Base):
     updated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class ManualEventRisk(Base):
+    """A user-confirmed event-risk assertion scoped to one plan content revision."""
+
+    __tablename__ = "manual_event_risk"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('CLEAR', 'RISK_PRESENT')",
+            name="ck_manual_event_risk_status",
+        ),
+        CheckConstraint(
+            "revision >= 0",
+            name="ck_manual_event_risk_revision_nonnegative",
+        ),
+    )
+
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    plan_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    status: Mapped[str] = mapped_column(String(16))
+    expires_on: Mapped[date] = mapped_column(Date)
+    confirmed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class EvaluationLedger(Base):
     __tablename__ = "evaluation_ledger"
     __table_args__ = (

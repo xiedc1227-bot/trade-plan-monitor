@@ -429,6 +429,73 @@ test("submits position commands for backend-only T+1 and maximum-policy decision
   await expect(page.getByText("T+1 / 当前日期不可卖")).toBeVisible();
 });
 
+test("confirms plan-scoped manual event risk through the normal symbol page", async ({ page }) => {
+  const manualRiskCommands: unknown[] = [];
+  const planVersionId = "4c623c8c-ca26-4cd8-8cb2-08cd5e61be93";
+  await page.route("**/api/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/v1/manual-event-risk") {
+      await route.fulfill({
+        body: JSON.stringify({
+          confirmedAt: null,
+          expiresOn: null,
+          planVersionId,
+          reason: "MISSING_CONFIRMATION",
+          revision: 0,
+          status: "UNKNOWN",
+          symbol,
+        }),
+        contentType: "application/json",
+      });
+      return;
+    }
+    if (url.pathname === "/api/v1/manual-event-risk-confirmations") {
+      manualRiskCommands.push({
+        body: readJsonBody(route),
+        idempotencyKey: await route.request().headerValue("Idempotency-Key"),
+      });
+      await route.fulfill({
+        body: JSON.stringify({
+          confirmedAt: observedAt,
+          expiresOn: "2026-08-24",
+          planVersionId,
+          reason: null,
+          revision: 1,
+          status: "RISK_PRESENT",
+          symbol,
+        }),
+        contentType: "application/json",
+      });
+      return;
+    }
+    await fulfillApi(route, []);
+  });
+
+  await page.goto(`${baseUrl}/stocks/${symbol}`);
+  await expect(page.getByRole("heading", { level: 2, name: "人工事件风险确认" })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "缺少人工事件风险确认" })).toBeVisible();
+
+  await page.locator('select[name="manualRiskStatus"]').selectOption("RISK_PRESENT");
+  await page.locator('input[name="manualRiskExpiresOn"]').fill("2026-08-24");
+  await page.getByRole("button", { name: "复核确认" }).click();
+  await expect(page.getByTestId("manual-risk-confirmation")).toBeVisible();
+  await page.getByTestId("confirm-manual-risk").click();
+
+  await expect.poll(() => manualRiskCommands.length).toBe(1);
+  expect(manualRiskCommands).toEqual([
+    {
+      body: {
+        expectedRevision: 0,
+        expiresOn: "2026-08-24",
+        status: "RISK_PRESENT",
+        symbol,
+      },
+      idempotencyKey: expect.stringMatching(/^manual-risk-[0-9a-f-]{36}$/),
+    },
+  ]);
+  await expect(page.getByRole("status").filter({ hasText: "已确认存在事件风险" })).toBeVisible();
+});
+
 async function fulfillApi(
   route: Route,
   ranges: Array<{ endAt: string | null; startAt: string | null }>,

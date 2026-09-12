@@ -52,6 +52,9 @@ from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
 from trade_plan_monitor.web.backtest_pagination import BacktestApiCursorSigner
 from trade_plan_monitor.web.cursor_keys import load_or_create_cursor_key
+from trade_plan_monitor.web.manual_event_risk_service import (
+    PersistentManualEventRiskOperationService,
+)
 from trade_plan_monitor.web.persistent_market_index_history import (
     PersistentMarketIndexHistorySource,
 )
@@ -97,6 +100,7 @@ class MonitorWebComposition:
         restart_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         websocket_service: object | None = None,
         position_service: object | None = None,
+        manual_event_risk_service: object | None = None,
         alert_service: object | None = None,
         market_index_read_service: object | None = None,
     ) -> None:
@@ -113,6 +117,7 @@ class MonitorWebComposition:
         self._read_service = read_service
         self._websocket_service = websocket_service
         self._position_service = position_service
+        self._manual_event_risk_service = manual_event_risk_service
         self._alert_service = alert_service
         self._market_index_read_service = market_index_read_service
         self._runner_task: asyncio.Task[None] | None = None
@@ -138,6 +143,10 @@ class MonitorWebComposition:
     @property
     def position_service(self) -> object | None:
         return self._position_service
+
+    @property
+    def manual_event_risk_service(self) -> object | None:
+        return self._manual_event_risk_service
 
     @property
     def alert_service(self) -> object | None:
@@ -741,6 +750,10 @@ def create_monitor_composition(
         websocket_service=stream,
         position_service=PersistentPositionOperationService(
             unit_of_work_factory=unit_of_work_factory,
+        ),
+        manual_event_risk_service=PersistentManualEventRiskOperationService(
+            unit_of_work_factory=unit_of_work_factory,
+            clock=clock.now,
         ),
         alert_service=PersistentAlertOperationService(
             unit_of_work_factory=unit_of_work_factory,

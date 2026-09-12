@@ -345,6 +345,12 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - `/alerts` 是真实惰性路由。`AlertsRouteView` 执行首次权威读取、注入严格提醒 API 操作，并且只把最新已校验监控事件作为失效提示传递。`AlertsView` 继续只用已校验权威分页替换内容；严格适配器校验筛选回显、成员归属、身份、时间戳、revision、证据预算，以及信号/严重度/下一步/预填关系。服务端消息作为转义文本渲染，确认后始终执行权威重读。任何提醒路径都不提交成交，也不调用持仓端点。
 - 本切片不增加 REST 路径或字段，因此 42 路径 OpenAPI 快照和生成 TypeScript 契约在重新生成检查后保持逐字节一致。它不改变 Schema v1 数据或迁移、历史回测结果、既有 hash、判断规则或供应商边界，也不读取 token 或执行供应商请求。
 
+### WEBF14 人工事件风险确认边界
+
+- 默认监控组合在运行时 SQLite 工作单元工厂上注入一个 `PersistentManualEventRiskOperationService`。它暴露 `GET /api/v1/manual-event-risk` 和 `POST /api/v1/manual-event-risk-confirmations`；生成的 OpenAPI 与 TypeScript 契约承载三态权威结果，而不是可空布尔值捷径。
+- `/stocks/:symbol` 把 `ManualEventRiskPanel` 组合为独立局部界面。它展示权威状态、计划版本范围、到期时间，以及缺少确认、计划变更或已到期时的明确未知原因。浏览器只校验传输形状，要求带标签的选择和到期日期，通过原生对话框获得明确确认，并将新幂等键和当前展示的 revision 绑定到新的语义命令。它绝不把未知转换为无风险，也不从浏览器数据推导事件风险。
+- 后端解析当前已启用不可变计划，并在每次确认中记录当前内容哈希。只有后端决定范围、到期、revision 冲突、幂等重放和审计持久化。面板不调用供应商、不读取 token、不提交交易，也不替代官方收盘风险确认行为。
+
 ### WEBF11 可按游标恢复的监控事件流边界
 
 - WEBF11 复用既有 T039 已提交监控事件账本、T043 传输契约和 T044 `useMonitorStream` 生命周期；不创建并行事件日志、游标、快照组装器或浏览器状态权威副本。后端仍是唯一业务权威来源，现有 SQLite `monitor_event`/`monitor_sequence` 仍是回放来源和全局高水位域。

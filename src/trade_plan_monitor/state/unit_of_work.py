@@ -20,6 +20,7 @@ from trade_plan_monitor.state.repositories import (
     EvaluationRepository,
     HealthRepository,
     IdempotencyRepository,
+    ManualEventRiskRepository,
     MarketHistoryRepository,
     MarketReferenceRepository,
     PlanRepository,
@@ -45,6 +46,9 @@ class UnitOfWork(Protocol):
 
     @property
     def risk(self) -> RiskRepository: ...
+
+    @property
+    def manual_event_risk(self) -> ManualEventRiskRepository: ...
 
     @property
     def evaluations(self) -> EvaluationRepository: ...
@@ -104,6 +108,7 @@ class SqlAlchemyUnitOfWork:
         self._positions: PositionRepository | None = None
         self._episodes: EpisodeRepository | None = None
         self._risk: RiskRepository | None = None
+        self._manual_event_risk: ManualEventRiskRepository | None = None
         self._evaluations: EvaluationRepository | None = None
         self._projections: ProjectionRepository | None = None
         self._health: HealthRepository | None = None
@@ -141,6 +146,12 @@ class SqlAlchemyUnitOfWork:
         if self._risk is None:
             raise RuntimeError("Unit of work is not active")
         return self._risk
+
+    @property
+    def manual_event_risk(self) -> ManualEventRiskRepository:
+        if self._manual_event_risk is None:
+            raise RuntimeError("Unit of work is not active")
+        return self._manual_event_risk
 
     @property
     def evaluations(self) -> EvaluationRepository:
@@ -217,6 +228,11 @@ class SqlAlchemyUnitOfWork:
             clock=self._clock,
             id_factory=self._id_factory,
         )
+        self._manual_event_risk = ManualEventRiskRepository(
+            self._session,
+            clock=self._clock,
+            id_factory=self._id_factory,
+        )
         self._evaluations = EvaluationRepository(self._session)
         self._projections = ProjectionRepository(self._session)
         self._health = HealthRepository(
@@ -259,6 +275,7 @@ class SqlAlchemyUnitOfWork:
             self._positions = None
             self._episodes = None
             self._risk = None
+            self._manual_event_risk = None
             self._evaluations = None
             self._projections = None
             self._health = None

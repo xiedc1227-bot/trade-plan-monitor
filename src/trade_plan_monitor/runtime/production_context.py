@@ -24,7 +24,11 @@ from trade_plan_monitor.runtime.service import (
     StaleActivationGenerationError,
     UnitOfWorkFactory,
 )
-from trade_plan_monitor.state.repositories import RiskStateRecord
+from trade_plan_monitor.state.repositories import (
+    ManualEventRiskRecord,
+    ManualEventRiskStatus,
+    RiskStateRecord,
+)
 
 
 def _risk_snapshot_for_plan(
@@ -49,6 +53,25 @@ def _risk_snapshot_for_plan(
         revision=0 if risk is None else risk.revision,
         updated_at=datetime.combine(prior.trade_date, time(15), cutoff.tzinfo),
     )
+
+
+def _manual_event_risk_for_plan(
+    confirmation: ManualEventRiskRecord | None,
+    *,
+    plan_hash: str,
+    trade_date: date,
+    cutoff: datetime,
+) -> bool | None:
+    """Return only a current explicit assertion; every mismatch is fail-closed unknown."""
+
+    if (
+        confirmation is None
+        or confirmation.plan_hash != plan_hash
+        or confirmation.expires_on < trade_date
+        or confirmation.confirmed_at > cutoff
+    ):
+        return None
+    return confirmation.status is ManualEventRiskStatus.RISK_PRESENT
 
 
 class ProductionContextBuilder:
@@ -88,6 +111,7 @@ class ProductionContextBuilder:
             limits = work.references.list_daily_limits(trade_date)
             positions = work.positions.list_open_lots(plan.symbol)
             risk = work.risk.get(plan.symbol)
+            manual_event_risk = work.manual_event_risk.get(plan.symbol)
             head = work.projections.get_decision_head(plan.symbol)
         if not history:
             raise RuntimeError("official reference history is unavailable")
@@ -168,5 +192,10 @@ class ProductionContextBuilder:
             ),
             low_zone_episode=episode,
             risk_state=risk_snapshot,
-            manual_event_risk=None,
+            manual_event_risk=_manual_event_risk_for_plan(
+                manual_event_risk,
+                plan_hash=digest,
+                trade_date=trade_date,
+                cutoff=cutoff,
+            ),
         )
