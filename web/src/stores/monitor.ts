@@ -114,6 +114,7 @@ export const useMonitorStore = defineStore("monitor", () => {
   );
   const marketTurnoverState = shallowRef<MarketTurnoverSummaryView | null>(null);
   const recoveryIntentState = shallowRef<SnapshotRecoveryIntent | null>(null);
+  const alertRefreshRevisionState = shallowRef(0);
   const lastInvalidationState = shallowRef<MonitorInvalidation | null>(null);
   const lastEventState = shallowRef<MonitorEventEnvelope | null>(null);
 
@@ -242,7 +243,14 @@ export const useMonitorStore = defineStore("monitor", () => {
     });
   }
 
+  function requestAlertRefresh(): void {
+    if (alertRefreshRevisionState.value < MAX_SEQUENCE) {
+      alertRefreshRevisionState.value += 1;
+    }
+  }
+
   return {
+    alertRefreshRevision: readonly(alertRefreshRevisionState),
     applyEvent,
     applySnapshot,
     applyUnavailable,
@@ -257,6 +265,7 @@ export const useMonitorStore = defineStore("monitor", () => {
     observedAt: readonly(observedAtState),
     recoveryIntent: readonly(recoveryIntentState),
     requestSnapshotRecovery,
+    requestAlertRefresh,
     runtimeGeneration: readonly(runtimeGenerationState),
     sequence: readonly(sequenceState),
     symbolIds: readonly(symbolIdsState),

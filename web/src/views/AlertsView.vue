@@ -33,6 +33,7 @@ import AlertTable from "../components/alerts/AlertTable.vue";
 import type { MonitorEventEnvelope } from "../stores/monitor";
 
 interface Props {
+  alertRefreshRevision?: number;
   createIdempotencyKey?: () => string;
   initialLoading?: boolean;
   initialPage: AlertPage | null;
@@ -41,6 +42,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  alertRefreshRevision: 0,
   createIdempotencyKey: () => crypto.randomUUID(),
   initialLoading: false,
   liveEvents: () => [],
@@ -144,6 +146,13 @@ watch(
     }
   },
   { immediate: true },
+);
+
+watch(
+  () => props.alertRefreshRevision,
+  () => {
+    void refreshAndResumeLive(requestedQuery.value);
+  },
 );
 
 function refresh(nextQuery: AlertQuery): Promise<boolean> {

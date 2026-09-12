@@ -103,4 +103,21 @@ describe("/alerts route", () => {
       event,
     ]);
   });
+
+  it("refreshes the current authoritative alert query after a recovered snapshot advances the cursor", async () => {
+    const store = useMonitorStore();
+    const listAlerts = vi.fn(async () => emptyPage);
+    const wrapper = mount(AlertsRouteView, {
+      props: { api: { acknowledgeAlert: vi.fn(), listAlerts } },
+    });
+
+    await flushPromises();
+    expect(listAlerts).toHaveBeenCalledTimes(1);
+
+    store.requestAlertRefresh();
+    await flushPromises();
+
+    expect(listAlerts).toHaveBeenCalledTimes(2);
+    expect(wrapper.getComponent({ name: "AlertsView" }).props("initialPage")).toEqual(emptyPage);
+  });
 });

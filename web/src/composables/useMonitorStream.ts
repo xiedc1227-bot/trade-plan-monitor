@@ -83,6 +83,7 @@ export function useMonitorStream(
   let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
   let retryAttempt = 0;
   let lifecycleRevision = 0;
+  let refreshAlertsAfterSnapshot = false;
   let requiresAuthoritativeRefresh = false;
   let started = false;
 
@@ -92,6 +93,7 @@ export function useMonitorStream(
     }
     started = true;
     lifecycleRevision += 1;
+    refreshAlertsAfterSnapshot = false;
     connectionCode.value = "CONNECTING";
     beginSnapshot(lifecycleRevision);
   }
@@ -112,6 +114,7 @@ export function useMonitorStream(
       return;
     }
     lifecycleRevision += 1;
+    refreshAlertsAfterSnapshot = true;
     connectionCode.value = store.hasSnapshot ? "STALE" : "CONNECTING";
     abortController?.abort();
     clearHeartbeatTimer();
@@ -148,6 +151,10 @@ export function useMonitorStream(
           return;
         }
         store.applySnapshot(snapshot);
+        if (refreshAlertsAfterSnapshot) {
+          refreshAlertsAfterSnapshot = false;
+          store.requestAlertRefresh();
+        }
         connect(store.sequence, revision);
       })
       .catch(() => {

@@ -450,6 +450,7 @@ describe("useMonitorStream", () => {
 
     expect(apiClient.getDashboard).toHaveBeenCalledTimes(3);
     expect(useMonitorStore(pinia).sequence).toBe(12);
+    expect(useMonitorStore(pinia).alertRefreshRevision).toBe(2);
     expect(sockets.sockets[2]?.url).toContain("after=12");
     wrapper.unmount();
   });

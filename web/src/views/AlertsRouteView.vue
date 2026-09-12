@@ -59,6 +59,7 @@ onBeforeUnmount(() => {
   <AlertsView
     :initial-loading="initialLoading"
     :initial-page="initialPage"
+    :alert-refresh-revision="monitor.alertRefreshRevision"
     :live-events="liveEvents"
     :operations="operations"
   />
