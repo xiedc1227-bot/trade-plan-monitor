@@ -245,7 +245,7 @@ function compareText(left: string, right: string): number {
       class="dashboard-view__empty"
       data-testid="watchlist-empty"
     >
-      尚无监控股票。请先激活至少一个计划。
+      此列表尚无监控股票；明确规则计划显示在上方的当前状态面板。
     </p>
     <p
       v-else-if="unavailable === null && symbols.length > 0 && displayRows.length === 0"

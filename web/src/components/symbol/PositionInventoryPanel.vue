@@ -36,7 +36,7 @@ const selectedOpeningBalance = computed(
 const canClose = computed(() => {
   const quantity = parseBoardLot(closureQuantity.value);
   return !loading.value && !closing.value && inventory.value?.status === "KNOWN" &&
-    selectedOpeningBalance.value !== null && quantity !== null &&
+    selectedOpeningBalance.value !== null && quantity !== null && quantity > 0 &&
     quantity <= selectedOpeningBalance.value.remainingQuantity && canLoad.value;
 });
 
@@ -83,6 +83,7 @@ async function confirm(): Promise<void> {
       symbol,
       totalQuantity: total,
     }, `inventory-confirm-${symbol}-${current.inventoryRevision}`);
+    closureSourceId.value = inventory.value.openingBalances?.[0]?.openingBalanceId ?? "";
     completeRegistration.value = false;
   } catch {
     error.value = "库存登记未确认；请刷新后以当前库存修订重试。";
@@ -117,6 +118,7 @@ async function closeOpeningBalance(): Promise<void> {
 }
 
 function parseBoardLot(value: string): number | null {
+  if (value.trim() === "") return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 && parsed % 100 === 0 ? parsed : null;
 }

@@ -49,6 +49,7 @@ from trade_plan_monitor.domain.plan_validation import DraftReviewIssue, Validati
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.state.models import PlanVersionStatus
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+from trade_plan_monitor.web.routers.alerts import ExplicitConditionEvidenceView
 from trade_plan_monitor.web.schemas import (
     ApiValue,
     MutationContext,
@@ -134,16 +135,11 @@ class ExplicitPlanCapabilityView(ApiValue):
         "SELL",
         "RISK_ALERT",
     )
-    # Keep this public contract fail-closed until the ordinary user forms have
-    # the same durable review and runtime evidence as the explicit API path.
-    # The activation endpoint itself remains intentionally strict and is
-    # exercised by the isolated integration composition.
-    public_activation_available: Literal[False] = False
-    isolated_trusted_review_only: Literal[True] = True
-    pending_requirements: tuple[
-        Literal["ORDINARY_PLAN_FORMS",],
-        ...,
-    ] = ("ORDINARY_PLAN_FORMS",)
+    # Ordinary UI is verified against real services and scheduler composition.
+    # Availability never bypasses current review/hash/revision validation.
+    public_activation_available: Literal[True] = True
+    isolated_trusted_review_only: Literal[False] = False
+    pending_requirements: tuple[str, ...] = ()
 
 
 class PlanExtractionOperationStatus(StrEnum):
@@ -634,6 +630,7 @@ class ExplicitRuleOutcomeView(ApiValue):
     rule_id: str
     action: Literal["BUY", "SELL", "RISK_ALERT"]
     condition_code: str
+    condition_evidence: ExplicitConditionEvidenceView | None = None
     outcome: Literal["SATISFIED", "UNSATISFIED", "MISSING_INPUT"]
     missing_inputs: tuple[str, ...] = Field(default=(), max_length=32)
     blockers: tuple[str, ...] = Field(default=(), max_length=8)

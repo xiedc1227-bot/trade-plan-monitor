@@ -544,9 +544,9 @@ def test_v4_extraction_save_review_and_public_activation_are_server_bound(
         assert activation.json()["planVersionId"] == detail["id"]
         assert activation.json()["active"] is True
         capability = client.get("/api/v1/plan-capabilities").json()
-        assert capability["publicActivationAvailable"] is False
-        assert capability["isolatedTrustedReviewOnly"] is True
-        assert capability["pendingRequirements"] == ["ORDINARY_PLAN_FORMS"]
+        assert capability["publicActivationAvailable"] is True
+        assert capability["isolatedTrustedReviewOnly"] is False
+        assert capability["pendingRequirements"] == []
 
 
 def test_partial_draft_persists_and_stale_review_cannot_cross_an_immutable_edit(

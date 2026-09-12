@@ -140,7 +140,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`44599729a2c947a0f41baeb7011871dc82aae6c649399adaaebeb45b343ed662`
+OpenAPI 快照 SHA-256：`1aed810d751d7c1dee623b1eb6afb7f2538928c8ea091bdf79027dd34e58951a`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 48 个已批准 REST 路径：33 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式命令 `POST /position-inventory-confirmations`、`POST /position-inventory-closures` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -546,10 +546,10 @@ const emit = defineEmits<Emits>()
 
 ## 审核状态
 
-活动版本绑定的明确运行时读模型只公开已持久化的逐规则结果，不会捏造 legacy 判断投影。
-
-当前 R12 普通用户分片增加受控的政策补充表单：它保存带有耐久 `USER_SUPPLEMENT` 绑定的新不可变 Schema-v3 草稿，绝不把修改后的原文映射值重新标记为原文证据，并要求重新取得服务端审核；它还在个股详情中公开独立、权威的库存确认和实际期初余额减记操作，提醒与确认提醒仍不能改变库存。在完整普通流程和实际组合证据完成前，公开明确计划激活仍以 `ORDINARY_PLAN_FORMS` 待项封闭失败。
-
 WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。WEBF13 记录当前真实路由和新建回测旅程边界，不改变冻结契约；其配对离线验收证据已于 2026-09-04 通过。
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实施历史继续保持此前批准状态。R09 增加显式计划能力投影、权威持仓库存读取/确认传输和持久化 BUY 提醒投影。R10 增加隔离可信的普通 `SELL` 与纯五分钟 `RISK_ALERT` 执行、抑制前完整冲突处理、多意图原子 outbox 投影，以及统一批次/期初余额库存减记。R11 增加 v4 部分草稿保存/读取与精确当前快照复核确认，同时继续为 R12 阻断导入和公开启用。当前 OpenAPI 契约精确包含 49 条路径：34 条实时路径和 15 条回测路径。提交、推送、依赖安装和联网访问继续需要分别授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实施历史继续保持此前批准状态。R09 增加显式计划能力投影、权威持仓库存读取/确认传输和持久化 BUY 提醒投影。R10 增加隔离可信的普通 `SELL` 与纯五分钟 `RISK_ALERT` 执行、抑制前完整冲突处理、多意图原子 outbox 投影，以及统一批次/期初余额库存减记。R11 增加 v4 部分草稿保存/读取与精确当前快照复核确认，当时继续为 R12 阻断导入和公开启用。
+
+R12 完成普通用户的 v4 AI 提取、不可变 Schema-v3 保存、八项政策补充、当前问题复核、激活、独立按日期库存登记、提醒确认、实际库存减记及停用流程。补充保留耐久 `USER_SUPPLEMENT` 绑定并要求重新取得服务端审核；原文字段修改绝不会成为原文证据。只有已存在的技术性 `CONTRACT` 版本绑定随服务端分配的后继版本更新。库存可直接在 v3 工作台操作，仍独立于提醒和提醒确认。活动版本绑定的运行时读模型公开已持久化的逐规则条件证据，包括实际成交量、历史均量和阈值，不会捏造 legacy 判断投影。
+
+完整 Chromium 流程已在独立临时 SQLite 数据库、真实应用服务和调度器、受控时钟，以及 AI HTTP/行情 SDK 边界假提供方上通过。仅预置交易日历和历史行情；计划、复核、激活、库存、提醒确认、减记和停用均通过普通界面操作。已验证能力为 `publicActivationAvailable=true`、`isolatedTrustedReviewOnly=false`、`pendingRequirements=[]`；精确当前 `reviewId`、`contentHash` 和激活 `expectedRevision` 校验仍为强制要求。这是本地集成证据，不代表真实外部提供方验证。当前 OpenAPI 契约精确包含 50 条路径：35 条实时路径和 15 条回测路径。提交、推送、依赖安装和联网访问继续需要分别授权。

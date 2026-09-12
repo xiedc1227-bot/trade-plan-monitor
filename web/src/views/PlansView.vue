@@ -15,6 +15,7 @@ import ActivationDiffDialog from "../components/plans/ActivationDiffDialog.vue";
 import ExplicitPlanReviewPanel from "../components/plans/ExplicitPlanReviewPanel.vue";
 import ExplicitPlanRuntimePanel from "../components/plans/ExplicitPlanRuntimePanel.vue";
 import ExplicitPlanSupplementForm from "../components/plans/ExplicitPlanSupplementForm.vue";
+import PlanInventoryPanel from "../components/plans/PlanInventoryPanel.vue";
 import StructuredPlanEditor, {
   type PlanExportIntent,
 } from "../components/plans/StructuredPlanEditor.vue";
@@ -309,13 +310,18 @@ function deactivate(command: PlanDeactivationCommand): void {
             :symbol="currentPlan.symbol"
           />
           <StructuredPlanEditor
-            v-else
+            v-if="currentPlan.contentHash === null || currentPlan.contentHash === undefined"
             :busy="busy"
             :plan="currentPlan"
             @dirty-change="editorDirty = $event"
             @export-document="emit('exportPlan', $event)"
             @import-document="emit('importPlan', $event)"
             @save-draft="emit('saveDraft', $event)"
+          />
+
+          <PlanInventoryPanel
+            v-if="currentPlan.contentHash !== null && currentPlan.contentHash !== undefined"
+            :symbol="currentPlan.symbol"
           />
 
           <section class="plans-view__activation" aria-labelledby="plan-activation-title">

@@ -66,6 +66,7 @@ from trade_plan_monitor.state.repositories import (
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.idempotency import claim_replay, complete_replay, operation_hash
+from trade_plan_monitor.web.routers.alerts import _explicit_evidence_view
 from trade_plan_monitor.web.routers.plans import (
     MAX_SAFE_INTEGER,
     ActivePlanView,
@@ -484,6 +485,7 @@ class PersistentPlanWebLifecycle:
                         action=item.action.type,
                         blockers=item.blockers,
                         condition_code=item.condition_evidence.condition.type,
+                        condition_evidence=_explicit_evidence_view(item.condition_evidence),
                         missing_inputs=tuple(
                             value.value for value in item.condition_evidence.missing_inputs
                         ),
@@ -814,6 +816,20 @@ def _resolve_server_review(
             supplied_mapping = (
                 command.mapping.to_domain() if command.mapping is not None else extraction.mapping
             )
+            # Version numbering is assigned by the repository, not a trading input.
+            # Keep only an existing technical CONTRACT binding synchronized when
+            # saving an immutable successor; source/user bindings are never rewritten.
+            if command.base_plan_version_id is not None:
+                supplied_mapping = supplied_mapping.model_copy(
+                    update={
+                        "field_bindings": tuple(
+                            binding.model_copy(update={"value": plan.version})
+                            if binding.path == "version" and binding.origin.value == "CONTRACT"
+                            else binding
+                            for binding in supplied_mapping.field_bindings
+                        )
+                    }
+                )
             mapping = upgrade_source_mapping(
                 draft=plan,
                 mapping=reconcile_plan_mapping(draft=plan, mapping=supplied_mapping),

@@ -6296,25 +6296,22 @@
             "type": "string"
           },
           "isolatedTrustedReviewOnly": {
-            "const": true,
-            "default": true,
+            "const": false,
+            "default": false,
             "title": "Isolatedtrustedreviewonly",
             "type": "boolean"
           },
           "pendingRequirements": {
-            "default": [
-              "ORDINARY_PLAN_FORMS"
-            ],
+            "default": [],
             "items": {
-              "const": "ORDINARY_PLAN_FORMS",
               "type": "string"
             },
             "title": "Pendingrequirements",
             "type": "array"
           },
           "publicActivationAvailable": {
-            "const": false,
-            "default": false,
+            "const": true,
+            "default": true,
             "title": "Publicactivationavailable",
             "type": "boolean"
           },
@@ -6451,6 +6448,16 @@
           "conditionCode": {
             "title": "Conditioncode",
             "type": "string"
+          },
+          "conditionEvidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplicitConditionEvidenceView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "missingInputs": {
             "default": [],

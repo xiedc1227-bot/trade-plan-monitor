@@ -3,6 +3,7 @@ import { shallowRef, watch } from "vue";
 
 import { createPlanApi, type ExplicitPlanRuntimeApi } from "../../api/plans";
 import type { ExplicitPlanRuntimeView } from "../../api/generated";
+import ExplicitConditionEvidence from "./ExplicitConditionEvidence.vue";
 
 interface Props {
   api?: ExplicitPlanRuntimeApi;
@@ -54,9 +55,11 @@ async function load(): Promise<void> {
             <tr v-for="rule in runtime.ruleOutcomes" :key="rule.ruleId">
               <th scope="row">{{ rule.ruleId }}</th>
               <td>{{ rule.action }}</td>
-              <td>{{ rule.conditionCode }}</td>
+              <td>{{ rule.conditionCode }}
+                <details v-if="rule.conditionEvidence"><summary>查看条件数值</summary><ExplicitConditionEvidence :evidence="rule.conditionEvidence" /></details>
+              </td>
               <td>{{ rule.outcome }}</td>
-              <td>{{ [...(rule.missingInputs ?? []), ...(rule.blockers ?? [])].join("、") || "—" }}</td>
+              <td>{{ [...(rule.missingInputs ?? []), ...(rule.blockers ?? []), ...(rule.suppressionReason ? [rule.suppressionReason] : [])].join("、") || "—" }}</td>
             </tr>
           </tbody>
         </table>

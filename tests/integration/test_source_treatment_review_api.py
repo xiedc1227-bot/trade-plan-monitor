@@ -433,9 +433,9 @@ def test_literal_source_completes_current_review_without_initializing_inventory(
         "risk-950",
     ]
     capability = client.get("/api/v1/plan-capabilities").json()
-    assert capability["publicActivationAvailable"] is False
-    assert capability["isolatedTrustedReviewOnly"] is True
-    assert capability["pendingRequirements"] == ["ORDINARY_PLAN_FORMS"]
+    assert capability["publicActivationAvailable"] is True
+    assert capability["isolatedTrustedReviewOnly"] is False
+    assert capability["pendingRequirements"] == []
     # Separate public operation: source save/review above left the ledger UNKNOWN.
     registered = client.post(
         "/api/v1/position-inventory-confirmations",

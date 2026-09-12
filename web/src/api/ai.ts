@@ -213,6 +213,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       "evidence",
       "id",
       "model",
+      "mapping",
       "promptVersion",
       "providerId",
       "sourceTextSha256",
@@ -248,7 +249,9 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       isBoundedToken(value.promptVersion, 64) &&
       isBoundedText(value.draftPlanJson, 4 * 1024 * 1024) &&
       Array.isArray(value.evidence) &&
-      value.evidence.length > 0 &&
+      (value.promptVersion === "plan-extract-v4"
+        ? value.evidence.length === 0 && isExtractionMapping(value.mapping)
+        : value.evidence.length > 0 && value.mapping == null) &&
       value.startedAt !== null &&
       value.startedAt !== undefined &&
       value.completedAt !== null &&
@@ -267,6 +270,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
 function hasNoResultPayload(value: Record<string, unknown>): boolean {
   return (
     value.draftPlanJson == null &&
+    value.mapping == null &&
     isAbsentOrEmptyArray(value.evidence) &&
     isAbsentOrEmptyArray(value.assumptions) &&
     isAbsentOrEmptyArray(value.warnings) &&
@@ -276,6 +280,19 @@ function hasNoResultPayload(value: Record<string, unknown>): boolean {
     value.sourceTextSha256 == null &&
     value.usage == null
   );
+}
+
+function isExtractionMapping(value: unknown): boolean {
+  return isRecord(value) &&
+    ["plan-mapping-v1", "plan-mapping-v2"].includes(String(value.mappingVersion)) &&
+    Array.isArray(value.sourceClauses) && value.sourceClauses.length > 0 &&
+    value.sourceClauses.length <= 512 && value.sourceClauses.every((clause) =>
+      isRecord(clause) && typeof clause.clauseId === "string" && typeof clause.excerpt === "string" &&
+      Number.isSafeInteger(clause.start) && Number.isSafeInteger(clause.end)) &&
+    Array.isArray(value.fieldBindings) && value.fieldBindings.length > 0 &&
+    value.fieldBindings.length <= 4096 && value.fieldBindings.every((binding) =>
+      isRecord(binding) && typeof binding.path === "string" && typeof binding.unit === "string" &&
+      ["SOURCE", "CONTRACT", "USER_SUPPLEMENT"].includes(String(binding.origin)));
 }
 
 function isAbsentOrEmptyArray(value: unknown): boolean {

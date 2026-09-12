@@ -976,9 +976,9 @@ export type ExplicitConditionEvidenceView = {
 export type ExplicitPlanCapabilityView = {
   executionMode?: "EXPLICIT_RULES";
   executionVersion?: "explicit-rules-v1";
-  isolatedTrustedReviewOnly?: true;
-  pendingRequirements?: Array<"ORDINARY_PLAN_FORMS">;
-  publicActivationAvailable?: false;
+  isolatedTrustedReviewOnly?: false;
+  pendingRequirements?: Array<string>;
+  publicActivationAvailable?: true;
   schemaVersion?: 3;
   supportedActions?: Array<"BUY" | "SELL" | "RISK_ALERT">;
 };
@@ -998,6 +998,7 @@ export type ExplicitRuleOutcomeView = {
   action: "BUY" | "SELL" | "RISK_ALERT";
   blockers?: Array<string>;
   conditionCode: string;
+  conditionEvidence?: (components["schemas"]["ExplicitConditionEvidenceView"]) | (null);
   missingInputs?: Array<string>;
   outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
   ruleId: string;

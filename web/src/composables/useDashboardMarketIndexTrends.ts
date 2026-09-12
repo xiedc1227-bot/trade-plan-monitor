@@ -65,6 +65,8 @@ export function useDashboardMarketIndexTrends(
         return;
       }
       const queries = requestedCodes.flatMap((indexCode) => {
+        const summary = summaries.value.find((item) => item.indexCode === indexCode);
+        if (summary?.completedBucketAt === null && summary.issues?.includes("PROVIDER_UNAVAILABLE")) return [];
         const query = buildCurrentDayQuery(indexCode, currentObservedAt);
         return query === null ? [] : [{ indexCode, query }];
       });

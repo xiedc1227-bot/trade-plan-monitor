@@ -47,6 +47,7 @@ async function load(): Promise<void> {
     <p v-else-if="items.length === 0">没有活动的明确规则计划。</p>
     <article v-for="item in items" :key="item.symbol" class="explicit-runtime-dashboard__card">
       <h3>{{ item.symbol }} · v3</h3>
+      <a :href="`/plans/${item.planVersionId}`">查看计划与逐规则证据</a>
       <p v-if="item.status === 'AWAITING_EVALUATION'">已启用，等待首个完成周期。</p>
       <template v-else>
         <p>周期 {{ item.targetBucketEnd }}；评估 {{ item.evaluatedAt }}</p>

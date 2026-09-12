@@ -750,6 +750,7 @@ def create_monitor_composition(
         websocket_service=stream,
         position_service=PersistentPositionOperationService(
             unit_of_work_factory=unit_of_work_factory,
+            clock=clock.now,
         ),
         manual_event_risk_service=PersistentManualEventRiskOperationService(
             unit_of_work_factory=unit_of_work_factory,

@@ -15,6 +15,21 @@ const runtime = {
 };
 
 describe("AI plan API", () => {
+  it("accepts v4 bidirectional mapping while rejecting a result with neither mapping nor evidence", async () => {
+    const result = {
+      id: "00000000-0000-4000-8000-000000000111", providerId: runtime.providerId,
+      status: "SUCCEEDED", submittedAt: "2026-09-14T10:00:00+08:00",
+      startedAt: "2026-09-14T10:00:00+08:00", completedAt: "2026-09-14T10:00:01+08:00",
+      sourceTextSha256: "a".repeat(64), model: "isolated-v3", promptVersion: "plan-extract-v4",
+      draftPlanJson: '{"schema_version":3}', evidence: [],
+      mapping: { mappingVersion: "plan-mapping-v1", sourceClauses: [{ clauseId: "clause-1", excerpt: "买入100股", start: 0, end: 6 }],
+        fieldBindings: [{ path: "rules[0].action.quantity", value: 100, unit: "SHARES", origin: "SOURCE" }] },
+    };
+    const api = createAIPlanApi(vi.fn(async () => jsonResponse(result)) as typeof fetch);
+    await expect(api.getExtraction(result.id)).resolves.toMatchObject({ mapping: result.mapping });
+    const malformed = createAIPlanApi(vi.fn(async () => jsonResponse({ ...result, mapping: null })) as typeof fetch);
+    await expect(malformed.getExtraction(result.id)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
   it("loads read-only file configuration and submits one idempotent extraction", async () => {
     const requests: Array<{ init: RequestInit | undefined; url: string }> = [];
     const fetchImplementation = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
