@@ -145,7 +145,7 @@ T038 诊断判断是该同一公共 `evaluate(context)` 契约的只读应用服
 - 指标无效或缺失；
 - 已达到最大仓位。
 
-T022 在 DSL 证据之外返回有界结构性阻断记录，使后续结果组装能够保留阻止动作的原因。稳定代码为 `DATA_NOT_READY`、`DAILY_LIMIT_UNKNOWN`、`EPISODE_HISTORY_GAP`、`BEARISH_VOLUME_EXPANSION` 和 `RISK_PENDING`；每条记录都包含非满足 outcome、明确的数值/状态事实，并在 outcome 为 `MISSING_INPUT` 时包含所需缺失输入代码。仅当最新完整 5 分钟 K 线收盘低于开盘，且成交股数严格超过配置的买入 `VOLUME_TO_MEDIAN_LTE` 阈值时，`BEARISH_VOLUME_EXPANSION` 才生效；等于阈值或阳线均不激活该结构阻断。华亚样例 blocker 树保持为有序 `ALL`：`MANUAL_EVENT_RISK_CLEAR`、`DISTANCE_FROM_LIMIT_DOWN_GTE(minimum_ratio=0.01)` 和 `LOWER_BAND_HITS_LTE(max_hits=2, window_bars=4)`。T024 负责把这些记录映射为最终 `BLOCKED_DATA`/`BLOCKED_RISK` 结果优先级，不改变 T022 事件进度。
+T022 在 DSL 证据之外返回有界结构性阻断记录，使后续结果组装能够保留阻止动作的原因。稳定代码为 `DATA_NOT_READY`、`DAILY_LIMIT_UNKNOWN`、`EPISODE_HISTORY_GAP`、`BEARISH_VOLUME_EXPANSION` 和 `RISK_PENDING`；每条记录都包含非满足 outcome、明确的数值/状态事实，并在 outcome 为 `MISSING_INPUT` 时包含所需缺失输入代码。仅当最新完整 5 分钟 K 线收盘低于开盘，且成交股数严格超过显式合取 `ALL` 买入路径上的 `VOLUME_TO_MEDIAN_LTE` 阈值时，`BEARISH_VOLUME_EXPANSION` 才生效；位于任一 `ANY` 备选下的阈值不是全局阻断。等于阈值或阳线均不激活该结构阻断。华亚样例 blocker 树保持为有序 `ALL`：`MANUAL_EVENT_RISK_CLEAR`、`DISTANCE_FROM_LIMIT_DOWN_GTE(minimum_ratio=0.01)` 和 `LOWER_BAND_HITS_LTE(max_hits=2, window_bars=4)`。T024 负责把这些记录映射为最终 `BLOCKED_DATA`/`BLOCKED_RISK` 结果优先级，不改变 T022 事件进度。
 
 `LOWER_BAND_HITS_LTE` 选择截至判断目标的最近 `window_bars` 根相邻完整 5 分钟 K 线。每根 K 线必须恰好对应一个具有相同 `(symbol, bar_end, formula_version)` 的 `ta-v1` 5 分钟 `IndicatorPoint`。当 `bar.close_fen / 100 <= point.boll_lower_yuan` 时记一次命中；相等也算命中。禁止复用同一个下轨、使用日线下轨、向前填充，或仅按位置而不核对 identity 对齐。下轨证据缺失、重复、错位或为 `None` 都会阻断判断；否则仅当 `hit_count <= max_hits` 时满足。
 

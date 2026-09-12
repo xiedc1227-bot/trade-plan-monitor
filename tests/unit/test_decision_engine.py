@@ -5239,6 +5239,93 @@ def test_low_zone_bearish_volume_expansion_has_explicit_structural_evidence(
     }
 
 
+@pytest.mark.parametrize(
+    "condition_payload",
+    [
+        {
+            "type": "ANY",
+            "conditions": [
+                {"type": "PRICE_IN_ZONE", "zone": "LOW_BUY"},
+                {
+                    "type": "VOLUME_TO_MEDIAN_LTE",
+                    "max_ratio": Decimal("1.5"),
+                    "window_bars": 20,
+                },
+            ],
+        },
+        {
+            "type": "ANY",
+            "conditions": [
+                {
+                    "type": "VOLUME_TO_MEDIAN_LTE",
+                    "max_ratio": Decimal("1.5"),
+                    "window_bars": 20,
+                },
+                {"type": "PRICE_IN_ZONE", "zone": "LOW_BUY"},
+            ],
+        },
+        {
+            "type": "ANY",
+            "conditions": [
+                {
+                    "type": "ANY",
+                    "conditions": [
+                        {"type": "PRICE_IN_ZONE", "zone": "LOW_BUY"},
+                        {
+                            "type": "VOLUME_TO_MEDIAN_LTE",
+                            "max_ratio": Decimal("1.5"),
+                            "window_bars": 20,
+                        },
+                    ],
+                },
+                {
+                    "type": "VOLUME_TO_MEDIAN_LTE",
+                    "max_ratio": Decimal("1.2"),
+                    "window_bars": 20,
+                },
+            ],
+        },
+    ],
+    ids=("price-first", "volume-first", "nested-and-multiple-volume-caps"),
+)
+def test_low_zone_any_volume_alternatives_do_not_become_structural_blockers(
+    condition_payload: ConditionPayload,
+) -> None:
+    """A satisfied ANY entry branch cannot be vetoed by an optional volume cap."""
+
+    condition = _condition(condition_payload)
+    context = _with_entry_condition(
+        _replace_latest_bar(
+            _context(),
+            open_fen=6420,
+            high_fen=6420,
+            low_fen=6380,
+            close_fen=6400,
+            volume_shares=100_000,
+        ),
+        condition,
+    )
+
+    source = evaluate_low_zone_episode(context)
+    assert source.entry_evidence is not None
+    assert source.entry_evidence.outcome is ConditionOutcome.SATISFIED
+    assert not any(
+        blocker.code.value == "BEARISH_VOLUME_EXPANSION"
+        for blocker in source.structural_blockers
+    )
+    assert source.signal_intent is not None
+
+    result = evaluate(context)
+
+    assert result.snapshot.signal_type is SignalType.BUY_CORE_READY
+    assert result.signal_intent == source.signal_intent
+    assert not any(
+        isinstance(evidence, RuleEvidence)
+        and evidence.code is RuleEvidenceCode.BEARISH_VOLUME_EXPANSION
+        for evidence in result.blockers
+    )
+
+
 def test_low_zone_near_limit_down_blocker_is_executable_and_visible() -> None:
     context = _context()
     assert context.daily_limit is not None

@@ -319,15 +319,21 @@ def _buy_structural_blockers(
     return tuple(blockers)
 
 
-def _entry_volume_cap(context: EvaluationContext) -> VolumeToMedianLteCondition | None:
+def _mandatory_entry_volume_caps(
+    context: EvaluationContext,
+) -> tuple[VolumeToMedianLteCondition, ...]:
+    """Return volume caps on explicitly conjunctive entry paths only."""
+
     stack = [context.plan.entry.condition]
+    caps: list[VolumeToMedianLteCondition] = []
     while stack:
         condition = stack.pop()
         if isinstance(condition, VolumeToMedianLteCondition):
-            return condition
-        if isinstance(condition, (AllCondition, AnyCondition)):
+            caps.append(condition)
+        elif isinstance(condition, AllCondition):
             stack.extend(reversed(condition.conditions))
-    return None
+        # A condition beneath ANY is an alternative, never an inferred global blocker.
+    return tuple(caps)
 
 
 def _bearish_volume_blocker(
@@ -336,22 +342,21 @@ def _bearish_volume_blocker(
     latest = context.complete_5m_bars[-1]
     if latest.close_fen >= latest.open_fen:
         return None
-    condition = _entry_volume_cap(context)
-    if condition is None:
-        return None
-    evidence = _evaluate_validated_condition(condition, context)
-    if evidence.outcome is not ConditionOutcome.UNSATISFIED:
-        return None
-    return EpisodeStructuralBlocker(
-        code=EpisodeStructuralBlockerCode.BEARISH_VOLUME_EXPANSION,
-        outcome=ConditionOutcome.UNSATISFIED,
-        facts=(
-            _fact("latest_open_fen", latest.open_fen, EvidenceUnit.FEN),
-            _fact("latest_close_fen", latest.close_fen, EvidenceUnit.FEN),
-            _fact("bearish", True, EvidenceUnit.BOOLEAN),
-            *evidence.facts,
-        ),
-    )
+    for condition in _mandatory_entry_volume_caps(context):
+        evidence = _evaluate_validated_condition(condition, context)
+        if evidence.outcome is not ConditionOutcome.UNSATISFIED:
+            continue
+        return EpisodeStructuralBlocker(
+            code=EpisodeStructuralBlockerCode.BEARISH_VOLUME_EXPANSION,
+            outcome=ConditionOutcome.UNSATISFIED,
+            facts=(
+                _fact("latest_open_fen", latest.open_fen, EvidenceUnit.FEN),
+                _fact("latest_close_fen", latest.close_fen, EvidenceUnit.FEN),
+                _fact("bearish", True, EvidenceUnit.BOOLEAN),
+                *evidence.facts,
+            ),
+        )
+    return None
 
 
 def _first_touch(
