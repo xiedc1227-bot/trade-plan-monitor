@@ -49,6 +49,8 @@ APPROVED_PATHS = {
     "/api/v1/diagnostic-evaluations",
     "/api/v1/health",
     "/api/v1/health/symbols/{symbol}",
+    "/api/v1/manual-event-risk",
+    "/api/v1/manual-event-risk-confirmations",
     "/api/v1/market-indexes/{indexCode}/bars",
     "/api/v1/plan-activation-states/{symbol}",
     "/api/v1/plan-activations",
