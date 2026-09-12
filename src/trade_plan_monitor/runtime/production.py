@@ -28,6 +28,7 @@ from trade_plan_monitor.market_index.tushare import (
     unverified_tushare_market_index_profile,
 )
 from trade_plan_monitor.runtime.clock import Clock
+from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
 from trade_plan_monitor.runtime.health import SymbolHealthTracker
 from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexService
 from trade_plan_monitor.runtime.production_context import ProductionContextBuilder
@@ -55,6 +56,14 @@ from trade_plan_monitor.runtime.symbol_service import SymbolService
 from trade_plan_monitor.state.models import EvaluationKind, PlanVersionStatus
 
 _REFERENCE_DAYS = 366
+
+
+def create_explicit_runtime_evaluation_service(
+    unit_of_work_factory: UnitOfWorkFactory,
+) -> ExplicitRuntimeEvaluationService:
+    """Compose the isolated R09 BUY runtime against the production SQLite boundary."""
+
+    return ExplicitRuntimeEvaluationService(unit_of_work_factory)
 
 
 class _CertifiedTushareClient:
