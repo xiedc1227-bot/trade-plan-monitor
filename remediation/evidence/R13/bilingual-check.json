@@ -10,5 +10,11 @@
     "headingStructureEquivalent": true,
     "technicalCodeTokensEquivalent": true,
     "agentSemanticReview": "completed; scope, thresholds, statuses and limitations aligned"
+  },
+  {
+    "document": "remediation/handoffs/R13",
+    "headingStructureEquivalent": true,
+    "technicalCodeTokensEquivalent": true,
+    "agentSemanticReview": "completed; scope, thresholds, statuses and limitations aligned"
   }
 ]
