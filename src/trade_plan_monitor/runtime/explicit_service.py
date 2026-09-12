@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from enum import StrEnum
+from inspect import isawaitable
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
@@ -22,6 +23,7 @@ from trade_plan_monitor.notifications.models import (
     ExplicitAlertEvent,
     build_explicit_alert_payload,
 )
+from trade_plan_monitor.state.events import MonitorEvent, MonitorEventType
 from trade_plan_monitor.state.repositories import ManualEventRiskStatus
 from trade_plan_monitor.state.unit_of_work import UnitOfWork
 
@@ -68,13 +70,53 @@ class ExplicitRuntimeEvaluationService:
         unit_of_work_factory: UnitOfWorkFactory,
         *,
         after_evaluate: Callable[[ExplicitEvaluationResult], None] | None = None,
+        committed_event_publisher: Callable[[MonitorEvent], object] | None = None,
     ) -> None:
         if not callable(unit_of_work_factory):
             raise TypeError("unit_of_work_factory must be callable")
         if after_evaluate is not None and not callable(after_evaluate):
             raise TypeError("after_evaluate must be callable")
+        if committed_event_publisher is not None and not callable(
+            committed_event_publisher
+        ):
+            raise TypeError("committed_event_publisher must be callable")
         self._work = unit_of_work_factory
         self._after_evaluate = after_evaluate
+        self._publisher = committed_event_publisher
+
+    async def run_intraday_and_publish(
+        self,
+        *,
+        plan: ExplicitTradePlan,
+        target_bucket_end: datetime,
+        evaluated_at: datetime,
+    ) -> ExplicitRuntimeCycleResult:
+        """Evaluate once, then publish only the durable alert invalidations."""
+
+        result = self.run_intraday(
+            plan=plan,
+            target_bucket_end=target_bucket_end,
+            evaluated_at=evaluated_at,
+        )
+        if self._publisher is None or not result.committed_events:
+            return result
+        with self._work() as work:
+            monitor_events = tuple(
+                work.events.get(event.event_id) for event in result.committed_events
+            )
+        if any(
+            event is None
+            or event.event_type is not MonitorEventType.ALERT_CREATED
+            for event in monitor_events
+        ):
+            raise RuntimeError("committed explicit alert event is unavailable")
+        for event in monitor_events:
+            if event is None:  # pragma: no cover - guarded above for type narrowing
+                continue
+            publication = self._publisher(event)
+            if isawaitable(publication):
+                await publication
+        return result
 
     def run_intraday(
         self,

@@ -8,7 +8,12 @@ from uuid import UUID
 from trade_plan_monitor.config import TushareConfiguration
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import TradePlan, activation_is_eligible_on
+from trade_plan_monitor.domain.plan_models import (
+    ExecutableTradePlan,
+    ExplicitTradePlan,
+    TradePlan,
+    activation_is_eligible_on,
+)
 from trade_plan_monitor.live_profiles import (
     StockLiveCertification,
     load_index_certification,
@@ -60,10 +65,15 @@ _REFERENCE_DAYS = 366
 
 def create_explicit_runtime_evaluation_service(
     unit_of_work_factory: UnitOfWorkFactory,
+    *,
+    committed_event_publisher: CommittedEventPublisher | None = None,
 ) -> ExplicitRuntimeEvaluationService:
-    """Compose the isolated R09 BUY runtime against the production SQLite boundary."""
+    """Compose the R09 BUY runtime against the production SQLite/event boundary."""
 
-    return ExplicitRuntimeEvaluationService(unit_of_work_factory)
+    return ExplicitRuntimeEvaluationService(
+        unit_of_work_factory,
+        committed_event_publisher=committed_event_publisher,
+    )
 
 
 class _CertifiedTushareClient:
@@ -146,7 +156,7 @@ class ProductionMonitorPipeline:
         self._stock_evidence = stock_certification
         self._calendar: dict[date, bool] = {}
         self._reference_key: tuple[date, tuple[str, ...]] | None = None
-        self._deadline_plans: tuple[TradePlan, ...] | None = None
+        self._deadline_plans: tuple[ExecutableTradePlan, ...] | None = None
         self._running_deadline = False
         self._gap_repair_due_at: datetime | None = None
         self.reference_stage = TushareOperation.TRADING_CALENDAR
@@ -212,11 +222,16 @@ class ProductionMonitorPipeline:
             runtime_generation=runtime_generation,
             clock=clock,
         )
+        self.explicit_evaluations = create_explicit_runtime_evaluation_service(
+            unit_of_work_factory,
+            committed_event_publisher=publisher,
+        )
         self.coordinator = RuntimeDeadlineCoordinator(
             clock=clock,
             active_plans=self.deadline_plans,
             symbol_service=self.symbols,
             evaluation_service=self.evaluations,
+            explicit_evaluation_service=self.explicit_evaluations,
         )
         self.recovery = RecoveryService(
             provider=self.provider,
@@ -243,7 +258,7 @@ class ProductionMonitorPipeline:
         )
         return evidence is not None and evidence == self._index_evidence
 
-    def _persisted_active_plans(self) -> tuple[TradePlan, ...]:
+    def _persisted_active_plans(self) -> tuple[ExecutableTradePlan, ...]:
         with self._work() as work:
             records, _ = work.plans.list_version_details(
                 offset=0,
@@ -259,7 +274,10 @@ class ProductionMonitorPipeline:
             )
         )
 
-    def active_plans(self, market_date: date | None = None) -> tuple[TradePlan, ...]:
+    def active_plans(
+        self,
+        market_date: date | None = None,
+    ) -> tuple[ExecutableTradePlan, ...]:
         """Return persisted ACTIVE plans eligible for one market date."""
 
         effective_date = self._clock.now().date() if market_date is None else market_date
@@ -274,7 +292,7 @@ class ProductionMonitorPipeline:
     def active_symbols(self) -> tuple[str, ...]:
         return tuple(plan.symbol for plan in self.active_plans())
 
-    def deadline_plans(self) -> tuple[TradePlan, ...]:
+    def deadline_plans(self) -> tuple[ExecutableTradePlan, ...]:
         if self._deadline_plans is None:
             raise RuntimeError("deadline plan capture is unavailable")
         return self._deadline_plans
@@ -320,7 +338,7 @@ class ProductionMonitorPipeline:
         self,
         *,
         deadline: MarketDeadline,
-        plans: tuple[TradePlan, ...],
+        plans: tuple[ExecutableTradePlan, ...],
     ) -> None:
         if deadline.bar_end is None or not plans:
             return
@@ -359,6 +377,7 @@ class ProductionMonitorPipeline:
 
     async def refresh_references(self, trade_date: date) -> None:
         plans = self.active_plans(trade_date)
+        legacy_plans = tuple(plan for plan in plans if isinstance(plan, TradePlan))
         start = trade_date - timedelta(days=_REFERENCE_DAYS)
         end = trade_date + timedelta(days=32)
         for exchange in sorted({"SSE", *(plan.market for plan in plans)}):
@@ -376,19 +395,19 @@ class ProductionMonitorPipeline:
                 work.commit()
             if exchange == "SSE":
                 self._calendar = {day.cal_date: day.is_open for day in days}
-        if self.is_open_on(trade_date):
+        if legacy_plans and self.is_open_on(trade_date):
             limits = await self._request(
                 TushareOperation.DAILY_LIMITS,
                 lambda: self.provider.daily_limits(trade_date),
                 f"limits:{trade_date}",
             )
             with self._work() as work:
-                active_symbols = {plan.symbol for plan in plans}
+                active_symbols = {plan.symbol for plan in legacy_plans}
                 work.references.upsert_daily_limits(
                     tuple(row for row in limits if row.symbol in active_symbols)
                 )
                 work.commit()
-        for plan in plans:
+        for plan in legacy_plans:
             bars = await self._request(
                 TushareOperation.DAILY_BARS,
                 lambda plan=plan: self.provider.daily_bars(
@@ -423,6 +442,8 @@ class ProductionMonitorPipeline:
     async def _recover_pending_close_batches(self, startup_date: date) -> None:
         grouped: dict[date, list[TradePlan]] = {}
         for plan in self._persisted_active_plans():
+            if isinstance(plan, ExplicitTradePlan):
+                continue
             pending_date = self.evaluations.pending_close_date(plan.symbol)
             if pending_date is None:
                 continue
@@ -491,22 +512,38 @@ class ProductionMonitorPipeline:
                 active = work.plans.get_active(plan.symbol)
                 if active is None or active.activated_at > cutoff:
                     continue
+                if (
+                    isinstance(plan, ExplicitTradePlan)
+                    and deadline.kind is DeadlineKind.OFFICIAL_CLOSE
+                ):
+                    continue
                 evaluation_due = (
                     deadline.bar_end is None or five_minute_bucket_end(cutoff) == cutoff
                 )
-                if evaluation_due and work.evaluations.has_claim(
-                    plan_hash=plan_sha256(plan),
-                    symbol=plan.symbol,
-                    evaluation_kind=(
-                        EvaluationKind.INTRADAY
-                        if deadline.bar_end
-                        else EvaluationKind.OFFICIAL_CLOSE
-                    ),
-                    bucket_end=deadline.bar_end,
-                    official_trade_date=None if deadline.bar_end else deadline.trade_date,
-                    formula_version=plan.monitoring.indicator_formula_version,
-                ):
-                    continue
+                if evaluation_due:
+                    if isinstance(plan, ExplicitTradePlan):
+                        if deadline.bar_end is not None and work.explicit_rules.get(
+                            plan_hash=plan_sha256(plan),
+                            symbol=plan.symbol,
+                            target_bucket_end=deadline.bar_end,
+                            activation_revision=active.revision,
+                        ) is not None:
+                            continue
+                    elif work.evaluations.has_claim(
+                        plan_hash=plan_sha256(plan),
+                        symbol=plan.symbol,
+                        evaluation_kind=(
+                            EvaluationKind.INTRADAY
+                            if deadline.bar_end
+                            else EvaluationKind.OFFICIAL_CLOSE
+                        ),
+                        bucket_end=deadline.bar_end,
+                        official_trade_date=(
+                            None if deadline.bar_end else deadline.trade_date
+                        ),
+                        formula_version=plan.monitoring.indicator_formula_version,
+                    ):
+                        continue
                 selected.append(plan)
         if not selected:
             await self._refresh_dashboard_indexes(deadline)
