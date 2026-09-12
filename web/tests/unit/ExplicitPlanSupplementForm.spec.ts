@@ -77,4 +77,29 @@ describe("ExplicitPlanSupplementForm", () => {
     const document = JSON.parse(command.planJson) as Record<string, unknown>;
     expect(document.activation).toEqual({ mode: "TRADING_DAY", trading_day: "2026-09-14" });
   });
+
+  it("turns an edited source-mapped board-lot field into a reviewed user supplement", async () => {
+    const wrapper = mount(ExplicitPlanSupplementForm, {
+      props: { plan: { ...plan, unresolvedReviewIssues: [] } },
+    });
+    await wrapper.get("select").setValue("rules[0].action.quantity");
+    await wrapper.get('input[aria-label="rules[0].action.quantity 新值"]').setValue("200");
+    const form = wrapper.findAll("form")[0];
+    expect(form?.get("button").attributes("disabled")).toBeUndefined();
+    await form?.trigger("submit");
+
+    const command = wrapper.emitted("saveDraft")?.[0]?.[0] as PlanDraftCommand;
+    const document = JSON.parse(command.planJson) as { rules: Array<{ action?: { quantity?: number } }> };
+    expect(document.rules[0]?.action?.quantity).toBe(200);
+    expect(command.mapping?.fieldBindings).toContainEqual(expect.objectContaining({
+      origin: "USER_SUPPLEMENT",
+      path: "rules[0].action.quantity",
+      unit: "SHARES",
+      value: 200,
+    }));
+    expect(command.mapping?.fieldBindings).not.toContainEqual(expect.objectContaining({
+      origin: "SOURCE",
+      path: "rules[0].action.quantity",
+    }));
+  });
 });
