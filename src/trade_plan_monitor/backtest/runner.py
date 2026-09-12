@@ -80,7 +80,7 @@ from trade_plan_monitor.decision.models import (
     RuleEvidence,
     SignalType,
 )
-from trade_plan_monitor.domain.plan_models import TradePlan
+from trade_plan_monitor.domain.plan_models import TradePlan, activation_is_eligible_on
 from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
     validate_trade_plan,
@@ -1024,11 +1024,10 @@ def _activation_at(
     activation = plan.activation
     if activation.mode == "MANUAL":
         return True, activation_origin
+    active = activation_is_eligible_on(activation, trade_date)
     if activation.mode == "TRADING_DAY":
-        active = trade_date == activation.trading_day
         activated_at = datetime.combine(activation.trading_day, time(9, 0), SHANGHAI)
         return active, activated_at if active else None
-    active = activation.start_date <= trade_date <= activation.end_date
     activated_at = datetime.combine(activation.start_date, time(9, 0), SHANGHAI)
     return active, activated_at if active else None
 

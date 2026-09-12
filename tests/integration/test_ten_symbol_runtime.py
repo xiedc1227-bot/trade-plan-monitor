@@ -1616,12 +1616,12 @@ def test_plan_rotation_during_fetch_is_discarded_and_next_cycle_still_commits(
     source_text = SAMPLE_PLAN_PATH.read_text(encoding="utf-8")
     bucket_end = _at(9, 35)
     evaluated_at = bucket_end + timedelta(seconds=20)
-    factory = _runtime_uow_factory(
+    seed_factory = _runtime_uow_factory(
         runtime_engine,
         {"active": 0},
-        now=evaluated_at + timedelta(seconds=1),
+        now=datetime(2026, 8, 24, 9, 0, tzinfo=SHANGHAI),
     )
-    with factory() as work:
+    with seed_factory() as work:
         work.plans.save_draft(plan, source_text=source_text)
         work.plans.activate(
             plan,
@@ -1632,6 +1632,12 @@ def test_plan_rotation_during_fetch_is_discarded_and_next_cycle_still_commits(
             ),
         )
         work.commit()
+
+    factory = _runtime_uow_factory(
+        runtime_engine,
+        {"active": 0},
+        now=evaluated_at + timedelta(seconds=1),
+    )
 
     calls = 0
 
@@ -1691,6 +1697,144 @@ def test_stale_activation_error_is_a_typed_expected_runtime_outcome() -> None:
 
     assert error.symbol == "003043.SZ"
     assert "003043.SZ" in str(error)
+
+
+def test_final_commit_fence_rejects_a_plan_outside_its_market_date(
+    runtime_engine: Engine,
+) -> None:
+    payload = _runtime_plan().model_dump(mode="python", round_trip=True)
+    payload["activation"] = {
+        "mode": "DATE_RANGE",
+        "start_date": date(2026, 8, 24),
+        "end_date": date(2026, 8, 24),
+    }
+    plan = TradePlan.model_validate(payload)
+    factory = _runtime_uow_factory(
+        runtime_engine,
+        {"active": 0},
+        now=datetime(2026, 8, 24, 9, 0, tzinfo=SHANGHAI),
+    )
+    with factory() as work:
+        work.plans.save_draft(
+            plan,
+            source_text=SAMPLE_PLAN_PATH.read_text(encoding="utf-8"),
+        )
+        work.plans.activate(
+            plan,
+            expected_revision=0,
+            validation=validate_trade_plan(
+                plan,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        work.commit()
+
+    with factory() as work:
+        RuntimeEvaluationService._require_evaluated_plan_active(
+            work,
+            plan,
+            expected_revision=1,
+            market_date=date(2026, 8, 24),
+        )
+        with pytest.raises(StaleActivationGenerationError):
+            RuntimeEvaluationService._require_evaluated_plan_active(
+                work,
+                plan,
+                expected_revision=1,
+                market_date=date(2026, 8, 25),
+            )
+
+
+def test_production_context_marks_an_out_of_validity_market_date_inactive(
+    runtime_engine: Engine,
+) -> None:
+    payload = _runtime_plan().model_dump(mode="python", round_trip=True)
+    payload["activation"] = {
+        "mode": "TRADING_DAY",
+        "trading_day": date(2026, 8, 24),
+    }
+    plan = TradePlan.model_validate(payload)
+    bucket_end = _at(9, 35, day=25)
+    evaluated_at = bucket_end + timedelta(seconds=20)
+    seed_factory = _runtime_uow_factory(
+        runtime_engine,
+        {"active": 0},
+        now=datetime(2026, 8, 24, 9, 0, tzinfo=SHANGHAI),
+    )
+    with seed_factory() as work:
+        work.plans.save_draft(
+            plan,
+            source_text=SAMPLE_PLAN_PATH.read_text(encoding="utf-8"),
+        )
+        work.plans.activate(
+            plan,
+            expected_revision=0,
+            validation=validate_trade_plan(
+                plan,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        work.history.upsert_daily_bars(
+            (
+                _daily_bar(
+                    trade_date=date(2026, 8, 24),
+                    close_fen=6400,
+                    is_official=True,
+                ),
+            )
+        )
+        work.references.upsert_trading_days(
+            (
+                TradingDay(
+                    exchange=plan.market,
+                    cal_date=bucket_end.date(),
+                    is_open=True,
+                    previous_trade_date=date(2026, 8, 24),
+                ),
+            )
+        )
+        work.commit()
+
+    factory = _runtime_uow_factory(
+        runtime_engine,
+        {"active": 0},
+        now=evaluated_at + timedelta(seconds=1),
+    )
+
+    captured: list[EvaluationContext] = []
+    production_builder = ProductionContextBuilder(factory)
+
+    def context_builder(
+        candidate: TradePlan,
+        facts: IntradayMarketFacts,
+    ) -> EvaluationContext:
+        context = production_builder(candidate, facts)
+        captured.append(context)
+        return context
+
+    async def fetch_minutes(_symbol: str, target: datetime) -> list[MinuteBar]:
+        return [_bar(plan.symbol, minute_end) for minute_end in expected_five_minute_ends(target)]
+
+    service = RuntimeEvaluationService(
+        fetch_minutes=fetch_minutes,
+        unit_of_work_factory=factory,
+        context_builder=context_builder,
+        committed_event_publisher=lambda _event: None,
+    )
+
+    results = asyncio.run(
+        service.run_intraday_batch(
+            plans=(plan,),
+            bucket_end=bucket_end,
+            evaluated_at=evaluated_at,
+        )
+    )
+
+    assert results == ()
+    assert len(captured) == 1
+    assert captured[0].plan_active is False
+    with factory() as work:
+        assert work.projections.get_decision_head(plan.symbol) is None
 
 
 def test_deadline_coordinator_starts_one_stock_batch_and_reuses_it_for_every_plan(

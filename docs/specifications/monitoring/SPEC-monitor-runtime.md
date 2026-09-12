@@ -67,6 +67,10 @@ tests/integration/
 - Complete 5-minute buckets are evaluated exactly once; incomplete buckets immediately suppress actionable evaluation.
 - Two consecutive incomplete required buckets mark the symbol `DEGRADED`, but the first incomplete bucket is already a buy-alert blocker.
 - Each deadline freezes one immutable plan/symbol/activation-revision tuple before acquisition; `SymbolService` uses that exact tuple and cannot independently re-read the active set. Dynamic activation/disable therefore changes the next deadline snapshot without process restart, while a concurrent stale write is discarded by the revision fence.
+- The frozen set contains only persisted `ACTIVE` plans whose activation policy authorizes
+  the deadline's market date. Context assembly derives `plan_active` from that same target
+  date, and the final transaction fence rechecks it before any claim, projection, transition,
+  or alert is committed.
 
 ### T028 Session Scheduler Contract
 
@@ -89,6 +93,9 @@ tests/integration/
 - Close-risk state advances only when the returned or already persisted official row matches the exact requested trading date. The runtime rebuilds `ta-v1` from strictly ordered earlier official rows plus that exact official row, with `OFFICIAL` provenance and a 15:00 `source_as_of`; provisional or mixed evidence is rejected.
 - Persist the exact official row, when present, and the durable unresolved-close marker in the same short market transaction before context construction. Clear `CLOSE_PENDING` only in the later atomic evaluation/state/audit/outbox commit, so unavailable data, invalid context, evaluation failure, or application rollback remains restart-recoverable without inventing a latest completed minute.
 - Startup recovery retries each active symbol's durable pending close serially before current-day minute recovery. An unresolved earlier date blocks every later official-close transition until the original date resolves. While such a marker exists, the same plan-writer transaction rejects both deactivation and rotation, preserving an active immutable owner for recovery.
+- Pending-close recovery uses the pending close's historical market date for activation
+  eligibility. A close that belonged to a valid date can therefore be restored after midnight
+  or after the date range ends, while an invalid target date cannot create a new action alert.
 - Before provider or decision work, an exact read-only lookup of `(plan_hash, symbol, OFFICIAL_CLOSE, trade_date, formula_version)` short-circuits an already committed date as `DUPLICATE`. This prevents later configured attempts or restart from re-evaluating a completed identity without weakening result-hash conflict detection.
 
 ## Request Control
@@ -172,7 +179,7 @@ fetch outside transaction
 → short transaction: upsert bars and reference data
 → build immutable context
 → pure evaluate outside transaction
-→ short transaction: claim evaluation + append `symbol.snapshot.updated` + apply state intents + enqueue alert/outbox + audit
+→ short transaction: recheck activation eligibility for the target market date + claim evaluation + append `symbol.snapshot.updated` + apply state intents + enqueue alert/outbox + audit
 → commit all global monitor events
 → publish one exact committed event as an in-memory wake-up
 ```

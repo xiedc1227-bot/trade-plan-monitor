@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal, Self
 
@@ -138,6 +138,20 @@ ActivationPolicy = Annotated[
     ManualActivation | TradingDayActivation | DateRangeActivation,
     Field(discriminator="mode"),
 ]
+
+
+def activation_is_eligible_on(activation: ActivationPolicy, market_date: date) -> bool:
+    """Return whether an activation policy authorizes one market date."""
+
+    if not isinstance(activation, ManualActivation | TradingDayActivation | DateRangeActivation):
+        raise TypeError("activation must be an ActivationPolicy")
+    if isinstance(market_date, datetime) or not isinstance(market_date, date):
+        raise TypeError("market_date must be a date")
+    if isinstance(activation, ManualActivation):
+        return True
+    if isinstance(activation, TradingDayActivation):
+        return market_date == activation.trading_day
+    return activation.start_date <= market_date <= activation.end_date
 
 
 class PriceZone(_DomainValue):

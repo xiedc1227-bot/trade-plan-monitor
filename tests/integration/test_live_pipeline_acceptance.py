@@ -776,7 +776,13 @@ def test_cross_day_official_risk_breach_restores_from_sqlite_dashboard(
     async def scenario() -> None:
         target_date = NOW.date()
         clock = ControlledClock(NOW.replace(hour=9, minute=0))
-        plan = _sample_plan()
+        plan_payload = _sample_plan().model_dump(mode="python", round_trip=True)
+        plan_payload["activation"] = {
+            "mode": "DATE_RANGE",
+            "start_date": target_date,
+            "end_date": target_date,
+        }
+        plan = TradePlan.model_validate(plan_payload)
         database = tmp_path / "monitor.sqlite3"
         _activate_plans(database, clock, (plan,))
         clock.current = NOW + timedelta(days=1)
@@ -850,6 +856,126 @@ def test_cross_day_official_risk_breach_restores_from_sqlite_dashboard(
             assert restored.market_data_at == NOW.replace(hour=15, minute=0, second=0)
             with pytest.raises(ValidationError, match="actionable decisions require LIVE"):
                 restored.model_copy(update={"signal_type": SignalType.BUY_CORE_READY})
+        finally:
+            await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "activation",
+    (
+        {
+            "mode": "DATE_RANGE",
+            "start_date": NOW.date() + timedelta(days=1),
+            "end_date": NOW.date() + timedelta(days=2),
+        },
+        {
+            "mode": "DATE_RANGE",
+            "start_date": NOW.date() - timedelta(days=8),
+            "end_date": NOW.date() - timedelta(days=7),
+        },
+        {
+            "mode": "TRADING_DAY",
+            "trading_day": NOW.date() - timedelta(days=7),
+        },
+    ),
+    ids=("before-start", "after-end", "trading-day-mismatch"),
+)
+def test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    activation: dict[str, object],
+) -> None:
+    import trade_plan_monitor.runtime.production as production
+
+    async def scenario() -> None:
+        clock = ControlledClock(NOW)
+        database = tmp_path / "monitor.sqlite3"
+        payload = _sample_plan().model_dump(mode="python", round_trip=True)
+        payload["activation"] = activation
+        payload["entry"] = {"condition": {"type": "PRICE_IN_ZONE", "zone": "LOW_BUY"}}
+        payload["blockers"] = {"condition": {"type": "PRICE_IN_ZONE", "zone": "LOW_BUY"}}
+        plan = TradePlan.model_validate(payload)
+        runtime_time = clock.current
+        if activation["mode"] == "TRADING_DAY":
+            activation_date = activation["trading_day"]
+        elif activation["start_date"] < NOW.date():
+            activation_date = activation["end_date"]
+        else:
+            activation_date = NOW.date()
+        assert isinstance(activation_date, date)
+        clock.current = datetime.combine(activation_date, runtime_time.timetz())
+        _activate_plans(database, clock, (plan,))
+        clock.current = runtime_time
+        config = _write_configuration_and_evidence(
+            tmp_path,
+            observed_at=clock.now(),
+            include_index=False,
+        )
+        sdk = OfflineSDK(clock, (plan.symbol,))
+        monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
+        pace = VirtualPace()
+        controller = create_live_tushare_request_controller(
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
+        )
+        engine, work_factory = _work_factory(database, clock)
+        pipeline = ProductionMonitorPipeline(
+            configuration=load_application_config(config).tushare,
+            certification_directory=tmp_path / "data" / "live-certification",
+            stock_certification=create_stock_certification(
+                observed_at=clock.now(),
+                endpoint_url=ENDPOINT,
+                capabilities=_ready_stock_capabilities(),
+                source_time_label=SourceTimeLabel.START,
+            ),
+            clock=clock,
+            request_controller=controller,
+            unit_of_work_factory=work_factory,
+            runtime_generation=uuid4(),
+            publisher=lambda _event: None,
+        )
+        try:
+            assert pipeline.active_plans() == ()
+            await pipeline.refresh_references(NOW.date())
+            await pipeline.recover_startup(NOW.date())
+            results = await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=NOW.date(),
+                    due_at=NOW,
+                    bar_end=NOW.replace(second=0, microsecond=0),
+                )
+            )
+            assert results == ()
+            official_results = await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.OFFICIAL_CLOSE,
+                    trade_date=NOW.date(),
+                    due_at=NOW.replace(hour=17, minute=0),
+                    close_attempt=2,
+                )
+            )
+            assert official_results == ()
+            assert Counter(name for name, _ in sdk.calls)["rt_min"] == 0
+            assert Counter(name for name, _ in sdk.calls)["daily"] == 0
+            with work_factory() as work:
+                assert work.plans.get_active(plan.symbol) is not None
+                assert work.projections.get_decision_head(plan.symbol) is None
+                alerts, total = work.alerts.list_events(
+                    symbol=plan.symbol,
+                    signal_type=None,
+                    acknowledged=None,
+                    start_at=None,
+                    end_at=None,
+                    offset=0,
+                    limit=100,
+                )
+            assert alerts == ()
+            assert total == 0
         finally:
             await controller.aclose()
             engine.dispose()

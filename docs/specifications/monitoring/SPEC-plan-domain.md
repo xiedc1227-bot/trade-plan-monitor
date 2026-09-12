@@ -69,6 +69,11 @@ Activation policy is a discriminated union:
 - `TRADING_DAY`: active only on one specified trading day.
 - `DATE_RANGE`: active between start and end dates according to the trading calendar.
 
+`activation_is_eligible_on` is the canonical date policy for both replay and production.
+It evaluates the market date carried by the evaluation target, not the later wall-clock
+time at which delayed work or restart recovery happens. `TRADING_DAY` equality and both
+`DATE_RANGE` endpoints are inclusive; `MANUAL` remains eligible until explicit disablement.
+
 At most one version is active per symbol. Editing an active version creates a new draft, and activating the new version atomically deactivates the previous one.
 
 ### Allowlisted Condition DSL
@@ -152,6 +157,8 @@ Python uses `snake_case`, explicit enums, and immutable value objects where prac
 ## Boundaries
 
 - Always: validate at import, API, AI-output, save, and activation boundaries.
+- Always: apply the canonical activation policy at production selection, context assembly,
+  and the final transaction fence using the target market date.
 - Always: preserve source text and draft provenance without making either executable.
 - Ask first: add a condition type, schema version, or activation mode.
 - Never: execute user- or AI-supplied code, formulas, or SQL.

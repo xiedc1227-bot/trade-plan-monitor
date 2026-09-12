@@ -14,7 +14,7 @@ from trade_plan_monitor.decision.models import (
     RiskStatus,
 )
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import TradePlan
+from trade_plan_monitor.domain.plan_models import TradePlan, activation_is_eligible_on
 from trade_plan_monitor.market_data.indicators import calculate_ta_v1
 from trade_plan_monitor.market_data.models import DailyBar
 from trade_plan_monitor.market_data.reconciliation import reconcile_daily_close
@@ -126,6 +126,7 @@ class ProductionContextBuilder:
             if intraday
             else facts.daily_indicator_snapshot
         )
+        plan_active = activation_is_eligible_on(plan.activation, trade_date)
         return EvaluationContext(
             evaluated_at=facts.evaluated_at,
             target=(
@@ -135,8 +136,8 @@ class ProductionContextBuilder:
             ),
             plan=plan,
             plan_hash=digest,
-            plan_active=True,
-            activated_at=active.activated_at,
+            plan_active=plan_active,
+            activated_at=active.activated_at if plan_active else None,
             current_day_minutes=minutes,
             complete_5m_bars=bars,
             official_daily_bars=history,

@@ -8,7 +8,7 @@ from uuid import UUID
 from trade_plan_monitor.config import TushareConfiguration
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import TradePlan
+from trade_plan_monitor.domain.plan_models import TradePlan, activation_is_eligible_on
 from trade_plan_monitor.live_profiles import (
     StockLiveCertification,
     load_index_certification,
@@ -234,7 +234,7 @@ class ProductionMonitorPipeline:
         )
         return evidence is not None and evidence == self._index_evidence
 
-    def active_plans(self) -> tuple[TradePlan, ...]:
+    def _persisted_active_plans(self) -> tuple[TradePlan, ...]:
         with self._work() as work:
             records, _ = work.plans.list_version_details(
                 offset=0,
@@ -248,6 +248,18 @@ class ProductionMonitorPipeline:
                 (load_plan_json(record.payload_json) for record in records),
                 key=lambda plan: plan.symbol,
             )
+        )
+
+    def active_plans(self, market_date: date | None = None) -> tuple[TradePlan, ...]:
+        """Return persisted ACTIVE plans eligible for one market date."""
+
+        effective_date = self._clock.now().date() if market_date is None else market_date
+        if isinstance(effective_date, datetime) or not isinstance(effective_date, date):
+            raise TypeError("market_date must be a date")
+        return tuple(
+            plan
+            for plan in self._persisted_active_plans()
+            if activation_is_eligible_on(plan.activation, effective_date)
         )
 
     def active_symbols(self) -> tuple[str, ...]:
@@ -337,7 +349,7 @@ class ProductionMonitorPipeline:
         )
 
     async def refresh_references(self, trade_date: date) -> None:
-        plans = self.active_plans()
+        plans = self.active_plans(trade_date)
         start = trade_date - timedelta(days=_REFERENCE_DAYS)
         end = trade_date + timedelta(days=32)
         for exchange in sorted({"SSE", *(plan.market for plan in plans)}):
@@ -401,12 +413,14 @@ class ProductionMonitorPipeline:
 
     async def _recover_pending_close_batches(self, startup_date: date) -> None:
         grouped: dict[date, list[TradePlan]] = {}
-        for plan in self.active_plans():
+        for plan in self._persisted_active_plans():
             pending_date = self.evaluations.pending_close_date(plan.symbol)
             if pending_date is None:
                 continue
             if pending_date > startup_date:
                 raise RuntimeError("startup recovery failed")
+            if not activation_is_eligible_on(plan.activation, pending_date):
+                continue
             grouped.setdefault(pending_date, []).append(plan)
         for pending_date in sorted(grouped):
             plans = tuple(grouped[pending_date])
@@ -457,7 +471,7 @@ class ProductionMonitorPipeline:
     async def run_deadline(self, deadline: MarketDeadline):
         if not self._stock_certification_current():
             raise RuntimeError("stock certification must be refreshed before execution")
-        plans = self.active_plans()
+        plans = self.active_plans(deadline.trade_date)
         reference_key = deadline.trade_date, tuple(plan.symbol for plan in plans)
         cutoff = deadline.bar_end or datetime.combine(
             deadline.trade_date, time(15), deadline.due_at.tzinfo

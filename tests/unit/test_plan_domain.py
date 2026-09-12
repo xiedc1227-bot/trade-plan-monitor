@@ -1,7 +1,7 @@
 import json
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -24,6 +24,7 @@ from trade_plan_monitor.domain.plan_models import (
     PriceZone,
     TradePlan,
     TradingDayActivation,
+    activation_is_eligible_on,
 )
 from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
@@ -168,6 +169,63 @@ def test_date_range_requires_ordered_dates() -> None:
 
     with pytest.raises(ValidationError, match="start date cannot be after end date"):
         TradePlan.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("activation", "market_date", "expected"),
+    [
+        (ManualActivation(), date(2026, 8, 6), True),
+        (TradingDayActivation(trading_day=date(2026, 8, 7)), date(2026, 8, 6), False),
+        (TradingDayActivation(trading_day=date(2026, 8, 7)), date(2026, 8, 7), True),
+        (TradingDayActivation(trading_day=date(2026, 8, 7)), date(2026, 8, 8), False),
+        (
+            DateRangeActivation(
+                start_date=date(2026, 8, 7),
+                end_date=date(2026, 8, 14),
+            ),
+            date(2026, 8, 6),
+            False,
+        ),
+        (
+            DateRangeActivation(
+                start_date=date(2026, 8, 7),
+                end_date=date(2026, 8, 14),
+            ),
+            date(2026, 8, 7),
+            True,
+        ),
+        (
+            DateRangeActivation(
+                start_date=date(2026, 8, 7),
+                end_date=date(2026, 8, 14),
+            ),
+            date(2026, 8, 14),
+            True,
+        ),
+        (
+            DateRangeActivation(
+                start_date=date(2026, 8, 7),
+                end_date=date(2026, 8, 14),
+            ),
+            date(2026, 8, 15),
+            False,
+        ),
+    ],
+)
+def test_activation_eligibility_uses_the_market_date_and_inclusive_boundaries(
+    activation: ManualActivation | TradingDayActivation | DateRangeActivation,
+    market_date: date,
+    expected: bool,
+) -> None:
+    assert activation_is_eligible_on(activation, market_date) is expected
+
+
+def test_activation_eligibility_rejects_a_datetime_as_a_market_date() -> None:
+    with pytest.raises(TypeError, match="market_date must be a date"):
+        activation_is_eligible_on(
+            ManualActivation(),
+            datetime(2026, 8, 7, 9, 30),
+        )
 
 
 @pytest.mark.parametrize(

@@ -32,7 +32,7 @@ from trade_plan_monitor.decision.models import (
 )
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import TradePlan
+from trade_plan_monitor.domain.plan_models import TradePlan, activation_is_eligible_on
 from trade_plan_monitor.market_data.aggregation import (
     FiveMinuteBar,
     aggregate_five_minute_bar,
@@ -908,6 +908,7 @@ class RuntimeEvaluationService:
                 unit_of_work,
                 plan,
                 expected_revision=activation_revision,
+                market_date=canonical_bucket.date(),
             )
             identity = result.evaluation_identity
             claim = unit_of_work.evaluations.claim(
@@ -1234,6 +1235,7 @@ class RuntimeEvaluationService:
                 unit_of_work,
                 plan,
                 expected_revision=activation_revision,
+                market_date=trade_date,
             )
             identity = result.evaluation_identity
             claim = unit_of_work.evaluations.claim(
@@ -1359,6 +1361,7 @@ class RuntimeEvaluationService:
                 unit_of_work,
                 plan,
                 expected_revision=activation_revision,
+                market_date=trade_date,
             )
             completed = unit_of_work.evaluations.has_claim(
                 plan_hash=plan_sha256(plan),
@@ -1397,6 +1400,7 @@ class RuntimeEvaluationService:
                 unit_of_work,
                 plan,
                 expected_revision=activation_revision,
+                market_date=trade_date,
             )
             if incoming:
                 unit_of_work.history.upsert_daily_bars(incoming)
@@ -2031,7 +2035,10 @@ class RuntimeEvaluationService:
         plan: TradePlan,
         *,
         expected_revision: int,
+        market_date: date,
     ) -> None:
+        if not activation_is_eligible_on(plan.activation, market_date):
+            raise StaleActivationGenerationError(plan.symbol)
         activation_state = unit_of_work.plans.get_activation_state(plan.symbol)
         # The runtime service is also used as a narrow persistence primitive in
         # tests and offline tooling that have no plan registry.  Once a symbol
