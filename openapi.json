@@ -6296,13 +6296,15 @@
             "type": "string"
           },
           "isolatedTrustedReviewOnly": {
-            "const": false,
-            "default": false,
+            "const": true,
+            "default": true,
             "title": "Isolatedtrustedreviewonly",
             "type": "boolean"
           },
           "pendingRequirements": {
-            "default": [],
+            "default": [
+              "ORDINARY_PLAN_FORMS"
+            ],
             "items": {
               "const": "ORDINARY_PLAN_FORMS",
               "type": "string"
@@ -6311,8 +6313,8 @@
             "type": "array"
           },
           "publicActivationAvailable": {
-            "const": true,
-            "default": true,
+            "const": false,
+            "default": false,
             "title": "Publicactivationavailable",
             "type": "boolean"
           },

@@ -134,12 +134,16 @@ class ExplicitPlanCapabilityView(ApiValue):
         "SELL",
         "RISK_ALERT",
     )
-    public_activation_available: Literal[True] = True
-    isolated_trusted_review_only: Literal[False] = False
+    # Keep this public contract fail-closed until the ordinary user forms have
+    # the same durable review and runtime evidence as the explicit API path.
+    # The activation endpoint itself remains intentionally strict and is
+    # exercised by the isolated integration composition.
+    public_activation_available: Literal[False] = False
+    isolated_trusted_review_only: Literal[True] = True
     pending_requirements: tuple[
         Literal["ORDINARY_PLAN_FORMS",],
         ...,
-    ] = ()
+    ] = ("ORDINARY_PLAN_FORMS",)
 
 
 class PlanExtractionOperationStatus(StrEnum):

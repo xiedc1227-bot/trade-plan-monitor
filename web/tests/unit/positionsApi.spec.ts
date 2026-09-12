@@ -5,6 +5,10 @@ import type {
   PositionLotClosureView,
   PositionLotCreateCommand,
   PositionLotPage,
+  PositionInventoryClosureCommand,
+  PositionInventoryClosureView,
+  PositionInventoryConfirmationCommand,
+  PositionInventoryView,
   components,
 } from "../../src/api/generated";
 import { createPositionApi } from "../../src/api/positions";
@@ -37,6 +41,28 @@ const page: PositionLotPage = {
   offset: 0,
   symbol,
   total: 1,
+};
+
+const inventory: PositionInventoryView = {
+  asOfTradeDate,
+  confirmationId: "00000000-0000-4000-8000-000000000013",
+  confirmedAt: observedAt(),
+  cutoff: observedAt(),
+  includedLotIds: [],
+  inventoryRevision: 2,
+  missingReasons: [],
+  openingBalances: [{
+    openingBalanceId: "00000000-0000-4000-8000-000000000014",
+    originalQuantity: 200,
+    remainingQuantity: 200,
+    revision: 0,
+    sellableFrom: asOfTradeDate,
+    symbol,
+  }],
+  sellableQuantity: 200,
+  status: "KNOWN",
+  symbol,
+  totalQuantity: 200,
 };
 
 describe("position API", () => {
@@ -137,6 +163,55 @@ describe("position API", () => {
     }
   });
 
+  it("keeps independent inventory confirmation and real closure separate from alerts", async () => {
+    const confirm: PositionInventoryConfirmationCommand = {
+      asOfTradeDate,
+      completeRegistration: true,
+      expectedRevision: 1,
+      includedLotIds: [],
+      sellableQuantity: 200,
+      symbol,
+      totalQuantity: 200,
+    };
+    const close: PositionInventoryClosureCommand = {
+      expectedRevision: 0,
+      quantity: 100,
+      sourceId: inventory.openingBalances?.[0]?.openingBalanceId ?? "",
+      sourceType: "OPENING_BALANCE",
+      tradeDate: asOfTradeDate,
+    };
+    const closure: PositionInventoryClosureView = {
+      afterRemainingQuantity: 100,
+      appliedQuantity: 100,
+      beforeRemainingQuantity: 200,
+      revision: 1,
+      sourceId: close.sourceId,
+      sourceType: "OPENING_BALANCE",
+      symbol,
+      tradeDate: asOfTradeDate,
+    };
+    const requests: string[] = [];
+    const api = createPositionApi(vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url.startsWith("/api/v1/position-inventory?")) return jsonResponse(inventory);
+      if (url.endsWith("confirmations")) return jsonResponse({ ...inventory, inventoryRevision: 2 });
+      return jsonResponse(closure);
+    }) as typeof fetch);
+
+    await expect(api.getInventory(symbol, asOfTradeDate)).resolves.toEqual(inventory);
+    await expect(api.confirmInventory(confirm, "inventory-confirm-1")).resolves.toMatchObject({
+      inventoryRevision: 2,
+      status: "KNOWN",
+    });
+    await expect(api.closeInventory(close, "inventory-close-1")).resolves.toEqual(closure);
+    expect(requests).toEqual([
+      "/api/v1/position-inventory?asOfTradeDate=2026-08-24&symbol=003043.SZ",
+      "/api/v1/position-inventory-confirmations",
+      "/api/v1/position-inventory-closures",
+    ]);
+  });
+
   it("rejects mutation receipts that do not prove the requested lot transition", async () => {
     const createCommand: PositionLotCreateCommand = {
       acquiredTradeDate: asOfTradeDate,
@@ -209,4 +284,8 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { "Content-Type": "application/json" },
     status,
   });
+}
+
+function observedAt(): string {
+  return "2026-08-24T10:05:05.000000+08:00";
 }

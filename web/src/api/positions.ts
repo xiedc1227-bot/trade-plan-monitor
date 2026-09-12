@@ -1,4 +1,8 @@
 import type {
+  PositionInventoryClosureCommand,
+  PositionInventoryClosureView,
+  PositionInventoryConfirmationCommand,
+  PositionInventoryView,
   PositionLotClosureCommand,
   PositionLotClosureView,
   PositionLotCreateCommand,
@@ -41,14 +45,69 @@ export interface PositionApi {
   ): Promise<PositionLotPage>;
 }
 
+export interface PositionInventoryApi {
+  closeInventory(
+    command: PositionInventoryClosureCommand,
+    idempotencyKey: string,
+    options?: PositionRequestOptions,
+  ): Promise<PositionInventoryClosureView>;
+  confirmInventory(
+    command: PositionInventoryConfirmationCommand,
+    idempotencyKey: string,
+    options?: PositionRequestOptions,
+  ): Promise<PositionInventoryView>;
+  getInventory(
+    symbol: string,
+    asOfTradeDate: string,
+    options?: PositionRequestOptions,
+  ): Promise<PositionInventoryView>;
+}
+
 const idempotencyKeyPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function createPositionApi(
   fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
-): PositionApi {
+): PositionApi & PositionInventoryApi {
   return Object.freeze({
+    async getInventory(symbol: string, asOfTradeDate: string, options?: PositionRequestOptions) {
+      if (!isShareSymbol(symbol) || !isCalendarDate(asOfTradeDate)) throw invalidResponse(0);
+      const search = new URLSearchParams({ asOfTradeDate, symbol });
+      const { body, status } = await requestJson(
+        fetchImplementation,
+        `/api/v1/position-inventory?${search.toString()}`,
+        readRequest(options),
+      );
+      if (!isInventory(body, symbol, asOfTradeDate)) throw invalidResponse(status);
+      return body;
+    },
+
+    async confirmInventory(command: PositionInventoryConfirmationCommand, idempotencyKey: string, options?: PositionRequestOptions) {
+      requireInventoryConfirmation(command);
+      const { body, status } = await requestJson(
+        fetchImplementation,
+        "/api/v1/position-inventory-confirmations",
+        mutationRequest(command, idempotencyKey, options),
+      );
+      if (!isInventory(body, command.symbol, command.asOfTradeDate) ||
+        body.inventoryRevision !== command.expectedRevision + 1 ||
+        body.status !== "KNOWN" || body.totalQuantity !== command.totalQuantity ||
+        body.sellableQuantity !== command.sellableQuantity) throw invalidResponse(status);
+      return body;
+    },
+
+    async closeInventory(command: PositionInventoryClosureCommand, idempotencyKey: string, options?: PositionRequestOptions) {
+      requireInventoryClosure(command);
+      const { body, status } = await requestJson(
+        fetchImplementation,
+        "/api/v1/position-inventory-closures",
+        mutationRequest(command, idempotencyKey, options),
+      );
+      if (!isInventoryClosure(body, command)) throw invalidResponse(status);
+      return body;
+    },
+
     async listPositions(
       request: PositionListRequest,
       options?: PositionRequestOptions,
@@ -109,7 +168,7 @@ function readRequest(options?: PositionRequestOptions): RequestInit {
 }
 
 function mutationRequest(
-  command: PositionLotCreateCommand | PositionLotClosureCommand,
+  command: PositionLotCreateCommand | PositionLotClosureCommand | PositionInventoryConfirmationCommand | PositionInventoryClosureCommand,
   idempotencyKey: string,
   options?: PositionRequestOptions,
 ): RequestInit {
@@ -126,6 +185,24 @@ function mutationRequest(
     method: "POST",
     ...(options?.signal === undefined ? {} : { signal: options.signal }),
   };
+}
+
+function requireInventoryConfirmation(command: PositionInventoryConfirmationCommand): void {
+  if (!isShareSymbol(command.symbol) || !isCalendarDate(command.asOfTradeDate) ||
+    !isNonnegativeInteger(command.expectedRevision) || !isBoardLotOrZero(command.totalQuantity) ||
+    !isBoardLotOrZero(command.sellableQuantity) || command.sellableQuantity > command.totalQuantity ||
+    command.completeRegistration !== true ||
+    !(command.includedLotIds === undefined || command.includedLotIds.every(isUuid))) {
+    throw new RangeError("inventory confirmation command is invalid");
+  }
+}
+
+function requireInventoryClosure(command: PositionInventoryClosureCommand): void {
+  if (!isInventorySourceType(command.sourceType) || typeof command.sourceId !== "string" ||
+    command.sourceId.length === 0 || !isBoardLot(command.quantity) ||
+    !isCalendarDate(command.tradeDate) || !isNonnegativeInteger(command.expectedRevision)) {
+    throw new RangeError("inventory closure command is invalid");
+  }
 }
 
 function requireListRequest(request: PositionListRequest): void {
@@ -298,6 +375,32 @@ function isPositionLot(value: unknown): value is PositionLot {
   );
 }
 
+function isInventory(
+  value: unknown,
+  symbol: string,
+  asOfTradeDate: string,
+): value is PositionInventoryView {
+  if (!isRecord(value) || value.symbol !== symbol || value.asOfTradeDate !== asOfTradeDate ||
+    !isNonnegativeInteger(value.inventoryRevision) ||
+    (value.status !== "KNOWN" && value.status !== "UNKNOWN") ||
+    !isNullableBoardLot(value.totalQuantity) || !isNullableBoardLot(value.sellableQuantity) ||
+    (value.totalQuantity !== null && value.sellableQuantity !== null && value.sellableQuantity > value.totalQuantity)) return false;
+  return value.status === "KNOWN"
+    ? value.totalQuantity !== null && value.confirmedAt !== null
+    : value.totalQuantity === null && value.sellableQuantity === null;
+}
+
+function isInventoryClosure(
+  value: unknown,
+  command: PositionInventoryClosureCommand,
+): value is PositionInventoryClosureView {
+  return isRecord(value) && value.sourceType === command.sourceType && value.sourceId === command.sourceId &&
+    value.tradeDate === command.tradeDate && value.appliedQuantity === command.quantity &&
+    isBoardLotOrZero(value.beforeRemainingQuantity) && isBoardLotOrZero(value.afterRemainingQuantity) &&
+    value.beforeRemainingQuantity - value.afterRemainingQuantity === command.quantity &&
+    value.revision === command.expectedRevision + command.quantity / 100;
+}
+
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -348,6 +451,14 @@ function isBoardLot(value: unknown): value is number {
 
 function isBoardLotOrZero(value: unknown): value is number {
   return isNonnegativeInteger(value) && value % 100 === 0;
+}
+
+function isNullableBoardLot(value: unknown): value is number | null {
+  return value === null || isBoardLotOrZero(value);
+}
+
+function isInventorySourceType(value: unknown): value is "LOT" | "OPENING_BALANCE" {
+  return value === "LOT" || value === "OPENING_BALANCE";
 }
 
 function isIntegerBetween(value: unknown, minimum: number, maximum: number): value is number {

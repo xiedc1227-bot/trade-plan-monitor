@@ -13,10 +13,12 @@ import type {
   SymbolEventView,
 } from "../api/generated";
 import type { ManualEventRiskApi } from "../api/manualEventRisk";
+import type { PositionInventoryApi } from "../api/positions";
 import EpisodeTimeline from "../components/symbol/EpisodeTimeline.vue";
 import MarketIndexChart from "../components/market-index/MarketIndexChart.vue";
 import ReferenceMarketPanel from "../components/market-index/ReferenceMarketPanel.vue";
 import PositionLots from "../components/symbol/PositionLots.vue";
+import PositionInventoryPanel from "../components/symbol/PositionInventoryPanel.vue";
 import ManualEventRiskPanel from "../components/symbol/ManualEventRiskPanel.vue";
 import type { ChartRange } from "../components/symbol/PriceChart.vue";
 import { useChartSeries } from "../composables/useChartSeries";
@@ -35,6 +37,7 @@ interface Props {
   indexHistoryLoading?: boolean;
   indexHistorySnapshotHash?: string | null;
   positionAsOfTradeDate?: string | null;
+  positionApi?: PositionInventoryApi | null;
   positionOperations?: PositionOperations | null;
   positionPage?: PositionLotPage | null;
   positionPrefill?: PositionPrefillView | null;
@@ -56,6 +59,7 @@ const props = withDefaults(defineProps<Props>(), {
   indexHistoryLoading: false,
   indexHistorySnapshotHash: null,
   positionAsOfTradeDate: null,
+  positionApi: null,
   positionOperations: null,
   positionPage: null,
   positionPrefill: null,
@@ -366,6 +370,13 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
         :operations="positionOperations"
         :prefill="positionPrefill"
         :summary-lots="detail.positionLots ?? []"
+      />
+
+      <PositionInventoryPanel
+        v-if="positionApi !== null"
+        :api="positionApi"
+        :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
+        :symbol="detail.summary.symbol"
       />
 
       <ManualEventRiskPanel

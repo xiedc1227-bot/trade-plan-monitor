@@ -26,6 +26,9 @@ const explicit = computed(
 );
 const unresolved = computed(() => props.plan.unresolvedReviewIssues ?? []);
 const sourceClauses = computed(() => props.plan.mapping?.sourceClauses ?? []);
+const fieldBindings = computed(() => props.plan.mapping?.fieldBindings ?? []);
+const supplements = computed(() => props.plan.mapping?.userSupplements ?? []);
+const treatments = computed(() => props.plan.mapping?.sourceProcessing?.treatments ?? []);
 const confirmationReady = computed(() =>
   explicit.value &&
   unresolved.value.length > 0 &&
@@ -105,6 +108,28 @@ function confirmReview(): void {
         <li v-for="clause in sourceClauses" :key="clause.clauseId">
           <code>{{ clause.disposition }} · {{ clause.paths?.join(", ") || "未映射" }}</code>
           <p>{{ clause.excerpt }}</p>
+        </li>
+      </ul>
+    </details>
+    <details open>
+      <summary>当前条件与证据来源</summary>
+      <ul>
+        <li v-for="binding in fieldBindings" :key="`${binding.bindingKind}-${binding.path}`">
+          <code>{{ binding.path }} = {{ binding.value }} · {{ binding.origin }} · {{ binding.bindingKind }}</code>
+        </li>
+      </ul>
+      <p v-if="supplements.length > 0">人工补充</p>
+      <ul v-if="supplements.length > 0">
+        <li v-for="supplement in supplements" :key="supplement.supplementId">
+          <code>{{ supplement.path }} = {{ supplement.value }} · USER_SUPPLEMENT</code>
+        </li>
+      </ul>
+      <p v-if="treatments.length > 0">独立处理（不是交易参数来源）</p>
+      <ul v-if="treatments.length > 0">
+        <li v-for="treatment in treatments" :key="treatment.treatmentId">
+          <code>{{ treatment.kind }} · {{ treatment.contractId }}</code>
+          <span v-if="treatment.kind === 'INVENTORY_ASSERTION'">：原文库存断言，必须独立登记。</span>
+          <span v-else>：提醒和确认不会改变持仓。</span>
         </li>
       </ul>
     </details>

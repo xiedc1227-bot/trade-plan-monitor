@@ -176,9 +176,9 @@ def test_plan_capability_reports_public_r12_activation() -> None:
         "executionMode": "EXPLICIT_RULES",
         "executionVersion": "explicit-rules-v1",
         "supportedActions": ["BUY", "SELL", "RISK_ALERT"],
-        "publicActivationAvailable": True,
-        "isolatedTrustedReviewOnly": False,
-        "pendingRequirements": [],
+        "publicActivationAvailable": False,
+        "isolatedTrustedReviewOnly": True,
+        "pendingRequirements": ["ORDINARY_PLAN_FORMS"],
     }
     assert blocked.status_code == 503
     assert blocked.json()["error"]["code"] == "SERVICE_UNAVAILABLE"

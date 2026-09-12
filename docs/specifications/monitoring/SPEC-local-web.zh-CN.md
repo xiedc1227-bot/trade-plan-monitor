@@ -140,7 +140,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`7b66308dbfee321eba7a75ac76068331b499960640e486cc6504688c6ebe0e7e`
+OpenAPI 快照 SHA-256：`b988006fb2da93b42fbd638d239f2b5d3bc03d5d5ce951f6f4fce98a6c866e24`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 48 个已批准 REST 路径：33 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式命令 `POST /position-inventory-confirmations`、`POST /position-inventory-closures` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -545,6 +545,8 @@ const emit = defineEmits<Emits>()
 - 无阻断问题。操作系统级浏览器通知和指定聊天平台保留为未来可选渠道。
 
 ## 审核状态
+
+当前 R12 普通用户分片增加受控的政策补充表单：它保存带有耐久 `USER_SUPPLEMENT` 绑定的新不可变 Schema-v3 草稿，绝不把修改后的原文映射值重新标记为原文证据，并要求重新取得服务端审核；它还在个股详情中公开独立、权威的库存确认和实际期初余额减记操作，提醒与确认提醒仍不能改变库存。在完整普通流程和实际组合证据完成前，公开明确计划激活仍以 `ORDINARY_PLAN_FORMS` 待项封闭失败。
 
 WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。WEBF13 记录当前真实路由和新建回测旅程边界，不改变冻结契约；其配对离线验收证据已于 2026-09-04 通过。
 

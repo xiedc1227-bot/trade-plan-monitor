@@ -13,6 +13,7 @@ import type {
 } from "../api/generated";
 import ActivationDiffDialog from "../components/plans/ActivationDiffDialog.vue";
 import ExplicitPlanReviewPanel from "../components/plans/ExplicitPlanReviewPanel.vue";
+import ExplicitPlanSupplementForm from "../components/plans/ExplicitPlanSupplementForm.vue";
 import StructuredPlanEditor, {
   type PlanExportIntent,
 } from "../components/plans/StructuredPlanEditor.vue";
@@ -295,6 +296,12 @@ function deactivate(command: PlanDeactivationCommand): void {
             :busy="busy"
             :plan="currentPlan"
             @confirm-review="emit('confirmPlanReview', $event)"
+          />
+          <ExplicitPlanSupplementForm
+            v-if="currentPlan.contentHash !== null && currentPlan.contentHash !== undefined"
+            :busy="busy"
+            :plan="currentPlan"
+            @save-draft="emit('saveDraft', $event)"
           />
           <StructuredPlanEditor
             v-else

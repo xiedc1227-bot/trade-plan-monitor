@@ -4,7 +4,11 @@ import { computed, shallowRef, watch } from "vue";
 import type { PositionLotPage } from "../api/generated";
 import { createMarketIndexApi, type MarketIndexApi } from "../api/marketIndexes";
 import { createManualEventRiskApi, type ManualEventRiskApi } from "../api/manualEventRisk";
-import { createPositionApi, type PositionApi } from "../api/positions";
+import {
+  createPositionApi,
+  type PositionApi,
+  type PositionInventoryApi,
+} from "../api/positions";
 import { isShanghaiDateTime, shanghaiDateTimeKey } from "../api/shanghaiTime";
 import { createSymbolApi, type SymbolApi } from "../api/symbols";
 import {
@@ -31,6 +35,9 @@ const api = props.api ?? createSymbolApi();
 const marketIndexApi = props.marketIndexApi ?? createMarketIndexApi();
 const manualEventRiskApi = props.manualEventRiskApi ?? createManualEventRiskApi();
 const positionApi = props.positionApi ?? createPositionApi();
+const inventoryApi: PositionInventoryApi | null = isInventoryApi(positionApi)
+  ? positionApi
+  : null;
 const positionOperations: PositionOperations = Object.freeze({
   closePosition: (request: Parameters<PositionOperations["closePosition"]>[0]) =>
     positionApi.closePosition(request.command, request.idempotencyKey),
@@ -154,6 +161,12 @@ function submitRange(): void {
   rangeError.value = null;
   range.value = Object.freeze({ endAt: endAt.value, startAt: startAt.value });
 }
+
+function isInventoryApi(value: PositionApi): value is PositionApi & PositionInventoryApi {
+  return typeof (value as Partial<PositionInventoryApi>).getInventory === "function" &&
+    typeof (value as Partial<PositionInventoryApi>).confirmInventory === "function" &&
+    typeof (value as Partial<PositionInventoryApi>).closeInventory === "function";
+}
 </script>
 
 <template>
@@ -208,6 +221,7 @@ function submitRange(): void {
       :loading="loading"
       :manual-event-risk-api="manualEventRiskApi"
       :position-as-of-trade-date="positionAsOfTradeDate"
+      :position-api="inventoryApi"
       :position-operations="positionOperations"
       :position-page="positionPage"
       :stale="stale"

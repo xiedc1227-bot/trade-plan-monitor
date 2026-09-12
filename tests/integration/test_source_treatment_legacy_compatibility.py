@@ -102,4 +102,7 @@ def test_historical_v1_storage_reads_after_restart_without_rehashing_or_upgradin
         assert restored.json()["reviewEvidenceHash"] == LEGACY_EVIDENCE_HASH
         assert restored.json()["mapping"]["mappingVersion"] == "plan-mapping-v1"
         assert restored.json()["mapping"]["sourceProcessing"] is None
-        assert client.get("/api/v1/plan-capabilities").json()["publicActivationAvailable"] is True
+        capability = client.get("/api/v1/plan-capabilities").json()
+        assert capability["publicActivationAvailable"] is False
+        assert capability["isolatedTrustedReviewOnly"] is True
+        assert capability["pendingRequirements"] == ["ORDINARY_PLAN_FORMS"]
