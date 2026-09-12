@@ -43,26 +43,47 @@
 - `SEM-DEF-01` 证明对“放量”（此前 5 根已完成 K 线、算术平均值、1.5 倍）和“有效跌破”（已完成 5 分钟收盘价低于 9.50 元）的有界定义不会触发仅由术语造成的阻断；未定义用法仍被阻断。
 - 错误业务单位被拒绝为无效提供商输出；遗漏成交量窗口映射及额外持仓上限会产生 `UNMAPPED_PLAN_FIELD`。
 - 内部自洽但与原文不符的数量、动作、`ALL`→`ANY` 及逻辑父节点子句归属仍不可启用，并要求精确来源映射复核。
-- 从未改动的完整原文中移除卖出子句或风险提醒子句映射，会使对应原文保持 `UNRESOLVED`，对应动作字段保持未映射。
+- 从历史派生三规则 fixture 中移除卖出子句或风险提醒子句映射，会使对应原文保持 `UNRESOLVED`，对应动作字段保持未映射。
 
-## 未改动完整原文的 API 链路
+## 历史派生简写 API 链路（非用户逐字原文）
 
-完整三规则中文原文在 fixture 与 API 测试中逐字节保留。部分草稿保存时精确报告六条缺失执行政策路径：激活、冲突政策、成交量历史范围，以及三条重复策略。`safety_conditions=null` 是可选值，不再被误报为缺失政策。
+历史 `_ORIGINAL_SOURCE` 是派生的三规则简写，并非用户逐字原文。撤回此前称其为未改动完整用户原文的表述；它保持不变，继续作为回归证据。部分草稿保存时精确报告六条缺失执行政策路径：激活、冲突政策、成交量历史范围，以及三条重复策略。`safety_conditions=null` 是可选值，不再被误报为缺失政策。
 
 当前内容编辑把上述七个具体政策值作为持久化 `USER_SUPPLEMENT` 记录加入，并与 `SOURCE` 分离。提交确认前，测试逐项比对来源问题与当前类型化值及服务端原文子句，也逐项比对政策问题与补录路径/值。确认完成后，启用仍为 false：组合的当前持仓子句与“提醒/确认不代表成交”子句仍未解析，`symbol` 也保持未映射，不会借组合子句的局部信息伪装成完整证据。
 
 该链路暴露并修复了一个映射重整变量遮蔽缺陷；此前它会在编辑时错误地把无引用子句改成 `MAPPED`。
 
+## 逐字原文闭环修正（2026-09-13）
+
+`explicit-plan-literal-source-v3.json` 保存提供的精确原文及换行、唯一明确记录的替换 `测试股票` → `003043.SZ`，以及独立的字段/单位/原文子句和人工补录 oracle。模拟响应经过真实 v4 提供商/解析器边界，再在临时 SQLite 通过普通部分保存、读取、编辑及复核 API。该 fixture 不代表真实模型准确率。
+
+| 边界 | 预期与实际 |
+|---|---|
+| 仅原文 | 六条缺失政策路径；无 reviewId，内容 canActivate=false |
+| 当前编辑 | 八项明确人工测试补录：TRADING_DAY 与 2026-09-14、三条重复选择、两条冲突选择、成交量历史范围 |
+| 当前映射已审核、处理项未确认 | 精确剩余两项 SOURCE_TREATMENT_REVIEW_REQUIRED；内容 canActivate=false |
+| 当前值与处理均已审核 | 有效 reviewId；内容 canActivate=true；executionReadiness=NOT_EVALUATED；公开激活返回409 |
+| 库存隔离 | 保存/编辑/复核后仍为 UNKNOWN/null；独立公开确认登记100；同 key 重试和新 key 再确认仍为100且期初余额不变 |
+| 运行时/提醒 | 真实隔离显式运行时在 UNKNOWN 库存下提交纯 RISK_ALERT；BUY/SELL/RISK 提醒入队及公开已读/重试不改变已登记库存 |
+| 兼容性 | 不含 source_processing 的已复核/未复核旧 v1 记录重启后保留修正前冻结的来源/内容/证据哈希 |
+
+`INVENTORY_ASSERTION` 保留独立 symbol、数量及结算区段；`PRODUCT_GUARANTEE` 保留两条精确子句且仅绑定 `alert-position-isolation-v1`。服务端重新推导每条存储记录、要求精确当前确认，绝不从文本初始化持仓。有限语法及保留语族边界见 SPEC-source-treatment-review；任意中文语义仍需人工复核。
+
+独立审查发现新验收测试初版只检查提取 oracle，未检查编辑后的当前值。交付前已修正：每次确认都先独立核验当前值、单位、结构、原文子句及补录。把980改为970、数量改为200、ALL→ANY 或引用错误子句的变异探针必须在确认前失败。附加条件、否定、伪造数量/可卖量/契约/区段、缺失子句/处理、错误解决绑定、旧哈希及存储处理/解决记录篡改也有反例覆盖。无效提交返回422；存储损坏沿用不泄露内部信息的500 INTERNAL_ERROR。
+
 ## 自动化证据
 
-- v1/v2/提供商/解析器/复核/API 聚焦链路：**69 passed**。
-- 完整后端单元测试：**1,362 passed**，仅有一条既有 Starlette `httpx` 弃用警告。
-- 计划 API、生产组合、SQLite 仓储及显式复核集成组：**269 passed**，同一条警告。
+- 原有 v1/v2/提供商/解析器/复核/API 聚焦链路保留：**69 passed**；加上45项新处理/逐字原文/库存/旧版本测试后：**114 passed**。
+- 本次完整后端单元测试：**1,382 passed**，仅有一条既有 Starlette `httpx` 弃用警告。
+- 本次相关计划/SQLite/持仓/显式运行时/传输/提醒集成组：**189 passed**。
+- 此前 **1,362 unit / 269 integration** 属于上一轮语义语料修正，不属于本轮逐字原文闭环运行。
 - 所有变更 Python 文件的 `ruff check` 与 `ruff format --check` 通过。
 - 早期 R11 的 433 项发布门槛、29 项旧显式运行时/传输及 684 项广泛回归仅保留为初始实现提交的历史背景；更正后的结论以上述最新运行结果为依据。
 - 尝试执行全体测试时进入既有长耗时集成段，最终被中止且没有结果，因此不计入证据。
 
 前端类型检查仍报告 R10 已存在的 `AlertTable.vue` 与 `AlertsView.vue` 告警联合类型错误。R11 未修改或压制这些错误。
+
+从 `trade-plan-monitor/` 复现：`.venv/Scripts/python.exe -m pytest tests/unit -q`。114项命令选择单元文件 `tests/unit/test_explicit_plan_semantic_corpus.py`、`test_explicit_plan_semantic_acceptance.py`、`test_ai_plan_extraction_v4.py`、`test_explicit_plan_review.py`、`test_source_processing.py`，以及集成文件 `test_explicit_plan_review_api.py`、`test_source_treatment_review_api.py`、`test_source_treatment_inventory_isolation.py`、`test_source_treatment_legacy_compatibility.py`。189项组选择集成文件 `test_plan_production_composition.py`、`test_sqlite_repositories.py`、`test_explicit_plan_review_api.py`、`test_position_inventory.py`、`test_explicit_transport.py`、`test_explicit_runtime_production.py`、`test_explicit_decision_persistence.py`、`test_alert_production_composition.py`，再加三个新增 `test_source_treatment_*` 集成文件。全部使用 `-q`；各组存在重叠，不得相加计数。
 
 ## 发布边界
 
