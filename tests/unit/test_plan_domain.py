@@ -83,6 +83,54 @@ def _valid_plan_payload() -> dict[str, object]:
     }
 
 
+def _valid_explicit_buy_plan_payload() -> dict[str, object]:
+    return {
+        "schema_version": 3,
+        "execution_mode": "EXPLICIT_RULES",
+        "execution_version": "explicit-rules-v1",
+        "plan_id": "synthetic-f06-buy",
+        "version": 1,
+        "symbol": "003043.SZ",
+        "name": "SYNTHETIC F06 BUY SUBSET",
+        "market": "SZSE",
+        "metadata": {},
+        "activation": {"mode": "TRADING_DAY", "trading_day": "2026-09-14"},
+        "position": {"inventory_scope": "ALL_REGISTERED", "lot_size": 100, "max_qty": 300},
+        "monitoring": {"timeframe_minutes": 5, "indicator_formula_version": "ta-v1"},
+        "rules": [
+            {
+                "rule_id": "buy-100",
+                "condition": {
+                    "type": "ALL",
+                    "conditions": [
+                        {
+                            "type": "COMPLETED_CLOSE_IN_RANGE",
+                            "low_fen": 980,
+                            "high_fen": 1000,
+                            "include_low": True,
+                            "include_high": True,
+                        },
+                        {
+                            "type": "VOLUME_TO_MEAN_GTE",
+                            "window_bars": 5,
+                            "minimum_ratio": "1.5",
+                            "history_scope": "CONTIGUOUS_TRADING_BARS",
+                        },
+                    ],
+                },
+                "action": {"type": "BUY", "quantity": 100},
+                "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+                "repeat_policy": {"mode": "ONCE_PER_ACTIVATION"},
+                "safety_conditions": None,
+            }
+        ],
+        "conflict_policy": {
+            "trade_conflict": "BLOCK_BOTH",
+            "risk_conflict": "RISK_ONLY",
+        },
+    }
+
+
 def _replace_entry_condition(condition: object) -> dict[str, object]:
     payload = _valid_plan_payload()
     payload["entry"] = {"condition": condition}
@@ -108,6 +156,75 @@ def test_trade_plan_preserves_integer_fen_and_version_identity() -> None:
     assert plan.levels.low_buy.low_fen == 6300
     assert plan.levels.pressure_reference_fen == 6906
     assert isinstance(plan.activation, ManualActivation)
+
+
+def test_explicit_plan_codec_dispatches_without_widening_legacy_model() -> None:
+    from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
+
+    plan = load_plan_json(json.dumps(_valid_explicit_buy_plan_payload(), ensure_ascii=False))
+
+    assert isinstance(plan, ExplicitTradePlan)
+    assert not isinstance(plan, TradePlan)
+    assert load_plan_json(dump_plan_json(plan)) == plan
+    assert load_plan_yaml(dump_plan_yaml(plan)) == plan
+    assert plan.execution_version == "explicit-rules-v1"
+    assert plan.rules[0].condition.conditions[1].minimum_ratio == Decimal("1.5")
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("schema_version", 4, "UNSUPPORTED_PLAN_VERSION"),
+        ("execution_version", "explicit-rules-v2", "UNSUPPORTED_EXECUTION_VERSION"),
+    ],
+)
+def test_codec_rejects_unknown_plan_and_execution_versions_explicitly(
+    field: str,
+    value: object,
+    code: str,
+) -> None:
+    payload = _valid_explicit_buy_plan_payload()
+    payload[field] = value
+
+    with pytest.raises(PlanDocumentError) as error:
+        load_plan_json(json.dumps(payload))
+
+    assert error.value.code == code
+
+
+def test_incomplete_explicit_plan_cannot_enter_executable_codec() -> None:
+    payload = _valid_explicit_buy_plan_payload()
+    rules = payload["rules"]
+    assert isinstance(rules, list)
+    rules[0]["repeat_policy"] = None
+
+    with pytest.raises(PlanDocumentError) as error:
+        load_plan_json(json.dumps(payload))
+
+    assert error.value.code == "INVALID_PLAN"
+
+
+def test_explicit_content_hash_excludes_only_review_identity_metadata() -> None:
+    from trade_plan_monitor.domain.plan_hash import explicit_plan_content_sha256
+
+    first = load_plan_json(json.dumps(_valid_explicit_buy_plan_payload()))
+    changed_identity_payload = deepcopy(_valid_explicit_buy_plan_payload())
+    changed_identity_payload.update(
+        {
+            "plan_id": "synthetic-f06-buy-copy",
+            "version": 2,
+            "name": "RENAMED",
+            "metadata": {"reference_price_fen": 990},
+        }
+    )
+    changed_identity = load_plan_json(json.dumps(changed_identity_payload))
+    changed_semantics_payload = deepcopy(_valid_explicit_buy_plan_payload())
+    changed_semantics_payload["position"]["max_qty"] = 400
+    changed_semantics = load_plan_json(json.dumps(changed_semantics_payload))
+
+    assert explicit_plan_content_sha256(first) == explicit_plan_content_sha256(changed_identity)
+    assert explicit_plan_content_sha256(first) != explicit_plan_content_sha256(changed_semantics)
+    assert plan_sha256(first) != plan_sha256(changed_identity)
 
 
 @pytest.mark.parametrize(

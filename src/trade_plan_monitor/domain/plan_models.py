@@ -90,6 +90,25 @@ CanonicalThresholdRatio = Annotated[
 ]
 
 
+def _canonical_positive_ratio(value: object) -> Decimal:
+    if type(value) not in {str, Decimal}:
+        raise ValueError("minimum_ratio must be a canonical decimal string or Decimal")
+    text = str(value)
+    if _CANONICAL_RATIO_PATTERN.fullmatch(text) is None or text in {"-0", "0"}:
+        raise ValueError("minimum_ratio must use positive canonical non-exponent decimal text")
+    parsed = Decimal(text)
+    if not parsed.is_finite():
+        raise ValueError("minimum_ratio must be finite")
+    return parsed
+
+
+CanonicalPositiveRatio = Annotated[
+    Decimal,
+    BeforeValidator(_canonical_positive_ratio),
+    Field(strict=True, gt=Decimal("0"), le=Decimal("10"), allow_inf_nan=False),
+]
+
+
 class _DomainValue(BaseModel):
     """Make all domain values closed and immutable at validation boundaries."""
 
@@ -534,6 +553,199 @@ class MonitoringPolicy(_DomainValue):
     indicator_formula_version: Literal["ta-v1"] = "ta-v1"
 
 
+class ExplicitPositionPolicy(_DomainValue):
+    """Actual-inventory limits for Schema v3 explicit rules."""
+
+    inventory_scope: Literal["ALL_REGISTERED"] = "ALL_REGISTERED"
+    lot_size: Literal[100] = 100
+    max_qty: PositiveBoardLotQuantity
+
+
+class CompletedCloseInRangeCondition(_DomainValue):
+    """Match one completed five-minute close against an exact fen interval."""
+
+    type: Literal["COMPLETED_CLOSE_IN_RANGE"] = "COMPLETED_CLOSE_IN_RANGE"
+    low_fen: PositiveFen
+    high_fen: PositiveFen
+    include_low: StrictFlag
+    include_high: StrictFlag
+
+    @model_validator(mode="after")
+    def validate_nonempty_interval(self) -> Self:
+        if self.low_fen > self.high_fen:
+            raise ValueError("price range lower bound cannot exceed upper bound")
+        if self.low_fen == self.high_fen and not (self.include_low and self.include_high):
+            raise ValueError("price range must contain at least one integer-fen price")
+        return self
+
+
+class VolumeToMeanGteCondition(_DomainValue):
+    """Compare current volume with the exact preceding completed-bar mean."""
+
+    type: Literal["VOLUME_TO_MEAN_GTE"] = "VOLUME_TO_MEAN_GTE"
+    window_bars: ConditionBars
+    minimum_ratio: CanonicalPositiveRatio
+    history_scope: Literal["CONTIGUOUS_TRADING_BARS"]
+
+
+class CompletedCloseBelowCondition(_DomainValue):
+    """Match one completed five-minute close strictly below a fen threshold."""
+
+    type: Literal["COMPLETED_CLOSE_BELOW"] = "COMPLETED_CLOSE_BELOW"
+    price_fen: PositiveFen
+
+
+class ExplicitAllCondition(_DomainValue):
+    type: Literal["ALL"] = "ALL"
+    conditions: tuple[ExplicitConditionNode, ...] = Field(
+        min_length=1,
+        max_length=_MAX_CONDITION_LEAVES,
+    )
+
+
+class ExplicitAnyCondition(_DomainValue):
+    type: Literal["ANY"] = "ANY"
+    conditions: tuple[ExplicitConditionNode, ...] = Field(
+        min_length=1,
+        max_length=_MAX_CONDITION_LEAVES,
+    )
+
+
+ExplicitConditionNode = Annotated[
+    CompletedCloseInRangeCondition
+    | VolumeToMeanGteCondition
+    | CompletedCloseBelowCondition
+    | ManualEventRiskClearCondition
+    | ExplicitAllCondition
+    | ExplicitAnyCondition,
+    Field(discriminator="type"),
+]
+
+ExplicitAllCondition.model_rebuild()
+ExplicitAnyCondition.model_rebuild()
+
+
+class CompletedBarConfirmation(_DomainValue):
+    kind: Literal["COMPLETED_BAR_CLOSE"] = "COMPLETED_BAR_CLOSE"
+    timeframe_minutes: Literal[5] = 5
+
+
+class ExplicitRepeatPolicy(_DomainValue):
+    mode: Literal["ONCE_PER_ACTIVATION", "EACH_QUALIFYING_BAR"]
+
+
+class ExplicitBuyAction(_DomainValue):
+    type: Literal["BUY"] = "BUY"
+    quantity: PositiveBoardLotQuantity
+
+
+class ExplicitSellAction(_DomainValue):
+    type: Literal["SELL"] = "SELL"
+    quantity: PositiveBoardLotQuantity
+    inventory_scope: Literal["ALL_REGISTERED"] = "ALL_REGISTERED"
+
+
+class ExplicitRiskAlertAction(_DomainValue):
+    type: Literal["RISK_ALERT"] = "RISK_ALERT"
+
+
+ExplicitAction = Annotated[
+    ExplicitBuyAction | ExplicitSellAction | ExplicitRiskAlertAction,
+    Field(discriminator="type"),
+]
+
+
+class ExplicitRule(_DomainValue):
+    rule_id: PlanId
+    condition: ExplicitConditionNode
+    action: ExplicitAction
+    confirmation: CompletedBarConfirmation
+    repeat_policy: ExplicitRepeatPolicy
+    safety_conditions: ExplicitConditionNode | None
+
+    @field_validator("condition", "safety_conditions", mode="before")
+    @classmethod
+    def validate_condition_structure(cls, value: object) -> object:
+        if value is not None:
+            _count_condition_leaves(value)
+        return value
+
+    @model_validator(mode="after")
+    def validate_manual_risk_scope(self) -> Self:
+        if _contains_condition_type(self.condition, "MANUAL_EVENT_RISK_CLEAR"):
+            raise ValueError("MANUAL_EVENT_RISK_CLEAR is allowed only in safety_conditions")
+        return self
+
+
+class ExplicitConflictPolicy(_DomainValue):
+    trade_conflict: Literal["BLOCK_BOTH"] = "BLOCK_BOTH"
+    risk_conflict: Literal["RISK_ONLY", "RISK_WITH_SELL_BLOCK_BUY"]
+
+
+def _contains_condition_type(root: object, expected_type: str) -> bool:
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        tag, children = _condition_tag_and_children(node)
+        if tag == expected_type:
+            return True
+        if tag in {"ALL", "ANY"} and isinstance(children, Sequence) and not isinstance(
+            children, (str, bytes)
+        ):
+            stack.extend(children)
+    return False
+
+
+class ExplicitTradePlan(_DomainValue):
+    """Complete executable Schema v3 plan; partial drafts use a separate review model."""
+
+    schema_version: Literal[3] = 3
+    execution_mode: Literal["EXPLICIT_RULES"] = "EXPLICIT_RULES"
+    execution_version: Literal["explicit-rules-v1"] = "explicit-rules-v1"
+    plan_id: PlanId
+    version: PositiveVersion
+    symbol: AShareSymbol
+    name: PlanName
+    market: Market
+    metadata: PlanMetadata
+    activation: ActivationPolicy
+    position: ExplicitPositionPolicy
+    monitoring: MonitoringPolicy
+    rules: tuple[ExplicitRule, ...] = Field(min_length=1, max_length=3)
+    conflict_policy: ExplicitConflictPolicy
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_plan_condition_limits(cls, data: object) -> object:
+        if not isinstance(data, Mapping):
+            return data
+        leaf_count = 0
+        rules = data.get("rules")
+        if isinstance(rules, Sequence) and not isinstance(rules, (str, bytes)):
+            for rule in rules:
+                if not isinstance(rule, Mapping):
+                    continue
+                for key in ("condition", "safety_conditions"):
+                    root = rule.get(key)
+                    if root is not None:
+                        leaf_count += _count_condition_leaves(root)
+        if leaf_count > _MAX_CONDITION_LEAVES:
+            raise ValueError(
+                f"condition leaf count cannot exceed {_MAX_CONDITION_LEAVES} per plan"
+            )
+        return data
+
+    @model_validator(mode="after")
+    def validate_rule_id_and_action_uniqueness(self) -> Self:
+        rule_ids = [rule.rule_id for rule in self.rules]
+        if len(rule_ids) != len(set(rule_ids)):
+            raise ValueError("explicit rule_id values must be unique")
+        action_types = [rule.action.type for rule in self.rules]
+        if len(action_types) != len(set(action_types)):
+            raise ValueError("explicit plans allow at most one rule per action type")
+        return self
+
+
 class TradePlan(_DomainValue):
     """One immutable, validated version of an executable trade plan."""
 
@@ -613,6 +825,9 @@ class TradePlan(_DomainValue):
         return self
 
 
+ExecutableTradePlan = TradePlan | ExplicitTradePlan
+
+
 __all__ = [
     "AShareSymbol",
     "ActivationPolicy",
@@ -621,11 +836,27 @@ __all__ = [
     "BlockerPolicy",
     "BoardLotQuantity",
     "CloseInBarLowerHalfCondition",
+    "CompletedBarConfirmation",
+    "CompletedCloseBelowCondition",
+    "CompletedCloseInRangeCondition",
     "ConditionNode",
     "ConsecutiveClosesBelowLevelCondition",
     "DateRangeActivation",
     "DistanceFromLimitDownGteCondition",
     "EntryPolicy",
+    "ExecutableTradePlan",
+    "ExplicitAction",
+    "ExplicitAllCondition",
+    "ExplicitAnyCondition",
+    "ExplicitBuyAction",
+    "ExplicitConditionNode",
+    "ExplicitConflictPolicy",
+    "ExplicitPositionPolicy",
+    "ExplicitRepeatPolicy",
+    "ExplicitRiskAlertAction",
+    "ExplicitRule",
+    "ExplicitSellAction",
+    "ExplicitTradePlan",
     "IndexCloseGteMaCondition",
     "IndexCloseLteMaCondition",
     "IndexMaNonDecreasingCondition",
@@ -659,5 +890,6 @@ __all__ = [
     "UpperWickRatioGteCondition",
     "VolumeToMedianGteCondition",
     "VolumeToMedianLteCondition",
+    "VolumeToMeanGteCondition",
     "VolumeToPreviousLteCondition",
 ]

@@ -10,7 +10,7 @@ from typing import Literal
 import yaml
 from pydantic import ValidationError
 
-from trade_plan_monitor.domain.plan_models import TradePlan
+from trade_plan_monitor.domain.plan_models import ExecutableTradePlan, ExplicitTradePlan, TradePlan
 
 MAX_PLAN_DOCUMENT_BYTES = 256 * 1024
 _MAX_PLAN_DOCUMENT_NODES = 10_000
@@ -22,6 +22,8 @@ PlanDocumentErrorCode = Literal[
     "INVALID_ROOT",
     "UNSUPPORTED_VALUE",
     "INVALID_PLAN",
+    "UNSUPPORTED_EXECUTION_VERSION",
+    "UNSUPPORTED_PLAN_VERSION",
 ]
 
 
@@ -167,14 +169,27 @@ def _validate_data_tree(root: dict[object, object]) -> None:
         )
 
 
-def _validate_plan_data(raw_plan: object) -> TradePlan:
+def _validate_plan_data(raw_plan: object) -> ExecutableTradePlan:
     if not isinstance(raw_plan, dict):
         raise PlanDocumentError(
             "INVALID_ROOT",
             "Plan document root must be a mapping.",
         )
     _validate_data_tree(raw_plan)
+    schema_version = raw_plan.get("schema_version", 1)
+    if schema_version not in {1, 2, 3}:
+        raise PlanDocumentError(
+            "UNSUPPORTED_PLAN_VERSION",
+            "Plan document uses an unsupported schema version.",
+        )
+    if schema_version == 3 and raw_plan.get("execution_version") != "explicit-rules-v1":
+        raise PlanDocumentError(
+            "UNSUPPORTED_EXECUTION_VERSION",
+            "Plan document uses an unsupported execution version.",
+        )
     try:
+        if schema_version == 3:
+            return ExplicitTradePlan.model_validate(raw_plan)
         return TradePlan.model_validate(raw_plan)
     except (ValidationError, RecursionError) as error:
         raise PlanDocumentError(
@@ -183,7 +198,7 @@ def _validate_plan_data(raw_plan: object) -> TradePlan:
         ) from error
 
 
-def load_plan_json(document: str | bytes) -> TradePlan:
+def load_plan_json(document: str | bytes) -> ExecutableTradePlan:
     """Parse one bounded JSON object and validate the complete plan schema."""
 
     normalized = _normalize_document(document)
@@ -203,7 +218,7 @@ def load_plan_json(document: str | bytes) -> TradePlan:
     return _validate_plan_data(raw_plan)
 
 
-def load_plan_yaml(document: str | bytes) -> TradePlan:
+def load_plan_yaml(document: str | bytes) -> ExecutableTradePlan:
     """Safely parse one bounded YAML object and validate the complete plan schema."""
 
     normalized = _normalize_document(document)
@@ -222,16 +237,16 @@ def load_plan_yaml(document: str | bytes) -> TradePlan:
     return _validate_plan_data(raw_plan)
 
 
-def _plan_json_data(plan: TradePlan) -> dict[str, object]:
-    if not isinstance(plan, TradePlan):
-        raise TypeError("plan must be a TradePlan")
+def _plan_json_data(plan: ExecutableTradePlan) -> dict[str, object]:
+    if not isinstance(plan, TradePlan | ExplicitTradePlan):
+        raise TypeError("plan must be an executable trade plan")
     data = plan.model_dump(mode="json")
     if plan.schema_version == 1:
         data.pop("reference_market", None)
     return data
 
 
-def dump_plan_json(plan: TradePlan) -> str:
+def dump_plan_json(plan: ExecutableTradePlan) -> str:
     """Return compact canonical JSON with recursively sorted object keys."""
 
     return json.dumps(
@@ -243,7 +258,7 @@ def dump_plan_json(plan: TradePlan) -> str:
     )
 
 
-def dump_plan_yaml(plan: TradePlan) -> str:
+def dump_plan_yaml(plan: ExecutableTradePlan) -> str:
     """Return portable Unicode YAML containing standard tags only."""
 
     return yaml.safe_dump(
