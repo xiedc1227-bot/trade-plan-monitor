@@ -3,6 +3,7 @@
 > `0005-version-explicit-plan-rules.md` 是英文正式版；本文为语义等价的中文审阅副本。
 
 - 状态：`已接受；R09-R11 已实施，R12 待完成`
+- 复核版本修订：[ADR 0006](0006-review-mixed-source-with-bounded-treatments.zh-CN.md) 只取代新服务端映射/证据版本；历史 v1 快照及全部提示词契约继续冻结。
 - 日期：`2026-09-12`
 - 工作项：`F06 / R08–R12`
 - 模块：`plan-domain`、`decision-engine`、`ai-plan-drafting`、`strategy-state`、`notification-outbox`、`local-web`、`backtest-engine`

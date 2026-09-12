@@ -6725,6 +6725,84 @@
         "title": "IntradayDiagnosticIdentityView",
         "type": "object"
       },
+      "InventorySourceTreatmentView": {
+        "additionalProperties": false,
+        "properties": {
+          "contractId": {
+            "const": "independent-inventory-v1",
+            "title": "Contractid",
+            "type": "string"
+          },
+          "kind": {
+            "const": "INVENTORY_ASSERTION",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ledgerEffect": {
+            "const": "NONE_REQUIRES_INDEPENDENT_CONFIRMATION",
+            "title": "Ledgereffect",
+            "type": "string"
+          },
+          "requiredOperation": {
+            "const": "/api/v1/position-inventory-confirmations",
+            "title": "Requiredoperation",
+            "type": "string"
+          },
+          "sellableQuantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sellablequantity",
+            "type": "integer"
+          },
+          "settlementBasis": {
+            "const": "HELD_BEFORE_TEST_DATE_ALL_SELLABLE",
+            "title": "Settlementbasis",
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/SourceSpanView"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Spans",
+            "type": "array"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "symbolSpan": {
+            "$ref": "#/components/schemas/SourceSpanView"
+          },
+          "totalQuantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Totalquantity",
+            "type": "integer"
+          },
+          "treatmentId": {
+            "title": "Treatmentid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "treatmentId",
+          "contractId",
+          "spans",
+          "symbolSpan",
+          "symbol",
+          "totalQuantity",
+          "sellableQuantity",
+          "settlementBasis",
+          "requiredOperation",
+          "ledgerEffect"
+        ],
+        "title": "InventorySourceTreatmentView",
+        "type": "object"
+      },
       "ManualEventRiskConfirmationCommand": {
         "additionalProperties": false,
         "properties": {
@@ -7853,8 +7931,11 @@
             "type": "array"
           },
           "mappingVersion": {
-            "const": "plan-mapping-v1",
             "default": "plan-mapping-v1",
+            "enum": [
+              "plan-mapping-v1",
+              "plan-mapping-v2"
+            ],
             "title": "Mappingversion",
             "type": "string"
           },
@@ -7866,6 +7947,16 @@
             "minItems": 1,
             "title": "Sourceclauses",
             "type": "array"
+          },
+          "sourceProcessing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceProcessingView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "userSupplements": {
             "default": [],
@@ -9029,6 +9120,48 @@
         "title": "PositionSummaryView",
         "type": "object"
       },
+      "ProductSourceTreatmentView": {
+        "additionalProperties": false,
+        "properties": {
+          "contractId": {
+            "const": "alert-position-isolation-v1",
+            "title": "Contractid",
+            "type": "string"
+          },
+          "guarantee": {
+            "const": "ALERTS_AND_ACKNOWLEDGEMENTS_DO_NOT_CHANGE_POSITIONS",
+            "title": "Guarantee",
+            "type": "string"
+          },
+          "kind": {
+            "const": "PRODUCT_GUARANTEE",
+            "title": "Kind",
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/SourceSpanView"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Spans",
+            "type": "array"
+          },
+          "treatmentId": {
+            "title": "Treatmentid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "treatmentId",
+          "contractId",
+          "spans",
+          "guarantee"
+        ],
+        "title": "ProductSourceTreatmentView",
+        "type": "object"
+      },
       "ProviderCapabilityStatus": {
         "description": "One independently probed provider capability state.",
         "enum": [
@@ -9239,6 +9372,7 @@
         "enum": [
           "CONFIRM_MAPPING",
           "CONFIRM_POLICY",
+          "CONFIRM_SOURCE_TREATMENT",
           "REPLACED_BY_REVIEWED_CONTENT"
         ],
         "title": "ReviewResolutionKind",
@@ -9720,6 +9854,77 @@
           "disposition"
         ],
         "title": "SourceClauseView",
+        "type": "object"
+      },
+      "SourceProcessingView": {
+        "additionalProperties": false,
+        "properties": {
+          "treatments": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "INVENTORY_ASSERTION": "#/components/schemas/InventorySourceTreatmentView",
+                  "PRODUCT_GUARANTEE": "#/components/schemas/ProductSourceTreatmentView"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/InventorySourceTreatmentView"
+                },
+                {
+                  "$ref": "#/components/schemas/ProductSourceTreatmentView"
+                }
+              ]
+            },
+            "maxItems": 512,
+            "title": "Treatments",
+            "type": "array"
+          },
+          "version": {
+            "const": "source-processing-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "treatments"
+        ],
+        "title": "SourceProcessingView",
+        "type": "object"
+      },
+      "SourceSpanView": {
+        "additionalProperties": false,
+        "properties": {
+          "clauseId": {
+            "title": "Clauseid",
+            "type": "string"
+          },
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "excerpt": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clauseId",
+          "start",
+          "end",
+          "excerpt"
+        ],
+        "title": "SourceSpanView",
         "type": "object"
       },
       "SymbolCollectionUnavailableResponse": {

@@ -724,15 +724,26 @@ def _resolve_server_review(
             or extraction.source_hash != source_hash
         ):
             raise PlanSaveBlockedError("Explicit draft has no matching v4 extraction evidence")
-        supplied_mapping = (
-            command.mapping.to_domain() if command.mapping is not None else extraction.mapping
-        )
-        mapping = reconcile_plan_mapping(draft=plan, mapping=supplied_mapping)
-        snapshot = build_server_review_snapshot(
-            draft=plan,
-            mapping=mapping,
-            source_text=source_text,
-        )
+        from trade_plan_monitor.ai.source_processing import upgrade_source_mapping
+
+        try:
+            supplied_mapping = (
+                command.mapping.to_domain() if command.mapping is not None else extraction.mapping
+            )
+            mapping = upgrade_source_mapping(
+                draft=plan,
+                mapping=reconcile_plan_mapping(draft=plan, mapping=supplied_mapping),
+                source_text=source_text,
+            )
+            snapshot = build_server_review_snapshot(
+                draft=plan,
+                mapping=mapping,
+                source_text=source_text,
+            )
+        except ValueError:
+            raise PlanSaveBlockedError(
+                "Submitted mapping does not match the current source"
+            ) from None
         origin = (
             PlanReviewOrigin.AI_EXTRACTION
             if extraction.draft_hash == draft_hash
@@ -845,9 +856,7 @@ def _plan_version_view(record: object) -> PlanVersionView:
     plan, validation, can_activate = _validated_plan_state(details)
     resolved_ids = tuple(item.issue_id for item in details.resolutions)
     unresolved = tuple(
-        issue
-        for issue in details.required_review_issues
-        if issue.issue_id not in set(resolved_ids)
+        issue for issue in details.required_review_issues if issue.issue_id not in set(resolved_ids)
     )
     return PlanVersionView(
         id=UUID(details.id),
@@ -868,12 +877,9 @@ def _plan_version_view(record: object) -> PlanVersionView:
         review_evidence_hash=details.review_evidence_hash,
         review_revision=(details.review_revision if isinstance(plan, ExplicitPlanDraft) else None),
         review_id=(None if details.review_id is None else UUID(details.review_id)),
-        mapping=(
-            None if details.mapping is None else PlanMappingView.from_domain(details.mapping)
-        ),
+        mapping=(None if details.mapping is None else PlanMappingView.from_domain(details.mapping)),
         required_review_issues=tuple(
-            RequiredReviewIssueView.from_domain(issue)
-            for issue in details.required_review_issues
+            RequiredReviewIssueView.from_domain(issue) for issue in details.required_review_issues
         ),
         resolved_issue_ids=resolved_ids,
         unresolved_review_issues=tuple(
@@ -890,9 +896,7 @@ def _validated_plan_state(
     if isinstance(plan, ExplicitPlanDraft):
         resolved = {item.issue_id for item in details.resolutions}
         unresolved = tuple(
-            issue
-            for issue in details.required_review_issues
-            if issue.issue_id not in resolved
+            issue for issue in details.required_review_issues if issue.issue_id not in resolved
         )
         validation = PlanValidationResult(
             issues=tuple(

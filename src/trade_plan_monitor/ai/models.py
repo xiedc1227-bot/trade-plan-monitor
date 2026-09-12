@@ -190,10 +190,13 @@ class PartialCompletedCloseInRange(_AIValue):
 class PartialVolumeToMeanGte(_AIValue):
     type: Literal["VOLUME_TO_MEAN_GTE"] = "VOLUME_TO_MEAN_GTE"
     window_bars: Annotated[int, Field(strict=True, ge=1, le=500)] | None
-    minimum_ratio: Annotated[
-        str,
-        StringConstraints(pattern=r"^(?:0\.[0-9]*[1-9]|[1-9](?:\.[0-9]*[1-9])?|10)$"),
-    ] | None
+    minimum_ratio: (
+        Annotated[
+            str,
+            StringConstraints(pattern=r"^(?:0\.[0-9]*[1-9]|[1-9](?:\.[0-9]*[1-9])?|10)$"),
+        ]
+        | None
+    )
     history_scope: Literal["CONTIGUOUS_TRADING_BARS"] | None
 
 
@@ -401,21 +404,15 @@ class FieldBinding(_AIValue):
             raise ValueError("field binding clause references must be unique")
         if self.origin is BindingOrigin.SOURCE:
             valid = (
-                bool(self.clause_ids)
-                and self.supplement_id is None
-                and self.contract_id is None
+                bool(self.clause_ids) and self.supplement_id is None and self.contract_id is None
             )
         elif self.origin is BindingOrigin.USER_SUPPLEMENT:
             valid = (
-                not self.clause_ids
-                and self.supplement_id is not None
-                and self.contract_id is None
+                not self.clause_ids and self.supplement_id is not None and self.contract_id is None
             )
         else:
             valid = (
-                not self.clause_ids
-                and self.supplement_id is None
-                and self.contract_id is not None
+                not self.clause_ids and self.supplement_id is None and self.contract_id is not None
             )
             if valid and not _contract_binding_path(self.path):
                 raise ValueError("CONTRACT cannot supply a trading parameter")
@@ -444,14 +441,64 @@ def _contract_binding_path(path: str) -> bool:
     return path.endswith(".rule_id")
 
 
+class SourceSpan(_AIValue):
+    clause_id: ClauseId
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    excerpt: EvidenceExcerpt
+
+
+class InventorySourceTreatment(_AIValue):
+    kind: Literal["INVENTORY_ASSERTION"] = "INVENTORY_ASSERTION"
+    treatment_id: SupplementId
+    contract_id: Literal["independent-inventory-v1"] = "independent-inventory-v1"
+    spans: tuple[SourceSpan, SourceSpan]
+    symbol_span: SourceSpan
+    symbol: AShareSymbol
+    total_quantity: int = Field(strict=True, ge=0, le=9_007_199_254_740_991)
+    sellable_quantity: int = Field(strict=True, ge=0, le=9_007_199_254_740_991)
+    settlement_basis: Literal["HELD_BEFORE_TEST_DATE_ALL_SELLABLE"] = (
+        "HELD_BEFORE_TEST_DATE_ALL_SELLABLE"
+    )
+    required_operation: Literal["/api/v1/position-inventory-confirmations"] = (
+        "/api/v1/position-inventory-confirmations"
+    )
+    ledger_effect: Literal["NONE_REQUIRES_INDEPENDENT_CONFIRMATION"] = (
+        "NONE_REQUIRES_INDEPENDENT_CONFIRMATION"
+    )
+
+
+class ProductSourceTreatment(_AIValue):
+    kind: Literal["PRODUCT_GUARANTEE"] = "PRODUCT_GUARANTEE"
+    treatment_id: SupplementId
+    contract_id: Literal["alert-position-isolation-v1"] = "alert-position-isolation-v1"
+    spans: tuple[SourceSpan, SourceSpan]
+    guarantee: Literal["ALERTS_AND_ACKNOWLEDGEMENTS_DO_NOT_CHANGE_POSITIONS"] = (
+        "ALERTS_AND_ACKNOWLEDGEMENTS_DO_NOT_CHANGE_POSITIONS"
+    )
+
+
+SourceTreatment = Annotated[
+    InventorySourceTreatment | ProductSourceTreatment, Field(discriminator="kind")
+]
+
+
+class SourceProcessing(_AIValue):
+    version: Literal["source-processing-v1"] = "source-processing-v1"
+    treatments: tuple[SourceTreatment, ...] = Field(default=(), max_length=512)
+
+
 class PlanMapping(_AIValue):
-    mapping_version: Literal["plan-mapping-v1"] = "plan-mapping-v1"
+    mapping_version: Literal["plan-mapping-v1", "plan-mapping-v2"] = "plan-mapping-v1"
     source_clauses: tuple[SourceClause, ...] = Field(min_length=1, max_length=512)
     field_bindings: tuple[FieldBinding, ...] = Field(default=(), max_length=10_000)
     user_supplements: tuple[UserSupplement, ...] = Field(default=(), max_length=512)
+    source_processing: SourceProcessing | None = None
 
     @model_validator(mode="after")
     def require_unique_identities(self) -> Self:
+        if (self.mapping_version == "plan-mapping-v2") != (self.source_processing is not None):
+            raise ValueError("v2 mapping requires versioned source processing; v1 forbids it")
         clauses = tuple(item.clause_id for item in self.source_clauses)
         bindings = tuple((item.binding_kind, item.path) for item in self.field_bindings)
         supplements = tuple(item.supplement_id for item in self.user_supplements)
@@ -467,6 +514,7 @@ class PlanMapping(_AIValue):
 class ReviewResolutionKind(StrEnum):
     CONFIRM_MAPPING = "CONFIRM_MAPPING"
     CONFIRM_POLICY = "CONFIRM_POLICY"
+    CONFIRM_SOURCE_TREATMENT = "CONFIRM_SOURCE_TREATMENT"
     REPLACED_BY_REVIEWED_CONTENT = "REPLACED_BY_REVIEWED_CONTENT"
 
 
@@ -613,9 +661,11 @@ class PlanExtractionResult(_AIValue):
             if self.prompt_version != "plan-extract-v4" and self.mapping is not None:
                 raise ValueError("legacy extraction versions cannot contain a v4 mapping")
             return self
-        if self.draft is not None or any(
-            (self.evidence, self.assumptions, self.warnings, self.unmapped_text)
-        ) or self.mapping is not None:
+        if (
+            self.draft is not None
+            or any((self.evidence, self.assumptions, self.warnings, self.unmapped_text))
+            or self.mapping is not None
+        ):
             raise ValueError("a non-succeeded extraction cannot expose draft content")
         return self
 

@@ -102,6 +102,8 @@ BUY 要求已知且登记完整的当前持仓，并满足 `total_qty + quantity
 
 ## E07. 草稿审核、哈希与 API 边界
 
+R11 混合原文修订：[SPEC-source-treatment-review](SPEC-source-treatment-review.zh-CN.md) 与 [ADR 0006](../../decisions/0006-review-mixed-source-with-bounded-treatments.zh-CN.md) 定义仅服务端新增的 `plan-mapping-v2` / `source-processing-v1` / `plan-review-evidence-v2` 记录。它们只对新保存取代下文仅含 v1 映射/证据的说明，不修改历史行或冻结的 v4 提取输出。精确持仓声明导向独立登记；精确提醒隔离保证绑定已实现的产品契约。二者都要求当前快照的处理确认。内容复核完成可为 true，同时库存仍为 UNKNOWN、公开启用仍关闭。
+
 v1/v2 保持当前 `planHash=SHA256(canonical UTF-8 plan JSON)` 不变，v3 沿用精确文档规则。它包含 `version` 和 metadata，因此**不是**语义内容哈希。仅对新 v3 审核增加服务端计算的 `contentHash`：域 `plan-review-content-v1`、NUL，以及 v3 计划只排除 `version`、`name`、`metadata`、`plan_id` 后的规范 JSON。包含股票、市场、Schema、执行版本、有效期、全部数量/条件/标记/安全/重复/冲突选择；不得静默丢弃未知字段。另行绑定精确原文 UTF-8 `sourceHash`、映射/问题快照哈希 `reviewEvidenceHash`、`planVersionId` 和审核 revision；相同内容换原文/计划不能自动获批。
 
 保留 R04 提取快照及 R05 `AI_EDITED`/`AI_REIMPORT`/`LEGACY_PENDING` 证据，其旧 draft hash 仍为精确文档哈希。版本号递增可保留语义比较，但不能把旧记录重标为已按内容审核。R11 增加针对**当前**服务端快照的可信确认，使编辑后的 AI 草稿能够真正完成重审；复制客户端 resolved 问题永远不能做到这一点。交易内容改变使批准失效。只改名称/metadata/版本时语义哈希相等，但激活仍须明确新不可变版本和当前 activation revision。禁止跨计划复用批准。

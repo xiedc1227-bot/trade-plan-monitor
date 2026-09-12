@@ -1040,6 +1040,20 @@ export type IntradayDiagnosticIdentityView = {
   symbol: string;
 };
 
+export type InventorySourceTreatmentView = {
+  contractId: "independent-inventory-v1";
+  kind: "INVENTORY_ASSERTION";
+  ledgerEffect: "NONE_REQUIRES_INDEPENDENT_CONFIRMATION";
+  requiredOperation: "/api/v1/position-inventory-confirmations";
+  sellableQuantity: number;
+  settlementBasis: "HELD_BEFORE_TEST_DATE_ALL_SELLABLE";
+  spans: Array<components["schemas"]["SourceSpanView"]>;
+  symbol: string;
+  symbolSpan: components["schemas"]["SourceSpanView"];
+  totalQuantity: number;
+  treatmentId: string;
+};
+
 export type ManualEventRiskConfirmationCommand = {
   expectedRevision: number;
   expiresOn: string;
@@ -1214,8 +1228,9 @@ export type PlanImportCommand = {
 
 export type PlanMappingView = {
   fieldBindings?: Array<components["schemas"]["FieldBindingView"]>;
-  mappingVersion?: "plan-mapping-v1";
+  mappingVersion?: "plan-mapping-v1" | "plan-mapping-v2";
   sourceClauses: Array<components["schemas"]["SourceClauseView"]>;
+  sourceProcessing?: (components["schemas"]["SourceProcessingView"]) | (null);
   userSupplements?: Array<components["schemas"]["UserSupplementView"]>;
 };
 
@@ -1400,6 +1415,14 @@ export type PositionSummaryView = {
   totalQuantity: number;
 };
 
+export type ProductSourceTreatmentView = {
+  contractId: "alert-position-isolation-v1";
+  guarantee: "ALERTS_AND_ACKNOWLEDGEMENTS_DO_NOT_CHANGE_POSITIONS";
+  kind: "PRODUCT_GUARANTEE";
+  spans: Array<components["schemas"]["SourceSpanView"]>;
+  treatmentId: string;
+};
+
 export type ProviderCapabilityStatus = "UNVERIFIED" | "READY" | "BLOCKED_PERMISSION" | "RATE_LIMITED" | "ERROR";
 
 export type ProviderHealthView = {
@@ -1435,7 +1458,7 @@ export type ReturnWindow = "FIVE_MINUTE_BUCKETS" | "OFFICIAL_OPEN_DAYS";
 
 export type ReviewIssueKind = "ASSUMPTION" | "WARNING" | "UNMAPPED_TEXT" | "MISSING_EVIDENCE";
 
-export type ReviewResolutionKind = "CONFIRM_MAPPING" | "CONFIRM_POLICY" | "REPLACED_BY_REVIEWED_CONTENT";
+export type ReviewResolutionKind = "CONFIRM_MAPPING" | "CONFIRM_POLICY" | "CONFIRM_SOURCE_TREATMENT" | "REPLACED_BY_REVIEWED_CONTENT";
 
 export type RiskStatus = "CLEAR" | "BREACHED_PENDING_CONFIRMATION" | "EXIT_PENDING_SETTLEMENT";
 
@@ -1513,6 +1536,18 @@ export type SourceClauseView = {
   end: number;
   excerpt: string;
   paths?: Array<string>;
+  start: number;
+};
+
+export type SourceProcessingView = {
+  treatments: Array<(components["schemas"]["InventorySourceTreatmentView"]) | (components["schemas"]["ProductSourceTreatmentView"])>;
+  version: "source-processing-v1";
+};
+
+export type SourceSpanView = {
+  clauseId: string;
+  end: number;
+  excerpt: string;
   start: number;
 };
 
@@ -1787,6 +1822,7 @@ export interface components {
     IndexConditionEvidenceView: IndexConditionEvidenceView;
     IndexConditionProgressView: IndexConditionProgressView;
     IntradayDiagnosticIdentityView: IntradayDiagnosticIdentityView;
+    InventorySourceTreatmentView: InventorySourceTreatmentView;
     ManualEventRiskConfirmationCommand: ManualEventRiskConfirmationCommand;
     ManualEventRiskStatus: ManualEventRiskStatus;
     ManualEventRiskUnknownReason: ManualEventRiskUnknownReason;
@@ -1836,6 +1872,7 @@ export interface components {
     PositionPrefillAction: PositionPrefillAction;
     PositionPrefillView: PositionPrefillView;
     PositionSummaryView: PositionSummaryView;
+    ProductSourceTreatmentView: ProductSourceTreatmentView;
     ProviderCapabilityStatus: ProviderCapabilityStatus;
     ProviderHealthView: ProviderHealthView;
     RequiredReviewIssueView: RequiredReviewIssueView;
@@ -1856,6 +1893,8 @@ export interface components {
     SmaIndicatorFactView: SmaIndicatorFactView;
     SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
     SourceClauseView: SourceClauseView;
+    SourceProcessingView: SourceProcessingView;
+    SourceSpanView: SourceSpanView;
     SymbolCollectionUnavailableResponse: SymbolCollectionUnavailableResponse;
     SymbolDetailResponse: SymbolDetailResponse;
     SymbolDetailUnavailableResponse: SymbolDetailUnavailableResponse;

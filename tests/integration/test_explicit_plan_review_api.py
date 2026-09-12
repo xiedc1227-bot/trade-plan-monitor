@@ -37,6 +37,7 @@ _SOURCE = (
     "五分钟完成收盘10.80到11.00元含端点卖出100股 五分钟完成收盘低于9.50元风险提醒 "
     "人工选择手动有效 每条规则每次激活只提醒一次 同时交易冲突阻止两者 风险冲突仅保留风险"
 )
+# Historical derived shorthand, NOT the literal user source. Kept as regression coverage.
 _ORIGINAL_SOURCE = (
     "003043.SZ现有100股且今日可卖，最高300股。"
     "五分钟收盘价在9.80至10.00元（含端点）且当前成交量不少于前5根已完成五分钟K线"
@@ -439,7 +440,7 @@ def test_v4_extraction_save_review_and_public_activation_gate_are_server_bound(
         assert detail["reviewRevision"] == 0
         assert detail["reviewId"] is None
         assert detail["requiredReviewIssues"]
-        assert detail["mapping"]["mappingVersion"] == "plan-mapping-v1"
+        assert detail["mapping"]["mappingVersion"] == "plan-mapping-v2"
 
         omitted = client.post(
             "/api/v1/plan-review-confirmations",

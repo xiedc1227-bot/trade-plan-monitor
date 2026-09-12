@@ -34,6 +34,7 @@ from trade_plan_monitor.ai.review import (
     explicit_draft_sha256,
     load_explicit_plan_draft_json,
 )
+from trade_plan_monitor.ai.source_processing import upgrade_source_mapping
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
@@ -612,9 +613,7 @@ class PlanRepository:
             content_hash=review.content_hash,
             review_evidence_hash=review.review_evidence_hash,
             required_issues_json=(
-                None
-                if review.mapping is None
-                else _models_json(review.required_issues)
+                None if review.mapping is None else _models_json(review.required_issues)
             ),
             completed_at=timestamp.isoformat(),
         )
@@ -711,11 +710,16 @@ class PlanRepository:
         )
         normalized_review_issues = _plan_review_issues(review_issues)
         if is_explicit_draft:
-            if normalized_origin not in {
-                PlanReviewOrigin.AI_EXTRACTION,
-                PlanReviewOrigin.AI_EDITED,
-                PlanReviewOrigin.AI_REIMPORT,
-            } or normalized_extraction_id is None or normalized_confirmed_at is not None:
+            if (
+                normalized_origin
+                not in {
+                    PlanReviewOrigin.AI_EXTRACTION,
+                    PlanReviewOrigin.AI_EDITED,
+                    PlanReviewOrigin.AI_REIMPORT,
+                }
+                or normalized_extraction_id is None
+                or normalized_confirmed_at is not None
+            ):
                 raise ValueError("explicit draft review provenance is inconsistent")
         elif normalized_origin in {PlanReviewOrigin.LEGACY_PENDING, PlanReviewOrigin.MANUAL}:
             if normalized_confirmed_at is not None:
@@ -729,19 +733,20 @@ class PlanRepository:
             issue.resolved for issue in normalized_review_issues
         ):
             raise ValueError("unreviewed AI content must remain unresolved")
-        if not is_explicit_draft and not validate_trade_plan(
-            plan,
-            available_market_evidence=set(),
-            review_issues=normalized_review_issues,
-        ).can_save:
+        if (
+            not is_explicit_draft
+            and not validate_trade_plan(
+                plan,
+                available_market_evidence=set(),
+                review_issues=normalized_review_issues,
+            ).can_save
+        ):
             raise PlanSaveBlockedError("Plan has save-blocking validation errors")
         if is_explicit_draft:
             assert explicit_snapshot is not None
-            if (
-                explicit_snapshot.source_hash
-                != sha256(source_text.encode("utf-8")).hexdigest()
-                or explicit_snapshot.content_hash != explicit_draft_content_sha256(plan)
-            ):
+            if explicit_snapshot.source_hash != sha256(
+                source_text.encode("utf-8")
+            ).hexdigest() or explicit_snapshot.content_hash != explicit_draft_content_sha256(plan):
                 raise PlanSaveBlockedError("Explicit review snapshot does not match the draft")
 
         created_at = _aware_now(self._clock).isoformat()
@@ -914,6 +919,8 @@ class PlanRepository:
             issue = required.get(resolution.issue_id)
             if issue is None or resolution.resolution not in issue.allowed_resolutions:
                 raise ValueError("review resolution is not allowed for this snapshot")
+            if details.mapping.mapping_version == "plan-mapping-v2":
+                _validate_v2_resolution(resolution, issue, details.mapping)
             if resolution.resolution.value == "CONFIRM_MAPPING":
                 if (
                     resolution.binding_path is None
@@ -922,7 +929,7 @@ class PlanRepository:
                     or resolution.supplement_id is not None
                 ):
                     raise ValueError("mapping confirmation is not bound to the required field")
-            else:
+            elif resolution.resolution.value != "CONFIRM_SOURCE_TREATMENT":
                 supplement = (
                     None
                     if resolution.supplement_id is None
@@ -3412,9 +3419,7 @@ def _plan_version_details_record(
         else:
             plan = load_plan_json(version.payload_json)
         is_explicit = isinstance(plan, ExplicitPlanDraft)
-        canonical = (
-            dump_explicit_plan_draft_json(plan) if is_explicit else dump_plan_json(plan)
-        )
+        canonical = dump_explicit_plan_draft_json(plan) if is_explicit else dump_plan_json(plan)
         actual_hash = explicit_draft_sha256(plan) if is_explicit else plan_sha256(plan)
         review_issues = _load_plan_review_issues(review.review_issues_json)
         created_at = datetime.fromisoformat(version.created_at)
@@ -3454,6 +3459,29 @@ def _plan_version_details_record(
             )
             resolved_ids = {item.issue_id for item in resolutions}
             required_ids = {item.issue_id for item in required_issues}
+            if mapping is not None and mapping.mapping_version == "plan-mapping-v2":
+                issues_by_id = {item.issue_id: item for item in required_issues}
+                for resolution in resolutions:
+                    _validate_v2_resolution(
+                        resolution, issues_by_id.get(resolution.issue_id), mapping
+                    )
+            extraction_snapshot = None
+            if (
+                mapping is not None
+                and mapping.mapping_version == "plan-mapping-v2"
+                and extraction_record is not None
+                and extraction_record.mapping is not None
+                and extraction_record.draft_hash == actual_hash
+            ):
+                extraction_snapshot = build_server_review_snapshot(
+                    draft=plan,
+                    mapping=upgrade_source_mapping(
+                        draft=plan,
+                        mapping=extraction_record.mapping,
+                        source_text=source.source_text,
+                    ),
+                    source_text=source.source_text,
+                )
             explicit_fields_valid = (
                 extraction_record is not None
                 and provenance.extraction_id == extraction_record.extraction_id
@@ -3479,11 +3507,17 @@ def _plan_version_details_record(
                     origin is PlanReviewOrigin.AI_EXTRACTION
                     and extraction_record.draft_hash == actual_hash
                     and extraction_record.source_hash == source.source_hash
-                    and extraction_record.mapping == mapping
-                    and extraction_record.content_hash == provenance.content_hash
-                    and extraction_record.review_evidence_hash
-                    == provenance.review_evidence_hash
-                    and extraction_record.required_review_issues == tuple(required_issues)
+                    and (
+                        extraction_snapshot == snapshot
+                        if extraction_snapshot is not None
+                        else (
+                            extraction_record.mapping == mapping
+                            and extraction_record.content_hash == provenance.content_hash
+                            and extraction_record.review_evidence_hash
+                            == provenance.review_evidence_hash
+                            and extraction_record.required_review_issues == tuple(required_issues)
+                        )
+                    )
                 )
                 or (
                     origin is PlanReviewOrigin.AI_EDITED
@@ -3503,34 +3537,40 @@ def _plan_version_details_record(
                 and provenance.review_revision == 0
             )
             extraction_valid = (
-            (
-                origin in {PlanReviewOrigin.LEGACY_PENDING, PlanReviewOrigin.MANUAL}
-                and provenance.extraction_id is None
-                and extraction_record is None
-            )
-            or (
-                origin is PlanReviewOrigin.AI_EXTRACTION
-                and extraction_record is not None
-                and provenance.extraction_id == extraction_record.extraction_id
-                and provenance.source_hash == extraction_record.source_hash
-                and provenance.draft_hash == extraction_record.draft_hash
-                and _review_issues_match_required(review_issues, extraction_record.review_issues)
-            )
-            or (
-                origin is PlanReviewOrigin.AI_EDITED
-                and extraction_record is not None
-                and provenance.extraction_id == extraction_record.extraction_id
-                and provenance.source_hash == extraction_record.source_hash
-                and provenance.draft_hash != extraction_record.draft_hash
-                and _review_issues_match_required(review_issues, extraction_record.review_issues)
-            )
-            or (
-                origin is PlanReviewOrigin.AI_REIMPORT
-                and extraction_record is not None
-                and provenance.extraction_id == extraction_record.extraction_id
-                and provenance.draft_hash == extraction_record.draft_hash
-                and _review_issues_match_required(review_issues, extraction_record.review_issues)
-            )
+                (
+                    origin in {PlanReviewOrigin.LEGACY_PENDING, PlanReviewOrigin.MANUAL}
+                    and provenance.extraction_id is None
+                    and extraction_record is None
+                )
+                or (
+                    origin is PlanReviewOrigin.AI_EXTRACTION
+                    and extraction_record is not None
+                    and provenance.extraction_id == extraction_record.extraction_id
+                    and provenance.source_hash == extraction_record.source_hash
+                    and provenance.draft_hash == extraction_record.draft_hash
+                    and _review_issues_match_required(
+                        review_issues, extraction_record.review_issues
+                    )
+                )
+                or (
+                    origin is PlanReviewOrigin.AI_EDITED
+                    and extraction_record is not None
+                    and provenance.extraction_id == extraction_record.extraction_id
+                    and provenance.source_hash == extraction_record.source_hash
+                    and provenance.draft_hash != extraction_record.draft_hash
+                    and _review_issues_match_required(
+                        review_issues, extraction_record.review_issues
+                    )
+                )
+                or (
+                    origin is PlanReviewOrigin.AI_REIMPORT
+                    and extraction_record is not None
+                    and provenance.extraction_id == extraction_record.extraction_id
+                    and provenance.draft_hash == extraction_record.draft_hash
+                    and _review_issues_match_required(
+                        review_issues, extraction_record.review_issues
+                    )
+                )
             )
             confirmation_valid = (
                 origin is PlanReviewOrigin.MANUAL
@@ -4126,10 +4166,49 @@ def _model_json(value: BaseModel) -> str:
     return _canonical_json(value.model_dump(mode="json", by_alias=True))
 
 
+def _validate_v2_resolution(
+    resolution: ReviewResolution,
+    issue: RequiredReviewIssue | None,
+    mapping: PlanMapping,
+) -> None:
+    """Validate durable v2 confirmations both on mutation and on every read."""
+    if issue is None or resolution.resolution not in issue.allowed_resolutions:
+        raise ValueError("review resolution is not allowed for this snapshot")
+    if resolution.resolution.value == "CONFIRM_SOURCE_TREATMENT":
+        paths = {
+            f"source_processing.treatments[{index}]"
+            for index, _ in enumerate(mapping.source_processing.treatments)
+        }
+        if (
+            issue.code != "SOURCE_TREATMENT_REVIEW_REQUIRED"
+            or resolution.binding_path != issue.binding_path
+            or resolution.binding_path not in paths
+            or resolution.supplement_id is not None
+        ):
+            raise ValueError("source treatment confirmation is not bound to its required record")
+    elif resolution.resolution.value == "CONFIRM_MAPPING":
+        if (
+            resolution.binding_path != issue.binding_path
+            or resolution.binding_path not in {item.path for item in mapping.field_bindings}
+            or resolution.supplement_id is not None
+        ):
+            raise ValueError("mapping confirmation is not bound to the required field")
+    elif resolution.resolution.value == "CONFIRM_POLICY":
+        if resolution.binding_path is not None or not any(
+            item.supplement_id == resolution.supplement_id
+            and item.path in {issue.path, issue.binding_path}
+            and any(
+                binding.supplement_id == item.supplement_id for binding in mapping.field_bindings
+            )
+            for item in mapping.user_supplements
+        ):
+            raise ValueError("policy confirmation is not bound to a current user supplement")
+    else:
+        raise ValueError("unresolved content requires a new reviewed version, not acknowledgement")
+
+
 def _models_json(values: Sequence[BaseModel]) -> str:
-    return _canonical_json(
-        [value.model_dump(mode="json", by_alias=True) for value in values]
-    )
+    return _canonical_json([value.model_dump(mode="json", by_alias=True) for value in values])
 
 
 def _load_model_json(value: str, model_type: type[BaseModel]) -> object:

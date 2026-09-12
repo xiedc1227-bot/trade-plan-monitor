@@ -137,9 +137,7 @@ class ExplicitPlanCapabilityView(ApiValue):
     public_activation_available: Literal[False] = False
     isolated_trusted_review_only: Literal[True] = True
     pending_requirements: tuple[
-        Literal[
-            "ORDINARY_PLAN_FORMS",
-        ],
+        Literal["ORDINARY_PLAN_FORMS",],
         ...,
     ] = ("ORDINARY_PLAN_FORMS",)
 
@@ -386,17 +384,55 @@ class UserSupplementView(ApiValue):
     label: Literal["human_confirmed_test_supplement", "human_confirmed_supplement"]
 
 
+class SourceSpanView(ApiValue):
+    clause_id: str
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    excerpt: str = Field(min_length=1, max_length=512)
+
+
+class InventorySourceTreatmentView(ApiValue):
+    kind: Literal["INVENTORY_ASSERTION"]
+    treatment_id: str
+    contract_id: Literal["independent-inventory-v1"]
+    spans: tuple[SourceSpanView, ...] = Field(min_length=2, max_length=2, strict=False)
+    symbol_span: SourceSpanView
+    symbol: AShareSymbol
+    total_quantity: NonNegativeSafeInteger
+    sellable_quantity: NonNegativeSafeInteger
+    settlement_basis: Literal["HELD_BEFORE_TEST_DATE_ALL_SELLABLE"]
+    required_operation: Literal["/api/v1/position-inventory-confirmations"]
+    ledger_effect: Literal["NONE_REQUIRES_INDEPENDENT_CONFIRMATION"]
+
+
+class ProductSourceTreatmentView(ApiValue):
+    kind: Literal["PRODUCT_GUARANTEE"]
+    treatment_id: str
+    contract_id: Literal["alert-position-isolation-v1"]
+    spans: tuple[SourceSpanView, ...] = Field(min_length=2, max_length=2, strict=False)
+    guarantee: Literal["ALERTS_AND_ACKNOWLEDGEMENTS_DO_NOT_CHANGE_POSITIONS"]
+
+
+class SourceProcessingView(ApiValue):
+    version: Literal["source-processing-v1"]
+    treatments: tuple[
+        Annotated[
+            InventorySourceTreatmentView | ProductSourceTreatmentView, Field(discriminator="kind")
+        ],
+        ...,
+    ] = Field(max_length=512, strict=False)
+
+
 class PlanMappingView(ApiValue):
-    mapping_version: Literal["plan-mapping-v1"] = "plan-mapping-v1"
-    source_clauses: tuple[SourceClauseView, ...] = Field(
-        min_length=1, max_length=512, strict=False
-    )
+    mapping_version: Literal["plan-mapping-v1", "plan-mapping-v2"] = "plan-mapping-v1"
+    source_clauses: tuple[SourceClauseView, ...] = Field(min_length=1, max_length=512, strict=False)
     field_bindings: tuple[FieldBindingView, ...] = Field(
         default=(), max_length=10_000, strict=False
     )
     user_supplements: tuple[UserSupplementView, ...] = Field(
         default=(), max_length=512, strict=False
     )
+    source_processing: SourceProcessingView | None = None
 
     def to_domain(self) -> PlanMapping:
         return PlanMapping.model_validate_json(
@@ -415,9 +451,7 @@ class RequiredReviewIssueView(ApiValue):
     reason: str
     clause_id: str | None = None
     binding_path: str | None = None
-    allowed_resolutions: tuple[ReviewResolutionKind, ...] = Field(
-        max_length=3, strict=False
-    )
+    allowed_resolutions: tuple[ReviewResolutionKind, ...] = Field(max_length=3, strict=False)
 
     @classmethod
     def from_domain(cls, value: RequiredReviewIssue) -> RequiredReviewIssueView:
@@ -437,9 +471,7 @@ class PlanReviewConfirmationCommand(ApiValue):
     source_hash: Sha256Hex
     review_evidence_hash: Sha256Hex
     expected_revision: NonNegativeSafeInteger
-    resolutions: tuple[PlanReviewResolution, ...] = Field(
-        default=(), max_length=512, strict=False
-    )
+    resolutions: tuple[PlanReviewResolution, ...] = Field(default=(), max_length=512, strict=False)
 
 
 class PlanReviewConfirmationView(ApiValue):
@@ -959,9 +991,7 @@ def _validate_web_plan(
 
 def _matches_plan(result: PlanVersionView, plan: ExecutableTradePlan) -> bool:
     expected_hash = (
-        explicit_draft_sha256(plan)
-        if isinstance(plan, ExplicitPlanDraft)
-        else plan_sha256(plan)
+        explicit_draft_sha256(plan) if isinstance(plan, ExplicitPlanDraft) else plan_sha256(plan)
     )
     return (
         result.plan_id == plan.plan_id

@@ -3,6 +3,7 @@
 > Canonical English; `0005-version-explicit-plan-rules.zh-CN.md` is the equivalent Chinese review copy.
 
 - Status: `Accepted; R09-R11 implemented, R12 pending`
+- Review-version amendment: [ADR 0006](0006-review-mixed-source-with-bounded-treatments.md) supersedes only new server mapping/evidence versions; historical v1 snapshots and all prompt contracts remain frozen.
 - Date: `2026-09-12`
 - Initiative: `F06 / R08–R12`
 - Modules: `plan-domain`, `decision-engine`, `ai-plan-drafting`, `strategy-state`, `notification-outbox`, `local-web`, `backtest-engine`

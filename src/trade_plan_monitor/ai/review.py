@@ -20,6 +20,10 @@ from trade_plan_monitor.ai.models import (
     ServerReviewSnapshot,
     SourceClause,
 )
+from trade_plan_monitor.ai.source_processing import (
+    derive_source_processing,
+    looks_like_unhandled_mixed_source,
+)
 
 _CLAUSE_BREAKS: Final = frozenset("。！？；;,，\n")
 _AMBIGUOUS_TERMS: Final = ("企稳", "放量", "受阻")
@@ -174,6 +178,18 @@ def build_server_review_snapshot(
     else:
         raise ValueError("exact source text or its validated SHA-256 is required")
 
+    treatment_clauses: set[str] = set()
+    symbol_clauses: set[str] = set()
+    if mapping.mapping_version == "plan-mapping-v2":
+        if source_text is None or mapping.source_processing != derive_source_processing(
+            source_text, symbol=draft.symbol
+        ):
+            raise ValueError("source processing does not match exact server derivation")
+        for treatment in mapping.source_processing.treatments:
+            treatment_clauses.update(span.clause_id for span in treatment.spans)
+            if treatment.kind == "INVENTORY_ASSERTION":
+                symbol_clauses.add(treatment.symbol_span.clause_id)
+
     data = draft.model_dump(mode="json")
     issues: list[RequiredReviewIssue] = []
     clauses = {item.clause_id: item for item in mapping.source_clauses}
@@ -200,6 +216,12 @@ def build_server_review_snapshot(
                     raise ValueError("SOURCE binding references a non-mapped clause")
                 if binding.path not in clause.paths:
                     raise ValueError("SOURCE binding path is absent from its source clause")
+                if clause_id in treatment_clauses and not (
+                    clause_id in symbol_clauses
+                    and binding.path == "symbol"
+                    and binding.binding_kind is BindingKind.VALUE
+                ):
+                    raise ValueError("source treatment cannot supply a trading parameter")
         elif binding.origin is BindingOrigin.USER_SUPPLEMENT:
             supplement = supplements.get(binding.supplement_id or "")
             if (
@@ -269,7 +291,10 @@ def build_server_review_snapshot(
                             allowed=(ReviewResolutionKind.CONFIRM_MAPPING,),
                         )
                     )
-        else:
+        elif not (
+            clause.clause_id in treatment_clauses
+            and clause.disposition is ClauseDisposition.UNRESOLVED
+        ):
             code = (
                 "UNRESOLVED_SEMANTICS"
                 if clause.disposition.value == "UNRESOLVED"
@@ -280,6 +305,20 @@ def build_server_review_snapshot(
                     code,
                     "source",
                     "The material source clause is not represented by supported current content.",
+                    clause_id=clause.clause_id,
+                    allowed=(ReviewResolutionKind.REPLACED_BY_REVIEWED_CONTENT,),
+                )
+            )
+        if (
+            mapping.mapping_version == "plan-mapping-v2"
+            and clause.clause_id not in treatment_clauses
+            and looks_like_unhandled_mixed_source(clause)
+        ):
+            issues.append(
+                _issue(
+                    "UNRESOLVED_MIXED_SOURCE",
+                    "source",
+                    "An inventory or product-boundary clause has no bounded supported treatment.",
                     clause_id=clause.clause_id,
                     allowed=(ReviewResolutionKind.REPLACED_BY_REVIEWED_CONTENT,),
                 )
@@ -324,6 +363,27 @@ def build_server_review_snapshot(
                 )
             )
 
+    if mapping.source_processing is not None:
+        for index, treatment in enumerate(mapping.source_processing.treatments):
+            path = f"source_processing.treatments[{index}]"
+            reason = (
+                "Confirm the extracted inventory assertion and route it to independent "
+                "POST /api/v1/position-inventory-confirmations with a chosen as-of date. "
+                "This review does not register holdings or confirm ledger truth."
+                if treatment.kind == "INVENTORY_ASSERTION"
+                else "Confirm the exact source guarantee: alerts and acknowledgements do not "
+                "change positions; only independent position commands can do so."
+            )
+            issues.append(
+                _issue(
+                    "SOURCE_TREATMENT_REVIEW_REQUIRED",
+                    path,
+                    reason,
+                    binding_path=path,
+                    allowed=(ReviewResolutionKind.CONFIRM_SOURCE_TREATMENT,),
+                )
+            )
+
     required_issues = _unique_sorted_issues(issues)
     evidence_payload = {
         "mappingVersion": mapping.mapping_version,
@@ -343,9 +403,11 @@ def build_server_review_snapshot(
             for item in required_issues
         ],
     }
-    evidence_hash = sha256(
-        b"plan-review-evidence-v1\x00" + _canonical_json(evidence_payload).encode("utf-8")
-    ).hexdigest()
+    domain = b"plan-review-evidence-v1\x00"
+    if mapping.source_processing is not None:
+        evidence_payload["sourceProcessing"] = mapping.source_processing.model_dump(mode="json")
+        domain = b"plan-review-evidence-v2\x00"
+    evidence_hash = sha256(domain + _canonical_json(evidence_payload).encode("utf-8")).hexdigest()
     return ServerReviewSnapshot(
         source_hash=source_hash,
         content_hash=explicit_draft_content_sha256(draft),
@@ -401,6 +463,7 @@ def reconcile_plan_mapping(
         source_clauses=clauses,
         field_bindings=tuple(retained),
         user_supplements=mapping.user_supplements,
+        source_processing=mapping.source_processing,
     )
 
 
