@@ -305,6 +305,73 @@ class PositionLot(Base):
     closed_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class PositionInventoryState(Base):
+    """Monotonic ledger revision used to fence inventory-dependent decisions."""
+
+    __tablename__ = "position_inventory_state"
+    __table_args__ = (
+        CheckConstraint("revision >= 0", name="ck_position_inventory_state_revision"),
+    )
+
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class PositionOpeningBalance(Base):
+    """Ordinary settled opening inventory without fabricated trade facts."""
+
+    __tablename__ = "position_opening_balance"
+    __table_args__ = (
+        CheckConstraint("original_qty > 0", name="ck_position_opening_balance_positive"),
+        CheckConstraint(
+            "remaining_qty >= 0 AND remaining_qty <= original_qty",
+            name="ck_position_opening_balance_remaining",
+        ),
+        CheckConstraint("revision >= 0", name="ck_position_opening_balance_revision"),
+    )
+
+    id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), index=True)
+    original_qty: Mapped[int] = mapped_column(Integer)
+    remaining_qty: Mapped[int] = mapped_column(Integer)
+    sellable_from: Mapped[date] = mapped_column(Date)
+    confirmation_id: Mapped[str] = mapped_column(String(ID_LENGTH))
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+    closed_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
+class PositionInventoryConfirmation(Base):
+    """Latest complete-ledger assertion for one symbol."""
+
+    __tablename__ = "position_inventory_confirmation"
+    __table_args__ = (
+        CheckConstraint("total_qty >= 0", name="ck_inventory_confirmation_total"),
+        CheckConstraint(
+            "sellable_qty >= 0 AND sellable_qty <= total_qty",
+            name="ck_inventory_confirmation_sellable",
+        ),
+        CheckConstraint(
+            "inventory_revision >= 0",
+            name="ck_inventory_confirmation_revision",
+        ),
+        CheckConstraint(
+            "complete_registration = 1",
+            name="ck_inventory_confirmation_complete",
+        ),
+    )
+
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    confirmation_id: Mapped[str] = mapped_column(String(ID_LENGTH), unique=True)
+    as_of_trade_date: Mapped[date] = mapped_column(Date)
+    confirmed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    inventory_revision: Mapped[int] = mapped_column(Integer)
+    total_qty: Mapped[int] = mapped_column(Integer)
+    sellable_qty: Mapped[int] = mapped_column(Integer)
+    included_lot_ids_json: Mapped[str] = mapped_column(Text)
+    opening_balance_ids_json: Mapped[str] = mapped_column(Text)
+    complete_registration: Mapped[bool] = mapped_column(Boolean)
+
+
 class ZoneEpisode(Base):
     __tablename__ = "zone_episode"
     __table_args__ = (
@@ -957,7 +1024,10 @@ __all__ = [
     "PlanVersionStatus",
     "PendingOfficialClose",
     "PositionBucket",
+    "PositionInventoryConfirmation",
+    "PositionInventoryState",
     "PositionLot",
+    "PositionOpeningBalance",
     "ProviderHealth",
     "RequestIdempotency",
     "IdempotencyStatus",

@@ -72,7 +72,10 @@ from trade_plan_monitor.state.models import (
     PlanVersionReview,
     PlanVersionStatus,
     PositionBucket,
+    PositionInventoryConfirmation,
+    PositionInventoryState,
     PositionLot,
+    PositionOpeningBalance,
     ProviderHealth,
     RequestIdempotency,
     RiskState,
@@ -315,6 +318,45 @@ class PositionLotRecord(BaseModel):
     cost_fen: int
     related_alert_id: str | None
     closed_at: datetime | None
+
+
+class OpeningBalanceRecord(BaseModel):
+    """Ordinary opening inventory without invented acquisition or cost facts."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    symbol: str
+    original_qty: int
+    remaining_qty: int
+    sellable_from: date
+    confirmation_id: str
+    revision: int
+    closed_at: datetime | None
+
+
+class InventorySnapshotStatus(StrEnum):
+    KNOWN = "KNOWN"
+    UNKNOWN = "UNKNOWN"
+
+
+class InventorySnapshot(BaseModel):
+    """Authoritative complete-ledger view consumed by explicit rules."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    status: InventorySnapshotStatus
+    as_of_trade_date: date
+    cutoff: datetime
+    inventory_revision: int
+    total_qty: int | None
+    sellable_qty: int | None
+    confirmation_id: str | None
+    confirmed_at: datetime | None
+    included_lot_ids: tuple[str, ...] = ()
+    opening_balances: tuple[OpeningBalanceRecord, ...] = ()
+    missing_reasons: tuple[str, ...] = ()
 
 
 class EpisodeRecord(BaseModel):
@@ -1248,6 +1290,14 @@ class PositionRepository:
                 )
             ).all()
         )
+        open_quantity += sum(
+            self._session.scalars(
+                select(PositionOpeningBalance.remaining_qty).where(
+                    PositionOpeningBalance.symbol == normalized_symbol,
+                    PositionOpeningBalance.remaining_qty > 0,
+                )
+            ).all()
+        )
         if open_quantity + normalized_quantity > normalized_maximum:
             raise MaxPositionExceededError("Buy would exceed the maximum position")
 
@@ -1276,6 +1326,7 @@ class PositionRepository:
             quantity=normalized_quantity,
         )
         self._append_position_event(record, occurred_at=occurred_at)
+        self._advance_inventory_revision(normalized_symbol)
         return record
 
     def get_lot(self, lot_id: str) -> PositionLotRecord:
@@ -1327,6 +1378,206 @@ class PositionRepository:
             .limit(normalized_limit)
         ).all()
         return tuple(_position_lot_record(model) for model in models), total
+
+    def inventory_snapshot(
+        self,
+        symbol: str,
+        *,
+        as_of_trade_date: date,
+        cutoff: datetime,
+    ) -> InventorySnapshot:
+        """Return known quantities only while a complete confirmation is in scope."""
+
+        normalized_symbol = _symbol(symbol)
+        normalized_date = _calendar_date(as_of_trade_date, "as_of_trade_date")
+        normalized_cutoff = _aware_datetime(cutoff, "cutoff")
+        revision = self._inventory_revision(normalized_symbol)
+        confirmation = self._session.get(PositionInventoryConfirmation, normalized_symbol)
+        if confirmation is None:
+            return InventorySnapshot(
+                symbol=normalized_symbol,
+                status=InventorySnapshotStatus.UNKNOWN,
+                as_of_trade_date=normalized_date,
+                cutoff=normalized_cutoff,
+                inventory_revision=revision,
+                total_qty=None,
+                sellable_qty=None,
+                confirmation_id=None,
+                confirmed_at=None,
+                missing_reasons=("POSITION_UNKNOWN",),
+            )
+        confirmed_at = _aware_datetime(
+            datetime.fromisoformat(confirmation.confirmed_at),
+            "confirmed_at",
+        )
+        if confirmation.inventory_revision != revision or confirmed_at > normalized_cutoff:
+            return InventorySnapshot(
+                symbol=normalized_symbol,
+                status=InventorySnapshotStatus.UNKNOWN,
+                as_of_trade_date=normalized_date,
+                cutoff=normalized_cutoff,
+                inventory_revision=revision,
+                total_qty=None,
+                sellable_qty=None,
+                confirmation_id=confirmation.confirmation_id,
+                confirmed_at=confirmed_at,
+                missing_reasons=("POSITION_UNKNOWN",),
+            )
+        lots = self.list_open_lots(normalized_symbol)
+        balances = self._list_opening_balances(normalized_symbol)
+        total_qty = sum(lot.remaining_qty for lot in lots) + sum(
+            balance.remaining_qty for balance in balances
+        )
+        sellable_qty = sum(
+            lot.remaining_qty for lot in lots if lot.acquired_trade_date < normalized_date
+        ) + sum(
+            balance.remaining_qty
+            for balance in balances
+            if balance.sellable_from <= normalized_date
+        )
+        included_lot_ids = _stored_string_tuple(
+            confirmation.included_lot_ids_json,
+            "included_lot_ids_json",
+        )
+        if total_qty != confirmation.total_qty:
+            raise RepositoryError("Confirmed inventory total does not match its ledger")
+        return InventorySnapshot(
+            symbol=normalized_symbol,
+            status=InventorySnapshotStatus.KNOWN,
+            as_of_trade_date=normalized_date,
+            cutoff=normalized_cutoff,
+            inventory_revision=revision,
+            total_qty=total_qty,
+            sellable_qty=sellable_qty,
+            confirmation_id=confirmation.confirmation_id,
+            confirmed_at=confirmed_at,
+            included_lot_ids=included_lot_ids,
+            opening_balances=balances,
+        )
+
+    def confirm_inventory(
+        self,
+        *,
+        symbol: str,
+        as_of_trade_date: date,
+        total_quantity: int,
+        sellable_quantity: int,
+        included_lot_ids: Sequence[str],
+        complete_registration: bool,
+        expected_revision: int,
+    ) -> InventorySnapshot:
+        """Persist one complete, revision-fenced ledger assertion."""
+
+        normalized_symbol = _symbol(symbol)
+        normalized_date = _calendar_date(as_of_trade_date, "as_of_trade_date")
+        total = _nonnegative_integer(total_quantity, "total_quantity")
+        sellable = _nonnegative_integer(sellable_quantity, "sellable_quantity")
+        expected = _nonnegative_integer(expected_revision, "expected_revision")
+        if complete_registration is not True:
+            raise ValueError("complete_registration must be an explicit true assertion")
+        if total % 100 or sellable % 100 or sellable > total:
+            raise BoardLotViolationError("Inventory quantities must be valid whole board lots")
+        calendar = self._session.get(
+            TradingCalendar,
+            (_exchange_for_position_symbol(normalized_symbol), normalized_date),
+        )
+        if calendar is None or not calendar.is_open:
+            raise RepositoryError("Inventory confirmation requires a certified open trading date")
+        current_revision = self._inventory_revision(normalized_symbol, lock=True)
+        if current_revision != expected:
+            raise RevisionConflictError(current_revision)
+        lots = self.list_open_lots(normalized_symbol)
+        normalized_lot_ids = tuple(
+            _bounded_text(value, "included_lot_id", maximum=36) for value in included_lot_ids
+        )
+        if len(normalized_lot_ids) != len(set(normalized_lot_ids)):
+            raise ValueError("included_lot_ids must be unique")
+        if set(normalized_lot_ids) != {lot.id for lot in lots}:
+            raise RepositoryError("Complete inventory confirmation must reference every open lot")
+        balances = self._list_opening_balances(normalized_symbol)
+        represented_total = sum(lot.remaining_qty for lot in lots) + sum(
+            balance.remaining_qty for balance in balances
+        )
+        represented_sellable = sum(
+            lot.remaining_qty for lot in lots if lot.acquired_trade_date < normalized_date
+        ) + sum(
+            balance.remaining_qty
+            for balance in balances
+            if balance.sellable_from <= normalized_date
+        )
+        remainder = total - represented_total
+        if remainder < 0 or sellable != represented_sellable + remainder:
+            raise RepositoryError("Inventory assertion does not match represented settled holdings")
+        confirmation_id = self._id_factory()
+        if remainder:
+            opening = PositionOpeningBalance(
+                id=self._id_factory(),
+                symbol=normalized_symbol,
+                original_qty=remainder,
+                remaining_qty=remainder,
+                sellable_from=normalized_date,
+                confirmation_id=confirmation_id,
+                revision=0,
+                closed_at=None,
+            )
+            self._session.add(opening)
+            self._session.flush()
+            balances = (*balances, _opening_balance_record(opening))
+        new_revision = self._advance_inventory_revision(normalized_symbol)
+        now = _aware_now(self._clock)
+        confirmation = self._session.get(PositionInventoryConfirmation, normalized_symbol)
+        values = {
+            "confirmation_id": confirmation_id,
+            "as_of_trade_date": normalized_date,
+            "confirmed_at": now.isoformat(),
+            "inventory_revision": new_revision,
+            "total_qty": total,
+            "sellable_qty": sellable,
+            "included_lot_ids_json": _canonical_json(normalized_lot_ids),
+            "opening_balance_ids_json": _canonical_json(
+                tuple(balance.id for balance in balances)
+            ),
+            "complete_registration": True,
+        }
+        if confirmation is None:
+            confirmation = PositionInventoryConfirmation(symbol=normalized_symbol, **values)
+            self._session.add(confirmation)
+        else:
+            for key, value in values.items():
+                setattr(confirmation, key, value)
+        self._session.add(
+            AuditLog(
+                id=self._id_factory(),
+                action="POSITION_INVENTORY_CONFIRMED",
+                entity_type="POSITION_INVENTORY",
+                entity_id=normalized_symbol,
+                before_hash=None,
+                after_hash=sha256(
+                    _canonical_json(
+                        {
+                            "confirmationId": confirmation_id,
+                            "inventoryRevision": new_revision,
+                            "sellableQty": sellable,
+                            "symbol": normalized_symbol,
+                            "totalQty": total,
+                        }
+                    ).encode("utf-8")
+                ).hexdigest(),
+                details_json=_canonical_json(
+                    {
+                        "asOfTradeDate": normalized_date.isoformat(),
+                        "completeRegistration": True,
+                    }
+                ),
+                created_at=now.isoformat(),
+            )
+        )
+        self._session.flush()
+        return self.inventory_snapshot(
+            normalized_symbol,
+            as_of_trade_date=normalized_date,
+            cutoff=now,
+        )
 
     def sellable_quantity(
         self,
@@ -1398,7 +1649,50 @@ class PositionRepository:
             quantity=normalized_quantity,
         )
         self._append_position_event(after, occurred_at=occurred_at)
+        self._advance_inventory_revision(before.symbol)
         return after
+
+    def _inventory_revision(self, symbol: str, *, lock: bool = False) -> int:
+        statement = sqlite_insert(PositionInventoryState).values(symbol=symbol, revision=0)
+        self._session.execute(
+            statement.on_conflict_do_nothing(index_elements=[PositionInventoryState.symbol])
+        )
+        self._session.flush()
+        if lock:
+            self._session.execute(
+                update(PositionInventoryState)
+                .where(PositionInventoryState.symbol == symbol)
+                .values(revision=PositionInventoryState.revision)
+                .execution_options(synchronize_session=False)
+            )
+            self._session.expire_all()
+        row = self._session.get(PositionInventoryState, symbol)
+        if row is None:  # pragma: no cover - protected by insert
+            raise RepositoryError("Inventory revision could not be initialized")
+        return row.revision
+
+    def _advance_inventory_revision(self, symbol: str) -> int:
+        self._inventory_revision(symbol, lock=True)
+        self._session.execute(
+            update(PositionInventoryState)
+            .where(PositionInventoryState.symbol == symbol)
+            .values(revision=PositionInventoryState.revision + 1)
+            .execution_options(synchronize_session=False)
+        )
+        self._session.flush()
+        self._session.expire_all()
+        return self._inventory_revision(symbol)
+
+    def _list_opening_balances(self, symbol: str) -> tuple[OpeningBalanceRecord, ...]:
+        rows = self._session.scalars(
+            select(PositionOpeningBalance)
+            .where(
+                PositionOpeningBalance.symbol == symbol,
+                PositionOpeningBalance.remaining_qty > 0,
+            )
+            .order_by(PositionOpeningBalance.sellable_from, PositionOpeningBalance.id)
+        ).all()
+        return tuple(_opening_balance_record(row) for row in rows)
 
     def _append_audit(
         self,
@@ -2944,6 +3238,39 @@ def _position_lot_record(model: PositionLot) -> PositionLotRecord:
     )
 
 
+def _opening_balance_record(model: PositionOpeningBalance) -> OpeningBalanceRecord:
+    return OpeningBalanceRecord(
+        id=model.id,
+        symbol=model.symbol,
+        original_qty=model.original_qty,
+        remaining_qty=model.remaining_qty,
+        sellable_from=model.sellable_from,
+        confirmation_id=model.confirmation_id,
+        revision=model.revision,
+        closed_at=None if model.closed_at is None else datetime.fromisoformat(model.closed_at),
+    )
+
+
+def _stored_string_tuple(document: str, name: str) -> tuple[str, ...]:
+    try:
+        value = json.loads(document)
+    except (json.JSONDecodeError, TypeError):
+        raise RepositoryError(f"Stored {name} is invalid") from None
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise RepositoryError(f"Stored {name} is invalid")
+    if len(value) != len(set(value)):
+        raise RepositoryError(f"Stored {name} contains duplicate identities")
+    return tuple(value)
+
+
+def _exchange_for_position_symbol(symbol: str) -> str:
+    suffix = symbol.rsplit(".", maxsplit=1)[-1]
+    try:
+        return {"BJ": "BSE", "SH": "SSE", "SZ": "SZSE"}[suffix]
+    except KeyError:
+        raise ValueError("symbol exchange is invalid") from None
+
+
 def _position_lot_hash(record: PositionLotRecord) -> str:
     snapshot = {
         "acquiredTradeDate": record.acquired_trade_date.isoformat(),
@@ -3508,6 +3835,8 @@ __all__ = [
     "IdempotencyKeyReuseError",
     "IdempotencyRecord",
     "IdempotencyRepository",
+    "InventorySnapshot",
+    "InventorySnapshotStatus",
     "FiveMinuteBarRecord",
     "LatestQuoteRecord",
     "MaxPositionExceededError",
@@ -3524,6 +3853,7 @@ __all__ = [
     "PlanVersionRecord",
     "PositionLotNotFoundError",
     "PositionLotRecord",
+    "OpeningBalanceRecord",
     "PositionReductionError",
     "PositionRepository",
     "PositionT1LockedError",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated, Protocol, Self, cast
+from typing import Annotated, Literal, Protocol, Self, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -142,6 +142,60 @@ class PositionLotClosureView(ApiValue):
         return self
 
 
+class PositionOpeningBalanceView(ApiValue):
+    """Ordinary settled inventory with no fabricated cost or acquisition date."""
+
+    opening_balance_id: UUID = Field(strict=False)
+    symbol: AShareSymbol
+    original_quantity: PositiveBoardLotQuantity
+    remaining_quantity: NonNegativeBoardLotQuantity
+    sellable_from: Annotated[date, Field(strict=True)]
+    revision: NonNegativeRevision
+
+
+class PositionInventoryView(ApiValue):
+    """Three-state-safe authoritative inventory projection."""
+
+    symbol: AShareSymbol
+    status: Literal["KNOWN", "UNKNOWN"]
+    as_of_trade_date: Annotated[date, Field(strict=True)]
+    cutoff: ShanghaiDatetime
+    inventory_revision: NonNegativeRevision
+    total_quantity: NonNegativeBoardLotQuantity | None
+    sellable_quantity: NonNegativeBoardLotQuantity | None
+    confirmation_id: UUID | None = Field(default=None, strict=False)
+    confirmed_at: ShanghaiDatetime | None
+    included_lot_ids: tuple[UUID, ...] = Field(default=(), max_length=200)
+    opening_balances: tuple[PositionOpeningBalanceView, ...] = Field(default=(), max_length=200)
+    missing_reasons: tuple[Literal["POSITION_UNKNOWN"], ...] = Field(
+        default=(),
+        max_length=1,
+    )
+
+    @model_validator(mode="after")
+    def validate_inventory_state(self) -> Self:
+        if self.status == "KNOWN":
+            if self.total_quantity is None or self.sellable_quantity is None:
+                raise ValueError("known inventory requires numeric quantities")
+            if self.sellable_quantity > self.total_quantity or self.missing_reasons:
+                raise ValueError("known inventory quantities are inconsistent")
+        elif self.total_quantity is not None or self.sellable_quantity is not None:
+            raise ValueError("unknown inventory cannot guess numeric quantities")
+        elif self.missing_reasons != ("POSITION_UNKNOWN",):
+            raise ValueError("unknown inventory requires its missing reason")
+        return self
+
+
+class PositionInventoryConfirmationCommand(ApiValue):
+    symbol: AShareSymbol
+    as_of_trade_date: date = Field(strict=False)
+    expected_revision: NonNegativeRevision
+    total_quantity: NonNegativeBoardLotQuantity
+    sellable_quantity: NonNegativeBoardLotQuantity
+    included_lot_ids: tuple[UUID, ...] = Field(default=(), max_length=200)
+    complete_registration: Literal[True]
+
+
 class PositionOperationService(Protocol):
     """Application service owning position policy, idempotency, and audit work."""
 
@@ -167,6 +221,20 @@ class PositionOperationService(Protocol):
         command: PositionLotClosureCommand,
         context: MutationContext,
     ) -> PositionLotClosureView: ...
+
+    async def get_position_inventory(
+        self,
+        *,
+        symbol: str,
+        as_of_trade_date: date,
+    ) -> PositionInventoryView: ...
+
+    async def confirm_position_inventory(
+        self,
+        *,
+        command: PositionInventoryConfirmationCommand,
+        context: MutationContext,
+    ) -> PositionInventoryView: ...
 
 
 def get_position_operation_service(request: Request) -> PositionOperationService:
@@ -269,6 +337,9 @@ __all__ = [
     "PositionLotCreateCommand",
     "PositionLotPage",
     "PositionLotView",
+    "PositionInventoryConfirmationCommand",
+    "PositionInventoryView",
+    "PositionOpeningBalanceView",
     "PositionOperationService",
     "router",
 ]

@@ -18,6 +18,7 @@ from trade_plan_monitor.state.repositories import (
     BoardLotViolationError,
     IdempotencyInProgressError,
     IdempotencyKeyReuseError,
+    InventorySnapshot,
     MaxPositionExceededError,
     PositionLotNotFoundError,
     PositionLotRecord,
@@ -30,11 +31,14 @@ from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.idempotency import claim_replay, complete_replay, operation_hash
 from trade_plan_monitor.web.routers.positions import (
+    PositionInventoryConfirmationCommand,
+    PositionInventoryView,
     PositionLotClosureCommand,
     PositionLotClosureView,
     PositionLotCreateCommand,
     PositionLotPage,
     PositionLotView,
+    PositionOpeningBalanceView,
 )
 from trade_plan_monitor.web.schemas import MutationContext
 
@@ -60,10 +64,42 @@ class PersistentPositionOperationService:
         self,
         *,
         unit_of_work_factory: Callable[[], SqlAlchemyUnitOfWork],
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         if not callable(unit_of_work_factory):
             raise TypeError("unit_of_work_factory must be callable")
         self._unit_of_work_factory = unit_of_work_factory
+        self._clock = clock or (lambda: datetime.now(_SHANGHAI))
+
+    async def get_position_inventory(
+        self,
+        *,
+        symbol: str,
+        as_of_trade_date: date,
+    ) -> PositionInventoryView:
+        try:
+            return await to_thread.run_sync(
+                partial(
+                    self._get_position_inventory_sync,
+                    symbol=symbol,
+                    as_of_trade_date=as_of_trade_date,
+                )
+            )
+        except RepositoryError:
+            raise RuntimeError("persistent inventory read failed") from None
+
+    async def confirm_position_inventory(
+        self,
+        *,
+        command: PositionInventoryConfirmationCommand,
+        context: MutationContext,
+    ) -> PositionInventoryView:
+        return await self._run_mutation(
+            self._confirm_position_inventory_sync,
+            operation="CONFIRM_POSITION_INVENTORY",
+            command=command,
+            context=context,
+        )
 
     async def list_position_lots(
         self,
@@ -119,7 +155,11 @@ class PersistentPositionOperationService:
         function: Callable[..., ResultT],
         *,
         operation: str,
-        command: PositionLotCreateCommand | PositionLotClosureCommand,
+        command: (
+            PositionLotCreateCommand
+            | PositionLotClosureCommand
+            | PositionInventoryConfirmationCommand
+        ),
         context: MutationContext,
     ) -> ResultT:
         request_hash = operation_hash(operation, command)
@@ -152,6 +192,56 @@ class PersistentPositionOperationService:
             raise ApiError(ApiErrorCode.CONFLICT) from None
         except RepositoryError:
             raise RuntimeError("persistent position operation failed") from None
+
+    def _get_position_inventory_sync(
+        self,
+        *,
+        symbol: str,
+        as_of_trade_date: date,
+    ) -> PositionInventoryView:
+        cutoff = self._clock()
+        with self._unit_of_work_factory() as work:
+            snapshot = work.positions.inventory_snapshot(
+                symbol,
+                as_of_trade_date=as_of_trade_date,
+                cutoff=cutoff,
+            )
+        return _position_inventory_view(snapshot)
+
+    def _confirm_position_inventory_sync(
+        self,
+        *,
+        request_hash: str,
+        context: MutationContext,
+        command: PositionInventoryConfirmationCommand,
+    ) -> PositionInventoryView:
+        with self._unit_of_work_factory() as work:
+            replay = claim_replay(
+                work,
+                context=context,
+                request_hash=request_hash,
+                model_type=PositionInventoryView,
+            )
+            if replay is not None:
+                return replay
+            snapshot = work.positions.confirm_inventory(
+                symbol=command.symbol,
+                as_of_trade_date=command.as_of_trade_date,
+                total_quantity=command.total_quantity,
+                sellable_quantity=command.sellable_quantity,
+                included_lot_ids=tuple(str(value) for value in command.included_lot_ids),
+                complete_registration=command.complete_registration,
+                expected_revision=command.expected_revision,
+            )
+            result = _position_inventory_view(snapshot)
+            complete_replay(
+                work,
+                context=context,
+                request_hash=request_hash,
+                response=result,
+            )
+            work.commit()
+            return result
 
     def _list_position_lots_sync(
         self,
@@ -354,6 +444,39 @@ def _position_lot_view(
         ),
         closed_at=(None if record.closed_at is None else _shanghai_datetime(record.closed_at)),
         revision=(record.quantity - record.remaining_qty) // 100,
+    )
+
+
+def _position_inventory_view(snapshot: InventorySnapshot) -> PositionInventoryView:
+    return PositionInventoryView(
+        symbol=snapshot.symbol,
+        status=snapshot.status.value,
+        as_of_trade_date=snapshot.as_of_trade_date,
+        cutoff=snapshot.cutoff.astimezone(_SHANGHAI),
+        inventory_revision=snapshot.inventory_revision,
+        total_quantity=snapshot.total_qty,
+        sellable_quantity=snapshot.sellable_qty,
+        confirmation_id=(
+            None if snapshot.confirmation_id is None else UUID(snapshot.confirmation_id)
+        ),
+        confirmed_at=(
+            None
+            if snapshot.confirmed_at is None
+            else snapshot.confirmed_at.astimezone(_SHANGHAI)
+        ),
+        included_lot_ids=tuple(UUID(value) for value in snapshot.included_lot_ids),
+        opening_balances=tuple(
+            PositionOpeningBalanceView(
+                opening_balance_id=UUID(balance.id),
+                symbol=balance.symbol,
+                original_quantity=balance.original_qty,
+                remaining_quantity=balance.remaining_qty,
+                sellable_from=balance.sellable_from,
+                revision=balance.revision,
+            )
+            for balance in snapshot.opening_balances
+        ),
+        missing_reasons=snapshot.missing_reasons,
     )
 
 
