@@ -609,12 +609,10 @@ def _resolve_server_review(
     exact_source = False
     if requested_extraction_id is not None:
         extraction = plans.get_extraction_review(requested_extraction_id)
-        if (
-            extraction is None
-            or extraction.source_hash != source_hash
-            or extraction.draft_hash != draft_hash
-        ):
+        if extraction is None or extraction.source_hash != source_hash:
             raise PlanSaveBlockedError("Extraction identity does not match the submitted draft")
+        if extraction.draft_hash != draft_hash:
+            return _pending_edited_review(extraction)
         exact_source = True
     else:
         extraction = plans.find_extraction_review(
@@ -624,6 +622,9 @@ def _resolve_server_review(
         if extraction is not None:
             exact_source = True
         else:
+            extraction = plans.find_extraction_review_by_source_hash(source_hash)
+            if extraction is not None:
+                return _pending_edited_review(extraction)
             extraction = plans.find_extraction_review(draft_hash=draft_hash)
 
     if extraction is None:
@@ -648,6 +649,24 @@ def _resolve_server_review(
         PlanReviewOrigin.AI_EXTRACTION,
         extraction.extraction_id,
         confirmed_at,
+    )
+
+
+def _pending_edited_review(
+    extraction: PlanExtractionReviewRecord,
+) -> tuple[
+    tuple[DraftReviewIssue, ...],
+    PlanReviewOrigin,
+    str,
+    None,
+]:
+    """Invalidate prior approval when an AI-derived document hash changes."""
+
+    return (
+        tuple(issue.model_copy(update={"resolved": False}) for issue in extraction.review_issues),
+        PlanReviewOrigin.AI_EDITED,
+        extraction.extraction_id,
+        None,
     )
 
 
@@ -735,7 +754,12 @@ def _validated_plan_state(
             }
         )
     review_confirmed = (
-        details.review_origin not in {PlanReviewOrigin.AI_EXTRACTION, PlanReviewOrigin.AI_REIMPORT}
+        details.review_origin
+        not in {
+            PlanReviewOrigin.AI_EXTRACTION,
+            PlanReviewOrigin.AI_EDITED,
+            PlanReviewOrigin.AI_REIMPORT,
+        }
         or details.review_confirmed_at is not None
     )
     can_activate = (

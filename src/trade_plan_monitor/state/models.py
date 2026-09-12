@@ -39,6 +39,7 @@ class PlanReviewOrigin(StrEnum):
     LEGACY_PENDING = "LEGACY_PENDING"
     MANUAL = "MANUAL"
     AI_EXTRACTION = "AI_EXTRACTION"
+    AI_EDITED = "AI_EDITED"
     AI_REIMPORT = "AI_REIMPORT"
 
 
@@ -142,12 +143,14 @@ class PlanReviewProvenance(Base):
     __tablename__ = "plan_review_provenance"
     __table_args__ = (
         CheckConstraint(
-            "origin IN ('LEGACY_PENDING', 'MANUAL', 'AI_EXTRACTION', 'AI_REIMPORT')",
+            "origin IN ('LEGACY_PENDING', 'MANUAL', 'AI_EXTRACTION', 'AI_EDITED', "
+            "'AI_REIMPORT')",
             name="ck_plan_review_provenance_origin",
         ),
         CheckConstraint(
             "(origin IN ('LEGACY_PENDING', 'MANUAL') AND extraction_id IS NULL) OR "
-            "(origin IN ('AI_EXTRACTION', 'AI_REIMPORT') AND extraction_id IS NOT NULL)",
+            "(origin IN ('AI_EXTRACTION', 'AI_EDITED', 'AI_REIMPORT') "
+            "AND extraction_id IS NOT NULL)",
             name="ck_plan_review_provenance_extraction_identity",
         ),
     )

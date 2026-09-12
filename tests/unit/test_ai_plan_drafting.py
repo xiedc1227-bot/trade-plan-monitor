@@ -893,6 +893,115 @@ def test_exact_extraction_review_confirmation_can_activate(tmp_path: Path) -> No
         assert activated.json()["active"] is True
 
 
+def test_a2_edited_ai_draft_invalidates_approval_and_survives_restart(tmp_path: Path) -> None:
+    source_text, result = _a1_result()
+    database_path = tmp_path / "monitor.sqlite3"
+    lifecycle = PersistentPlanWebLifecycle(
+        database_path=database_path,
+        clock=lambda: datetime.now(ZoneInfo("Asia/Shanghai")),
+    )
+    app = create_app(runtime_factory=_Runtime, plan_lifecycle_factory=lambda: lifecycle)
+
+    original_payload = json.loads(dump_plan_json(result.draft))
+    original = {
+        "extractionId": str(_REQUEST_ID),
+        "planJson": json.dumps(original_payload, ensure_ascii=False),
+        "reviewIssues": [
+            {
+                "kind": "MISSING_EVIDENCE",
+                "path": "draft",
+                "material": True,
+                "resolved": True,
+            }
+        ],
+        "sourceText": source_text,
+        "expectedRevision": 0,
+    }
+    edited_payload = json.loads(json.dumps(original_payload))
+    edited_payload["version"] = 2
+    edited_payload["levels"]["low_buy"]["low_fen"] = 6200
+    edited = {
+        **original,
+        "planJson": json.dumps(edited_payload, ensure_ascii=False),
+        "expectedRevision": 1,
+    }
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        asyncio.run(lifecycle.record_plan_extraction(result))
+        approved = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "a2-approved-original"},
+            json=original,
+        )
+        assert approved.status_code == 200
+        assert approved.json()["canActivate"] is True
+        activated = client.post(
+            "/api/v1/plan-activations",
+            headers={"Idempotency-Key": "a2-activate-original"},
+            json={"planVersionId": approved.json()["id"], "expectedRevision": 0},
+        )
+        assert activated.status_code == 200
+
+        saved = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "a2-save-edited"},
+            json=edited,
+        )
+        replayed = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "a2-save-edited"},
+            json=edited,
+        )
+        assert saved.status_code == replayed.status_code == 200
+        assert replayed.json() == saved.json()
+        assert saved.json()["canActivate"] is False
+        assert saved.json()["reviewIssues"] == [
+            {
+                "kind": "MISSING_EVIDENCE",
+                "path": "draft",
+                "material": True,
+                "resolved": False,
+            }
+        ]
+        blocked = client.post(
+            "/api/v1/plan-activations",
+            headers={"Idempotency-Key": "a2-activate-edited"},
+            json={"planVersionId": saved.json()["id"], "expectedRevision": 1},
+        )
+        assert blocked.status_code == 409
+        saved_id = saved.json()["id"]
+
+        without_extraction_identity = {
+            **edited,
+            "planJson": json.dumps({**edited_payload, "version": 3}, ensure_ascii=False),
+        }
+        without_extraction_identity.pop("extractionId")
+        removed_identity = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "a2-remove-extraction-id"},
+            json=without_extraction_identity,
+        )
+        assert removed_identity.status_code == 200
+        assert removed_identity.json()["canActivate"] is False
+        assert removed_identity.json()["reviewIssues"][0]["resolved"] is False
+
+    restarted = PersistentPlanWebLifecycle(database_path=database_path)
+    restarted_app = create_app(
+        runtime_factory=_Runtime,
+        plan_lifecycle_factory=lambda: restarted,
+    )
+    with TestClient(restarted_app, base_url="http://127.0.0.1:8765") as client:
+        restored = client.get(f"/api/v1/plan-versions/{saved_id}")
+        assert restored.status_code == 200
+        assert restored.json()["canActivate"] is False
+        blocked = client.post(
+            "/api/v1/plan-activations",
+            headers={"Idempotency-Key": "a2-activate-after-restart"},
+            json={"planVersionId": saved_id, "expectedRevision": 1},
+        )
+        assert blocked.status_code == 409
+
+
 def test_configured_ai_marks_success_only_after_review_snapshot_is_persisted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

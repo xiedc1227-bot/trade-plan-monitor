@@ -536,6 +536,24 @@ class PlanRepository:
         )
         return None if model is None else _plan_extraction_review_record(model)
 
+    def find_extraction_review_by_source_hash(
+        self,
+        source_hash: str,
+    ) -> PlanExtractionReviewRecord | None:
+        model = self._session.scalar(
+            select(StoredPlanExtractionReview)
+            .where(
+                StoredPlanExtractionReview.source_hash
+                == _sha256_hash(source_hash, "source_hash")
+            )
+            .order_by(
+                StoredPlanExtractionReview.completed_at.desc(),
+                StoredPlanExtractionReview.id.desc(),
+            )
+            .limit(1)
+        )
+        return None if model is None else _plan_extraction_review_record(model)
+
     def save_draft(
         self,
         plan: TradePlan,
@@ -578,7 +596,7 @@ class PlanRepository:
         elif normalized_confirmed_at is not None or any(
             issue.resolved for issue in normalized_review_issues
         ):
-            raise ValueError("AI reimport review state must remain unresolved")
+            raise ValueError("unreviewed AI content must remain unresolved")
         if not validate_trade_plan(
             plan,
             available_market_evidence=set(),
@@ -2588,18 +2606,25 @@ def _plan_version_details_record(
             and provenance.extraction_id is None
             and extraction_record is None
         ) or (
-            origin in {PlanReviewOrigin.AI_EXTRACTION, PlanReviewOrigin.AI_REIMPORT}
+            origin is PlanReviewOrigin.AI_EXTRACTION
+            and extraction_record is not None
+            and provenance.extraction_id == extraction_record.extraction_id
+            and provenance.source_hash == extraction_record.source_hash
+            and provenance.draft_hash == extraction_record.draft_hash
+            and _review_issues_match_required(review_issues, extraction_record.review_issues)
+        ) or (
+            origin is PlanReviewOrigin.AI_EDITED
+            and extraction_record is not None
+            and provenance.extraction_id == extraction_record.extraction_id
+            and provenance.source_hash == extraction_record.source_hash
+            and provenance.draft_hash != extraction_record.draft_hash
+            and _review_issues_match_required(review_issues, extraction_record.review_issues)
+        ) or (
+            origin is PlanReviewOrigin.AI_REIMPORT
             and extraction_record is not None
             and provenance.extraction_id == extraction_record.extraction_id
             and provenance.draft_hash == extraction_record.draft_hash
-            and (
-                origin is PlanReviewOrigin.AI_REIMPORT
-                or provenance.source_hash == extraction_record.source_hash
-            )
-            and _review_issues_match_required(
-                review_issues,
-                extraction_record.review_issues,
-            )
+            and _review_issues_match_required(review_issues, extraction_record.review_issues)
         )
         confirmation_valid = (
             origin is PlanReviewOrigin.MANUAL
@@ -2609,7 +2634,7 @@ def _plan_version_details_record(
                 and (confirmed_at is not None) == all(issue.resolved for issue in review_issues)
             )
             or (
-                origin is PlanReviewOrigin.AI_REIMPORT
+                origin in {PlanReviewOrigin.AI_EDITED, PlanReviewOrigin.AI_REIMPORT}
                 and confirmed_at is None
                 and all(not issue.resolved for issue in review_issues)
             )

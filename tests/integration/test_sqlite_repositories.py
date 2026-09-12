@@ -2198,7 +2198,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0010_plan_review_binding"
+        assert first_revision == second_revision == "0011_plan_review_content_invalidation"
     finally:
         engine.dispose()
 
@@ -2226,7 +2226,7 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0010_plan_review_binding"
+                == "0011_plan_review_content_invalidation"
             )
     finally:
         engine.dispose()
@@ -2501,7 +2501,7 @@ def test_plan_web_state_migration_refuses_lossy_downgrade_atomically(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0010_plan_review_binding"
+                == "0011_plan_review_content_invalidation"
             )
             assert (
                 connection.exec_driver_sql(
@@ -2538,7 +2538,7 @@ def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) 
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0010_plan_review_binding"
+                == "0011_plan_review_content_invalidation"
             )
     finally:
         engine.dispose()
@@ -2591,7 +2591,7 @@ def test_monitor_event_migration_renames_high_water_and_backfills_alerts(
         }
         assert row.occurred_at == _FIXED_NOW.isoformat()
         assert high_water == 42
-        assert revision == "0010_plan_review_binding"
+        assert revision == "0011_plan_review_content_invalidation"
     finally:
         engine.dispose()
 
@@ -2683,7 +2683,7 @@ def test_market_index_event_constraint_migration_preserves_the_existing_ledger(
             _FIXED_NOW.isoformat(),
         )
         assert high_water_after == 7
-        assert revision == "0010_plan_review_binding"
+        assert revision == "0011_plan_review_content_invalidation"
         assert inspector.get_foreign_keys("monitor_event") == foreign_keys_before
         assert inspector.get_indexes("monitor_event") == indexes_before
         assert inspector.get_unique_constraints("monitor_event") == unique_constraints_before
@@ -2718,7 +2718,7 @@ def test_market_index_event_constraint_migration_refuses_lossy_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0010_plan_review_binding"
+                == "0011_plan_review_content_invalidation"
             )
             assert connection.exec_driver_sql("SELECT id, sequence FROM monitor_event").one() == (
                 event_id,
@@ -3054,7 +3054,7 @@ def test_monitor_event_migration_refuses_lossy_non_alert_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0010_plan_review_binding"
+                == "0011_plan_review_content_invalidation"
             )
     finally:
         engine.dispose()
@@ -3106,7 +3106,7 @@ def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
             "c" * 64,
             evaluated_at,
         )
-        assert revision == "0010_plan_review_binding"
+        assert revision == "0011_plan_review_content_invalidation"
     finally:
         engine.dispose()
 
@@ -3179,7 +3179,7 @@ def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0010_plan_review_binding"
+                == "0011_plan_review_content_invalidation"
             )
             assert connection.exec_driver_sql(
                 "SELECT evaluation_kind, target_value FROM evaluation_ledger"
