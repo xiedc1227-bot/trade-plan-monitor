@@ -123,7 +123,7 @@ class PlanExtractionResult(BaseModel):
 - 把用户计划明确包裹为不可信数据；
 - 不包含密钥、实时持仓或无关报告。
 
-提示词使用不可变版本号。提示词或生成 Schema 发生变化时必须创建新版本并更新黄金样例。兼容用 `plan-extract-v1` 通过投影 Schema v1 计划契约逐字节保留；配合规范 `GOLDEN_PLAN_SOURCE` 时，其 SHA-256 固定为 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`。默认 `plan-extract-v2` 暴露增量 Schema v2 契约和六种已批准板块指数叶子，对应哈希为 `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`。显式历史 v1 配置仍可重放，未指定版本的配置选择 v2。以后任何模板或 Schema 变化都必须再次创建新版本并更新黄金值。
+提示词使用不可变版本号和生成 Schema 的 SHA-256 契约。模板或生成 Schema 的变更必须创建新版本；未版本化的 Schema 漂移会在构建提示词时被拒绝。兼容用 `plan-extract-v1` 通过投影 Schema v1 计划契约逐字节保留；配合规范 `GOLDEN_PLAN_SOURCE` 时，其 SHA-256 固定为 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`。尽管共享 enum 后续扩展，`plan-extract-v2` 仍保留五个指数的 allowlist，并固定为 `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`。默认的 `plan-extract-v3` 有意暴露扩展后的六指数 Schema v2 契约（包括 `399107.SZ`），并固定为 `df606ede45e58263b669f092cfaeb575becf1ea314076823b23f275a1768ae5d`。显式的历史 v1/v2 配置保持可回放；省略版本的配置选择 v3。之后的任何模板或 Schema 变更都必须使用另一个版本和黄金值。
 
 ### 审核与激活边界
 

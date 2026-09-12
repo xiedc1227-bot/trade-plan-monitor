@@ -8,13 +8,29 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from hashlib import sha256
 from typing import Final
 
 from trade_plan_monitor.ai.models import PlanExtractionOutput
 
-PLAN_EXTRACTION_PROMPT_VERSION: Final = "plan-extract-v2"
 PLAN_EXTRACTION_PROMPT_V1: Final = "plan-extract-v1"
+PLAN_EXTRACTION_PROMPT_V2: Final = "plan-extract-v2"
+PLAN_EXTRACTION_PROMPT_V3: Final = "plan-extract-v3"
+PLAN_EXTRACTION_PROMPT_VERSION: Final = PLAN_EXTRACTION_PROMPT_V3
 MAX_SOURCE_TEXT_CHARS: Final = 150_000
+
+_V2_MARKET_INDEX_CODES: Final = (
+    "000001.SH",
+    "399001.SZ",
+    "399006.SZ",
+    "000688.SH",
+    "899050.BJ",
+)
+_SCHEMA_CONTRACT_SHA256: Final = {
+    PLAN_EXTRACTION_PROMPT_V1: "fbf241167c4e3960c98b59faf62e46b590185a8711ba22209720d683562d18a1",
+    PLAN_EXTRACTION_PROMPT_V2: "fd5f2f42184ea0fa5b361087f869aa73a7a8e26d961c203d80e1e506d98cc0a3",
+    PLAN_EXTRACTION_PROMPT_V3: "0de88a7a9bdec1a84ad0d458d2963fcdc2b68bfee591dea270b0f35bc5fa0f95",
+}
 
 
 def _schema_v1_from_current() -> dict[str, object]:
@@ -80,9 +96,41 @@ def _render_schema(schema: dict[str, object]) -> str:
     )
 
 
+def _schema_v2_from_current() -> dict[str, object]:
+    """Project the frozen v2 index allowlist before the shared enum expanded."""
+
+    schema = deepcopy(PlanExtractionOutput.model_json_schema())
+    definitions = schema["$defs"]
+    market_index_code = definitions["MarketIndexCode"]
+    market_index_code["enum"] = list(_V2_MARKET_INDEX_CODES)
+    return schema
+
+
+def _render_frozen_schema(prompt_version: str, schema: dict[str, object]) -> str:
+    """Reject an unversioned generated-schema drift instead of changing a prompt silently."""
+
+    rendered = _render_schema(schema)
+    actual_hash = sha256(rendered.encode("utf-8")).hexdigest()
+    if actual_hash != _SCHEMA_CONTRACT_SHA256[prompt_version]:
+        raise RuntimeError(
+            f"prompt schema contract changed for {prompt_version}; create a new prompt version"
+        )
+    return rendered
+
+
 _OUTPUT_SCHEMAS = {
-    PLAN_EXTRACTION_PROMPT_V1: _render_schema(_schema_v1_from_current()),
-    PLAN_EXTRACTION_PROMPT_VERSION: _render_schema(PlanExtractionOutput.model_json_schema()),
+    PLAN_EXTRACTION_PROMPT_V1: _render_frozen_schema(
+        PLAN_EXTRACTION_PROMPT_V1,
+        _schema_v1_from_current(),
+    ),
+    PLAN_EXTRACTION_PROMPT_V2: _render_frozen_schema(
+        PLAN_EXTRACTION_PROMPT_V2,
+        _schema_v2_from_current(),
+    ),
+    PLAN_EXTRACTION_PROMPT_V3: _render_frozen_schema(
+        PLAN_EXTRACTION_PROMPT_V3,
+        PlanExtractionOutput.model_json_schema(),
+    ),
 }
 
 
@@ -147,6 +195,8 @@ def build_plan_extraction_prompt(
 __all__ = [
     "MAX_SOURCE_TEXT_CHARS",
     "PLAN_EXTRACTION_PROMPT_V1",
+    "PLAN_EXTRACTION_PROMPT_V2",
+    "PLAN_EXTRACTION_PROMPT_V3",
     "PLAN_EXTRACTION_PROMPT_VERSION",
     "build_plan_extraction_prompt",
 ]
