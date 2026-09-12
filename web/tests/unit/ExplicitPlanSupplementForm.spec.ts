@@ -60,16 +60,10 @@ describe("ExplicitPlanSupplementForm", () => {
   it("creates a new durable user-supplement mapping instead of pretending policy came from source", async () => {
     const wrapper = mount(ExplicitPlanSupplementForm, { props: { plan } });
     const inputs = wrapper.findAll<HTMLInputElement>('form input:not([type="checkbox"])');
-    expect(inputs).toHaveLength(8);
+    expect(inputs).toHaveLength(2);
     const values = [
       "TRADING_DAY",
       "2026-09-14",
-      "CONTIGUOUS_TRADING_BARS",
-      "ONCE_PER_ACTIVATION",
-      "ONCE_PER_ACTIVATION",
-      "ONCE_PER_ACTIVATION",
-      "BLOCK_BOTH",
-      "RISK_ONLY",
     ];
     for (const [index, value] of values.entries()) await inputs[index]?.setValue(value);
 
@@ -78,11 +72,9 @@ describe("ExplicitPlanSupplementForm", () => {
 
     const command = wrapper.emitted("saveDraft")?.[0]?.[0] as PlanDraftCommand;
     expect(command.sourceText).toBe(plan.sourceText);
-    expect(command.mapping?.userSupplements).toHaveLength(8);
-    expect(command.mapping?.fieldBindings?.filter((item) => item.origin === "USER_SUPPLEMENT")).toHaveLength(8);
+    expect(command.mapping?.userSupplements).toHaveLength(2);
+    expect(command.mapping?.fieldBindings?.filter((item) => item.origin === "USER_SUPPLEMENT")).toHaveLength(2);
     const document = JSON.parse(command.planJson) as Record<string, unknown>;
     expect(document.activation).toEqual({ mode: "TRADING_DAY", trading_day: "2026-09-14" });
-    expect(document.conflict_policy).toEqual({ risk_conflict: "RISK_ONLY", trade_conflict: "BLOCK_BOTH" });
-    expect((document.rules as Array<Record<string, unknown>>)[0]?.repeat_policy).toEqual({ mode: "ONCE_PER_ACTIVATION" });
   });
 });

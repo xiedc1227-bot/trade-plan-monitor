@@ -52,10 +52,18 @@ const selectedBinding = computed(() => editableBindings.value.find(
   (item) => item.path === selectedBindingPath.value,
 ) ?? null);
 const hasMissingPolicies = computed(() => {
-  const unresolved = props.plan.unresolvedReviewIssues ?? [];
-  return unresolved.some((issue) => policyFields.some((field) => issue.path === field.path || issue.path === "activation" || issue.path === "conflict_policy" || issue.path.endsWith(".repeat_policy")));
+  return activePolicyFields.value.length > 0;
 });
-const policyReady = computed(() => policyFields.every((field) =>
+const activePolicyFields = computed(() => {
+  const paths = new Set((props.plan.unresolvedReviewIssues ?? []).map((issue) => issue.path));
+  return policyFields.filter((field) =>
+    paths.has(field.path) ||
+    (field.path.startsWith("activation.") && paths.has("activation")) ||
+    (field.path.startsWith("conflict_policy.") && paths.has("conflict_policy")) ||
+    (field.path.endsWith(".mode") && paths.has(field.path.slice(0, -5))),
+  );
+});
+const policyReady = computed(() => activePolicyFields.value.every((field) =>
   (policyValues.value[field.path]?.trim().length ?? 0) > 0,
 ));
 
@@ -87,7 +95,7 @@ function savePolicySupplements(): void {
     value: string;
     unit: FieldBindingView["unit"];
     bindingKind: NonNullable<FieldBindingView["bindingKind"]>;
-  }> = policyFields.map((field) => ({
+  }> = activePolicyFields.value.map((field) => ({
     path: field.path,
     value: policyValues.value[field.path]?.trim() ?? "",
     unit: "NONE" as const,
@@ -227,8 +235,8 @@ function writeChild(
     <p v-if="localError" role="alert">{{ localError }}</p>
     <form v-if="hasMissingPolicies" @submit.prevent="savePolicySupplements">
       <h3>缺失的普通政策</h3>
-      <p>这些选项不从自然语言原文猜测。请按您的实际策略填写，所有八项将作为人工补充持久保存。</p>
-      <label v-for="field in policyFields" :key="field.path">
+      <p>这些选项不从自然语言原文猜测。请按您的实际策略填写；每一项会作为人工补充持久保存。</p>
+      <label v-for="field in activePolicyFields" :key="field.path">
         {{ field.label }}
         <input v-model="policyValues[field.path]" :placeholder="field.placeholder" required />
       </label>
