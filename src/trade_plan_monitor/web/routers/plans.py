@@ -25,7 +25,11 @@ from trade_plan_monitor.domain.plan_codec import (
     load_plan_yaml,
 )
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import AShareSymbol, TradePlan
+from trade_plan_monitor.domain.plan_models import (
+    AShareSymbol,
+    ExecutableTradePlan,
+    ExplicitTradePlan,
+)
 from trade_plan_monitor.domain.plan_validation import DraftReviewIssue, ValidationIssue
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.state.models import PlanVersionStatus
@@ -102,6 +106,29 @@ Sha256Hex = Annotated[
 class PlanDocumentFormat(StrEnum):
     JSON = "JSON"
     YAML = "YAML"
+
+
+class ExplicitPlanCapabilityView(ApiValue):
+    """Backend-owned R09 capability state; this is not an activation grant."""
+
+    schema_version: Literal[3] = 3
+    execution_mode: Literal["EXPLICIT_RULES"] = "EXPLICIT_RULES"
+    execution_version: Literal["explicit-rules-v1"] = "explicit-rules-v1"
+    supported_actions: tuple[Literal["BUY"], ...] = ("BUY",)
+    public_activation_available: Literal[False] = False
+    isolated_trusted_review_only: Literal[True] = True
+    pending_requirements: tuple[
+        Literal[
+            "SELL_AND_RISK_CONSUMERS",
+            "CURRENT_CONTENT_REVIEW",
+            "ORDINARY_PLAN_FORMS",
+        ],
+        ...,
+    ] = (
+        "SELL_AND_RISK_CONSUMERS",
+        "CURRENT_CONTENT_REVIEW",
+        "ORDINARY_PLAN_FORMS",
+    )
 
 
 class PlanExtractionOperationStatus(StrEnum):
@@ -543,6 +570,8 @@ async def save_plan_draft(
     context: MutationContextDependency,
     service: PlanServiceDependency,
 ) -> PlanVersionView:
+    if isinstance(load_plan_json(command.plan_json), ExplicitTradePlan):
+        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
     result = validate_api_response(
         await service.save_plan_draft(command=command, context=context),
         PlanVersionView,
@@ -576,6 +605,13 @@ async def import_plan(
     context: MutationContextDependency,
     service: PlanServiceDependency,
 ) -> PlanVersionView:
+    imported = (
+        load_plan_json(command.document)
+        if command.format is PlanDocumentFormat.JSON
+        else load_plan_yaml(command.document)
+    )
+    if isinstance(imported, ExplicitTradePlan):
+        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
     result = validate_api_response(
         await service.import_plan(command=command, context=context),
         PlanVersionView,
@@ -596,6 +632,11 @@ async def import_plan(
     if result.source_text != command.document:
         raise RuntimeError("plan service returned mismatched import provenance")
     return result
+
+
+@router.get("/plan-capabilities", response_model=ExplicitPlanCapabilityView)
+async def get_explicit_plan_capability() -> ExplicitPlanCapabilityView:
+    return ExplicitPlanCapabilityView()
 
 
 @router.post(
@@ -677,13 +718,13 @@ def _valid_utf8_text(value: str, *, max_bytes: int | None = None) -> str:
     return value
 
 
-def _validate_web_plan(plan: TradePlan) -> TradePlan:
+def _validate_web_plan(plan: ExecutableTradePlan) -> ExecutableTradePlan:
     if plan.version > MAX_SAFE_INTEGER:
         raise ValueError("plan version exceeds the Web safe-integer limit")
     return plan
 
 
-def _matches_plan(result: PlanVersionView, plan: TradePlan) -> bool:
+def _matches_plan(result: PlanVersionView, plan: ExecutableTradePlan) -> bool:
     return (
         result.plan_id == plan.plan_id
         and result.version == plan.version
@@ -694,6 +735,7 @@ def _matches_plan(result: PlanVersionView, plan: TradePlan) -> bool:
 
 __all__ = [
     "ActivePlanView",
+    "ExplicitPlanCapabilityView",
     "MAX_SAFE_INTEGER",
     "PlanActivationCommand",
     "PlanDeactivationCommand",

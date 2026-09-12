@@ -165,7 +165,7 @@ class PositionInventoryView(ApiValue):
     sellable_quantity: NonNegativeBoardLotQuantity | None
     confirmation_id: UUID | None = Field(default=None, strict=False)
     confirmed_at: ShanghaiDatetime | None
-    included_lot_ids: tuple[UUID, ...] = Field(default=(), max_length=200)
+    included_lot_ids: tuple[UUID, ...] = Field(default=(), max_length=200, strict=False)
     opening_balances: tuple[PositionOpeningBalanceView, ...] = Field(default=(), max_length=200)
     missing_reasons: tuple[Literal["POSITION_UNKNOWN"], ...] = Field(
         default=(),
@@ -192,7 +192,7 @@ class PositionInventoryConfirmationCommand(ApiValue):
     expected_revision: NonNegativeRevision
     total_quantity: NonNegativeBoardLotQuantity
     sellable_quantity: NonNegativeBoardLotQuantity
-    included_lot_ids: tuple[UUID, ...] = Field(default=(), max_length=200)
+    included_lot_ids: tuple[UUID, ...] = Field(default=(), max_length=200, strict=False)
     complete_registration: Literal[True]
 
 
@@ -328,6 +328,49 @@ async def close_position_lot(
         or result.lot.revision != expected_after_revision
     ):
         raise RuntimeError("position service returned a stale revision")
+    return result
+
+
+@router.get("/position-inventory", response_model=PositionInventoryView)
+async def get_position_inventory(
+    service: PositionServiceDependency,
+    symbol: SymbolQuery,
+    as_of_trade_date: AsOfTradeDateQuery,
+) -> PositionInventoryView:
+    result = validate_api_response(
+        await service.get_position_inventory(
+            symbol=symbol,
+            as_of_trade_date=as_of_trade_date,
+        ),
+        PositionInventoryView,
+    )
+    if result.symbol != symbol or result.as_of_trade_date != as_of_trade_date:
+        raise RuntimeError("position service returned mismatched inventory")
+    return result
+
+
+@router.post(
+    "/position-inventory-confirmations",
+    response_model=PositionInventoryView,
+)
+async def confirm_position_inventory(
+    command: PositionInventoryConfirmationCommand,
+    context: MutationContextDependency,
+    service: PositionServiceDependency,
+) -> PositionInventoryView:
+    result = validate_api_response(
+        await service.confirm_position_inventory(command=command, context=context),
+        PositionInventoryView,
+    )
+    if (
+        result.symbol != command.symbol
+        or result.as_of_trade_date != command.as_of_trade_date
+        or result.inventory_revision != command.expected_revision + 1
+        or result.total_quantity != command.total_quantity
+        or result.sellable_quantity != command.sellable_quantity
+        or result.status != "KNOWN"
+    ):
+        raise RuntimeError("position service returned mismatched confirmation")
     return result
 
 

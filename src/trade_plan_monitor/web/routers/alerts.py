@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field, model_validator
 
+from trade_plan_monitor.decision.explicit_conditions import ExplicitConditionEvidence
 from trade_plan_monitor.decision.models import (
     ActionableSignalType,
     ConditionEvidence,
@@ -26,6 +27,7 @@ from trade_plan_monitor.notifications.models import (
     AlertEvent,
     AlertPriceZone,
     AlertSeverity,
+    ExplicitAlertEvent,
 )
 from trade_plan_monitor.state.models import EvaluationKind
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
@@ -56,7 +58,8 @@ _MAX_EXPECTED_REVISION = 9_223_372_036_854_775_806
 OffsetQuery = Annotated[int, Query(ge=0, le=_MAX_ROWS)]
 LimitQuery = Annotated[int, Query(ge=1, le=_MAX_LIMIT)]
 SymbolFilter = Annotated[AShareSymbol | None, Query()]
-SignalTypeFilter = Annotated[ActionableSignalType | None, Query(alias="signalType")]
+PublicAlertSignalType = ActionableSignalType | Literal["BUY"]
+SignalTypeFilter = Annotated[PublicAlertSignalType | None, Query(alias="signalType")]
 AcknowledgedFilter = Annotated[bool | None, Query()]
 StartAtFilter = Annotated[ShanghaiDatetime | None, Query(alias="startAt")]
 EndAtFilter = Annotated[ShanghaiDatetime | None, Query(alias="endAt")]
@@ -110,7 +113,7 @@ class AlertPriceZoneView(ApiValue):
 class AlertRecord(ApiValue):
     """Internal service result retaining the canonical persisted alert event."""
 
-    event: AlertEvent
+    event: AlertEvent | ExplicitAlertEvent
     revision: NonNegativeRevision
     current_actionable: bool = Field(strict=True)
     position_prefill: PositionPrefillView | None = None
@@ -156,7 +159,7 @@ class AlertRecordPage(ApiValue):
 
     items: tuple[AlertRecord, ...] = Field(default=(), max_length=_MAX_LIMIT)
     symbol: AShareSymbol | None = None
-    signal_type: ActionableSignalType | None = None
+    signal_type: PublicAlertSignalType | None = None
     acknowledged: bool | None = Field(default=None, strict=True)
     start_at: ShanghaiDatetime | None = None
     end_at: ShanghaiDatetime | None = None
@@ -242,10 +245,61 @@ class AlertView(ApiValue):
         return self
 
 
+class ExplicitConditionEvidenceView(ApiValue):
+    """Path-addressed explicit evidence kept separate from the legacy condition DTO."""
+
+    plan_path: str = Field(strict=True, min_length=1, max_length=512)
+    code: str = Field(strict=True, min_length=1, max_length=64)
+    outcome: str = Field(strict=True, min_length=1, max_length=32)
+    facts: tuple[EvidenceFactView, ...] = Field(default=(), max_length=16)
+    missing_inputs: tuple[str, ...] = Field(default=(), max_length=4)
+    children: tuple[ExplicitConditionEvidenceView, ...] = Field(default=(), max_length=50)
+    bar_ends: tuple[ShanghaiDatetime, ...] = Field(default=(), max_length=501)
+
+
+class ExplicitAlertView(ApiValue):
+    """Queryable explicit BUY reminder without legacy bucket or fill semantics."""
+
+    payload_schema_version: Literal["explicit-rule-alert-v1"]
+    event_id: UUID = Field(strict=False)
+    sequence: Annotated[int, Field(strict=True, gt=0, le=2**53 - 1)]
+    dedup_key: Sha256Hex
+    plan_id: str = Field(strict=True, min_length=1, max_length=128)
+    plan_version: Annotated[int, Field(strict=True, gt=0)]
+    plan_hash: Sha256Hex
+    activation_revision: NonNegativeRevision
+    symbol: AShareSymbol
+    name: str = Field(strict=True, min_length=1, max_length=100)
+    signal_type: Literal["BUY"]
+    severity: Literal[AlertSeverity.ACTION]
+    trading_date: Annotated[date, Field(strict=True)]
+    cause_id: str = Field(strict=True, min_length=1, max_length=128)
+    rule_id: str = Field(strict=True, min_length=1, max_length=128)
+    target_bucket_end: ShanghaiDatetime
+    evaluated_at: ShanghaiDatetime
+    quantity: PositiveBoardLotQuantity
+    condition_evidence: ExplicitConditionEvidenceView
+    safety_evidence: ExplicitConditionEvidenceView | None
+    next_step: Literal["REVIEW_BUY_REMINDER"]
+    message_text: str = Field(strict=True, min_length=1, max_length=16_384)
+    created_at: ShanghaiDatetime
+    acknowledged_at: ShanghaiDatetime | None = None
+    revision: NonNegativeRevision
+    current_actionable: bool = Field(strict=True)
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> Self:
+        if self.cause_id != self.rule_id or self.trading_date != self.target_bucket_end.date():
+            raise ValueError("explicit alert rule and target identity are inconsistent")
+        if self.revision != (0 if self.acknowledged_at is None else 1):
+            raise ValueError("explicit alert revision must match acknowledgement state")
+        return self
+
+
 class AlertPage(ApiValue):
-    items: tuple[AlertView, ...] = Field(default=(), max_length=_MAX_LIMIT)
+    items: tuple[AlertView | ExplicitAlertView, ...] = Field(default=(), max_length=_MAX_LIMIT)
     symbol: AShareSymbol | None = None
-    signal_type: ActionableSignalType | None = None
+    signal_type: PublicAlertSignalType | None = None
     acknowledged: bool | None = Field(default=None, strict=True)
     start_at: ShanghaiDatetime | None = None
     end_at: ShanghaiDatetime | None = None
@@ -435,8 +489,58 @@ def _zone_view(zone: AlertPriceZone | None) -> AlertPriceZoneView | None:
     )
 
 
-def _alert_view(record: AlertRecord) -> AlertView:
+def _explicit_evidence_view(
+    evidence: ExplicitConditionEvidence,
+) -> ExplicitConditionEvidenceView:
+    return ExplicitConditionEvidenceView(
+        plan_path=evidence.plan_path,
+        code=evidence.condition.type,
+        outcome=evidence.outcome.value,
+        facts=tuple(
+            EvidenceFactView(key=fact.key, value=fact.value, unit=fact.unit)
+            for fact in evidence.facts
+        ),
+        missing_inputs=tuple(item.value for item in evidence.missing_inputs),
+        children=tuple(_explicit_evidence_view(child) for child in evidence.children),
+        bar_ends=evidence.bar_ends,
+    )
+
+
+def _alert_view(record: AlertRecord) -> AlertView | ExplicitAlertView:
     event = record.event
+    if isinstance(event, ExplicitAlertEvent):
+        return ExplicitAlertView(
+            payload_schema_version=event.payload_schema_version,
+            event_id=event.event_id,
+            sequence=event.sequence,
+            dedup_key=event.dedup_key,
+            plan_id=event.plan_id,
+            plan_version=event.plan_version,
+            plan_hash=event.plan_hash,
+            activation_revision=event.activation_revision,
+            symbol=event.symbol,
+            name=event.name,
+            signal_type=event.signal_type,
+            severity=event.severity,
+            trading_date=event.trading_date,
+            cause_id=event.cause_id,
+            rule_id=event.rule_id,
+            target_bucket_end=event.target_bucket_end,
+            evaluated_at=event.evaluated_at,
+            quantity=event.quantity,
+            condition_evidence=_explicit_evidence_view(event.condition_evidence),
+            safety_evidence=(
+                None
+                if event.safety_evidence is None
+                else _explicit_evidence_view(event.safety_evidence)
+            ),
+            next_step=event.next_step,
+            message_text=event.message_text,
+            created_at=event.created_at,
+            acknowledged_at=event.acknowledged_at,
+            revision=record.revision,
+            current_actionable=record.current_actionable,
+        )
     return AlertView(
         event_id=event.event_id,
         sequence=event.sequence,
@@ -623,12 +727,15 @@ async def list_alerts(
     )
 
 
-@router.post("/alert-acknowledgements", response_model=AlertView)
+@router.post(
+    "/alert-acknowledgements",
+    response_model=AlertView | ExplicitAlertView,
+)
 async def acknowledge_alert(
     command: AlertAcknowledgementCommand,
     context: MutationContextDependency,
     service: AlertServiceDependency,
-) -> AlertView:
+) -> AlertView | ExplicitAlertView:
     if command.expected_revision not in {0, 1}:
         raise ApiError(ApiErrorCode.CONFLICT)
     result = validate_api_response(
@@ -674,6 +781,7 @@ __all__ = [
     "AlertRecord",
     "AlertRecordPage",
     "AlertView",
+    "ExplicitAlertView",
     "DiagnosticEvaluationCommand",
     "DiagnosticEvaluationRecord",
     "DiagnosticEvaluationView",

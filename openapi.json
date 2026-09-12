@@ -390,7 +390,14 @@
           "items": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/AlertView"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AlertView"
+                },
+                {
+                  "$ref": "#/components/schemas/ExplicitAlertView"
+                }
+              ]
             },
             "maxItems": 100,
             "title": "Items",
@@ -414,9 +421,14 @@
                 "$ref": "#/components/schemas/ActionableSignalType"
               },
               {
+                "const": "BUY",
+                "type": "string"
+              },
+              {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Signaltype"
           },
           "startAt": {
             "anyOf": [
@@ -5952,6 +5964,327 @@
         "title": "ExecutorHealthView",
         "type": "object"
       },
+      "ExplicitAlertView": {
+        "additionalProperties": false,
+        "description": "Queryable explicit BUY reminder without legacy bucket or fill semantics.",
+        "properties": {
+          "acknowledgedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledgedat"
+          },
+          "activationRevision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Activationrevision",
+            "type": "integer"
+          },
+          "causeId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Causeid",
+            "type": "string"
+          },
+          "conditionEvidence": {
+            "$ref": "#/components/schemas/ExplicitConditionEvidenceView"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "currentActionable": {
+            "title": "Currentactionable",
+            "type": "boolean"
+          },
+          "dedupKey": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Dedupkey",
+            "type": "string"
+          },
+          "evaluatedAt": {
+            "format": "date-time",
+            "title": "Evaluatedat",
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "messageText": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "title": "Messagetext",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "nextStep": {
+            "const": "REVIEW_BUY_REMINDER",
+            "title": "Nextstep",
+            "type": "string"
+          },
+          "payloadSchemaVersion": {
+            "const": "explicit-rule-alert-v1",
+            "title": "Payloadschemaversion",
+            "type": "string"
+          },
+          "planHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Planid",
+            "type": "string"
+          },
+          "planVersion": {
+            "exclusiveMinimum": 0.0,
+            "title": "Planversion",
+            "type": "integer"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "revision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "ruleId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Ruleid",
+            "type": "string"
+          },
+          "safetyEvidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplicitConditionEvidenceView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sequence": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "severity": {
+            "const": "ACTION",
+            "title": "Severity",
+            "type": "string"
+          },
+          "signalType": {
+            "const": "BUY",
+            "title": "Signaltype",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "targetBucketEnd": {
+            "format": "date-time",
+            "title": "Targetbucketend",
+            "type": "string"
+          },
+          "tradingDate": {
+            "format": "date",
+            "title": "Tradingdate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payloadSchemaVersion",
+          "eventId",
+          "sequence",
+          "dedupKey",
+          "planId",
+          "planVersion",
+          "planHash",
+          "activationRevision",
+          "symbol",
+          "name",
+          "signalType",
+          "severity",
+          "tradingDate",
+          "causeId",
+          "ruleId",
+          "targetBucketEnd",
+          "evaluatedAt",
+          "quantity",
+          "conditionEvidence",
+          "safetyEvidence",
+          "nextStep",
+          "messageText",
+          "createdAt",
+          "revision",
+          "currentActionable"
+        ],
+        "title": "ExplicitAlertView",
+        "type": "object"
+      },
+      "ExplicitConditionEvidenceView": {
+        "additionalProperties": false,
+        "description": "Path-addressed explicit evidence kept separate from the legacy condition DTO.",
+        "properties": {
+          "barEnds": {
+            "default": [],
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "maxItems": 501,
+            "title": "Barends",
+            "type": "array"
+          },
+          "children": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExplicitConditionEvidenceView"
+            },
+            "maxItems": 50,
+            "title": "Children",
+            "type": "array"
+          },
+          "code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "facts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EvidenceFactView"
+            },
+            "maxItems": 16,
+            "title": "Facts",
+            "type": "array"
+          },
+          "missingInputs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4,
+            "title": "Missinginputs",
+            "type": "array"
+          },
+          "outcome": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Outcome",
+            "type": "string"
+          },
+          "planPath": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Planpath",
+            "type": "string"
+          }
+        },
+        "required": [
+          "planPath",
+          "code",
+          "outcome"
+        ],
+        "title": "ExplicitConditionEvidenceView",
+        "type": "object"
+      },
+      "ExplicitPlanCapabilityView": {
+        "additionalProperties": false,
+        "description": "Backend-owned R09 capability state; this is not an activation grant.",
+        "properties": {
+          "executionMode": {
+            "const": "EXPLICIT_RULES",
+            "default": "EXPLICIT_RULES",
+            "title": "Executionmode",
+            "type": "string"
+          },
+          "executionVersion": {
+            "const": "explicit-rules-v1",
+            "default": "explicit-rules-v1",
+            "title": "Executionversion",
+            "type": "string"
+          },
+          "isolatedTrustedReviewOnly": {
+            "const": true,
+            "default": true,
+            "title": "Isolatedtrustedreviewonly",
+            "type": "boolean"
+          },
+          "pendingRequirements": {
+            "default": [
+              "SELL_AND_RISK_CONSUMERS",
+              "CURRENT_CONTENT_REVIEW",
+              "ORDINARY_PLAN_FORMS"
+            ],
+            "items": {
+              "enum": [
+                "SELL_AND_RISK_CONSUMERS",
+                "CURRENT_CONTENT_REVIEW",
+                "ORDINARY_PLAN_FORMS"
+              ],
+              "type": "string"
+            },
+            "title": "Pendingrequirements",
+            "type": "array"
+          },
+          "publicActivationAvailable": {
+            "const": false,
+            "default": false,
+            "title": "Publicactivationavailable",
+            "type": "boolean"
+          },
+          "schemaVersion": {
+            "const": 3,
+            "default": 3,
+            "title": "Schemaversion",
+            "type": "integer"
+          },
+          "supportedActions": {
+            "default": [
+              "BUY"
+            ],
+            "items": {
+              "const": "BUY",
+              "type": "string"
+            },
+            "title": "Supportedactions",
+            "type": "array"
+          }
+        },
+        "title": "ExplicitPlanCapabilityView",
+        "type": "object"
+      },
       "ExtractionIssue": {
         "additionalProperties": false,
         "description": "Bounded AI-reported assumption or warning awaiting user review.",
@@ -7539,6 +7872,190 @@
         "title": "PlanVersionView",
         "type": "object"
       },
+      "PositionInventoryConfirmationCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "asOfTradeDate": {
+            "format": "date",
+            "title": "Asoftradedate",
+            "type": "string"
+          },
+          "completeRegistration": {
+            "const": true,
+            "title": "Completeregistration",
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "includedLotIds": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Includedlotids",
+            "type": "array"
+          },
+          "sellableQuantity": {
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Sellablequantity",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "totalQuantity": {
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Totalquantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "symbol",
+          "asOfTradeDate",
+          "expectedRevision",
+          "totalQuantity",
+          "sellableQuantity",
+          "completeRegistration"
+        ],
+        "title": "PositionInventoryConfirmationCommand",
+        "type": "object"
+      },
+      "PositionInventoryView": {
+        "additionalProperties": false,
+        "description": "Three-state-safe authoritative inventory projection.",
+        "properties": {
+          "asOfTradeDate": {
+            "format": "date",
+            "title": "Asoftradedate",
+            "type": "string"
+          },
+          "confirmationId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmationid"
+          },
+          "confirmedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedat"
+          },
+          "cutoff": {
+            "format": "date-time",
+            "title": "Cutoff",
+            "type": "string"
+          },
+          "includedLotIds": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Includedlotids",
+            "type": "array"
+          },
+          "inventoryRevision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Inventoryrevision",
+            "type": "integer"
+          },
+          "missingReasons": {
+            "default": [],
+            "items": {
+              "const": "POSITION_UNKNOWN",
+              "type": "string"
+            },
+            "maxItems": 1,
+            "title": "Missingreasons",
+            "type": "array"
+          },
+          "openingBalances": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PositionOpeningBalanceView"
+            },
+            "maxItems": 200,
+            "title": "Openingbalances",
+            "type": "array"
+          },
+          "sellableQuantity": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sellablequantity"
+          },
+          "status": {
+            "enum": [
+              "KNOWN",
+              "UNKNOWN"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "totalQuantity": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalquantity"
+          }
+        },
+        "required": [
+          "symbol",
+          "status",
+          "asOfTradeDate",
+          "cutoff",
+          "inventoryRevision",
+          "totalQuantity",
+          "sellableQuantity",
+          "confirmedAt"
+        ],
+        "title": "PositionInventoryView",
+        "type": "object"
+      },
       "PositionLotClosureCommand": {
         "additionalProperties": false,
         "properties": {
@@ -7726,6 +8243,55 @@
           "total"
         ],
         "title": "PositionLotPage",
+        "type": "object"
+      },
+      "PositionOpeningBalanceView": {
+        "additionalProperties": false,
+        "description": "Ordinary settled inventory with no fabricated cost or acquisition date.",
+        "properties": {
+          "openingBalanceId": {
+            "format": "uuid",
+            "title": "Openingbalanceid",
+            "type": "string"
+          },
+          "originalQuantity": {
+            "exclusiveMinimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Originalquantity",
+            "type": "integer"
+          },
+          "remainingQuantity": {
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Remainingquantity",
+            "type": "integer"
+          },
+          "revision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sellableFrom": {
+            "format": "date",
+            "title": "Sellablefrom",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "openingBalanceId",
+          "symbol",
+          "originalQuantity",
+          "remainingQuantity",
+          "sellableFrom",
+          "revision"
+        ],
+        "title": "PositionOpeningBalanceView",
         "type": "object"
       },
       "PositionPrefillAction": {
@@ -10222,7 +10788,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AlertView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AlertView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ExplicitAlertView"
+                    }
+                  ],
+                  "title": "Response Acknowledge Alert Api V1 Alert Acknowledgements Post"
                 }
               }
             },
@@ -10374,6 +10948,10 @@
               "anyOf": [
                 {
                   "$ref": "#/components/schemas/ActionableSignalType"
+                },
+                {
+                  "const": "BUY",
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -15019,6 +15597,137 @@
         ]
       }
     },
+    "/api/v1/plan-capabilities": {
+      "get": {
+        "operationId": "get_explicit_plan_capability_api_v1_plan_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplicitPlanCapabilityView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Explicit Plan Capability",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
     "/api/v1/plan-deactivations": {
       "post": {
         "operationId": "deactivate_plan_api_v1_plan_deactivations_post",
@@ -16134,6 +16843,314 @@
         "summary": "Get Plan Version",
         "tags": [
           "plans"
+        ]
+      }
+    },
+    "/api/v1/position-inventory": {
+      "get": {
+        "operationId": "get_position_inventory_api_v1_position_inventory_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asOfTradeDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Asoftradedate",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionInventoryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Position Inventory",
+        "tags": [
+          "positions"
+        ]
+      }
+    },
+    "/api/v1/position-inventory-confirmations": {
+      "post": {
+        "operationId": "confirm_position_inventory_api_v1_position_inventory_confirmations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PositionInventoryConfirmationCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionInventoryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Confirm Position Inventory",
+        "tags": [
+          "positions"
         ]
       }
     },

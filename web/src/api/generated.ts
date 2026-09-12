@@ -75,10 +75,10 @@ export type AlertAcknowledgementCommand = {
 export type AlertPage = {
   acknowledged?: (boolean) | (null);
   endAt?: (string) | (null);
-  items?: Array<components["schemas"]["AlertView"]>;
+  items?: Array<(components["schemas"]["AlertView"]) | (components["schemas"]["ExplicitAlertView"])>;
   limit: number;
   offset: number;
-  signalType?: (components["schemas"]["ActionableSignalType"]) | (null);
+  signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY") | (null);
   startAt?: (string) | (null);
   symbol?: (string) | (null);
   total: number;
@@ -926,6 +926,55 @@ export type ExecutorHealthView = {
   waitingCount: number;
 };
 
+export type ExplicitAlertView = {
+  acknowledgedAt?: (string) | (null);
+  activationRevision: number;
+  causeId: string;
+  conditionEvidence: components["schemas"]["ExplicitConditionEvidenceView"];
+  createdAt: string;
+  currentActionable: boolean;
+  dedupKey: string;
+  evaluatedAt: string;
+  eventId: string;
+  messageText: string;
+  name: string;
+  nextStep: "REVIEW_BUY_REMINDER";
+  payloadSchemaVersion: "explicit-rule-alert-v1";
+  planHash: string;
+  planId: string;
+  planVersion: number;
+  quantity: number;
+  revision: number;
+  ruleId: string;
+  safetyEvidence: (components["schemas"]["ExplicitConditionEvidenceView"]) | (null);
+  sequence: number;
+  severity: "ACTION";
+  signalType: "BUY";
+  symbol: string;
+  targetBucketEnd: string;
+  tradingDate: string;
+};
+
+export type ExplicitConditionEvidenceView = {
+  barEnds?: Array<string>;
+  children?: Array<components["schemas"]["ExplicitConditionEvidenceView"]>;
+  code: string;
+  facts?: Array<components["schemas"]["EvidenceFactView"]>;
+  missingInputs?: Array<string>;
+  outcome: string;
+  planPath: string;
+};
+
+export type ExplicitPlanCapabilityView = {
+  executionMode?: "EXPLICIT_RULES";
+  executionVersion?: "explicit-rules-v1";
+  isolatedTrustedReviewOnly?: true;
+  pendingRequirements?: Array<"SELL_AND_RISK_CONSUMERS" | "CURRENT_CONTENT_REVIEW" | "ORDINARY_PLAN_FORMS">;
+  publicActivationAvailable?: false;
+  schemaVersion?: 3;
+  supportedActions?: Array<"BUY">;
+};
+
 export type ExtractionIssue = {
   material: boolean;
   message: string;
@@ -1177,6 +1226,31 @@ export type PlanVersionView = {
   version: number;
 };
 
+export type PositionInventoryConfirmationCommand = {
+  asOfTradeDate: string;
+  completeRegistration: true;
+  expectedRevision: number;
+  includedLotIds?: Array<string>;
+  sellableQuantity: number;
+  symbol: string;
+  totalQuantity: number;
+};
+
+export type PositionInventoryView = {
+  asOfTradeDate: string;
+  confirmationId?: (string) | (null);
+  confirmedAt: (string) | (null);
+  cutoff: string;
+  includedLotIds?: Array<string>;
+  inventoryRevision: number;
+  missingReasons?: Array<"POSITION_UNKNOWN">;
+  openingBalances?: Array<components["schemas"]["PositionOpeningBalanceView"]>;
+  sellableQuantity: (number) | (null);
+  status: "KNOWN" | "UNKNOWN";
+  symbol: string;
+  totalQuantity: (number) | (null);
+};
+
 export type PositionLotClosureCommand = {
   expectedRevision: number;
   lotId: string;
@@ -1209,6 +1283,15 @@ export type PositionLotPage = {
   offset: number;
   symbol: string;
   total: number;
+};
+
+export type PositionOpeningBalanceView = {
+  openingBalanceId: string;
+  originalQuantity: number;
+  remainingQuantity: number;
+  revision: number;
+  sellableFrom: string;
+  symbol: string;
 };
 
 export type PositionPrefillAction = "BUY" | "CLOSE";
@@ -1574,6 +1657,9 @@ export interface components {
     EvidenceUnit: EvidenceUnit;
     ExecutionStatus: ExecutionStatus;
     ExecutorHealthView: ExecutorHealthView;
+    ExplicitAlertView: ExplicitAlertView;
+    ExplicitConditionEvidenceView: ExplicitConditionEvidenceView;
+    ExplicitPlanCapabilityView: ExplicitPlanCapabilityView;
     ExtractionIssue: ExtractionIssue;
     FieldEvidence: FieldEvidence;
     IndexConditionEvidenceView: IndexConditionEvidenceView;
@@ -1612,10 +1698,13 @@ export interface components {
     PlanVersionStatus: PlanVersionStatus;
     PlanVersionSummary: PlanVersionSummary;
     PlanVersionView: PlanVersionView;
+    PositionInventoryConfirmationCommand: PositionInventoryConfirmationCommand;
+    PositionInventoryView: PositionInventoryView;
     PositionLotClosureCommand: PositionLotClosureCommand;
     PositionLotClosureView: PositionLotClosureView;
     PositionLotCreateCommand: PositionLotCreateCommand;
     PositionLotPage: PositionLotPage;
+    PositionOpeningBalanceView: PositionOpeningBalanceView;
     PositionPrefillAction: PositionPrefillAction;
     PositionPrefillView: PositionPrefillView;
     PositionSummaryView: PositionSummaryView;
@@ -2140,7 +2229,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["AlertView"];
+            "application/json": (components["schemas"]["AlertView"]) | (components["schemas"]["ExplicitAlertView"]);
           };
         };
         "400": {
@@ -2209,7 +2298,7 @@ export interface paths {
           endAt?: (string) | (null);
           limit?: number;
           offset?: number;
-          signalType?: (components["schemas"]["ActionableSignalType"]) | (null);
+          signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY") | (null);
           startAt?: (string) | (null);
           symbol?: (string) | (null);
         };
@@ -4304,6 +4393,79 @@ export interface paths {
       };
     };
   };
+  "/api/v1/plan-capabilities": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ExplicitPlanCapabilityView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
   "/api/v1/plan-deactivations": {
     post: {
       parameters: {
@@ -4789,6 +4951,161 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["PlanVersionView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/position-inventory": {
+    get: {
+      parameters: {
+        query: {
+          asOfTradeDate: string;
+          symbol: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PositionInventoryView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/position-inventory-confirmations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PositionInventoryConfirmationCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PositionInventoryView"];
           };
         };
         "400": {

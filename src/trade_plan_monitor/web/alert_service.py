@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from anyio import to_thread
 
 from trade_plan_monitor.decision.models import ActionableSignalType
-from trade_plan_monitor.notifications.models import AlertEvent
+from trade_plan_monitor.notifications.models import AlertEvent, ExplicitAlertEvent
 from trade_plan_monitor.notifications.outbox import (
     AlertNotFoundError,
     AlertRevisionConflictError,
@@ -211,7 +211,11 @@ class PersistentAlertOperationService:
         return current.astimezone(_SHANGHAI).date()
 
 
-def _alert_record(event: AlertEvent, *, current_actionable: bool) -> AlertRecord:
+def _alert_record(
+    event: AlertEvent | ExplicitAlertEvent,
+    *,
+    current_actionable: bool,
+) -> AlertRecord:
     return AlertRecord(
         event=event,
         revision=0 if event.acknowledged_at is None else 1,
@@ -220,7 +224,11 @@ def _alert_record(event: AlertEvent, *, current_actionable: bool) -> AlertRecord
     )
 
 
-def _position_prefill(event: AlertEvent) -> PositionPrefillView | None:
+def _position_prefill(
+    event: AlertEvent | ExplicitAlertEvent,
+) -> PositionPrefillView | None:
+    if isinstance(event, ExplicitAlertEvent):
+        return None
     buys = {
         ActionableSignalType.BUY_CORE_READY,
         ActionableSignalType.BUY_TACTICAL_READY,

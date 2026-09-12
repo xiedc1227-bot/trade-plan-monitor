@@ -24,7 +24,7 @@ from trade_plan_monitor.ai.models import (
 )
 from trade_plan_monitor.domain.plan_codec import load_plan_json, load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import TradePlan
+from trade_plan_monitor.domain.plan_models import ExplicitTradePlan, TradePlan
 from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
     DraftReviewIssue,
@@ -184,6 +184,8 @@ class PersistentPlanWebLifecycle:
         context: MutationContext,
     ) -> PlanVersionView:
         plan = load_plan_json(command.plan_json)
+        if isinstance(plan, ExplicitTradePlan):
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
         _require_web_safe_plan(plan)
         return await self._run_mutation(
             self._save_plan_sync,
@@ -216,6 +218,8 @@ class PersistentPlanWebLifecycle:
             if command.format is PlanDocumentFormat.JSON
             else load_plan_yaml(command.document)
         )
+        if isinstance(plan, ExplicitTradePlan):
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
         _require_web_safe_plan(plan)
         if plan.symbol != command.symbol:
             raise ApiError(ApiErrorCode.VALIDATION_ERROR)
@@ -502,6 +506,11 @@ class PersistentPlanWebLifecycle:
             details = work.plans.get_version_details(str(command.plan_version_id))
             if details is None:
                 raise PlanVersionNotFoundError("Plan version was not found")
+            stored_plan = load_plan_json(details.payload_json)
+            if isinstance(stored_plan, ExplicitTradePlan):
+                raise PlanActivationBlockedError(
+                    "Explicit plan activation awaits R11/R12 consumers"
+                )
             plan, validation, can_activate = _validated_plan_state(details)
             if PlanVersionStatus(details.status) is not PlanVersionStatus.DRAFT or not can_activate:
                 raise PlanActivationBlockedError("Plan is not ready for activation")
