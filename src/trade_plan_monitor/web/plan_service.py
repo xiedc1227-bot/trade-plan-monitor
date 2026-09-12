@@ -69,6 +69,8 @@ from trade_plan_monitor.web.idempotency import claim_replay, complete_replay, op
 from trade_plan_monitor.web.routers.plans import (
     MAX_SAFE_INTEGER,
     ActivePlanView,
+    ExplicitPlanRuntimeView,
+    ExplicitRuleOutcomeView,
     PlanActivationCommand,
     PlanDeactivationCommand,
     PlanDocumentFormat,
@@ -200,6 +202,9 @@ class PersistentPlanWebLifecycle:
 
     async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None:
         return await self._run(self._get_plan_activation_state_sync, symbol=symbol)
+
+    async def get_explicit_plan_runtime(self, *, symbol: str) -> ExplicitPlanRuntimeView | None:
+        return await self._run(self._get_explicit_plan_runtime_sync, symbol=symbol)
 
     async def save_plan_draft(
         self,
@@ -437,6 +442,60 @@ class PersistentPlanWebLifecycle:
                 active=False,
                 revision=0,
                 changed_at=_shanghai_datetime(self._clock()),
+            )
+
+    def _get_explicit_plan_runtime_sync(self, *, symbol: str) -> ExplicitPlanRuntimeView | None:
+        with self._unit_of_work() as work:
+            active = work.plans.get_activation_state(symbol)
+            if active is None or active.plan_version_id is None:
+                return None
+            details = work.plans.get_version_details(active.plan_version_id)
+            if details is None:
+                raise RepositoryError("Active plan version could not be reloaded")
+            draft = _load_reviewable_plan(details.payload_json)
+            if not isinstance(draft, ExplicitPlanDraft):
+                return None
+            executable = draft.to_executable()
+            if executable is None:
+                raise RepositoryError("Active explicit plan must be complete")
+            result = work.explicit_rules.latest(
+                activation_revision=active.revision,
+                plan_hash=plan_sha256(executable),
+                symbol=executable.symbol,
+            )
+            if result is None:
+                return ExplicitPlanRuntimeView(
+                    activation_revision=active.revision,
+                    evaluated_at=None,
+                    plan_hash=plan_sha256(executable),
+                    plan_version_id=UUID(active.plan_version_id),
+                    rule_outcomes=(),
+                    status="AWAITING_EVALUATION",
+                    symbol=executable.symbol,
+                    target_bucket_end=None,
+                )
+            return ExplicitPlanRuntimeView(
+                activation_revision=result.activation_revision,
+                evaluated_at=_shanghai_datetime(result.evaluated_at),
+                plan_hash=result.plan_hash,
+                plan_version_id=UUID(active.plan_version_id),
+                rule_outcomes=tuple(
+                    ExplicitRuleOutcomeView(
+                        action=item.action.type,
+                        blockers=item.blockers,
+                        condition_code=item.condition_evidence.condition.type,
+                        missing_inputs=tuple(
+                            value.value for value in item.condition_evidence.missing_inputs
+                        ),
+                        outcome=item.condition_evidence.outcome.value,
+                        rule_id=item.rule_id,
+                        suppression_reason=item.suppression_reason,
+                    )
+                    for item in result.rule_results
+                ),
+                status="CURRENT",
+                symbol=result.symbol,
+                target_bucket_end=_shanghai_datetime(result.target_bucket_end),
             )
 
     def _save_plan_sync(

@@ -84,6 +84,28 @@ class ExplicitDecisionRepository:
             return None
         return _result_from_row(row)
 
+    def latest(
+        self,
+        *,
+        plan_hash: str,
+        symbol: str,
+        activation_revision: int,
+    ) -> ExplicitEvaluationResult | None:
+        """Return the newest committed result for one active explicit identity."""
+
+        row = self._session.scalar(
+            select(ExplicitEvaluationLedger)
+            .where(
+                ExplicitEvaluationLedger.plan_hash == plan_hash,
+                ExplicitEvaluationLedger.symbol == symbol,
+                ExplicitEvaluationLedger.activation_revision == activation_revision,
+                ExplicitEvaluationLedger.execution_version == "explicit-rules-v1",
+            )
+            .order_by(ExplicitEvaluationLedger.evaluated_at.desc())
+            .limit(1)
+        )
+        return None if row is None else _result_from_row(row)
+
     def persist(self, result: ExplicitEvaluationResult) -> ExplicitEvaluationRecord:
         if type(result) is not ExplicitEvaluationResult:
             raise TypeError("result must be an ExplicitEvaluationResult")

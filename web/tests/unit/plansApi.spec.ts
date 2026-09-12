@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type {
   ActivePlanView,
+  ExplicitPlanRuntimeView,
   PlanDraftCommand,
   PlanImportCommand,
   PlanVersionSummary,
@@ -34,6 +35,25 @@ const inactiveState: ActivePlanView = {
   planVersionId: null,
   revision: 0,
   symbol: version.symbol,
+};
+
+const explicitRuntime: ExplicitPlanRuntimeView = {
+  activationRevision: 1,
+  evaluatedAt: "2026-09-03T10:05:00.000000+08:00",
+  planHash: "c".repeat(64),
+  planVersionId: VERSION_ID,
+  ruleOutcomes: [{
+    action: "BUY",
+    blockers: [],
+    conditionCode: "ALL",
+    missingInputs: [],
+    outcome: "SATISFIED",
+    ruleId: "buy-range",
+    suppressionReason: null,
+  }],
+  status: "CURRENT",
+  symbol: version.symbol,
+  targetBucketEnd: "2026-09-03T10:05:00.000000+08:00",
 };
 
 const summary: PlanVersionSummary = {
@@ -168,6 +188,18 @@ describe("plan API", () => {
       { expectedRevision: 0, planVersionId: VERSION_ID },
       { expectedRevision: 1, symbol: version.symbol },
     ]);
+  });
+
+  it("reads persisted v3 rule outcomes without accepting a legacy-shaped fallback", async () => {
+    const api = createPlanApi(vi.fn(async () => jsonResponse(explicitRuntime)) as typeof fetch);
+    await expect(api.getExplicitPlanRuntime(version.symbol)).resolves.toEqual(explicitRuntime);
+    const malformed = createPlanApi(vi.fn(async () => jsonResponse({
+      ...explicitRuntime,
+      ruleOutcomes: [{ ...explicitRuntime.ruleOutcomes[0], outcome: "UNKNOWN" }],
+    })) as typeof fetch);
+    await expect(malformed.getExplicitPlanRuntime(version.symbol)).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
   });
 
   it("rejects a save response that reuses the immutable base version identity", async () => {

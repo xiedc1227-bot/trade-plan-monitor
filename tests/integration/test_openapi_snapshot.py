@@ -47,6 +47,7 @@ APPROVED_PATHS = {
     "/api/v1/backtest-runs/{run_id}/market-index-series",
     "/api/v1/dashboard",
     "/api/v1/diagnostic-evaluations",
+    "/api/v1/explicit-plan-runtime/{symbol}",
     "/api/v1/health",
     "/api/v1/health/symbols/{symbol}",
     "/api/v1/manual-event-risk",

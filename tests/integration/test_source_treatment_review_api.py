@@ -25,6 +25,8 @@ from tests.integration.test_source_treatment_inventory_isolation import (
     CONFIRMATION,
     INVENTORY_QUERY,
     NOW,
+    TARGET,
+    _bars,
     _seed_calendar,
     _work,
 )
@@ -48,6 +50,10 @@ from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 from trade_plan_monitor.web.position_service import PersistentPositionOperationService
 from trade_plan_monitor.web.routers.plans import PlanMappingView
+from trade_plan_monitor.runtime.explicit_service import (
+    ExplicitRuntimeCycleStatus,
+    ExplicitRuntimeEvaluationService,
+)
 
 FIXTURE = json.loads(
     (Path(__file__).parents[1] / "fixtures/ai/explicit-plan-literal-source-v3.json").read_text(
@@ -326,7 +332,7 @@ def _complete(client, draft, first):
 
 
 def test_literal_source_completes_current_review_without_initializing_inventory(workspace):
-    client, _, draft, first = workspace
+    client, engine, draft, first = workspace
     assert (
         FIXTURE["literalUserSource"].replace(
             FIXTURE["soleSubstitution"]["from"], FIXTURE["soleSubstitution"]["to"]
@@ -396,6 +402,36 @@ def test_literal_source_completes_current_review_without_initializing_inventory(
     )
     assert activation.status_code == 200, activation.text
     assert activation.json()["active"] is True
+    runtime = client.get("/api/v1/explicit-plan-runtime/003043.SZ")
+    assert runtime.status_code == 200, runtime.text
+    runtime_view = runtime.json()
+    assert runtime_view["status"] == "AWAITING_EVALUATION"
+    assert runtime_view["symbol"] == "003043.SZ"
+    assert runtime_view["planVersionId"] == second["id"]
+    assert runtime_view["activationRevision"] == activation.json()["revision"]
+    assert runtime_view["evaluatedAt"] is runtime_view["targetBucketEnd"] is None
+    assert runtime_view["ruleOutcomes"] == []
+    executable = ExplicitPlanDraft.model_validate_json(second["planJson"]).to_executable()
+    assert executable is not None
+    with _work(engine) as work:
+        for bar in _bars(949):
+            work.history.upsert_five_minute(**bar.model_dump())
+        work.commit()
+    cycle = ExplicitRuntimeEvaluationService(lambda: _work(engine)).run_intraday(
+        plan=executable,
+        target_bucket_end=TARGET,
+        evaluated_at=NOW,
+    )
+    assert cycle.status is ExplicitRuntimeCycleStatus.COMMITTED
+    current_runtime = client.get("/api/v1/explicit-plan-runtime/003043.SZ")
+    assert current_runtime.status_code == 200, current_runtime.text
+    assert current_runtime.json()["status"] == "CURRENT"
+    assert current_runtime.json()["targetBucketEnd"] == TARGET.isoformat()
+    assert [item["ruleId"] for item in current_runtime.json()["ruleOutcomes"]] == [
+        "buy-100",
+        "sell-100",
+        "risk-950",
+    ]
     capability = client.get("/api/v1/plan-capabilities").json()
     assert capability["publicActivationAvailable"] is False
     assert capability["isolatedTrustedReviewOnly"] is True

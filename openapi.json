@@ -6345,6 +6345,161 @@
         "title": "ExplicitPlanCapabilityView",
         "type": "object"
       },
+      "ExplicitPlanRuntimeView": {
+        "additionalProperties": false,
+        "description": "Current active v3 rule state for a single symbol's read model.",
+        "properties": {
+          "activationRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Activationrevision",
+            "type": "integer"
+          },
+          "evaluatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluatedat"
+          },
+          "planHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "ruleOutcomes": {
+            "items": {
+              "$ref": "#/components/schemas/ExplicitRuleOutcomeView"
+            },
+            "maxItems": 3,
+            "title": "Ruleoutcomes",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "AWAITING_EVALUATION",
+              "CURRENT"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "targetBucketEnd": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetbucketend"
+          }
+        },
+        "required": [
+          "symbol",
+          "planVersionId",
+          "planHash",
+          "activationRevision",
+          "status",
+          "evaluatedAt",
+          "targetBucketEnd",
+          "ruleOutcomes"
+        ],
+        "title": "ExplicitPlanRuntimeView",
+        "type": "object"
+      },
+      "ExplicitRuleOutcomeView": {
+        "additionalProperties": false,
+        "description": "One persisted v3 rule result, never coerced into a legacy decision.",
+        "properties": {
+          "action": {
+            "enum": [
+              "BUY",
+              "SELL",
+              "RISK_ALERT"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "blockers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "conditionCode": {
+            "title": "Conditioncode",
+            "type": "string"
+          },
+          "missingInputs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Missinginputs",
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "ruleId": {
+            "title": "Ruleid",
+            "type": "string"
+          },
+          "suppressionReason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ONCE_ALREADY_EMITTED",
+                  "TARGET_ALREADY_EMITTED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suppressionreason"
+          }
+        },
+        "required": [
+          "ruleId",
+          "action",
+          "conditionCode",
+          "outcome",
+          "suppressionReason"
+        ],
+        "title": "ExplicitRuleOutcomeView",
+        "type": "object"
+      },
       "ExtractionIssue": {
         "additionalProperties": false,
         "description": "Bounded AI-reported assumption or warning awaiting user review.",
@@ -15538,6 +15693,149 @@
         "summary": "Evaluate Diagnostic",
         "tags": [
           "alerts"
+        ]
+      }
+    },
+    "/api/v1/explicit-plan-runtime/{symbol}": {
+      "get": {
+        "operationId": "get_explicit_plan_runtime_api_v1_explicit_plan_runtime__symbol__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplicitPlanRuntimeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Explicit Plan Runtime",
+        "tags": [
+          "plans"
         ]
       }
     },

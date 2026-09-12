@@ -140,7 +140,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`b988006fb2da93b42fbd638d239f2b5d3bc03d5d5ce951f6f4fce98a6c866e24`
+OpenAPI 快照 SHA-256：`44599729a2c947a0f41baeb7011871dc82aae6c649399adaaebeb45b343ed662`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 48 个已批准 REST 路径：33 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式命令 `POST /position-inventory-confirmations`、`POST /position-inventory-closures` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -378,7 +378,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
-- 当前冻结契约精确为 49 条 REST 路径：34 条实时路径（包含 v4 当前快照计划复核确认、只读 AI 运行配置、板块指数历史、权威计划启用状态、显式计划能力、权威持仓库存读取/确认/减记以及按计划范围的人工事件风险读取/确认）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
+- 当前冻结契约精确为 50 条 REST 路径：35 条实时路径（包含 v4 当前快照计划复核确认、只读 AI 运行配置、板块指数历史、权威计划启用状态、显式计划能力、与活动版本绑定的 `GET /explicit-plan-runtime/{symbol}` 规则结果读模型、权威持仓库存读取/确认/减记以及按计划范围的人工事件风险读取/确认）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
 - 生产 Router 精确包含十条路径，且全部接入真实或惰性加载视图；两个静态回测子路由继续排在动态路由之前；
 - WEBF10 在不增加路由的前提下，把最后一条历史 `/alerts` 占位路由接入其业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
@@ -545,6 +545,8 @@ const emit = defineEmits<Emits>()
 - 无阻断问题。操作系统级浏览器通知和指定聊天平台保留为未来可选渠道。
 
 ## 审核状态
+
+活动版本绑定的明确运行时读模型只公开已持久化的逐规则结果，不会捏造 legacy 判断投影。
 
 当前 R12 普通用户分片增加受控的政策补充表单：它保存带有耐久 `USER_SUPPLEMENT` 绑定的新不可变 Schema-v3 草稿，绝不把修改后的原文映射值重新标记为原文证据，并要求重新取得服务端审核；它还在个股详情中公开独立、权威的库存确认和实际期初余额减记操作，提醒与确认提醒仍不能改变库存。在完整普通流程和实际组合证据完成前，公开明确计划激活仍以 `ORDINARY_PLAN_FORMS` 待项封闭失败。
 

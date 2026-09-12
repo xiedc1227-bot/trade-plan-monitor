@@ -983,6 +983,27 @@ export type ExplicitPlanCapabilityView = {
   supportedActions?: Array<"BUY" | "SELL" | "RISK_ALERT">;
 };
 
+export type ExplicitPlanRuntimeView = {
+  activationRevision: number;
+  evaluatedAt: (string) | (null);
+  planHash: string;
+  planVersionId: string;
+  ruleOutcomes: Array<components["schemas"]["ExplicitRuleOutcomeView"]>;
+  status: "AWAITING_EVALUATION" | "CURRENT";
+  symbol: string;
+  targetBucketEnd: (string) | (null);
+};
+
+export type ExplicitRuleOutcomeView = {
+  action: "BUY" | "SELL" | "RISK_ALERT";
+  blockers?: Array<string>;
+  conditionCode: string;
+  missingInputs?: Array<string>;
+  outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  ruleId: string;
+  suppressionReason: ("ONCE_ALREADY_EMITTED" | "TARGET_ALREADY_EMITTED") | (null);
+};
+
 export type ExtractionIssue = {
   material: boolean;
   message: string;
@@ -1816,6 +1837,8 @@ export interface components {
     ExplicitAlertView: ExplicitAlertView;
     ExplicitConditionEvidenceView: ExplicitConditionEvidenceView;
     ExplicitPlanCapabilityView: ExplicitPlanCapabilityView;
+    ExplicitPlanRuntimeView: ExplicitPlanRuntimeView;
+    ExplicitRuleOutcomeView: ExplicitRuleOutcomeView;
     ExtractionIssue: ExtractionIssue;
     FieldBindingView: FieldBindingView;
     FieldEvidence: FieldEvidence;
@@ -3967,6 +3990,81 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["DiagnosticEvaluationView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/explicit-plan-runtime/{symbol}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          symbol: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ExplicitPlanRuntimeView"];
           };
         };
         "400": {

@@ -1,6 +1,7 @@
 import type {
   ActivePlanView,
   DraftReviewIssue,
+  ExplicitPlanRuntimeView,
   PlanActivationCommand,
   PlanDeactivationCommand,
   PlanDraftCommand,
@@ -70,10 +71,27 @@ export interface PlanApi {
   ): Promise<PlanVersionView>;
 }
 
+export interface ExplicitPlanRuntimeApi {
+  getExplicitPlanRuntime(
+    symbol: string,
+    options?: PlanRequestOptions,
+  ): Promise<ExplicitPlanRuntimeView>;
+}
+
 export function createPlanApi(
   fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
-): PlanApi {
+): PlanApi & ExplicitPlanRuntimeApi {
   return Object.freeze({
+    async getExplicitPlanRuntime(symbol: string, options?: PlanRequestOptions) {
+      if (!isShareSymbol(symbol)) throw invalidResponse(0);
+      const { body, status } = await requestJson(
+        fetchImplementation,
+        `/api/v1/explicit-plan-runtime/${encodeURIComponent(symbol)}`,
+        readRequest(options),
+      );
+      if (!isExplicitPlanRuntime(body, symbol)) throw invalidResponse(status);
+      return body;
+    },
     async listPlanVersions(
       request: PlanVersionListRequest,
       options?: PlanRequestOptions,
@@ -393,6 +411,30 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
     !reviewIssues.some((issue) => issue.resolved !== true) &&
     !validationIssues.some((issue) => issue.activationBlocking);
   return value.canActivate === canActivate && (value.status !== "ACTIVE" || canActivate);
+}
+
+function isExplicitPlanRuntime(value: unknown, symbol: string): value is ExplicitPlanRuntimeView {
+  if (!isRecord(value) || value.symbol !== symbol || !isUuid(value.planVersionId) ||
+    !isSha256Hash(value.planHash) || !isNonnegativeInteger(value.activationRevision) ||
+    (value.status !== "AWAITING_EVALUATION" && value.status !== "CURRENT") ||
+    !Array.isArray(value.ruleOutcomes) || !value.ruleOutcomes.every(isExplicitRuleOutcome)) return false;
+  return value.status === "CURRENT"
+    ? isShanghaiDateTime(value.evaluatedAt) && isShanghaiDateTime(value.targetBucketEnd)
+    : value.evaluatedAt === null && value.targetBucketEnd === null && value.ruleOutcomes.length === 0;
+}
+
+function isExplicitRuleOutcome(value: unknown): boolean {
+  return isRecord(value) && typeof value.ruleId === "string" &&
+    (value.action === "BUY" || value.action === "SELL" || value.action === "RISK_ALERT") &&
+    typeof value.conditionCode === "string" &&
+    (value.outcome === "SATISFIED" || value.outcome === "UNSATISFIED" || value.outcome === "MISSING_INPUT") &&
+    Array.isArray(value.missingInputs) && value.missingInputs.every((item) => typeof item === "string") &&
+    Array.isArray(value.blockers) && value.blockers.every((item) => typeof item === "string") &&
+    (value.suppressionReason === null || value.suppressionReason === "ONCE_ALREADY_EMITTED" || value.suppressionReason === "TARGET_ALREADY_EMITTED");
+}
+
+function isSha256Hash(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 }
 
 function isPlanReviewConfirmation(

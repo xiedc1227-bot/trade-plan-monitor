@@ -628,6 +628,40 @@ class ActivePlanView(ApiValue):
         return self
 
 
+class ExplicitRuleOutcomeView(ApiValue):
+    """One persisted v3 rule result, never coerced into a legacy decision."""
+
+    rule_id: str
+    action: Literal["BUY", "SELL", "RISK_ALERT"]
+    condition_code: str
+    outcome: Literal["SATISFIED", "UNSATISFIED", "MISSING_INPUT"]
+    missing_inputs: tuple[str, ...] = Field(default=(), max_length=32)
+    blockers: tuple[str, ...] = Field(default=(), max_length=8)
+    suppression_reason: Literal["ONCE_ALREADY_EMITTED", "TARGET_ALREADY_EMITTED"] | None
+
+
+class ExplicitPlanRuntimeView(ApiValue):
+    """Current active v3 rule state for a single symbol's read model."""
+
+    symbol: AShareSymbol
+    plan_version_id: UUID
+    plan_hash: Sha256Hex
+    activation_revision: NonNegativeSafeInteger
+    status: Literal["AWAITING_EVALUATION", "CURRENT"]
+    evaluated_at: ShanghaiDatetime | None
+    target_bucket_end: ShanghaiDatetime | None
+    rule_outcomes: tuple[ExplicitRuleOutcomeView, ...] = Field(max_length=3, strict=False)
+
+    @model_validator(mode="after")
+    def validate_current_result(self) -> Self:
+        has_result = self.status == "CURRENT"
+        if has_result != (self.evaluated_at is not None and self.target_bucket_end is not None):
+            raise ValueError("explicit runtime result timestamps are inconsistent")
+        if not has_result and self.rule_outcomes:
+            raise ValueError("awaiting explicit runtime cannot contain outcomes")
+        return self
+
+
 class PlanExtractionService(Protocol):
     """Application-service contract for review-only configured AI operations."""
 
@@ -657,6 +691,8 @@ class PlanOperationService(PlanExtractionService, Protocol):
     async def get_plan_version(self, *, version_id: str) -> PlanVersionView | None: ...
 
     async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None: ...
+
+    async def get_explicit_plan_runtime(self, *, symbol: str) -> ExplicitPlanRuntimeView | None: ...
 
     async def save_plan_draft(
         self,
@@ -877,6 +913,17 @@ async def get_explicit_plan_capability() -> ExplicitPlanCapabilityView:
     return ExplicitPlanCapabilityView()
 
 
+@router.get("/explicit-plan-runtime/{symbol}", response_model=ExplicitPlanRuntimeView)
+async def get_explicit_plan_runtime(
+    symbol: PlanSymbolPath,
+    service: PlanServiceDependency,
+) -> ExplicitPlanRuntimeView:
+    result = await service.get_explicit_plan_runtime(symbol=symbol)
+    if result is None:
+        raise ApiError(ApiErrorCode.NOT_FOUND)
+    return validate_api_response(result, ExplicitPlanRuntimeView)
+
+
 @router.post("/plan-review-confirmations", response_model=PlanReviewConfirmationView)
 async def confirm_plan_review(
     command: PlanReviewConfirmationCommand,
@@ -1008,6 +1055,8 @@ def _matches_plan(result: PlanVersionView, plan: ExecutableTradePlan) -> bool:
 __all__ = [
     "ActivePlanView",
     "ExplicitPlanCapabilityView",
+    "ExplicitPlanRuntimeView",
+    "ExplicitRuleOutcomeView",
     "MAX_SAFE_INTEGER",
     "PlanActivationCommand",
     "PlanDeactivationCommand",
