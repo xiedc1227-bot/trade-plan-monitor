@@ -68,6 +68,7 @@ from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
 from trade_plan_monitor.state.models import (
     AuditLog,
     DeliveryAttempt,
+    PlanVersion,
     PositionLot,
 )
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
@@ -169,6 +170,12 @@ def _expiring_plan() -> TradePlan:
         "start_date": NOW.date(),
         "end_date": NOW.date(),
     }
+    return TradePlan.model_validate(payload)
+
+
+def _next_plan_version(plan: TradePlan) -> TradePlan:
+    payload = plan.model_dump(mode="python", round_trip=True)
+    payload["version"] = plan.version + 1
     return TradePlan.model_validate(payload)
 
 
@@ -771,6 +778,10 @@ def test_expired_queued_alert_is_retained_but_not_dispatched_as_current(
             committed,
             market_date=NOW.date(),
         )
+        assert work.alerts.is_delivery_allowed(
+            committed,
+            market_date=NOW.date(),
+        )
         work.commit()
 
     expired_at = NOW + timedelta(days=1)
@@ -813,8 +824,148 @@ def test_expired_queued_alert_is_retained_but_not_dispatched_as_current(
             committed,
             market_date=expired_at.date(),
         )
+        assert not work.alerts.is_delivery_allowed(
+            committed,
+            market_date=expired_at.date(),
+        )
     with create_session_factory(database_engine)() as session:
         assert session.scalars(select(DeliveryAttempt)).all() == []
+
+
+@pytest.mark.parametrize("policy_method", ("is_current_actionable", "is_delivery_allowed"))
+def test_alert_without_active_plan_is_neither_actionable_nor_deliverable(
+    database_engine: Engine,
+    policy_method: str,
+) -> None:
+    with _unit_of_work(database_engine) as work:
+        event = work.alerts.enqueue(_payload(803))
+        policy = getattr(work.alerts, policy_method)
+
+        assert not policy(event, market_date=NOW.date())
+
+
+@pytest.mark.parametrize("policy_method", ("is_current_actionable", "is_delivery_allowed"))
+def test_alert_from_replaced_plan_is_neither_actionable_nor_deliverable(
+    database_engine: Engine,
+    policy_method: str,
+) -> None:
+    original = _expiring_plan()
+    replacement = _next_plan_version(original)
+    source_text = SAMPLE_PLAN_PATH.read_text(encoding="utf-8")
+    with _unit_of_work(database_engine) as work:
+        work.plans.save_draft(original, source_text=source_text)
+        work.plans.activate(
+            original,
+            expected_revision=0,
+            validation=validate_trade_plan(
+                original,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        event = work.alerts.enqueue(_payload_for_plan(804, original))
+        work.commit()
+
+    with _unit_of_work(database_engine) as work:
+        work.plans.save_draft(replacement, source_text=source_text)
+        work.plans.activate(
+            replacement,
+            expected_revision=1,
+            validation=validate_trade_plan(
+                replacement,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        policy = getattr(work.alerts, policy_method)
+
+        assert not policy(event, market_date=NOW.date())
+
+
+def test_alert_query_retains_replaced_plan_event_as_historical(
+    database_engine: Engine,
+) -> None:
+    original = _expiring_plan()
+    replacement = _next_plan_version(original)
+    source_text = SAMPLE_PLAN_PATH.read_text(encoding="utf-8")
+    with _unit_of_work(database_engine) as work:
+        work.plans.save_draft(original, source_text=source_text)
+        work.plans.activate(
+            original,
+            expected_revision=0,
+            validation=validate_trade_plan(
+                original,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        event = work.alerts.enqueue(_payload_for_plan(805, original))
+        work.commit()
+
+    with _unit_of_work(database_engine) as work:
+        work.plans.save_draft(replacement, source_text=source_text)
+        work.plans.activate(
+            replacement,
+            expected_revision=1,
+            validation=validate_trade_plan(
+                replacement,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        work.commit()
+
+    alert_service = PersistentAlertOperationService(
+        unit_of_work_factory=lambda: _unit_of_work(database_engine),
+        clock=lambda: NOW,
+    )
+    page = asyncio.run(
+        alert_service.list_alerts(
+            symbol=original.symbol,
+            signal_type=None,
+            acknowledged=None,
+            start_at=None,
+            end_at=None,
+            offset=0,
+            limit=20,
+        )
+    )
+
+    assert page.total == 1
+    assert page.items[0].event == event
+    assert page.items[0].current_actionable is False
+    assert page.items[0].position_prefill is None
+
+
+@pytest.mark.parametrize("policy_method", ("is_current_actionable", "is_delivery_allowed"))
+def test_alert_policy_rejects_malformed_active_plan_storage(
+    database_engine: Engine,
+    policy_method: str,
+) -> None:
+    plan = _expiring_plan()
+    source_text = SAMPLE_PLAN_PATH.read_text(encoding="utf-8")
+    with _unit_of_work(database_engine) as work:
+        work.plans.save_draft(plan, source_text=source_text)
+        work.plans.activate(
+            plan,
+            expected_revision=0,
+            validation=validate_trade_plan(
+                plan,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        event = work.alerts.enqueue(_payload_for_plan(806, plan))
+        work.commit()
+
+    with create_session_factory(database_engine)() as session:
+        stored_plan = session.scalar(
+            select(PlanVersion).where(PlanVersion.plan_hash == plan_sha256(plan))
+        )
+        assert stored_plan is not None
+        stored_plan.payload_json = "{}"
+        session.commit()
+
+    with _unit_of_work(database_engine) as work:
+        policy = getattr(work.alerts, policy_method)
+
+        with pytest.raises(OutboxStorageError, match="Stored plan data is invalid"):
+            policy(event, market_date=NOW.date())
 
 
 def test_target_date_valid_cross_day_risk_recovery_is_delivered_as_history(

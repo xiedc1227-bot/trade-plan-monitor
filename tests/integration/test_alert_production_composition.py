@@ -199,6 +199,7 @@ def test_default_monitor_composition_queries_filtered_canonical_alerts(
     assert page["items"][0]["matchedConditions"][0]["code"] == (
         "OFFICIAL_CLOSE_BELOW_LEVEL"
     )
+    assert page["items"][0]["currentActionable"] is False
     assert page["items"][0]["positionPrefill"] is None
     assert not hasattr(app.state, "alert_operation_service")
 

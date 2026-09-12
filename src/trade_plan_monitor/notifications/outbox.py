@@ -251,7 +251,7 @@ class AlertOutbox:
             .where(ActivePlan.symbol == event.symbol)
         ).one_or_none()
         if row is None:
-            return False
+            return None
         version, active = row
         if (
             version.id != active.plan_version_id
@@ -261,7 +261,7 @@ class AlertOutbox:
             or version.plan_hash != event.plan_hash
             or version.symbol != event.symbol
         ):
-            return False
+            return None
         try:
             plan = load_plan_json(version.payload_json)
         except (TypeError, ValueError):
