@@ -333,7 +333,7 @@ class AlertEvent(AlertPayload):
 
 
 class ExplicitAlertPayload(_NotificationValue):
-    """Versioned reminder payload for one explicit BUY occurrence."""
+    """Versioned reminder payload for one explicit rule occurrence."""
 
     payload_schema_version: Literal["explicit-rule-alert-v1"] = "explicit-rule-alert-v1"
     event_id: UUID
@@ -344,29 +344,51 @@ class ExplicitAlertPayload(_NotificationValue):
     activation_revision: NonNegativeInteger
     symbol: AShareSymbol
     name: AlertName
-    signal_type: Literal["BUY"] = "BUY"
-    severity: Literal[AlertSeverity.ACTION] = AlertSeverity.ACTION
+    signal_type: Literal["BUY", "SELL", "RISK_ALERT"]
+    severity: Literal[AlertSeverity.ACTION, AlertSeverity.RISK]
     trading_date: Annotated[date, Field(strict=True)]
     cause_id: StableIdentifier
     rule_id: StableIdentifier
     target_bucket_end: ShanghaiDatetime
     evaluated_at: ShanghaiDatetime
-    quantity: PositiveBoardLot
+    quantity: PositiveBoardLot | None
     condition_evidence: ExplicitConditionEvidence
     safety_evidence: ExplicitConditionEvidence | None
-    next_step: Literal["REVIEW_BUY_REMINDER"] = "REVIEW_BUY_REMINDER"
+    next_step: Literal[
+        "REVIEW_BUY_REMINDER",
+        "REVIEW_SELL_REMINDER",
+        "REVIEW_RISK_REMINDER",
+    ]
 
     @model_validator(mode="after")
     def validate_payload(self) -> Self:
+        if self.signal_type == "BUY":
+            action = {"type": "BUY", "quantity": self.quantity}
+            expected_severity = AlertSeverity.ACTION
+        elif self.signal_type == "SELL":
+            action = {
+                "type": "SELL",
+                "quantity": self.quantity,
+                "inventory_scope": "ALL_REGISTERED",
+            }
+            expected_severity = AlertSeverity.ACTION
+        else:
+            action = {"type": "RISK_ALERT"}
+            expected_severity = AlertSeverity.RISK
+        if self.severity is not expected_severity:
+            raise ValueError("explicit alert severity must match its action")
+        if (self.signal_type == "RISK_ALERT") != (self.quantity is None):
+            raise ValueError("only a pure risk alert omits quantity")
         signal = ExplicitSignalIntent(
             plan_hash=self.plan_hash,
             activation_revision=self.activation_revision,
             symbol=self.symbol,
             rule_id=self.rule_id,
             target_bucket_end=self.target_bucket_end,
-            action={"type": "BUY", "quantity": self.quantity},
+            action=action,
             condition_evidence=self.condition_evidence,
             safety_evidence=self.safety_evidence,
+            next_step=self.next_step,
         )
         if self.dedup_key != explicit_alert_dedup_key(signal):
             raise ValueError("dedup_key must match the explicit alert identity")
@@ -529,14 +551,19 @@ def build_explicit_alert_payload(
         activation_revision=result.activation_revision,
         symbol=result.symbol,
         name=plan.name,
+        signal_type=signal.action.type,
+        severity=(
+            AlertSeverity.RISK if signal.action.type == "RISK_ALERT" else AlertSeverity.ACTION
+        ),
         trading_date=result.target_bucket_end.date(),
         cause_id=signal.rule_id,
         rule_id=signal.rule_id,
         target_bucket_end=result.target_bucket_end,
         evaluated_at=result.evaluated_at,
-        quantity=signal.action.quantity,
+        quantity=getattr(signal.action, "quantity", None),
         condition_evidence=signal.condition_evidence,
         safety_evidence=signal.safety_evidence,
+        next_step=signal.next_step,
     )
 
 

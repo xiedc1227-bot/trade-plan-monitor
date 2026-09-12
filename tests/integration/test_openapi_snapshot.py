@@ -66,6 +66,7 @@ APPROVED_PATHS = {
     "/api/v1/position-lots",
     "/api/v1/position-inventory",
     "/api/v1/position-inventory-confirmations",
+    "/api/v1/position-inventory-closures",
     "/api/v1/symbols",
     "/api/v1/symbols/{symbol}",
     "/api/v1/symbols/{symbol}/bars",

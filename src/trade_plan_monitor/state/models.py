@@ -143,8 +143,7 @@ class PlanReviewProvenance(Base):
     __tablename__ = "plan_review_provenance"
     __table_args__ = (
         CheckConstraint(
-            "origin IN ('LEGACY_PENDING', 'MANUAL', 'AI_EXTRACTION', 'AI_EDITED', "
-            "'AI_REIMPORT')",
+            "origin IN ('LEGACY_PENDING', 'MANUAL', 'AI_EXTRACTION', 'AI_EDITED', 'AI_REIMPORT')",
             name="ck_plan_review_provenance_origin",
         ),
         CheckConstraint(
@@ -479,7 +478,7 @@ class ExplicitEvaluationLedger(Base):
             name="ck_explicit_evaluation_execution_version",
         ),
         CheckConstraint(
-            "activation_revision >= 0 AND inventory_revision >= 0",
+            "activation_revision >= 0 AND (inventory_revision IS NULL OR inventory_revision >= 0)",
             name="ck_explicit_evaluation_revisions",
         ),
         CheckConstraint(
@@ -499,7 +498,7 @@ class ExplicitEvaluationLedger(Base):
     activation_revision: Mapped[int] = mapped_column(Integer, primary_key=True)
     result_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
     result_json: Mapped[str] = mapped_column(Text)
-    inventory_revision: Mapped[int] = mapped_column(Integer)
+    inventory_revision: Mapped[int | None] = mapped_column(Integer)
     manual_event_risk_revision: Mapped[int | None] = mapped_column(Integer)
     evaluated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 

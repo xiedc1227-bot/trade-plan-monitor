@@ -20,8 +20,10 @@ from trade_plan_monitor.state.repositories import (
     IdempotencyKeyReuseError,
     InventorySnapshot,
     MaxPositionExceededError,
+    OpeningBalanceRecord,
     PositionLotNotFoundError,
     PositionLotRecord,
+    PositionOpeningBalanceNotFoundError,
     PositionReductionError,
     PositionT1LockedError,
     RepositoryError,
@@ -31,6 +33,8 @@ from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.idempotency import claim_replay, complete_replay, operation_hash
 from trade_plan_monitor.web.routers.positions import (
+    PositionInventoryClosureCommand,
+    PositionInventoryClosureView,
     PositionInventoryConfirmationCommand,
     PositionInventoryView,
     PositionLotClosureCommand,
@@ -150,6 +154,19 @@ class PersistentPositionOperationService:
             context=context,
         )
 
+    async def close_position_inventory(
+        self,
+        *,
+        command: PositionInventoryClosureCommand,
+        context: MutationContext,
+    ) -> PositionInventoryClosureView:
+        return await self._run_mutation(
+            self._close_position_inventory_sync,
+            operation="CLOSE_POSITION_INVENTORY",
+            command=command,
+            context=context,
+        )
+
     async def _run_mutation[ResultT](
         self,
         function: Callable[..., ResultT],
@@ -159,6 +176,7 @@ class PersistentPositionOperationService:
             PositionLotCreateCommand
             | PositionLotClosureCommand
             | PositionInventoryConfirmationCommand
+            | PositionInventoryClosureCommand
         ),
         context: MutationContext,
     ) -> ResultT:
@@ -174,7 +192,7 @@ class PersistentPositionOperationService:
             )
         except IdempotencyKeyReuseError:
             raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
-        except PositionLotNotFoundError:
+        except PositionLotNotFoundError, PositionOpeningBalanceNotFoundError:
             raise ApiError(ApiErrorCode.NOT_FOUND) from None
         except BoardLotViolationError:
             raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
@@ -372,6 +390,75 @@ class PersistentPositionOperationService:
             work.commit()
             return result
 
+    def _close_position_inventory_sync(
+        self,
+        *,
+        request_hash: str,
+        context: MutationContext,
+        command: PositionInventoryClosureCommand,
+    ) -> PositionInventoryClosureView:
+        with self._unit_of_work_factory() as work:
+            replay = claim_replay(
+                work,
+                context=context,
+                request_hash=request_hash,
+                model_type=PositionInventoryClosureView,
+            )
+            if replay is not None:
+                return replay
+            if command.source_type == "LOT":
+                before = work.positions.get_lot(str(command.source_id))
+                previous_trade_date = _previous_open_trade_date(
+                    work,
+                    symbol=before.symbol,
+                    trade_date=command.trade_date,
+                )
+                if previous_trade_date is None or before.acquired_trade_date > previous_trade_date:
+                    raise _TradingCalendarConflictError
+                after = work.positions.reduce_lot(
+                    str(command.source_id),
+                    quantity=command.quantity,
+                    trade_date=command.trade_date,
+                    expected_revision=command.expected_revision,
+                    board_lot=100,
+                )
+                revision = (after.quantity - after.remaining_qty) // 100
+            else:
+                before = work.positions.get_opening_balance(str(command.source_id))
+                if (
+                    _previous_open_trade_date(
+                        work,
+                        symbol=before.symbol,
+                        trade_date=command.trade_date,
+                    )
+                    is None
+                ):
+                    raise _TradingCalendarConflictError
+                after = work.positions.reduce_opening_balance(
+                    str(command.source_id),
+                    quantity=command.quantity,
+                    trade_date=command.trade_date,
+                    expected_revision=command.expected_revision,
+                    board_lot=100,
+                )
+                revision = after.revision
+            result = _position_inventory_closure_view(
+                source_type=command.source_type,
+                before=before,
+                after=after,
+                quantity=command.quantity,
+                trade_date=command.trade_date,
+                revision=revision,
+            )
+            complete_replay(
+                work,
+                context=context,
+                request_hash=request_hash,
+                response=result,
+            )
+            work.commit()
+            return result
+
 
 def _active_plan(work: SqlAlchemyUnitOfWork, symbol: str) -> TradePlan:
     active = work.plans.get_active(symbol)
@@ -460,9 +547,7 @@ def _position_inventory_view(snapshot: InventorySnapshot) -> PositionInventoryVi
             None if snapshot.confirmation_id is None else UUID(snapshot.confirmation_id)
         ),
         confirmed_at=(
-            None
-            if snapshot.confirmed_at is None
-            else snapshot.confirmed_at.astimezone(_SHANGHAI)
+            None if snapshot.confirmed_at is None else snapshot.confirmed_at.astimezone(_SHANGHAI)
         ),
         included_lot_ids=tuple(UUID(value) for value in snapshot.included_lot_ids),
         opening_balances=tuple(
@@ -477,6 +562,27 @@ def _position_inventory_view(snapshot: InventorySnapshot) -> PositionInventoryVi
             for balance in snapshot.opening_balances
         ),
         missing_reasons=snapshot.missing_reasons,
+    )
+
+
+def _position_inventory_closure_view(
+    *,
+    source_type: str,
+    before: PositionLotRecord | OpeningBalanceRecord,
+    after: PositionLotRecord | OpeningBalanceRecord,
+    quantity: int,
+    trade_date: date,
+    revision: int,
+) -> PositionInventoryClosureView:
+    return PositionInventoryClosureView(
+        source_type=source_type,
+        source_id=UUID(after.id),
+        symbol=after.symbol,
+        applied_quantity=quantity,
+        trade_date=trade_date,
+        before_remaining_quantity=before.remaining_qty,
+        after_remaining_quantity=after.remaining_qty,
+        revision=revision,
     )
 
 

@@ -421,7 +421,11 @@
                 "$ref": "#/components/schemas/ActionableSignalType"
               },
               {
-                "const": "BUY",
+                "enum": [
+                  "BUY",
+                  "SELL",
+                  "RISK_ALERT"
+                ],
                 "type": "string"
               },
               {
@@ -5966,7 +5970,7 @@
       },
       "ExplicitAlertView": {
         "additionalProperties": false,
-        "description": "Queryable explicit BUY reminder without legacy bucket or fill semantics.",
+        "description": "Queryable explicit reminder without legacy bucket or fill semantics.",
         "properties": {
           "acknowledgedAt": {
             "anyOf": [
@@ -6034,7 +6038,11 @@
             "type": "string"
           },
           "nextStep": {
-            "const": "REVIEW_BUY_REMINDER",
+            "enum": [
+              "REVIEW_BUY_REMINDER",
+              "REVIEW_SELL_REMINDER",
+              "REVIEW_RISK_REMINDER"
+            ],
             "title": "Nextstep",
             "type": "string"
           },
@@ -6062,10 +6070,17 @@
             "type": "integer"
           },
           "quantity": {
-            "exclusiveMinimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Quantity",
-            "type": "integer"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
           },
           "revision": {
             "maximum": 9.223372036854776e+18,
@@ -6096,12 +6111,19 @@
             "type": "integer"
           },
           "severity": {
-            "const": "ACTION",
+            "enum": [
+              "ACTION",
+              "RISK"
+            ],
             "title": "Severity",
             "type": "string"
           },
           "signalType": {
-            "const": "BUY",
+            "enum": [
+              "BUY",
+              "SELL",
+              "RISK_ALERT"
+            ],
             "title": "Signaltype",
             "type": "string"
           },
@@ -6221,7 +6243,7 @@
       },
       "ExplicitPlanCapabilityView": {
         "additionalProperties": false,
-        "description": "Backend-owned R09 capability state; this is not an activation grant.",
+        "description": "Backend-owned R10 capability state; this is not an activation grant.",
         "properties": {
           "executionMode": {
             "const": "EXPLICIT_RULES",
@@ -6243,13 +6265,11 @@
           },
           "pendingRequirements": {
             "default": [
-              "SELL_AND_RISK_CONSUMERS",
               "CURRENT_CONTENT_REVIEW",
               "ORDINARY_PLAN_FORMS"
             ],
             "items": {
               "enum": [
-                "SELL_AND_RISK_CONSUMERS",
                 "CURRENT_CONTENT_REVIEW",
                 "ORDINARY_PLAN_FORMS"
               ],
@@ -6272,10 +6292,16 @@
           },
           "supportedActions": {
             "default": [
-              "BUY"
+              "BUY",
+              "SELL",
+              "RISK_ALERT"
             ],
             "items": {
-              "const": "BUY",
+              "enum": [
+                "BUY",
+                "SELL",
+                "RISK_ALERT"
+              ],
               "type": "string"
             },
             "title": "Supportedactions",
@@ -7872,6 +7898,115 @@
         "title": "PlanVersionView",
         "type": "object"
       },
+      "PositionInventoryClosureCommand": {
+        "additionalProperties": false,
+        "description": "Debit one explicit ledger source after a real-world sale is recorded.",
+        "properties": {
+          "expectedRevision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "sourceId": {
+            "format": "uuid",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceType": {
+            "enum": [
+              "LOT",
+              "OPENING_BALANCE"
+            ],
+            "title": "Sourcetype",
+            "type": "string"
+          },
+          "tradeDate": {
+            "format": "date",
+            "title": "Tradedate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceType",
+          "sourceId",
+          "quantity",
+          "tradeDate",
+          "expectedRevision"
+        ],
+        "title": "PositionInventoryClosureCommand",
+        "type": "object"
+      },
+      "PositionInventoryClosureView": {
+        "additionalProperties": false,
+        "properties": {
+          "afterRemainingQuantity": {
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Afterremainingquantity",
+            "type": "integer"
+          },
+          "appliedQuantity": {
+            "exclusiveMinimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Appliedquantity",
+            "type": "integer"
+          },
+          "beforeRemainingQuantity": {
+            "exclusiveMinimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Beforeremainingquantity",
+            "type": "integer"
+          },
+          "revision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sourceId": {
+            "format": "uuid",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceType": {
+            "enum": [
+              "LOT",
+              "OPENING_BALANCE"
+            ],
+            "title": "Sourcetype",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tradeDate": {
+            "format": "date",
+            "title": "Tradedate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceType",
+          "sourceId",
+          "symbol",
+          "appliedQuantity",
+          "tradeDate",
+          "beforeRemainingQuantity",
+          "afterRemainingQuantity",
+          "revision"
+        ],
+        "title": "PositionInventoryClosureView",
+        "type": "object"
+      },
       "PositionInventoryConfirmationCommand": {
         "additionalProperties": false,
         "properties": {
@@ -7987,10 +8122,13 @@
           "missingReasons": {
             "default": [],
             "items": {
-              "const": "POSITION_UNKNOWN",
+              "enum": [
+                "POSITION_UNKNOWN",
+                "SELLABLE_QUANTITY_UNKNOWN"
+              ],
               "type": "string"
             },
-            "maxItems": 1,
+            "maxItems": 2,
             "title": "Missingreasons",
             "type": "array"
           },
@@ -10950,7 +11088,11 @@
                   "$ref": "#/components/schemas/ActionableSignalType"
                 },
                 {
-                  "const": "BUY",
+                  "enum": [
+                    "BUY",
+                    "SELL",
+                    "RISK_ALERT"
+                  ],
                   "type": "string"
                 },
                 {
@@ -16994,6 +17136,161 @@
           }
         },
         "summary": "Get Position Inventory",
+        "tags": [
+          "positions"
+        ]
+      }
+    },
+    "/api/v1/position-inventory-closures": {
+      "post": {
+        "operationId": "close_position_inventory_api_v1_position_inventory_closures_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PositionInventoryClosureCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionInventoryClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Close Position Inventory",
         "tags": [
           "positions"
         ]

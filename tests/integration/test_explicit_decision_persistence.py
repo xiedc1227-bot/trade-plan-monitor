@@ -96,8 +96,66 @@ def _result():
         target_bucket_end=TARGET,
         evaluated_at=NOW,
         activation_revision=4,
+        inventory=ExplicitInventorySnapshot(status="KNOWN", total_qty=100, inventory_revision=7),
+        rule_states=(),
+    )
+    return plan, result
+
+
+def _multi_result():
+    payload = _plan().model_dump(mode="python", round_trip=True)
+    payload["rules"] = [
+        {
+            "rule_id": "sell-100",
+            "condition": {
+                "type": "COMPLETED_CLOSE_IN_RANGE",
+                "low_fen": 1080,
+                "high_fen": 1100,
+                "include_low": True,
+                "include_high": True,
+            },
+            "action": {
+                "type": "SELL",
+                "quantity": 100,
+                "inventory_scope": "ALL_REGISTERED",
+            },
+            "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+            "repeat_policy": {"mode": "ONCE_PER_ACTIVATION"},
+            "safety_conditions": None,
+        },
+        {
+            "rule_id": "risk-under-1200",
+            "condition": {"type": "COMPLETED_CLOSE_BELOW", "price_fen": 1200},
+            "action": {"type": "RISK_ALERT"},
+            "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+            "repeat_policy": {"mode": "ONCE_PER_ACTIVATION"},
+            "safety_conditions": None,
+        },
+    ]
+    payload["conflict_policy"]["risk_conflict"] = "RISK_WITH_SELL_BLOCK_BUY"
+    plan = ExplicitTradePlan.model_validate(payload)
+    bar = FiveMinuteBar(
+        symbol=plan.symbol,
+        bar_end=TARGET,
+        open_fen=1080,
+        high_fen=1080,
+        low_fen=1080,
+        close_fen=1080,
+        volume_shares=100,
+        amount_yuan=Decimal("0"),
+    )
+    result = evaluate_explicit_rules(
+        plan=plan,
+        bars=(bar,),
+        trading_calendar=(),
+        target_bucket_end=TARGET,
+        evaluated_at=NOW,
+        activation_revision=4,
         inventory=ExplicitInventorySnapshot(
-            status="KNOWN", total_qty=100, inventory_revision=7
+            status="KNOWN",
+            total_qty=100,
+            sellable_qty=100,
+            inventory_revision=7,
         ),
         rule_states=(),
     )
@@ -180,17 +238,89 @@ def test_rollback_after_enqueue_releases_result_state_event_and_dedup_claim(
             work.rollback()
 
         with _work(engine) as restarted:
-            assert restarted.explicit_rules.get(
-                plan_hash=result.plan_hash,
-                symbol=result.symbol,
-                target_bucket_end=result.target_bucket_end,
-                activation_revision=result.activation_revision,
-            ) is None
-            assert restarted.explicit_rules.states(
-                plan_hash=result.plan_hash,
-                symbol=result.symbol,
-                activation_revision=result.activation_revision,
-            ) == ()
+            assert (
+                restarted.explicit_rules.get(
+                    plan_hash=result.plan_hash,
+                    symbol=result.symbol,
+                    target_bucket_end=result.target_bucket_end,
+                    activation_revision=result.activation_revision,
+                )
+                is None
+            )
+            assert (
+                restarted.explicit_rules.states(
+                    plan_hash=result.plan_hash,
+                    symbol=result.symbol,
+                    activation_revision=result.activation_revision,
+                )
+                == ()
+            )
             assert not restarted.alerts.has_dedup_key(event.dedup_key)
+    finally:
+        engine.dispose()
+
+
+def test_risk_and_sell_enqueue_failure_rolls_back_both_and_retry_keeps_identities(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "explicit-multi-rollback.sqlite3")
+    try:
+        upgrade_database(engine)
+        plan, result = _multi_result()
+        assert tuple(signal.action.type for signal in result.signal_intents) == (
+            "SELL",
+            "RISK_ALERT",
+        )
+        first_event_id = None
+        with _work(engine) as work:
+            work.explicit_rules.persist(result)
+            first_signal = result.signal_intents[0]
+            first_event = work.alerts.enqueue_explicit(
+                build_explicit_alert_payload(
+                    event_id=explicit_alert_event_id(first_signal),
+                    plan=plan,
+                    result=result,
+                    signal=first_signal,
+                )
+            )
+            first_event_id = first_event.event_id
+            work.rollback()
+
+        committed_ids = []
+        with _work(engine) as retry:
+            record = retry.explicit_rules.persist(result)
+            for signal in result.signal_intents:
+                event = retry.alerts.enqueue_explicit(
+                    build_explicit_alert_payload(
+                        event_id=explicit_alert_event_id(signal),
+                        plan=plan,
+                        result=result,
+                        signal=signal,
+                    )
+                )
+                committed_ids.append(event.event_id)
+            retry.commit()
+
+        assert record.created is True
+        assert committed_ids[0] == first_event_id
+        assert len(set(committed_ids)) == 2
+        with _work(engine) as restarted:
+            events, total = restarted.alerts.list_events(
+                symbol=plan.symbol,
+                signal_type=None,
+                acknowledged=None,
+                start_at=None,
+                end_at=None,
+                offset=0,
+                limit=10,
+            )
+            states = restarted.explicit_rules.states(
+                plan_hash=result.plan_hash,
+                symbol=result.symbol,
+                activation_revision=result.activation_revision,
+            )
+        assert total == 2
+        assert {event.signal_type for event in events} == {"SELL", "RISK_ALERT"}
+        assert len(states) == 2
     finally:
         engine.dispose()

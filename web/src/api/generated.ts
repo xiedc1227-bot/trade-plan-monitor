@@ -78,7 +78,7 @@ export type AlertPage = {
   items?: Array<(components["schemas"]["AlertView"]) | (components["schemas"]["ExplicitAlertView"])>;
   limit: number;
   offset: number;
-  signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY") | (null);
+  signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY" | "SELL" | "RISK_ALERT") | (null);
   startAt?: (string) | (null);
   symbol?: (string) | (null);
   total: number;
@@ -938,18 +938,18 @@ export type ExplicitAlertView = {
   eventId: string;
   messageText: string;
   name: string;
-  nextStep: "REVIEW_BUY_REMINDER";
+  nextStep: "REVIEW_BUY_REMINDER" | "REVIEW_SELL_REMINDER" | "REVIEW_RISK_REMINDER";
   payloadSchemaVersion: "explicit-rule-alert-v1";
   planHash: string;
   planId: string;
   planVersion: number;
-  quantity: number;
+  quantity: (number) | (null);
   revision: number;
   ruleId: string;
   safetyEvidence: (components["schemas"]["ExplicitConditionEvidenceView"]) | (null);
   sequence: number;
-  severity: "ACTION";
-  signalType: "BUY";
+  severity: "ACTION" | "RISK";
+  signalType: "BUY" | "SELL" | "RISK_ALERT";
   symbol: string;
   targetBucketEnd: string;
   tradingDate: string;
@@ -969,10 +969,10 @@ export type ExplicitPlanCapabilityView = {
   executionMode?: "EXPLICIT_RULES";
   executionVersion?: "explicit-rules-v1";
   isolatedTrustedReviewOnly?: true;
-  pendingRequirements?: Array<"SELL_AND_RISK_CONSUMERS" | "CURRENT_CONTENT_REVIEW" | "ORDINARY_PLAN_FORMS">;
+  pendingRequirements?: Array<"CURRENT_CONTENT_REVIEW" | "ORDINARY_PLAN_FORMS">;
   publicActivationAvailable?: false;
   schemaVersion?: 3;
-  supportedActions?: Array<"BUY">;
+  supportedActions?: Array<"BUY" | "SELL" | "RISK_ALERT">;
 };
 
 export type ExtractionIssue = {
@@ -1226,6 +1226,25 @@ export type PlanVersionView = {
   version: number;
 };
 
+export type PositionInventoryClosureCommand = {
+  expectedRevision: number;
+  quantity: number;
+  sourceId: string;
+  sourceType: "LOT" | "OPENING_BALANCE";
+  tradeDate: string;
+};
+
+export type PositionInventoryClosureView = {
+  afterRemainingQuantity: number;
+  appliedQuantity: number;
+  beforeRemainingQuantity: number;
+  revision: number;
+  sourceId: string;
+  sourceType: "LOT" | "OPENING_BALANCE";
+  symbol: string;
+  tradeDate: string;
+};
+
 export type PositionInventoryConfirmationCommand = {
   asOfTradeDate: string;
   completeRegistration: true;
@@ -1243,7 +1262,7 @@ export type PositionInventoryView = {
   cutoff: string;
   includedLotIds?: Array<string>;
   inventoryRevision: number;
-  missingReasons?: Array<"POSITION_UNKNOWN">;
+  missingReasons?: Array<"POSITION_UNKNOWN" | "SELLABLE_QUANTITY_UNKNOWN">;
   openingBalances?: Array<components["schemas"]["PositionOpeningBalanceView"]>;
   sellableQuantity: (number) | (null);
   status: "KNOWN" | "UNKNOWN";
@@ -1698,6 +1717,8 @@ export interface components {
     PlanVersionStatus: PlanVersionStatus;
     PlanVersionSummary: PlanVersionSummary;
     PlanVersionView: PlanVersionView;
+    PositionInventoryClosureCommand: PositionInventoryClosureCommand;
+    PositionInventoryClosureView: PositionInventoryClosureView;
     PositionInventoryConfirmationCommand: PositionInventoryConfirmationCommand;
     PositionInventoryView: PositionInventoryView;
     PositionLotClosureCommand: PositionLotClosureCommand;
@@ -2298,7 +2319,7 @@ export interface paths {
           endAt?: (string) | (null);
           limit?: number;
           offset?: number;
-          signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY") | (null);
+          signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY" | "SELL" | "RISK_ALERT") | (null);
           startAt?: (string) | (null);
           symbol?: (string) | (null);
         };
@@ -5027,6 +5048,85 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["PositionInventoryView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/position-inventory-closures": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PositionInventoryClosureCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PositionInventoryClosureView"];
           };
         };
         "400": {

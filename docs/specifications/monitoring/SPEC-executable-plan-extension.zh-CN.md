@@ -1,6 +1,6 @@
 # 规格：executable-plan-extension（R08 / F06）
 
-> `SPEC-executable-plan-extension.md` 是英文正式版；本文为语义等价的中文审阅副本。日期：2026-09-12。**供 R09–R12 实施的设计；不代表能力已实现或已激活。**
+> `SPEC-executable-plan-extension.md` 是英文正式版；本文为语义等价的中文审阅副本。日期：2026-09-12。**R09–R10 执行分片已面向隔离可信输入实现；在 R11–R12 完成前，公开 Schema v3 保存、导入和启用仍关闭。**
 
 ## E01. 范围与依据
 
@@ -115,6 +115,7 @@ v3 草稿与可执行模型是不同的类型视图。草稿允许缺失必需�
 | `POST /plan-review-confirmations` | `planVersionId`、`contentHash`、`sourceHash`、`reviewEvidenceHash`、`expectedRevision`、按服务端 `issueId` 标识的显式解决记录；响应 `reviewId`、绑定哈希/版本、`revision`、`confirmedAt`、未解决问题及 `canActivate` |
 | `GET /position-inventory?symbol=...&asOfTradeDate=...` | E04 的类型化 KNOWN/UNKNOWN 持仓快照；未知数字可空，包含确认和账本 revision |
 | `POST /position-inventory-confirmations` | `symbol`、`asOfTradeDate`、`expectedRevision`、`totalQuantity`、`sellableQuantity`、`includedLotIds`、明确完整登记声明；响应权威快照及可能产生的期初余额身份、审计回执 |
+| `POST /position-inventory-closures` | 幂等的 `LOT` 或 `OPENING_BALANCE` 来源 identity、整手数量、减记交易日和来源 `expectedRevision`；响应精确的操作前/后数量及权威库存 revision |
 
 所有写入要求既有 `Idempotency-Key`/请求哈希/revision 机制；相同重试返回相同回执，同键异体返回 422，进行中或陈旧 revision 返回 409。不从模型输出直接接受批准或持仓状态。首版 v1 范围中，减去已纳入的已知 lot 后，期初确认只能声明 total=sellable 或零；余量结算未知阻止完成。重试或重新确认不得自动重复新增余额。
 
@@ -157,6 +158,6 @@ R09 必须把被消费的人工风险 revision 带入 v3 结果/提交保护，�
 
 ## E10. 交付分片与验收
 
-R09 负责 v3 领域/编解码分派、改共享模型前保护旧提示词、精确均量/区间求值、首个合格 BUY、已知持仓、重复状态、被消费状态保护，以及足以离线验证 BUY 的结果/outbox 接线。R10 增加普通 SELL 和纯 RISK_ALERT、全部审核冲突/多意图及保留旧风险回归。R11 负责部分提取、双向映射、当前内容可信重审和 v4 提示词发布。R12 负责普通表单、明确政策选择、完整预览和权威缺失状态展示。在每个必需分片实现且通过验证前，以不支持消费者/能力检查阻止激活；分片测试可以使用隔离且明确的可信审核输入，但不能声称公开审核流程已完成。
+R09 负责 v3 领域/编解码分派、改共享模型前保护旧提示词、精确均量/区间求值、首个合格 BUY、已知持仓、重复状态、被消费状态保护，以及足以离线验证 BUY 的结果/outbox 接线。R10 增加普通 SELL 和纯 RISK_ALERT、全部审核冲突/多意图、统一批次/期初余额减记，并保留旧风险回归。R09 与 R10 已面向隔离且明确的可信审核输入实现并验证。R11 负责部分提取、双向映射、当前内容可信重审和 v4 提示词发布。R12 负责普通表单、明确政策选择、完整预览和权威缺失状态展示。在 R11 与 R12 实现并通过验证前，即使 `GET /plan-capabilities` 现已报告隔离消费者支持全部三种执行动作，公开 Schema v3 保存、导入和启用仍保持阻断。
 
 必需测试预期、精确消费位置和待确认业务项见 [R08 映射](../../../remediation/R08-mapping.zh-CN.md)。R13 独立从未改动原文出发，把新增人工确认 fixture 输入单独标记。原文没有政策时，仅原文提取必须保持阻断；补齐的合成测试 fixture 必须证明每项新增政策为何已知。除非另有版本化回测契约支持本模式，否则离线回放不生成研究模拟成交。R14 真实供应商/用户可见证据仍须另行授权，且尚未验证。

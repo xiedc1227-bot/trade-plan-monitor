@@ -58,23 +58,32 @@ _RULE_LABELS = {
 
 
 def render_explicit_alert(payload: ExplicitAlertPayload) -> str:
-    """Render a bounded explicit BUY reminder without implying order execution."""
+    """Render a bounded explicit reminder without implying order execution."""
 
     if type(payload) is not ExplicitAlertPayload:
         raise TypeError("payload must be an ExplicitAlertPayload")
+    title = {"BUY": "买入提醒", "SELL": "卖出提醒", "RISK_ALERT": "风险提醒"}[payload.signal_type]
+    quantity_line = () if payload.quantity is None else (f"提醒数量: {payload.quantity}股",)
+    next_step = {
+        "BUY": "人工复核后自行决定是否下单",
+        "SELL": "人工复核后另行登记实际减仓",
+        "RISK_ALERT": "人工复核风险，不会自动卖出或改变风险状态",
+    }[payload.signal_type]
     lines = (
-        f"[买入提醒] {payload.name} {payload.symbol}",
+        f"[{title}] {payload.name} {payload.symbol}",
         f"规则: {payload.rule_id}",
         f"完成K线: {payload.target_bucket_end.isoformat()}",
-        f"提醒数量: {payload.quantity}股",
+        *quantity_line,
         "条件证据: 已满足",
-        "下一步: 人工复核后自行决定是否下单",
+        f"下一步: {next_step}",
         DISCLAIMER,
     )
     value = "\n".join(lines)
     if len(value) > MAX_ALERT_TEXT_CHARS:
         raise ValueError("rendered alert exceeds the text limit")
     return value
+
+
 _FACT_LABELS = {
     "current_price_fen": "当前价",
     "risk_status": "风险状态",

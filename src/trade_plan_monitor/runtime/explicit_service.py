@@ -76,9 +76,7 @@ class ExplicitRuntimeEvaluationService:
             raise TypeError("unit_of_work_factory must be callable")
         if after_evaluate is not None and not callable(after_evaluate):
             raise TypeError("after_evaluate must be callable")
-        if committed_event_publisher is not None and not callable(
-            committed_event_publisher
-        ):
+        if committed_event_publisher is not None and not callable(committed_event_publisher):
             raise TypeError("committed_event_publisher must be callable")
         self._work = unit_of_work_factory
         self._after_evaluate = after_evaluate
@@ -105,8 +103,7 @@ class ExplicitRuntimeEvaluationService:
                 work.events.get(event.event_id) for event in result.committed_events
             )
         if any(
-            event is None
-            or event.event_type is not MonitorEventType.ALERT_CREATED
+            event is None or event.event_type is not MonitorEventType.ALERT_CREATED
             for event in monitor_events
         ):
             raise RuntimeError("committed explicit alert event is unavailable")
@@ -164,12 +161,14 @@ class ExplicitRuntimeEvaluationService:
                 as_of_trade_date=target_bucket_end.date(),
                 cutoff=target_bucket_end,
             )
-            if (
+            if result.inventory_revision is not None and (
                 current_inventory.inventory_revision != result.inventory_revision
                 or current_inventory.status.value != captured.inventory.status
                 or current_inventory.total_qty != captured.inventory.total_qty
+                or current_inventory.sellable_qty != captured.inventory.sellable_qty
+                or current_inventory.missing_reasons != captured.inventory.missing_reasons
             ):
-                raise StaleExplicitDecisionError("inventory changed before BUY commit")
+                raise StaleExplicitDecisionError("inventory changed before trade commit")
             if captured.manual_event_risk_revision is not None:
                 current_value, current_revision = _manual_risk_value(
                     work.manual_event_risk.get(plan.symbol),
@@ -181,9 +180,7 @@ class ExplicitRuntimeEvaluationService:
                     current_revision != captured.manual_event_risk_revision
                     or current_value != captured.manual_event_risk
                 ):
-                    raise StaleExplicitDecisionError(
-                        "manual event risk changed before BUY commit"
-                    )
+                    raise StaleExplicitDecisionError("manual event risk changed before BUY commit")
             record = work.explicit_rules.persist(result)
             if record.created:
                 for signal in result.signal_intents:
@@ -257,7 +254,9 @@ class ExplicitRuntimeEvaluationService:
             inventory=ExplicitInventorySnapshot(
                 status=inventory.status.value,
                 total_qty=inventory.total_qty,
+                sellable_qty=inventory.sellable_qty,
                 inventory_revision=inventory.inventory_revision,
+                missing_reasons=inventory.missing_reasons,
             ),
             bars=bars,
             trading_calendar=calendar,

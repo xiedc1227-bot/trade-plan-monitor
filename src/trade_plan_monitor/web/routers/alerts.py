@@ -58,7 +58,7 @@ _MAX_EXPECTED_REVISION = 9_223_372_036_854_775_806
 OffsetQuery = Annotated[int, Query(ge=0, le=_MAX_ROWS)]
 LimitQuery = Annotated[int, Query(ge=1, le=_MAX_LIMIT)]
 SymbolFilter = Annotated[AShareSymbol | None, Query()]
-PublicAlertSignalType = ActionableSignalType | Literal["BUY"]
+PublicAlertSignalType = ActionableSignalType | Literal["BUY", "SELL", "RISK_ALERT"]
 SignalTypeFilter = Annotated[PublicAlertSignalType | None, Query(alias="signalType")]
 AcknowledgedFilter = Annotated[bool | None, Query()]
 StartAtFilter = Annotated[ShanghaiDatetime | None, Query(alias="startAt")]
@@ -258,7 +258,7 @@ class ExplicitConditionEvidenceView(ApiValue):
 
 
 class ExplicitAlertView(ApiValue):
-    """Queryable explicit BUY reminder without legacy bucket or fill semantics."""
+    """Queryable explicit reminder without legacy bucket or fill semantics."""
 
     payload_schema_version: Literal["explicit-rule-alert-v1"]
     event_id: UUID = Field(strict=False)
@@ -270,17 +270,21 @@ class ExplicitAlertView(ApiValue):
     activation_revision: NonNegativeRevision
     symbol: AShareSymbol
     name: str = Field(strict=True, min_length=1, max_length=100)
-    signal_type: Literal["BUY"]
-    severity: Literal[AlertSeverity.ACTION]
+    signal_type: Literal["BUY", "SELL", "RISK_ALERT"]
+    severity: Literal[AlertSeverity.ACTION, AlertSeverity.RISK]
     trading_date: Annotated[date, Field(strict=True)]
     cause_id: str = Field(strict=True, min_length=1, max_length=128)
     rule_id: str = Field(strict=True, min_length=1, max_length=128)
     target_bucket_end: ShanghaiDatetime
     evaluated_at: ShanghaiDatetime
-    quantity: PositiveBoardLotQuantity
+    quantity: PositiveBoardLotQuantity | None
     condition_evidence: ExplicitConditionEvidenceView
     safety_evidence: ExplicitConditionEvidenceView | None
-    next_step: Literal["REVIEW_BUY_REMINDER"]
+    next_step: Literal[
+        "REVIEW_BUY_REMINDER",
+        "REVIEW_SELL_REMINDER",
+        "REVIEW_RISK_REMINDER",
+    ]
     message_text: str = Field(strict=True, min_length=1, max_length=16_384)
     created_at: ShanghaiDatetime
     acknowledged_at: ShanghaiDatetime | None = None
@@ -293,6 +297,17 @@ class ExplicitAlertView(ApiValue):
             raise ValueError("explicit alert rule and target identity are inconsistent")
         if self.revision != (0 if self.acknowledged_at is None else 1):
             raise ValueError("explicit alert revision must match acknowledgement state")
+        expected = {
+            "BUY": (AlertSeverity.ACTION, "REVIEW_BUY_REMINDER", False),
+            "SELL": (AlertSeverity.ACTION, "REVIEW_SELL_REMINDER", False),
+            "RISK_ALERT": (AlertSeverity.RISK, "REVIEW_RISK_REMINDER", True),
+        }[self.signal_type]
+        if (
+            self.severity is not expected[0]
+            or self.next_step != expected[1]
+            or (self.quantity is None) is not expected[2]
+        ):
+            raise ValueError("explicit alert action fields are inconsistent")
         return self
 
 

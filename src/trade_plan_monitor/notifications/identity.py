@@ -35,6 +35,7 @@ def explicit_alert_dedup_key(signal: ExplicitSignalIntent) -> str:
 
     if type(signal) is not ExplicitSignalIntent:
         raise TypeError("signal must be an ExplicitSignalIntent")
+    quantity = getattr(signal.action, "quantity", None)
     fields = (
         signal.payload_schema_version,
         signal.plan_hash,
@@ -43,7 +44,7 @@ def explicit_alert_dedup_key(signal: ExplicitSignalIntent) -> str:
         signal.rule_id,
         signal.target_bucket_end.isoformat(),
         signal.action.type,
-        str(signal.action.quantity),
+        "null" if quantity is None else str(quantity),
     )
     preimage = _EXPLICIT_ALERT_DOMAIN + b"\0".join(item.encode("utf-8") for item in fields)
     return sha256(preimage).hexdigest()

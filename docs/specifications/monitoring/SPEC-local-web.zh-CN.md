@@ -124,7 +124,7 @@ web/src/
 
 - `create_app(position_service=..., alert_service=...)` 接收明确注入的 `PositionOperationService` 和 `AlertOperationService` 适配器，但不构造仓储、不打开 SQLite、不判断计划，也不启动工作。缺少服务时以 `SERVICE_UNAVAILABLE` 封闭失败。应用服务负责原子幂等、乐观修订检查、计划所属最大仓位策略、T+1/日历策略、持久化和审计写入。
 - T038 实现 `GET /position-lots`、`POST /position-lots`、`POST /position-lot-closures`、`GET /alerts`、`POST /alert-acknowledgements` 和 `POST /diagnostic-evaluations`。它不实现 T039 WebSocket 发布/回放、T040 Origin/安全/静态资源提供、生产服务组合，也不修改任何 T024 判断优先级、hash 或回放行为。
-- 持仓分页要求一个精确股票和显式 `asOfTradeDate`，回显请求的分页/筛选 identity，并且只暴露有界的人工批次事实与 T+1 可卖投影。人工建仓要求显式的 100 股整手数量、仓位桶、买入交易日、整数分成本、可选关联提醒和 `expectedRevision=0`；新批次从修订 `0` 开始。减仓是针对一个批次、数量、交易日和预期修订的独立明确命令。批次的持久修订为 `(quantity - remainingQuantity) / 100`，因此每减少一手就前进一步，且无需新增存储列。减仓响应将精确应用数量和交易日绑定到操作前/后的剩余数量及结果批次，且不能报告买入当日或更早日期的成功减仓。应用服务必须在提交持仓审计前拒绝最大仓位、剩余数量、交易日历 T+1 和过期修订冲突。
+- 持仓分页要求一个精确股票和显式 `asOfTradeDate`，回显请求的分页/筛选 identity，并且只暴露有界的人工批次事实与 T+1 可卖投影。人工建仓要求显式的 100 股整手数量、仓位桶、买入交易日、整数分成本、可选关联提醒和 `expectedRevision=0`；新批次从修订 `0` 开始。减仓既可使用旧有的批次专用命令，也可使用新增的统一库存减记命令；后者针对一个 `LOT` 或 `OPENING_BALANCE` 来源、数量、交易日和预期修订。批次的持久修订为 `(quantity - remainingQuantity) / 100`，因此每减少一手就前进一步，且无需新增存储列。减仓响应将精确应用数量和交易日绑定到操作前/后的剩余数量及结果来源，且不能报告买入或结算当日及更早日期的成功减仓。应用服务必须在同一原子事务提交库存 revision、确认投影、审计及事件前，拒绝剩余数量、交易日历 T+1、结算和过期修订冲突。
 - 提醒分页使用有界 `offset`/`limit`，并可按股票、可操作信号类型、确认状态和成对的上海时区闭区间时间筛选。分页回显这些筛选条件，拒绝重复事件 ID 或序号，并重新校验每个完整规范 `AlertEvent`，包括去重 identity、严重级别、相关区间、下一步、证据/节点/事实/数值预算、确定性渲染结果和确认时间戳。持仓预填是不提交的值，其股票、数量、仓位桶、目标批次和事件 identity 必须与提醒精确一致；它绝不调用持仓服务。
 - 提醒确认是独立的幂等审计命令。提醒修订就是持久确认状态：未确认时为 `0`，确认后为 `1`。首次确认要求修订 `0` 并返回 `1`；对已确认修订 `1` 再次确认是仍保持 `1` 的 no-op；其他过期修订均冲突。响应必须标识请求事件并包含确认时间。该路由不能创建、关闭或以其他方式修改持仓；提醒确认继续与投递成功和成交相互独立。
 - 诊断命令必须且只能指定一个规范 `INTRADAY` 五分钟交易时段边界，或一个 `OFFICIAL_CLOSE` 交易日期。服务返回一个规范且自校验的 `EvaluationResult`；适配器在投影权威判断前重新校验其 `resultHash`、内嵌 evaluation identity 和完整结果。该内嵌 identity 的 `planHash`、股票、kind、强类型目标和 `formulaVersion` 必须同时匹配结果与请求，并携带精确来源修订。严格响应要求 `stateMutationApplied=false`、`alertEnqueued=false` 和 `positionChanged=false`；唯一允许的写入是可选诊断审计。路由既不调用也不重新实现决策引擎。
@@ -140,9 +140,9 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`5338dbd1fbc93d10e9099d4a221ee725e504a530aa336834d2f2614b41629145`
+OpenAPI 快照 SHA-256：`6e8a727355500c310237e5d19d2820ac2a95585b9f664b19d9d130566242611f`
 
-- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 47 个已批准 REST 路径：32 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式确认命令 `POST /position-inventory-confirmations` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
+- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 48 个已批准 REST 路径：33 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式命令 `POST /position-inventory-confirmations`、`POST /position-inventory-closures` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
 - `python scripts/generate_frontend_types.py --check` 是只读检查，只要任一已提交生成文件存在逐字节差异就失败。生成过程遇到不支持或悬空的 Schema 引用、参数位置、Schema 类型或非法 TypeScript 标识符时会封闭失败，而不是静默弱化契约。
 - `web/index.html` 是稳定的 Vite 应用文档，包含一个 `#app` 根节点和一个外部模块入口，不含违反 T040 CSP 的内联脚本或样式。Vite 现在执行会生成 `dist/index.html` 的文档式应用构建；T042 仍负责首个应用外壳、路由和组件挂载，T052 仍负责已安装资源发现及生产组合。
@@ -378,7 +378,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
-- 当前冻结契约精确为 47 条 REST 路径：32 条实时路径（包含只读 AI 运行配置、板块指数历史、权威计划启用状态、显式计划能力、权威持仓库存读取/确认以及按计划范围的人工事件风险读取/确认）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
+- 当前冻结契约精确为 48 条 REST 路径：33 条实时路径（包含只读 AI 运行配置、板块指数历史、权威计划启用状态、显式计划能力、权威持仓库存读取/确认/减记以及按计划范围的人工事件风险读取/确认）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
 - 生产 Router 精确包含十条路径，且全部接入真实或惰性加载视图；两个静态回测子路由继续排在动态路由之前；
 - WEBF10 在不增加路由的前提下，把最后一条历史 `/alerts` 占位路由接入其业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
@@ -548,4 +548,4 @@ const emit = defineEmits<Emits>()
 
 WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。WEBF13 记录当前真实路由和新建回测旅程边界，不改变冻结契约；其配对离线验收证据已于 2026-09-04 通过。
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到以后端为权威来源的总览快照和共用指数投影；后续成交额扩展只增加可空的 `marketTurnover` 字段。WEBF09 组合既有持仓 API 和真实个股详情路由，同时把所有 T+1 与持仓策略判断保留在后端。WEBF10 组合既有提醒 API 和真实 `/alerts` 路由，同时把筛选成员归属、规范提醒和确认 revision 保留在后端。R09 增加显式计划能力投影、权威持仓库存读取/确认传输和持久化 BUY 提醒投影，同时在其余 SELL、RISK、冲突、复核及常规表单工作完成前继续禁止公开保存、导入或启用 Schema v3。当前 OpenAPI 契约精确包含 47 条路径，其中 32 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，且全部接入真实视图。提交、推送、依赖安装和联网访问继续需要分别授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到以后端为权威来源的总览快照和共用指数投影；后续成交额扩展只增加可空的 `marketTurnover` 字段。WEBF09 组合既有持仓 API 和真实个股详情路由，同时把所有 T+1 与持仓策略判断保留在后端。WEBF10 组合既有提醒 API 和真实 `/alerts` 路由，同时把筛选成员归属、规范提醒和确认 revision 保留在后端。R09 增加了显式计划能力投影、权威持仓库存读取/确认传输和持久化 BUY 提醒投影。R10 增加隔离可信的普通 `SELL` 与纯五分钟 `RISK_ALERT` 执行、抑制前完整冲突处理、多意图原子 outbox 投影，以及统一批次/期初余额库存减记。在 R11 当前内容复核和 R12 普通表单完成前，公开 Schema v3 保存、导入或启用仍不可用。当前 OpenAPI 契约精确包含 48 条路径，其中 33 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，且全部接入真实视图。提交、推送、依赖安装和联网访问继续需要分别授权。

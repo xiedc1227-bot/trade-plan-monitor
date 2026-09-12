@@ -1,6 +1,6 @@
 # Spec: executable-plan-extension (R08 / F06)
 
-> Canonical English; `SPEC-executable-plan-extension.zh-CN.md` is the equivalent Chinese review copy. Date: 2026-09-12. **Design for R09–R12; not an implemented or activated capability.**
+> Canonical English; `SPEC-executable-plan-extension.zh-CN.md` is the equivalent Chinese review copy. Date: 2026-09-12. **R09–R10 execution slices are implemented for isolated trusted input; public schema-v3 save/import/activation remains disabled pending R11–R12.**
 
 ## E01. Scope and authority
 
@@ -115,6 +115,7 @@ Reuse existing `/api/v1/plan-drafts`, `/plan-imports`, `/plan-versions`, `/plan-
 | `POST /plan-review-confirmations` | `planVersionId`, `contentHash`, `sourceHash`, `reviewEvidenceHash`, `expectedRevision`, explicit resolution records keyed by server `issueId`; response `reviewId`, bound hashes/version, `revision`, `confirmedAt`, unresolved issues and `canActivate` |
 | `GET /position-inventory?symbol=...&asOfTradeDate=...` | Typed KNOWN/UNKNOWN inventory snapshot from E04; unknown numeric facts nullable; include confirmation and ledger revision |
 | `POST /position-inventory-confirmations` | `symbol`, `asOfTradeDate`, `expectedRevision`, `totalQuantity`, `sellableQuantity`, `includedLotIds`, explicit complete-registration assertion; response authoritative snapshot plus any opening-balance identity and audit receipt |
+| `POST /position-inventory-closures` | Idempotent `LOT` or `OPENING_BALANCE` source identity, board-lot quantity, reduction trade date and source `expectedRevision`; response exact before/after quantity and authoritative inventory revision |
 
 All writes require existing `Idempotency-Key`/request-hash/revision machinery; identical retry returns the same receipt, different body under the same key returns 422, in-progress or stale revision returns 409. No approval or inventory state is accepted directly from model output. For initial v1 scope, opening confirmation may assert total=sellable or zero after subtracting included known lots; unknown remainder settlement blocks completion. No automatic repeated balance addition on retries or reconfirmation.
 
@@ -157,6 +158,6 @@ Keep the existing API error envelope and `ValidationIssue(code,path,severity,mes
 
 ## E10. Delivery slices and acceptance
 
-R09 owns v3 domain/codec discrimination, legacy prompt preservation before any shared-model edit, exact mean/range evaluation, first eligible BUY, known inventory, repeat state, consumed-state fences and enough result/outbox plumbing to verify BUY offline. R10 adds ordinary SELL and pure RISK_ALERT, all reviewed conflicts/multiple intents and retained legacy risk regressions. R11 owns partial extraction, bidirectional mapping, current-content trusted re-review and v4 prompt release. R12 owns ordinary forms, explicit policy choices, complete preview and authoritative missing-state display. Until each required slice is implemented and validated, unsupported consumer/capability checks must block activation; slice tests may use explicit isolated trusted review inputs without claiming public review is complete.
+R09 owns v3 domain/codec discrimination, legacy prompt preservation before any shared-model edit, exact mean/range evaluation, first eligible BUY, known inventory, repeat state, consumed-state fences and enough result/outbox plumbing to verify BUY offline. R10 adds ordinary SELL and pure RISK_ALERT, all reviewed conflicts/multiple intents, unified lot/opening-balance reduction, and retained legacy risk regressions. R09 and R10 are implemented and verified for explicit isolated trusted review inputs. R11 owns partial extraction, bidirectional mapping, current-content trusted re-review and v4 prompt release. R12 owns ordinary forms, explicit policy choices, complete preview and authoritative missing-state display. Until R11 and R12 are implemented and validated, public schema-v3 save/import/activation remains blocked even though `GET /plan-capabilities` reports all three execution actions as available to the isolated consumer.
 
 Required test oracles, exact consumption sites and pending business choices are in [R08 mapping](../../../remediation/R08-mapping.md). R13 independently starts from the unchanged source and labels additional human-confirmation fixture input separately. Source-only extraction must remain blocked when policies are absent; a completed synthetic test fixture must demonstrate why each added policy is known. Offline replay does not place simulated research fills unless a separately versioned backtest contract supports this mode. R14 real provider/user-visible evidence remains separately authorized and unverified.

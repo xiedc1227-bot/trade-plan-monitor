@@ -102,6 +102,40 @@ def _plan() -> ExplicitTradePlan:
     )
 
 
+def _risk_sell_plan() -> ExplicitTradePlan:
+    payload = _plan().model_dump(mode="python", round_trip=True)
+    payload["rules"] = [
+        {
+            "rule_id": "sell-100",
+            "condition": {
+                "type": "COMPLETED_CLOSE_IN_RANGE",
+                "low_fen": 1080,
+                "high_fen": 1100,
+                "include_low": True,
+                "include_high": True,
+            },
+            "action": {
+                "type": "SELL",
+                "quantity": 100,
+                "inventory_scope": "ALL_REGISTERED",
+            },
+            "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+            "repeat_policy": {"mode": "ONCE_PER_ACTIVATION"},
+            "safety_conditions": None,
+        },
+        {
+            "rule_id": "risk-under-1200",
+            "condition": {"type": "COMPLETED_CLOSE_BELOW", "price_fen": 1200},
+            "action": {"type": "RISK_ALERT"},
+            "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+            "repeat_policy": {"mode": "ONCE_PER_ACTIVATION"},
+            "safety_conditions": None,
+        },
+    ]
+    payload["conflict_policy"]["risk_conflict"] = "RISK_WITH_SELL_BLOCK_BUY"
+    return ExplicitTradePlan.model_validate(payload)
+
+
 def _work(engine, *, now: datetime = NOW):
     return SqlAlchemyUnitOfWork(create_session_factory(engine), clock=lambda: now)
 
@@ -140,11 +174,10 @@ def test_plan_capability_is_backend_authoritative_and_v3_public_writes_stay_bloc
         "schemaVersion": 3,
         "executionMode": "EXPLICIT_RULES",
         "executionVersion": "explicit-rules-v1",
-        "supportedActions": ["BUY"],
+        "supportedActions": ["BUY", "SELL", "RISK_ALERT"],
         "publicActivationAvailable": False,
         "isolatedTrustedReviewOnly": True,
         "pendingRequirements": [
-            "SELL_AND_RISK_CONSUMERS",
             "CURRENT_CONTENT_REVIEW",
             "ORDINARY_PLAN_FORMS",
         ],
@@ -227,9 +260,7 @@ def test_explicit_buy_alert_is_queryable_with_versioned_evidence(tmp_path: Path)
         target_bucket_end=TARGET,
         evaluated_at=NOW,
         activation_revision=1,
-        inventory=ExplicitInventorySnapshot(
-            status="KNOWN", total_qty=100, inventory_revision=1
-        ),
+        inventory=ExplicitInventorySnapshot(status="KNOWN", total_qty=100, inventory_revision=1),
         rule_states=(),
     )
     signal = result.signal_intents[0]
@@ -258,9 +289,223 @@ def test_explicit_buy_alert_is_queryable_with_versioned_evidence(tmp_path: Path)
         assert page["total"] == 1
         assert page["items"][0]["eventId"] == str(event.event_id)
         assert page["items"][0]["payloadSchemaVersion"] == "explicit-rule-alert-v1"
-        assert page["items"][0]["conditionEvidence"]["code"] == (
-            "COMPLETED_CLOSE_IN_RANGE"
-        )
+        assert page["items"][0]["conditionEvidence"]["code"] == ("COMPLETED_CLOSE_IN_RANGE")
         assert "positionPrefill" not in page["items"][0]
+    finally:
+        engine.dispose()
+
+
+def test_explicit_sell_and_risk_alerts_keep_type_quantity_and_rendering_through_api(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "explicit-multi-http.sqlite3")
+    upgrade_database(engine)
+    plan = _risk_sell_plan()
+    bar = FiveMinuteBar(
+        symbol=plan.symbol,
+        bar_end=TARGET,
+        open_fen=1080,
+        high_fen=1080,
+        low_fen=1080,
+        close_fen=1080,
+        volume_shares=100,
+        amount_yuan=Decimal("0"),
+    )
+    result = evaluate_explicit_rules(
+        plan=plan,
+        bars=(bar,),
+        trading_calendar=(),
+        target_bucket_end=TARGET,
+        evaluated_at=NOW,
+        activation_revision=1,
+        inventory=ExplicitInventorySnapshot(
+            status="KNOWN",
+            total_qty=100,
+            sellable_qty=100,
+            inventory_revision=1,
+        ),
+        rule_states=(),
+    )
+    try:
+        with _work(engine) as work:
+            for signal in result.signal_intents:
+                work.alerts.enqueue_explicit(
+                    build_explicit_alert_payload(
+                        event_id=explicit_alert_event_id(signal),
+                        plan=plan,
+                        result=result,
+                        signal=signal,
+                    )
+                )
+            work.commit()
+        service = PersistentAlertOperationService(
+            unit_of_work_factory=lambda: _work(engine), clock=lambda: NOW
+        )
+        with TestClient(_app(alert_service=service), base_url=BASE_URL) as client:
+            all_alerts = client.get("/api/v1/alerts", params={"symbol": plan.symbol})
+            risk_only = client.get(
+                "/api/v1/alerts",
+                params={"symbol": plan.symbol, "signalType": "RISK_ALERT"},
+            )
+
+        assert all_alerts.status_code == risk_only.status_code == 200
+        assert all_alerts.json()["total"] == 2
+        by_type = {item["signalType"]: item for item in all_alerts.json()["items"]}
+        assert by_type["SELL"]["quantity"] == 100
+        assert "卖出提醒" in by_type["SELL"]["messageText"]
+        assert by_type["RISK_ALERT"]["quantity"] is None
+        assert "风险提醒" in by_type["RISK_ALERT"]["messageText"]
+        assert risk_only.json()["total"] == 1
+        assert risk_only.json()["items"][0]["signalType"] == "RISK_ALERT"
+    finally:
+        engine.dispose()
+
+
+def test_inventory_closure_command_debits_opening_balance_without_active_plan(
+    tmp_path: Path,
+) -> None:
+    engine = create_sqlite_engine(tmp_path / "opening-closure-http.sqlite3")
+    upgrade_database(engine)
+    try:
+        with _work(engine, now=TARGET - timedelta(minutes=1)) as work:
+            work.references.upsert_trading_days(
+                (
+                    TradingDay(
+                        exchange="SZSE",
+                        cal_date=TARGET.date(),
+                        is_open=True,
+                        previous_trade_date=date(2026, 9, 11),
+                    ),
+                )
+            )
+            inventory = work.positions.confirm_inventory(
+                symbol="003043.SZ",
+                as_of_trade_date=TARGET.date(),
+                total_quantity=100,
+                sellable_quantity=100,
+                included_lot_ids=(),
+                complete_registration=True,
+                expected_revision=0,
+            )
+            opening_id = inventory.opening_balances[0].id
+            work.commit()
+        service = PersistentPositionOperationService(
+            unit_of_work_factory=lambda: _work(engine),
+            clock=lambda: NOW,
+        )
+        payload = {
+            "sourceType": "OPENING_BALANCE",
+            "sourceId": opening_id,
+            "quantity": 100,
+            "tradeDate": TARGET.date().isoformat(),
+            "expectedRevision": 0,
+        }
+        with TestClient(_app(position_service=service), base_url=BASE_URL) as client:
+            closed = client.post(
+                "/api/v1/position-inventory-closures",
+                headers={"Idempotency-Key": "opening-close-1"},
+                json=payload,
+            )
+            replay = client.post(
+                "/api/v1/position-inventory-closures",
+                headers={"Idempotency-Key": "opening-close-1"},
+                json=payload,
+            )
+            current = client.get(
+                "/api/v1/position-inventory",
+                params={
+                    "symbol": "003043.SZ",
+                    "asOfTradeDate": TARGET.date().isoformat(),
+                },
+            )
+
+        assert closed.status_code == 200, closed.text
+        assert replay.json() == closed.json()
+        assert closed.json() == {
+            "sourceType": "OPENING_BALANCE",
+            "sourceId": opening_id,
+            "symbol": "003043.SZ",
+            "appliedQuantity": 100,
+            "tradeDate": TARGET.date().isoformat(),
+            "beforeRemainingQuantity": 100,
+            "afterRemainingQuantity": 0,
+            "revision": 1,
+        }
+        assert current.json()["status"] == "KNOWN"
+        assert current.json()["totalQuantity"] == 0
+        assert current.json()["sellableQuantity"] == 0
+    finally:
+        engine.dispose()
+
+
+def test_inventory_closure_command_debits_registered_core_lot(tmp_path: Path) -> None:
+    engine = create_sqlite_engine(tmp_path / "lot-closure-http.sqlite3")
+    upgrade_database(engine)
+    try:
+        with _work(engine, now=TARGET - timedelta(minutes=1)) as work:
+            work.references.upsert_trading_days(
+                (
+                    TradingDay(
+                        exchange="SZSE",
+                        cal_date=TARGET.date(),
+                        is_open=True,
+                        previous_trade_date=date(2026, 9, 11),
+                    ),
+                )
+            )
+            lot = work.positions.record_buy(
+                symbol="003043.SZ",
+                bucket="CORE",
+                quantity=100,
+                acquired_trade_date=date(2026, 9, 11),
+                cost_fen=990,
+                board_lot=100,
+                max_position_qty=300,
+            )
+            unconfirmed = work.positions.inventory_snapshot(
+                "003043.SZ",
+                as_of_trade_date=TARGET.date(),
+                cutoff=TARGET,
+            )
+            work.positions.confirm_inventory(
+                symbol="003043.SZ",
+                as_of_trade_date=TARGET.date(),
+                total_quantity=100,
+                sellable_quantity=100,
+                included_lot_ids=(lot.id,),
+                complete_registration=True,
+                expected_revision=unconfirmed.inventory_revision,
+            )
+            work.commit()
+        service = PersistentPositionOperationService(
+            unit_of_work_factory=lambda: _work(engine),
+            clock=lambda: NOW,
+        )
+        with TestClient(_app(position_service=service), base_url=BASE_URL) as client:
+            closed = client.post(
+                "/api/v1/position-inventory-closures",
+                headers={"Idempotency-Key": "core-close-1"},
+                json={
+                    "sourceType": "LOT",
+                    "sourceId": lot.id,
+                    "quantity": 100,
+                    "tradeDate": TARGET.date().isoformat(),
+                    "expectedRevision": 0,
+                },
+            )
+            current = client.get(
+                "/api/v1/position-inventory",
+                params={
+                    "symbol": "003043.SZ",
+                    "asOfTradeDate": TARGET.date().isoformat(),
+                },
+            )
+
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["sourceType"] == "LOT"
+        assert closed.json()["sourceId"] == lot.id
+        assert closed.json()["afterRemainingQuantity"] == 0
+        assert current.json()["status"] == "KNOWN"
+        assert current.json()["totalQuantity"] == 0
     finally:
         engine.dispose()

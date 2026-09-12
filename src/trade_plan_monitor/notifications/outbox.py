@@ -347,7 +347,7 @@ class AlertOutbox:
             return None
         try:
             plan = load_plan_json(version.payload_json)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             raise OutboxStorageError("Stored plan data is invalid") from None
         if plan_sha256(plan) != event.plan_hash:
             raise OutboxStorageError("Stored plan data is invalid")
@@ -366,9 +366,7 @@ class AlertOutbox:
     ) -> tuple[tuple[AlertEvent | ExplicitAlertEvent, ...], int]:
         """Return one stable bounded page in committed delivery order."""
 
-        if symbol is not None and (
-            type(symbol) is not str or not _is_share_symbol(symbol)
-        ):
+        if symbol is not None and (type(symbol) is not str or not _is_share_symbol(symbol)):
             raise ValueError("symbol must be a canonical A-share identity")
         if signal_type is not None and (
             not isinstance(signal_type, str) or signal_type not in _ACTIONABLE_SIGNAL_TYPES
@@ -605,6 +603,8 @@ _ACTIONABLE_SIGNAL_TYPES = {
     "RISK_EXIT_READY",
     "RISK_EXIT_PENDING_SETTLEMENT",
     "BUY",
+    "SELL",
+    "RISK_ALERT",
 }
 
 

@@ -178,6 +178,10 @@ class PositionLotNotFoundError(RepositoryError):
     code = "POSITION_LOT_NOT_FOUND"
 
 
+class PositionOpeningBalanceNotFoundError(RepositoryError):
+    code = "POSITION_OPENING_BALANCE_NOT_FOUND"
+
+
 class PositionReductionError(RepositoryError):
     """A manual reduction exceeds the lot's remaining quantity."""
 
@@ -607,8 +611,7 @@ class PlanRepository:
         model = self._session.scalar(
             select(StoredPlanExtractionReview)
             .where(
-                StoredPlanExtractionReview.source_hash
-                == _sha256_hash(source_hash, "source_hash")
+                StoredPlanExtractionReview.source_hash == _sha256_hash(source_hash, "source_hash")
             )
             .order_by(
                 StoredPlanExtractionReview.completed_at.desc(),
@@ -1274,6 +1277,7 @@ class PositionRepository:
         if related_alert_id is not None:
             _bounded_text(related_alert_id, "related_alert_id", maximum=36)
 
+        previous_inventory_revision = self._inventory_revision(normalized_symbol, lock=True)
         # A no-op write serializes SQLite writers before the maximum-position read,
         # including when this symbol does not yet have a lot.
         self._session.execute(
@@ -1326,7 +1330,13 @@ class PositionRepository:
             quantity=normalized_quantity,
         )
         self._append_position_event(record, occurred_at=occurred_at)
-        self._advance_inventory_revision(normalized_symbol)
+        next_inventory_revision = self._advance_inventory_revision(normalized_symbol)
+        self._sync_inventory_confirmation(
+            normalized_symbol,
+            previous_revision=previous_inventory_revision,
+            next_revision=next_inventory_revision,
+            total_delta=normalized_quantity,
+        )
         return record
 
     def get_lot(self, lot_id: str) -> PositionLotRecord:
@@ -1428,19 +1438,34 @@ class PositionRepository:
         total_qty = sum(lot.remaining_qty for lot in lots) + sum(
             balance.remaining_qty for balance in balances
         )
-        sellable_qty = sum(
-            lot.remaining_qty for lot in lots if lot.acquired_trade_date < normalized_date
-        ) + sum(
-            balance.remaining_qty
-            for balance in balances
-            if balance.sellable_from <= normalized_date
-        )
         included_lot_ids = _stored_string_tuple(
             confirmation.included_lot_ids_json,
             "included_lot_ids_json",
         )
         if total_qty != confirmation.total_qty:
             raise RepositoryError("Confirmed inventory total does not match its ledger")
+        calendar = self._session.get(
+            TradingCalendar,
+            (_exchange_for_position_symbol(normalized_symbol), normalized_date),
+        )
+        missing_reasons: tuple[str, ...] = ()
+        if calendar is None:
+            sellable_qty = None
+            missing_reasons = ("SELLABLE_QUANTITY_UNKNOWN",)
+        elif not calendar.is_open:
+            sellable_qty = 0
+        else:
+            previous_trade_date = calendar.previous_trade_date
+            sellable_qty = sum(
+                lot.remaining_qty
+                for lot in lots
+                if previous_trade_date is not None
+                and lot.acquired_trade_date <= previous_trade_date
+            ) + sum(
+                balance.remaining_qty
+                for balance in balances
+                if balance.sellable_from <= normalized_date
+            )
         return InventorySnapshot(
             symbol=normalized_symbol,
             status=InventorySnapshotStatus.KNOWN,
@@ -1453,6 +1478,7 @@ class PositionRepository:
             confirmed_at=confirmed_at,
             included_lot_ids=included_lot_ids,
             opening_balances=balances,
+            missing_reasons=missing_reasons,
         )
 
     def confirm_inventory(
@@ -1534,9 +1560,7 @@ class PositionRepository:
             "total_qty": total,
             "sellable_qty": sellable,
             "included_lot_ids_json": _canonical_json(normalized_lot_ids),
-            "opening_balance_ids_json": _canonical_json(
-                tuple(balance.id for balance in balances)
-            ),
+            "opening_balance_ids_json": _canonical_json(tuple(balance.id for balance in balances)),
             "complete_registration": True,
         }
         if confirmation is None:
@@ -1615,6 +1639,10 @@ class PositionRepository:
         )
         if normalized_quantity % normalized_board_lot != 0:
             raise BoardLotViolationError("Reduction quantity must be a whole board lot")
+        previous_inventory_revision = self._inventory_revision(
+            self.get_lot(normalized_id).symbol,
+            lock=True,
+        )
         self._session.execute(
             update(PositionLot)
             .where(PositionLot.id == normalized_id)
@@ -1649,7 +1677,90 @@ class PositionRepository:
             quantity=normalized_quantity,
         )
         self._append_position_event(after, occurred_at=occurred_at)
-        self._advance_inventory_revision(before.symbol)
+        next_inventory_revision = self._advance_inventory_revision(before.symbol)
+        self._sync_inventory_confirmation(
+            before.symbol,
+            previous_revision=previous_inventory_revision,
+            next_revision=next_inventory_revision,
+            total_delta=-normalized_quantity,
+        )
+        return after
+
+    def get_opening_balance(self, opening_balance_id: str) -> OpeningBalanceRecord:
+        normalized_id = _bounded_text(
+            opening_balance_id,
+            "opening_balance_id",
+            maximum=36,
+        )
+        model = self._session.get(PositionOpeningBalance, normalized_id)
+        if model is None:
+            raise PositionOpeningBalanceNotFoundError("Opening balance was not found")
+        return _opening_balance_record(model)
+
+    def reduce_opening_balance(
+        self,
+        opening_balance_id: str,
+        *,
+        quantity: int,
+        trade_date: date,
+        expected_revision: int | None = None,
+        board_lot: int = 100,
+    ) -> OpeningBalanceRecord:
+        normalized_id = _bounded_text(
+            opening_balance_id,
+            "opening_balance_id",
+            maximum=36,
+        )
+        normalized_quantity = _positive_integer(quantity, "quantity")
+        normalized_date = _calendar_date(trade_date, "trade_date")
+        normalized_board_lot = _positive_integer(board_lot, "board_lot")
+        normalized_revision = (
+            None
+            if expected_revision is None
+            else _nonnegative_integer(expected_revision, "expected_revision")
+        )
+        if normalized_quantity % normalized_board_lot != 0:
+            raise BoardLotViolationError("Reduction quantity must be a whole board lot")
+        self._session.execute(
+            update(PositionOpeningBalance)
+            .where(PositionOpeningBalance.id == normalized_id)
+            .values(remaining_qty=PositionOpeningBalance.remaining_qty)
+            .execution_options(synchronize_session=False)
+        )
+        self._session.expire_all()
+        model = self._session.get(PositionOpeningBalance, normalized_id)
+        if model is None:
+            raise PositionOpeningBalanceNotFoundError("Opening balance was not found")
+        previous_inventory_revision = self._inventory_revision(model.symbol, lock=True)
+        before = _opening_balance_record(model)
+        if normalized_revision is not None and normalized_revision != model.revision:
+            raise RevisionConflictError(model.revision)
+        if model.sellable_from > normalized_date:
+            raise PositionT1LockedError("Opening balance is not sellable on this trade date")
+        if normalized_quantity > model.remaining_qty:
+            raise PositionReductionError(
+                "Reduction exceeds the opening balance's remaining quantity"
+            )
+
+        model.remaining_qty -= normalized_quantity
+        model.revision += normalized_quantity // normalized_board_lot
+        if model.remaining_qty == 0:
+            model.closed_at = _aware_now(self._clock).isoformat()
+        self._session.flush()
+        after = _opening_balance_record(model)
+        occurred_at = self._append_opening_balance_audit(
+            before=before,
+            after=after,
+            quantity=normalized_quantity,
+        )
+        self._append_opening_balance_event(after, occurred_at=occurred_at)
+        next_inventory_revision = self._advance_inventory_revision(before.symbol)
+        self._sync_inventory_confirmation(
+            before.symbol,
+            previous_revision=previous_inventory_revision,
+            next_revision=next_inventory_revision,
+            total_delta=-normalized_quantity,
+        )
         return after
 
     def _inventory_revision(self, symbol: str, *, lock: bool = False) -> int:
@@ -1682,6 +1793,25 @@ class PositionRepository:
         self._session.flush()
         self._session.expire_all()
         return self._inventory_revision(symbol)
+
+    def _sync_inventory_confirmation(
+        self,
+        symbol: str,
+        *,
+        previous_revision: int,
+        next_revision: int,
+        total_delta: int,
+    ) -> None:
+        confirmation = self._session.get(PositionInventoryConfirmation, symbol)
+        if confirmation is None or confirmation.inventory_revision != previous_revision:
+            return
+        next_total = confirmation.total_qty + total_delta
+        if next_total < 0:
+            raise RepositoryError("Position mutation conflicts with confirmed inventory")
+        confirmation.total_qty = next_total
+        confirmation.sellable_qty = min(confirmation.sellable_qty, next_total)
+        confirmation.inventory_revision = next_revision
+        self._session.flush()
 
     def _list_opening_balances(self, symbol: str) -> tuple[OpeningBalanceRecord, ...]:
         rows = self._session.scalars(
@@ -1743,6 +1873,58 @@ class PositionRepository:
                 payload=MonitorEventPayload(
                     entity_id=position.id,
                     symbol=position.symbol,
+                    status=status,
+                ),
+                occurred_at=occurred_at,
+            )
+        )
+
+    def _append_opening_balance_audit(
+        self,
+        *,
+        before: OpeningBalanceRecord,
+        after: OpeningBalanceRecord,
+        quantity: int,
+    ) -> datetime:
+        occurred_at = _aware_now(self._clock)
+        self._session.add(
+            AuditLog(
+                id=self._id_factory(),
+                action="POSITION_OPENING_BALANCE_REDUCTION_RECORDED",
+                entity_type="POSITION_OPENING_BALANCE",
+                entity_id=after.id,
+                before_hash=sha256(
+                    _canonical_json(before.model_dump(mode="json")).encode("utf-8")
+                ).hexdigest(),
+                after_hash=sha256(
+                    _canonical_json(after.model_dump(mode="json")).encode("utf-8")
+                ).hexdigest(),
+                details_json=_canonical_json({"quantity": quantity, "symbol": after.symbol}),
+                created_at=occurred_at.isoformat(),
+            )
+        )
+        self._session.flush()
+        return occurred_at
+
+    def _append_opening_balance_event(
+        self,
+        balance: OpeningBalanceRecord,
+        *,
+        occurred_at: datetime,
+    ) -> None:
+        status = "CLOSED" if balance.remaining_qty == 0 else "OPEN"
+        self._events.append(
+            MonitorEventDraft(
+                event_id=monitor_event_id(
+                    MonitorEventType.POSITION_UPDATED,
+                    balance.id,
+                    str(balance.remaining_qty),
+                ),
+                event_type=MonitorEventType.POSITION_UPDATED,
+                aggregate_id=balance.id,
+                payload=MonitorEventPayload(
+                    entity_id=balance.id,
+                    symbol=balance.symbol,
                     status=status,
                 ),
                 occurred_at=occurred_at,
@@ -2135,9 +2317,7 @@ class ManualEventRiskRepository:
                 action="MANUAL_EVENT_RISK_CONFIRMED",
                 entity_type="MANUAL_EVENT_RISK",
                 entity_id=after.symbol,
-                before_hash=(
-                    None if before is None else _manual_event_risk_hash(before)
-                ),
+                before_hash=(None if before is None else _manual_event_risk_hash(before)),
                 after_hash=_manual_event_risk_hash(after),
                 details_json=_canonical_json(
                     {
@@ -3012,29 +3192,34 @@ def _plan_version_details_record(
             None if extraction is None else _plan_extraction_review_record(extraction)
         )
         extraction_valid = (
-            origin in {PlanReviewOrigin.LEGACY_PENDING, PlanReviewOrigin.MANUAL}
-            and provenance.extraction_id is None
-            and extraction_record is None
-        ) or (
-            origin is PlanReviewOrigin.AI_EXTRACTION
-            and extraction_record is not None
-            and provenance.extraction_id == extraction_record.extraction_id
-            and provenance.source_hash == extraction_record.source_hash
-            and provenance.draft_hash == extraction_record.draft_hash
-            and _review_issues_match_required(review_issues, extraction_record.review_issues)
-        ) or (
-            origin is PlanReviewOrigin.AI_EDITED
-            and extraction_record is not None
-            and provenance.extraction_id == extraction_record.extraction_id
-            and provenance.source_hash == extraction_record.source_hash
-            and provenance.draft_hash != extraction_record.draft_hash
-            and _review_issues_match_required(review_issues, extraction_record.review_issues)
-        ) or (
-            origin is PlanReviewOrigin.AI_REIMPORT
-            and extraction_record is not None
-            and provenance.extraction_id == extraction_record.extraction_id
-            and provenance.draft_hash == extraction_record.draft_hash
-            and _review_issues_match_required(review_issues, extraction_record.review_issues)
+            (
+                origin in {PlanReviewOrigin.LEGACY_PENDING, PlanReviewOrigin.MANUAL}
+                and provenance.extraction_id is None
+                and extraction_record is None
+            )
+            or (
+                origin is PlanReviewOrigin.AI_EXTRACTION
+                and extraction_record is not None
+                and provenance.extraction_id == extraction_record.extraction_id
+                and provenance.source_hash == extraction_record.source_hash
+                and provenance.draft_hash == extraction_record.draft_hash
+                and _review_issues_match_required(review_issues, extraction_record.review_issues)
+            )
+            or (
+                origin is PlanReviewOrigin.AI_EDITED
+                and extraction_record is not None
+                and provenance.extraction_id == extraction_record.extraction_id
+                and provenance.source_hash == extraction_record.source_hash
+                and provenance.draft_hash != extraction_record.draft_hash
+                and _review_issues_match_required(review_issues, extraction_record.review_issues)
+            )
+            or (
+                origin is PlanReviewOrigin.AI_REIMPORT
+                and extraction_record is not None
+                and provenance.extraction_id == extraction_record.extraction_id
+                and provenance.draft_hash == extraction_record.draft_hash
+                and _review_issues_match_required(review_issues, extraction_record.review_issues)
+            )
         )
         confirmation_valid = (
             origin is PlanReviewOrigin.MANUAL
@@ -3254,7 +3439,7 @@ def _opening_balance_record(model: PositionOpeningBalance) -> OpeningBalanceReco
 def _stored_string_tuple(document: str, name: str) -> tuple[str, ...]:
     try:
         value = json.loads(document)
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         raise RepositoryError(f"Stored {name} is invalid") from None
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise RepositoryError(f"Stored {name} is invalid")
@@ -3853,6 +4038,7 @@ __all__ = [
     "PlanVersionRecord",
     "PositionLotNotFoundError",
     "PositionLotRecord",
+    "PositionOpeningBalanceNotFoundError",
     "OpeningBalanceRecord",
     "PositionReductionError",
     "PositionRepository",
