@@ -2,7 +2,7 @@
 
 > Canonical English; `0005-version-explicit-plan-rules.zh-CN.md` is the equivalent Chinese review copy.
 
-- Status: `Accepted for R08 design; implementation pending`
+- Status: `Accepted; R09-R11 implemented, R12 pending`
 - Date: `2026-09-12`
 - Initiative: `F06 / R08–R12`
 - Modules: `plan-domain`, `decision-engine`, `ai-plan-drafting`, `strategy-state`, `notification-outbox`, `local-web`, `backtest-engine`
@@ -32,13 +32,13 @@ These values were read from R03 and the current local source. Golden prompt valu
 | `plan-extract-v1` | Historical Schema 1 | `fbf241167c4e3960c98b59faf62e46b590185a8711ba22209720d683562d18a1` | `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d` |
 | `plan-extract-v2` | Historical Schema 2, five-index allowlist | `fd5f2f42184ea0fa5b361087f869aa73a7a8e26d961c203d80e1e506d98cc0a3` | `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf` |
 | `plan-extract-v3` | Existing Schema 2, six-index allowlist | `0de88a7a9bdec1a84ad0d458d2963fcdc2b68bfee591dea270b0f35bc5fa0f95` | `df606ede45e58263b669f092cfaeb575becf1ea314076823b23f275a1768ae5d` |
-| `plan-extract-v4` | New explicit Schema 3 draft + bidirectional mapping, R11 | Not assigned in R08; derive only after the complete output contract is implemented and reviewed | Not assigned in R08; new template, new fixture and new digest required |
+| `plan-extract-v4` | Explicit Schema 3 partial draft + `plan-mapping-v1`, R11 | `9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1` | `e91f6b32a69a60b1f35da3e5deee5acd17d326cecd0efcadd2aa99bdb36b4eb7` |
 
 R09 must first prove that introducing sibling v3 domain types leaves the entire v1/v2/v3 prompt-schema graph byte-identical. Keep `_render_frozen_schema` checks active. If sharing a helper changes generated titles/defaults/definitions, isolate a historical prompt model/serializer with the exact old graph or checked-in verified snapshot and keep its independent digest/tamper check; do not update existing expected digests, bypass checks, or catch the drift exception and continue. Do not widen `TradePlanDraft` inheritance to the new union.
 
 R11 creates a separate v4 output model and parser selected by prompt version, plus explicit prompt-to-schema support tests: v1 accepts only its historical contract; v2 retains its old index allowlist; v3 cannot return Schema 3; v4 returns only the new explicit draft contract. Model output cannot choose its own prompt identity. Keep old template text, field meanings, enum ranges and parser support intact. New fields/enums must fail a deliberately mutated-schema guard test unless a new version is declared.
 
-The existing default remains v3 during R08–R10. R11 may publish/select v4 through an explicit supported workflow after its offline gates; it must not modify real configuration or replace the extraction provider/model. Old explicit version settings keep selecting their old contract. Every new extraction review records prompt version, schema digest, source hash, exact draft hash/content hash, mapping snapshot and unresolved issues. Historical extraction rows are not recomputed or marked approved merely because new code can read them.
+The existing default remains v3 during R08–R10. R11 publishes v4 as the omitted-version default after its offline gates without modifying real configuration or replacing the extraction provider/model. Old explicit version settings keep selecting their old contract. Every new v4 extraction review records prompt version, source hash, exact draft hash, semantic content hash, mapping snapshot, review-evidence hash and unresolved issues. Historical extraction rows are not recomputed or marked approved merely because new code can read them.
 
 ## Read, Write and Rollback Matrix
 

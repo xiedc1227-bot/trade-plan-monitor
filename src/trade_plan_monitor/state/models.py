@@ -134,6 +134,10 @@ class StoredPlanExtractionReview(Base):
     source_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
     draft_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
     review_issues_json: Mapped[str] = mapped_column(Text)
+    mapping_json: Mapped[str | None] = mapped_column(Text)
+    content_hash: Mapped[str | None] = mapped_column(String(HASH_LENGTH))
+    review_evidence_hash: Mapped[str | None] = mapped_column(String(HASH_LENGTH))
+    required_issues_json: Mapped[str | None] = mapped_column(Text)
     completed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
@@ -152,6 +156,7 @@ class PlanReviewProvenance(Base):
             "AND extraction_id IS NOT NULL)",
             name="ck_plan_review_provenance_extraction_identity",
         ),
+        Index("uq_plan_review_provenance_review_id", "review_id", unique=True),
     )
 
     plan_version_id: Mapped[str] = mapped_column(
@@ -165,6 +170,13 @@ class PlanReviewProvenance(Base):
     source_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
     draft_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
     confirmed_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
+    content_hash: Mapped[str | None] = mapped_column(String(HASH_LENGTH))
+    review_evidence_hash: Mapped[str | None] = mapped_column(String(HASH_LENGTH))
+    mapping_json: Mapped[str | None] = mapped_column(Text)
+    required_issues_json: Mapped[str | None] = mapped_column(Text)
+    resolutions_json: Mapped[str | None] = mapped_column(Text)
+    review_id: Mapped[str | None] = mapped_column(String(ID_LENGTH))
+    review_revision: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class PlanActivationState(Base):

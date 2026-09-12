@@ -1,0 +1,22 @@
+[
+  {"id":"EXP-01","category":"EXPLICIT","sourceText":"5分钟完成收盘在9.80元到10.00元之间含端点，买入100股。","expectedSemanticCodes":[]},
+  {"id":"EXP-02","category":"EXPLICIT","sourceText":"5分钟完成收盘低于9.50元时触发风险提醒。","expectedSemanticCodes":[]},
+  {"id":"EXP-03","category":"EXPLICIT","sourceText":"成交量不少于前5根已完成5分钟K线算术平均值的1.5倍。","expectedSemanticCodes":[]},
+  {"id":"EXP-04","category":"EXPLICIT","sourceText":"5分钟完成收盘达到10.80元并低于或等于11.00元，卖出100股。","expectedSemanticCodes":[]},
+  {"id":"EXP-05","category":"EXPLICIT","sourceText":"人工选择手动激活，每条规则每次激活只提醒一次。","expectedSemanticCodes":[]},
+  {"id":"EXP-06","category":"EXPLICIT","sourceText":"同时命中买入和卖出时阻止两者。","expectedSemanticCodes":[]},
+  {"id":"EXP-07","category":"EXPLICIT","sourceText":"风险规则与交易规则同时命中时只保留风险提醒。","expectedSemanticCodes":[]},
+  {"id":"EXP-08","category":"EXPLICIT","sourceText":"最大持仓300股，单次买入数量100股。","expectedSemanticCodes":[]},
+  {"id":"AMB-01","category":"AMBIGUOUS","sourceText":"价格企稳后买入100股。","expectedSemanticCodes":["UNRESOLVED_SEMANTICS"]},
+  {"id":"AMB-02","category":"AMBIGUOUS","sourceText":"明显放量时买入100股。","expectedSemanticCodes":["UNRESOLVED_SEMANTICS"]},
+  {"id":"AMB-03","category":"AMBIGUOUS","sourceText":"上涨受阻时卖出100股。","expectedSemanticCodes":["UNRESOLVED_SEMANTICS"]},
+  {"id":"AMB-04","category":"AMBIGUOUS","sourceText":"5分钟完成收盘企稳并放量时买入100股。","expectedSemanticCodes":["UNRESOLVED_SEMANTICS"]},
+  {"id":"AMB-05","category":"AMBIGUOUS","sourceText":"价格受阻且明显放量时卖出100股。","expectedSemanticCodes":["UNRESOLVED_SEMANTICS"]},
+  {"id":"AMB-06","category":"AMBIGUOUS","sourceText":"5分钟完成收盘在10元附近企稳时提醒。","expectedSemanticCodes":["UNRESOLVED_SEMANTICS"]},
+  {"id":"UNS-01","category":"UNSUPPORTED","sourceText":"有效跌破9.50元时卖出100股。","expectedSemanticCodes":["UNSUPPORTED_SEMANTICS"]},
+  {"id":"UNS-02","category":"UNSUPPORTED","sourceText":"先企稳再放量后买入100股。","expectedSemanticCodes":["UNRESOLVED_SEMANTICS","UNSUPPORTED_SEMANTICS"]},
+  {"id":"UNS-03","category":"UNSUPPORTED","sourceText":"先买入100股，然后价格上涨再卖出100股。","expectedSemanticCodes":["UNSUPPORTED_SEMANTICS"]},
+  {"id":"UNS-04","category":"UNSUPPORTED","sourceText":"收盘低于9.50元时触发风险提醒。","expectedSemanticCodes":["UNSUPPORTED_SEMANTICS"]},
+  {"id":"UNS-05","category":"UNSUPPORTED","sourceText":"突破后随后回踩再买入100股。","expectedSemanticCodes":["UNSUPPORTED_SEMANTICS"]},
+  {"id":"UNS-06","category":"UNSUPPORTED","sourceText":"有效跌破后再等下一次收盘确认。","expectedSemanticCodes":["UNSUPPORTED_SEMANTICS"]}
+]

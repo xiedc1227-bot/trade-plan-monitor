@@ -14,9 +14,24 @@ from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.models import (
     AIUsageSnapshot,
+    BindingKind,
+    BindingOrigin,
+    BindingUnit,
+    ClauseDisposition,
+    ExplicitPlanDraft,
     ExtractionIssue,
     FieldEvidence,
+    PlanMapping,
+    RequiredReviewIssue,
+    ReviewResolutionKind,
     UnmappedText,
+)
+from trade_plan_monitor.ai.review import (
+    build_server_review_snapshot,
+    dump_explicit_plan_draft_json,
+    explicit_draft_content_sha256,
+    explicit_draft_sha256,
+    load_explicit_plan_draft_json,
 )
 from trade_plan_monitor.domain.plan_codec import (
     MAX_PLAN_DOCUMENT_BYTES,
@@ -123,14 +138,10 @@ class ExplicitPlanCapabilityView(ApiValue):
     isolated_trusted_review_only: Literal[True] = True
     pending_requirements: tuple[
         Literal[
-            "CURRENT_CONTENT_REVIEW",
             "ORDINARY_PLAN_FORMS",
         ],
         ...,
-    ] = (
-        "CURRENT_CONTENT_REVIEW",
-        "ORDINARY_PLAN_FORMS",
-    )
+    ] = ("ORDINARY_PLAN_FORMS",)
 
 
 class PlanExtractionOperationStatus(StrEnum):
@@ -169,6 +180,22 @@ class PlanVersionView(PlanVersionSummary):
     source_text: PlanSourceText
     review_issues: tuple[DraftReviewIssue, ...] = Field(default=(), max_length=512)
     validation_issues: tuple[ValidationIssue, ...] = Field(default=(), max_length=512)
+    content_hash: Sha256Hex | None = None
+    source_hash: Sha256Hex | None = None
+    review_evidence_hash: Sha256Hex | None = None
+    review_revision: NonNegativeSafeInteger | None = None
+    review_id: UUID | None = None
+    mapping: PlanMappingView | None = None
+    required_review_issues: tuple[RequiredReviewIssueView, ...] = Field(
+        default=(),
+        max_length=512,
+    )
+    resolved_issue_ids: tuple[str, ...] = Field(default=(), max_length=512)
+    unresolved_review_issues: tuple[RequiredReviewIssueView, ...] = Field(
+        default=(),
+        max_length=512,
+    )
+    execution_readiness: Literal["NOT_EVALUATED"] | None = None
 
     @field_validator("source_text")
     @classmethod
@@ -177,16 +204,71 @@ class PlanVersionView(PlanVersionSummary):
 
     @model_validator(mode="after")
     def validate_canonical_plan_and_activation_state(self) -> Self:
-        plan = load_plan_json(self.plan_json)
-        if dump_plan_json(plan) != self.plan_json:
+        plan = _load_reviewable_plan(self.plan_json)
+        canonical = (
+            dump_explicit_plan_draft_json(plan)
+            if isinstance(plan, ExplicitPlanDraft)
+            else dump_plan_json(plan)
+        )
+        if canonical != self.plan_json:
             raise ValueError("plan_json must be canonical")
+        actual_hash = (
+            explicit_draft_sha256(plan)
+            if isinstance(plan, ExplicitPlanDraft)
+            else plan_sha256(plan)
+        )
         if (
             plan.plan_id != self.plan_id
             or plan.version != self.version
             or plan.symbol != self.symbol
-            or plan_sha256(plan) != self.plan_hash
+            or actual_hash != self.plan_hash
         ):
             raise ValueError("plan version identity must match its canonical document")
+        if isinstance(plan, ExplicitPlanDraft):
+            explicit_fields = (
+                self.content_hash,
+                self.source_hash,
+                self.review_evidence_hash,
+                self.review_revision,
+                self.mapping,
+                self.execution_readiness,
+            )
+            if any(value is None for value in explicit_fields):
+                raise ValueError("explicit drafts require their current server review snapshot")
+            assert self.mapping is not None
+            snapshot = build_server_review_snapshot(
+                draft=plan,
+                mapping=self.mapping.to_domain(),
+                source_text=self.source_text,
+            )
+            required_domain = tuple(
+                RequiredReviewIssue.model_validate_json(item.model_dump_json(by_alias=False))
+                for item in self.required_review_issues
+            )
+            if (
+                self.content_hash != explicit_draft_content_sha256(plan)
+                or self.source_hash != snapshot.source_hash
+                or self.review_evidence_hash != snapshot.review_evidence_hash
+                or required_domain != snapshot.required_issues
+            ):
+                raise ValueError("explicit review snapshot must match current content and source")
+            required_ids = {item.issue_id for item in self.required_review_issues}
+            resolved_ids = set(self.resolved_issue_ids)
+            unresolved_ids = {item.issue_id for item in self.unresolved_review_issues}
+            if (
+                not resolved_ids <= required_ids
+                or unresolved_ids != required_ids - resolved_ids
+                or (self.review_id is not None) != (not unresolved_ids)
+            ):
+                raise ValueError("explicit review resolution state is inconsistent")
+            expected_can_activate = (
+                plan.to_executable() is not None
+                and self.review_id is not None
+                and not unresolved_ids
+            )
+            if self.can_activate != expected_can_activate:
+                raise ValueError("can_activate must match the current explicit review snapshot")
+            return self
         expected_can_activate = not any(
             issue.activation_blocking for issue in self.validation_issues
         ) and not any(not issue.resolved for issue in self.review_issues)
@@ -224,11 +306,12 @@ class PlanDraftCommand(ApiValue):
         strict=False,
     )
     expected_revision: NonNegativeSafeInteger
+    mapping: PlanMappingView | None = None
 
     @field_validator("plan_json")
     @classmethod
     def validate_plan_json(cls, value: str) -> str:
-        _validate_web_plan(load_plan_json(value))
+        _validate_web_plan(_load_reviewable_plan(value))
         return value
 
     @field_validator("source_text")
@@ -269,7 +352,106 @@ class PlanExtractionCommand(ApiValue):
 
 class PlanActivationCommand(ApiValue):
     plan_version_id: UUID = Field(strict=False)
+    review_id: UUID | None = Field(default=None, strict=False)
+    content_hash: Sha256Hex | None = None
     expected_revision: ActivationExpectedRevision
+
+
+class SourceClauseView(ApiValue):
+    clause_id: str
+    start: int = Field(strict=True, ge=0)
+    end: int = Field(strict=True, gt=0)
+    excerpt: str = Field(strict=True, min_length=1, max_length=512)
+    disposition: ClauseDisposition = Field(strict=False)
+    paths: tuple[str, ...] = Field(default=(), max_length=256, strict=False)
+
+
+class FieldBindingView(ApiValue):
+    path: str
+    value: bool | int | str | None
+    unit: BindingUnit = Field(strict=False)
+    origin: BindingOrigin = Field(strict=False)
+    binding_kind: BindingKind = Field(default=BindingKind.VALUE, strict=False)
+    clause_ids: tuple[str, ...] = Field(default=(), max_length=64, strict=False)
+    supplement_id: str | None = None
+    contract_id: str | None = None
+
+
+class UserSupplementView(ApiValue):
+    supplement_id: str
+    path: str
+    value: bool | int | str | None
+    unit: BindingUnit = Field(strict=False)
+    supplied_at: ShanghaiDatetime = Field(strict=False)
+    label: Literal["human_confirmed_test_supplement", "human_confirmed_supplement"]
+
+
+class PlanMappingView(ApiValue):
+    mapping_version: Literal["plan-mapping-v1"] = "plan-mapping-v1"
+    source_clauses: tuple[SourceClauseView, ...] = Field(
+        min_length=1, max_length=512, strict=False
+    )
+    field_bindings: tuple[FieldBindingView, ...] = Field(
+        default=(), max_length=10_000, strict=False
+    )
+    user_supplements: tuple[UserSupplementView, ...] = Field(
+        default=(), max_length=512, strict=False
+    )
+
+    def to_domain(self) -> PlanMapping:
+        return PlanMapping.model_validate_json(
+            self.model_dump_json(by_alias=False),
+        )
+
+    @classmethod
+    def from_domain(cls, value: PlanMapping) -> PlanMappingView:
+        return cls.model_validate_json(value.model_dump_json())
+
+
+class RequiredReviewIssueView(ApiValue):
+    issue_id: str
+    code: str
+    path: str
+    reason: str
+    clause_id: str | None = None
+    binding_path: str | None = None
+    allowed_resolutions: tuple[ReviewResolutionKind, ...] = Field(
+        max_length=3, strict=False
+    )
+
+    @classmethod
+    def from_domain(cls, value: RequiredReviewIssue) -> RequiredReviewIssueView:
+        return cls.model_validate_json(value.model_dump_json())
+
+
+class PlanReviewResolution(ApiValue):
+    issue_id: str
+    resolution: ReviewResolutionKind = Field(strict=False)
+    binding_path: str | None = None
+    supplement_id: str | None = None
+
+
+class PlanReviewConfirmationCommand(ApiValue):
+    plan_version_id: UUID = Field(strict=False)
+    content_hash: Sha256Hex
+    source_hash: Sha256Hex
+    review_evidence_hash: Sha256Hex
+    expected_revision: NonNegativeSafeInteger
+    resolutions: tuple[PlanReviewResolution, ...] = Field(
+        default=(), max_length=512, strict=False
+    )
+
+
+class PlanReviewConfirmationView(ApiValue):
+    plan_version_id: UUID
+    review_id: UUID | None
+    content_hash: Sha256Hex
+    source_hash: Sha256Hex
+    review_evidence_hash: Sha256Hex
+    revision: NonNegativeSafeInteger
+    confirmed_at: ShanghaiDatetime | None
+    unresolved_issues: tuple[RequiredReviewIssueView, ...] = Field(default=(), max_length=512)
+    can_activate: bool = Field(strict=True)
 
 
 class PlanDeactivationCommand(ApiValue):
@@ -313,6 +495,7 @@ class PlanExtractionView(ApiValue):
         | None
     ) = None
     draft_plan_json: PlanDocument | None = None
+    mapping: PlanMappingView | None = None
     evidence: tuple[FieldEvidence, ...] = Field(default=(), max_length=10_000)
     assumptions: tuple[ExtractionIssue, ...] = Field(default=(), max_length=256)
     warnings: tuple[ExtractionIssue, ...] = Field(default=(), max_length=256)
@@ -351,13 +534,25 @@ class PlanExtractionView(ApiValue):
         elif self.status is PlanExtractionOperationStatus.CANCELLED and self.completed_at is None:
             raise ValueError("cancelled extraction requires completion time")
         if self.status is PlanExtractionOperationStatus.SUCCEEDED:
-            if any(value is None for value in result_fields) or not self.evidence:
+            if any(value is None for value in result_fields):
                 raise ValueError("successful extraction requires complete review data")
             plan_json = cast(str, self.draft_plan_json)
-            if dump_plan_json(load_plan_json(plan_json)) != plan_json:
+            plan = _load_reviewable_plan(plan_json)
+            canonical = (
+                dump_explicit_plan_draft_json(plan)
+                if isinstance(plan, ExplicitPlanDraft)
+                else dump_plan_json(plan)
+            )
+            if canonical != plan_json:
                 raise ValueError("draft_plan_json must be canonical")
-            if any(len(item.excerpt) < 4 for item in self.evidence):
-                raise ValueError("extraction evidence excerpts require four characters")
+            if self.prompt_version == "plan-extract-v4":
+                if self.mapping is None or self.evidence or self.unmapped_text:
+                    raise ValueError("v4 extraction requires only its bidirectional mapping")
+            else:
+                if not self.evidence or self.mapping is not None:
+                    raise ValueError("legacy extraction requires field evidence")
+                if any(len(item.excerpt) < 4 for item in self.evidence):
+                    raise ValueError("extraction evidence excerpts require four characters")
             evidence_review = tuple(
                 issue
                 for issue in self.validation_issues
@@ -365,7 +560,7 @@ class PlanExtractionView(ApiValue):
                 and issue.severity.value == "WARNING"
                 and issue.activation_blocking
             )
-            if len(evidence_review) != 1:
+            if self.prompt_version != "plan-extract-v4" and len(evidence_review) != 1:
                 raise ValueError("successful extraction requires its evidence review blocker")
             if any(not item.material for item in self.unmapped_text):
                 raise ValueError("unreviewed unmapped text must remain material")
@@ -373,12 +568,12 @@ class PlanExtractionView(ApiValue):
             PlanExtractionOperationStatus.INVALID_OUTPUT,
             PlanExtractionOperationStatus.PROVIDER_ERROR,
             PlanExtractionOperationStatus.CANCELLED,
-        } and (any(value is not None for value in result_fields) or review_data):
+        } and (any(value is not None for value in result_fields) or review_data or self.mapping):
             raise ValueError("failed extraction cannot expose draft or provider content")
         elif self.status in {
             PlanExtractionOperationStatus.QUEUED,
             PlanExtractionOperationStatus.RUNNING,
-        } and (any(value is not None for value in result_fields) or review_data):
+        } and (any(value is not None for value in result_fields) or review_data or self.mapping):
             raise ValueError("unfinished extraction cannot expose result content")
         return self
 
@@ -440,6 +635,13 @@ class PlanOperationService(PlanExtractionService, Protocol):
         command: PlanImportCommand,
         context: MutationContext,
     ) -> PlanVersionView: ...
+
+    async def confirm_plan_review(
+        self,
+        *,
+        command: PlanReviewConfirmationCommand,
+        context: MutationContext,
+    ) -> PlanReviewConfirmationView: ...
 
     async def activate_plan(
         self,
@@ -572,13 +774,11 @@ async def save_plan_draft(
     context: MutationContextDependency,
     service: PlanServiceDependency,
 ) -> PlanVersionView:
-    if isinstance(load_plan_json(command.plan_json), ExplicitTradePlan):
-        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
     result = validate_api_response(
         await service.save_plan_draft(command=command, context=context),
         PlanVersionView,
     )
-    submitted_plan = load_plan_json(command.plan_json)
+    submitted_plan = _load_reviewable_plan(command.plan_json)
     expected_plan = (
         submitted_plan
         if command.base_plan_version_id is None
@@ -639,6 +839,28 @@ async def import_plan(
 @router.get("/plan-capabilities", response_model=ExplicitPlanCapabilityView)
 async def get_explicit_plan_capability() -> ExplicitPlanCapabilityView:
     return ExplicitPlanCapabilityView()
+
+
+@router.post("/plan-review-confirmations", response_model=PlanReviewConfirmationView)
+async def confirm_plan_review(
+    command: PlanReviewConfirmationCommand,
+    context: MutationContextDependency,
+    service: PlanServiceDependency,
+) -> PlanReviewConfirmationView:
+    result = validate_api_response(
+        await service.confirm_plan_review(command=command, context=context),
+        PlanReviewConfirmationView,
+    )
+    if (
+        result.plan_version_id != command.plan_version_id
+        or result.content_hash != command.content_hash
+        or result.source_hash != command.source_hash
+        or result.review_evidence_hash != command.review_evidence_hash
+    ):
+        raise RuntimeError("plan review service returned a mismatched binding")
+    if result.revision < command.expected_revision:
+        raise RuntimeError("plan review service returned a stale revision")
+    return result
 
 
 @router.post(
@@ -720,18 +942,32 @@ def _valid_utf8_text(value: str, *, max_bytes: int | None = None) -> str:
     return value
 
 
-def _validate_web_plan(plan: ExecutableTradePlan) -> ExecutableTradePlan:
+def _load_reviewable_plan(document: str) -> ExecutableTradePlan | ExplicitPlanDraft:
+    try:
+        return load_explicit_plan_draft_json(document)
+    except ValueError:
+        return load_plan_json(document)
+
+
+def _validate_web_plan(
+    plan: ExecutableTradePlan | ExplicitPlanDraft,
+) -> ExecutableTradePlan | ExplicitPlanDraft:
     if plan.version > MAX_SAFE_INTEGER:
         raise ValueError("plan version exceeds the Web safe-integer limit")
     return plan
 
 
 def _matches_plan(result: PlanVersionView, plan: ExecutableTradePlan) -> bool:
+    expected_hash = (
+        explicit_draft_sha256(plan)
+        if isinstance(plan, ExplicitPlanDraft)
+        else plan_sha256(plan)
+    )
     return (
         result.plan_id == plan.plan_id
         and result.version == plan.version
         and result.symbol == plan.symbol
-        and result.plan_hash == plan_sha256(plan)
+        and result.plan_hash == expected_hash
     )
 
 
@@ -747,6 +983,10 @@ __all__ = [
     "PlanExtractionView",
     "PlanImportCommand",
     "PlanOperationService",
+    "PlanReviewConfirmationCommand",
+    "PlanReviewConfirmationView",
+    "PlanReviewResolution",
+    "PlanMappingView",
     "PlanVersionPage",
     "PlanVersionSummary",
     "PlanVersionView",

@@ -19,17 +19,19 @@ from trade_plan_monitor.ai.models import (
     AIProviderConfig,
     AIUsageSnapshot,
     PlanExtractionOutput,
+    PlanExtractionOutputV4,
     PlanExtractionResult,
     PlanExtractionStatus,
     UnmappedText,
 )
-from trade_plan_monitor.ai.prompts import build_plan_extraction_prompt
+from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V4, build_plan_extraction_prompt
 from trade_plan_monitor.ai.provider import (
     AIProvider,
     AIProviderError,
     PlanExtractionRequest,
     RawAIResponse,
 )
+from trade_plan_monitor.ai.review import build_server_review_snapshot
 from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
     DraftReviewIssue,
@@ -117,7 +119,7 @@ async def extract_plan(
         )
 
     try:
-        output = _parse_untrusted_output(raw.content)
+        output = _parse_untrusted_output(raw.content, prompt_version=config.prompt_version)
     except UnicodeError, ValueError, RecursionError, ValidationError:
         return _failure_result(
             request_id=request_id,
@@ -128,6 +130,44 @@ async def extract_plan(
             issue_path="draft",
             issue_message="AI output did not satisfy the extraction contract.",
             raw=raw,
+        )
+
+    if isinstance(output, PlanExtractionOutputV4):
+        try:
+            mapping = output.to_mapping()
+            snapshot = build_server_review_snapshot(
+                source_text=source_text,
+                draft=output.draft,
+                mapping=mapping,
+            )
+        except (TypeError, UnicodeError, ValueError, RecursionError, ValidationError):
+            return _failure_result(
+                request_id=request_id,
+                config=config,
+                source_text_sha256=source_text_sha256,
+                status=PlanExtractionStatus.INVALID_OUTPUT,
+                issue_code="AI_FIELD_EVIDENCE_INVALID",
+                issue_path="mapping",
+                issue_message="AI mapping did not match the submitted source and current draft.",
+                raw=raw,
+            )
+        validation_issues = tuple(
+            _blocking_warning(issue.code, issue.path, issue.reason)
+            for issue in snapshot.required_issues
+        )
+        return PlanExtractionResult(
+            request_id=request_id,
+            provider_id=raw.provider_id,
+            model=raw.model,
+            prompt_version=config.prompt_version,
+            source_text_sha256=source_text_sha256,
+            draft=output.draft,
+            mapping=mapping,
+            assumptions=output.assumptions,
+            warnings=output.warnings,
+            validation_issues=validation_issues,
+            usage=_usage_snapshot(raw),
+            status=PlanExtractionStatus.SUCCEEDED,
         )
 
     evidence_issue = _validate_provenance(output, source_text)
@@ -209,7 +249,11 @@ async def extract_plan(
     )
 
 
-def _parse_untrusted_output(content: str) -> PlanExtractionOutput:
+def _parse_untrusted_output(
+    content: str,
+    *,
+    prompt_version: str,
+) -> PlanExtractionOutput | PlanExtractionOutputV4:
     if len(content.encode("utf-8")) > MAX_EXTRACTION_OUTPUT_BYTES:
         raise _UntrustedOutputError("output byte limit exceeded")
 
@@ -236,7 +280,12 @@ def _parse_untrusted_output(content: str) -> PlanExtractionOutput:
         allow_nan=False,
         separators=(",", ":"),
     )
-    return PlanExtractionOutput.model_validate_json(normalized)
+    model = (
+        PlanExtractionOutputV4
+        if prompt_version == PLAN_EXTRACTION_PROMPT_V4
+        else PlanExtractionOutput
+    )
+    return model.model_validate_json(normalized)
 
 
 def _enforce_json_budget(value: object) -> None:

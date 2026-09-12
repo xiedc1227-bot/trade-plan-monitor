@@ -112,7 +112,7 @@ web/src/
 - T037 实现 `GET /plan-versions`、`GET /plan-versions/{id}`、`GET /plan-activation-states/{symbol}`、`GET /plan-extractions/{id}`、`GET /ai-providers`、`POST /plan-drafts`、`POST /plan-imports`、`POST /plan-extractions`、`POST /plan-activations`、`POST /plan-deactivations`、`POST /ai-providers`、`PATCH /ai-providers/{id}`、`POST /ai-provider-secrets` 和 `POST /ai-provider-tests`。它不实现 T038 持仓/提醒/诊断资源、WebSocket 发布、Origin/安全响应头、静态资源提供或任何 T024 判断行为。
 - 计划版本集合项是有界的轻量摘要，包含精确的计划/版本/股票/hash identity、`canActivate`、状态、修订和创建时间；它们不包含可能很大的计划文档、原文和问题数组。`GET /plan-versions/{id}` 暴露完整版本，包括一个规范、有界的 `planJson` 文档、保留的有界 `sourceText`、审核问题和确定性校验问题。`GET /plan-activation-states/{symbol}` 暴露以后端为权威来源、可空的活动 `planVersionId`、单调递增的启用状态 `revision` 和变更时间；停用后仍可查询非活动状态。服务输出会被重新校验，并且必须匹配请求草稿/导入的 identity 与 provenance。`planJson` 保持为规范 `plan-domain` JSON 文档；外围 API 字段仍使用 camelCase。当 `offset` 超过 `total` 时，空分页仍然合法。
 - 草稿保存接收 `planJson`、`sourceText`、`reviewIssues`、`expectedRevision`、可选的 `basePlanVersionId` 和可选的 AI `extractionId`。存在基版本 identity 时，应用服务会验证提交的 `plan_id` 与 `symbol` 是否匹配不可变基版本，并在同一个串行化幂等事务中为该 `plan_id` 分配下一版本；浏览器绝不分配这个后继版本，且不会覆盖任何既有版本。导入接收 `format=JSON|YAML`、明确的目标 `symbol`、安全有界的 `document` 和 `expectedRevision`；后端解析必须先证明文档股票与命令一致，revision 才能授权持久化。每个计划版本和返回的 revision 均受 JavaScript 安全整数上限约束。启用命令把 `expectedRevision` 上限设为该值减二，停用命令设为该值减一，从而保证每次递增都可精确表示，并让 revision 耗尽只能终止于非活动状态而不会卡住活动计划；不安全文档和已耗尽的后继版本序列会在提交前被拒绝，且不改变领域 Schema 或既有行。启用是针对不可变 `planVersionId` 的独立命令；停用是独立的股票命令。任何未解决的假设、警告、缺失证据、重大遗漏或阻断启用的校验问题都会使 `canActivate=false`，应用服务必须以冲突拒绝启用。
-- 每次生产提取成功后，必须先持久化一份服务端权威审核快照，把 `extractionId`、供应商/模型/prompt identity、精确原文 hash、规范草稿 hash 以及必需审核项 identity 绑定起来，之后操作才能进入 `SUCCEEDED`。只有原文和规范草稿 hash 均精确匹配的草稿才可应用确认。原文相同但精确内容 hash 不同的 AI 草稿会通过明确的待审核路径以 `AI_EDITED` 保存：所有必需问题均重置为未解决，且不能启用。即使省略其 `extractionId` 也不能恢复资格，因为服务端还会识别已绑定的原文 hash；未知、重复或伪造的确认/identity 都不能抹掉必需审核项。匹配的 AI 草稿若脱离其绑定原文再次提交，会以所有必需问题均未解决的 `AI_REIMPORT` 保存，并且不能启用。提取快照重试写入保持幂等，重启或回放也不能仅凭客户端所有的 `reviewIssues` 恢复启用资格。
+- 每次生产提取成功后，必须先持久化一份服务端权威审核快照，把 `extractionId`、供应商/模型/prompt identity、精确原文 hash、规范草稿 hash 以及必需审核项 identity 绑定起来，之后操作才能进入 `SUCCEEDED`。V4 还持久保存类型化部分草稿、双向 `plan-mapping-v1`、语义 `contentHash` 和 `reviewEvidenceHash`。`POST /api/v1/plan-review-confirmations` 只接受绑定到该精确当前快照和乐观复核 revision 的解决记录；遗漏项保持未解决，编辑会创建新的不可变版本并拒绝旧哈希。提取/复核持久化重试具备幂等性，重启/重放不能仅从客户端拥有的问题列表恢复资格。
 - 计划提取和 AI 供应商测试只接受有界提交命令，并返回带强类型 `QUEUED` 回执的 `202`。路由只等待服务的持久提交边界；既不调用供应商，也不创建或运行提取工作，并且绝不启用计划。提取状态封闭为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`INVALID_OUTPUT`、`PROVIDER_ERROR` 和 `CANCELLED`；成功结果保留恰好一个阻断启用的 `AI_EVIDENCE_REVIEW_REQUIRED`，并且只暴露规范草稿 JSON、有界证据/问题、确定性校验结果、脱敏用量、hash 和时间戳。供应商/模型原始响应体和授权材料没有任何响应字段。
 - AI 供应商创建/更新使用完整的不含密钥配置。`PATCH` 是带修订保护的完整替换，其正文 `providerId` 必须与路径一致。API 通过具体 `AIProviderConfig` 的 class-local 脱敏校验器重新校验配置，包括 HTTPS/回环 URL 策略和资源限制。密钥替换接收现有 class-local `SecretWrite` 值，但响应只包含等价于 `SecretStatus` 的已配置状态、来源、固定掩码和代数元数据。服务返回的配置必须与提交的规范化配置一致；额外密钥或供应商原始字段会封闭失败。
 - 每个 T037 状态变更端点都要求 1～128 个白名单字符组成的 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同意图回放其规范响应。应用服务必须原子完成这些检查与审计写入；路由绝不重建仓储、校验或决策引擎行为。
@@ -140,7 +140,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`6e8a727355500c310237e5d19d2820ac2a95585b9f664b19d9d130566242611f`
+OpenAPI 快照 SHA-256：`5fbcd3221aca8d18331202fc7a8dc034a65145ce1b43e25a8a8a37bb661f0066`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 48 个已批准 REST 路径：33 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式命令 `POST /position-inventory-confirmations`、`POST /position-inventory-closures` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -378,7 +378,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 
 六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
 
-- 当前冻结契约精确为 48 条 REST 路径：33 条实时路径（包含只读 AI 运行配置、板块指数历史、权威计划启用状态、显式计划能力、权威持仓库存读取/确认/减记以及按计划范围的人工事件风险读取/确认）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
+- 当前冻结契约精确为 49 条 REST 路径：34 条实时路径（包含 v4 当前快照计划复核确认、只读 AI 运行配置、板块指数历史、权威计划启用状态、显式计划能力、权威持仓库存读取/确认/减记以及按计划范围的人工事件风险读取/确认）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
 - 生产 Router 精确包含十条路径，且全部接入真实或惰性加载视图；两个静态回测子路由继续排在动态路由之前；
 - WEBF10 在不增加路由的前提下，把最后一条历史 `/alerts` 占位路由接入其业务视图；
 - 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
@@ -548,4 +548,4 @@ const emit = defineEmits<Emits>()
 
 WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。WEBF13 记录当前真实路由和新建回测旅程边界，不改变冻结契约；其配对离线验收证据已于 2026-09-04 通过。
 
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实现历史继续保持此前已批准状态。用户于 2026-08-26 批准 `Backtest Extension Boundary` 和 `backtest-web`，确认 `backtest-api`，随后确认统一 `Asia/Shanghai`/`+08:00` 时间契约及其余 API/engine/results/jobs 一致性修正。聚合详细规格闸门现已关闭。双语实施计划第 15 节和生成的 `BT009`～`BT050` 任务清单已分别获批。板块指数扩展于 2026-09-02 获批并获离线实施授权。WEBF06 把根监控总览接到以后端为权威来源的总览快照和共用指数投影；后续成交额扩展只增加可空的 `marketTurnover` 字段。WEBF09 组合既有持仓 API 和真实个股详情路由，同时把所有 T+1 与持仓策略判断保留在后端。WEBF10 组合既有提醒 API 和真实 `/alerts` 路由，同时把筛选成员归属、规范提醒和确认 revision 保留在后端。R09 增加了显式计划能力投影、权威持仓库存读取/确认传输和持久化 BUY 提醒投影。R10 增加隔离可信的普通 `SELL` 与纯五分钟 `RISK_ALERT` 执行、抑制前完整冲突处理、多意图原子 outbox 投影，以及统一批次/期初余额库存减记。在 R11 当前内容复核和 R12 普通表单完成前，公开 Schema v3 保存、导入或启用仍不可用。当前 OpenAPI 契约精确包含 48 条路径，其中 33 条为实时路径、15 条为回测路径；生产 Router 精确包含 10 条路径，且全部接入真实视图。提交、推送、依赖安装和联网访问继续需要分别授权。
+基础 `local-web` 规格和已完成的 `T035`～`T056` 实施历史继续保持此前批准状态。R09 增加显式计划能力投影、权威持仓库存读取/确认传输和持久化 BUY 提醒投影。R10 增加隔离可信的普通 `SELL` 与纯五分钟 `RISK_ALERT` 执行、抑制前完整冲突处理、多意图原子 outbox 投影，以及统一批次/期初余额库存减记。R11 增加 v4 部分草稿保存/读取与精确当前快照复核确认，同时继续为 R12 阻断导入和公开启用。当前 OpenAPI 契约精确包含 49 条路径：34 条实时路径和 15 条回测路径。提交、推送、依赖安装和联网访问继续需要分别授权。

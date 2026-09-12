@@ -18,9 +18,20 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from trade_plan_monitor.ai.models import (
+    ExplicitPlanDraft,
     PlanExtractionResult,
     PlanExtractionReview,
+    PlanMapping,
+    RequiredReviewIssue,
+    ReviewResolution,
+    ServerReviewSnapshot,
     build_plan_extraction_review,
+)
+from trade_plan_monitor.ai.review import (
+    build_server_review_snapshot,
+    explicit_draft_sha256,
+    load_explicit_plan_draft_json,
+    reconcile_plan_mapping,
 )
 from trade_plan_monitor.domain.plan_codec import load_plan_json, load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
@@ -46,6 +57,7 @@ from trade_plan_monitor.state.repositories import (
     PlanActivationBlockedError,
     PlanExtractionReviewRecord,
     PlanRepository,
+    PlanReviewConfirmationRecord,
     PlanSaveBlockedError,
     PlanVersionNotFoundError,
     RepositoryError,
@@ -64,9 +76,13 @@ from trade_plan_monitor.web.routers.plans import (
     PlanExtractionCommand,
     PlanExtractionView,
     PlanImportCommand,
+    PlanMappingView,
+    PlanReviewConfirmationCommand,
+    PlanReviewConfirmationView,
     PlanVersionPage,
     PlanVersionSummary,
     PlanVersionView,
+    RequiredReviewIssueView,
 )
 from trade_plan_monitor.web.schemas import MutationContext, OperationReceipt
 
@@ -106,10 +122,18 @@ class _PlanVersionDetails(Protocol):
     status: str
     payload_json: str
     source_text: str
+    source_hash: str
     review_issues: tuple[DraftReviewIssue, ...]
     review_origin: PlanReviewOrigin
     extraction_id: str | None
     review_confirmed_at: datetime | None
+    content_hash: str | None
+    review_evidence_hash: str | None
+    mapping: PlanMapping | None
+    required_review_issues: tuple[RequiredReviewIssue, ...]
+    resolutions: tuple[ReviewResolution, ...]
+    review_id: str | None
+    review_revision: int
     revision: int
     created_at: datetime
 
@@ -183,9 +207,7 @@ class PersistentPlanWebLifecycle:
         command: PlanDraftCommand,
         context: MutationContext,
     ) -> PlanVersionView:
-        plan = load_plan_json(command.plan_json)
-        if isinstance(plan, ExplicitTradePlan):
-            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        plan = _load_reviewable_plan(command.plan_json)
         _require_web_safe_plan(plan)
         return await self._run_mutation(
             self._save_plan_sync,
@@ -195,6 +217,19 @@ class PersistentPlanWebLifecycle:
             plan=plan,
             source_text=command.source_text,
             review_issues=command.review_issues,
+        )
+
+    async def confirm_plan_review(
+        self,
+        *,
+        command: PlanReviewConfirmationCommand,
+        context: MutationContext,
+    ) -> PlanReviewConfirmationView:
+        return await self._run_mutation(
+            self._confirm_plan_review_sync,
+            operation="CONFIRM_PLAN_REVIEW",
+            command=command,
+            context=context,
         )
 
     async def record_plan_extraction(self, result: PlanExtractionResult) -> None:
@@ -410,7 +445,7 @@ class PersistentPlanWebLifecycle:
         request_hash: str,
         context: MutationContext,
         command: PlanDraftCommand | PlanImportCommand,
-        plan: TradePlan,
+        plan: TradePlan | ExplicitPlanDraft,
         source_text: str,
         review_issues: tuple[DraftReviewIssue, ...],
     ) -> PlanVersionView:
@@ -423,11 +458,13 @@ class PersistentPlanWebLifecycle:
             )
             if replay is not None:
                 return replay
+            base_extraction_id: str | None = None
             if isinstance(command, PlanDraftCommand) and command.base_plan_version_id is not None:
                 base = work.plans.get_version_details(str(command.base_plan_version_id))
                 if base is None:
                     raise PlanVersionNotFoundError("Base plan version was not found")
                 _validated_persisted_plan(base)
+                base_extraction_id = base.extraction_id
                 if plan.plan_id != base.plan_id or plan.symbol != base.symbol:
                     raise PlanSaveBlockedError(
                         "Draft identity does not match its base plan version"
@@ -441,6 +478,7 @@ class PersistentPlanWebLifecycle:
                 review_origin,
                 extraction_id,
                 review_confirmed_at,
+                explicit_snapshot,
             ) = _resolve_server_review(
                 plans=work.plans,
                 command=command,
@@ -448,6 +486,7 @@ class PersistentPlanWebLifecycle:
                 source_text=source_text,
                 submitted_issues=review_issues,
                 now=self._clock(),
+                base_extraction_id=base_extraction_id,
             )
             activation = work.plans.get_activation_state(plan.symbol)
             current_revision = 0 if activation is None else activation.revision
@@ -460,6 +499,7 @@ class PersistentPlanWebLifecycle:
                 review_origin=review_origin,
                 extraction_id=extraction_id,
                 review_confirmed_at=review_confirmed_at,
+                explicit_snapshot=explicit_snapshot,
             )
             details = work.plans.get_version_details(saved.id)
             if details is None:
@@ -487,6 +527,46 @@ class PersistentPlanWebLifecycle:
             )
             work.commit()
 
+    def _confirm_plan_review_sync(
+        self,
+        *,
+        request_hash: str,
+        context: MutationContext,
+        command: PlanReviewConfirmationCommand,
+    ) -> PlanReviewConfirmationView:
+        with self._unit_of_work() as work:
+            replay = claim_replay(
+                work,
+                context=context,
+                request_hash=request_hash,
+                model_type=PlanReviewConfirmationView,
+            )
+            if replay is not None:
+                return replay
+            try:
+                record = work.plans.confirm_explicit_review(
+                    plan_version_id=str(command.plan_version_id),
+                    content_hash=command.content_hash,
+                    source_hash=command.source_hash,
+                    review_evidence_hash=command.review_evidence_hash,
+                    expected_revision=command.expected_revision,
+                    resolutions=tuple(
+                        ReviewResolution.model_validate(item.model_dump(mode="python"))
+                        for item in command.resolutions
+                    ),
+                )
+            except ValueError as error:
+                raise PlanSaveBlockedError("Plan review resolution is invalid") from error
+            result = _plan_review_confirmation_view(record)
+            complete_replay(
+                work,
+                context=context,
+                request_hash=request_hash,
+                response=result,
+            )
+            work.commit()
+            return result
+
     def _activate_plan_sync(
         self,
         *,
@@ -506,10 +586,20 @@ class PersistentPlanWebLifecycle:
             details = work.plans.get_version_details(str(command.plan_version_id))
             if details is None:
                 raise PlanVersionNotFoundError("Plan version was not found")
-            stored_plan = load_plan_json(details.payload_json)
-            if isinstance(stored_plan, ExplicitTradePlan):
+            stored_plan = _load_reviewable_plan(details.payload_json)
+            if isinstance(stored_plan, ExplicitPlanDraft):
+                if (
+                    command.review_id is None
+                    or command.content_hash is None
+                    or details.review_id != str(command.review_id)
+                    or details.content_hash != command.content_hash
+                    or details.review_confirmed_at is None
+                ):
+                    raise PlanActivationBlockedError(
+                        "Explicit activation requires the current server review binding"
+                    )
                 raise PlanActivationBlockedError(
-                    "Explicit plan activation awaits R11/R12 consumers"
+                    "Explicit plan activation awaits R12 ordinary plan forms"
                 )
             plan, validation, can_activate = _validated_plan_state(details)
             if PlanVersionStatus(details.status) is not PlanVersionStatus.DRAFT or not can_activate:
@@ -597,31 +687,66 @@ def _resolve_server_review(
     *,
     plans: PlanRepository,
     command: PlanDraftCommand | PlanImportCommand,
-    plan: TradePlan,
+    plan: TradePlan | ExplicitPlanDraft,
     source_text: str,
     submitted_issues: tuple[DraftReviewIssue, ...],
     now: datetime,
+    base_extraction_id: str | None,
 ) -> tuple[
     tuple[DraftReviewIssue, ...],
     PlanReviewOrigin,
     str | None,
     datetime | None,
+    ServerReviewSnapshot | None,
 ]:
     source_hash = sha256(source_text.encode("utf-8")).hexdigest()
-    draft_hash = plan_sha256(plan)
+    draft_hash = (
+        explicit_draft_sha256(plan) if isinstance(plan, ExplicitPlanDraft) else plan_sha256(plan)
+    )
     requested_extraction_id = (
         str(command.extraction_id)
         if isinstance(command, PlanDraftCommand) and command.extraction_id is not None
-        else None
+        else base_extraction_id
     )
     extraction: PlanExtractionReviewRecord | None
+    if isinstance(plan, ExplicitPlanDraft):
+        if not isinstance(command, PlanDraftCommand):
+            raise PlanSaveBlockedError("Explicit drafts require the review-only save endpoint")
+        extraction = (
+            plans.get_extraction_review(requested_extraction_id)
+            if requested_extraction_id is not None
+            else plans.find_extraction_review_by_source_hash(source_hash)
+        )
+        if (
+            extraction is None
+            or extraction.prompt_version != "plan-extract-v4"
+            or extraction.mapping is None
+            or extraction.source_hash != source_hash
+        ):
+            raise PlanSaveBlockedError("Explicit draft has no matching v4 extraction evidence")
+        supplied_mapping = (
+            command.mapping.to_domain() if command.mapping is not None else extraction.mapping
+        )
+        mapping = reconcile_plan_mapping(draft=plan, mapping=supplied_mapping)
+        snapshot = build_server_review_snapshot(
+            draft=plan,
+            mapping=mapping,
+            source_text=source_text,
+        )
+        origin = (
+            PlanReviewOrigin.AI_EXTRACTION
+            if extraction.draft_hash == draft_hash
+            else PlanReviewOrigin.AI_EDITED
+        )
+        return (), origin, extraction.extraction_id, None, snapshot
+
     exact_source = False
     if requested_extraction_id is not None:
         extraction = plans.get_extraction_review(requested_extraction_id)
         if extraction is None or extraction.source_hash != source_hash:
             raise PlanSaveBlockedError("Extraction identity does not match the submitted draft")
         if extraction.draft_hash != draft_hash:
-            return _pending_edited_review(extraction)
+            return (*_pending_edited_review(extraction), None)
         exact_source = True
     else:
         extraction = plans.find_extraction_review(
@@ -633,11 +758,11 @@ def _resolve_server_review(
         else:
             extraction = plans.find_extraction_review_by_source_hash(source_hash)
             if extraction is not None:
-                return _pending_edited_review(extraction)
+                return (*_pending_edited_review(extraction), None)
             extraction = plans.find_extraction_review(draft_hash=draft_hash)
 
     if extraction is None:
-        return submitted_issues, PlanReviewOrigin.MANUAL, None, None
+        return submitted_issues, PlanReviewOrigin.MANUAL, None, None, None
     if not exact_source:
         return (
             tuple(
@@ -645,6 +770,7 @@ def _resolve_server_review(
             ),
             PlanReviewOrigin.AI_REIMPORT,
             extraction.extraction_id,
+            None,
             None,
         )
 
@@ -658,6 +784,7 @@ def _resolve_server_review(
         PlanReviewOrigin.AI_EXTRACTION,
         extraction.extraction_id,
         confirmed_at,
+        None,
     )
 
 
@@ -715,7 +842,13 @@ def _merge_review_confirmations(
 
 def _plan_version_view(record: object) -> PlanVersionView:
     details = cast(_PlanVersionDetails, record)
-    _plan, validation, can_activate = _validated_plan_state(details)
+    plan, validation, can_activate = _validated_plan_state(details)
+    resolved_ids = tuple(item.issue_id for item in details.resolutions)
+    unresolved = tuple(
+        issue
+        for issue in details.required_review_issues
+        if issue.issue_id not in set(resolved_ids)
+    )
     return PlanVersionView(
         id=UUID(details.id),
         plan_id=details.plan_id,
@@ -730,13 +863,56 @@ def _plan_version_view(record: object) -> PlanVersionView:
         can_activate=can_activate,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
+        content_hash=details.content_hash,
+        source_hash=(details.source_hash if isinstance(plan, ExplicitPlanDraft) else None),
+        review_evidence_hash=details.review_evidence_hash,
+        review_revision=(details.review_revision if isinstance(plan, ExplicitPlanDraft) else None),
+        review_id=(None if details.review_id is None else UUID(details.review_id)),
+        mapping=(
+            None if details.mapping is None else PlanMappingView.from_domain(details.mapping)
+        ),
+        required_review_issues=tuple(
+            RequiredReviewIssueView.from_domain(issue)
+            for issue in details.required_review_issues
+        ),
+        resolved_issue_ids=resolved_ids,
+        unresolved_review_issues=tuple(
+            RequiredReviewIssueView.from_domain(issue) for issue in unresolved
+        ),
+        execution_readiness=("NOT_EVALUATED" if isinstance(plan, ExplicitPlanDraft) else None),
     )
 
 
 def _validated_plan_state(
     details: _PlanVersionDetails,
-) -> tuple[TradePlan, PlanValidationResult, bool]:
+) -> tuple[TradePlan | ExplicitPlanDraft, PlanValidationResult, bool]:
     plan = _validated_persisted_plan(details)
+    if isinstance(plan, ExplicitPlanDraft):
+        resolved = {item.issue_id for item in details.resolutions}
+        unresolved = tuple(
+            issue
+            for issue in details.required_review_issues
+            if issue.issue_id not in resolved
+        )
+        validation = PlanValidationResult(
+            issues=tuple(
+                ValidationIssue(
+                    code=issue.code,
+                    path=issue.path,
+                    severity=ValidationSeverity.WARNING,
+                    message=issue.reason,
+                    activation_blocking=True,
+                )
+                for issue in unresolved
+            )
+        )
+        can_activate = (
+            plan.to_executable() is not None
+            and details.review_id is not None
+            and details.review_confirmed_at is not None
+            and not unresolved
+        )
+        return plan, validation, can_activate
     validation = validate_trade_plan(
         plan,
         available_market_evidence=ALL_MARKET_EVIDENCE,
@@ -779,16 +955,27 @@ def _validated_plan_state(
     return plan, validation, can_activate
 
 
-def _validated_persisted_plan(record: _PlanVersionDetails) -> TradePlan:
+def _validated_persisted_plan(
+    record: _PlanVersionDetails,
+) -> TradePlan | ExplicitPlanDraft:
     try:
-        plan = load_plan_json(record.payload_json)
+        plan = (
+            load_explicit_plan_draft_json(record.payload_json)
+            if record.content_hash is not None
+            else load_plan_json(record.payload_json)
+        )
     except TypeError, ValueError:
         raise RuntimeError("persisted plan state is invalid") from None
     if (
         plan.plan_id != record.plan_id
         or plan.version != record.version
         or plan.symbol != record.symbol
-        or plan_sha256(plan) != record.plan_hash
+        or (
+            explicit_draft_sha256(plan)
+            if isinstance(plan, ExplicitPlanDraft)
+            else plan_sha256(plan)
+        )
+        != record.plan_hash
     ):
         raise RuntimeError("persisted plan identity is invalid")
     return plan
@@ -805,9 +992,36 @@ def _active_plan_view(record: object) -> ActivePlanView:
     )
 
 
-def _require_web_safe_plan(plan: TradePlan) -> None:
+def _require_web_safe_plan(plan: TradePlan | ExplicitPlanDraft) -> None:
     if plan.version > MAX_SAFE_INTEGER:
         raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+
+
+def _load_reviewable_plan(document: str) -> TradePlan | ExplicitPlanDraft:
+    try:
+        return load_explicit_plan_draft_json(document)
+    except ValueError:
+        return load_plan_json(document)
+
+
+def _plan_review_confirmation_view(
+    record: PlanReviewConfirmationRecord,
+) -> PlanReviewConfirmationView:
+    return PlanReviewConfirmationView(
+        plan_version_id=UUID(record.plan_version_id),
+        review_id=None if record.review_id is None else UUID(record.review_id),
+        content_hash=record.content_hash,
+        source_hash=record.source_hash,
+        review_evidence_hash=record.review_evidence_hash,
+        revision=record.revision,
+        confirmed_at=(
+            None if record.confirmed_at is None else _shanghai_datetime(record.confirmed_at)
+        ),
+        unresolved_issues=tuple(
+            RequiredReviewIssueView.from_domain(item) for item in record.unresolved_issues
+        ),
+        can_activate=record.can_activate,
+    )
 
 
 def _shanghai_datetime(value: datetime) -> datetime:

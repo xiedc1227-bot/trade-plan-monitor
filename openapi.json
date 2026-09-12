@@ -5002,6 +5002,35 @@
         "title": "BarView",
         "type": "object"
       },
+      "BindingKind": {
+        "enum": [
+          "VALUE",
+          "STRUCTURE"
+        ],
+        "title": "BindingKind",
+        "type": "string"
+      },
+      "BindingOrigin": {
+        "enum": [
+          "SOURCE",
+          "USER_SUPPLEMENT",
+          "CONTRACT"
+        ],
+        "title": "BindingOrigin",
+        "type": "string"
+      },
+      "BindingUnit": {
+        "enum": [
+          "FEN",
+          "SHARES",
+          "BARS",
+          "MINUTES",
+          "RATIO",
+          "NONE"
+        ],
+        "title": "BindingUnit",
+        "type": "string"
+      },
       "Board": {
         "description": "Closed board identities supported by the Phase-1 mapping.",
         "enum": [
@@ -5012,6 +5041,15 @@
           "BSE"
         ],
         "title": "Board",
+        "type": "string"
+      },
+      "ClauseDisposition": {
+        "enum": [
+          "MAPPED",
+          "UNRESOLVED",
+          "UNSUPPORTED"
+        ],
+        "title": "ClauseDisposition",
         "type": "string"
       },
       "ConditionOutcome": {
@@ -6265,14 +6303,10 @@
           },
           "pendingRequirements": {
             "default": [
-              "CURRENT_CONTENT_REVIEW",
               "ORDINARY_PLAN_FORMS"
             ],
             "items": {
-              "enum": [
-                "CURRENT_CONTENT_REVIEW",
-                "ORDINARY_PLAN_FORMS"
-              ],
+              "const": "ORDINARY_PLAN_FORMS",
               "type": "string"
             },
             "title": "Pendingrequirements",
@@ -6339,6 +6373,81 @@
           "material"
         ],
         "title": "ExtractionIssue",
+        "type": "object"
+      },
+      "FieldBindingView": {
+        "additionalProperties": false,
+        "properties": {
+          "bindingKind": {
+            "$ref": "#/components/schemas/BindingKind",
+            "default": "VALUE"
+          },
+          "clauseIds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Clauseids",
+            "type": "array"
+          },
+          "contractId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contractid"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BindingOrigin"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "supplementId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplementid"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/BindingUnit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "path",
+          "value",
+          "unit",
+          "origin"
+        ],
+        "title": "FieldBindingView",
         "type": "object"
       },
       "FieldEvidence": {
@@ -7334,6 +7443,20 @@
       "PlanActivationCommand": {
         "additionalProperties": false,
         "properties": {
+          "contentHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenthash"
+          },
           "expectedRevision": {
             "maximum": 9007199254740989.0,
             "minimum": 0.0,
@@ -7344,6 +7467,18 @@
             "format": "uuid",
             "title": "Planversionid",
             "type": "string"
+          },
+          "reviewId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewid"
           }
         },
         "required": [
@@ -7415,6 +7550,16 @@
               }
             ],
             "title": "Extractionid"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanMappingView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "planJson": {
             "maxLength": 262144,
@@ -7538,6 +7683,16 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanMappingView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "model": {
             "anyOf": [
@@ -7685,6 +7840,230 @@
         "title": "PlanImportCommand",
         "type": "object"
       },
+      "PlanMappingView": {
+        "additionalProperties": false,
+        "properties": {
+          "fieldBindings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FieldBindingView"
+            },
+            "maxItems": 10000,
+            "title": "Fieldbindings",
+            "type": "array"
+          },
+          "mappingVersion": {
+            "const": "plan-mapping-v1",
+            "default": "plan-mapping-v1",
+            "title": "Mappingversion",
+            "type": "string"
+          },
+          "sourceClauses": {
+            "items": {
+              "$ref": "#/components/schemas/SourceClauseView"
+            },
+            "maxItems": 512,
+            "minItems": 1,
+            "title": "Sourceclauses",
+            "type": "array"
+          },
+          "userSupplements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UserSupplementView"
+            },
+            "maxItems": 512,
+            "title": "Usersupplements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sourceClauses"
+        ],
+        "title": "PlanMappingView",
+        "type": "object"
+      },
+      "PlanReviewConfirmationCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "resolutions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlanReviewResolution"
+            },
+            "maxItems": 512,
+            "title": "Resolutions",
+            "type": "array"
+          },
+          "reviewEvidenceHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reviewevidencehash",
+            "type": "string"
+          },
+          "sourceHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcehash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "contentHash",
+          "sourceHash",
+          "reviewEvidenceHash",
+          "expectedRevision"
+        ],
+        "title": "PlanReviewConfirmationCommand",
+        "type": "object"
+      },
+      "PlanReviewConfirmationView": {
+        "additionalProperties": false,
+        "properties": {
+          "canActivate": {
+            "title": "Canactivate",
+            "type": "boolean"
+          },
+          "confirmedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedat"
+          },
+          "contentHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "reviewEvidenceHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reviewevidencehash",
+            "type": "string"
+          },
+          "reviewId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewid"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sourceHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcehash",
+            "type": "string"
+          },
+          "unresolvedIssues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RequiredReviewIssueView"
+            },
+            "maxItems": 512,
+            "title": "Unresolvedissues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "reviewId",
+          "contentHash",
+          "sourceHash",
+          "reviewEvidenceHash",
+          "revision",
+          "confirmedAt",
+          "canActivate"
+        ],
+        "title": "PlanReviewConfirmationView",
+        "type": "object"
+      },
+      "PlanReviewResolution": {
+        "additionalProperties": false,
+        "properties": {
+          "bindingPath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bindingpath"
+          },
+          "issueId": {
+            "title": "Issueid",
+            "type": "string"
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/ReviewResolutionKind"
+          },
+          "supplementId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplementid"
+          }
+        },
+        "required": [
+          "issueId",
+          "resolution"
+        ],
+        "title": "PlanReviewResolution",
+        "type": "object"
+      },
       "PlanVersionPage": {
         "additionalProperties": false,
         "properties": {
@@ -7808,15 +8187,51 @@
             "title": "Canactivate",
             "type": "boolean"
           },
+          "contentHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenthash"
+          },
           "createdAt": {
             "format": "date-time",
             "title": "Createdat",
             "type": "string"
           },
+          "executionReadiness": {
+            "anyOf": [
+              {
+                "const": "NOT_EVALUATED",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executionreadiness"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanMappingView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "planHash": {
             "maxLength": 64,
@@ -7837,6 +8252,50 @@
             "title": "Planjson",
             "type": "string"
           },
+          "requiredReviewIssues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RequiredReviewIssueView"
+            },
+            "maxItems": 512,
+            "title": "Requiredreviewissues",
+            "type": "array"
+          },
+          "resolvedIssueIds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 512,
+            "title": "Resolvedissueids",
+            "type": "array"
+          },
+          "reviewEvidenceHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewevidencehash"
+          },
+          "reviewId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewid"
+          },
           "reviewIssues": {
             "default": [],
             "items": {
@@ -7846,11 +8305,38 @@
             "title": "Reviewissues",
             "type": "array"
           },
+          "reviewRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewrevision"
+          },
           "revision": {
             "maximum": 9007199254740991.0,
             "minimum": 0.0,
             "title": "Revision",
             "type": "integer"
+          },
+          "sourceHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcehash"
           },
           "sourceText": {
             "maxLength": 262144,
@@ -7865,6 +8351,15 @@
             "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
             "title": "Symbol",
             "type": "string"
+          },
+          "unresolvedReviewIssues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RequiredReviewIssueView"
+            },
+            "maxItems": 512,
+            "title": "Unresolvedreviewissues",
+            "type": "array"
           },
           "validationIssues": {
             "default": [],
@@ -8607,6 +9102,66 @@
         "title": "ProviderHealthView",
         "type": "object"
       },
+      "RequiredReviewIssueView": {
+        "additionalProperties": false,
+        "properties": {
+          "allowedResolutions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewResolutionKind"
+            },
+            "maxItems": 3,
+            "title": "Allowedresolutions",
+            "type": "array"
+          },
+          "bindingPath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bindingpath"
+          },
+          "clauseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clauseid"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "issueId": {
+            "title": "Issueid",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issueId",
+          "code",
+          "path",
+          "reason",
+          "allowedResolutions"
+        ],
+        "title": "RequiredReviewIssueView",
+        "type": "object"
+      },
       "ReturnIndicatorFactView": {
         "additionalProperties": false,
         "properties": {
@@ -8678,6 +9233,15 @@
           "MISSING_EVIDENCE"
         ],
         "title": "ReviewIssueKind",
+        "type": "string"
+      },
+      "ReviewResolutionKind": {
+        "enum": [
+          "CONFIRM_MAPPING",
+          "CONFIRM_POLICY",
+          "REPLACED_BY_REVIEWED_CONTENT"
+        ],
+        "title": "ReviewResolutionKind",
         "type": "string"
       },
       "RiskStatus": {
@@ -9110,6 +9674,52 @@
           "formulaDefinitionHash"
         ],
         "title": "SmaLookbackIndicatorFactView",
+        "type": "object"
+      },
+      "SourceClauseView": {
+        "additionalProperties": false,
+        "properties": {
+          "clauseId": {
+            "title": "Clauseid",
+            "type": "string"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/ClauseDisposition"
+          },
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "excerpt": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 256,
+            "title": "Paths",
+            "type": "array"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clauseId",
+          "start",
+          "end",
+          "excerpt",
+          "disposition"
+        ],
+        "title": "SourceClauseView",
         "type": "object"
       },
       "SymbolCollectionUnavailableResponse": {
@@ -9764,6 +10374,62 @@
           "material"
         ],
         "title": "UnmappedText",
+        "type": "object"
+      },
+      "UserSupplementView": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "enum": [
+              "human_confirmed_test_supplement",
+              "human_confirmed_supplement"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "supplementId": {
+            "title": "Supplementid",
+            "type": "string"
+          },
+          "suppliedAt": {
+            "format": "date-time",
+            "title": "Suppliedat",
+            "type": "string"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/BindingUnit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "supplementId",
+          "path",
+          "value",
+          "unit",
+          "suppliedAt",
+          "label"
+        ],
+        "title": "UserSupplementView",
         "type": "object"
       },
       "ValidationIssue": {
@@ -16628,6 +17294,161 @@
           }
         },
         "summary": "Import Plan",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-review-confirmations": {
+      "post": {
+        "operationId": "confirm_plan_review_api_v1_plan_review_confirmations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanReviewConfirmationCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanReviewConfirmationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Confirm Plan Review",
         "tags": [
           "plans"
         ]

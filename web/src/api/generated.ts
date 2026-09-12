@@ -766,7 +766,15 @@ export type BarView = {
   volumeShares: number;
 };
 
+export type BindingKind = "VALUE" | "STRUCTURE";
+
+export type BindingOrigin = "SOURCE" | "USER_SUPPLEMENT" | "CONTRACT";
+
+export type BindingUnit = "FEN" | "SHARES" | "BARS" | "MINUTES" | "RATIO" | "NONE";
+
 export type Board = "SSE_MAIN" | "SZSE_MAIN" | "CHINEXT" | "STAR_MARKET" | "BSE";
+
+export type ClauseDisposition = "MAPPED" | "UNRESOLVED" | "UNSUPPORTED";
 
 export type ConditionOutcome = "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
 
@@ -969,7 +977,7 @@ export type ExplicitPlanCapabilityView = {
   executionMode?: "EXPLICIT_RULES";
   executionVersion?: "explicit-rules-v1";
   isolatedTrustedReviewOnly?: true;
-  pendingRequirements?: Array<"CURRENT_CONTENT_REVIEW" | "ORDINARY_PLAN_FORMS">;
+  pendingRequirements?: Array<"ORDINARY_PLAN_FORMS">;
   publicActivationAvailable?: false;
   schemaVersion?: 3;
   supportedActions?: Array<"BUY" | "SELL" | "RISK_ALERT">;
@@ -979,6 +987,17 @@ export type ExtractionIssue = {
   material: boolean;
   message: string;
   path: string;
+};
+
+export type FieldBindingView = {
+  bindingKind?: components["schemas"]["BindingKind"];
+  clauseIds?: Array<string>;
+  contractId?: (string) | (null);
+  origin: components["schemas"]["BindingOrigin"];
+  path: string;
+  supplementId?: (string) | (null);
+  unit: components["schemas"]["BindingUnit"];
+  value: (boolean) | (number) | (string) | (null);
 };
 
 export type FieldEvidence = {
@@ -1135,8 +1154,10 @@ export type OperationReceipt = {
 };
 
 export type PlanActivationCommand = {
+  contentHash?: (string) | (null);
   expectedRevision: number;
   planVersionId: string;
+  reviewId?: (string) | (null);
 };
 
 export type PlanDeactivationCommand = {
@@ -1150,6 +1171,7 @@ export type PlanDraftCommand = {
   basePlanVersionId?: (string) | (null);
   expectedRevision: number;
   extractionId?: (string) | (null);
+  mapping?: (components["schemas"]["PlanMappingView"]) | (null);
   planJson: string;
   reviewIssues?: Array<components["schemas"]["DraftReviewIssue"]>;
   sourceText: string;
@@ -1169,6 +1191,7 @@ export type PlanExtractionView = {
   draftPlanJson?: (string) | (null);
   evidence?: Array<components["schemas"]["FieldEvidence"]>;
   id: string;
+  mapping?: (components["schemas"]["PlanMappingView"]) | (null);
   model?: (string) | (null);
   promptVersion?: (string) | (null);
   providerId: string;
@@ -1187,6 +1210,41 @@ export type PlanImportCommand = {
   expectedRevision: number;
   format: components["schemas"]["PlanDocumentFormat"];
   symbol: string;
+};
+
+export type PlanMappingView = {
+  fieldBindings?: Array<components["schemas"]["FieldBindingView"]>;
+  mappingVersion?: "plan-mapping-v1";
+  sourceClauses: Array<components["schemas"]["SourceClauseView"]>;
+  userSupplements?: Array<components["schemas"]["UserSupplementView"]>;
+};
+
+export type PlanReviewConfirmationCommand = {
+  contentHash: string;
+  expectedRevision: number;
+  planVersionId: string;
+  resolutions?: Array<components["schemas"]["PlanReviewResolution"]>;
+  reviewEvidenceHash: string;
+  sourceHash: string;
+};
+
+export type PlanReviewConfirmationView = {
+  canActivate: boolean;
+  confirmedAt: (string) | (null);
+  contentHash: string;
+  planVersionId: string;
+  reviewEvidenceHash: string;
+  reviewId: (string) | (null);
+  revision: number;
+  sourceHash: string;
+  unresolvedIssues?: Array<components["schemas"]["RequiredReviewIssueView"]>;
+};
+
+export type PlanReviewResolution = {
+  bindingPath?: (string) | (null);
+  issueId: string;
+  resolution: components["schemas"]["ReviewResolutionKind"];
+  supplementId?: (string) | (null);
 };
 
 export type PlanVersionPage = {
@@ -1212,16 +1270,26 @@ export type PlanVersionSummary = {
 
 export type PlanVersionView = {
   canActivate: boolean;
+  contentHash?: (string) | (null);
   createdAt: string;
+  executionReadiness?: ("NOT_EVALUATED") | (null);
   id: string;
+  mapping?: (components["schemas"]["PlanMappingView"]) | (null);
   planHash: string;
   planId: string;
   planJson: string;
+  requiredReviewIssues?: Array<components["schemas"]["RequiredReviewIssueView"]>;
+  resolvedIssueIds?: Array<string>;
+  reviewEvidenceHash?: (string) | (null);
+  reviewId?: (string) | (null);
   reviewIssues?: Array<components["schemas"]["DraftReviewIssue"]>;
+  reviewRevision?: (number) | (null);
   revision: number;
+  sourceHash?: (string) | (null);
   sourceText: string;
   status: components["schemas"]["PlanVersionStatus"];
   symbol: string;
+  unresolvedReviewIssues?: Array<components["schemas"]["RequiredReviewIssueView"]>;
   validationIssues?: Array<components["schemas"]["ValidationIssue"]>;
   version: number;
 };
@@ -1343,6 +1411,16 @@ export type ProviderHealthView = {
   status: components["schemas"]["ProviderCapabilityStatus"];
 };
 
+export type RequiredReviewIssueView = {
+  allowedResolutions: Array<components["schemas"]["ReviewResolutionKind"]>;
+  bindingPath?: (string) | (null);
+  clauseId?: (string) | (null);
+  code: string;
+  issueId: string;
+  path: string;
+  reason: string;
+};
+
 export type ReturnIndicatorFactView = {
   formulaDefinitionHash: string;
   formulaId: "RETURN";
@@ -1356,6 +1434,8 @@ export type ReturnIndicatorFactView = {
 export type ReturnWindow = "FIVE_MINUTE_BUCKETS" | "OFFICIAL_OPEN_DAYS";
 
 export type ReviewIssueKind = "ASSUMPTION" | "WARNING" | "UNMAPPED_TEXT" | "MISSING_EVIDENCE";
+
+export type ReviewResolutionKind = "CONFIRM_MAPPING" | "CONFIRM_POLICY" | "REPLACED_BY_REVIEWED_CONTENT";
 
 export type RiskStatus = "CLEAR" | "BREACHED_PENDING_CONFIRMATION" | "EXIT_PENDING_SETTLEMENT";
 
@@ -1425,6 +1505,15 @@ export type SmaLookbackIndicatorFactView = {
   sourceBarHash: string;
   unit: "POINTS";
   value: string;
+};
+
+export type SourceClauseView = {
+  clauseId: string;
+  disposition: components["schemas"]["ClauseDisposition"];
+  end: number;
+  excerpt: string;
+  paths?: Array<string>;
+  start: number;
 };
 
 export type SymbolCollectionUnavailableResponse = {
@@ -1529,6 +1618,15 @@ export type UnmappedText = {
   path: string;
   reason: string;
   start?: (number) | (null);
+};
+
+export type UserSupplementView = {
+  label: "human_confirmed_test_supplement" | "human_confirmed_supplement";
+  path: string;
+  supplementId: string;
+  suppliedAt: string;
+  unit: components["schemas"]["BindingUnit"];
+  value: (boolean) | (number) | (string) | (null);
 };
 
 export type ValidationIssue = {
@@ -1649,7 +1747,11 @@ export interface components {
     BarInterval: BarInterval;
     BarPage: BarPage;
     BarView: BarView;
+    BindingKind: BindingKind;
+    BindingOrigin: BindingOrigin;
+    BindingUnit: BindingUnit;
     Board: Board;
+    ClauseDisposition: ClauseDisposition;
     ConditionOutcome: ConditionOutcome;
     ConfiguredAIProviderRuntimeView: ConfiguredAIProviderRuntimeView;
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
@@ -1680,6 +1782,7 @@ export interface components {
     ExplicitConditionEvidenceView: ExplicitConditionEvidenceView;
     ExplicitPlanCapabilityView: ExplicitPlanCapabilityView;
     ExtractionIssue: ExtractionIssue;
+    FieldBindingView: FieldBindingView;
     FieldEvidence: FieldEvidence;
     IndexConditionEvidenceView: IndexConditionEvidenceView;
     IndexConditionProgressView: IndexConditionProgressView;
@@ -1713,6 +1816,10 @@ export interface components {
     PlanExtractionOperationStatus: PlanExtractionOperationStatus;
     PlanExtractionView: PlanExtractionView;
     PlanImportCommand: PlanImportCommand;
+    PlanMappingView: PlanMappingView;
+    PlanReviewConfirmationCommand: PlanReviewConfirmationCommand;
+    PlanReviewConfirmationView: PlanReviewConfirmationView;
+    PlanReviewResolution: PlanReviewResolution;
     PlanVersionPage: PlanVersionPage;
     PlanVersionStatus: PlanVersionStatus;
     PlanVersionSummary: PlanVersionSummary;
@@ -1731,9 +1838,11 @@ export interface components {
     PositionSummaryView: PositionSummaryView;
     ProviderCapabilityStatus: ProviderCapabilityStatus;
     ProviderHealthView: ProviderHealthView;
+    RequiredReviewIssueView: RequiredReviewIssueView;
     ReturnIndicatorFactView: ReturnIndicatorFactView;
     ReturnWindow: ReturnWindow;
     ReviewIssueKind: ReviewIssueKind;
+    ReviewResolutionKind: ReviewResolutionKind;
     RiskStatus: RiskStatus;
     RuntimeGapView: RuntimeGapView;
     RuntimeHealthResponse: RuntimeHealthResponse;
@@ -1746,6 +1855,7 @@ export interface components {
     SignalType: SignalType;
     SmaIndicatorFactView: SmaIndicatorFactView;
     SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
+    SourceClauseView: SourceClauseView;
     SymbolCollectionUnavailableResponse: SymbolCollectionUnavailableResponse;
     SymbolDetailResponse: SymbolDetailResponse;
     SymbolDetailUnavailableResponse: SymbolDetailUnavailableResponse;
@@ -1759,6 +1869,7 @@ export interface components {
     SymbolSummaryView: SymbolSummaryView;
     UnfilledReason: UnfilledReason;
     UnmappedText: UnmappedText;
+    UserSupplementView: UserSupplementView;
     ValidationIssue: ValidationIssue;
     ValidationSeverity: ValidationSeverity;
     trade_plan_monitor__web__routers__positions__PositionLotView: trade_plan_monitor__web__routers__positions__PositionLotView;
@@ -4818,6 +4929,85 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["PlanVersionView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-review-confirmations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PlanReviewConfirmationCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PlanReviewConfirmationView"];
           };
         };
         "400": {

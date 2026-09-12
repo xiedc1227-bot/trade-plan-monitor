@@ -2,7 +2,7 @@
 
 > `0005-version-explicit-plan-rules.md` 是英文正式版；本文为语义等价的中文审阅副本。
 
-- 状态：`Accepted for R08 design; implementation pending`
+- 状态：`已接受；R09-R11 已实施，R12 待完成`
 - 日期：`2026-09-12`
 - 工作项：`F06 / R08–R12`
 - 模块：`plan-domain`、`decision-engine`、`ai-plan-drafting`、`strategy-state`、`notification-outbox`、`local-web`、`backtest-engine`
@@ -32,13 +32,13 @@ R03 在 import 时以生成 Schema 摘要保护提示词。R04/R05 把审核绑�
 | `plan-extract-v1` | 历史 Schema 1 | `fbf241167c4e3960c98b59faf62e46b590185a8711ba22209720d683562d18a1` | `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d` |
 | `plan-extract-v2` | 历史 Schema 2，五指数 allowlist | `fd5f2f42184ea0fa5b361087f869aa73a7a8e26d961c203d80e1e506d98cc0a3` | `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf` |
 | `plan-extract-v3` | 既有 Schema 2，六指数 allowlist | `0de88a7a9bdec1a84ad0d458d2963fcdc2b68bfee591dea270b0f35bc5fa0f95` | `df606ede45e58263b669f092cfaeb575becf1ea314076823b23f275a1768ae5d` |
-| `plan-extract-v4` | 新显式 Schema 3 草稿 + 双向映射，由 R11 负责 | R08 不赋值；完整输出契约实现并审核后才能生成 | R08 不赋值；要求新模板、新 fixture 和新摘要 |
+| `plan-extract-v4` | 显式 Schema 3 部分草稿 + `plan-mapping-v1`，由 R11 负责 | `9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1` | `e91f6b32a69a60b1f35da3e5deee5acd17d326cecd0efcadd2aa99bdb36b4eb7` |
 
 R09 首先证明增加平行 v3 领域类型后，v1/v2/v3 整个提示词 Schema 图仍逐字节相同。保留 `_render_frozen_schema` 检查。如果共享辅助类型改变生成的标题/默认值/定义，应隔离具有精确旧模型图的历史提示词模型/序列化器，或使用经验证的入库快照，并保留独立摘要/篡改检查；不得更新旧预期摘要、绕过检查，或捕获漂移异常后继续。不得把 `TradePlanDraft` 的继承关系放宽成新联合。
 
 R11 创建单独的 v4 输出模型，并按提示词版本选择解析器，同时增加 prompt-to-schema 支持测试：v1 只接收历史契约；v2 保留旧指数 allowlist；v3 不能返回 Schema 3；v4 只返回新显式草稿契约。模型输出不能自行选择提示词身份。保留旧模板文字、字段含义、枚举范围和解析支持。新字段/枚举在刻意变更 Schema 的 guard 测试中必须失败，除非声明了新版本。
 
-R08–R10 既有默认仍为 v3。R11 在离线门禁通过后，可通过明确支持的流程发布/选择 v4，但不得修改真实配置或替换提取供应商/模型。显式旧版本设置继续选择旧契约。每个新提取审核记录提示词版本、Schema 摘要、原文哈希、精确 draft hash/content hash、映射快照和未解决问题。不能仅因新代码可读就重新计算历史提取记录或标成已批准。
+R08–R10 期间既有默认值保持 v3。R11 在离线闸门通过后把 v4 发布为省略版本时的默认值，但不修改真实配置，也不替换提取供应商/模型。旧的显式版本设置继续选择其旧契约。每条新 v4 提取审核记录提示词版本、原文哈希、精确草稿哈希、语义 content hash、映射快照、review-evidence hash 和未解决问题。历史提取行不会仅因为新代码能读取就被重算或标记为已批准。
 
 ## 读写与回退矩阵
 

@@ -134,8 +134,8 @@ R09.1–R09.2 implement the original R09-A intent. R09.3–R09.7 are necessary d
 |---|---|
 | R10-A | Extend direct action evaluator and current position closure path for ordinary SELL; settlement/insufficient quantity and existing bucket compatibility |
 | R10-B | New pure risk leaf/action, explicit conflicts, multiple-intent result -> transaction -> payload -> query -> render; never reuse persistent official-risk transitions or the legacy historical delivery exception |
-| R11-A | `ai/models.py`, `prompts.py`, `extraction.py`, persistent review records and `web/plan_service.py`; separate v4 parser, partial draft, original-span-to-leaf and leaf-to-origin coverage, current edited-content confirmation |
-| R11-B | Independently reviewed 20-case corpus: 8 explicit / 6 ambiguous / 6 unsupported, with original cases immutable and manual supplements separately labeled |
+| R11-A | **Implemented and offline-verified.** `ai/models.py`, `prompts.py`, `extraction.py`, persistent review records and `web/plan_service.py`; separate v4 parser, partial draft, original-span-to-leaf and leaf-to-origin coverage, current edited-content confirmation |
+| R11-B | **Implemented and offline-verified.** Independently fixed 20-case corpus: 8 explicit / 6 ambiguous / 6 unsupported, with expected and actual semantic outcomes recorded separately; no real AI call |
 | R12-A/B | Existing plan forms and preview, inventory confirmation/closure forms, per-rule policy selection, original/current/diff/provenance, all rule outcomes/alerts, server-authoritative `canActivate` versus `executionReadiness`; no mandatory JSON |
 
 ## M07. Targeted test oracles

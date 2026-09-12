@@ -55,6 +55,7 @@ def _config(**changes: object) -> AIProviderConfig:
         "max_input_chars": 1_000,
         "max_output_tokens": 128,
         "temperature": 0,
+        "prompt_version": "plan-extract-v3",
     }
     values.update(changes)
     return AIProviderConfig(**values)

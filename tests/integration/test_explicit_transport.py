@@ -28,6 +28,7 @@ from trade_plan_monitor.state.database import (
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
 from trade_plan_monitor.web.app import create_app
+from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.position_service import PersistentPositionOperationService
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -38,7 +39,7 @@ BASE_URL = "http://127.0.0.1:8765"
 
 class _RejectPlanService:
     async def save_plan_draft(self, **_kwargs):
-        raise AssertionError("v3 public write must be blocked before service dispatch")
+        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
 
 
 class _InertLifecycle:
@@ -140,7 +141,7 @@ def _work(engine, *, now: datetime = NOW):
     return SqlAlchemyUnitOfWork(create_session_factory(engine), clock=lambda: now)
 
 
-def test_plan_capability_is_backend_authoritative_and_v3_public_writes_stay_blocked() -> None:
+def test_plan_capability_reports_r11_review_while_activation_remains_blocked() -> None:
     plan_json = dump_plan_json(_plan())
     with TestClient(_app(plan_service=_RejectPlanService()), base_url=BASE_URL) as client:
         capability = client.get("/api/v1/plan-capabilities")
@@ -177,14 +178,11 @@ def test_plan_capability_is_backend_authoritative_and_v3_public_writes_stay_bloc
         "supportedActions": ["BUY", "SELL", "RISK_ALERT"],
         "publicActivationAvailable": False,
         "isolatedTrustedReviewOnly": True,
-        "pendingRequirements": [
-            "CURRENT_CONTENT_REVIEW",
-            "ORDINARY_PLAN_FORMS",
-        ],
+        "pendingRequirements": ["ORDINARY_PLAN_FORMS"],
     }
     assert blocked.status_code == 503
     assert blocked.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
-    assert invalid.status_code == 422
+    assert invalid.status_code == 503
 
 
 def test_authoritative_inventory_http_distinguishes_unknown_and_confirmed_zero(

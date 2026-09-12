@@ -20,7 +20,12 @@ from trade_plan_monitor.ai.composition import (
 )
 from trade_plan_monitor.ai.configured_secrets import create_configured_secret_store
 from trade_plan_monitor.ai.extraction import extract_plan
-from trade_plan_monitor.ai.models import PlanExtractionResult, PlanExtractionStatus
+from trade_plan_monitor.ai.models import (
+    ExplicitPlanDraft,
+    PlanExtractionResult,
+    PlanExtractionStatus,
+)
+from trade_plan_monitor.ai.review import dump_explicit_plan_draft_json
 from trade_plan_monitor.ai.secrets import InMemorySecretStore
 from trade_plan_monitor.config import AIConfiguration, load_application_config
 from trade_plan_monitor.domain.plan_codec import dump_plan_json
@@ -42,6 +47,7 @@ from trade_plan_monitor.web.routers.plans import (
     PlanExtractionCommand,
     PlanExtractionOperationStatus,
     PlanExtractionView,
+    PlanMappingView,
 )
 from trade_plan_monitor.web.schemas import (
     MutationContext,
@@ -428,7 +434,14 @@ def _completed_extraction_view(
         source_text_sha256=result.source_text_sha256,
         model=result.model,
         prompt_version=result.prompt_version,
-        draft_plan_json=dump_plan_json(result.draft),
+        draft_plan_json=(
+            dump_explicit_plan_draft_json(result.draft)
+            if isinstance(result.draft, ExplicitPlanDraft)
+            else dump_plan_json(result.draft)
+        ),
+        mapping=(
+            None if result.mapping is None else PlanMappingView.from_domain(result.mapping)
+        ),
         evidence=result.evidence,
         assumptions=result.assumptions,
         warnings=result.warnings,

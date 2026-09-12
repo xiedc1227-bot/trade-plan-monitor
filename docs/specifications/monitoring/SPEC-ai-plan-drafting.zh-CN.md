@@ -123,7 +123,7 @@ class PlanExtractionResult(BaseModel):
 - 把用户计划明确包裹为不可信数据；
 - 不包含密钥、实时持仓或无关报告。
 
-提示词使用不可变版本号和生成 Schema 的 SHA-256 契约。模板或生成 Schema 的变更必须创建新版本；未版本化的 Schema 漂移会在构建提示词时被拒绝。兼容用 `plan-extract-v1` 通过投影 Schema v1 计划契约逐字节保留；配合规范 `GOLDEN_PLAN_SOURCE` 时，其 SHA-256 固定为 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`。尽管共享 enum 后续扩展，`plan-extract-v2` 仍保留五个指数的 allowlist，并固定为 `6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`。默认的 `plan-extract-v3` 有意暴露扩展后的六指数 Schema v2 契约（包括 `399107.SZ`），并固定为 `df606ede45e58263b669f092cfaeb575becf1ea314076823b23f275a1768ae5d`。显式的历史 v1/v2 配置保持可回放；省略版本的配置选择 v3。之后的任何模板或 Schema 变更都必须使用另一个版本和黄金值。
+提示词使用不可变版本标识和生成 Schema 的 SHA-256 契约。兼容的 `plan-extract-v1`、`plan-extract-v2`、`plan-extract-v3` 契约保持逐字节不变，其黄金提示词摘要分别为 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`、`6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`、`df606ede45e58263b669f092cfaeb575becf1ea314076823b23f275a1768ae5d`。R11 新增独立的 `plan-extract-v4` 部分 Schema 3/映射契约，生成 Schema 摘要为 `9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1`，黄金提示词摘要为 `e91f6b32a69a60b1f35da3e5deee5acd17d326cecd0efcadd2aa99bdb36b4eb7`。显式历史配置保持可回放；省略版本现选择 v4。之后任何模板或 Schema 变更都必须使用另一个版本和黄金值。
 
 ### 审核与激活边界
 
@@ -215,6 +215,6 @@ async def extract_plan(
 
 上述既有提取模型和 prompt v1/v2/v3 继续属于旧契约。[SPEC-executable-plan-extension](SPEC-executable-plan-extension.zh-CN.md) E07 中的 R08 设计为 R11 增加独立类型化 Schema 3 部分草稿和 `plan-mapping-v1` 双向证据，来源为 `SOURCE`、`USER_SUPPLEMENT`、`CONTRACT`。原文条款、字段、逻辑父子关系、单位、包含边界、确认时机、动作数量、重复、冲突选择和未映射语义都必须可审核。子串命中不能证明语义正确。
 
-R11 必须实现单独的 `plan-extract-v4` 输出/解析器和当前内容审核确认；R08 不赋值 v4 摘要，也不修改当前默认/供应商。[ADR 0005](../../decisions/0005-version-explicit-plan-rules.zh-CN.md) 冻结全部旧 Schema/提示词摘要，规定 R09 增加平行领域类型前如何保留旧模型图。绝不能仅修改旧预期哈希或关闭 guard 来修复 R03 保护。
+R11 已实现单独的 `plan-extract-v4` 输出/解析器和当前内容复核确认。v4 Schema/提示词摘要分别为 `9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1` 和 `e91f6b32a69a60b1f35da3e5deee5acd17d326cecd0efcadd2aa99bdb36b4eb7`；v1/v2/v3 保持冻结。省略版本的供应商设置选择 v4，但不修改任何真实供应商、凭据或模型配置。
 
-缺失 repeat/rearm、有效期或冲突选择保持 `UNRESOLVED`、`canActivate=false`。不支持的先后关系不能标为完全解析，不能靠通用已读解决。期初持仓是单独确认事实，不是 AI 计划字段或推断成交。R04/R05 来源保持不可变；R11 增加对精确当前 content/source/evidence/version 的审核，使编辑草稿能够完成可信重审。[R08 映射](../../../remediation/R08-mapping.zh-CN.md) 保留原合成计划及 S01–S09，标明单独人工确认测试补充。本修订不声称新策略能力、真实模型准确性或具体政策批准已完成。
+缺失 repeat/rearm、激活或冲突选择保留为类型化 null，并产生服务端派生的 `UNRESOLVED_EXECUTION_POLICY` 问题及 `canActivate=false`。不支持的先后关系和未限定周期的收盘语义保留原文绑定阻断，不能靠通用已读解决。`POST /api/v1/plan-review-confirmations` 把解决记录绑定到精确不可变计划版本、语义 `contentHash`、`sourceHash`、`reviewEvidenceHash` 及乐观复核 revision；编辑会生成新快照并使旧确认失效。期初持仓仍是单独确认事实。公开启用在 R12 普通表单交付前继续不可用，R11 不声称真实模型准确性或真实供应商证据。

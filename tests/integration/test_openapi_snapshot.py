@@ -60,6 +60,7 @@ APPROVED_PATHS = {
     "/api/v1/plan-extractions",
     "/api/v1/plan-extractions/{operation_id}",
     "/api/v1/plan-imports",
+    "/api/v1/plan-review-confirmations",
     "/api/v1/plan-versions",
     "/api/v1/plan-versions/{version_id}",
     "/api/v1/position-lot-closures",
