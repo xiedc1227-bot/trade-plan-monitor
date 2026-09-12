@@ -40,6 +40,10 @@ config/plans/
 └── 003043.SZ.sample.yaml
 ```
 
+## R08 版本范围
+
+下述 Schema 1 契约及 `SPEC-plan-index-conditions.md` 中的追加 Schema 2 契约描述 `LEGACY_LOW_BUY`。已授权 R08 设计在 [SPEC-executable-plan-extension](SPEC-executable-plan-extension.zh-CN.md) 中新增独立 Schema 3 / `EXPLICIT_RULES` / `explicit-rules-v1` 契约，明确字段、部分草稿与可执行校验、显式动作数量、独立确认持仓、待解决政策和错误码。本次文档变更不代表已经实现。[ADR 0005](../../decisions/0005-version-explicit-plan-rules.zh-CN.md) 规定新旧读写/hash/回放兼容，禁止放宽旧模型图或修改旧哈希。设计不为任何待解决的具体计划授予激活批准。
+
 ## 公共契约
 
 ### 版本化计划

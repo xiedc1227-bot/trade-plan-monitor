@@ -38,6 +38,10 @@ tests/replay/
 └── test_decision_replay.py
 ```
 
+## R08 Version Scope
+
+The singular result, priority, episode, CORE/TACTICAL and official-close rules below remain the `LEGACY_LOW_BUY` contract. [SPEC-executable-plan-extension](SPEC-executable-plan-extension.md) E03–E08 defines the planned `explicit-rules-v1` sibling: exact preceding-bar mean, completed-close range/strict-below conditions, BUY/SELL quantities, pure risk, explicit repeat/conflict policies, multiple versioned intents and consumed-state revision fences. It inherits none of the legacy strategy restrictions unless declared in its own supported reviewed contract. R09–R12 must implement and verify the new consumers before capability activation; this amendment does not make the new strategy runnable. Historical result and backtest boundaries follow [ADR 0005](../../decisions/0005-version-explicit-plan-rules.md).
+
 ## Public Contract
 
 ```python
@@ -151,7 +155,7 @@ T022 returns bounded structural blocker records alongside DSL evidence so later 
 
 `MANUAL_EVENT_RISK_CLEAR` is backed by a durable, audited confirmation scoped to one symbol, the active immutable plan-content hash, and an inclusive expiry trading date. Its authoritative input is exactly three-state: an explicit `CLEAR` projects `False`, an explicit `RISK_PRESENT` projects `True`, and a missing, plan-changed, expired, or post-cutoff confirmation projects `None`. `None` must remain unknown and fail closed; it must never be defaulted or coerced to `False`.
 
-The production context reads that record in the same SQLite unit of work as the plan and risk facts before constructing `EvaluationContext`. A plan-content hash change, expiry, or restart therefore cannot retain a prior clear confirmation. Each accepted confirmation records its revision, confirmation time, expiry date, state, plan hash, and audit action; optimistic revision and idempotency make a retried semantic command return its prior receipt without creating another audit event. The record is not an official-close risk acknowledgement and cannot weaken that separate fail-closed state.
+The production context reads that record in the same SQLite unit of work as the plan and risk facts before constructing `EvaluationContext`. An exact plan-hash change, expiry or post-cutoff confirmation makes the input unknown; a restart with the same hash and still-valid scope retains the persisted confirmation. R07's hash includes the plan version and is not R08's new semantic `contentHash`. Each accepted confirmation records its revision, confirmation time, expiry date, state, plan hash, and audit action; optimistic revision and idempotency make a retried semantic command return its prior receipt without creating another audit event. The record is not an official-close risk acknowledgement and cannot weaken that separate fail-closed state.
 
 `LOWER_BAND_HITS_LTE` selects the latest `window_bars` adjacent complete 5-minute bars ending at the evaluation target. Every bar must have exactly one `ta-v1` 5-minute `IndicatorPoint` with the same `(symbol, bar_end, formula_version)`. A hit is `bar.close_fen / 100 <= point.boll_lower_yuan`; equality is a hit. Reusing one band, using a daily band, forward filling, or aligning by position without matching identities is forbidden. Missing, duplicate, misaligned, or `None` band evidence blocks evaluation; otherwise the condition is satisfied if and only if `hit_count <= max_hits`.
 

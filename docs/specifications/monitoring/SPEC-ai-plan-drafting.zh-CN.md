@@ -210,3 +210,11 @@ async def extract_plan(
 ## 待确认事项
 
 无。Web AI 设置编辑明确不在范围内；Web 与 CLI 都只使用被 Git 忽略的 `config/app.yaml` 中的直接凭证。
+
+## R08 显式计划扩展修订
+
+上述既有提取模型和 prompt v1/v2/v3 继续属于旧契约。[SPEC-executable-plan-extension](SPEC-executable-plan-extension.zh-CN.md) E07 中的 R08 设计为 R11 增加独立类型化 Schema 3 部分草稿和 `plan-mapping-v1` 双向证据，来源为 `SOURCE`、`USER_SUPPLEMENT`、`CONTRACT`。原文条款、字段、逻辑父子关系、单位、包含边界、确认时机、动作数量、重复、冲突选择和未映射语义都必须可审核。子串命中不能证明语义正确。
+
+R11 必须实现单独的 `plan-extract-v4` 输出/解析器和当前内容审核确认；R08 不赋值 v4 摘要，也不修改当前默认/供应商。[ADR 0005](../../decisions/0005-version-explicit-plan-rules.zh-CN.md) 冻结全部旧 Schema/提示词摘要，规定 R09 增加平行领域类型前如何保留旧模型图。绝不能仅修改旧预期哈希或关闭 guard 来修复 R03 保护。
+
+缺失 repeat/rearm、有效期或冲突选择保持 `UNRESOLVED`、`canActivate=false`。不支持的先后关系不能标为完全解析，不能靠通用已读解决。期初持仓是单独确认事实，不是 AI 计划字段或推断成交。R04/R05 来源保持不可变；R11 增加对精确当前 content/source/evidence/version 的审核，使编辑草稿能够完成可信重审。[R08 映射](../../../remediation/R08-mapping.zh-CN.md) 保留原合成计划及 S01–S09，标明单独人工确认测试补充。本修订不声称新策略能力、真实模型准确性或具体政策批准已完成。

@@ -38,6 +38,10 @@ tests/replay/
 └── test_decision_replay.py
 ```
 
+## R08 版本范围
+
+下述单结果、优先级、episode、CORE/TACTICAL 及官方收盘规则继续属于 `LEGACY_LOW_BUY` 契约。[SPEC-executable-plan-extension](SPEC-executable-plan-extension.zh-CN.md) E03–E08 定义待实现的平行 `explicit-rules-v1`：精确前序均量、完成收盘区间/严格低于条件、BUY/SELL 数量、纯风险、明确重复/冲突政策、多版本化意图及被消费状态 revision 保护。除非在自身受支持且已审核的契约中声明，否则不继承旧策略限制。R09–R12 必须先实现并验证新消费者才能激活能力；本修订不代表新策略可以运行。历史结果和回测边界遵守 [ADR 0005](../../decisions/0005-version-explicit-plan-rules.zh-CN.md)。
+
 ## 公共契约
 
 ```python
@@ -151,7 +155,7 @@ T022 在 DSL 证据之外返回有界结构性阻断记录，使后续结果组�
 
 `MANUAL_EVENT_RISK_CLEAR` 由一条可持久化、可审计的确认记录支持；其范围同时限定为单只股票、当前已启用不可变计划的内容哈希和包含边界的到期交易日。其权威输入严格为三态：明确 `CLEAR` 投影为 `False`，明确 `RISK_PRESENT` 投影为 `True`，缺失、计划已变更、已到期或在 cutoff 后才确认的记录投影为 `None`。`None` 必须保持未知并失败关闭，绝不能默认或强制转换为 `False`。
 
-生产 context 在构造 `EvaluationContext` 前，使用与计划及风险事实相同的 SQLite 工作单元读取该记录。因此，计划内容哈希变更、到期或重启均不能保留此前的无风险确认。每次被接受的确认都会记录 revision、确认时间、到期日期、状态、计划哈希和审计动作；乐观 revision 与幂等机制使同一语义命令的重试返回原有回执，而不产生第二条审计事件。该记录不是官方收盘风险确认，不能削弱该独立且失败关闭的状态。
+生产 context 在构造 `EvaluationContext` 前，使用与计划及风险事实相同的 SQLite 工作单元读取该记录。精确计划哈希变更、到期或确认晚于 cutoff 会使输入变为未知；相同哈希且范围仍有效时，重启保留持久确认。R07 的哈希包含计划版本，不是 R08 新增的语义 `contentHash`。每次被接受的确认都会记录 revision、确认时间、到期日期、状态、计划哈希和审计动作；乐观 revision 与幂等机制使同一语义命令的重试返回原有回执，而不产生第二条审计事件。该记录不是官方收盘风险确认，不能削弱该独立且失败关闭的状态。
 
 `LOWER_BAND_HITS_LTE` 选择截至判断目标的最近 `window_bars` 根相邻完整 5 分钟 K 线。每根 K 线必须恰好对应一个具有相同 `(symbol, bar_end, formula_version)` 的 `ta-v1` 5 分钟 `IndicatorPoint`。当 `bar.close_fen / 100 <= point.boll_lower_yuan` 时记一次命中；相等也算命中。禁止复用同一个下轨、使用日线下轨、向前填充，或仅按位置而不核对 identity 对齐。下轨证据缺失、重复、错位或为 `None` 都会阻断判断；否则仅当 `hit_count <= max_hits` 时满足。
 

@@ -211,3 +211,11 @@ Keep service calls, JSON parsing, domain validation, and persistence separate. M
 ## Open Questions
 
 None. Web AI settings editing is intentionally out of scope; both Web and CLI use direct credentials only from the Git-ignored `config/app.yaml`.
+
+## R08 Explicit-Plan Extension Amendment
+
+The existing extraction model and prompt v1/v2/v3 contracts above remain legacy contracts. The R08 design in [SPEC-executable-plan-extension](SPEC-executable-plan-extension.md) E07 introduces a separate typed Schema 3 partial draft and `plan-mapping-v1` bidirectional evidence for R11, with `SOURCE`, `USER_SUPPLEMENT` and `CONTRACT` origins. Original clauses, fields, logical parentage, units, inclusive bounds, confirmation timing, action quantities, repetition, conflict choices and unmapped semantics must all remain reviewable. Substring membership alone is not semantic correctness.
+
+R11 must implement a separate `plan-extract-v4` output/parser and current-content review confirmation; R08 does not assign v4 digests or change the current default/provider. [ADR 0005](../../decisions/0005-version-explicit-plan-rules.md) freezes every old schema/prompt digest and specifies how R09 must preserve the old model graph before adding sibling domain types. Never repair R03's guard by merely changing old expected hashes or disabling it.
+
+Missing repeat/rearm, activation or conflict choices remain `UNRESOLVED`, with `canActivate=false`. Unsupported ordering cannot be marked fully parsed or resolved by a generic acknowledgement. Initial holdings are separately confirmed facts, not AI plan fields or inferred fills. R04/R05 provenance remains immutable; R11 adds review of the exact current content/source/evidence/version so edited drafts can complete trusted re-review. [R08 mapping](../../../remediation/R08-mapping.md) preserves the original synthetic plan and S01–S09 and identifies separate human-confirmed test supplements. No new strategy capability, real-model accuracy or concrete policy approval is claimed by this amendment.

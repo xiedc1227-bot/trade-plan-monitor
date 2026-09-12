@@ -11,6 +11,7 @@
 ## 监控规格
 
 - [计划领域](specifications/monitoring/SPEC-plan-domain.zh-CN.md)（[英文](specifications/monitoring/SPEC-plan-domain.md)）
+- [R08 显式计划扩展](specifications/monitoring/SPEC-executable-plan-extension.zh-CN.md)（[英文](specifications/monitoring/SPEC-executable-plan-extension.md)）——供 R09–R12 实施的设计，附[原文映射与有序实施切片](../remediation/R08-mapping.zh-CN.md)（[英文](../remediation/R08-mapping.md)）；不代表已实现能力。
 - [AI 计划草稿](specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md)（[英文](specifications/monitoring/SPEC-ai-plan-drafting.md)）
 - [行情数据](specifications/monitoring/SPEC-market-data.zh-CN.md)（[英文](specifications/monitoring/SPEC-market-data.md)）
 - [板块指数身份](specifications/monitoring/SPEC-index-identity.zh-CN.md)（[英文](specifications/monitoring/SPEC-index-identity.md)）
@@ -42,6 +43,7 @@
 - [ADR 0002：所有回测时间统一使用 Asia/Shanghai](decisions/0002-use-asia-shanghai-for-backtest-time.zh-CN.md)（[英文](decisions/0002-use-asia-shanghai-for-backtest-time.md)）
 - [ADR 0003：共用板块指数数据，使用方式由交易计划决定](decisions/0003-share-board-index-data-and-let-plans-own-usage.zh-CN.md)（[英文](decisions/0003-share-board-index-data-and-let-plans-own-usage.md)）
 - [ADR 0004：权威投影可用性与原子实时状态](decisions/0004-use-authoritative-projection-availability-and-atomic-live-state.zh-CN.md)（[英文](decisions/0004-use-authoritative-projection-availability-and-atomic-live-state.md)）
+- [ADR 0005：版本化显式计划规则并保留历史含义](decisions/0005-version-explicit-plan-rules.zh-CN.md)（[英文](decisions/0005-version-explicit-plan-rules.md)）
 
 ## 已批准提案
 

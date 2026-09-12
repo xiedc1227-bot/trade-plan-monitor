@@ -11,6 +11,7 @@ This directory contains the project's design, specification, decision, operating
 ## Monitoring Specifications
 
 - [Plan domain](specifications/monitoring/SPEC-plan-domain.md) ([Chinese](specifications/monitoring/SPEC-plan-domain.zh-CN.md))
+- [R08 explicit-plan extension](specifications/monitoring/SPEC-executable-plan-extension.md) ([Chinese](specifications/monitoring/SPEC-executable-plan-extension.zh-CN.md)) — design for R09–R12, with [source mapping and ordered implementation slices](../remediation/R08-mapping.md) ([Chinese](../remediation/R08-mapping.zh-CN.md)); not implemented capability.
 - [AI plan drafting](specifications/monitoring/SPEC-ai-plan-drafting.md) ([Chinese](specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md))
 - [Market data](specifications/monitoring/SPEC-market-data.md) ([Chinese](specifications/monitoring/SPEC-market-data.zh-CN.md))
 - [Board-index identity](specifications/monitoring/SPEC-index-identity.md) ([Chinese](specifications/monitoring/SPEC-index-identity.zh-CN.md))
@@ -42,6 +43,7 @@ This directory contains the project's design, specification, decision, operating
 - [ADR 0002: Use Asia/Shanghai for all backtest time](decisions/0002-use-asia-shanghai-for-backtest-time.md) ([Chinese](decisions/0002-use-asia-shanghai-for-backtest-time.zh-CN.md))
 - [ADR 0003: Share board-index data and let plans own usage](decisions/0003-share-board-index-data-and-let-plans-own-usage.md) ([Chinese](decisions/0003-share-board-index-data-and-let-plans-own-usage.zh-CN.md))
 - [ADR 0004: Authoritative projection availability and atomic live state](decisions/0004-use-authoritative-projection-availability-and-atomic-live-state.md) ([Chinese](decisions/0004-use-authoritative-projection-availability-and-atomic-live-state.zh-CN.md))
+- [ADR 0005: Version explicit plan rules without reinterpreting history](decisions/0005-version-explicit-plan-rules.md) ([Chinese](decisions/0005-version-explicit-plan-rules.zh-CN.md))
 
 ## Approved Proposals
 

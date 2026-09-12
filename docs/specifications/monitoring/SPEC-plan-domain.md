@@ -40,6 +40,10 @@ config/plans/
 └── 003043.SZ.sample.yaml
 ```
 
+## R08 Version Scope
+
+The following Schema 1 contract and the additive Schema 2 contract in `SPEC-plan-index-conditions.md` describe `LEGACY_LOW_BUY`. The approved R08 design adds a separate Schema 3 / `EXPLICIT_RULES` / `explicit-rules-v1` contract in [SPEC-executable-plan-extension](SPEC-executable-plan-extension.md), with exact fields, partial-draft versus executable validation, explicit action quantities, independent confirmed inventory, unresolved policies and error codes. It is not implemented by this documentation change. [ADR 0005](../../decisions/0005-version-explicit-plan-rules.md) governs old/new read/write/hash/replay compatibility; do not widen the legacy model graph or change old hashes. No unresolved concrete plan gains activation approval from this design.
+
 ## Public Contract
 
 ### Versioned Plan
