@@ -22,6 +22,7 @@ from trade_plan_monitor.ai.review import (
     dump_explicit_plan_draft_json,
     explicit_draft_content_sha256,
     explicit_draft_sha256,
+    reconcile_plan_mapping,
     server_source_clauses,
 )
 
@@ -224,6 +225,68 @@ def test_mapping_rejects_duplicate_clause_ids_and_unknown_binding_origins() -> N
         )
 
 
+def test_mapping_rejects_a_business_value_with_the_wrong_unit() -> None:
+    source = "买入100股。"
+    clause = server_source_clauses(source)[0]
+    mapping = PlanMapping(
+        source_clauses=(
+            clause.model_copy(
+                update={
+                    "disposition": ClauseDisposition.MAPPED,
+                    "paths": ("rules[0].action.quantity",),
+                }
+            ),
+        ),
+        field_bindings=(
+            FieldBinding(
+                path="rules[0].action.quantity",
+                value=100,
+                unit=BindingUnit.FEN,
+                origin=BindingOrigin.SOURCE,
+                clause_ids=(clause.clause_id,),
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="unit"):
+        build_server_review_snapshot(
+            source_text=source,
+            draft=_draft(),
+            mapping=mapping,
+        )
+
+
+def test_reconcile_keeps_unreferenced_source_clauses_unresolved() -> None:
+    source = "买入100股。提醒和确认不代表成交。"
+    mapped, unresolved = server_source_clauses(source)
+    mapping = PlanMapping(
+        source_clauses=(
+            mapped.model_copy(
+                update={
+                    "disposition": ClauseDisposition.MAPPED,
+                    "paths": ("rules[0].action.quantity",),
+                }
+            ),
+            unresolved,
+        ),
+        field_bindings=(
+            FieldBinding(
+                path="rules[0].action.quantity",
+                value=100,
+                unit=BindingUnit.SHARES,
+                origin=BindingOrigin.SOURCE,
+                clause_ids=(mapped.clause_id,),
+            ),
+        ),
+    )
+
+    reconciled = reconcile_plan_mapping(draft=_draft(), mapping=mapping)
+
+    assert reconciled.source_clauses[0].disposition is ClauseDisposition.MAPPED
+    assert reconciled.source_clauses[1].disposition is ClauseDisposition.UNRESOLVED
+    assert reconciled.source_clauses[1].paths == ()
+
+
 def test_server_snapshot_reports_every_unresolved_policy_without_client_issue_input() -> None:
     snapshot = build_server_review_snapshot(
         source_text=_SOURCE,
@@ -239,6 +302,21 @@ def test_server_snapshot_reports_every_unresolved_policy_without_client_issue_in
     assert ("UNRESOLVED_EXECUTION_POLICY", "conflict_policy") in codes_and_paths
     assert snapshot.can_activate is False
     assert snapshot.source_hash == __import__("hashlib").sha256(_SOURCE.encode()).hexdigest()
+
+
+def test_absent_optional_safety_conditions_do_not_create_execution_policy_issues() -> None:
+    snapshot = build_server_review_snapshot(
+        source_text=_SOURCE,
+        draft=_draft(),
+        mapping=_mapping_for_source(_SOURCE),
+    )
+
+    unresolved_paths = {
+        issue.path
+        for issue in snapshot.required_issues
+        if issue.code == "UNRESOLVED_EXECUTION_POLICY"
+    }
+    assert not {path for path in unresolved_paths if path.endswith(".safety_conditions")}
 
 
 def test_ambiguous_and_unsupported_phrases_cannot_become_generic_confirmations() -> None:
@@ -259,6 +337,54 @@ def test_ambiguous_and_unsupported_phrases_cannot_become_generic_confirmations()
         "UNSUPPORTED_SEMANTICS",
     }
     assert all("CONFIRM_MAPPING" not in issue.allowed_resolutions for issue in semantic)
+
+
+def test_explicit_five_minute_context_qualifies_the_following_close_clause() -> None:
+    source = "仅监控已完成5分钟K线；收盘价低于9.50元时发出风险提醒。"
+
+    snapshot = build_server_review_snapshot(
+        source_text=source,
+        draft=_draft(),
+        mapping=_mapping_for_source(source),
+    )
+
+    assert not [
+        issue for issue in snapshot.required_issues if "unqualified close" in issue.reason.lower()
+    ]
+
+
+def test_explicit_numeric_definitions_do_not_trigger_term_only_semantic_blockers() -> None:
+    source = (
+        "放量定义为当前已完成5分钟K线成交量不少于此前5根已完成5分钟K线成交量算术平均值的1.5倍；"
+        "有效跌破定义为已完成5分钟K线收盘价低于9.50元；"
+        "满足上述放量时买入100股；满足上述有效跌破时发出风险提醒。"
+    )
+
+    snapshot = build_server_review_snapshot(
+        source_text=source,
+        draft=_draft(),
+        mapping=_mapping_for_source(source),
+    )
+
+    term_only_blockers = [
+        issue
+        for issue in snapshot.required_issues
+        if "phrase 放量" in issue.reason or "unsupported confirmation or sequencing" in issue.reason
+    ]
+    assert term_only_blockers == []
+
+
+def test_undefined_terms_remain_semantic_blockers() -> None:
+    source = "价格企稳后买入100股；有效跌破9.50元时卖出100股。"
+
+    snapshot = build_server_review_snapshot(
+        source_text=source,
+        draft=_draft(),
+        mapping=_mapping_for_source(source),
+    )
+
+    codes = {issue.code for issue in snapshot.required_issues}
+    assert {"UNRESOLVED_SEMANTICS", "UNSUPPORTED_SEMANTICS"} <= codes
 
 
 def test_user_supplement_is_separate_from_source_and_participates_in_evidence_hash() -> None:

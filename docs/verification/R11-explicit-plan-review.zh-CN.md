@@ -1,51 +1,69 @@
 # R11 显式计划复核验证报告
 
-## 范围
+## 范围与更正后的结论
 
-本报告使用固定且独立分类的语义语料，验证 R11 显式计划复核边界。验证全程确定性离线执行：未调用真实 AI 提供商、行情提供商、通知渠道、交易接口或生产数据库，也未使用任何密钥。
+本报告离线验证 R11 显式计划复核边界。未调用真实 AI 提供商、行情提供商、通知渠道、交易接口或生产数据库，也未使用凭据、额度或网络请求。
 
-R11 接受 Schema 3 部分草稿，保留精确原文子句及双向来源映射，由服务端推导必需复核问题，将复核确认精确绑定到内容与来源哈希，并在 R12 普通计划表单门槛实现前继续关闭公开启用。
+初版报告把 `explicit-plan-semantic-corpus-v1.json` 中通过的 20 例描述为固定语义语料，这一表述范围过大。这些案例把任意原文绑定到通用风险提醒草稿，只断言关键词推导出的语义码。它们保持原样，继续作为有用的词法分类器回归证据，但其 **20/20 结果不属于原文到计划的语义验收证据**。
 
-## 固定语料结果
+修正后的验收语料为 `tests/fixtures/ai/explicit-plan-semantic-acceptance-v2.json`。每个案例都有自己的原文、独立预期类型化字段与单位、边界、动作、数量、时间语义、逻辑结构、未解析路径、不支持原因片段、模拟提供商部分响应及来源映射。测试把响应送入真实的 v4 提供商边界、解析器和服务端复核构建器。它是确定性的模拟提供商证据，不代表真实模型准确率。
 
-独立判定基准在实现验收前记录于 `tests/fixtures/ai/explicit-plan-semantic-corpus-v1.json`。`NONE` 表示服务端没有生成语义阻断项。
+## V2 原文到计划语义结果
 
-| ID | 类别 | 预期语义码 | 实际语义码 | 状态 |
-|---|---|---|---|---|
-| EXP-01 | EXPLICIT | NONE | NONE | PASS |
-| EXP-02 | EXPLICIT | NONE | NONE | PASS |
-| EXP-03 | EXPLICIT | NONE | NONE | PASS |
-| EXP-04 | EXPLICIT | NONE | NONE | PASS |
-| EXP-05 | EXPLICIT | NONE | NONE | PASS |
-| EXP-06 | EXPLICIT | NONE | NONE | PASS |
-| EXP-07 | EXPLICIT | NONE | NONE | PASS |
-| EXP-08 | EXPLICIT | NONE | NONE | PASS |
-| AMB-01 | AMBIGUOUS | `UNRESOLVED_SEMANTICS` | `UNRESOLVED_SEMANTICS` | PASS |
-| AMB-02 | AMBIGUOUS | `UNRESOLVED_SEMANTICS` | `UNRESOLVED_SEMANTICS` | PASS |
-| AMB-03 | AMBIGUOUS | `UNRESOLVED_SEMANTICS` | `UNRESOLVED_SEMANTICS` | PASS |
-| AMB-04 | AMBIGUOUS | `UNRESOLVED_SEMANTICS` | `UNRESOLVED_SEMANTICS` | PASS |
-| AMB-05 | AMBIGUOUS | `UNRESOLVED_SEMANTICS` | `UNRESOLVED_SEMANTICS` | PASS |
-| AMB-06 | AMBIGUOUS | `UNRESOLVED_SEMANTICS` | `UNRESOLVED_SEMANTICS` | PASS |
-| UNS-01 | UNSUPPORTED | `UNSUPPORTED_SEMANTICS` | `UNSUPPORTED_SEMANTICS` | PASS |
-| UNS-02 | UNSUPPORTED | `UNRESOLVED_SEMANTICS`、`UNSUPPORTED_SEMANTICS` | `UNRESOLVED_SEMANTICS`、`UNSUPPORTED_SEMANTICS` | PASS |
-| UNS-03 | UNSUPPORTED | `UNSUPPORTED_SEMANTICS` | `UNSUPPORTED_SEMANTICS` | PASS |
-| UNS-04 | UNSUPPORTED | `UNSUPPORTED_SEMANTICS` | `UNSUPPORTED_SEMANTICS` | PASS |
-| UNS-05 | UNSUPPORTED | `UNSUPPORTED_SEMANTICS` | `UNSUPPORTED_SEMANTICS` | PASS |
-| UNS-06 | UNSUPPORTED | `UNSUPPORTED_SEMANTICS` | `UNSUPPORTED_SEMANTICS` | PASS |
+“实际”记录提供商/解析器/服务端复核链的输出。`MATCH` 表示每个 oracle 字段值与单位、引用原文片段、逻辑父节点与子节点、未解析路径集合和语义码集合都一致，而不只是表中摘录的重点。
 
-结果：**20/20 案例通过**，其中明确语义 8 例、歧义语义 6 例、不支持语义 6 例。
+| ID | 原文 | 独立预期语义 | 实际 |
+|---|---|---|---|
+| SEM-EXP-01 | `003043.SZ` 已完成 5 分钟收盘价位于 9.80–10.00 元（含两端）时买入 100 股 | symbol；5 `MINUTES`；980–1000 `FEN` 且含端点；`BUY` 100 `SHARES`；无语义阻断 | MATCH；`NONE` |
+| SEM-EXP-02 | 已完成 5 分钟收盘价低于 9.50 元时风险提醒 | 5 `MINUTES`；950 `FEN`；`RISK_ALERT`；无语义阻断 | MATCH；`NONE` |
+| SEM-EXP-03 | 含端点价格区间 AND 当前量不少于此前 5 根已完成 5 分钟 K 线成交量算术均值的 1.5 倍；买入 100 股 | `ALL` 价格与成交量子条件；980–1000 `FEN`；5 `BARS`；1.5 `RATIO`；`CONTIGUOUS_TRADING_BARS`；100 `SHARES` | MATCH；`NONE` |
+| SEM-EXP-04 | 已完成 5 分钟收盘价位于 10.80–11.00 元（含两端）时卖出已登记持仓 100 股 | 1080–1100 `FEN` 且含端点；`SELL` 100 `SHARES`；`ALL_REGISTERED` | MATCH；`NONE` |
+| SEM-EXP-05 | 手动激活；低于 9.50 元风险提醒；每次激活仅一次 | `MANUAL`；950 `FEN`；`RISK_ALERT`；`ONCE_PER_ACTIVATION` | MATCH；`NONE` |
+| SEM-EXP-06 | 买入规则、卖出规则，以及交易同时命中时阻止两者 | `BUY` 100；`SELL` 100；`trade_conflict=BLOCK_BOTH` | MATCH；`NONE` |
+| SEM-EXP-07 | 买入规则、风险规则，以及风险与交易同时命中时仅保留风险 | `BUY`；950 `FEN` 风险提醒；`risk_conflict=RISK_ONLY` | MATCH；`NONE` |
+| SEM-EXP-08 | `003043.SZ` 最大持仓 300 股；明确区间买入 100 股 | symbol；300 与 100 `SHARES`；明确已完成 K 线区间 | MATCH；`NONE` |
+| SEM-AMB-01 | 价格“企稳”后买入 100 股 | 保留 `BUY` 100；条件未解析 | MATCH；`UNRESOLVED_SEMANTICS` |
+| SEM-AMB-02 | “明显放量”时买入 100 股 | 保留 `BUY` 100；成交量阈值/窗口未解析 | MATCH；`UNRESOLVED_SEMANTICS` |
+| SEM-AMB-03 | 上涨“受阻”时卖出 100 股 | 保留 `SELL` 100；价格条件未解析 | MATCH；`UNRESOLVED_SEMANTICS` |
+| SEM-AMB-04 | 已完成 5 分钟收盘价“企稳” AND “放量”时买入 100 股 | 保留 5 `MINUTES` 与 100 `SHARES`；组合条件未解析 | MATCH；`UNRESOLVED_SEMANTICS` |
+| SEM-AMB-05 | 价格“受阻”且“明显放量”时卖出 100 股 | 保留 `SELL` 100；父子条件未解析 | MATCH；`UNRESOLVED_SEMANTICS` |
+| SEM-AMB-06 | 已完成 5 分钟收盘价在 10 元“附近企稳”时风险提醒 | 保留 5 `MINUTES` 与 `RISK_ALERT`；数值区间未解析 | MATCH；`UNRESOLVED_SEMANTICS` |
+| SEM-UNS-01 | “有效跌破”9.50 元时卖出已登记持仓 100 股 | 保留 950 `FEN`、`SELL` 100；确认语义不支持 | MATCH；`UNSUPPORTED_SEMANTICS` |
+| SEM-UNS-02 | 先企稳，再放量，然后买入 100 股 | 保留 `BUY` 100；术语未解析且顺序语义不支持 | MATCH；两个语义码 |
+| SEM-UNS-03 | 先买入 100 股，价格上涨后再卖出 100 股 | 保留两个数量；跨子句顺序语义不支持 | MATCH；`UNSUPPORTED_SEMANTICS` |
+| SEM-UNS-04 | 未限定周期的收盘价低于 9.50 元时风险提醒 | 保留 950 `FEN` 与提醒；已完成 5 分钟确认未解析 | MATCH；`UNSUPPORTED_SEMANTICS` |
+| SEM-UNS-05 | 突破后随后回踩再买入 100 股 | 保留 `BUY` 100；顺序语义不支持 | MATCH；`UNSUPPORTED_SEMANTICS` |
+| SEM-UNS-06 | 有效跌破后再等下一次收盘确认 | 保留提醒意图；阈值/时间未解析；顺序与收盘限定不支持 | MATCH；`UNSUPPORTED_SEMANTICS` |
+
+结果：**20/20 个 v2 原文到计划案例通过**，其中明确 8 例、歧义 6 例、不支持 6 例。该结果仅覆盖模拟提供商契约，不能替代另行授权的真实模型评估。
+
+## 反误报与对抗证据
+
+- `SEM-CTX-01` 证明“仅监控已完成 5 分钟 K 线”的全局上下文可以限定后续收盘子句，不产生“未限定收盘”误报。
+- `SEM-DEF-01` 证明对“放量”（此前 5 根已完成 K 线、算术平均值、1.5 倍）和“有效跌破”（已完成 5 分钟收盘价低于 9.50 元）的有界定义不会触发仅由术语造成的阻断；未定义用法仍被阻断。
+- 错误业务单位被拒绝为无效提供商输出；遗漏成交量窗口映射及额外持仓上限会产生 `UNMAPPED_PLAN_FIELD`。
+- 内部自洽但与原文不符的数量、动作、`ALL`→`ANY` 及逻辑父节点子句归属仍不可启用，并要求精确来源映射复核。
+- 从未改动的完整原文中移除卖出子句或风险提醒子句映射，会使对应原文保持 `UNRESOLVED`，对应动作字段保持未映射。
+
+## 未改动完整原文的 API 链路
+
+完整三规则中文原文在 fixture 与 API 测试中逐字节保留。部分草稿保存时精确报告六条缺失执行政策路径：激活、冲突政策、成交量历史范围，以及三条重复策略。`safety_conditions=null` 是可选值，不再被误报为缺失政策。
+
+当前内容编辑把上述七个具体政策值作为持久化 `USER_SUPPLEMENT` 记录加入，并与 `SOURCE` 分离。提交确认前，测试逐项比对来源问题与当前类型化值及服务端原文子句，也逐项比对政策问题与补录路径/值。确认完成后，启用仍为 false：组合的当前持仓子句与“提醒/确认不代表成交”子句仍未解析，`symbol` 也保持未映射，不会借组合子句的局部信息伪装成完整证据。
+
+该链路暴露并修复了一个映射重整变量遮蔽缺陷；此前它会在编辑时错误地把无引用子句改成 `MAPPED`。
 
 ## 自动化证据
 
-- R11 聚焦复核与安全检查：49 项通过。
-- AI、Web、OpenAPI、仓储与 R11 集成发布门槛：最终加固后 433 项通过。
-- 旧版显式执行与传输回归组：29 项通过。
-- 其余计划、决策、发件箱、风险、持仓、通知与生产回归组：684 项通过。
-- 配置回归组：22 项通过。
-- 生成的前端 API 类型与 OpenAPI 快照一致。
+- v1/v2/提供商/解析器/复核/API 聚焦链路：**69 passed**。
+- 完整后端单元测试：**1,362 passed**，仅有一条既有 Starlette `httpx` 弃用警告。
+- 计划 API、生产组合、SQLite 仓储及显式复核集成组：**269 passed**，同一条警告。
+- 所有变更 Python 文件的 `ruff check` 与 `ruff format --check` 通过。
+- 早期 R11 的 433 项发布门槛、29 项旧显式运行时/传输及 684 项广泛回归仅保留为初始实现提交的历史背景；更正后的结论以上述最新运行结果为依据。
+- 尝试执行全体测试时进入既有长耗时集成段，最终被中止且没有结果，因此不计入证据。
 
-前端类型检查仍报告 R10 已存在的 `AlertTable.vue` 与 `AlertsView.vue` 告警联合类型错误。R11 未修改这些文件，也没有削弱该检查。
+前端类型检查仍报告 R10 已存在的 `AlertTable.vue` 与 `AlertsView.vue` 告警联合类型错误。R11 未修改或压制这些错误。
 
 ## 发布边界
 
-公开能力继续保持 `publicActivationAvailable=false`。有效且属于当前内容的复核确认是公开启用的必要条件，但刻意不是充分条件：API 仍返回 R12 普通计划表单门槛。导入、通知投递、交易执行与生产部署仍不在本阶段范围内。
+公开能力继续保持 `publicActivationAvailable=false`。有效且属于当前内容的复核是公开启用的必要条件，但由于 R12 普通计划表单仍不存在，它刻意不是充分条件。R12、真实 AI、导入、通知投递、交易执行、网络访问、推送及生产部署均不在本次修正范围内。

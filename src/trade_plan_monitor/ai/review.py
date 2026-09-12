@@ -10,6 +10,7 @@ from typing import Final
 from trade_plan_monitor.ai.models import (
     BindingKind,
     BindingOrigin,
+    BindingUnit,
     ClauseDisposition,
     ExplicitPlanDraft,
     FieldBinding,
@@ -24,6 +25,13 @@ _CLAUSE_BREAKS: Final = frozenset("。！？；;,，\n")
 _AMBIGUOUS_TERMS: Final = ("企稳", "放量", "受阻")
 _UNSUPPORTED_TERMS: Final = ("有效跌破",)
 _SEQUENCING_PATTERN: Final = re.compile(r"(?:先.+(?:再|后|然后)|(?:之后|随后).+)")
+_COMPLETED_FIVE_MINUTE_MARKERS: Final = ("已完成五分钟K线", "已完成5分钟K线")
+_GLOBAL_FIVE_MINUTE_CONTEXT: Final = re.compile(
+    r"(?:仅|只)(?:监控|使用|基于|按照)(?:已完成的?)?(?:五分钟|5分钟)K线"
+)
+_VOLUME_DEFINITION_RATIO: Final = re.compile(r"(?:不少于|大于等于|达到).+?[0-9]+(?:\.[0-9]+)?倍")
+_VOLUME_DEFINITION_WINDOW: Final = re.compile(r"(?:此前|前)[0-9]+根")
+_BREAKDOWN_DEFINITION_PRICE: Final = re.compile(r"低于[0-9]+(?:\.[0-9]+)?元")
 _PATH_PART: Final = re.compile(r"(?:^|\.)([A-Za-z_][A-Za-z0-9_-]*)|\[([0-9]+)\]")
 _TECHNICAL_PATHS: Final = frozenset(
     {
@@ -123,9 +131,12 @@ def server_source_clauses(source_text: str) -> tuple[SourceClause, ...]:
         while chunk_start < raw_end:
             chunk_end = min(chunk_start + 512, raw_end)
             excerpt = source_text[chunk_start:chunk_end]
-            clause_id = "clause-" + sha256(
-                f"plan-source-clause-v1\x00{chunk_start}\x00{chunk_end}\x00{excerpt}".encode()
-            ).hexdigest()[:16]
+            clause_id = (
+                "clause-"
+                + sha256(
+                    f"plan-source-clause-v1\x00{chunk_start}\x00{chunk_end}\x00{excerpt}".encode()
+                ).hexdigest()[:16]
+            )
             clauses.append(
                 SourceClause(
                     clause_id=clause_id,
@@ -168,10 +179,16 @@ def build_server_review_snapshot(
     clauses = {item.clause_id: item for item in mapping.source_clauses}
     supplements = {item.supplement_id: item for item in mapping.user_supplements}
     binding_by_identity = {(item.binding_kind, item.path): item for item in mapping.field_bindings}
+    defined_terms = _supported_defined_terms(source_text or "")
+    has_global_five_minute_context = bool(
+        source_text and _GLOBAL_FIVE_MINUTE_CONTEXT.search(source_text)
+    )
 
     for binding in mapping.field_bindings:
         actual = _resolve_path(data, binding.path)
         expected = actual.get("type") if binding.binding_kind is BindingKind.STRUCTURE else actual
+        if binding.unit != _binding_unit_for_path(binding.path, binding.binding_kind):
+            raise ValueError("field binding unit does not match the typed plan path")
         if binding.binding_kind is BindingKind.VALUE and isinstance(actual, dict | list):
             raise ValueError("value binding must address a scalar plan field")
         if type(expected) is not type(binding.value) or expected != binding.value:
@@ -267,7 +284,13 @@ def build_server_review_snapshot(
                     allowed=(ReviewResolutionKind.REPLACED_BY_REVIEWED_CONTENT,),
                 )
             )
-        issues.extend(_semantic_phrase_issues(clause))
+        issues.extend(
+            _semantic_phrase_issues(
+                clause,
+                defined_terms=defined_terms,
+                has_global_five_minute_context=has_global_five_minute_context,
+            )
+        )
 
     if source_text is not None and _SEQUENCING_PATTERN.search(source_text):
         issues.append(
@@ -351,13 +374,12 @@ def reconcile_plan_mapping(
         if type(expected) is type(binding.value) and expected == binding.value:
             retained.append(binding)
     source_paths = {
-        clause_id: {
+        current_clause_id: {
             binding.path
             for binding in retained
-            if binding.origin is BindingOrigin.SOURCE
-            for clause_id in binding.clause_ids
+            if binding.origin is BindingOrigin.SOURCE and current_clause_id in binding.clause_ids
         }
-        for clause_id in (clause.clause_id for clause in mapping.source_clauses)
+        for current_clause_id in (clause.clause_id for clause in mapping.source_clauses)
     }
     clauses = tuple(
         clause.model_copy(
@@ -420,6 +442,23 @@ def _resolve_path(value: object, path: str) -> object:
     return current
 
 
+def _binding_unit_for_path(path: str, binding_kind: BindingKind) -> BindingUnit:
+    if binding_kind is BindingKind.STRUCTURE:
+        return BindingUnit.NONE
+    leaf = path.rsplit(".", 1)[-1]
+    if leaf.endswith("_fen"):
+        return BindingUnit.FEN
+    if leaf in {"quantity", "max_qty", "lot_size"}:
+        return BindingUnit.SHARES
+    if leaf == "window_bars":
+        return BindingUnit.BARS
+    if leaf == "timeframe_minutes":
+        return BindingUnit.MINUTES
+    if leaf == "minimum_ratio":
+        return BindingUnit.RATIO
+    return BindingUnit.NONE
+
+
 def _non_null_scalar_paths(value: object, path: str = "") -> tuple[str, ...]:
     if isinstance(value, dict):
         return tuple(
@@ -463,7 +502,7 @@ def _unresolved_required_paths(draft: ExplicitPlanDraft) -> tuple[str, ...]:
     unresolved = [path for path in paths if _resolve_path(data, path) is None]
     for index, rule in enumerate(data["rules"]):
         prefix = f"rules[{index}]"
-        for suffix in ("condition", "confirmation", "repeat_policy", "safety_conditions"):
+        for suffix in ("condition", "confirmation", "repeat_policy"):
             path = f"{prefix}.{suffix}"
             if _resolve_path(data, path) is None:
                 unresolved.append(path)
@@ -492,10 +531,40 @@ def _nested_null_paths(value: object, path: str) -> tuple[str, ...]:
     return (path,) if value is None else ()
 
 
-def _semantic_phrase_issues(clause: SourceClause) -> tuple[RequiredReviewIssue, ...]:
+def _supported_defined_terms(source_text: str) -> frozenset[str]:
+    defined: set[str] = set()
+    for clause in server_source_clauses(source_text) if source_text else ():
+        excerpt = clause.excerpt
+        has_completed_five_minutes = any(
+            marker in excerpt for marker in _COMPLETED_FIVE_MINUTE_MARKERS
+        )
+        if (
+            re.search(r"放量[”\"]?定义为", excerpt)
+            and has_completed_five_minutes
+            and "算术平均值" in excerpt
+            and _VOLUME_DEFINITION_WINDOW.search(excerpt)
+            and _VOLUME_DEFINITION_RATIO.search(excerpt)
+        ):
+            defined.add("放量")
+        if (
+            re.search(r"有效跌破[”\"]?定义为", excerpt)
+            and has_completed_five_minutes
+            and "收盘" in excerpt
+            and _BREAKDOWN_DEFINITION_PRICE.search(excerpt)
+        ):
+            defined.add("有效跌破")
+    return frozenset(defined)
+
+
+def _semantic_phrase_issues(
+    clause: SourceClause,
+    *,
+    defined_terms: frozenset[str],
+    has_global_five_minute_context: bool,
+) -> tuple[RequiredReviewIssue, ...]:
     issues: list[RequiredReviewIssue] = []
     for term in _AMBIGUOUS_TERMS:
-        if term in clause.excerpt:
+        if term in clause.excerpt and term not in defined_terms:
             issues.append(
                 _issue(
                     "UNRESOLVED_SEMANTICS",
@@ -505,9 +574,9 @@ def _semantic_phrase_issues(clause: SourceClause) -> tuple[RequiredReviewIssue, 
                     allowed=(ReviewResolutionKind.REPLACED_BY_REVIEWED_CONTENT,),
                 )
             )
-    if any(term in clause.excerpt for term in _UNSUPPORTED_TERMS) or _SEQUENCING_PATTERN.search(
-        clause.excerpt
-    ):
+    if any(
+        term in clause.excerpt and term not in defined_terms for term in _UNSUPPORTED_TERMS
+    ) or _SEQUENCING_PATTERN.search(clause.excerpt):
         issues.append(
             _issue(
                 "UNSUPPORTED_SEMANTICS",
@@ -517,8 +586,10 @@ def _semantic_phrase_issues(clause: SourceClause) -> tuple[RequiredReviewIssue, 
                 allowed=(ReviewResolutionKind.REPLACED_BY_REVIEWED_CONTENT,),
             )
         )
-    if "收盘" in clause.excerpt and not any(
-        marker in clause.excerpt for marker in ("五分钟", "5分钟", "5m", "5M")
+    if (
+        "收盘" in clause.excerpt
+        and not has_global_five_minute_context
+        and not any(marker in clause.excerpt for marker in ("五分钟", "5分钟", "5m", "5M"))
     ):
         issues.append(
             _issue(
@@ -552,8 +623,7 @@ def _issue(
     )
     return RequiredReviewIssue(
         issue_id=(
-            "issue-"
-            + sha256(b"plan-review-issue-v1\x00" + identity.encode()).hexdigest()[:24]
+            "issue-" + sha256(b"plan-review-issue-v1\x00" + identity.encode()).hexdigest()[:24]
         ),
         code=code,
         path=path,

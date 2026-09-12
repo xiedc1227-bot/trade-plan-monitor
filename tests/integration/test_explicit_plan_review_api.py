@@ -37,6 +37,21 @@ _SOURCE = (
     "五分钟完成收盘10.80到11.00元含端点卖出100股 五分钟完成收盘低于9.50元风险提醒 "
     "人工选择手动有效 每条规则每次激活只提醒一次 同时交易冲突阻止两者 风险冲突仅保留风险"
 )
+_ORIGINAL_SOURCE = (
+    "003043.SZ现有100股且今日可卖，最高300股。"
+    "五分钟收盘价在9.80至10.00元（含端点）且当前成交量不少于前5根已完成五分钟K线"
+    "成交量算术平均值的1.5倍时买入100股；五分钟收盘价在10.80至11.00元（含端点）时卖出100股；"
+    "五分钟收盘价低于9.50元时风险提醒。提醒和确认不代表成交。"
+)
+_HUMAN_SUPPLEMENT_PATHS = {
+    "activation.mode",
+    "rules[0].condition.conditions[1].history_scope",
+    "rules[0].repeat_policy.mode",
+    "rules[1].repeat_policy.mode",
+    "rules[2].repeat_policy.mode",
+    "conflict_policy.trade_conflict",
+    "conflict_policy.risk_conflict",
+}
 
 
 class _Runtime:
@@ -83,9 +98,7 @@ def _draft_payload(*, complete: bool = True) -> dict[str, object]:
                             "type": "VOLUME_TO_MEAN_GTE",
                             "window_bars": 5,
                             "minimum_ratio": "1.5",
-                            "history_scope": (
-                                "CONTIGUOUS_TRADING_BARS" if complete else None
-                            ),
+                            "history_scope": ("CONTIGUOUS_TRADING_BARS" if complete else None),
                         },
                     ],
                 },
@@ -131,9 +144,7 @@ def _draft_payload(*, complete: bool = True) -> dict[str, object]:
             },
         ],
         "conflict_policy": (
-            {"trade_conflict": "BLOCK_BOTH", "risk_conflict": "RISK_ONLY"}
-            if complete
-            else None
+            {"trade_conflict": "BLOCK_BOTH", "risk_conflict": "RISK_ONLY"} if complete else None
         ),
     }
 
@@ -165,6 +176,13 @@ def _logical_paths(value: object, path: str = "") -> list[tuple[str, str]]:
         for index, child in enumerate(value):
             result.extend(_logical_paths(child, f"{path}[{index}]"))
     return result
+
+
+def _get_path(value: object, path: str) -> object:
+    current = value
+    for part in path.replace("]", "").replace("[", ".").split("."):
+        current = current[int(part)] if isinstance(current, list) else current[part]
+    return current
 
 
 def _unit(path: str) -> BindingUnit:
@@ -235,27 +253,6 @@ def _mapping(draft: ExplicitPlanDraft) -> PlanMapping:
                 clause_ids=(clause.clause_id,),
             )
         )
-    supplements: list[UserSupplement] = []
-    for index in range(len(draft.rules)):
-        path = f"rules[{index}].safety_conditions"
-        supplement = UserSupplement(
-            supplement_id=f"no-extra-safety-{index}",
-            path=path,
-            value=None,
-            unit=BindingUnit.NONE,
-            supplied_at=_NOW,
-            label="human_confirmed_test_supplement",
-        )
-        supplements.append(supplement)
-        bindings.append(
-            FieldBinding(
-                path=path,
-                value=None,
-                unit=BindingUnit.NONE,
-                origin=BindingOrigin.USER_SUPPLEMENT,
-                supplement_id=supplement.supplement_id,
-            )
-        )
     return PlanMapping(
         source_clauses=(
             clause.model_copy(
@@ -266,18 +263,124 @@ def _mapping(draft: ExplicitPlanDraft) -> PlanMapping:
             ),
         ),
         field_bindings=tuple(bindings),
+        user_supplements=(),
+    )
+
+
+def _original_mapping(draft: ExplicitPlanDraft, *, with_human_supplements: bool) -> PlanMapping:
+    clauses = server_source_clauses(_ORIGINAL_SOURCE)
+    data = draft.model_dump(mode="json")
+    paths_by_clause: dict[int, list[str]] = {index: [] for index in range(len(clauses))}
+    bindings: list[FieldBinding] = []
+    supplements: list[UserSupplement] = []
+
+    def source_clause_index(path: str) -> int:
+        if path == "position.max_qty":
+            return 1
+        if path == "monitoring.timeframe_minutes" or path.startswith("rules[0]."):
+            return 2
+        if path.startswith("rules[1]."):
+            return 3
+        if path.startswith("rules[2]."):
+            return 4
+        raise AssertionError(f"No original-source clause assigned for {path}")
+
+    for path, value in _scalar_paths(data):
+        if path == "symbol":
+            # The unchanged first clause also asserts current sellable inventory.
+            # Leave the combined clause unresolved instead of pretending that
+            # mapping only its symbol captures the clause's full meaning.
+            continue
+        if _is_contract(path):
+            bindings.append(
+                FieldBinding(
+                    path=path,
+                    value=value,
+                    unit=_unit(path),
+                    origin=BindingOrigin.CONTRACT,
+                    contract_id="explicit-rules-v1",
+                )
+            )
+        elif with_human_supplements and path in _HUMAN_SUPPLEMENT_PATHS:
+            supplement = UserSupplement(
+                supplement_id=f"human-{len(supplements) + 1}",
+                path=path,
+                value=value,
+                unit=_unit(path),
+                supplied_at=_NOW,
+                label="human_confirmed_supplement",
+            )
+            supplements.append(supplement)
+            bindings.append(
+                FieldBinding(
+                    path=path,
+                    value=value,
+                    unit=_unit(path),
+                    origin=BindingOrigin.USER_SUPPLEMENT,
+                    supplement_id=supplement.supplement_id,
+                )
+            )
+        else:
+            clause_index = source_clause_index(path)
+            paths_by_clause[clause_index].append(path)
+            bindings.append(
+                FieldBinding(
+                    path=path,
+                    value=value,
+                    unit=_unit(path),
+                    origin=BindingOrigin.SOURCE,
+                    clause_ids=(clauses[clause_index].clause_id,),
+                )
+            )
+
+    for path, value in _logical_paths(data):
+        clause_index = source_clause_index(path)
+        paths_by_clause[clause_index].append(path)
+        bindings.append(
+            FieldBinding(
+                path=path,
+                value=value,
+                unit=BindingUnit.NONE,
+                origin=BindingOrigin.SOURCE,
+                binding_kind=BindingKind.STRUCTURE,
+                clause_ids=(clauses[clause_index].clause_id,),
+            )
+        )
+
+    source_clauses = tuple(
+        clause.model_copy(
+            update={
+                "disposition": (
+                    ClauseDisposition.MAPPED
+                    if paths_by_clause[index]
+                    else ClauseDisposition.UNRESOLVED
+                ),
+                "paths": tuple(paths_by_clause[index]),
+            }
+        )
+        for index, clause in enumerate(clauses)
+    )
+    return PlanMapping(
+        source_clauses=source_clauses,
+        field_bindings=tuple(bindings),
         user_supplements=tuple(supplements),
     )
 
 
-def _record_extraction(lifecycle: PersistentPlanWebLifecycle, draft: ExplicitPlanDraft) -> None:
-    mapping = _mapping(draft)
+def _record_extraction(
+    lifecycle: PersistentPlanWebLifecycle,
+    draft: ExplicitPlanDraft,
+    *,
+    source_text: str = _SOURCE,
+    mapping: PlanMapping | None = None,
+) -> None:
+    mapping = mapping or _mapping(draft)
     result = PlanExtractionResult(
         request_id=_EXTRACTION_ID,
         provider_id=_PROVIDER_ID,
         model="offline-v4",
         prompt_version="plan-extract-v4",
-        source_text_sha256=__import__("hashlib").sha256(_SOURCE.encode()).hexdigest(),
+        source_text_sha256=__import__("hashlib").sha256(source_text.encode()).hexdigest(),
         draft=draft,
         mapping=mapping,
         usage=None,
@@ -500,3 +603,154 @@ def test_partial_draft_persists_and_stale_review_cannot_cross_an_immutable_edit(
             },
         )
         assert forged.status_code == 409
+
+
+def test_original_source_partial_save_current_edit_and_semantic_review_stay_bound(
+    tmp_path: Path,
+) -> None:
+    app, lifecycle = _app(tmp_path / "original-source-review.sqlite3")
+    partial = ExplicitPlanDraft.model_validate_json(json.dumps(_draft_payload(complete=False)))
+    partial_mapping = _original_mapping(partial, with_human_supplements=False)
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        _record_extraction(
+            lifecycle,
+            partial,
+            source_text=_ORIGINAL_SOURCE,
+            mapping=partial_mapping,
+        )
+        saved = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "save-original-partial"},
+            json={
+                "extractionId": str(_EXTRACTION_ID),
+                "planJson": dump_explicit_plan_draft_json(partial),
+                "sourceText": _ORIGINAL_SOURCE,
+                "expectedRevision": 0,
+            },
+        )
+        assert saved.status_code == 200, saved.text
+        first = saved.json()
+        assert first["sourceText"] == _ORIGINAL_SOURCE
+        assert {
+            issue["path"]
+            for issue in first["requiredReviewIssues"]
+            if issue["code"] == "UNRESOLVED_EXECUTION_POLICY"
+        } == {
+            "activation",
+            "conflict_policy",
+            "rules[0].condition.conditions[1].history_scope",
+            "rules[0].repeat_policy",
+            "rules[1].repeat_policy",
+            "rules[2].repeat_policy",
+        }
+        assert not any(
+            issue["path"].endswith("safety_conditions") for issue in first["requiredReviewIssues"]
+        )
+        unresolved_clauses = [
+            clause
+            for clause in first["mapping"]["sourceClauses"]
+            if clause["disposition"] == "UNRESOLVED"
+        ]
+        assert [clause["excerpt"] for clause in unresolved_clauses] == [
+            "003043.SZ现有100股且今日可卖，",
+            "提醒和确认不代表成交。",
+        ]
+
+        complete_payload = _draft_payload()
+        complete_payload["version"] = 2
+        complete = ExplicitPlanDraft.model_validate_json(json.dumps(complete_payload))
+        complete_mapping = _original_mapping(complete, with_human_supplements=True)
+        edited = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "save-original-complete"},
+            json={
+                "basePlanVersionId": first["id"],
+                "planJson": dump_explicit_plan_draft_json(complete),
+                "sourceText": _ORIGINAL_SOURCE,
+                "expectedRevision": 0,
+                "mapping": json.loads(complete_mapping.model_dump_json(by_alias=True)),
+            },
+        )
+        assert edited.status_code == 200, edited.text
+        current = edited.json()
+        assert current["version"] == 2
+        assert current["sourceText"] == _ORIGINAL_SOURCE
+        assert current["sourceHash"] == first["sourceHash"]
+        assert current["contentHash"] != first["contentHash"]
+        assert {
+            item["path"] for item in current["mapping"]["userSupplements"]
+        } == _HUMAN_SUPPLEMENT_PATHS
+        assert {item["label"] for item in current["mapping"]["userSupplements"]} == {
+            "human_confirmed_supplement"
+        }
+
+        clauses = {clause["clauseId"]: clause for clause in current["mapping"]["sourceClauses"]}
+        bindings = current["mapping"]["fieldBindings"]
+        supplements = {item["supplementId"]: item for item in current["mapping"]["userSupplements"]}
+        current_draft = json.loads(current["planJson"])
+        resolutions: list[dict[str, object]] = []
+        for issue in current["requiredReviewIssues"]:
+            if issue["code"] == "SOURCE_MAPPING_REVIEW_REQUIRED":
+                binding = next(item for item in bindings if item["path"] == issue["bindingPath"])
+                assert binding["origin"] == "SOURCE"
+                assert issue["clauseId"] in binding["clauseIds"]
+                assert clauses[issue["clauseId"]]["excerpt"] in _ORIGINAL_SOURCE
+                actual = _get_path(current_draft, issue["bindingPath"])
+                assert binding["value"] == (
+                    actual["type"] if binding["bindingKind"] == "STRUCTURE" else actual
+                )
+                resolutions.append(
+                    {
+                        "issueId": issue["issueId"],
+                        "resolution": "CONFIRM_MAPPING",
+                        "bindingPath": issue["bindingPath"],
+                    }
+                )
+            elif issue["code"] == "USER_SUPPLEMENT_REVIEW_REQUIRED":
+                supplement = next(
+                    item for item in supplements.values() if item["path"] == issue["path"]
+                )
+                assert supplement["label"] == "human_confirmed_supplement"
+                assert supplement["path"] == issue["path"]
+                assert supplement["value"] == _get_path(current_draft, issue["path"])
+                resolutions.append(
+                    {
+                        "issueId": issue["issueId"],
+                        "resolution": "CONFIRM_POLICY",
+                        "supplementId": supplement["supplementId"],
+                    }
+                )
+
+        reviewed = client.post(
+            "/api/v1/plan-review-confirmations",
+            headers={"Idempotency-Key": "review-original-current"},
+            json={
+                "planVersionId": current["id"],
+                "contentHash": current["contentHash"],
+                "sourceHash": current["sourceHash"],
+                "reviewEvidenceHash": current["reviewEvidenceHash"],
+                "expectedRevision": 0,
+                "resolutions": resolutions,
+            },
+        )
+        assert reviewed.status_code == 200, reviewed.text
+        after_review = reviewed.json()
+        assert after_review["revision"] == 1
+        assert after_review["canActivate"] is False
+        refreshed_response = client.get(f"/api/v1/plan-versions/{current['id']}")
+        assert refreshed_response.status_code == 200
+        refreshed = refreshed_response.json()
+        assert {
+            (issue["code"], clauses[issue["clauseId"]]["excerpt"])
+            for issue in refreshed["unresolvedReviewIssues"]
+            if issue["code"] == "UNRESOLVED_SEMANTICS"
+        } == {
+            ("UNRESOLVED_SEMANTICS", "003043.SZ现有100股且今日可卖，"),
+            ("UNRESOLVED_SEMANTICS", "提醒和确认不代表成交。"),
+        }
+        assert {
+            (issue["code"], issue["path"])
+            for issue in refreshed["unresolvedReviewIssues"]
+            if issue["code"] != "UNRESOLVED_SEMANTICS"
+        } == {("UNMAPPED_PLAN_FIELD", "symbol")}
