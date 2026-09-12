@@ -2,11 +2,10 @@
 import { computed, shallowRef, watch } from "vue";
 
 import type {
-  ActionableSignalType,
   AlertPage,
-  AlertView,
   DecisionEvidenceView,
 } from "../../api/generated";
+import type { PublicAlertSignalType, PublicAlertView } from "../../api/alerts";
 import type { AlertQuery } from "../../views/AlertsView.vue";
 import { formatDisplayDateTime, formatDisplayFactValue } from "../../formatters/dateTime";
 
@@ -18,7 +17,7 @@ interface Props {
 }
 
 interface Emits {
-  acknowledge: [alert: AlertView];
+  acknowledge: [alert: PublicAlertView];
   applyFilters: [query: AlertQuery];
   pageChange: [offset: number];
 }
@@ -27,7 +26,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 
 const symbol = shallowRef(props.query.symbol ?? "");
-const signalType = shallowRef<ActionableSignalType | "">(props.query.signalType ?? "");
+const signalType = shallowRef<PublicAlertSignalType | "">(props.query.signalType ?? "");
 const acknowledged = shallowRef<"" | "false" | "true">(
   props.query.acknowledged === null ? "" : String(props.query.acknowledged) as "false" | "true",
 );
@@ -114,8 +113,8 @@ function toggleEvidence(eventId: string): void {
   expandedIds.value = next;
 }
 
-function chartHref(alert: AlertView): string {
-  const at = alert.marketDataAt ?? alert.evaluatedAt;
+function chartHref(alert: PublicAlertView): string {
+  const at = isExplicitAlert(alert) ? alert.targetBucketEnd : alert.marketDataAt ?? alert.evaluatedAt;
   return `/stocks/${encodeURIComponent(alert.symbol)}?at=${encodeURIComponent(at)}`;
 }
 
@@ -143,13 +142,17 @@ function evidenceLabel(row: EvidenceRow): string {
   return `${"— ".repeat(row.depth)}${row.evidence.kind} · ${row.evidence.code} · ${row.evidence.outcome}`;
 }
 
-function acknowledge(item: AlertView): void {
+function acknowledge(item: PublicAlertView): void {
   if (
     item.acknowledgedAt === null &&
     !props.pendingAcknowledgements.has(item.eventId)
   ) {
     emit("acknowledge", item);
   }
+}
+
+function isExplicitAlert(item: PublicAlertView): item is Extract<PublicAlertView, { payloadSchemaVersion: "explicit-rule-alert-v1" }> {
+  return "payloadSchemaVersion" in item && item.payloadSchemaVersion === "explicit-rule-alert-v1";
 }
 
 function toShanghaiTimestamp(value: string): string | null {
@@ -183,6 +186,9 @@ function toLocalInput(value: string | null): string {
           <option value="RISK_BREACH">风险线突破</option>
           <option value="RISK_EXIT_READY">风险退出</option>
           <option value="RISK_EXIT_PENDING_SETTLEMENT">风险退出待结算</option>
+          <option value="BUY">普通计划买入</option>
+          <option value="SELL">普通计划卖出</option>
+          <option value="RISK_ALERT">普通计划风险提醒</option>
         </select>
       </label>
       <label>
@@ -267,7 +273,19 @@ function toLocalInput(value: string | null): string {
             </tr>
             <tr v-if="expandedIds.has(item.eventId)" :id="`alert-evidence-${item.eventId}`">
               <td colspan="3">
-                <section :aria-label="`${item.name}提醒证据`">
+                <section v-if="isExplicitAlert(item)" :aria-label="`${item.name}提醒证据`">
+                  <h3>当前规则证据</h3>
+                  <p>规则 {{ item.ruleId }} · 目标完成K线 {{ formatDisplayDateTime(item.targetBucketEnd) }}</p>
+                  <p>数量：{{ item.quantity === null ? "无（纯风险提醒）" : `${item.quantity} 股` }}</p>
+                  <p>结果：{{ item.conditionEvidence.code }} · {{ item.conditionEvidence.outcome }}</p>
+                  <p v-if="(item.conditionEvidence.missingInputs ?? []).length > 0">
+                    缺失输入：{{ (item.conditionEvidence.missingInputs ?? []).join("、") }}
+                  </p>
+                  <p v-if="item.safetyEvidence !== null">
+                    风险条件：{{ item.safetyEvidence.code }} · {{ item.safetyEvidence.outcome }}
+                  </p>
+                </section>
+                <section v-else :aria-label="`${item.name}提醒证据`">
                   <h3>成立证据</h3>
                   <ul>
                     <li v-for="row in evidenceRows(item.matchedConditions)" :key="`matched:${row.key}`">

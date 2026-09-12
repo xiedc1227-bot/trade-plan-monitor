@@ -413,7 +413,7 @@ def _confirmation_resolutions(detail: dict[str, object]) -> list[dict[str, objec
     return resolutions
 
 
-def test_v4_extraction_save_review_and_public_activation_gate_are_server_bound(
+def test_v4_extraction_save_review_and_public_activation_are_server_bound(
     tmp_path: Path,
 ) -> None:
     app, lifecycle = _app(tmp_path / "review.sqlite3")
@@ -530,7 +530,7 @@ def test_v4_extraction_save_review_and_public_activation_gate_are_server_bound(
             json={"planVersionId": detail["id"], "expectedRevision": 0},
         )
         assert missing_binding.status_code == 409
-        public_gate = client.post(
+        activation = client.post(
             "/api/v1/plan-activations",
             headers={"Idempotency-Key": "activate-current-review"},
             json={
@@ -540,10 +540,12 @@ def test_v4_extraction_save_review_and_public_activation_gate_are_server_bound(
                 "expectedRevision": 0,
             },
         )
-        assert public_gate.status_code == 409
+        assert activation.status_code == 200, activation.text
+        assert activation.json()["planVersionId"] == detail["id"]
+        assert activation.json()["active"] is True
         capability = client.get("/api/v1/plan-capabilities").json()
-        assert capability["publicActivationAvailable"] is False
-        assert capability["pendingRequirements"] == ["ORDINARY_PLAN_FORMS"]
+        assert capability["publicActivationAvailable"] is True
+        assert capability["pendingRequirements"] == []
 
 
 def test_partial_draft_persists_and_stale_review_cannot_cross_an_immutable_edit(

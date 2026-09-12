@@ -27,6 +27,19 @@ const props = withDefaults(defineProps<Props>(), {
 });
 const emit = defineEmits<Emits>();
 const entered = shallowRef(false);
+const explicitCandidate = computed(() => {
+  const document = candidate.value;
+  if (document === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(document.planJson);
+    return typeof parsed === "object" && parsed !== null &&
+      !Array.isArray(parsed) && Reflect.get(parsed, "schema_version") === 3
+      ? document
+      : null;
+  } catch {
+    return null;
+  }
+});
 
 const candidate = computed<StructuredPlanDocument | null>(() => {
   if (props.extraction.status !== "SUCCEEDED") return null;
@@ -75,6 +88,18 @@ function saveDraft(command: PlanDraftCommand): void {
   });
 }
 
+function saveExplicitDraft(): void {
+  const plan = explicitCandidate.value;
+  if (plan === null || props.busy || props.saved) return;
+  emit("saveDraft", {
+    extractionId: props.extraction.id,
+    planJson: plan.planJson,
+    reviewIssues: [],
+    sourceText: plan.sourceText,
+    symbol: plan.symbol,
+  });
+}
+
 function planIdentity(planJson: string): { symbol: string; version: number } | null {
   try {
     const parsed: unknown = JSON.parse(planJson);
@@ -95,7 +120,14 @@ function planIdentity(planJson: string): { symbol: string; version: number } | n
       AI 审核结果已保存为持久草稿；启用仍需在下方查看差异并明确确认。
     </p>
     <template v-else-if="candidate">
-      <div v-if="!entered" class="extracted-plan-review__gate">
+      <div v-if="explicitCandidate" class="extracted-plan-review__gate">
+        <div>
+          <h2>待审核的明确规则草稿</h2>
+          <p>保存后在当前版本逐项核对原文、来源和缺失政策。这里不会把规则降级为旧 JSON 表单。</p>
+        </div>
+        <button type="button" :disabled="busy" @click="saveExplicitDraft">保存并进入逐项复核</button>
+      </div>
+      <div v-else-if="!entered" class="extracted-plan-review__gate">
         <div>
           <h2>待审核计划草稿</h2>
           <p>进入后可编辑并保存草稿；此操作不会启用计划。</p>

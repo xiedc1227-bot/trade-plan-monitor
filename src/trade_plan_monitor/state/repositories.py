@@ -37,7 +37,7 @@ from trade_plan_monitor.ai.review import (
 from trade_plan_monitor.ai.source_processing import upgrade_source_mapping
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import TradePlan
+from trade_plan_monitor.domain.plan_models import ExecutableTradePlan, ExplicitTradePlan, TradePlan
 from trade_plan_monitor.domain.plan_validation import (
     DraftReviewIssue,
     PlanValidationResult,
@@ -1089,13 +1089,13 @@ class PlanRepository:
 
     def activate(
         self,
-        plan: TradePlan,
+        plan: ExecutableTradePlan,
         *,
         expected_revision: int,
         validation: PlanValidationResult,
     ) -> ActivePlanRecord:
-        if not isinstance(plan, TradePlan):
-            raise TypeError("plan must be a TradePlan")
+        if not isinstance(plan, TradePlan | ExplicitTradePlan):
+            raise TypeError("plan must be an executable trade plan")
         if type(expected_revision) is not int or expected_revision < 0:
             raise ValueError("expected_revision must be a non-negative integer")
         if not isinstance(validation, PlanValidationResult):

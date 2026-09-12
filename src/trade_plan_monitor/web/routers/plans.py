@@ -124,7 +124,7 @@ class PlanDocumentFormat(StrEnum):
 
 
 class ExplicitPlanCapabilityView(ApiValue):
-    """Backend-owned R10 capability state; this is not an activation grant."""
+    """Backend-owned public Schema-v3 capability state."""
 
     schema_version: Literal[3] = 3
     execution_mode: Literal["EXPLICIT_RULES"] = "EXPLICIT_RULES"
@@ -134,12 +134,12 @@ class ExplicitPlanCapabilityView(ApiValue):
         "SELL",
         "RISK_ALERT",
     )
-    public_activation_available: Literal[False] = False
-    isolated_trusted_review_only: Literal[True] = True
+    public_activation_available: Literal[True] = True
+    isolated_trusted_review_only: Literal[False] = False
     pending_requirements: tuple[
         Literal["ORDINARY_PLAN_FORMS",],
         ...,
-    ] = ("ORDINARY_PLAN_FORMS",)
+    ] = ()
 
 
 class PlanExtractionOperationStatus(StrEnum):

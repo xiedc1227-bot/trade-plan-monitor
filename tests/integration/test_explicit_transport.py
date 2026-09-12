@@ -141,7 +141,7 @@ def _work(engine, *, now: datetime = NOW):
     return SqlAlchemyUnitOfWork(create_session_factory(engine), clock=lambda: now)
 
 
-def test_plan_capability_reports_r11_review_while_activation_remains_blocked() -> None:
+def test_plan_capability_reports_public_r12_activation() -> None:
     plan_json = dump_plan_json(_plan())
     with TestClient(_app(plan_service=_RejectPlanService()), base_url=BASE_URL) as client:
         capability = client.get("/api/v1/plan-capabilities")
@@ -176,9 +176,9 @@ def test_plan_capability_reports_r11_review_while_activation_remains_blocked() -
         "executionMode": "EXPLICIT_RULES",
         "executionVersion": "explicit-rules-v1",
         "supportedActions": ["BUY", "SELL", "RISK_ALERT"],
-        "publicActivationAvailable": False,
-        "isolatedTrustedReviewOnly": True,
-        "pendingRequirements": ["ORDINARY_PLAN_FORMS"],
+        "publicActivationAvailable": True,
+        "isolatedTrustedReviewOnly": False,
+        "pendingRequirements": [],
     }
     assert blocked.status_code == 503
     assert blocked.json()["error"]["code"] == "SERVICE_UNAVAILABLE"

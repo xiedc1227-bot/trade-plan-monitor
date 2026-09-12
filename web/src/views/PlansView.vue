@@ -7,10 +7,12 @@ import type {
   PlanDeactivationCommand,
   PlanDraftCommand,
   PlanImportCommand,
+  PlanReviewConfirmationCommand,
   PlanVersionSummary,
   PlanVersionView,
 } from "../api/generated";
 import ActivationDiffDialog from "../components/plans/ActivationDiffDialog.vue";
+import ExplicitPlanReviewPanel from "../components/plans/ExplicitPlanReviewPanel.vue";
 import StructuredPlanEditor, {
   type PlanExportIntent,
 } from "../components/plans/StructuredPlanEditor.vue";
@@ -26,6 +28,7 @@ interface Props {
 
 interface Emits {
   activatePlan: [command: PlanActivationCommand];
+  confirmPlanReview: [command: PlanReviewConfirmationCommand];
   deactivatePlan: [command: PlanDeactivationCommand];
   exportPlan: [intent: PlanExportIntent];
   importPlan: [command: PlanImportCommand];
@@ -287,7 +290,14 @@ function deactivate(command: PlanDeactivationCommand): void {
         </section>
 
         <template v-if="currentPlan">
+          <ExplicitPlanReviewPanel
+            v-if="currentPlan.contentHash !== null && currentPlan.contentHash !== undefined"
+            :busy="busy"
+            :plan="currentPlan"
+            @confirm-review="emit('confirmPlanReview', $event)"
+          />
           <StructuredPlanEditor
+            v-else
             :busy="busy"
             :plan="currentPlan"
             @dirty-change="editorDirty = $event"

@@ -173,6 +173,7 @@ async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<voi
         :selected-plan-id="plans.selectedPlanId.value"
         :versions="plans.versions.value"
         @activate-plan="plans.activatePlan"
+        @confirm-plan-review="plans.confirmPlanReview"
         @deactivate-plan="plans.deactivatePlan"
         @export-plan="exportPlan"
         @import-plan="plans.importPlan"

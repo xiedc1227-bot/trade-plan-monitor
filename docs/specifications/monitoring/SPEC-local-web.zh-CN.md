@@ -140,7 +140,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`5fbcd3221aca8d18331202fc7a8dc034a65145ce1b43e25a8a8a37bb661f0066`
+OpenAPI 快照 SHA-256：`7b66308dbfee321eba7a75ac76068331b499960640e486cc6504688c6ebe0e7e`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 48 个已批准 REST 路径：33 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式命令 `POST /position-inventory-confirmations`、`POST /position-inventory-closures` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。

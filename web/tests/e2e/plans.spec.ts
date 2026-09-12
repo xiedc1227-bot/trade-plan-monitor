@@ -322,6 +322,7 @@ test("requires explicit review, save, and backend-approved activation for an AI 
   expect(savedDraftCommands).toEqual([
     {
       expectedRevision: 0,
+      extractionId: OPERATION_ID,
       planJson: planDocument,
       reviewIssues: [
         { kind: "MISSING_EVIDENCE", material: true, path: "draft", resolved: true },

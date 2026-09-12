@@ -3,6 +3,7 @@ import type {
   AlertAcknowledgementCommand,
   AlertPage,
   AlertView,
+  ExplicitAlertView,
   EvidenceFactView,
   NextStepView,
   PositionPrefillView,
@@ -16,13 +17,15 @@ import {
 import { invalidResponse, requestJson } from "./transport";
 
 type AlertListQuery = paths["/api/v1/alerts"]["get"]["parameters"]["query"];
+export type PublicAlertSignalType = Exclude<AlertPage["signalType"], null | undefined>;
+export type PublicAlertView = AlertView | ExplicitAlertView;
 
 export type AlertListRequest = AlertListQuery & {
   readonly acknowledged: boolean | null;
   readonly endAt: string | null;
   readonly limit: number;
   readonly offset: number;
-  readonly signalType: ActionableSignalType | null;
+  readonly signalType: PublicAlertSignalType | null;
   readonly startAt: string | null;
   readonly symbol: string | null;
 };
@@ -36,7 +39,7 @@ export interface AlertApi {
     command: AlertAcknowledgementCommand,
     idempotencyKey: string,
     options?: AlertRequestOptions,
-  ): Promise<AlertView>;
+  ): Promise<PublicAlertView>;
   listAlerts(
     request: AlertListRequest,
     options?: AlertRequestOptions,
@@ -56,6 +59,11 @@ const actionableSignals = new Set<ActionableSignalType>([
   "RISK_BREACH",
   "RISK_EXIT_READY",
   "RISK_EXIT_PENDING_SETTLEMENT",
+]);
+const explicitSignals = new Set<ExplicitAlertView["signalType"]>([
+  "BUY",
+  "SELL",
+  "RISK_ALERT",
 ]);
 const decisionZones = new Set([
   "LOW_BUY",
@@ -206,7 +214,7 @@ function requireListRequest(request: AlertListRequest): void {
   const hasRange = request.startAt !== null && request.endAt !== null;
   if (
     !(request.symbol === null || isShareSymbol(request.symbol)) ||
-    !(request.signalType === null || actionableSignals.has(request.signalType)) ||
+    !(request.signalType === null || isPublicSignal(request.signalType)) ||
     !(request.acknowledged === null || typeof request.acknowledged === "boolean") ||
     (request.startAt === null) !== (request.endAt === null) ||
     (hasRange &&
@@ -271,7 +279,7 @@ function isAlertPage(value: unknown, request: AlertListRequest): value is AlertP
   );
 }
 
-function matchesQuery(item: AlertView, request: AlertListRequest): boolean {
+function matchesQuery(item: PublicAlertView, request: AlertListRequest): boolean {
   const acknowledged = item.acknowledgedAt !== null && item.acknowledgedAt !== undefined;
   return (
     (request.symbol === null || item.symbol === request.symbol) &&
@@ -284,7 +292,18 @@ function matchesQuery(item: AlertView, request: AlertListRequest): boolean {
   );
 }
 
-function isAlert(value: unknown): value is AlertView {
+function isAlert(value: unknown): value is PublicAlertView {
+  return isLegacyAlert(value) || isExplicitAlert(value);
+}
+
+function isPublicSignal(value: PublicAlertSignalType): boolean {
+  if (value === "BUY" || value === "SELL" || value === "RISK_ALERT") {
+    return explicitSignals.has(value);
+  }
+  return actionableSignals.has(value);
+}
+
+function isLegacyAlert(value: unknown): value is AlertView {
   if (
     !isRecord(value) ||
     !hasOnlyKeys(value, [
@@ -416,6 +435,123 @@ function isAlert(value: unknown): value is AlertView {
     return false;
   }
   return validateSignalRelationships(item);
+}
+
+function isExplicitAlert(value: unknown): value is ExplicitAlertView {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      "acknowledgedAt",
+      "activationRevision",
+      "causeId",
+      "conditionEvidence",
+      "createdAt",
+      "currentActionable",
+      "dedupKey",
+      "evaluatedAt",
+      "eventId",
+      "messageText",
+      "name",
+      "nextStep",
+      "payloadSchemaVersion",
+      "planHash",
+      "planId",
+      "planVersion",
+      "quantity",
+      "revision",
+      "ruleId",
+      "safetyEvidence",
+      "sequence",
+      "severity",
+      "signalType",
+      "symbol",
+      "targetBucketEnd",
+      "tradingDate",
+    ]) ||
+    !hasKeys(value, [
+      "activationRevision",
+      "causeId",
+      "conditionEvidence",
+      "createdAt",
+      "currentActionable",
+      "dedupKey",
+      "evaluatedAt",
+      "eventId",
+      "messageText",
+      "name",
+      "nextStep",
+      "payloadSchemaVersion",
+      "planHash",
+      "planId",
+      "planVersion",
+      "quantity",
+      "revision",
+      "ruleId",
+      "safetyEvidence",
+      "sequence",
+      "severity",
+      "signalType",
+      "symbol",
+      "targetBucketEnd",
+      "tradingDate",
+    ]) ||
+    value.payloadSchemaVersion !== "explicit-rule-alert-v1" ||
+    !isUuid(value.eventId) ||
+    !isPositiveInteger(value.sequence) ||
+    !isSha256(value.dedupKey) ||
+    !isBoundedText(value.planId, 128) ||
+    !isPositiveInteger(value.planVersion) ||
+    !isSha256(value.planHash) ||
+    !isIntegerBetween(value.activationRevision, 0, MAX_SAFE_REVISION) ||
+    !isShareSymbol(value.symbol) ||
+    !isBoundedText(value.name, 100) ||
+    !isCalendarDate(value.tradingDate) ||
+    !isBoundedText(value.causeId, 128) ||
+    value.causeId !== value.ruleId ||
+    !isBoundedText(value.ruleId, 128) ||
+    !isShanghaiDateTime(value.targetBucketEnd) ||
+    !isShanghaiDateTime(value.evaluatedAt) ||
+    !isShanghaiDateTime(value.createdAt) ||
+    !isNullableBoardLot(value.quantity) ||
+    !isExplicitEvidence(value.conditionEvidence) ||
+    !(value.safetyEvidence === null || isExplicitEvidence(value.safetyEvidence)) ||
+    !isBoundedText(value.messageText, 16_384) ||
+    !(value.acknowledgedAt === undefined ||
+      value.acknowledgedAt === null ||
+      isShanghaiDateTime(value.acknowledgedAt)) ||
+    !isIntegerBetween(value.revision, 0, 1) ||
+    typeof value.currentActionable !== "boolean"
+  ) {
+    return false;
+  }
+  const expected = value.signalType === "BUY"
+    ? ["ACTION", "REVIEW_BUY_REMINDER", false]
+    : value.signalType === "SELL"
+      ? ["ACTION", "REVIEW_SELL_REMINDER", false]
+      : value.signalType === "RISK_ALERT"
+        ? ["RISK", "REVIEW_RISK_REMINDER", true]
+        : null;
+  return expected !== null &&
+    value.severity === expected[0] &&
+    value.nextStep === expected[1] &&
+    (value.quantity === null) === expected[2] &&
+    value.revision === (value.acknowledgedAt === null || value.acknowledgedAt === undefined ? 0 : 1) &&
+    value.tradingDate === value.targetBucketEnd.slice(0, 10) &&
+    (value.safetyEvidence === null || value.signalType !== "RISK_ALERT");
+}
+
+function isExplicitEvidence(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["barEnds", "children", "code", "facts", "missingInputs", "outcome", "planPath"])) {
+    return false;
+  }
+  return hasKeys(value, ["code", "outcome", "planPath"]) &&
+    isBoundedText(value.planPath, 512) && /^[A-Za-z0-9_.\[\]-]+$/.test(value.planPath) &&
+    isStableCode(value.code) &&
+    isBoundedText(value.outcome, 32) &&
+    (value.facts === undefined || (Array.isArray(value.facts) && value.facts.length <= 16 && value.facts.every(isEvidenceFact))) &&
+    (value.missingInputs === undefined || (Array.isArray(value.missingInputs) && value.missingInputs.length <= 4 && value.missingInputs.every((item) => isStableCode(item)))) &&
+    (value.barEnds === undefined || (Array.isArray(value.barEnds) && value.barEnds.length <= 501 && value.barEnds.every((item) => isShanghaiDateTime(item)))) &&
+    (value.children === undefined || (Array.isArray(value.children) && value.children.length <= 50 && value.children.every(isExplicitEvidence)));
 }
 
 function validateSignalRelationships(item: AlertView): boolean {

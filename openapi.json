@@ -6281,7 +6281,7 @@
       },
       "ExplicitPlanCapabilityView": {
         "additionalProperties": false,
-        "description": "Backend-owned R10 capability state; this is not an activation grant.",
+        "description": "Backend-owned public Schema-v3 capability state.",
         "properties": {
           "executionMode": {
             "const": "EXPLICIT_RULES",
@@ -6296,15 +6296,13 @@
             "type": "string"
           },
           "isolatedTrustedReviewOnly": {
-            "const": true,
-            "default": true,
+            "const": false,
+            "default": false,
             "title": "Isolatedtrustedreviewonly",
             "type": "boolean"
           },
           "pendingRequirements": {
-            "default": [
-              "ORDINARY_PLAN_FORMS"
-            ],
+            "default": [],
             "items": {
               "const": "ORDINARY_PLAN_FORMS",
               "type": "string"
@@ -6313,8 +6311,8 @@
             "type": "array"
           },
           "publicActivationAvailable": {
-            "const": false,
-            "default": false,
+            "const": true,
+            "default": true,
             "title": "Publicactivationavailable",
             "type": "boolean"
           },

@@ -5,6 +5,8 @@ import type {
   PlanDeactivationCommand,
   PlanDraftCommand,
   PlanImportCommand,
+  PlanReviewConfirmationCommand,
+  PlanReviewConfirmationView,
   PlanVersionPage,
   PlanVersionStatus,
   PlanVersionSummary,
@@ -56,6 +58,11 @@ export interface PlanApi {
     request: PlanVersionListRequest,
     options?: PlanRequestOptions,
   ): Promise<PlanVersionPage>;
+  confirmPlanReview(
+    command: PlanReviewConfirmationCommand,
+    idempotencyKey: string,
+    options?: PlanRequestOptions,
+  ): Promise<PlanReviewConfirmationView>;
   savePlanDraft(
     command: PlanDraftCommand,
     idempotencyKey: string,
@@ -96,6 +103,20 @@ export function createPlanApi(
         readRequest(options),
       );
       if (!isPlanVersion(body) || body.id !== versionId) throw invalidResponse(status);
+      return body;
+    },
+
+    async confirmPlanReview(
+      command: PlanReviewConfirmationCommand,
+      idempotencyKey: string,
+      options?: PlanRequestOptions,
+    ) {
+      const { body, status } = await requestJson(
+        fetchImplementation,
+        "/api/v1/plan-review-confirmations",
+        mutationRequest(command, idempotencyKey, options),
+      );
+      if (!isPlanReviewConfirmation(body, command)) throw invalidResponse(status);
       return body;
     },
 
@@ -293,16 +314,26 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
     !isRecord(value) ||
     !hasOnlyKeys(value, [
       "canActivate",
+      "contentHash",
       "createdAt",
+      "executionReadiness",
       "id",
+      "mapping",
       "planHash",
       "planId",
       "planJson",
+      "requiredReviewIssues",
+      "resolvedIssueIds",
+      "reviewEvidenceHash",
+      "reviewId",
       "reviewIssues",
+      "reviewRevision",
       "revision",
       "sourceText",
+      "sourceHash",
       "status",
       "symbol",
+      "unresolvedReviewIssues",
       "validationIssues",
       "version",
     ]) ||
@@ -329,6 +360,21 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
       (!Array.isArray(value.reviewIssues) ||
         value.reviewIssues.length > 512 ||
         !value.reviewIssues.every(isReviewIssue))) ||
+    !isOptionalHash(value.contentHash) ||
+    !isOptionalHash(value.sourceHash) ||
+    !isOptionalHash(value.reviewEvidenceHash) ||
+    !isOptionalUuid(value.reviewId) ||
+    !isOptionalNonnegativeInteger(value.reviewRevision) ||
+    !(value.executionReadiness === undefined ||
+      value.executionReadiness === null ||
+      value.executionReadiness === "NOT_EVALUATED") ||
+    !(value.mapping === undefined || value.mapping === null || isRecord(value.mapping)) ||
+    !(value.requiredReviewIssues === undefined ||
+      (Array.isArray(value.requiredReviewIssues) && value.requiredReviewIssues.every(isReviewIssueRecord))) ||
+    !(value.resolvedIssueIds === undefined ||
+      (Array.isArray(value.resolvedIssueIds) && value.resolvedIssueIds.every((item) => isBoundedText(item, 128)))) ||
+    !(value.unresolvedReviewIssues === undefined ||
+      (Array.isArray(value.unresolvedReviewIssues) && value.unresolvedReviewIssues.every(isReviewIssueRecord))) ||
     !isNonnegativeInteger(value.revision) ||
     !isBoundedText(value.sourceText, 262_144) ||
     (value.status !== "DRAFT" && value.status !== "ACTIVE" && value.status !== "SUPERSEDED") ||
@@ -347,6 +393,70 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
     !reviewIssues.some((issue) => issue.resolved !== true) &&
     !validationIssues.some((issue) => issue.activationBlocking);
   return value.canActivate === canActivate && (value.status !== "ACTIVE" || canActivate);
+}
+
+function isPlanReviewConfirmation(
+  value: unknown,
+  command: PlanReviewConfirmationCommand,
+): value is PlanReviewConfirmationView {
+  return isRecord(value) &&
+    hasOnlyKeys(value, [
+      "canActivate",
+      "confirmedAt",
+      "contentHash",
+      "planVersionId",
+      "reviewEvidenceHash",
+      "reviewId",
+      "revision",
+      "sourceHash",
+      "unresolvedIssues",
+    ]) &&
+    hasRequiredKeys(value, [
+      "canActivate",
+      "confirmedAt",
+      "contentHash",
+      "planVersionId",
+      "reviewEvidenceHash",
+      "reviewId",
+      "revision",
+      "sourceHash",
+    ]) &&
+    typeof value.canActivate === "boolean" &&
+    (value.confirmedAt === null || isShanghaiDateTime(value.confirmedAt)) &&
+    value.contentHash === command.contentHash &&
+    value.planVersionId === command.planVersionId &&
+    value.reviewEvidenceHash === command.reviewEvidenceHash &&
+    value.sourceHash === command.sourceHash &&
+    (value.reviewId === null || isUuid(value.reviewId)) &&
+    isNonnegativeInteger(value.revision) &&
+    (value.unresolvedIssues === undefined ||
+      (Array.isArray(value.unresolvedIssues) && value.unresolvedIssues.every(isReviewIssueRecord)));
+}
+
+function isReviewIssueRecord(value: unknown): boolean {
+  return isRecord(value) &&
+    hasOnlyKeys(value, ["allowedResolutions", "bindingPath", "clauseId", "code", "issueId", "path", "reason"]) &&
+    hasRequiredKeys(value, ["allowedResolutions", "code", "issueId", "path", "reason"]) &&
+    Array.isArray(value.allowedResolutions) &&
+    value.allowedResolutions.every((item) =>
+      item === "CONFIRM_MAPPING" || item === "CONFIRM_POLICY" ||
+      item === "CONFIRM_SOURCE_TREATMENT" || item === "REPLACED_BY_REVIEWED_CONTENT") &&
+    isBoundedText(value.code, 100) && isBoundedText(value.issueId, 128) &&
+    isPlanPath(value.path) && isBoundedText(value.reason, 512) &&
+    (value.bindingPath === undefined || value.bindingPath === null || isPlanPath(value.bindingPath)) &&
+    (value.clauseId === undefined || value.clauseId === null || isBoundedText(value.clauseId, 128));
+}
+
+function isOptionalHash(value: unknown): boolean {
+  return value === undefined || value === null || isSha256(value);
+}
+
+function isOptionalUuid(value: unknown): boolean {
+  return value === undefined || value === null || isUuid(value);
+}
+
+function isOptionalNonnegativeInteger(value: unknown): boolean {
+  return value === undefined || value === null || isNonnegativeInteger(value);
 }
 
 function isReviewIssue(value: unknown): value is DraftReviewIssue {

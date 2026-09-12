@@ -386,7 +386,7 @@ def test_literal_source_completes_current_review_without_initializing_inventory(
     assert client.get("/api/v1/position-inventory", params=INVENTORY_QUERY).json() == unknown
     activation = client.post(
         "/api/v1/plan-activations",
-        headers={"Idempotency-Key": "literal-activation-blocked"},
+            headers={"Idempotency-Key": "literal-activation-current-review"},
         json={
             "planVersionId": second["id"],
             "reviewId": approved["reviewId"],
@@ -394,8 +394,9 @@ def test_literal_source_completes_current_review_without_initializing_inventory(
             "expectedRevision": 0,
         },
     )
-    assert activation.status_code == 409
-    assert client.get("/api/v1/plan-capabilities").json()["publicActivationAvailable"] is False
+    assert activation.status_code == 200, activation.text
+    assert activation.json()["active"] is True
+    assert client.get("/api/v1/plan-capabilities").json()["publicActivationAvailable"] is True
     # Separate public operation: source save/review above left the ledger UNKNOWN.
     registered = client.post(
         "/api/v1/position-inventory-confirmations",

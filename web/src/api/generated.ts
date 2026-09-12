@@ -976,9 +976,9 @@ export type ExplicitConditionEvidenceView = {
 export type ExplicitPlanCapabilityView = {
   executionMode?: "EXPLICIT_RULES";
   executionVersion?: "explicit-rules-v1";
-  isolatedTrustedReviewOnly?: true;
+  isolatedTrustedReviewOnly?: false;
   pendingRequirements?: Array<"ORDINARY_PLAN_FORMS">;
-  publicActivationAvailable?: false;
+  publicActivationAvailable?: true;
   schemaVersion?: 3;
   supportedActions?: Array<"BUY" | "SELL" | "RISK_ALERT">;
 };

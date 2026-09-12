@@ -598,9 +598,34 @@ class PersistentPlanWebLifecycle:
                     raise PlanActivationBlockedError(
                         "Explicit activation requires the current server review binding"
                     )
-                raise PlanActivationBlockedError(
-                    "Explicit plan activation awaits R12 ordinary plan forms"
+                executable = stored_plan.to_executable()
+                if executable is None:
+                    raise PlanActivationBlockedError(
+                        "Explicit activation requires a complete executable draft"
+                    )
+                _draft, validation, can_activate = _validated_plan_state(details)
+                if (
+                    PlanVersionStatus(details.status) is not PlanVersionStatus.DRAFT
+                    or not can_activate
+                ):
+                    raise PlanActivationBlockedError("Plan is not ready for activation")
+                work.plans.activate(
+                    executable,
+                    expected_revision=command.expected_revision,
+                    validation=validation,
                 )
+                state = work.plans.get_activation_state(executable.symbol)
+                if state is None:
+                    raise RepositoryError("Activated plan state could not be reloaded")
+                result = _active_plan_view(state)
+                complete_replay(
+                    work,
+                    context=context,
+                    request_hash=request_hash,
+                    response=result,
+                )
+                work.commit()
+                return result
             plan, validation, can_activate = _validated_plan_state(details)
             if PlanVersionStatus(details.status) is not PlanVersionStatus.DRAFT or not can_activate:
                 raise PlanActivationBlockedError("Plan is not ready for activation")

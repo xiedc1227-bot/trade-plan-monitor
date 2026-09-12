@@ -1,17 +1,16 @@
 <script lang="ts">
 import type {
-  ActionableSignalType,
   AlertAcknowledgementCommand,
   AlertPage,
-  AlertView,
 } from "../api/generated";
+import type { PublicAlertSignalType, PublicAlertView } from "../api/alerts";
 
 export interface AlertQuery {
   acknowledged: boolean | null;
   endAt: string | null;
   limit: number;
   offset: number;
-  signalType: ActionableSignalType | null;
+  signalType: PublicAlertSignalType | null;
   startAt: string | null;
   symbol: string | null;
 }
@@ -20,7 +19,7 @@ export interface AlertOperations {
   acknowledgeAlert(request: {
     command: AlertAcknowledgementCommand;
     idempotencyKey: string;
-  }): Promise<AlertView>;
+  }): Promise<PublicAlertView>;
   listAlerts(query: AlertQuery): Promise<AlertPage>;
 }
 </script>
@@ -65,7 +64,7 @@ type AcknowledgementOutcome =
 
 interface AcknowledgementContext {
   hadFocus: boolean;
-  original: AlertView;
+  original: PublicAlertView;
   outcome: AcknowledgementOutcome;
 }
 
@@ -201,7 +200,7 @@ function changePage(offset: number): void {
   void refreshAndResumeLive(nextQuery);
 }
 
-async function acknowledge(item: AlertView): Promise<void> {
+async function acknowledge(item: PublicAlertView): Promise<void> {
   if (pendingAcknowledgements.value.has(item.eventId)) {
     return;
   }

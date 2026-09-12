@@ -140,7 +140,7 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 
 ### T041 Frozen OpenAPI and Frontend-Type Boundary
 
-OpenAPI snapshot SHA-256: `5fbcd3221aca8d18331202fc7a8dc034a65145ce1b43e25a8a8a37bb661f0066`
+OpenAPI snapshot SHA-256: `7b66308dbfee321eba7a75ac76068331b499960640e486cc6504688c6ebe0e7e`
 
 - The side-effect-free `create_app()` is the sole OpenAPI source. Its document contains exactly 48 approved REST paths: 33 live paths, including read-only `GET /ai-runtime`, `GET /market-indexes/{indexCode}/bars`, `GET /plan-activation-states/{symbol}`, `GET /plan-capabilities`, `GET /position-inventory`, plan-scoped `GET /manual-event-risk`, and the explicit commands `POST /position-inventory-confirmations`, `POST /position-inventory-closures`, and `POST /manual-event-risk-confirmations`; the other exactly 15 paths are backtest resources, including reference-market coverage and frozen index-series reads. It documents every stable public error status with `ErrorResponse`; FastAPI's default `HTTPValidationError`/`ValidationError` schemas are excluded because runtime validation already uses the bounded secret-free envelope.
 - `scripts/generate_frontend_types.py` serializes `openapi.json` as sorted, indented UTF-8 with LF line endings and one final newline. It derives TypeScript component schemas, path methods, grouped parameters, request bodies, response statuses, media types, references, unions, intersections, arrays, objects, enums, and literals from that same document; API fields are never copied by hand.

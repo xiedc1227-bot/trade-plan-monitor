@@ -5,6 +5,7 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from uuid import UUID
 
+from trade_plan_monitor.ai.review import load_explicit_plan_draft_json
 from trade_plan_monitor.config import TushareConfiguration
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
@@ -61,6 +62,18 @@ from trade_plan_monitor.runtime.symbol_service import SymbolService
 from trade_plan_monitor.state.models import EvaluationKind, PlanVersionStatus
 
 _REFERENCE_DAYS = 366
+
+
+def _load_active_plan(document: str) -> ExecutableTradePlan:
+    """Load only a complete persisted plan; active partial drafts fail closed."""
+
+    try:
+        explicit = load_explicit_plan_draft_json(document).to_executable()
+    except ValueError:
+        return load_plan_json(document)
+    if explicit is None:
+        raise RuntimeError("active explicit plan is incomplete")
+    return explicit
 
 
 def create_explicit_runtime_evaluation_service(
@@ -269,7 +282,7 @@ class ProductionMonitorPipeline:
             raise ValueError("production supports at most ten active plans")
         return tuple(
             sorted(
-                (load_plan_json(record.payload_json) for record in records),
+                (_load_active_plan(record.payload_json) for record in records),
                 key=lambda plan: plan.symbol,
             )
         )

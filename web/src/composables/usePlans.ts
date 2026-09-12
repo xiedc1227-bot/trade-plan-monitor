@@ -15,6 +15,7 @@ import type {
   PlanDeactivationCommand,
   PlanDraftCommand,
   PlanImportCommand,
+  PlanReviewConfirmationCommand,
   PlanVersionPage,
   PlanVersionSummary,
   PlanVersionView,
@@ -54,6 +55,7 @@ export interface UsePlansResult {
   readonly selectedPlan: Readonly<ShallowRef<PlanVersionView | null>>;
   readonly versions: ComputedRef<readonly PlanVersionSummary[]>;
   activatePlan(command: PlanActivationCommand): Promise<boolean>;
+  confirmPlanReview(command: PlanReviewConfirmationCommand): Promise<boolean>;
   deactivatePlan(command: PlanDeactivationCommand): Promise<boolean>;
   importPlan(command: PlanImportCommand): Promise<boolean>;
   openPlan(planVersionId: string | null): Promise<boolean>;
@@ -271,6 +273,16 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     );
   }
 
+  async function confirmPlanReview(command: PlanReviewConfirmationCommand): Promise<boolean> {
+    return mutate(
+      "CONFIRM_PLAN_REVIEW",
+      command,
+      (prepared, key, signal) => api.confirmPlanReview(prepared, key, { signal }),
+      () => command.planVersionId,
+      "复核可能已提交，但无法确认结果；请刷新后核对。",
+    );
+  }
+
   async function deactivatePlan(command: PlanDeactivationCommand): Promise<boolean> {
     return mutate(
       "DEACTIVATE_PLAN",
@@ -428,6 +440,7 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     selectedPlan: shallowReadonly(selectedPlan),
     versions,
     activatePlan,
+    confirmPlanReview,
     deactivatePlan,
     importPlan,
     openPlan,

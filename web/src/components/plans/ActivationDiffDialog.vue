@@ -173,9 +173,11 @@ function confirmAction(): void {
     return;
   }
   if (props.action === "ACTIVATE") {
+    const explicitBinding = explicitReviewBinding(props.candidate);
     emit("activate", {
       expectedRevision: props.expectedRevision,
       planVersionId: props.candidate.id,
+      ...(explicitBinding === null ? {} : explicitBinding),
     });
   } else {
     if (props.current === null) {
@@ -186,6 +188,16 @@ function confirmAction(): void {
       symbol: props.current.symbol,
     });
   }
+}
+
+function explicitReviewBinding(
+  plan: PlanVersionView,
+): Pick<PlanActivationCommand, "contentHash" | "reviewId"> | null {
+  if (plan.contentHash === null || plan.contentHash === undefined ||
+    plan.reviewId === null || plan.reviewId === undefined) {
+    return null;
+  }
+  return { contentHash: plan.contentHash, reviewId: plan.reviewId };
 }
 </script>
 
