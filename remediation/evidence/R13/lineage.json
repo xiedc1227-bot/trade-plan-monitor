@@ -1,0 +1,168 @@
+{
+  "baselineHead": "fa316833e8c5d4b427acef4f8500d1e9714a2dd1",
+  "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-v9bgfe21\\monitor.sqlite3",
+  "readMode": "mode=ro",
+  "evaluations": [
+    {
+      "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "target_value": "2026-09-14T10:05:00+08:00",
+      "result_hash": "eb0099c1d9a3121a67d2862a8ddea4b9e573cb85a677f5757bff5b4bb180de5b",
+      "activation_revision": 1,
+      "inventory_revision": null,
+      "evaluated_at": "2026-09-14T10:05:15+08:00",
+      "hashValidation": "PASSED_CANONICAL_DOMAIN_VALIDATOR"
+    },
+    {
+      "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "target_value": "2026-09-14T10:10:00+08:00",
+      "result_hash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+      "activation_revision": 1,
+      "inventory_revision": 1,
+      "evaluated_at": "2026-09-14T10:10:15+08:00",
+      "hashValidation": "PASSED_CANONICAL_DOMAIN_VALIDATOR"
+    },
+    {
+      "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "target_value": "2026-09-14T10:15:00+08:00",
+      "result_hash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+      "activation_revision": 1,
+      "inventory_revision": 1,
+      "evaluated_at": "2026-09-14T10:15:15+08:00",
+      "hashValidation": "PASSED_CANONICAL_DOMAIN_VALIDATOR"
+    },
+    {
+      "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "target_value": "2026-09-14T10:20:00+08:00",
+      "result_hash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+      "activation_revision": 1,
+      "inventory_revision": null,
+      "evaluated_at": "2026-09-14T10:20:15+08:00",
+      "hashValidation": "PASSED_CANONICAL_DOMAIN_VALIDATOR"
+    }
+  ],
+  "occurrenceStates": [
+    {
+      "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "symbol": "003043.SZ",
+      "activation_revision": 1,
+      "rule_id": "buy-100",
+      "revision": 1,
+      "has_emitted": 1,
+      "last_emitted_bucket_end": "2026-09-14T10:10:00+08:00"
+    },
+    {
+      "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "symbol": "003043.SZ",
+      "activation_revision": 1,
+      "rule_id": "sell-100",
+      "revision": 1,
+      "has_emitted": 1,
+      "last_emitted_bucket_end": "2026-09-14T10:15:00+08:00"
+    },
+    {
+      "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "symbol": "003043.SZ",
+      "activation_revision": 1,
+      "rule_id": "risk-950",
+      "revision": 1,
+      "has_emitted": 1,
+      "last_emitted_bucket_end": "2026-09-14T10:20:00+08:00"
+    }
+  ],
+  "deliveryAttempts": [
+    {
+      "event_id": "e5928068-29c4-5554-9469-80e72628afdf",
+      "channel": "IN_APP",
+      "attempt": 1,
+      "status": "RETRY_PENDING",
+      "error_code": "CHANNEL_FAILURE"
+    },
+    {
+      "event_id": "e5928068-29c4-5554-9469-80e72628afdf",
+      "channel": "IN_APP",
+      "attempt": 2,
+      "status": "RETRY_PENDING",
+      "error_code": "CHANNEL_FAILURE"
+    },
+    {
+      "event_id": "e5928068-29c4-5554-9469-80e72628afdf",
+      "channel": "IN_APP",
+      "attempt": 3,
+      "status": "RETRY_PENDING",
+      "error_code": "CHANNEL_FAILURE"
+    },
+    {
+      "event_id": "00f68439-e072-5f51-8cd8-9559f9091e63",
+      "channel": "IN_APP",
+      "attempt": 1,
+      "status": "RETRY_PENDING",
+      "error_code": "CHANNEL_FAILURE"
+    },
+    {
+      "event_id": "00f68439-e072-5f51-8cd8-9559f9091e63",
+      "channel": "IN_APP",
+      "attempt": 2,
+      "status": "RETRY_PENDING",
+      "error_code": "CHANNEL_FAILURE"
+    },
+    {
+      "event_id": "e5928068-29c4-5554-9469-80e72628afdf",
+      "channel": "IN_APP",
+      "attempt": 4,
+      "status": "FAILED",
+      "error_code": "CHANNEL_FAILURE"
+    },
+    {
+      "event_id": "00f68439-e072-5f51-8cd8-9559f9091e63",
+      "channel": "IN_APP",
+      "attempt": 3,
+      "status": "RETRY_PENDING",
+      "error_code": "CHANNEL_FAILURE"
+    },
+    {
+      "event_id": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+      "channel": "IN_APP",
+      "attempt": 1,
+      "status": "RETRY_PENDING",
+      "error_code": "CHANNEL_FAILURE"
+    }
+  ],
+  "alerts": [
+    {
+      "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+      "planVersion": 2,
+      "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "activationRevision": 1,
+      "ruleId": "buy-100",
+      "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+      "quantity": 100,
+      "signalType": "BUY",
+      "currentActionable": true,
+      "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99"
+    },
+    {
+      "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+      "planVersion": 2,
+      "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "activationRevision": 1,
+      "ruleId": "sell-100",
+      "targetBucketEnd": "2026-09-14T10:15:00+08:00",
+      "quantity": 100,
+      "signalType": "SELL",
+      "currentActionable": true,
+      "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26"
+    },
+    {
+      "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+      "planVersion": 2,
+      "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "activationRevision": 1,
+      "ruleId": "risk-950",
+      "targetBucketEnd": "2026-09-14T10:20:00+08:00",
+      "quantity": null,
+      "signalType": "RISK_ALERT",
+      "currentActionable": true,
+      "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32"
+    }
+  ]
+}

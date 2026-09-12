@@ -1,0 +1,14 @@
+[
+  {
+    "document": "docs/verification/R13-business-acceptance",
+    "headingStructureEquivalent": true,
+    "technicalCodeTokensEquivalent": true,
+    "agentSemanticReview": "completed; scope, thresholds, statuses and limitations aligned"
+  },
+  {
+    "document": "remediation/R13-matrix",
+    "headingStructureEquivalent": true,
+    "technicalCodeTokensEquivalent": true,
+    "agentSemanticReview": "completed; scope, thresholds, statuses and limitations aligned"
+  }
+]

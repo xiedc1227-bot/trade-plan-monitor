@@ -1,0 +1,1722 @@
+{
+  "source": "backend.xml",
+  "sourceSha256": "d0c5d679a7573120a00efcd392615511e14941447cc0f582e528d2ea7df980b4",
+  "scope": "Existing full offline run only; grouped whole-file outcomes support the precise matrix references without claiming every case proves every scenario. R13 new tests remain separate in r13-regressions.xml.",
+  "groups": {
+    "S01-S04": {
+      "count": 63,
+      "cases": [
+        {
+          "nodeid": "tests/integration/test_explicit_decision_persistence.py::test_result_state_and_explicit_alert_commit_atomically_and_replay_after_restart",
+          "outcome": "PASSED",
+          "seconds": 0.088
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_decision_persistence.py::test_rollback_after_enqueue_releases_result_state_event_and_dedup_claim",
+          "outcome": "PASSED",
+          "seconds": 0.086
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_decision_persistence.py::test_risk_and_sell_enqueue_failure_rolls_back_both_and_retry_keeps_identities",
+          "outcome": "PASSED",
+          "seconds": 0.093
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_production_deadline_dispatches_only_qualified_explicit_buy[59-0]",
+          "outcome": "PASSED",
+          "seconds": 2.767
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_production_deadline_dispatches_only_qualified_explicit_buy[60-1]",
+          "outcome": "PASSED",
+          "seconds": 2.791
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_real_offline_scheduler_runs_sell_and_pure_five_minute_risk[1080-True-SELL-100]",
+          "outcome": "PASSED",
+          "seconds": 2.665
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_real_offline_scheduler_runs_sell_and_pure_five_minute_risk[1100-True-SELL-100]",
+          "outcome": "PASSED",
+          "seconds": 2.692
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_real_offline_scheduler_runs_sell_and_pure_five_minute_risk[949-False-RISK_ALERT-None]",
+          "outcome": "PASSED",
+          "seconds": 2.688
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_real_offline_scheduler_runs_sell_and_pure_five_minute_risk[950-False-None-None]",
+          "outcome": "PASSED",
+          "seconds": 2.661
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_real_offline_scheduler_commits_risk_and_sell_as_independent_intents",
+          "outcome": "PASSED",
+          "seconds": 2.675
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_real_scheduler_rolls_back_both_intents_when_second_enqueue_fails",
+          "outcome": "PASSED",
+          "seconds": 3.921
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_real_sell_scheduler_rejects_concurrent_inventory_revision_change",
+          "outcome": "PASSED",
+          "seconds": 2.705
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_deadline_waits_for_completed_bucket_and_restart_deduplicates",
+          "outcome": "PASSED",
+          "seconds": 4.023
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_real_monitor_composition_scheduler_dispatches_explicit_buy",
+          "outcome": "PASSED",
+          "seconds": 3.982
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_deadline_rejects_ineligible_or_replaced_explicit_plan[expired]",
+          "outcome": "PASSED",
+          "seconds": 0.268
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_deadline_rejects_ineligible_or_replaced_explicit_plan[deactivated]",
+          "outcome": "PASSED",
+          "seconds": 0.276
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_deadline_rejects_ineligible_or_replaced_explicit_plan[rotated]",
+          "outcome": "PASSED",
+          "seconds": 2.814
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_deadline_revision_guards_reject_stale_explicit_buy[deactivation]",
+          "outcome": "PASSED",
+          "seconds": 2.676
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_deadline_revision_guards_reject_stale_explicit_buy[rotation]",
+          "outcome": "PASSED",
+          "seconds": 2.689
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_deadline_revision_guards_reject_stale_explicit_buy[inventory]",
+          "outcome": "PASSED",
+          "seconds": 2.673
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_actual_deadline_revision_guards_reject_stale_explicit_buy[manual-risk]",
+          "outcome": "PASSED",
+          "seconds": 2.69
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_production_sqlite_dispatch_requires_price_and_mean_volume_then_deduplicates",
+          "outcome": "PASSED",
+          "seconds": 0.204
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_expired_explicit_plan_commits_evidence_but_never_a_new_buy_alert",
+          "outcome": "PASSED",
+          "seconds": 0.098
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_commit_guard_rejects_concurrent_consumed_revision_changes[activation]",
+          "outcome": "PASSED",
+          "seconds": 0.109
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_commit_guard_rejects_concurrent_consumed_revision_changes[inventory]",
+          "outcome": "PASSED",
+          "seconds": 0.104
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_runtime_production.py::test_commit_guard_rejects_concurrent_consumed_revision_changes[manual-risk]",
+          "outcome": "PASSED",
+          "seconds": 0.107
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_mean_volume_uses_preceding_nonuniform_window_and_exact_equality[200-UNSATISFIED]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_mean_volume_uses_preceding_nonuniform_window_and_exact_equality[299-UNSATISFIED]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_mean_volume_uses_preceding_nonuniform_window_and_exact_equality[300-SATISFIED]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_mean_volume_uses_preceding_nonuniform_window_and_exact_equality[301-SATISFIED]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_completed_close_range_honors_inclusive_fen_boundaries[979-False]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_completed_close_range_honors_inclusive_fen_boundaries[980-True]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_completed_close_range_honors_inclusive_fen_boundaries[981-True]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_completed_close_range_honors_inclusive_fen_boundaries[999-True]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_completed_close_range_honors_inclusive_fen_boundaries[1000-True]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_completed_close_range_honors_inclusive_fen_boundaries[1001-False]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_volume_window_rejects_gap_wrong_order_future_and_mixed_symbol",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_volume_window_accepts_lunch_and_confirmed_previous_trading_day_adjacency",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_conditions.py::test_zero_mean_is_data_and_logical_three_value_semantics_are_scoped",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_first_qualifying_bar_emits_direct_buy_100_with_state_proposal",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_buy_uses_known_current_inventory_without_reserving_or_filling[None-False-POSITION_UNKNOWN]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_buy_uses_known_current_inventory_without_reserving_or_filling[200-True-None]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_buy_uses_known_current_inventory_without_reserving_or_filling[300-False-MAX_POSITION_EXCEEDED]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_once_per_activation_suppresses_after_emit_but_new_activation_can_emit",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_each_qualifying_bar_suppresses_replay_only_and_does_not_consume_blocked_bar",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_result_hash_is_deterministic_and_tamper_evident",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_price_or_volume_false_emits_nothing_without_legacy_episode_state",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_sell_range_emits_exact_requested_quantity_only_when_sellable[1079-False]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_sell_range_emits_exact_requested_quantity_only_when_sellable[1080-True]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_sell_range_emits_exact_requested_quantity_only_when_sellable[1100-True]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_sell_range_emits_exact_requested_quantity_only_when_sellable[1101-False]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_sell_preserves_requested_quantity_and_reports_authoritative_inventory_blocker[inventory0-POSITION_UNKNOWN]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_sell_preserves_requested_quantity_and_reports_authoritative_inventory_blocker[inventory1-SELLABLE_QUANTITY_UNKNOWN]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_sell_preserves_requested_quantity_and_reports_authoritative_inventory_blocker[inventory2-INSUFFICIENT_SELLABLE_QUANTITY]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_pure_five_minute_risk_has_no_quantity_or_inventory_dependency[949-True]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_pure_five_minute_risk_has_no_quantity_or_inventory_dependency[950-False]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_pure_five_minute_risk_has_no_quantity_or_inventory_dependency[951-False]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_trade_conflict_blocks_buy_and_sell_before_repeat_or_inventory_checks",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_risk_sell_conflict_policy_preserves_independent_multi_intents[RISK_ONLY-expected_actions0]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_risk_sell_conflict_policy_preserves_independent_multi_intents[RISK_WITH_SELL_BLOCK_BUY-expected_actions1]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_repeat_suppressed_true_risk_still_blocks_buy",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_unknown_potential_risk_blocks_trade_but_not_known_risk",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_rules.py::test_known_risk_is_not_swallowed_by_unrelated_buy_input_missing",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        }
+      ]
+    },
+    "S05-S06": {
+      "count": 137,
+      "cases": [
+        {
+          "nodeid": "tests/integration/test_explicit_plan_review_api.py::test_v4_extraction_save_review_and_public_activation_are_server_bound",
+          "outcome": "PASSED",
+          "seconds": 0.222
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_plan_review_api.py::test_partial_draft_persists_and_stale_review_cannot_cross_an_immutable_edit",
+          "outcome": "PASSED",
+          "seconds": 0.177
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_plan_review_api.py::test_original_source_partial_save_current_edit_and_semantic_review_stay_bound",
+          "outcome": "PASSED",
+          "seconds": 0.178
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_inventory_isolation.py::test_independent_inventory_http_retry_restart_and_reconfirmation_never_double_count",
+          "outcome": "PASSED",
+          "seconds": 0.225
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_inventory_isolation.py::test_pure_risk_runtime_commits_without_registering_unknown_inventory",
+          "outcome": "PASSED",
+          "seconds": 0.093
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_inventory_isolation.py::test_explicit_reminder_and_acknowledgement_leave_registered_inventory_unchanged[BUY-990-100]",
+          "outcome": "PASSED",
+          "seconds": 0.174
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_inventory_isolation.py::test_explicit_reminder_and_acknowledgement_leave_registered_inventory_unchanged[SELL-1080-100]",
+          "outcome": "PASSED",
+          "seconds": 0.177
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_inventory_isolation.py::test_explicit_reminder_and_acknowledgement_leave_registered_inventory_unchanged[RISK_ALERT-949-None]",
+          "outcome": "PASSED",
+          "seconds": 0.175
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_legacy_compatibility.py::test_historical_v1_storage_reads_after_restart_without_rehashing_or_upgrading[False]",
+          "outcome": "PASSED",
+          "seconds": 0.203
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_legacy_compatibility.py::test_historical_v1_storage_reads_after_restart_without_rehashing_or_upgrading[True]",
+          "outcome": "PASSED",
+          "seconds": 0.476
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_literal_source_completes_current_review_without_initializing_inventory",
+          "outcome": "PASSED",
+          "seconds": 0.372
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_forged_source_processing_cannot_be_saved[quantity]",
+          "outcome": "PASSED",
+          "seconds": 0.161
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_forged_source_processing_cannot_be_saved[sellable]",
+          "outcome": "PASSED",
+          "seconds": 0.163
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_forged_source_processing_cannot_be_saved[contract]",
+          "outcome": "PASSED",
+          "seconds": 0.155
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_forged_source_processing_cannot_be_saved[span]",
+          "outcome": "PASSED",
+          "seconds": 0.161
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_forged_source_processing_cannot_be_saved[omit]",
+          "outcome": "PASSED",
+          "seconds": 0.17
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_forged_source_processing_cannot_be_saved[remove-processing]",
+          "outcome": "PASSED",
+          "seconds": 0.158
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_forged_source_processing_cannot_be_saved[remove-clause]",
+          "outcome": "PASSED",
+          "seconds": 0.16
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_tampered_stored_processing_or_resolution_fails_closed[processing]",
+          "outcome": "PASSED",
+          "seconds": 0.196
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_tampered_stored_processing_or_resolution_fails_closed[resolution]",
+          "outcome": "PASSED",
+          "seconds": 0.196
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_treatment_confirmation_cannot_be_forged[wrong-path]",
+          "outcome": "PASSED",
+          "seconds": 0.198
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_treatment_confirmation_cannot_be_forged[supplement]",
+          "outcome": "PASSED",
+          "seconds": 0.193
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_treatment_confirmation_cannot_be_forged[wrong-resolution]",
+          "outcome": "PASSED",
+          "seconds": 0.483
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_treatment_confirmation_cannot_be_forged[invented-issue]",
+          "outcome": "PASSED",
+          "seconds": 0.213
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_current_semantic_oracle_refuses_source_wrong_but_internally_consistent_mapping[price]",
+          "outcome": "PASSED",
+          "seconds": 0.181
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_current_semantic_oracle_refuses_source_wrong_but_internally_consistent_mapping[quantity]",
+          "outcome": "PASSED",
+          "seconds": 0.181
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_current_semantic_oracle_refuses_source_wrong_but_internally_consistent_mapping[logic]",
+          "outcome": "PASSED",
+          "seconds": 0.186
+        },
+        {
+          "nodeid": "tests/integration/test_source_treatment_review_api.py::test_current_semantic_oracle_refuses_source_wrong_but_internally_consistent_mapping[clause]",
+          "outcome": "PASSED",
+          "seconds": 0.177
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_uses_bounded_non_secret_defaults",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_strict_json_round_trip_preserves_valid_configuration",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_accepts_https_or_explicit_loopback_url[https://ai.example.com/v1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_accepts_https_or_explicit_loopback_url[http://localhost:11434/v1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_accepts_https_or_explicit_loopback_url[http://127.0.0.2:8000/v1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_accepts_https_or_explicit_loopback_url[http://[::1]:8000/v1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_unsafe_url[http://ai.example.com/v1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_unsafe_url[http://0.0.0.0:8000/v1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_unsafe_url[ftp://ai.example.com/v1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_unsafe_url[https://user:password@ai.example.com/v1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_unsafe_url[https://ai.example.com/v1?redirect=http://127.0.0.1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_unsafe_url[https://ai.example.com/v1#fragment]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[timeout_seconds-0]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[timeout_seconds-121]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[max_retries--1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[max_retries-3]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[max_input_chars-0]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[max_input_chars-200001]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[max_output_tokens-0]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[max_output_tokens-16385]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[temperature--0.01]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[temperature-0.31]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_values_outside_resource_bounds[allow_redirects-True]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_invalid_provider_and_model_fields[display_name-]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_invalid_provider_and_model_fields[display_name-unsafe\\nname]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_invalid_provider_and_model_fields[display_name-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_invalid_provider_and_model_fields[provider_type-UNKNOWN]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_invalid_provider_and_model_fields[model-]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_invalid_provider_and_model_fields[model-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_invalid_provider_and_model_fields[prompt_version-unsafe prompt version]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_validation_error_does_not_retain_misplaced_api_key[constructor]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_validation_error_does_not_retain_misplaced_api_key[model_validate]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_validation_error_does_not_retain_misplaced_api_key[model_validate_json]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_secret_store_public_contract_is_write_and_status_only",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_secret_write_and_replacement_return_masked_status_only",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_secret_reference_rejects_environment_variable_fallback",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_missing_secret_has_unconfigured_masked_state",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_secret_write_rejects_empty_or_oversized_values[]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_secret_write_rejects_empty_or_oversized_values[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_oversized_secret_validation_error_does_not_retain_secret_value[constructor]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_oversized_secret_validation_error_does_not_retain_secret_value[model_validate]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_oversized_secret_validation_error_does_not_retain_secret_value[model_validate_json]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_rejects_url_longer_than_persistence_bound",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_secret_write_rejects_whitespace_only_value",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_secret_status_rejects_stored_source_without_positive_generation",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_config_persistence_contains_references_but_no_secret_value_column",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_current_plan_extract_prompt_is_stable_json_only_and_wraps_injection_as_data",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_plan_extract_v1_prompt_matches_immutable_golden_hash",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_plan_extract_v2_prompt_matches_immutable_golden_hash",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_plan_extract_v3_prompt_versions_the_expanded_shared_index_enum",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_plan_extract_v4_prompt_has_an_independent_immutable_golden_hash",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_trade_plan_draft_remains_closed_and_cannot_add_an_arbitrary_formula",
+          "outcome": "PASSED",
+          "seconds": 0.006
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_returns_reviewable_draft_with_evidence_and_blocking_issues",
+          "outcome": "PASSED",
+          "seconds": 0.005
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_fails_closed_for_missing_forged_or_executable_ai_output[<lambda>-AI_FIELD_EVIDENCE_MISSING]",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_fails_closed_for_missing_forged_or_executable_ai_output[<lambda>-AI_FIELD_EVIDENCE_INVALID]",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_fails_closed_for_missing_forged_or_executable_ai_output[<lambda>-AI_OUTPUT_INVALID]",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_rejects_duplicate_json_keys_even_when_the_last_value_is_valid",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_provider_failure_returns_a_sanitized_non_executable_result",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_succeeded_extraction_result_cannot_exist_without_a_draft_and_evidence",
+          "outcome": "PASSED",
+          "seconds": 0.005
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_prompt_overhead_exceeding_configured_input_limit_returns_safe_result",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_rejects_lone_surrogates_without_calling_provider_or_leaking_text[\\ud800]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_rejects_lone_surrogates_without_calling_provider_or_leaking_text[\\udfff]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_ai_cannot_mark_unmapped_text_non_material_to_avoid_activation_block",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_successful_ai_draft_stays_blocked_until_evidence_is_trusted",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_successful_ai_result_builds_server_owned_review_snapshot",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_a1_omitted_client_review_cannot_activate_and_survives_restart",
+          "outcome": "PASSED",
+          "seconds": 0.194
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_forged_extraction_identity_and_reimport_cannot_qualify_for_activation",
+          "outcome": "PASSED",
+          "seconds": 0.13
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_exact_extraction_review_confirmation_can_activate",
+          "outcome": "PASSED",
+          "seconds": 0.14
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_a2_edited_ai_draft_invalidates_approval_and_survives_restart",
+          "outcome": "PASSED",
+          "seconds": 0.222
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_configured_ai_marks_success_only_after_review_snapshot_is_persisted",
+          "outcome": "PASSED",
+          "seconds": 0.016
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_single_character_field_evidence_is_rejected_as_degenerate",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_null_metadata_fields_do_not_require_fabricated_evidence",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_cancellation_propagates_without_becoming_provider_error",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_rejects_json_that_exceeds_node_budget",
+          "outcome": "PASSED",
+          "seconds": 0.006
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_rejects_json_that_exceeds_depth_budget",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_extraction_rejects_truncated_finish_reason_even_with_valid_json",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_drafting.py::test_missing_draft_is_a_sanitized_invalid_model_output",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_extraction_v4.py::test_provider_default_selects_v4_without_changing_the_configured_model",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_extraction_v4.py::test_v4_has_a_separate_schema_and_preserves_all_old_prompt_bytes",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_extraction_v4.py::test_v4_accepts_a_partial_typed_draft_but_derives_activation_blockers",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_extraction_v4.py::test_v4_rejects_a_missing_server_clause_even_when_json_is_well_typed",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_ai_plan_extraction_v4.py::test_v4_rejects_unknown_keys_duplicate_keys_and_truncation",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_v2_corpus_is_a_separate_simulated_provider_acceptance_oracle",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-EXP-01]",
+          "outcome": "PASSED",
+          "seconds": 0.003
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-EXP-02]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-EXP-03]",
+          "outcome": "PASSED",
+          "seconds": 0.003
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-EXP-04]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-EXP-05]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-EXP-06]",
+          "outcome": "PASSED",
+          "seconds": 0.003
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-EXP-07]",
+          "outcome": "PASSED",
+          "seconds": 0.003
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-EXP-08]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-AMB-01]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-AMB-02]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-AMB-03]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-AMB-04]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-AMB-05]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-AMB-06]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-UNS-01]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-UNS-02]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-UNS-03]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-UNS-04]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-UNS-05]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning[SEM-UNS-06]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_explicit_context_and_numeric_definitions_cross_the_same_v4_review_chain[SEM-CTX-01]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_explicit_context_and_numeric_definitions_cross_the_same_v4_review_chain[SEM-DEF-01]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_closed",
+          "outcome": "PASSED",
+          "seconds": 0.012
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_full_plan_omitted_action_clauses_remain_explicitly_unresolved[omitted-sell-clause]",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_full_plan_omitted_action_clauses_remain_explicitly_unresolved[omitted-risk-clause]",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/unit/test_explicit_plan_semantic_acceptance.py::test_full_synthetic_plan_preserves_omitted_clauses_and_policy_gaps",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        }
+      ]
+    },
+    "S07-S09": {
+      "count": 121,
+      "cases": [
+        {
+          "nodeid": "tests/integration/test_certified_production_runtime.py::test_production_capability_gate_consumes_fresh_local_stock_evidence[START]",
+          "outcome": "PASSED",
+          "seconds": 0.014
+        },
+        {
+          "nodeid": "tests/integration/test_certified_production_runtime.py::test_production_capability_gate_consumes_fresh_local_stock_evidence[UNVERIFIED]",
+          "outcome": "PASSED",
+          "seconds": 0.007
+        },
+        {
+          "nodeid": "tests/integration/test_certified_production_runtime.py::test_certified_pipeline_recovers_evaluates_once_and_restarts",
+          "outcome": "PASSED",
+          "seconds": 7.72
+        },
+        {
+          "nodeid": "tests/integration/test_certified_production_runtime.py::test_production_deadline_repairs_only_detected_gaps_with_realtime_budget[15-True]",
+          "outcome": "PASSED",
+          "seconds": 7.664
+        },
+        {
+          "nodeid": "tests/integration/test_certified_production_runtime.py::test_production_deadline_repairs_only_detected_gaps_with_realtime_budget[59-False]",
+          "outcome": "PASSED",
+          "seconds": 6.433
+        },
+        {
+          "nodeid": "tests/integration/test_certified_production_runtime.py::test_production_context_does_not_rebind_risk_from_another_plan_hash",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/integration/test_certified_production_runtime.py::test_unresolved_pending_close_makes_startup_recovery_fail_closed",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_transport.py::test_plan_capability_reports_public_r12_activation",
+          "outcome": "PASSED",
+          "seconds": 0.038
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_transport.py::test_authoritative_inventory_http_distinguishes_unknown_and_confirmed_zero",
+          "outcome": "PASSED",
+          "seconds": 0.137
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_transport.py::test_explicit_buy_alert_is_queryable_with_versioned_evidence",
+          "outcome": "PASSED",
+          "seconds": 0.282
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_transport.py::test_explicit_sell_and_risk_alerts_keep_type_quantity_and_rendering_through_api",
+          "outcome": "PASSED",
+          "seconds": 0.146
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_transport.py::test_inventory_closure_command_debits_opening_balance_without_active_plan",
+          "outcome": "PASSED",
+          "seconds": 0.146
+        },
+        {
+          "nodeid": "tests/integration/test_explicit_transport.py::test_inventory_closure_command_debits_registered_core_lot",
+          "outcome": "PASSED",
+          "seconds": 0.149
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_projection_validation_rejects_unbounded_canonical_decimal_expansion[{\"threshold_ratio\":\"1e-999999999\"}]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_projection_validation_rejects_unbounded_canonical_decimal_expansion[{ \"threshold_ratio\" : \"1e-999999999\" }]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_market_index_persistence_reuses_an_older_canonical_content_revision",
+          "outcome": "PASSED",
+          "seconds": 0.09
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_production_pipeline_collects_dashboard_indexes_without_active_plans",
+          "outcome": "PASSED",
+          "seconds": 0.165
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_production_pipeline_retries_a_late_index_bucket_once_on_the_next_minute",
+          "outcome": "PASSED",
+          "seconds": 0.229
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_real_composition_starts_runs_a_timer_and_restores_its_projection",
+          "outcome": "PASSED",
+          "seconds": 1.393
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_cross_day_official_risk_breach_restores_from_sqlite_dashboard",
+          "outcome": "PASSED",
+          "seconds": 0.652
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity[before-start]",
+          "outcome": "PASSED",
+          "seconds": 0.274
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity[after-end]",
+          "outcome": "PASSED",
+          "seconds": 0.278
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity[trading-day-mismatch]",
+          "outcome": "PASSED",
+          "seconds": 0.434
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_startup_batches_persisted_pending_closes_by_date_and_shared_index[success]",
+          "outcome": "PASSED",
+          "seconds": 2.189
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_startup_batches_persisted_pending_closes_by_date_and_shared_index[official_missing]",
+          "outcome": "PASSED",
+          "seconds": 1.959
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_startup_batches_persisted_pending_closes_by_date_and_shared_index[index_error]",
+          "outcome": "PASSED",
+          "seconds": 2.164
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_startup_batches_persisted_pending_closes_by_date_and_shared_index[revision_conflict]",
+          "outcome": "PASSED",
+          "seconds": 1.85
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_production_pipeline_shares_index_snapshots_and_fails_closed_after_invalidation[expiry]",
+          "outcome": "PASSED",
+          "seconds": 2.261
+        },
+        {
+          "nodeid": "tests/integration/test_live_pipeline_acceptance.py::test_production_pipeline_shares_index_snapshots_and_fails_closed_after_invalidation[tamper]",
+          "outcome": "PASSED",
+          "seconds": 2.13
+        },
+        {
+          "nodeid": "tests/integration/test_manual_event_risk.py::test_manual_event_risk_is_three_state_scoped_expiring_and_audited",
+          "outcome": "PASSED",
+          "seconds": 0.076
+        },
+        {
+          "nodeid": "tests/integration/test_manual_event_risk.py::test_manual_event_risk_api_exposes_unknown_reason_and_confirmation_receipt",
+          "outcome": "PASSED",
+          "seconds": 0.061
+        },
+        {
+          "nodeid": "tests/integration/test_manual_event_risk.py::test_manual_event_risk_service_survives_restart_and_fails_closed_on_scope_drift",
+          "outcome": "PASSED",
+          "seconds": 0.104
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_state_audit_and_outbox_commit_or_rollback_in_one_transaction",
+          "outcome": "PASSED",
+          "seconds": 0.086
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_concurrent_dedup_enqueue_has_one_unique_claim",
+          "outcome": "PASSED",
+          "seconds": 0.081
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_restart_dedup_preserves_original_event_identity",
+          "outcome": "PASSED",
+          "seconds": 0.071
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_outbox_reports_existing_dedup_identity_without_reenqueuing",
+          "outcome": "PASSED",
+          "seconds": 0.078
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_restart_dedup_normalizes_decimal_scale_and_signed_zero",
+          "outcome": "PASSED",
+          "seconds": 0.078
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_restart_dedup_preserves_integer_and_decimal_type_identity",
+          "outcome": "PASSED",
+          "seconds": 0.073
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_dedup_identity_rejects_conflicting_semantic_payload",
+          "outcome": "PASSED",
+          "seconds": 0.073
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_enqueue_maps_global_event_identity_conflict_to_sanitized_outbox_error",
+          "outcome": "PASSED",
+          "seconds": 0.072
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_enqueue_maps_monitor_storage_failure_to_sanitized_outbox_error",
+          "outcome": "PASSED",
+          "seconds": 0.015
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_acknowledge_maps_global_event_conflict_to_sanitized_atomic_outbox_error",
+          "outcome": "PASSED",
+          "seconds": 0.076
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_outbox_assigns_ordered_sequences_and_replays_after_cursor",
+          "outcome": "PASSED",
+          "seconds": 0.076
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_replay_sequence_does_not_reset_after_retained_events_are_deleted",
+          "outcome": "PASSED",
+          "seconds": 0.081
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_replay_includes_exact_seven_day_boundary",
+          "outcome": "PASSED",
+          "seconds": 0.08
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_replay_retention_must_be_valid_before_unit_of_work_opens",
+          "outcome": "PASSED",
+          "seconds": 0.067
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_replay_rejects_stored_event_identity_mismatch",
+          "outcome": "PASSED",
+          "seconds": 0.077
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_replay_storage_error_has_no_raw_payload_context",
+          "outcome": "PASSED",
+          "seconds": 0.072
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_acknowledge_is_idempotent_audited_and_does_not_change_position",
+          "outcome": "PASSED",
+          "seconds": 0.083
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_acknowledge_integrity_failure_is_sanitized_and_atomic",
+          "outcome": "PASSED",
+          "seconds": 0.076
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_dispatcher_recovers_a_committed_event_after_restart_and_skips_disabled_webhook",
+          "outcome": "PASSED",
+          "seconds": 0.093
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_expired_queued_alert_is_retained_but_not_dispatched_as_current",
+          "outcome": "PASSED",
+          "seconds": 0.283
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_alert_without_active_plan_is_neither_actionable_nor_deliverable[is_current_actionable]",
+          "outcome": "PASSED",
+          "seconds": 0.068
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_alert_without_active_plan_is_neither_actionable_nor_deliverable[is_delivery_allowed]",
+          "outcome": "PASSED",
+          "seconds": 0.071
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_alert_from_replaced_plan_is_neither_actionable_nor_deliverable[is_current_actionable]",
+          "outcome": "PASSED",
+          "seconds": 0.085
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_alert_from_replaced_plan_is_neither_actionable_nor_deliverable[is_delivery_allowed]",
+          "outcome": "PASSED",
+          "seconds": 0.089
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_alert_query_retains_replaced_plan_event_as_historical",
+          "outcome": "PASSED",
+          "seconds": 0.095
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_alert_policy_rejects_malformed_active_plan_storage[is_current_actionable]",
+          "outcome": "PASSED",
+          "seconds": 0.085
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_alert_policy_rejects_malformed_active_plan_storage[is_delivery_allowed]",
+          "outcome": "PASSED",
+          "seconds": 0.088
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_target_date_valid_cross_day_risk_recovery_is_delivered_as_history",
+          "outcome": "PASSED",
+          "seconds": 0.104
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_console_and_webhook_failures_remain_isolated_from_mandatory_in_app_delivery",
+          "outcome": "PASSED",
+          "seconds": 0.091
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_webhook_retry_schedule_is_persistent_bounded_and_uses_the_same_event_id",
+          "outcome": "PASSED",
+          "seconds": 0.115
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_non_retryable_webhook_failure_is_not_attempted_again",
+          "outcome": "PASSED",
+          "seconds": 0.087
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_dispatch_limit_bounds_channel_work_and_uncommitted_events_are_invisible",
+          "outcome": "PASSED",
+          "seconds": 0.09
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_webhook_network_call_occurs_with_no_database_transaction_open",
+          "outcome": "PASSED",
+          "seconds": 0.085
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_delivery_storage_failure_drops_sql_parameters_context_and_cause",
+          "outcome": "PASSED",
+          "seconds": 0.083
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_concurrent_dispatchers_atomically_claim_one_external_delivery[dispatch_pending]",
+          "outcome": "PASSED",
+          "seconds": 0.111
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_concurrent_dispatchers_atomically_claim_one_external_delivery[dispatch_event]",
+          "outcome": "PASSED",
+          "seconds": 0.11
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_restart_reclaims_an_expired_attempt_without_allocating_a_new_attempt",
+          "outcome": "PASSED",
+          "seconds": 0.095
+        },
+        {
+          "nodeid": "tests/integration/test_notification_delivery.py::test_dispatcher_rejects_a_channel_iterable_after_the_fourth_item",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_ten_symbol_runtime_uses_one_batch_and_builds_immutable_live_contexts",
+          "outcome": "PASSED",
+          "seconds": 0.003
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_runtime_persists_each_non_boundary_minute_without_premature_aggregation",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_partial_and_malformed_batch_blocks_only_affected_symbols",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_missing_current_response_cannot_be_hidden_by_cached_target_minute",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_malformed_loaded_context_blocks_only_its_symbol_after_missing_response",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_second_incomplete_bucket_degrades_one_symbol_without_cancelling_others",
+          "outcome": "PASSED",
+          "seconds": 0.004
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_dynamic_plan_enable_and_disable_changes_the_next_batch_without_restart",
+          "outcome": "PASSED",
+          "seconds": 0.003
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_provider_block_marks_each_symbol_blocked_without_leaking_provider_detail",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_runtime_rejects_more_than_ten_active_symbols_before_provider_call",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_startup_recovery_is_serial_sorted_and_idempotent_for_active_symbols",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_targeted_recovery_persists_only_explicit_detected_gaps",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_repaired_historical_gap_clears_on_the_next_bucket[False]",
+          "outcome": "PASSED",
+          "seconds": 0.003
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_repaired_historical_gap_clears_on_the_next_bucket[True]",
+          "outcome": "PASSED",
+          "seconds": 0.002
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_recovery_yields_before_starting_another_symbol_when_realtime_is_pending",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_recovery_permission_and_rate_limit_fail_closed_without_detail[BLOCKED_PERMISSION-BLOCKED_PERMISSION]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_recovery_permission_and_rate_limit_fail_closed_without_detail[RATE_LIMITED-RATE_LIMITED]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_recovery_transient_backoff_is_shared_by_startup_and_gap_repair",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_recovery_rejects_invalid_symbol_or_wrong_date_rows_without_persistence",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_recovery_persistence_failure_isolated_without_leaking_storage_detail",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_recovery_rejects_more_than_ten_active_symbols_before_provider_call",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_fetches_outside_transaction_and_assembles_exact_context",
+          "outcome": "PASSED",
+          "seconds": 0.108
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_injects_one_validated_reference_snapshot",
+          "outcome": "PASSED",
+          "seconds": 0.13
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_batch_uses_prefetched_deadline_minutes_without_second_fetch",
+          "outcome": "PASSED",
+          "seconds": 0.138
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_prefetched_symbol_health_replaces_context_builder_health_without_promotion",
+          "outcome": "PASSED",
+          "seconds": 0.107
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_plan_rotation_during_fetch_is_discarded_and_next_cycle_still_commits",
+          "outcome": "PASSED",
+          "seconds": 0.138
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_stale_activation_error_is_a_typed_expected_runtime_outcome",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_final_commit_fence_rejects_a_plan_outside_its_market_date",
+          "outcome": "PASSED",
+          "seconds": 0.085
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_production_context_marks_an_out_of_validity_market_date_inactive",
+          "outcome": "PASSED",
+          "seconds": 0.105
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_deadline_coordinator_starts_one_stock_batch_and_reuses_it_for_every_plan",
+          "outcome": "PASSED",
+          "seconds": 0.135
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_deadline_uses_post_fetch_whole_second_for_health_and_evaluation",
+          "outcome": "PASSED",
+          "seconds": 0.106
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_deadline_uses_immutable_plan_symbol_snapshot_when_active_set_changes[31]",
+          "outcome": "PASSED",
+          "seconds": 0.077
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_deadline_uses_immutable_plan_symbol_snapshot_when_active_set_changes[35]",
+          "outcome": "PASSED",
+          "seconds": 0.081
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_batch_unions_requirements_and_shares_one_snapshot_across_plans",
+          "outcome": "PASSED",
+          "seconds": 0.188
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_latest_quote_cannot_hide_gapped_current_day_context",
+          "outcome": "PASSED",
+          "seconds": 0.114
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_assembles_full_240_minute_provisional_close",
+          "outcome": "PASSED",
+          "seconds": 0.368
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_rolls_back_atomic_application_then_restarts_exactly_once",
+          "outcome": "PASSED",
+          "seconds": 0.2
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_publisher_failure_cannot_undo_committed_outbox",
+          "outcome": "PASSED",
+          "seconds": 0.119
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_never_applies_official_close_risk_transition",
+          "outcome": "PASSED",
+          "seconds": 0.346
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_never_enqueues_official_close_risk_signal",
+          "outcome": "PASSED",
+          "seconds": 0.086
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_intraday_service_same_cause_commits_later_bucket_without_republish",
+          "outcome": "PASSED",
+          "seconds": 0.149
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_official_close_uses_trusted_post_fetch_observation_time",
+          "outcome": "PASSED",
+          "seconds": 0.098
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_completed_official_close_short_circuits_later_attempt_after_restart",
+          "outcome": "PASSED",
+          "seconds": 0.12
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_official_close_accepts_scheduler_attempt_beyond_ten",
+          "outcome": "PASSED",
+          "seconds": 0.085
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_official_close_attempts_persist_pending_then_commit_matching_official_risk",
+          "outcome": "PASSED",
+          "seconds": 0.126
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_official_close_replaces_cross_plan_risk_with_storage_revision_cas",
+          "outcome": "PASSED",
+          "seconds": 0.143
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_official_close_rejects_provisional_fetch_and_mixed_context",
+          "outcome": "PASSED",
+          "seconds": 0.415
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_official_evaluation_failure_retains_pending_and_blocks_later_close",
+          "outcome": "PASSED",
+          "seconds": 0.102
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_official_close_rolls_back_application_then_restarts_exactly_once",
+          "outcome": "PASSED",
+          "seconds": 0.168
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_unresolved_close_pending_blocks_next_day_until_original_date_resolves",
+          "outcome": "PASSED",
+          "seconds": 0.135
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_concurrent_official_close_attempts_serialize_before_next_day_transition",
+          "outcome": "PASSED",
+          "seconds": 0.085
+        },
+        {
+          "nodeid": "tests/integration/test_ten_symbol_runtime.py::test_startup_recovery_resolves_close_pending_before_current_day_minutes",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        }
+      ]
+    },
+    "F09-contract": {
+      "count": 14,
+      "cases": [
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_openapi_snapshot_is_deterministic_canonical_and_current",
+          "outcome": "PASSED",
+          "seconds": 1.146
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval",
+          "outcome": "PASSED",
+          "seconds": 0.478
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas",
+          "outcome": "PASSED",
+          "seconds": 0.467
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_plan_contract_exposes_server_versioning_and_lightweight_summaries",
+          "outcome": "PASSED",
+          "seconds": 0.459
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_typescript_contract_is_generated_from_the_snapshot",
+          "outcome": "PASSED",
+          "seconds": 0.464
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_typescript_parameter_group_is_required_when_any_member_is_required",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_typescript_schema_names_reject_reserved_identifiers[export]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_typescript_schema_names_reject_reserved_identifiers[string]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_generator_check_detects_snapshot_and_type_drift",
+          "outcome": "PASSED",
+          "seconds": 0.495
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_generator_check_command_passes_for_committed_outputs",
+          "outcome": "PASSED",
+          "seconds": 1.862
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_spa_document_is_a_stable_csp_compatible_vite_entry",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_generated_contract_outputs_use_lf_and_end_with_newline[path0]",
+          "outcome": "PASSED",
+          "seconds": 0.001
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_generated_contract_outputs_use_lf_and_end_with_newline[path1]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        },
+        {
+          "nodeid": "tests/integration/test_openapi_snapshot.py::test_generated_contract_outputs_use_lf_and_end_with_newline[path2]",
+          "outcome": "PASSED",
+          "seconds": 0.0
+        }
+      ]
+    },
+    "F07-ANY": {
+      "count": 3,
+      "cases": [
+        {
+          "nodeid": "tests/unit/test_decision_engine.py::test_low_zone_any_volume_alternatives_do_not_become_structural_blockers[price-first]",
+          "outcome": "PASSED",
+          "seconds": 0.015
+        },
+        {
+          "nodeid": "tests/unit/test_decision_engine.py::test_low_zone_any_volume_alternatives_do_not_become_structural_blockers[volume-first]",
+          "outcome": "PASSED",
+          "seconds": 0.015
+        },
+        {
+          "nodeid": "tests/unit/test_decision_engine.py::test_low_zone_any_volume_alternatives_do_not_become_structural_blockers[nested-and-multiple-volume-caps]",
+          "outcome": "PASSED",
+          "seconds": 0.015
+        }
+      ]
+    }
+  }
+}

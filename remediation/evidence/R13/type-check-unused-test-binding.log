@@ -1,0 +1,5 @@
+
+> trade-plan-monitor-web@0.1.0 type-check
+> vue-tsc --noEmit -p tsconfig.json
+
+tests/e2e/r13-live-stream.spec.ts(76,11): error TS6133: 'original' is declared but its value is never read.

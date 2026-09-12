@@ -1,0 +1,120 @@
+[
+  {
+    "command": ".\\.venv\\Scripts\\python.exe -m pytest -m 'not live' -vv -ra --durations=25 --junitxml=remediation/evidence/R13/backend.xml",
+    "start": "2026-09-13T02:14:35.1739612+08:00",
+    "durationSeconds": 2330.0623207,
+    "exitCode": 0,
+    "cwd": "repository/",
+    "log": "backend.log",
+    "junit": "backend.xml",
+    "passed": 2591,
+    "skipped": 1,
+    "deselected": 4,
+    "warnings": 1,
+    "skipReason": "requires POSIX ownership semantics on this Windows host",
+    "deselectReason": "four marked live-provider cases outside R13 authorization",
+    "pytestDurationSeconds": 2328.09
+  },
+  {
+    "command": "npm run test -- --run",
+    "start": "2026-09-13T02:14:45.6352637+08:00",
+    "durationSeconds": 6.6407936,
+    "exitCode": 0,
+    "cwd": "web/",
+    "passed": 642,
+    "files": 45,
+    "log": "frontend-test.log"
+  },
+  {
+    "command": "npm run type-check",
+    "start": "2026-09-13T02:14:52.2272329+08:00",
+    "durationSeconds": 4.2594451,
+    "exitCode": 0,
+    "cwd": "web/",
+    "log": "frontend-type-check.log"
+  },
+  {
+    "command": "npm run build",
+    "start": "2026-09-13T02:14:56.4904057+08:00",
+    "durationSeconds": 1.3590101,
+    "exitCode": 0,
+    "cwd": "web/",
+    "log": "frontend-build.log"
+  },
+  {
+    "command": "npm run test:e2e",
+    "start": "2026-09-13T02:14:57.8519891+08:00",
+    "durationSeconds": 83.1434259,
+    "exitCode": 1,
+    "cwd": "web/",
+    "passed": 19,
+    "failed": 7,
+    "log": "frontend-test-e2e.log"
+  },
+  {
+    "durationSeconds": 111.4283168,
+    "exitCode": 1,
+    "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/integration/test_r13_independent_oracle.py tests/integration/test_r13_channel_acceptance.py -q --junitxml=remediation/evidence/R13/r13-regressions.xml",
+    "cwd": "repository/",
+    "log": "r13-regressions.log",
+    "passed": 37,
+    "failed": 3,
+    "junit": "r13-regressions.xml",
+    "finding": "N01"
+  },
+  {
+    "exitCode": 1,
+    "durationSeconds": 10.3746759,
+    "command": "npm run test:e2e -- tests/e2e/r13-corrections.spec.ts",
+    "cwd": "web/",
+    "log": "corrections.log",
+    "passed": 0,
+    "failed": 1,
+    "failedAssertions": 4,
+    "finding": "N02"
+  },
+  {
+    "exitCode": 0,
+    "durationSeconds": 7.0887846,
+    "command": "npm run test:e2e -- tests/e2e/r13-ai-faults.spec.ts",
+    "cwd": "web/",
+    "log": "ai-faults.log",
+    "passed": 1,
+    "faultVariants": 6
+  },
+  {
+    "exitCode": 0,
+    "durationSeconds": 37.7905102,
+    "command": "npm run test:e2e -- tests/e2e/r13-live-stream.spec.ts",
+    "cwd": "web/",
+    "log": "stream.log",
+    "passed": 1
+  },
+  {
+    "durationSeconds": 10.2742269,
+    "exitCode": 1,
+    "command": "npm run test:e2e -- --config ../remediation/evidence/R13/playwright.config.ts tests/e2e/production-restart.spec.ts tests/e2e/symbol-detail.spec.ts --grep 'packaged SPA|separated detail|submits position'",
+    "cwd": "web/",
+    "log": "browser-recheck.log",
+    "failed": 3,
+    "findings": [
+      "N03",
+      "N04"
+    ]
+  },
+  {
+    "command": ".\\.venv\\Scripts\\ruff.exe check tests/integration/test_r13_independent_oracle.py tests/integration/test_r13_channel_acceptance.py tests/browser/r13_fault_server.py",
+    "exitCode": 0,
+    "log": "ruff.log",
+    "durationSeconds": null,
+    "note": "Elapsed time was not independently recorded; no timing claimed."
+  },
+  {
+    "exitCode": 0,
+    "command": "npm run type-check",
+    "durationSeconds": 3.8381399,
+    "cwd": "web/",
+    "log": "final-type-check.log",
+    "scope": "After adding all R13 browser acceptance probes"
+  }
+]

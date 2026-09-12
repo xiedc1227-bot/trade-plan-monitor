@@ -1,0 +1,392 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test
+
+
+Running 26 tests using 1 worker
+
+(node:26960) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/26] [chrome] › tests\e2e\accessibility.spec.ts:94:1 › loads system health through the production /system route
+[2/26] [chrome] › tests\e2e\accessibility.spec.ts:199:1 › has no WCAG 2.1 A/AA axe violations
+[3/26] [chrome] › tests\e2e\accessibility.spec.ts:216:1 › fits 320, 768, 1024, and 1440 pixel layouts without horizontal overflow
+[4/26] [chrome] › tests\e2e\accessibility.spec.ts:235:1 › keeps native keyboard order, visible focus, semantic state, and reduced motion
+[5/26] [chrome] › tests\e2e\alert-recovery.spec.ts:99:3 › shows a persisted alert without manual refresh after snapshot-required
+[6/26] [chrome] › tests\e2e\alert-recovery.spec.ts:99:3 › shows a persisted alert without manual refresh after snapshot-then-alert
+[7/26] [chrome] › tests\e2e\alerts.spec.ts:109:1 › queries, filters, expands evidence, and acknowledges without a position request
+[8/26] [chrome] › tests\e2e\backtests.spec.ts:688:1 › covers the four backtest routes with keyboard flows and serious axe checks
+[9/26] [chrome] › tests\e2e\backtests.spec.ts:757:1 › submits a complete new run and follows the authoritative job to its result
+[10/26] [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries
+[11/26] [chrome] › tests\e2e\backtests.spec.ts:849:1 › enforces request, DOM, polling, and pre-equity ECharts bounds
+[12/26] [chrome] › tests\e2e\dashboard.spec.ts:239:1 › renders the authoritative dashboard and shared board-index summary at the root route
+  1) [chrome] › tests\e2e\dashboard.spec.ts:239:1 › renders the authoritative dashboard and shared board-index summary at the root route 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:59155/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    + ]
+
+      214 | test.afterEach(({ page }) => {
+      215 |   const audit = browserAudits.get(page);
+    > 216 |   expect(audit?.consoleFailures ?? []).toEqual([]);
+          |                                        ^
+      217 |   expect(audit?.failedRequests ?? []).toEqual([]);
+      218 | });
+      219 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\dashboard.spec.ts:216:40
+
+    Error: browser console errors/warnings
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:59155/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    + ]
+
+       at fixtures.ts:35
+
+      33 |       await use();
+      34 |
+    > 35 |       expect(audit.consoleFailures, "browser console errors/warnings").toEqual([]);
+         |                                                                        ^
+      36 |       expect(audit.failedRequests, "browser request failures").toEqual([]);
+      37 |     },
+      38 |     { auto: true },
+        at Object.base.extend.browserAudit.auto (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\fixtures.ts:35:72)
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome\error-context.md
+
+
+
+(node:51748) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[13/26] [chrome] › tests\e2e\dashboard.spec.ts:341:1 › keeps the shared-index and per-plan dashboard boundary responsive and accessible
+  2) [chrome] › tests\e2e\dashboard.spec.ts:341:1 › keeps the shared-index and per-plan dashboard boundary responsive and accessible 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 6
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:64056/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:64056/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:64056/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:64056/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    + ]
+
+      214 | test.afterEach(({ page }) => {
+      215 |   const audit = browserAudits.get(page);
+    > 216 |   expect(audit?.consoleFailures ?? []).toEqual([]);
+          |                                        ^
+      217 |   expect(audit?.failedRequests ?? []).toEqual([]);
+      218 | });
+      219 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\dashboard.spec.ts:216:40
+
+    Error: browser console errors/warnings
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 6
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:64056/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:64056/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:64056/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:64056/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    + ]
+
+       at fixtures.ts:35
+
+      33 |       await use();
+      34 |
+    > 35 |       expect(audit.consoleFailures, "browser console errors/warnings").toEqual([]);
+         |                                                                        ^
+      36 |       expect(audit.failedRequests, "browser request failures").toEqual([]);
+      37 |     },
+      38 |     { auto: true },
+        at Object.base.extend.browserAudit.auto (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\fixtures.ts:35:72)
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-keeps-the-shared-d638b-y-responsive-and-accessible-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-keeps-the-shared-d638b-y-responsive-and-accessible-chrome\error-context.md
+
+
+
+(node:30284) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[14/26] [chrome] › tests\e2e\dashboard.spec.ts:388:1 › distinguishes typed unavailable monitoring from a real disconnected service
+  3) [chrome] › tests\e2e\dashboard.spec.ts:388:1 › distinguishes typed unavailable monitoring from a real disconnected service 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    + ]
+
+      424 |   expect(dashboardRequests).toBeGreaterThanOrEqual(1);
+      425 |   expect(socketUrls).toEqual([]);
+    > 426 |   expect(consoleFailures).toEqual([]);
+          |                           ^
+      427 |   expect(failedRequests).toEqual([]);
+      428 | });
+      429 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\dashboard.spec.ts:426:27
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:51358/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    + ]
+
+      214 | test.afterEach(({ page }) => {
+      215 |   const audit = browserAudits.get(page);
+    > 216 |   expect(audit?.consoleFailures ?? []).toEqual([]);
+          |                                        ^
+      217 |   expect(audit?.failedRequests ?? []).toEqual([]);
+      218 | });
+      219 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\dashboard.spec.ts:216:40
+
+    Error: browser console errors/warnings
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:51358/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    + ]
+
+       at fixtures.ts:35
+
+      33 |       await use();
+      34 |
+    > 35 |       expect(audit.consoleFailures, "browser console errors/warnings").toEqual([]);
+         |                                                                        ^
+      36 |       expect(audit.failedRequests, "browser request failures").toEqual([]);
+      37 |     },
+      38 |     { auto: true },
+        at Object.base.extend.browserAudit.auto (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\fixtures.ts:35:72)
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-distinguishes-ty-1f40c-a-real-disconnected-service-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-distinguishes-ty-1f40c-a-real-disconnected-service-chrome\error-context.md
+
+
+
+(node:15000) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[15/26] [chrome] › tests\e2e\dashboard.spec.ts:451:1 › recovers a sequence gap with a fresh dashboard snapshot before replaying from its cursor
+  4) [chrome] › tests\e2e\dashboard.spec.ts:451:1 › recovers a sequence gap with a fresh dashboard snapshot before replaying from its cursor 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:60802/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    + ]
+
+      214 | test.afterEach(({ page }) => {
+      215 |   const audit = browserAudits.get(page);
+    > 216 |   expect(audit?.consoleFailures ?? []).toEqual([]);
+          |                                        ^
+      217 |   expect(audit?.failedRequests ?? []).toEqual([]);
+      218 | });
+      219 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\dashboard.spec.ts:216:40
+
+    Error: browser console errors/warnings
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:60802/api/v1/plan-versions?offset=0&limit=100&status=ACTIVE",
+    + ]
+
+       at fixtures.ts:35
+
+      33 |       await use();
+      34 |
+    > 35 |       expect(audit.consoleFailures, "browser console errors/warnings").toEqual([]);
+         |                                                                        ^
+      36 |       expect(audit.failedRequests, "browser request failures").toEqual([]);
+      37 |     },
+      38 |     { auto: true },
+        at Object.base.extend.browserAudit.auto (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\fixtures.ts:35:72)
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-recovers-a-seque-656c7-e-replaying-from-its-cursor-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-recovers-a-seque-656c7-e-replaying-from-its-cursor-chrome\error-context.md
+
+
+(node:4464) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[16/26] [chrome] › tests\e2e\explicit-sqlite.spec.ts:39:1 › literal v3 ordinary UI reaches real SQLite and production scheduler
+[chrome] › tests\e2e\explicit-sqlite.spec.ts:39:1 › literal v3 ordinary UI reaches real SQLite and production scheduler
+R12 browser evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-v9bgfe21
+
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+{"port": 64141, "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-v9bgfe21", "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-v9bgfe21\\monitor.sqlite3"}
+
+
+[17/26] [chrome] › tests\e2e\plans.spec.ts:217:1 › requires explicit review, save, and backend-approved activation for an AI result
+[18/26] [chrome] › tests\e2e\plans.spec.ts:348:1 › runs the configured AI and persisted plan workbench flow in isolated Chromium
+[19/26] [chrome] › tests\e2e\production-restart.spec.ts:63:3 › installed production restart › serves the packaged SPA and keeps typed availability across process restart
+  5) [chrome] › tests\e2e\production-restart.spec.ts:63:3 › installed production restart › serves the packaged SPA and keeps typed availability across process restart 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
+    + ]
+
+      100 |       sequence: 0,
+      101 |     });
+    > 102 |     expect(browserConsoleFailures).toEqual([]);
+          |                                    ^
+      103 |     expect(requestFailures).toEqual([]);
+      104 |   });
+      105 | });
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\production-restart.spec.ts:102:36
+
+    Error: EPERM, Permission denied: \\?\C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-production-e2e-qLxfG6 '\\?\C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-production-e2e-qLxfG6'
+
+      49 |     if (server === null && stateDirectory.startsWith(tmpdir())) {
+      50 |       resetWindowsCursorKeyAcl();
+    > 51 |       rmSync(stateDirectory, {
+         |       ^
+      52 |         force: true,
+      53 |         maxRetries: 10,
+      54 |         recursive: true,
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\production-restart.spec.ts:51:7
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\production-restart-install-884ef-lity-across-process-restart-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\production-restart-install-884ef-lity-across-process-restart-chrome\error-context.md
+
+
+
+(node:48728) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[20/26] [chrome] › tests\e2e\symbol-detail.spec.ts:173:1 › reads backend detail, bars, and events for an explicit Shanghai history range
+[21/26] [chrome] › tests\e2e\symbol-detail.spec.ts:228:1 › keeps current-plan evidence visible when shared index history fails
+[22/26] [chrome] › tests\e2e\symbol-detail.spec.ts:243:1 › keeps both sections explicit when the current plan has no index conditions
+[23/26] [chrome] › tests\e2e\symbol-detail.spec.ts:281:1 › marks a mapped Schema v2 plan with zero index leaves as unused
+[24/26] [chrome] › tests\e2e\symbol-detail.spec.ts:323:1 › keeps the separated detail sections responsive and accessible
+  6) [chrome] › tests\e2e\symbol-detail.spec.ts:323:1 › keeps the separated detail sections responsive and accessible 
+
+    Error: symbol detail overflow at 320px: [{"className":"","clientWidth":1728,"overflowX":"visible","scrollWidth":1728,"tagName":"TABLE"},{"className":"","clientWidth":1728,"overflowX":"visible","scrollWidth":1728,"tagName":"CAPTION"},{"className":"","clientWidth":1728,"overflowX":"visible","scrollWidth":1728,"tagName":"THEAD"},{"className":"","clientWidth":1728,"overflowX":"visible","scrollWidth":1728,"tagName":"TR"},{"className":"","clientWidth":1728,"overflowX":"visible","scrollWidth":1728,"tagName":"TBODY"},{"className":"","clientWidth":1728,"overflowX":"visible","scrollWidth":1728,"tagName":"TR"},{"className":"position-lots__table","clientWidth":1664,"overflowX":"visible","scrollWidth":1664,"tagName":"TABLE"},{"className":"","clientWidth":1664,"overflowX":"visible","scrollWidth":1664,"tagName":"THEAD"},{"className":"","clientWidth":1664,"overflowX":"visible","scrollWidth":1664,"tagName":"TR"},{"className":"","clientWidth":1664,"overflowX":"visible","scrollWidth":1664,"tagName":"TBODY"},{"className":"","clientWidth":1664,"overflowX":"visible","scrollWidth":1664,"tagName":"TR"},{"className":"","clientWidth":1664,"overflowX":"visible","scrollWidth":1664,"tagName":"TD"},{"className":"symbol-detail__table","clientWidth":1536,"overflowX":"visible","scrollWidth":1536,"tagName":"TABLE"},{"className":"symbol-detail__table-head","clientWidth":1536,"overflowX":"visible","scrollWidth":1536,"tagName":"THEAD"},{"className":"","clientWidth":1536,"overflowX":"visible","scrollWidth":1536,"tagName":"TR"},{"className":"","clientWidth":1536,"overflowX":"visible","scrollWidth":1536,"tagName":"TBODY"},{"className":"symbol-detail__table","clientWidth":1536,"overflowX":"visible","scrollWidth":1536,"tagName":"TABLE"},{"className":"symbol-detail__table-head","clientWidth":1536,"overflowX":"visible","scrollWidth":1536,"tagName":"THEAD"},{"className":"","clientWidth":1536,"overflowX":"visible","scrollWidth":1536,"tagName":"TR"},{"className":"","clientWidth":1536,"overflowX":"visible","scrollWidth":1536,"tagName":"TBODY"}]
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 320
+    Received:    412
+
+      357 |       sizes.scrollWidth,
+      358 |       `symbol detail overflow at ${width}px: ${JSON.stringify(overflowSources)}`,
+    > 359 |     ).toBeLessThanOrEqual(sizes.clientWidth);
+          |       ^
+      360 |   }
+      361 |
+      362 |   await page.addScriptTag({ path: axePath });
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\symbol-detail.spec.ts:359:7
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\symbol-detail-keeps-the-se-8f2e1-s-responsive-and-accessible-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\symbol-detail-keeps-the-se-8f2e1-s-responsive-and-accessible-chrome\error-context.md
+
+
+(node:15776) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[25/26] [chrome] › tests\e2e\symbol-detail.spec.ts:377:1 › submits position commands for backend-only T+1 and maximum-policy decisions
+  7) [chrome] › tests\e2e\symbol-detail.spec.ts:377:1 › submits position commands for backend-only T+1 and maximum-policy decisions 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByRole('alert')
+    Expected: "后端拒绝了持仓操作，请核对最新批次和计划规则后重试"
+    Error: strict mode violation: getByRole('alert') resolved to 2 elements:
+        1) <p role="alert" data-v-7c9c68db="">独立库存读取失败；不会从提醒或原文推测持仓。</p> aka getByText('独立库存读取失败；不会从提醒或原文推测持仓。')
+        2) <p role="alert" data-v-0794363e="" class="manual-event-risk__error">人工事件风险状态暂不可用；系统会继续按未知风险阻断。</p> aka getByText('人工事件风险状态暂不可用；系统会继续按未知风险阻断。')
+
+    Call log:
+      - Expect "toHaveText" with timeout 5000ms
+      - waiting for getByRole('alert')
+
+
+      406 |     symbol,
+      407 |   });
+    > 408 |   await expect(page.getByRole("alert")).toHaveText(
+          |                                         ^
+      409 |     "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
+      410 |   );
+      411 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\symbol-detail.spec.ts:408:41
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\symbol-detail-submits-posi-7d853-nd-maximum-policy-decisions-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\symbol-detail-submits-posi-7d853-nd-maximum-policy-decisions-chrome\error-context.md
+
+
+(node:36692) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[26/26] [chrome] › tests\e2e\symbol-detail.spec.ts:432:1 › confirms plan-scoped manual event risk through the normal symbol page
+  7 failed
+    [chrome] › tests\e2e\dashboard.spec.ts:239:1 › renders the authoritative dashboard and shared board-index summary at the root route 
+    [chrome] › tests\e2e\dashboard.spec.ts:341:1 › keeps the shared-index and per-plan dashboard boundary responsive and accessible 
+    [chrome] › tests\e2e\dashboard.spec.ts:388:1 › distinguishes typed unavailable monitoring from a real disconnected service 
+    [chrome] › tests\e2e\dashboard.spec.ts:451:1 › recovers a sequence gap with a fresh dashboard snapshot before replaying from its cursor 
+    [chrome] › tests\e2e\production-restart.spec.ts:63:3 › installed production restart › serves the packaged SPA and keeps typed availability across process restart 
+    [chrome] › tests\e2e\symbol-detail.spec.ts:323:1 › keeps the separated detail sections responsive and accessible 
+    [chrome] › tests\e2e\symbol-detail.spec.ts:377:1 › submits position commands for backend-only T+1 and maximum-policy decisions 
+  19 passed (1.4m)

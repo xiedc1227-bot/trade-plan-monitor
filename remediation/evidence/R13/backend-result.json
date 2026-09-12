@@ -1,0 +1,6 @@
+{
+  "command": ".\\.venv\\Scripts\\python.exe -m pytest -m 'not live' -vv -ra --durations=25 --junitxml=remediation/evidence/R13/backend.xml",
+  "start": "2026-09-13T02:14:35.1739612+08:00",
+  "durationSeconds": 2330.0623207,
+  "exitCode": 0
+}

@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="3" time="9.369" timestamp="2026-09-13T02:30:15.183960+08:00" hostname="X-1024"><testcase classname="tests.integration.test_r13_channel_acceptance" name="test_production_explicit_alert_completes_in_app_delivery[BUY]" time="2.731"><failure message="AssertionError: DeliveryAttemptRecord(id='81dd1fd4-5879-4e40-8f5d-42290a723bb2', event_id=UUID('a91de446-e09e-5044-919b-76dfadbe57a0')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)&#10;assert 'RETRY_PENDING' == 'DELIVERED'&#10;  &#10;  - DELIVERED&#10;  + RETRY_PENDING">tmp_path = WindowsPath('C:/Users/xiedc/AppData/Local/Temp/pytest-of-xiedc/pytest-2142/test_production_explicit_alert0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000145876963F0&gt;
+price = 990
+
+    @pytest.mark.parametrize("price", [990, 1080, 949], ids=["BUY", "SELL", "RISK_ALERT"])
+    def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypatch, price):
+        async def scenario():
+            engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+                tmp_path, monkeypatch, current_volume=60,
+                current_close_fen=price, plan=_three_rule_plan(),
+            )
+            dispatcher = NotificationDispatcher(
+                create_session_factory(engine), channels=(InAppChannel(),),
+                clock=lambda: PIPELINE_NOW, enforce_current_plan=True,
+            )
+            try:
+                await pipeline.refresh_references(TARGET.date())
+                await pipeline.run_deadline(MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW, bar_end=TARGET,
+                ))
+                attempts = await dispatcher.dispatch_pending()
+                assert len(attempts) == 1
+                assert attempts[0].status.value == "DELIVERED", attempts[0]
+            finally:
+                await dispatcher.aclose()
+                await controller.aclose()
+                engine.dispose()
+    
+&gt;       asyncio.run(scenario())
+
+tests\integration\test_r13_channel_acceptance.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=60,
+            current_close_fen=price, plan=_three_rule_plan(),
+        )
+        dispatcher = NotificationDispatcher(
+            create_session_factory(engine), channels=(InAppChannel(),),
+            clock=lambda: PIPELINE_NOW, enforce_current_plan=True,
+        )
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            await pipeline.run_deadline(MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                due_at=PIPELINE_NOW, bar_end=TARGET,
+            ))
+            attempts = await dispatcher.dispatch_pending()
+            assert len(attempts) == 1
+&gt;           assert attempts[0].status.value == "DELIVERED", attempts[0]
+E           AssertionError: DeliveryAttemptRecord(id='81dd1fd4-5879-4e40-8f5d-42290a723bb2', event_id=UUID('a91de446-e09e-5044-919b-76dfadbe57a0')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)
+E           assert 'RETRY_PENDING' == 'DELIVERED'
+E             
+E             - DELIVERED
+E             + RETRY_PENDING
+
+tests\integration\test_r13_channel_acceptance.py:38: AssertionError</failure></testcase><testcase classname="tests.integration.test_r13_channel_acceptance" name="test_production_explicit_alert_completes_in_app_delivery[SELL]" time="2.682"><failure message="AssertionError: DeliveryAttemptRecord(id='29a2baf7-2e2a-40ec-9ec6-1c6f7b81cfee', event_id=UUID('066f9613-cab5-5896-a2d2-aba8519e2c90')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)&#10;assert 'RETRY_PENDING' == 'DELIVERED'&#10;  &#10;  - DELIVERED&#10;  + RETRY_PENDING">tmp_path = WindowsPath('C:/Users/xiedc/AppData/Local/Temp/pytest-of-xiedc/pytest-2142/test_production_explicit_alert1')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000014587AB3E10&gt;
+price = 1080
+
+    @pytest.mark.parametrize("price", [990, 1080, 949], ids=["BUY", "SELL", "RISK_ALERT"])
+    def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypatch, price):
+        async def scenario():
+            engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+                tmp_path, monkeypatch, current_volume=60,
+                current_close_fen=price, plan=_three_rule_plan(),
+            )
+            dispatcher = NotificationDispatcher(
+                create_session_factory(engine), channels=(InAppChannel(),),
+                clock=lambda: PIPELINE_NOW, enforce_current_plan=True,
+            )
+            try:
+                await pipeline.refresh_references(TARGET.date())
+                await pipeline.run_deadline(MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW, bar_end=TARGET,
+                ))
+                attempts = await dispatcher.dispatch_pending()
+                assert len(attempts) == 1
+                assert attempts[0].status.value == "DELIVERED", attempts[0]
+            finally:
+                await dispatcher.aclose()
+                await controller.aclose()
+                engine.dispose()
+    
+&gt;       asyncio.run(scenario())
+
+tests\integration\test_r13_channel_acceptance.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=60,
+            current_close_fen=price, plan=_three_rule_plan(),
+        )
+        dispatcher = NotificationDispatcher(
+            create_session_factory(engine), channels=(InAppChannel(),),
+            clock=lambda: PIPELINE_NOW, enforce_current_plan=True,
+        )
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            await pipeline.run_deadline(MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                due_at=PIPELINE_NOW, bar_end=TARGET,
+            ))
+            attempts = await dispatcher.dispatch_pending()
+            assert len(attempts) == 1
+&gt;           assert attempts[0].status.value == "DELIVERED", attempts[0]
+E           AssertionError: DeliveryAttemptRecord(id='29a2baf7-2e2a-40ec-9ec6-1c6f7b81cfee', event_id=UUID('066f9613-cab5-5896-a2d2-aba8519e2c90')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)
+E           assert 'RETRY_PENDING' == 'DELIVERED'
+E             
+E             - DELIVERED
+E             + RETRY_PENDING
+
+tests\integration\test_r13_channel_acceptance.py:38: AssertionError</failure></testcase><testcase classname="tests.integration.test_r13_channel_acceptance" name="test_production_explicit_alert_completes_in_app_delivery[RISK_ALERT]" time="2.692"><failure message="AssertionError: DeliveryAttemptRecord(id='07cc5ebc-2d7f-4451-bb9e-7214a6cca883', event_id=UUID('704ff95d-b92d-52f0-a15e-c941da07224b')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)&#10;assert 'RETRY_PENDING' == 'DELIVERED'&#10;  &#10;  - DELIVERED&#10;  + RETRY_PENDING">tmp_path = WindowsPath('C:/Users/xiedc/AppData/Local/Temp/pytest-of-xiedc/pytest-2142/test_production_explicit_alert2')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000014589132B10&gt;
+price = 949
+
+    @pytest.mark.parametrize("price", [990, 1080, 949], ids=["BUY", "SELL", "RISK_ALERT"])
+    def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypatch, price):
+        async def scenario():
+            engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+                tmp_path, monkeypatch, current_volume=60,
+                current_close_fen=price, plan=_three_rule_plan(),
+            )
+            dispatcher = NotificationDispatcher(
+                create_session_factory(engine), channels=(InAppChannel(),),
+                clock=lambda: PIPELINE_NOW, enforce_current_plan=True,
+            )
+            try:
+                await pipeline.refresh_references(TARGET.date())
+                await pipeline.run_deadline(MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW, bar_end=TARGET,
+                ))
+                attempts = await dispatcher.dispatch_pending()
+                assert len(attempts) == 1
+                assert attempts[0].status.value == "DELIVERED", attempts[0]
+            finally:
+                await dispatcher.aclose()
+                await controller.aclose()
+                engine.dispose()
+    
+&gt;       asyncio.run(scenario())
+
+tests\integration\test_r13_channel_acceptance.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=60,
+            current_close_fen=price, plan=_three_rule_plan(),
+        )
+        dispatcher = NotificationDispatcher(
+            create_session_factory(engine), channels=(InAppChannel(),),
+            clock=lambda: PIPELINE_NOW, enforce_current_plan=True,
+        )
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            await pipeline.run_deadline(MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                due_at=PIPELINE_NOW, bar_end=TARGET,
+            ))
+            attempts = await dispatcher.dispatch_pending()
+            assert len(attempts) == 1
+&gt;           assert attempts[0].status.value == "DELIVERED", attempts[0]
+E           AssertionError: DeliveryAttemptRecord(id='07cc5ebc-2d7f-4451-bb9e-7214a6cca883', event_id=UUID('704ff95d-b92d-52f0-a15e-c941da07224b')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)
+E           assert 'RETRY_PENDING' == 'DELIVERED'
+E             
+E             - DELIVERED
+E             + RETRY_PENDING
+
+tests\integration\test_r13_channel_acceptance.py:38: AssertionError</failure></testcase></testsuite></testsuites>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="34" time="93.982" timestamp="2026-09-13T02:22:21.860386+08:00" hostname="X-1024"><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-979]" time="2.718" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-980]" time="2.662" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-981]" time="2.676" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-999]" time="2.689" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-1000]" time="2.752" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-1001]" time="2.667" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-979]" time="2.669" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-980]" time="2.680" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-981]" time="2.666" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-999]" time="2.662" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-1000]" time="2.676" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-1001]" time="2.690" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-979]" time="2.678" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-980]" time="2.689" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-981]" time="2.807" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-999]" time="2.685" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-1000]" time="2.680" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-1001]" time="2.678" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-979]" time="2.673" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-980]" time="2.687" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-981]" time="2.682" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-999]" time="2.689" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-1000]" time="2.679" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-1001]" time="2.668" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[949]" time="2.799" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[950]" time="2.665" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[951]" time="2.660" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1079]" time="2.674" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1080]" time="2.682" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1081]" time="2.669" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1099]" time="2.681" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1100]" time="2.687" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1101]" time="2.679" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_temporary_intrabar_satisfaction_then_failed_close_never_alerts" time="3.958"><failure message="RuntimeError: startup recovery failed">tmp_path = WindowsPath('C:/Users/xiedc/AppData/Local/Temp/pytest-of-xiedc/pytest-2140/test_temporary_intrabar_satisf0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000001BA4628E6D0&gt;
+
+    def test_temporary_intrabar_satisfaction_then_failed_close_never_alerts(tmp_path, monkeypatch):
+        async def scenario():
+            engine, work, plan, sdk, rebuild, controller, pipeline, _ = _pipeline_fixture(
+                tmp_path, monkeypatch, current_volume=60, plan=_three_rule_plan(),
+            )
+            try:
+                await pipeline.refresh_references(TARGET.date())
+                sdk.source_time = TARGET - timedelta(minutes=2)
+                assert await pipeline.run_deadline(MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                    due_at=TARGET - timedelta(minutes=1) + timedelta(seconds=15),
+                    bar_end=TARGET - timedelta(minutes=1),
+                )) == ()
+                sdk.source_time = TARGET - timedelta(minutes=1)
+                sdk.current_close_fen = 1001
+                deadline = MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW, bar_end=TARGET,
+                )
+                assert len(await pipeline.run_deadline(deadline)) == 1
+                await controller.aclose()
+                engine.dispose()
+                controller, fresh_pipeline, _ = rebuild()
+                assert fresh_pipeline is not pipeline
+                await fresh_pipeline.recover_startup(TARGET.date())
+                assert await fresh_pipeline.run_deadline(deadline) == ()
+                with work() as transaction:
+                    alerts, count = transaction.alerts.list_events(
+                        symbol=plan.symbol, signal_type=None, acknowledged=None,
+                        start_at=None, end_at=None, offset=0, limit=10,
+                    )
+                assert alerts == () and count == 0
+            finally:
+                await controller.aclose()
+                engine.dispose()
+    
+&gt;       asyncio.run(scenario())
+
+tests\integration\test_r13_independent_oracle.py:139: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\integration\test_r13_independent_oracle.py:127: in scenario
+    await fresh_pipeline.recover_startup(TARGET.date())
+src\trade_plan_monitor\runtime\production.py:453: in recover_startup
+    _ensure_recovery_complete(result)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = RecoveryBatchResult(mode=&lt;RecoveryMode.STARTUP: 'STARTUP'&gt;, trade_date=datetime.date(2026, 9, 14), results=(RecoverySy....PERSISTENCE_FAILED: 'PERSISTENCE_FAILED'&gt;, next_retry_at=None),), pending_close_results=(), yielded_to_realtime=False)
+
+    def _ensure_recovery_complete(result: RecoveryBatchResult) -&gt; None:
+        """Fail startup closed when current-day or pending-close recovery is incomplete."""
+    
+        if (
+            any(item.error_code is not None for item in result.results)
+            or any(not item.resolved for item in result.pending_close_results)
+            or result.yielded_to_realtime
+        ):
+&gt;           raise RuntimeError("startup recovery failed")
+E           RuntimeError: startup recovery failed
+
+src\trade_plan_monitor\runtime\production.py:121: RuntimeError</failure></testcase></testsuite></testsuites>

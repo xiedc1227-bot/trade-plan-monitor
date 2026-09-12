@@ -1,0 +1,215 @@
+{
+  "isolation": {
+    "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-jxl977zi",
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-jxl977zi\\monitor.sqlite3",
+    "config": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-jxl977zi\\config\\app.yaml",
+    "provider": "IN_PROCESS_FAKE",
+    "now": "2026-09-14T10:04:15+08:00",
+    "sdkCalls": [
+      "trade_cal"
+    ],
+    "aiRequests": [],
+    "deadlines": [
+      "2026-09-14T10:05:12+08:00"
+    ]
+  },
+  "records": [
+    {
+      "blockedReviewChecks": 0
+    },
+    {
+      "reviewStatus": 200,
+      "body": {
+        "planVersionId": "a6521334-724a-42e2-abe7-9c1b2f039d72",
+        "reviewId": "c44df88a-e2cd-4dc2-a7f7-6cdd74b9e3bc",
+        "contentHash": "9cee2e2b8f9b872fd27174e36817fa2be2042fac1178b45cbf9a6eb13616ba2e",
+        "sourceHash": "0b8b389b9b083adff268186c2d6ac8a2589b4ad02e0b4d3b5b8ca37ce1452191",
+        "reviewEvidenceHash": "e4315d159b3a718fa41e3b8c4db2564e6f38746ddb4a2b3a1a25f28385b7a389",
+        "revision": 1,
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+        "unresolvedIssues": [],
+        "canActivate": true
+      }
+    },
+    {
+      "label": "invalid-json",
+      "result": {
+        "id": "59674391-af03-44af-a3b5-444e40fe7711",
+        "providerId": "00000000-0000-4000-8000-0000000000d5",
+        "status": "INVALID_OUTPUT",
+        "submittedAt": "2026-09-14T10:04:15+08:00",
+        "startedAt": "2026-09-14T10:04:15+08:00",
+        "completedAt": "2026-09-14T10:04:15+08:00",
+        "sourceTextSha256": null,
+        "model": null,
+        "promptVersion": null,
+        "draftPlanJson": null,
+        "mapping": null,
+        "evidence": [],
+        "assumptions": [],
+        "warnings": [],
+        "unmappedText": [],
+        "validationIssues": [
+          {
+            "code": "AI_OUTPUT_INVALID",
+            "path": "draft",
+            "severity": "ERROR",
+            "message": "AI output did not satisfy the extraction contract.",
+            "activationBlocking": true
+          }
+        ],
+        "usage": null
+      }
+    },
+    {
+      "label": "duplicate-key",
+      "result": {
+        "id": "e0b05f1f-088c-404d-811f-50bd8850d53b",
+        "providerId": "00000000-0000-4000-8000-0000000000d5",
+        "status": "INVALID_OUTPUT",
+        "submittedAt": "2026-09-14T10:04:15+08:00",
+        "startedAt": "2026-09-14T10:04:15+08:00",
+        "completedAt": "2026-09-14T10:04:15+08:00",
+        "sourceTextSha256": null,
+        "model": null,
+        "promptVersion": null,
+        "draftPlanJson": null,
+        "mapping": null,
+        "evidence": [],
+        "assumptions": [],
+        "warnings": [],
+        "unmappedText": [],
+        "validationIssues": [
+          {
+            "code": "AI_OUTPUT_INVALID",
+            "path": "draft",
+            "severity": "ERROR",
+            "message": "AI output did not satisfy the extraction contract.",
+            "activationBlocking": true
+          }
+        ],
+        "usage": null
+      }
+    },
+    {
+      "label": "missing-draft",
+      "result": {
+        "id": "75680de8-9c73-45be-b350-dd05ec54ca38",
+        "providerId": "00000000-0000-4000-8000-0000000000d5",
+        "status": "INVALID_OUTPUT",
+        "submittedAt": "2026-09-14T10:04:15+08:00",
+        "startedAt": "2026-09-14T10:04:15+08:00",
+        "completedAt": "2026-09-14T10:04:15+08:00",
+        "sourceTextSha256": null,
+        "model": null,
+        "promptVersion": null,
+        "draftPlanJson": null,
+        "mapping": null,
+        "evidence": [],
+        "assumptions": [],
+        "warnings": [],
+        "unmappedText": [],
+        "validationIssues": [
+          {
+            "code": "AI_OUTPUT_INVALID",
+            "path": "draft",
+            "severity": "ERROR",
+            "message": "AI output did not satisfy the extraction contract.",
+            "activationBlocking": true
+          }
+        ],
+        "usage": null
+      }
+    },
+    {
+      "label": "provider-503",
+      "result": {
+        "id": "452195a3-e977-4c9a-9e80-3215a1dc9976",
+        "providerId": "00000000-0000-4000-8000-0000000000d5",
+        "status": "PROVIDER_ERROR",
+        "submittedAt": "2026-09-14T10:04:15+08:00",
+        "startedAt": "2026-09-14T10:04:15+08:00",
+        "completedAt": "2026-09-14T10:04:15+08:00",
+        "sourceTextSha256": null,
+        "model": null,
+        "promptVersion": null,
+        "draftPlanJson": null,
+        "mapping": null,
+        "evidence": [],
+        "assumptions": [],
+        "warnings": [],
+        "unmappedText": [],
+        "validationIssues": [
+          {
+            "code": "AI_PROVIDER_ERROR",
+            "path": "provider",
+            "severity": "ERROR",
+            "message": "AI provider extraction failed.",
+            "activationBlocking": true
+          }
+        ],
+        "usage": null
+      }
+    },
+    {
+      "label": "truncated",
+      "result": {
+        "id": "81deee93-9e5c-42db-9670-6e1f1fad9574",
+        "providerId": "00000000-0000-4000-8000-0000000000d5",
+        "status": "INVALID_OUTPUT",
+        "submittedAt": "2026-09-14T10:04:15+08:00",
+        "startedAt": "2026-09-14T10:04:15+08:00",
+        "completedAt": "2026-09-14T10:04:15+08:00",
+        "sourceTextSha256": null,
+        "model": null,
+        "promptVersion": null,
+        "draftPlanJson": null,
+        "mapping": null,
+        "evidence": [],
+        "assumptions": [],
+        "warnings": [],
+        "unmappedText": [],
+        "validationIssues": [
+          {
+            "code": "AI_OUTPUT_INVALID",
+            "path": "draft",
+            "severity": "ERROR",
+            "message": "AI output did not satisfy the extraction contract.",
+            "activationBlocking": true
+          }
+        ],
+        "usage": null
+      }
+    },
+    {
+      "label": "omitted-risk-rule",
+      "result": {
+        "id": "59a9ebbc-560f-4dd1-b903-f76c05c4b410",
+        "providerId": "00000000-0000-4000-8000-0000000000d5",
+        "status": "INVALID_OUTPUT",
+        "submittedAt": "2026-09-14T10:04:15+08:00",
+        "startedAt": "2026-09-14T10:04:15+08:00",
+        "completedAt": "2026-09-14T10:04:15+08:00",
+        "sourceTextSha256": null,
+        "model": null,
+        "promptVersion": null,
+        "draftPlanJson": null,
+        "mapping": null,
+        "evidence": [],
+        "assumptions": [],
+        "warnings": [],
+        "unmappedText": [],
+        "validationIssues": [
+          {
+            "code": "AI_FIELD_EVIDENCE_INVALID",
+            "path": "mapping",
+            "severity": "ERROR",
+            "message": "AI mapping did not match the submitted source and current draft.",
+            "activationBlocking": true
+          }
+        ],
+        "usage": null
+      }
+    }
+  ]
+}

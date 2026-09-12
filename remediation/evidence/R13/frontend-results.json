@@ -1,0 +1,26 @@
+[
+  {
+    "command": "npm run test -- --run",
+    "start": "2026-09-13T02:14:45.6352637+08:00",
+    "durationSeconds": 6.6407936,
+    "exitCode": 0
+  },
+  {
+    "command": "npm run type-check",
+    "start": "2026-09-13T02:14:52.2272329+08:00",
+    "durationSeconds": 4.2594451,
+    "exitCode": 0
+  },
+  {
+    "command": "npm run build",
+    "start": "2026-09-13T02:14:56.4904057+08:00",
+    "durationSeconds": 1.3590101,
+    "exitCode": 0
+  },
+  {
+    "command": "npm run test:e2e",
+    "start": "2026-09-13T02:14:57.8519891+08:00",
+    "durationSeconds": 83.1434259,
+    "exitCode": 1
+  }
+]

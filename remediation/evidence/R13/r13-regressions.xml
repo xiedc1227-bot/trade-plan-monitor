@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="40" time="110.289" timestamp="2026-09-13T02:34:24.633584+08:00" hostname="X-1024"><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-979]" time="2.705" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-980]" time="2.669" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-981]" time="2.685" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-999]" time="2.671" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-1000]" time="2.786" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[200-1001]" time="2.672" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-979]" time="2.685" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-980]" time="2.675" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-981]" time="2.665" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-999]" time="2.659" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-1000]" time="2.672" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[299-1001]" time="2.674" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-979]" time="2.680" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-980]" time="2.666" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-981]" time="2.768" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-999]" time="2.679" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-1000]" time="2.672" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[300-1001]" time="2.672" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-979]" time="2.687" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-980]" time="2.676" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-981]" time="2.677" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-999]" time="2.692" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-1000]" time="2.671" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_buy_uses_inclusive_price_and_arithmetic_mean[301-1001]" time="2.685" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_retained_explicit_alert_is_not_current_after_lifecycle_change[replace]" time="2.883" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_retained_explicit_alert_is_not_current_after_lifecycle_change[disable]" time="2.751" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_retained_explicit_alert_is_not_current_after_lifecycle_change[expire]" time="2.756" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[949]" time="2.683" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[950]" time="2.672" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[951]" time="2.667" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1079]" time="2.660" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1080]" time="2.660" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1081]" time="2.677" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1099]" time="2.811" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1100]" time="2.666" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_literal_sell_and_pure_risk_boundaries[1101]" time="2.672" /><testcase classname="tests.integration.test_r13_independent_oracle" name="test_temporary_intrabar_satisfaction_then_failed_close_never_alerts" time="3.921" /><testcase classname="tests.integration.test_r13_channel_acceptance" name="test_production_explicit_alert_completes_in_app_delivery[BUY]" time="2.686"><failure message="AssertionError: DeliveryAttemptRecord(id='c0bb9321-d39d-465f-b7ca-b6ccd5e74c07', event_id=UUID('a91de446-e09e-5044-919b-76dfadbe57a0')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)&#10;assert 'RETRY_PENDING' == 'DELIVERED'&#10;  &#10;  - DELIVERED&#10;  + RETRY_PENDING">tmp_path = WindowsPath('C:/Users/xiedc/AppData/Local/Temp/pytest-of-xiedc/pytest-2144/test_production_explicit_alert0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000265DC6B29E0&gt;
+price = 990
+
+    @pytest.mark.parametrize("price", [990, 1080, 949], ids=["BUY", "SELL", "RISK_ALERT"])
+    def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypatch, price):
+        async def scenario():
+            engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+                tmp_path,
+                monkeypatch,
+                current_volume=60,
+                current_close_fen=price,
+                plan=_three_rule_plan(),
+            )
+            dispatcher = NotificationDispatcher(
+                create_session_factory(engine),
+                channels=(InAppChannel(),),
+                clock=lambda: PIPELINE_NOW,
+                enforce_current_plan=True,
+            )
+            try:
+                await pipeline.refresh_references(TARGET.date())
+                await pipeline.run_deadline(
+                    MarketDeadline(
+                        kind=DeadlineKind.REALTIME_MINUTE,
+                        trade_date=TARGET.date(),
+                        due_at=PIPELINE_NOW,
+                        bar_end=TARGET,
+                    )
+                )
+                attempts = await dispatcher.dispatch_pending()
+                assert len(attempts) == 1
+                assert attempts[0].status.value == "DELIVERED", attempts[0]
+            finally:
+                await dispatcher.aclose()
+                await controller.aclose()
+                engine.dispose()
+    
+&gt;       asyncio.run(scenario())
+
+tests\integration\test_r13_channel_acceptance.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+            tmp_path,
+            monkeypatch,
+            current_volume=60,
+            current_close_fen=price,
+            plan=_three_rule_plan(),
+        )
+        dispatcher = NotificationDispatcher(
+            create_session_factory(engine),
+            channels=(InAppChannel(),),
+            clock=lambda: PIPELINE_NOW,
+            enforce_current_plan=True,
+        )
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW,
+                    bar_end=TARGET,
+                )
+            )
+            attempts = await dispatcher.dispatch_pending()
+            assert len(attempts) == 1
+&gt;           assert attempts[0].status.value == "DELIVERED", attempts[0]
+E           AssertionError: DeliveryAttemptRecord(id='c0bb9321-d39d-465f-b7ca-b6ccd5e74c07', event_id=UUID('a91de446-e09e-5044-919b-76dfadbe57a0')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)
+E           assert 'RETRY_PENDING' == 'DELIVERED'
+E             
+E             - DELIVERED
+E             + RETRY_PENDING
+
+tests\integration\test_r13_channel_acceptance.py:47: AssertionError</failure></testcase><testcase classname="tests.integration.test_r13_channel_acceptance" name="test_production_explicit_alert_completes_in_app_delivery[SELL]" time="2.696"><failure message="AssertionError: DeliveryAttemptRecord(id='9692baab-068d-4ebe-ab1f-1f2f42b0c6ec', event_id=UUID('066f9613-cab5-5896-a2d2-aba8519e2c90')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)&#10;assert 'RETRY_PENDING' == 'DELIVERED'&#10;  &#10;  - DELIVERED&#10;  + RETRY_PENDING">tmp_path = WindowsPath('C:/Users/xiedc/AppData/Local/Temp/pytest-of-xiedc/pytest-2144/test_production_explicit_alert1')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000265DBABC1A0&gt;
+price = 1080
+
+    @pytest.mark.parametrize("price", [990, 1080, 949], ids=["BUY", "SELL", "RISK_ALERT"])
+    def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypatch, price):
+        async def scenario():
+            engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+                tmp_path,
+                monkeypatch,
+                current_volume=60,
+                current_close_fen=price,
+                plan=_three_rule_plan(),
+            )
+            dispatcher = NotificationDispatcher(
+                create_session_factory(engine),
+                channels=(InAppChannel(),),
+                clock=lambda: PIPELINE_NOW,
+                enforce_current_plan=True,
+            )
+            try:
+                await pipeline.refresh_references(TARGET.date())
+                await pipeline.run_deadline(
+                    MarketDeadline(
+                        kind=DeadlineKind.REALTIME_MINUTE,
+                        trade_date=TARGET.date(),
+                        due_at=PIPELINE_NOW,
+                        bar_end=TARGET,
+                    )
+                )
+                attempts = await dispatcher.dispatch_pending()
+                assert len(attempts) == 1
+                assert attempts[0].status.value == "DELIVERED", attempts[0]
+            finally:
+                await dispatcher.aclose()
+                await controller.aclose()
+                engine.dispose()
+    
+&gt;       asyncio.run(scenario())
+
+tests\integration\test_r13_channel_acceptance.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+            tmp_path,
+            monkeypatch,
+            current_volume=60,
+            current_close_fen=price,
+            plan=_three_rule_plan(),
+        )
+        dispatcher = NotificationDispatcher(
+            create_session_factory(engine),
+            channels=(InAppChannel(),),
+            clock=lambda: PIPELINE_NOW,
+            enforce_current_plan=True,
+        )
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW,
+                    bar_end=TARGET,
+                )
+            )
+            attempts = await dispatcher.dispatch_pending()
+            assert len(attempts) == 1
+&gt;           assert attempts[0].status.value == "DELIVERED", attempts[0]
+E           AssertionError: DeliveryAttemptRecord(id='9692baab-068d-4ebe-ab1f-1f2f42b0c6ec', event_id=UUID('066f9613-cab5-5896-a2d2-aba8519e2c90')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)
+E           assert 'RETRY_PENDING' == 'DELIVERED'
+E             
+E             - DELIVERED
+E             + RETRY_PENDING
+
+tests\integration\test_r13_channel_acceptance.py:47: AssertionError</failure></testcase><testcase classname="tests.integration.test_r13_channel_acceptance" name="test_production_explicit_alert_completes_in_app_delivery[RISK_ALERT]" time="2.691"><failure message="AssertionError: DeliveryAttemptRecord(id='8156ee2b-7a60-4ded-babb-5d023f2738ab', event_id=UUID('704ff95d-b92d-52f0-a15e-c941da07224b')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)&#10;assert 'RETRY_PENDING' == 'DELIVERED'&#10;  &#10;  - DELIVERED&#10;  + RETRY_PENDING">tmp_path = WindowsPath('C:/Users/xiedc/AppData/Local/Temp/pytest-of-xiedc/pytest-2144/test_production_explicit_alert2')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000265DC846970&gt;
+price = 949
+
+    @pytest.mark.parametrize("price", [990, 1080, 949], ids=["BUY", "SELL", "RISK_ALERT"])
+    def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypatch, price):
+        async def scenario():
+            engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+                tmp_path,
+                monkeypatch,
+                current_volume=60,
+                current_close_fen=price,
+                plan=_three_rule_plan(),
+            )
+            dispatcher = NotificationDispatcher(
+                create_session_factory(engine),
+                channels=(InAppChannel(),),
+                clock=lambda: PIPELINE_NOW,
+                enforce_current_plan=True,
+            )
+            try:
+                await pipeline.refresh_references(TARGET.date())
+                await pipeline.run_deadline(
+                    MarketDeadline(
+                        kind=DeadlineKind.REALTIME_MINUTE,
+                        trade_date=TARGET.date(),
+                        due_at=PIPELINE_NOW,
+                        bar_end=TARGET,
+                    )
+                )
+                attempts = await dispatcher.dispatch_pending()
+                assert len(attempts) == 1
+                assert attempts[0].status.value == "DELIVERED", attempts[0]
+            finally:
+                await dispatcher.aclose()
+                await controller.aclose()
+                engine.dispose()
+    
+&gt;       asyncio.run(scenario())
+
+tests\integration\test_r13_channel_acceptance.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = _pipeline_fixture(
+            tmp_path,
+            monkeypatch,
+            current_volume=60,
+            current_close_fen=price,
+            plan=_three_rule_plan(),
+        )
+        dispatcher = NotificationDispatcher(
+            create_session_factory(engine),
+            channels=(InAppChannel(),),
+            clock=lambda: PIPELINE_NOW,
+            enforce_current_plan=True,
+        )
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW,
+                    bar_end=TARGET,
+                )
+            )
+            attempts = await dispatcher.dispatch_pending()
+            assert len(attempts) == 1
+&gt;           assert attempts[0].status.value == "DELIVERED", attempts[0]
+E           AssertionError: DeliveryAttemptRecord(id='8156ee2b-7a60-4ded-babb-5d023f2738ab', event_id=UUID('704ff95d-b92d-52f0-a15e-c941da07224b')...fo.ZoneInfo(key='Asia/Shanghai')), delivered_at=None, error_code=&lt;ChannelErrorCode.CHANNEL_FAILURE: 'CHANNEL_FAILURE'&gt;)
+E           assert 'RETRY_PENDING' == 'DELIVERED'
+E             
+E             - DELIVERED
+E             + RETRY_PENDING
+
+tests\integration\test_r13_channel_acceptance.py:47: AssertionError</failure></testcase></testsuite></testsuites>
