@@ -1,0 +1,96 @@
+{
+  "taskId": "01a09703-9d1b-7cd1-880a-8a8910dbd23d",
+  "capturedAt": "2026-09-13",
+  "isolation": {
+    "root": "C:/Users/xiedc/AppData/Local/Temp/tpm-r12-browser-m_ctdtpb",
+    "database": "C:/Users/xiedc/AppData/Local/Temp/tpm-r12-browser-m_ctdtpb/monitor.sqlite3",
+    "loopbackPort": 56306,
+    "provider": "IN_PROCESS_FAKE",
+    "seededBusinessState": false,
+    "browserBusinessApiRouteMocks": false,
+    "consoleErrorCount": 0,
+    "externalBrowserRequestCount": 0,
+    "aiHttpRequestCount": 1,
+    "schedulerDeadlineCount": 22
+  },
+  "browser": {
+    "test": "web/tests/e2e/explicit-sqlite.spec.ts",
+    "result": "PASSED",
+    "visibleAlerts": ["BUY", "SELL", "RISK_ALERT"],
+    "inventoryAt1020BeforeAcknowledgement": {
+      "status": "KNOWN",
+      "totalQuantity": 100,
+      "sellableQuantity": 100
+    },
+    "inventoryAfterAcknowledgingAllAlerts": {
+      "status": "KNOWN",
+      "totalQuantity": 100,
+      "sellableQuantity": 100
+    },
+    "inventoryAfterSeparateExplicitReduction": {
+      "status": "KNOWN",
+      "totalQuantity": 0,
+      "sellableQuantity": 0
+    }
+  },
+  "sqliteReadMode": "mode=ro with PRAGMA query_only=ON",
+  "deliverySummary": [
+    {
+      "channel": "IN_APP",
+      "status": "DELIVERED",
+      "count": 3
+    }
+  ],
+  "alerts": [
+    {
+      "sequence": 18,
+      "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+      "signalType": "BUY",
+      "quantity": 100,
+      "planId": "synthetic-r11-api",
+      "planVersion": 2,
+      "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "activationRevision": 1,
+      "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+      "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+      "deliveryAttempt": 1,
+      "deliveryStatus": "DELIVERED",
+      "deliveryErrorCode": null
+    },
+    {
+      "sequence": 29,
+      "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+      "signalType": "SELL",
+      "quantity": 100,
+      "planId": "synthetic-r11-api",
+      "planVersion": 2,
+      "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "activationRevision": 1,
+      "targetBucketEnd": "2026-09-14T10:15:00+08:00",
+      "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+      "deliveryAttempt": 1,
+      "deliveryStatus": "DELIVERED",
+      "deliveryErrorCode": null
+    },
+    {
+      "sequence": 40,
+      "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+      "signalType": "RISK_ALERT",
+      "quantity": null,
+      "planId": "synthetic-r11-api",
+      "planVersion": 2,
+      "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+      "activationRevision": 1,
+      "targetBucketEnd": "2026-09-14T10:20:00+08:00",
+      "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+      "deliveryAttempt": 1,
+      "deliveryStatus": "DELIVERED",
+      "deliveryErrorCode": null
+    }
+  ],
+  "claimBoundaries": {
+    "channelDelivery": "Each SQLite delivery attempt is DELIVERED.",
+    "browserVisibility": "The separate passing Chromium assertion establishes that all three reminders were visible.",
+    "acknowledgement": "Acknowledging all reminders left inventory at 100/100; only the later explicit reduction changed inventory to 0/0."
+  }
+}

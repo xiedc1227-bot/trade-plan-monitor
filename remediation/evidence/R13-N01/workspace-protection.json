@@ -1,0 +1,13 @@
+{
+  "taskId": "01a09703-9d1b-7cd1-880a-8a8910dbd23d",
+  "capturedAt": "2026-09-13",
+  "reference": "remediation/evidence/R13/workspace-before.json",
+  "comparison": "Exact SHA-256 of each of the 16 referenced files",
+  "all16MatchReference": true,
+  "manifestFormat": "Paths sorted ordinally; each UTF-8 line is path, TAB, uppercase content SHA-256, LF; final LF included",
+  "tracked12ManifestSha256": "957b8a99f0f7dbf383b86a790c61cd1aa1a5739f3463075200a7ec396514b55f",
+  "r00Untracked4ManifestSha256": "cd191bee4a8a74201d7ad97686f1a4be6ec8d7b724d1c8716be5e1f683e8983b",
+  "all16ManifestSha256": "4ca1e8ac60e289bbb2195819a716adb5158b3c73161202531fe43d630422fa9c",
+  "protectedFilesStaged": false,
+  "resetOrStashOrBranchSwitch": false
+}
