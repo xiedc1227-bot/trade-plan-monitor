@@ -20,8 +20,8 @@ from trade_plan_monitor.notifications.channels import (
     DeliveryChannel,
     InAppChannel,
     NotificationChannel,
+    NotificationEvent,
 )
-from trade_plan_monitor.notifications.models import AlertEvent
 from trade_plan_monitor.notifications.outbox import AlertOutbox, OutboxError
 from trade_plan_monitor.state.models import ActivePlan as ActivePlanRow
 from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
@@ -158,7 +158,7 @@ class NotificationDispatcher:
 
         _validate_dispatch_limit(limit)
         now = self._now()
-        pending: list[tuple[AlertEvent, NotificationChannel]] = []
+        pending: list[tuple[NotificationEvent, NotificationChannel]] = []
         for channel in self._enabled_channels():
             pending.extend((event, channel) for event in self._pending_events(channel, now, limit))
         pending.sort(key=lambda item: (item[0].sequence, _CHANNEL_ORDER[item[1].channel]))
@@ -197,7 +197,7 @@ class NotificationDispatcher:
 
     async def _dispatch_if_due(
         self,
-        event: AlertEvent,
+        event: NotificationEvent,
         channel: NotificationChannel,
     ) -> DeliveryAttemptRecord | None:
         claim_started_at = self._now()
@@ -244,7 +244,7 @@ class NotificationDispatcher:
         channel: NotificationChannel,
         now: datetime,
         limit: int,
-    ) -> tuple[AlertEvent, ...]:
+    ) -> tuple[NotificationEvent, ...]:
         latest_number = (
             select(func.max(DeliveryAttemptRow.attempt))
             .where(
@@ -307,7 +307,7 @@ class NotificationDispatcher:
             .order_by(AlertEventRow.sequence)
             .limit(limit)
         )
-        loaded: tuple[AlertEvent, ...] | None = None
+        loaded: tuple[NotificationEvent, ...] | None = None
         try:
             with self._session_factory() as session:
                 rows = session.scalars(statement).all()
@@ -329,8 +329,8 @@ class NotificationDispatcher:
             raise DeliveryStorageError("Pending alert delivery state is invalid")
         return loaded
 
-    def _load_event(self, event_id: UUID) -> AlertEvent:
-        loaded: AlertEvent | None = None
+    def _load_event(self, event_id: UUID) -> NotificationEvent:
+        loaded: NotificationEvent | None = None
         try:
             with self._session_factory() as session:
                 loaded = AlertOutbox(
@@ -344,7 +344,7 @@ class NotificationDispatcher:
             raise DeliveryStorageError("Committed alert event is unavailable")
         return loaded
 
-    def _event_is_delivery_allowed(self, event: AlertEvent, now: datetime) -> bool:
+    def _event_is_delivery_allowed(self, event: NotificationEvent, now: datetime) -> bool:
         if not self._enforce_current_plan:
             return True
         allowed: bool | None = None

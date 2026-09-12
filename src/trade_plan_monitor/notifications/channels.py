@@ -21,7 +21,9 @@ from pydantic import (
     model_validator,
 )
 
-from trade_plan_monitor.notifications.models import AlertEvent
+from trade_plan_monitor.notifications.models import AlertEvent, ExplicitAlertEvent
+
+NotificationEvent = AlertEvent | ExplicitAlertEvent
 
 WebhookHost = Annotated[
     str,
@@ -78,7 +80,7 @@ class NotificationChannel(Protocol):
     channel: DeliveryChannel
     enabled: bool
 
-    async def deliver(self, event: AlertEvent) -> ChannelDeliveryResult: ...
+    async def deliver(self, event: NotificationEvent) -> ChannelDeliveryResult: ...
 
 
 class WebhookConfig(BaseModel):
@@ -179,7 +181,7 @@ class InAppChannel:
     channel = DeliveryChannel.IN_APP
     enabled = True
 
-    async def deliver(self, event: AlertEvent) -> ChannelDeliveryResult:
+    async def deliver(self, event: NotificationEvent) -> ChannelDeliveryResult:
         _require_event(event)
         return _delivered(self.channel)
 
@@ -195,7 +197,7 @@ class ConsoleChannel:
             raise TypeError("write_line must be callable")
         self._write_line = write_line
 
-    async def deliver(self, event: AlertEvent) -> ChannelDeliveryResult:
+    async def deliver(self, event: NotificationEvent) -> ChannelDeliveryResult:
         _require_event(event)
         line = f"[alert event_id={event.event_id} sequence={event.sequence}] {event.message_text}"
         try:
@@ -228,7 +230,7 @@ class WebhookChannel:
 
         return self._config.enabled
 
-    async def deliver(self, event: AlertEvent) -> ChannelDeliveryResult:
+    async def deliver(self, event: NotificationEvent) -> ChannelDeliveryResult:
         _require_event(event)
         if not self._config.enabled or self._config.endpoint is None:
             return _failed(
@@ -273,14 +275,17 @@ class WebhookChannel:
         await self._client.aclose()
 
 
-def _webhook_payload(event: AlertEvent) -> dict[str, object]:
+def _webhook_payload(event: NotificationEvent) -> dict[str, object]:
+    signal_type = (
+        event.signal_type.value if type(event) is AlertEvent else event.signal_type
+    )
     return {
         "createdAt": event.created_at.isoformat(),
         "eventId": str(event.event_id),
         "messageText": event.message_text,
         "sequence": event.sequence,
         "severity": event.severity.value,
-        "signalType": event.signal_type.value,
+        "signalType": signal_type,
         "symbol": event.symbol,
     }
 
@@ -340,9 +345,9 @@ def _failed(
     )
 
 
-def _require_event(event: AlertEvent) -> None:
-    if type(event) is not AlertEvent:
-        raise TypeError("event must be an AlertEvent")
+def _require_event(event: NotificationEvent) -> None:
+    if type(event) not in {AlertEvent, ExplicitAlertEvent}:
+        raise TypeError("event must be a supported notification event")
 
 
 def _validation_error_without_inputs(error: ValidationError) -> ValidationError:
@@ -363,6 +368,7 @@ __all__ = [
     "DeliveryChannel",
     "InAppChannel",
     "NotificationChannel",
+    "NotificationEvent",
     "WebhookChannel",
     "WebhookConfig",
 ]
