@@ -19,6 +19,11 @@ from pydantic import (
     model_validator,
 )
 
+from trade_plan_monitor.decision.explicit_conditions import ExplicitConditionEvidence
+from trade_plan_monitor.decision.explicit_rules import (
+    ExplicitEvaluationResult,
+    ExplicitSignalIntent,
+)
 from trade_plan_monitor.decision.models import (
     ActionableSignalType,
     ConditionEvidence,
@@ -33,9 +38,9 @@ from trade_plan_monitor.decision.models import (
     SignalIntent,
     StableIdentifier,
 )
-from trade_plan_monitor.domain.plan_models import PositionBucket, TradePlan
+from trade_plan_monitor.domain.plan_models import ExplicitTradePlan, PositionBucket, TradePlan
 from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
-from trade_plan_monitor.notifications.identity import alert_dedup_key
+from trade_plan_monitor.notifications.identity import alert_dedup_key, explicit_alert_dedup_key
 
 AlertName = Annotated[
     str,
@@ -327,6 +332,81 @@ class AlertEvent(AlertPayload):
         return self
 
 
+class ExplicitAlertPayload(_NotificationValue):
+    """Versioned reminder payload for one explicit BUY occurrence."""
+
+    payload_schema_version: Literal["explicit-rule-alert-v1"] = "explicit-rule-alert-v1"
+    event_id: UUID
+    dedup_key: Sha256Hex
+    plan_id: StableIdentifier
+    plan_version: PositiveVersion
+    plan_hash: Sha256Hex
+    activation_revision: NonNegativeInteger
+    symbol: AShareSymbol
+    name: AlertName
+    signal_type: Literal["BUY"] = "BUY"
+    severity: Literal[AlertSeverity.ACTION] = AlertSeverity.ACTION
+    trading_date: Annotated[date, Field(strict=True)]
+    cause_id: StableIdentifier
+    rule_id: StableIdentifier
+    target_bucket_end: ShanghaiDatetime
+    evaluated_at: ShanghaiDatetime
+    quantity: PositiveBoardLot
+    condition_evidence: ExplicitConditionEvidence
+    safety_evidence: ExplicitConditionEvidence | None
+    next_step: Literal["REVIEW_BUY_REMINDER"] = "REVIEW_BUY_REMINDER"
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> Self:
+        signal = ExplicitSignalIntent(
+            plan_hash=self.plan_hash,
+            activation_revision=self.activation_revision,
+            symbol=self.symbol,
+            rule_id=self.rule_id,
+            target_bucket_end=self.target_bucket_end,
+            action={"type": "BUY", "quantity": self.quantity},
+            condition_evidence=self.condition_evidence,
+            safety_evidence=self.safety_evidence,
+        )
+        if self.dedup_key != explicit_alert_dedup_key(signal):
+            raise ValueError("dedup_key must match the explicit alert identity")
+        if self.cause_id != self.rule_id:
+            raise ValueError("explicit alert cause_id must equal rule_id")
+        if self.trading_date != self.target_bucket_end.date():
+            raise ValueError("explicit alert trading date must match its target")
+        if self.target_bucket_end > self.evaluated_at:
+            raise ValueError("explicit alert target cannot follow evaluation")
+        return self
+
+
+class ExplicitAlertEvent(ExplicitAlertPayload):
+    """Sequenced durable explicit alert event."""
+
+    sequence: PositiveSequence
+    message_text: MessageText
+    created_at: ShanghaiDatetime
+    acknowledged_at: ShanghaiDatetime | None = None
+
+    @model_validator(mode="after")
+    def validate_event(self) -> Self:
+        if self.created_at < self.evaluated_at:
+            raise ValueError("event cannot be created before evaluation")
+        if self.acknowledged_at is not None and self.acknowledged_at < self.created_at:
+            raise ValueError("acknowledgement cannot precede event creation")
+        payload = ExplicitAlertPayload.model_validate(
+            self.model_dump(
+                mode="python",
+                round_trip=True,
+                exclude={"sequence", "message_text", "created_at", "acknowledged_at"},
+            )
+        )
+        from trade_plan_monitor.notifications.render import render_explicit_alert
+
+        if self.message_text != render_explicit_alert(payload):
+            raise ValueError("message_text must match deterministic explicit rendering")
+        return self
+
+
 def build_alert_payload(
     *,
     event_id: UUID,
@@ -419,10 +499,54 @@ def build_alert_payload(
     )
 
 
+def build_explicit_alert_payload(
+    *,
+    event_id: UUID,
+    plan: ExplicitTradePlan,
+    result: ExplicitEvaluationResult,
+    signal: ExplicitSignalIntent,
+) -> ExplicitAlertPayload:
+    """Build one explicit alert strictly from matching validated plan/result facts."""
+
+    from trade_plan_monitor.domain.plan_hash import plan_sha256
+
+    if type(plan) is not ExplicitTradePlan:
+        raise TypeError("plan must be an ExplicitTradePlan")
+    if type(result) is not ExplicitEvaluationResult:
+        raise TypeError("result must be an ExplicitEvaluationResult")
+    if type(signal) is not ExplicitSignalIntent or signal not in result.signal_intents:
+        raise ValueError("signal must belong to the explicit evaluation result")
+    if plan_sha256(plan) != result.plan_hash or signal.plan_hash != result.plan_hash:
+        raise ValueError("explicit alert plan identity is inconsistent")
+    if plan.symbol != result.symbol or signal.symbol != result.symbol:
+        raise ValueError("explicit alert symbol identity is inconsistent")
+    return ExplicitAlertPayload(
+        event_id=event_id,
+        dedup_key=explicit_alert_dedup_key(signal),
+        plan_id=plan.plan_id,
+        plan_version=plan.version,
+        plan_hash=result.plan_hash,
+        activation_revision=result.activation_revision,
+        symbol=result.symbol,
+        name=plan.name,
+        trading_date=result.target_bucket_end.date(),
+        cause_id=signal.rule_id,
+        rule_id=signal.rule_id,
+        target_bucket_end=result.target_bucket_end,
+        evaluated_at=result.evaluated_at,
+        quantity=signal.action.quantity,
+        condition_evidence=signal.condition_evidence,
+        safety_evidence=signal.safety_evidence,
+    )
+
+
 __all__ = [
     "AlertEvent",
     "AlertPayload",
     "AlertPriceZone",
     "AlertSeverity",
+    "ExplicitAlertEvent",
+    "ExplicitAlertPayload",
     "build_alert_payload",
+    "build_explicit_alert_payload",
 ]

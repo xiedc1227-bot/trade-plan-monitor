@@ -469,6 +469,65 @@ class EvaluationLedger(Base):
     evaluated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class ExplicitEvaluationLedger(Base):
+    """Immutable explicit-rules-v1 result keyed by activation-aware target identity."""
+
+    __tablename__ = "explicit_evaluation_ledger"
+    __table_args__ = (
+        CheckConstraint(
+            "execution_version = 'explicit-rules-v1'",
+            name="ck_explicit_evaluation_execution_version",
+        ),
+        CheckConstraint(
+            "activation_revision >= 0 AND inventory_revision >= 0",
+            name="ck_explicit_evaluation_revisions",
+        ),
+        CheckConstraint(
+            "manual_event_risk_revision IS NULL OR manual_event_risk_revision >= 0",
+            name="ck_explicit_evaluation_manual_risk_revision",
+        ),
+        CheckConstraint(
+            "length(plan_hash) = 64 AND length(result_hash) = 64",
+            name="ck_explicit_evaluation_hashes",
+        ),
+    )
+
+    plan_hash: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    target_value: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH), primary_key=True)
+    execution_version: Mapped[str] = mapped_column(String(32), primary_key=True)
+    activation_revision: Mapped[int] = mapped_column(Integer, primary_key=True)
+    result_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    result_json: Mapped[str] = mapped_column(Text)
+    inventory_revision: Mapped[int] = mapped_column(Integer)
+    manual_event_risk_revision: Mapped[int | None] = mapped_column(Integer)
+    evaluated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
+class ExplicitRuleOccurrenceState(Base):
+    """Durable repeat-policy state scoped to one active explicit plan revision."""
+
+    __tablename__ = "explicit_rule_occurrence_state"
+    __table_args__ = (
+        CheckConstraint(
+            "activation_revision >= 0 AND revision >= 1",
+            name="ck_explicit_rule_occurrence_revisions",
+        ),
+        CheckConstraint(
+            "has_emitted = 1 AND last_emitted_bucket_end IS NOT NULL",
+            name="ck_explicit_rule_occurrence_emitted",
+        ),
+    )
+
+    plan_hash: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(SYMBOL_LENGTH), primary_key=True)
+    activation_revision: Mapped[int] = mapped_column(Integer, primary_key=True)
+    rule_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    has_emitted: Mapped[bool] = mapped_column(Boolean)
+    last_emitted_bucket_end: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
 class EvaluationResult(Base):
     """Immutable complete decision result attached to an existing ledger claim."""
 
@@ -1007,6 +1066,8 @@ __all__ = [
     "EvaluationKind",
     "EvaluationLedger",
     "EvaluationResult",
+    "ExplicitEvaluationLedger",
+    "ExplicitRuleOccurrenceState",
     "FiveMinuteBar",
     "LatestQuote",
     "MarketIndexSnapshot",

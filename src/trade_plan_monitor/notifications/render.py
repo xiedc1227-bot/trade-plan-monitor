@@ -15,7 +15,11 @@ from trade_plan_monitor.decision.models import (
     EvidenceUnit,
     RuleEvidence,
 )
-from trade_plan_monitor.notifications.models import AlertPayload, AlertPriceZone
+from trade_plan_monitor.notifications.models import (
+    AlertPayload,
+    AlertPriceZone,
+    ExplicitAlertPayload,
+)
 
 MAX_ALERT_TEXT_CHARS = 16_384
 DISCLAIMER = "仅提醒，不会自动下单。"
@@ -51,6 +55,26 @@ _RULE_LABELS = {
     "RISK_RECOVERY": "官方收盘已收回风险线",
     "RISK_DETERIORATION": "风险相对原始跌破继续恶化",
 }
+
+
+def render_explicit_alert(payload: ExplicitAlertPayload) -> str:
+    """Render a bounded explicit BUY reminder without implying order execution."""
+
+    if type(payload) is not ExplicitAlertPayload:
+        raise TypeError("payload must be an ExplicitAlertPayload")
+    lines = (
+        f"[买入提醒] {payload.name} {payload.symbol}",
+        f"规则: {payload.rule_id}",
+        f"完成K线: {payload.target_bucket_end.isoformat()}",
+        f"提醒数量: {payload.quantity}股",
+        "条件证据: 已满足",
+        "下一步: 人工复核后自行决定是否下单",
+        DISCLAIMER,
+    )
+    value = "\n".join(lines)
+    if len(value) > MAX_ALERT_TEXT_CHARS:
+        raise ValueError("rendered alert exceeds the text limit")
+    return value
 _FACT_LABELS = {
     "current_price_fen": "当前价",
     "risk_status": "风险状态",
@@ -328,4 +352,5 @@ __all__ = [
     "DISCLAIMER",
     "MAX_ALERT_TEXT_CHARS",
     "render_alert",
+    "render_explicit_alert",
 ]

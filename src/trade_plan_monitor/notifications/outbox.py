@@ -18,9 +18,17 @@ from sqlalchemy.orm import Session
 from trade_plan_monitor.decision.models import ActionableSignalType
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import TradePlan, activation_is_eligible_on
-from trade_plan_monitor.notifications.models import AlertEvent, AlertPayload
-from trade_plan_monitor.notifications.render import render_alert
+from trade_plan_monitor.domain.plan_models import (
+    ExecutableTradePlan,
+    activation_is_eligible_on,
+)
+from trade_plan_monitor.notifications.models import (
+    AlertEvent,
+    AlertPayload,
+    ExplicitAlertEvent,
+    ExplicitAlertPayload,
+)
+from trade_plan_monitor.notifications.render import render_alert, render_explicit_alert
 from trade_plan_monitor.state.events import (
     MonitorEventDraft,
     MonitorEventError,
@@ -185,6 +193,79 @@ class AlertOutbox:
         )
         return event
 
+    def enqueue_explicit(self, payload: ExplicitAlertPayload) -> ExplicitAlertEvent:
+        """Atomically claim one versioned explicit-alert identity."""
+
+        if type(payload) is not ExplicitAlertPayload:
+            raise TypeError("payload must be an ExplicitAlertPayload")
+        try:
+            self._events.lock_for_append()
+        except MonitorEventError:
+            raise OutboxStorageError("Alert event could not be persisted") from None
+        existing = self._session.scalar(
+            select(AlertEventRow).where(AlertEventRow.dedup_key == payload.dedup_key)
+        )
+        if existing is not None:
+            return self._deduplicated_explicit_event(existing, payload)
+
+        event_id = str(payload.event_id)
+        if self._session.get(AlertEventRow, event_id) is not None:
+            raise AlertIdentityConflictError("Alert event identity is already in use")
+        created_at = self._now()
+        if created_at < payload.evaluated_at:
+            raise ValueError("clock cannot precede alert evaluation")
+        monitor_draft = MonitorEventDraft(
+            event_id=payload.event_id,
+            event_type=MonitorEventType.ALERT_CREATED,
+            aggregate_id=event_id,
+            payload=MonitorEventPayload(
+                entity_id=event_id,
+                symbol=payload.symbol,
+                revision=0,
+            ),
+            occurred_at=created_at,
+        )
+        monitor_event = None
+        message_text = render_explicit_alert(payload)
+        try:
+            with self._session.begin_nested():
+                monitor_event = self._events.append(monitor_draft)
+                self._session.add(
+                    AlertEventRow(
+                        id=event_id,
+                        sequence=monitor_event.sequence,
+                        dedup_key=payload.dedup_key,
+                        payload_json=_payload_json(payload),
+                        message_text=message_text,
+                        created_at=created_at.isoformat(),
+                        acknowledged_at=None,
+                    )
+                )
+                self._session.flush()
+        except MonitorEventIdentityConflictError:
+            self._session.expire_all()
+            raise AlertIdentityConflictError("Alert event identity is already in use") from None
+        except MonitorEventError:
+            self._session.expire_all()
+            raise OutboxStorageError("Alert event could not be persisted") from None
+        except IntegrityError:
+            self._session.expire_all()
+            existing = self._session.scalar(
+                select(AlertEventRow).where(AlertEventRow.dedup_key == payload.dedup_key)
+            )
+            if existing is not None:
+                return self._deduplicated_explicit_event(existing, payload)
+            raise OutboxStorageError("Alert event could not be persisted") from None
+        if monitor_event is None:  # pragma: no cover
+            raise OutboxStorageError("Alert event could not be persisted")
+        return ExplicitAlertEvent(
+            **payload.model_dump(mode="python", round_trip=True),
+            sequence=monitor_event.sequence,
+            message_text=message_text,
+            created_at=created_at,
+            acknowledged_at=None,
+        )
+
     def has_dedup_key(self, dedup_key: str) -> bool:
         """Return whether one validated durable alert identity already exists."""
 
@@ -197,7 +278,7 @@ class AlertOutbox:
         _event_from_row(row)
         return True
 
-    def get(self, event_id: UUID) -> AlertEvent:
+    def get(self, event_id: UUID) -> AlertEvent | ExplicitAlertEvent:
         """Return one event visible to the current transaction."""
 
         normalized_id = _event_id(event_id)
@@ -208,14 +289,14 @@ class AlertOutbox:
 
     def is_current_actionable(
         self,
-        event: AlertEvent,
+        event: AlertEvent | ExplicitAlertEvent,
         *,
         market_date: date,
     ) -> bool:
         """Return whether a retained alert still belongs to the current active plan."""
 
-        if type(event) is not AlertEvent:
-            raise TypeError("event must be an AlertEvent")
+        if type(event) not in {AlertEvent, ExplicitAlertEvent}:
+            raise TypeError("event must be a supported alert event")
         if isinstance(market_date, datetime) or not isinstance(market_date, date):
             raise TypeError("market_date must be a date")
         plan = self._active_plan_for_event(event)
@@ -223,14 +304,14 @@ class AlertOutbox:
 
     def is_delivery_allowed(
         self,
-        event: AlertEvent,
+        event: AlertEvent | ExplicitAlertEvent,
         *,
         market_date: date,
     ) -> bool:
         """Allow current alerts plus target-date-valid cross-day risk recovery."""
 
-        if type(event) is not AlertEvent:
-            raise TypeError("event must be an AlertEvent")
+        if type(event) not in {AlertEvent, ExplicitAlertEvent}:
+            raise TypeError("event must be a supported alert event")
         if isinstance(market_date, datetime) or not isinstance(market_date, date):
             raise TypeError("market_date must be a date")
         plan = self._active_plan_for_event(event)
@@ -244,7 +325,9 @@ class AlertOutbox:
             and activation_is_eligible_on(plan.activation, event.trading_date)
         )
 
-    def _active_plan_for_event(self, event: AlertEvent) -> TradePlan | None:
+    def _active_plan_for_event(
+        self, event: AlertEvent | ExplicitAlertEvent
+    ) -> ExecutableTradePlan | None:
         row = self._session.execute(
             select(PlanVersion, ActivePlan)
             .join(ActivePlan, ActivePlan.plan_version_id == PlanVersion.id)
@@ -280,7 +363,7 @@ class AlertOutbox:
         end_at: datetime | None,
         offset: int,
         limit: int,
-    ) -> tuple[tuple[AlertEvent, ...], int]:
+    ) -> tuple[tuple[AlertEvent | ExplicitAlertEvent, ...], int]:
         """Return one stable bounded page in committed delivery order."""
 
         if symbol is not None and (
@@ -351,7 +434,7 @@ class AlertOutbox:
         sequence: int,
         *,
         limit: int = MAX_REPLAY_LIMIT,
-    ) -> tuple[AlertEvent, ...]:
+    ) -> tuple[AlertEvent | ExplicitAlertEvent, ...]:
         """Return retained events after an exclusive monotonically increasing cursor."""
 
         if type(sequence) is not int or sequence < 0:
@@ -375,7 +458,7 @@ class AlertOutbox:
         event_id: UUID,
         *,
         expected_revision: int | None = None,
-    ) -> AlertEvent:
+    ) -> AlertEvent | ExplicitAlertEvent:
         """Mark an alert seen once without touching delivery or strategy state."""
 
         normalized_id = _event_id(event_id)
@@ -459,7 +542,28 @@ class AlertOutbox:
         payload: AlertPayload,
     ) -> AlertEvent:
         event = _event_from_row(row)
+        if type(event) is not AlertEvent:
+            raise AlertIdentityConflictError("Alert dedup identity has conflicting versions")
         stored_semantics = AlertPayload.model_validate(
+            event.model_dump(
+                mode="python",
+                round_trip=True,
+                exclude={"sequence", "message_text", "created_at", "acknowledged_at"},
+            )
+        )
+        if _semantic_payload(stored_semantics) != _semantic_payload(payload):
+            raise AlertIdentityConflictError("Alert dedup identity has conflicting semantics")
+        return event
+
+    def _deduplicated_explicit_event(
+        self,
+        row: AlertEventRow,
+        payload: ExplicitAlertPayload,
+    ) -> ExplicitAlertEvent:
+        event = _event_from_row(row)
+        if type(event) is not ExplicitAlertEvent:
+            raise AlertIdentityConflictError("Alert dedup identity has conflicting versions")
+        stored_semantics = ExplicitAlertPayload.model_validate(
             event.model_dump(
                 mode="python",
                 round_trip=True,
@@ -500,6 +604,7 @@ _ACTIONABLE_SIGNAL_TYPES = {
     "RISK_BREACH",
     "RISK_EXIT_READY",
     "RISK_EXIT_PENDING_SETTLEMENT",
+    "BUY",
 }
 
 
@@ -529,11 +634,11 @@ def _audit_id(value: str) -> str:
     return value
 
 
-def _payload_json(payload: AlertPayload) -> str:
+def _payload_json(payload: AlertPayload | ExplicitAlertPayload) -> str:
     return _canonical_json(payload.model_dump(mode="json", round_trip=True))
 
 
-def _semantic_payload(payload: AlertPayload) -> object:
+def _semantic_payload(payload: AlertPayload | ExplicitAlertPayload) -> object:
     value = payload.model_dump(mode="python", round_trip=True, exclude={"event_id"})
     return _semantic_value(value)
 
@@ -594,23 +699,36 @@ def _canonical_decimal(value: Decimal) -> str:
     return f"{prefix}{coefficient}e{normalized_exponent}"
 
 
-def _event_hash(event: AlertEvent) -> str:
+def _event_hash(event: AlertEvent | ExplicitAlertEvent) -> str:
     value = _canonical_json(event.model_dump(mode="json", round_trip=True))
     return sha256(value.encode("utf-8")).hexdigest()
 
 
-def _event_from_row(row: AlertEventRow) -> AlertEvent:
+def _event_from_row(row: AlertEventRow) -> AlertEvent | ExplicitAlertEvent:
     try:
-        payload = AlertPayload.model_validate_json(row.payload_json)
+        raw_payload = json.loads(row.payload_json)
+        if not isinstance(raw_payload, Mapping):
+            raise ValueError("alert payload must be an object")
+        is_explicit = raw_payload.get("payload_schema_version") == "explicit-rule-alert-v1"
+        payload = (
+            ExplicitAlertPayload.model_validate_json(row.payload_json)
+            if is_explicit
+            else AlertPayload.model_validate_json(row.payload_json)
+        )
         identity_matches = row.id == str(payload.event_id) and row.dedup_key == payload.dedup_key
-        event = AlertEvent(
-            **payload.model_dump(mode="python", round_trip=True),
-            sequence=row.sequence,
-            message_text=row.message_text,
-            created_at=datetime.fromisoformat(row.created_at),
-            acknowledged_at=(
-                None if row.acknowledged_at is None else datetime.fromisoformat(row.acknowledged_at)
-            ),
+        event_type = ExplicitAlertEvent if is_explicit else AlertEvent
+        event = event_type.model_validate(
+            {
+                **payload.model_dump(mode="python", round_trip=True),
+                "sequence": row.sequence,
+                "message_text": row.message_text,
+                "created_at": datetime.fromisoformat(row.created_at),
+                "acknowledged_at": (
+                    None
+                    if row.acknowledged_at is None
+                    else datetime.fromisoformat(row.acknowledged_at)
+                ),
+            }
         )
     except TypeError, ValueError:
         pass

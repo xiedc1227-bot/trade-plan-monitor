@@ -14,6 +14,7 @@ from trade_plan_monitor.notifications.outbox import (
     AlertOutbox,
 )
 from trade_plan_monitor.state.events import MonitorEventLog
+from trade_plan_monitor.state.explicit_rules import ExplicitDecisionRepository
 from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.repositories import (
     EpisodeRepository,
@@ -52,6 +53,9 @@ class UnitOfWork(Protocol):
 
     @property
     def evaluations(self) -> EvaluationRepository: ...
+
+    @property
+    def explicit_rules(self) -> ExplicitDecisionRepository: ...
 
     @property
     def projections(self) -> ProjectionRepository: ...
@@ -110,6 +114,7 @@ class SqlAlchemyUnitOfWork:
         self._risk: RiskRepository | None = None
         self._manual_event_risk: ManualEventRiskRepository | None = None
         self._evaluations: EvaluationRepository | None = None
+        self._explicit_rules: ExplicitDecisionRepository | None = None
         self._projections: ProjectionRepository | None = None
         self._health: HealthRepository | None = None
         self._alerts: AlertOutbox | None = None
@@ -158,6 +163,12 @@ class SqlAlchemyUnitOfWork:
         if self._evaluations is None:
             raise RuntimeError("Unit of work is not active")
         return self._evaluations
+
+    @property
+    def explicit_rules(self) -> ExplicitDecisionRepository:
+        if self._explicit_rules is None:
+            raise RuntimeError("Unit of work is not active")
+        return self._explicit_rules
 
     @property
     def projections(self) -> ProjectionRepository:
@@ -234,6 +245,7 @@ class SqlAlchemyUnitOfWork:
             id_factory=self._id_factory,
         )
         self._evaluations = EvaluationRepository(self._session)
+        self._explicit_rules = ExplicitDecisionRepository(self._session)
         self._projections = ProjectionRepository(self._session)
         self._health = HealthRepository(
             self._session,
@@ -277,6 +289,7 @@ class SqlAlchemyUnitOfWork:
             self._risk = None
             self._manual_event_risk = None
             self._evaluations = None
+            self._explicit_rules = None
             self._projections = None
             self._health = None
             self._alerts = None
