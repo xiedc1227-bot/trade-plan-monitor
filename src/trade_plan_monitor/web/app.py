@@ -141,13 +141,6 @@ def create_production_app(
         raise TypeError("database_path must be a Path")
     if ai_service is not None and ai_lifecycle_factory is not None:
         raise ValueError("AI service and lifecycle factory are mutually exclusive")
-    if ai_service is None and ai_lifecycle_factory is None:
-        from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
-
-        def create_configured_ai_lifecycle() -> ConfiguredAIWebLifecycle:
-            return ConfiguredAIWebLifecycle(config_path=config_path)
-
-        ai_lifecycle_factory = create_configured_ai_lifecycle
     lifecycle_factory = runtime_factory
     has_explicit_monitor_service = any(
         service is not None
@@ -166,6 +159,7 @@ def create_production_app(
         )
     plan_lifecycle_factory: PlanWebLifecycleFactory | None = None
     plan_snapshot_reader = plan_service
+    persistent_plan_lifecycle = None
     if plan_service is None:
         from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
@@ -176,6 +170,16 @@ def create_production_app(
 
         plan_lifecycle_factory = create_persistent_plan_lifecycle
         plan_snapshot_reader = persistent_plan_lifecycle
+    if ai_service is None and ai_lifecycle_factory is None:
+        from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
+
+        def create_configured_ai_lifecycle() -> ConfiguredAIWebLifecycle:
+            return ConfiguredAIWebLifecycle(
+                config_path=config_path,
+                review_store=persistent_plan_lifecycle,
+            )
+
+        ai_lifecycle_factory = create_configured_ai_lifecycle
     if backtest_lifecycle_factory is None:
         from trade_plan_monitor.backtest.composition import (
             create_backtest_composition_factory,

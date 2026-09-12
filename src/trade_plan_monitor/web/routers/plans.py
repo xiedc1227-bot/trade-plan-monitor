@@ -186,6 +186,7 @@ class PlanVersionPage(ApiValue):
 
 class PlanDraftCommand(ApiValue):
     base_plan_version_id: UUID | None = Field(default=None, strict=False)
+    extraction_id: UUID | None = Field(default=None, strict=False)
     plan_json: PlanDocument
     source_text: PlanSourceText
     review_issues: tuple[DraftReviewIssue, ...] = Field(
@@ -556,10 +557,16 @@ async def save_plan_draft(
         raise RuntimeError("plan service returned a mismatched draft")
     if result.status is not PlanVersionStatus.DRAFT:
         raise RuntimeError("plan service returned a non-draft version")
-    if result.review_issues != command.review_issues:
-        raise RuntimeError("plan service returned mismatched review state")
     if result.source_text != command.source_text:
         raise RuntimeError("plan service returned mismatched draft provenance")
+    unresolved_submitted = {
+        (issue.kind, issue.path, issue.material)
+        for issue in command.review_issues
+        if not issue.resolved
+    }
+    returned_issues = {(issue.kind, issue.path, issue.material) for issue in result.review_issues}
+    if not unresolved_submitted <= returned_issues:
+        raise RuntimeError("plan service dropped an unresolved review issue")
     return result
 
 

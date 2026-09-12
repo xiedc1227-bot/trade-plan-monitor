@@ -7,6 +7,7 @@ from collections.abc import Callable
 from contextlib import closing
 from datetime import UTC, datetime
 from functools import partial
+from hashlib import sha256
 from pathlib import Path
 from typing import Protocol, cast
 from uuid import UUID
@@ -16,6 +17,11 @@ from anyio import to_thread
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from trade_plan_monitor.ai.models import (
+    PlanExtractionResult,
+    PlanExtractionReview,
+    build_plan_extraction_review,
+)
 from trade_plan_monitor.domain.plan_codec import load_plan_json, load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
@@ -23,6 +29,8 @@ from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
     DraftReviewIssue,
     PlanValidationResult,
+    ValidationIssue,
+    ValidationSeverity,
     validate_trade_plan,
 )
 from trade_plan_monitor.state.database import (
@@ -30,12 +38,14 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
-from trade_plan_monitor.state.models import PlanVersionStatus
+from trade_plan_monitor.state.models import PlanReviewOrigin, PlanVersionStatus
 from trade_plan_monitor.state.repositories import (
     DuplicatePlanVersionError,
     IdempotencyInProgressError,
     IdempotencyKeyReuseError,
     PlanActivationBlockedError,
+    PlanExtractionReviewRecord,
+    PlanRepository,
     PlanSaveBlockedError,
     PlanVersionNotFoundError,
     RepositoryError,
@@ -97,6 +107,9 @@ class _PlanVersionDetails(Protocol):
     payload_json: str
     source_text: str
     review_issues: tuple[DraftReviewIssue, ...]
+    review_origin: PlanReviewOrigin
+    extraction_id: str | None
+    review_confirmed_at: datetime | None
     revision: int
     created_at: datetime
 
@@ -180,6 +193,16 @@ class PersistentPlanWebLifecycle:
             plan=plan,
             source_text=command.source_text,
             review_issues=command.review_issues,
+        )
+
+    async def record_plan_extraction(self, result: PlanExtractionResult) -> None:
+        """Persist a successful extraction's server-owned activation review facts."""
+
+        review = build_plan_extraction_review(result)
+        await self._run(
+            self._record_plan_extraction_sync,
+            review=review,
+            completed_at=self._clock(),
         )
 
     async def import_plan(
@@ -409,6 +432,19 @@ class PersistentPlanWebLifecycle:
                 if next_version > MAX_SAFE_INTEGER:
                     raise PlanSaveBlockedError("Plan version sequence is exhausted")
                 plan = plan.model_copy(update={"version": next_version})
+            (
+                review_issues,
+                review_origin,
+                extraction_id,
+                review_confirmed_at,
+            ) = _resolve_server_review(
+                plans=work.plans,
+                command=command,
+                plan=plan,
+                source_text=source_text,
+                submitted_issues=review_issues,
+                now=self._clock(),
+            )
             activation = work.plans.get_activation_state(plan.symbol)
             current_revision = 0 if activation is None else activation.revision
             if command.expected_revision != current_revision:
@@ -417,6 +453,9 @@ class PersistentPlanWebLifecycle:
                 plan,
                 source_text=source_text,
                 review_issues=review_issues,
+                review_origin=review_origin,
+                extraction_id=extraction_id,
+                review_confirmed_at=review_confirmed_at,
             )
             details = work.plans.get_version_details(saved.id)
             if details is None:
@@ -430,6 +469,19 @@ class PersistentPlanWebLifecycle:
             )
             work.commit()
             return result
+
+    def _record_plan_extraction_sync(
+        self,
+        *,
+        review: object,
+        completed_at: datetime,
+    ) -> None:
+        with self._unit_of_work() as work:
+            work.plans.record_extraction_review(
+                cast(PlanExtractionReview, review),
+                completed_at=completed_at,
+            )
+            work.commit()
 
     def _activate_plan_sync(
         self,
@@ -450,17 +502,8 @@ class PersistentPlanWebLifecycle:
             details = work.plans.get_version_details(str(command.plan_version_id))
             if details is None:
                 raise PlanVersionNotFoundError("Plan version was not found")
-            plan = _validated_persisted_plan(details)
-            validation = validate_trade_plan(
-                plan,
-                available_market_evidence=ALL_MARKET_EVIDENCE,
-                review_issues=details.review_issues,
-            )
-            if (
-                PlanVersionStatus(details.status) is not PlanVersionStatus.DRAFT
-                or not validation.can_activate
-                or any(not issue.resolved for issue in details.review_issues)
-            ):
+            plan, validation, can_activate = _validated_plan_state(details)
+            if PlanVersionStatus(details.status) is not PlanVersionStatus.DRAFT or not can_activate:
                 raise PlanActivationBlockedError("Plan is not ready for activation")
             work.plans.activate(
                 plan,
@@ -541,6 +584,107 @@ def _plan_version_summary(record: object) -> PlanVersionSummary:
     )
 
 
+def _resolve_server_review(
+    *,
+    plans: PlanRepository,
+    command: PlanDraftCommand | PlanImportCommand,
+    plan: TradePlan,
+    source_text: str,
+    submitted_issues: tuple[DraftReviewIssue, ...],
+    now: datetime,
+) -> tuple[
+    tuple[DraftReviewIssue, ...],
+    PlanReviewOrigin,
+    str | None,
+    datetime | None,
+]:
+    source_hash = sha256(source_text.encode("utf-8")).hexdigest()
+    draft_hash = plan_sha256(plan)
+    requested_extraction_id = (
+        str(command.extraction_id)
+        if isinstance(command, PlanDraftCommand) and command.extraction_id is not None
+        else None
+    )
+    extraction: PlanExtractionReviewRecord | None
+    exact_source = False
+    if requested_extraction_id is not None:
+        extraction = plans.get_extraction_review(requested_extraction_id)
+        if (
+            extraction is None
+            or extraction.source_hash != source_hash
+            or extraction.draft_hash != draft_hash
+        ):
+            raise PlanSaveBlockedError("Extraction identity does not match the submitted draft")
+        exact_source = True
+    else:
+        extraction = plans.find_extraction_review(
+            draft_hash=draft_hash,
+            source_hash=source_hash,
+        )
+        if extraction is not None:
+            exact_source = True
+        else:
+            extraction = plans.find_extraction_review(draft_hash=draft_hash)
+
+    if extraction is None:
+        return submitted_issues, PlanReviewOrigin.MANUAL, None, None
+    if not exact_source:
+        return (
+            tuple(
+                issue.model_copy(update={"resolved": False}) for issue in extraction.review_issues
+            ),
+            PlanReviewOrigin.AI_REIMPORT,
+            extraction.extraction_id,
+            None,
+        )
+
+    resolved = _merge_review_confirmations(
+        required=extraction.review_issues,
+        submitted=submitted_issues,
+    )
+    confirmed_at = _shanghai_datetime(now) if all(issue.resolved for issue in resolved) else None
+    return (
+        resolved,
+        PlanReviewOrigin.AI_EXTRACTION,
+        extraction.extraction_id,
+        confirmed_at,
+    )
+
+
+def _merge_review_confirmations(
+    *,
+    required: tuple[DraftReviewIssue, ...],
+    submitted: tuple[DraftReviewIssue, ...],
+) -> tuple[DraftReviewIssue, ...]:
+    def identity(issue: DraftReviewIssue) -> tuple[object, str, bool]:
+        return issue.kind, issue.path, issue.material
+
+    submitted_by_identity: dict[tuple[object, str, bool], DraftReviewIssue] = {}
+    for issue in submitted:
+        key = identity(issue)
+        if key in submitted_by_identity:
+            raise PlanSaveBlockedError("Review confirmation identities must be unique")
+        submitted_by_identity[key] = issue
+    required_identities = {identity(issue) for issue in required}
+    if not submitted_by_identity.keys() <= required_identities:
+        raise PlanSaveBlockedError("Review confirmation contains an unknown issue")
+    counts: dict[tuple[object, str, bool], int] = {}
+    for issue in required:
+        key = identity(issue)
+        counts[key] = counts.get(key, 0) + 1
+    return tuple(
+        issue.model_copy(
+            update={
+                "resolved": (
+                    counts[identity(issue)] == 1
+                    and submitted_by_identity.get(identity(issue), issue).resolved
+                )
+            }
+        )
+        for issue in required
+    )
+
+
 def _plan_version_view(record: object) -> PlanVersionView:
     details = cast(_PlanVersionDetails, record)
     _plan, validation, can_activate = _validated_plan_state(details)
@@ -570,8 +714,34 @@ def _validated_plan_state(
         available_market_evidence=ALL_MARKET_EVIDENCE,
         review_issues=details.review_issues,
     )
-    can_activate = validation.can_activate and not any(
-        not issue.resolved for issue in details.review_issues
+    if (
+        details.review_origin is PlanReviewOrigin.LEGACY_PENDING
+        and PlanVersionStatus(details.status) is not PlanVersionStatus.ACTIVE
+    ):
+        validation = validation.model_copy(
+            update={
+                "issues": (
+                    *validation.issues,
+                    ValidationIssue(
+                        code="LEGACY_REVIEW_REQUIRED",
+                        path="draft",
+                        severity=ValidationSeverity.WARNING,
+                        message=(
+                            "Legacy plan review provenance must be confirmed before activation."
+                        ),
+                        activation_blocking=True,
+                    ),
+                )
+            }
+        )
+    review_confirmed = (
+        details.review_origin not in {PlanReviewOrigin.AI_EXTRACTION, PlanReviewOrigin.AI_REIMPORT}
+        or details.review_confirmed_at is not None
+    )
+    can_activate = (
+        validation.can_activate
+        and review_confirmed
+        and not any(not issue.resolved for issue in details.review_issues)
     )
     return plan, validation, can_activate
 

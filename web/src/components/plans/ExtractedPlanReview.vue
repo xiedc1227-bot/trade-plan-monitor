@@ -67,6 +67,7 @@ function saveDraft(command: PlanDraftCommand): void {
   const plan = candidate.value;
   if (plan === null || props.busy || props.saved) return;
   emit("saveDraft", {
+    extractionId: props.extraction.id,
     planJson: command.planJson,
     reviewIssues: command.reviewIssues ?? [],
     sourceText: command.sourceText,

@@ -1,10 +1,13 @@
 import asyncio
 import json
+from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from trade_plan_monitor.ai.extraction import (
@@ -15,10 +18,12 @@ from trade_plan_monitor.ai.extraction import (
 from trade_plan_monitor.ai.models import (
     AIProviderConfig,
     AIProviderType,
+    AIUsageSnapshot,
     PlanExtractionResult,
     PlanExtractionStatus,
     SecretReference,
     TradePlanDraft,
+    build_plan_extraction_review,
 )
 from trade_plan_monitor.ai.prompts import (
     PLAN_EXTRACTION_PROMPT_V1,
@@ -41,8 +46,13 @@ from trade_plan_monitor.ai.secrets import (
     SecretStore,
     SecretWrite,
 )
-from trade_plan_monitor.domain.plan_codec import load_plan_yaml
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_yaml
 from trade_plan_monitor.state.models import AIProviderConfiguration
+from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
+from trade_plan_monitor.web.app import create_app
+from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
+from trade_plan_monitor.web.routers.plans import PlanExtractionCommand
+from trade_plan_monitor.web.schemas import MutationContext
 
 _PROVIDER_ID = UUID("8db1318f-7182-4c43-9f1f-e260d46f3f0d")
 _REQUEST_ID = UUID("8db1318f-7182-4c43-9f1f-e260d46f3017")
@@ -61,6 +71,14 @@ _PLAN_EXTRACT_V2_GOLDEN_PROMPT_SHA256 = (
 _PLAN_EXTRACT_V3_GOLDEN_PROMPT_SHA256 = (
     "df606ede45e58263b669f092cfaeb575becf1ea314076823b23f275a1768ae5d"
 )
+
+
+class _Runtime:
+    async def start(self) -> object:
+        return object()
+
+    async def stop(self) -> None:
+        return None
 
 
 def _config_values() -> dict[str, object]:
@@ -134,6 +152,28 @@ def _valid_model_output() -> dict[str, object]:
             }
         ],
     }
+
+
+def _a1_result() -> tuple[str, PlanExtractionResult]:
+    source_text = "企稳后买入、放量突破"
+    output = _valid_model_output()
+    output["evidence"] = [
+        {"path": item["path"], "excerpt": "企稳后买入"} for item in output["evidence"]
+    ]
+    output["assumptions"] = []
+    output["warnings"] = []
+    output["unmapped_text"] = []
+    result = asyncio.run(
+        extract_plan(
+            request_id=_REQUEST_ID,
+            source_text=source_text,
+            config=AIProviderConfig(**_config_values()),
+            provider=_StaticProvider(json.dumps(output, ensure_ascii=False)),
+        )
+    )
+    assert result.status is PlanExtractionStatus.SUCCEEDED
+    assert result.draft is not None
+    return source_text, result
 
 
 def _nested_json(depth: int) -> str:
@@ -691,6 +731,241 @@ def test_successful_ai_draft_stays_blocked_until_evidence_is_trusted() -> None:
     assert len(evidence_review) == 1
     assert evidence_review[0].severity.value == "WARNING"
     assert evidence_review[0].activation_blocking is True
+
+
+def test_successful_ai_result_builds_server_owned_review_snapshot() -> None:
+    result, _ = _run_extraction(json.dumps(_valid_model_output(), ensure_ascii=False))
+
+    review = build_plan_extraction_review(result)
+
+    assert review.extraction_id == _REQUEST_ID
+    assert review.source_text_sha256 == result.source_text_sha256
+    assert review.draft_sha256 == sha256(dump_plan_json(result.draft).encode("utf-8")).hexdigest()
+    assert {(issue.kind.value, issue.path, issue.resolved) for issue in review.review_issues} == {
+        ("ASSUMPTION", "activation", False),
+        ("WARNING", "levels.low_buy", False),
+        ("UNMAPPED_TEXT", "position", False),
+        ("MISSING_EVIDENCE", "draft", False),
+    }
+
+
+def test_a1_omitted_client_review_cannot_activate_and_survives_restart(tmp_path: Path) -> None:
+    source_text, result = _a1_result()
+
+    database_path = tmp_path / "monitor.sqlite3"
+    first = PersistentPlanWebLifecycle(database_path=database_path)
+    first_app = create_app(
+        runtime_factory=_Runtime,
+        plan_lifecycle_factory=lambda: first,
+    )
+    with TestClient(first_app, base_url="http://127.0.0.1:8765") as client:
+        asyncio.run(first.record_plan_extraction(result))
+        request = {
+            "planJson": dump_plan_json(result.draft),
+            "sourceText": source_text,
+            "expectedRevision": 0,
+        }
+        saved = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "a1-review-save"},
+            json=request,
+        )
+        replayed = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "a1-review-save"},
+            json=request,
+        )
+        assert saved.status_code == replayed.status_code == 200
+        assert replayed.json() == saved.json()
+        assert saved.json()["canActivate"] is False
+        assert saved.json()["reviewIssues"] == [
+            {
+                "kind": "MISSING_EVIDENCE",
+                "path": "draft",
+                "material": True,
+                "resolved": False,
+            }
+        ]
+        blocked = client.post(
+            "/api/v1/plan-activations",
+            headers={"Idempotency-Key": "a1-review-activate"},
+            json={"planVersionId": saved.json()["id"], "expectedRevision": 0},
+        )
+        assert blocked.status_code == 409
+        saved_id = saved.json()["id"]
+
+    restarted = PersistentPlanWebLifecycle(database_path=database_path)
+    restarted_app = create_app(
+        runtime_factory=_Runtime,
+        plan_lifecycle_factory=lambda: restarted,
+    )
+    with TestClient(restarted_app, base_url="http://127.0.0.1:8765") as client:
+        restored = client.get(f"/api/v1/plan-versions/{saved_id}")
+        assert restored.status_code == 200
+        assert restored.json()["canActivate"] is False
+        blocked = client.post(
+            "/api/v1/plan-activations",
+            headers={"Idempotency-Key": "a1-review-activate-after-restart"},
+            json={"planVersionId": saved_id, "expectedRevision": 0},
+        )
+        assert blocked.status_code == 409
+
+
+def test_forged_extraction_identity_and_reimport_cannot_qualify_for_activation(
+    tmp_path: Path,
+) -> None:
+    source_text, result = _a1_result()
+    lifecycle = PersistentPlanWebLifecycle(database_path=tmp_path / "monitor.sqlite3")
+    app = create_app(runtime_factory=_Runtime, plan_lifecycle_factory=lambda: lifecycle)
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        asyncio.run(lifecycle.record_plan_extraction(result))
+        common = {
+            "planJson": dump_plan_json(result.draft),
+            "reviewIssues": [
+                {
+                    "kind": "MISSING_EVIDENCE",
+                    "path": "draft",
+                    "material": True,
+                    "resolved": True,
+                }
+            ],
+            "expectedRevision": 0,
+        }
+        forged = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "forged-extraction"},
+            json={
+                **common,
+                "extractionId": "00000000-0000-4000-8000-000000000999",
+                "sourceText": source_text,
+            },
+        )
+        assert forged.status_code == 422
+
+        reimported = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "reimported-extraction"},
+            json={**common, "sourceText": "unbound reimport"},
+        )
+        assert reimported.status_code == 200
+        assert reimported.json()["canActivate"] is False
+        assert reimported.json()["reviewIssues"][0]["resolved"] is False
+
+
+def test_exact_extraction_review_confirmation_can_activate(tmp_path: Path) -> None:
+    source_text, result = _a1_result()
+    lifecycle = PersistentPlanWebLifecycle(
+        database_path=tmp_path / "monitor.sqlite3",
+        clock=lambda: datetime.now(ZoneInfo("Asia/Shanghai")),
+    )
+    app = create_app(runtime_factory=_Runtime, plan_lifecycle_factory=lambda: lifecycle)
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        asyncio.run(lifecycle.record_plan_extraction(result))
+        asyncio.run(lifecycle.record_plan_extraction(result))
+        saved = client.post(
+            "/api/v1/plan-drafts",
+            headers={"Idempotency-Key": "confirmed-extraction"},
+            json={
+                "extractionId": str(_REQUEST_ID),
+                "planJson": dump_plan_json(result.draft),
+                "sourceText": source_text,
+                "reviewIssues": [
+                    {
+                        "kind": "MISSING_EVIDENCE",
+                        "path": "draft",
+                        "material": True,
+                        "resolved": True,
+                    }
+                ],
+                "expectedRevision": 0,
+            },
+        )
+        assert saved.status_code == 200
+        assert saved.json()["canActivate"] is True
+        activated = client.post(
+            "/api/v1/plan-activations",
+            headers={"Idempotency-Key": "activate-confirmed-extraction"},
+            json={"planVersionId": saved.json()["id"], "expectedRevision": 0},
+        )
+        assert activated.status_code == 200
+        assert activated.json()["active"] is True
+
+
+def test_configured_ai_marks_success_only_after_review_snapshot_is_persisted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_text, successful = _a1_result()
+    successful = successful.model_copy(
+        update={
+            "usage": AIUsageSnapshot(
+                prompt_tokens=1,
+                completion_tokens=1,
+                total_tokens=2,
+            )
+        }
+    )
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """\
+ai:
+  profile: DEEPSEEK
+  base_url: https://api.deepseek.com
+  model: deepseek-v4-flash
+  api_key: offline-test-key
+  max_retries: 0
+""",
+        encoding="utf-8",
+    )
+
+    class _ReviewStore:
+        def __init__(self) -> None:
+            self.results: list[PlanExtractionResult] = []
+
+        async def record_plan_extraction(self, result: PlanExtractionResult) -> None:
+            self.results.append(result)
+
+    async def fake_extract_plan(**kwargs: object) -> PlanExtractionResult:
+        return successful.model_copy(
+            update={
+                "request_id": kwargs["request_id"],
+                "provider_id": kwargs["config"].provider_id,
+            }
+        )
+
+    monkeypatch.setattr("trade_plan_monitor.web.ai_service.extract_plan", fake_extract_plan)
+    store = _ReviewStore()
+
+    async def scenario() -> None:
+        lifecycle = ConfiguredAIWebLifecycle(config_path=config_path, review_store=store)
+        await lifecycle.start()
+        try:
+            provider = (await lifecycle.list_ai_providers(offset=0, limit=1)).items[0]
+            receipt = await lifecycle.submit_plan_extraction(
+                command=PlanExtractionCommand(
+                    provider_id=provider.config.provider_id,
+                    source_text=source_text,
+                    expected_revision=0,
+                ),
+                context=MutationContext(
+                    idempotency_key="persist-before-success",
+                    request_id="a" * 32,
+                ),
+            )
+            for _attempt in range(100):
+                view = await lifecycle.get_plan_extraction(operation_id=str(receipt.operation_id))
+                if view is not None and view.status.value not in {"QUEUED", "RUNNING"}:
+                    break
+                await asyncio.sleep(0)
+            assert view is not None
+            assert [item.request_id for item in store.results] == [receipt.operation_id]
+            assert view.status.value == "SUCCEEDED"
+        finally:
+            await lifecycle.stop()
+
+    asyncio.run(scenario())
 
 
 def test_single_character_field_evidence_is_rejected_as_degenerate() -> None:

@@ -33,6 +33,15 @@ class PlanVersionStatus(StrEnum):
     SUPERSEDED = "SUPERSEDED"
 
 
+class PlanReviewOrigin(StrEnum):
+    """How one immutable plan version obtained its activation-review state."""
+
+    LEGACY_PENDING = "LEGACY_PENDING"
+    MANUAL = "MANUAL"
+    AI_EXTRACTION = "AI_EXTRACTION"
+    AI_REIMPORT = "AI_REIMPORT"
+
+
 class IdempotencyStatus(StrEnum):
     """Durable request-claim lifecycle."""
 
@@ -109,6 +118,51 @@ class PlanVersionReview(Base):
         primary_key=True,
     )
     review_issues_json: Mapped[str] = mapped_column(Text)
+
+
+class StoredPlanExtractionReview(Base):
+    """Immutable server-owned review facts for one successful AI extraction."""
+
+    __tablename__ = "plan_extraction_review"
+    __table_args__ = (Index("ix_plan_extraction_review_draft_hash", "draft_hash"),)
+
+    id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    provider_id: Mapped[str] = mapped_column(String(ID_LENGTH))
+    model: Mapped[str] = mapped_column(String(200))
+    prompt_version: Mapped[str] = mapped_column(String(64))
+    source_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    draft_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    review_issues_json: Mapped[str] = mapped_column(Text)
+    completed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
+class PlanReviewProvenance(Base):
+    """Source/content binding and trusted confirmation for one plan version."""
+
+    __tablename__ = "plan_review_provenance"
+    __table_args__ = (
+        CheckConstraint(
+            "origin IN ('LEGACY_PENDING', 'MANUAL', 'AI_EXTRACTION', 'AI_REIMPORT')",
+            name="ck_plan_review_provenance_origin",
+        ),
+        CheckConstraint(
+            "(origin IN ('LEGACY_PENDING', 'MANUAL') AND extraction_id IS NULL) OR "
+            "(origin IN ('AI_EXTRACTION', 'AI_REIMPORT') AND extraction_id IS NOT NULL)",
+            name="ck_plan_review_provenance_extraction_identity",
+        ),
+    )
+
+    plan_version_id: Mapped[str] = mapped_column(
+        ForeignKey("plan_version.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    origin: Mapped[str] = mapped_column(String(32))
+    extraction_id: Mapped[str | None] = mapped_column(
+        ForeignKey("plan_extraction_review.id"),
+    )
+    source_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    draft_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    confirmed_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
 class PlanActivationState(Base):
@@ -868,7 +922,10 @@ __all__ = [
     "MonitorEvent",
     "MonitorSequence",
     "PlanActivationState",
+    "PlanReviewOrigin",
+    "PlanReviewProvenance",
     "PlanSource",
+    "StoredPlanExtractionReview",
     "PlanVersion",
     "PlanVersionReview",
     "PlanVersionStatus",

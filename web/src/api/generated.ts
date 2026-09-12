@@ -1077,6 +1077,7 @@ export type PlanDocumentFormat = "JSON" | "YAML";
 export type PlanDraftCommand = {
   basePlanVersionId?: (string) | (null);
   expectedRevision: number;
+  extractionId?: (string) | (null);
   planJson: string;
   reviewIssues?: Array<components["schemas"]["DraftReviewIssue"]>;
   sourceText: string;

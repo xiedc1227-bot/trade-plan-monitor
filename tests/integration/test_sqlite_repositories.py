@@ -98,6 +98,8 @@ EXPECTED_APP_TABLES = frozenset(
         "monitor_sequence",
         "plan_source",
         "plan_activation_state",
+        "plan_extraction_review",
+        "plan_review_provenance",
         "plan_version",
         "plan_version_review",
         "pending_official_close",
@@ -2196,7 +2198,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0009_live_monitor_projection"
+        assert first_revision == second_revision == "0010_plan_review_binding"
     finally:
         engine.dispose()
 
@@ -2224,7 +2226,7 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0009_live_monitor_projection"
+                == "0010_plan_review_binding"
             )
     finally:
         engine.dispose()
@@ -2330,12 +2332,34 @@ def test_plan_web_state_migration_backfills_without_changing_existing_plan_rows(
                 "SELECT symbol, plan_version_id, revision, changed_at "
                 "FROM plan_activation_state ORDER BY symbol"
             ).all()
+            review_provenance = connection.exec_driver_sql(
+                "SELECT plan_version_id, origin, extraction_id, source_hash, draft_hash, "
+                "confirmed_at FROM plan_review_provenance ORDER BY plan_version_id"
+            ).all()
 
         assert after == before
         assert reviews == [(version_id, "[]"), (inactive_version_id, "[]")]
         assert activations == [
             (plan.symbol, version_id, 3, changed_at),
             (inactive_plan.symbol, None, 0, inactive_changed_at),
+        ]
+        assert review_provenance == [
+            (
+                version_id,
+                "LEGACY_PENDING",
+                None,
+                sha256(source_text.encode("utf-8")).hexdigest(),
+                plan_sha256(plan),
+                None,
+            ),
+            (
+                inactive_version_id,
+                "LEGACY_PENDING",
+                None,
+                sha256(source_text.encode("utf-8")).hexdigest(),
+                plan_sha256(inactive_plan),
+                None,
+            ),
         ]
     finally:
         engine.dispose()
@@ -2477,7 +2501,7 @@ def test_plan_web_state_migration_refuses_lossy_downgrade_atomically(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0009_live_monitor_projection"
+                == "0010_plan_review_binding"
             )
             assert (
                 connection.exec_driver_sql(
@@ -2514,7 +2538,7 @@ def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) 
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0009_live_monitor_projection"
+                == "0010_plan_review_binding"
             )
     finally:
         engine.dispose()
@@ -2567,7 +2591,7 @@ def test_monitor_event_migration_renames_high_water_and_backfills_alerts(
         }
         assert row.occurred_at == _FIXED_NOW.isoformat()
         assert high_water == 42
-        assert revision == "0009_live_monitor_projection"
+        assert revision == "0010_plan_review_binding"
     finally:
         engine.dispose()
 
@@ -2659,7 +2683,7 @@ def test_market_index_event_constraint_migration_preserves_the_existing_ledger(
             _FIXED_NOW.isoformat(),
         )
         assert high_water_after == 7
-        assert revision == "0009_live_monitor_projection"
+        assert revision == "0010_plan_review_binding"
         assert inspector.get_foreign_keys("monitor_event") == foreign_keys_before
         assert inspector.get_indexes("monitor_event") == indexes_before
         assert inspector.get_unique_constraints("monitor_event") == unique_constraints_before
@@ -2694,7 +2718,7 @@ def test_market_index_event_constraint_migration_refuses_lossy_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0009_live_monitor_projection"
+                == "0010_plan_review_binding"
             )
             assert connection.exec_driver_sql("SELECT id, sequence FROM monitor_event").one() == (
                 event_id,
@@ -3030,7 +3054,7 @@ def test_monitor_event_migration_refuses_lossy_non_alert_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0009_live_monitor_projection"
+                == "0010_plan_review_binding"
             )
     finally:
         engine.dispose()
@@ -3082,7 +3106,7 @@ def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
             "c" * 64,
             evaluated_at,
         )
-        assert revision == "0009_live_monitor_projection"
+        assert revision == "0010_plan_review_binding"
     finally:
         engine.dispose()
 
@@ -3155,7 +3179,7 @@ def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0009_live_monitor_projection"
+                == "0010_plan_review_binding"
             )
             assert connection.exec_driver_sql(
                 "SELECT evaluation_kind, target_value FROM evaluation_ledger"

@@ -58,7 +58,7 @@
             "type": "string"
           },
           "promptVersion": {
-            "default": "plan-extract-v2",
+            "default": "plan-extract-v3",
             "maxLength": 64,
             "minLength": 1,
             "pattern": "^[a-z0-9][a-z0-9._-]*$",
@@ -6911,6 +6911,18 @@
             "minimum": 0.0,
             "title": "Expectedrevision",
             "type": "integer"
+          },
+          "extractionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extractionid"
           },
           "planJson": {
             "maxLength": 262144,

@@ -8,7 +8,7 @@ import json
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -56,6 +56,10 @@ _MAX_CONCURRENT_EXTRACTIONS: Final = 1
 AIClientFactory = Callable[[], httpx.AsyncClient]
 
 
+class PlanExtractionReviewStore(Protocol):
+    async def record_plan_extraction(self, result: PlanExtractionResult) -> None: ...
+
+
 class ConfiguredAIWebLifecycle:
     """Own immutable directly configured AI model bindings for a Web lifetime."""
 
@@ -64,11 +68,13 @@ class ConfiguredAIWebLifecycle:
         *,
         config_path: Path,
         client_factory: AIClientFactory | None = None,
+        review_store: PlanExtractionReviewStore | None = None,
     ) -> None:
         if not isinstance(config_path, Path):
             raise TypeError("config_path must be a Path")
         self._config_path = config_path
         self._client_factory = client_factory or _default_client
+        self._review_store = review_store
         self._client: httpx.AsyncClient | None = None
         self._settings: AIConfiguration | None = None
         self._secret_store: InMemorySecretStore | None = None
@@ -273,12 +279,18 @@ class ConfiguredAIWebLifecycle:
                     config=binding.config,
                     provider=binding.provider,
                 )
-                self._operations[operation_id] = _completed_extraction_view(
+                completed_view = _completed_extraction_view(
                     result=result,
                     submitted_at=queued.submitted_at,
                     started_at=started_at,
                     completed_at=_now(),
                 )
+                if result.status is PlanExtractionStatus.SUCCEEDED:
+                    review_store = self._review_store
+                    if review_store is None:
+                        raise RuntimeError("plan extraction review store is unavailable")
+                    await review_store.record_plan_extraction(result)
+                self._operations[operation_id] = completed_view
         except asyncio.CancelledError:
             current = self._operations[operation_id]
             self._operations[operation_id] = PlanExtractionView(

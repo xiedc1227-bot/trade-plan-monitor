@@ -18,6 +18,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from trade_plan_monitor.ai.models import PlanExtractionReview
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
@@ -62,6 +63,8 @@ from trade_plan_monitor.state.models import (
     LatestQuote,
     PendingOfficialClose,
     PlanActivationState,
+    PlanReviewOrigin,
+    PlanReviewProvenance,
     PlanSource,
     PlanVersion,
     PlanVersionReview,
@@ -71,6 +74,7 @@ from trade_plan_monitor.state.models import (
     ProviderHealth,
     RequestIdempotency,
     RiskState,
+    StoredPlanExtractionReview,
     SymbolHealth,
     SymbolHealthStatus,
     TradingCalendar,
@@ -239,6 +243,24 @@ class PlanVersionDetailsRecord(PlanVersionRecord):
 
     source_text: str
     review_issues: tuple[DraftReviewIssue, ...] = ()
+    review_origin: PlanReviewOrigin
+    extraction_id: str | None
+    review_confirmed_at: datetime | None
+
+
+class PlanExtractionReviewRecord(BaseModel):
+    """Read-only server-owned extraction review snapshot."""
+
+    model_config = ConfigDict(frozen=True)
+
+    extraction_id: str
+    provider_id: str
+    model: str
+    prompt_version: str
+    source_hash: str
+    draft_hash: str
+    review_issues: tuple[DraftReviewIssue, ...]
+    completed_at: datetime
 
 
 class PlanActivationStateRecord(BaseModel):
@@ -445,18 +467,118 @@ class PlanRepository:
         self._id_factory = id_factory
         self._events = events
 
+    def record_extraction_review(
+        self,
+        review: PlanExtractionReview,
+        *,
+        completed_at: datetime,
+    ) -> PlanExtractionReviewRecord:
+        if not isinstance(review, PlanExtractionReview):
+            raise TypeError("review must be a PlanExtractionReview")
+        timestamp = _aware_datetime(completed_at, "completed_at")
+        expected = PlanExtractionReviewRecord(
+            extraction_id=str(review.extraction_id),
+            provider_id=str(review.provider_id),
+            model=review.model,
+            prompt_version=review.prompt_version,
+            source_hash=review.source_text_sha256,
+            draft_hash=review.draft_sha256,
+            review_issues=review.review_issues,
+            completed_at=timestamp,
+        )
+        model = StoredPlanExtractionReview(
+            id=str(review.extraction_id),
+            provider_id=str(review.provider_id),
+            model=review.model,
+            prompt_version=review.prompt_version,
+            source_hash=review.source_text_sha256,
+            draft_hash=review.draft_sha256,
+            review_issues_json=_plan_review_issues_json(review.review_issues),
+            completed_at=timestamp.isoformat(),
+        )
+        try:
+            with self._session.begin_nested():
+                self._session.add(model)
+                self._session.flush()
+        except IntegrityError:
+            existing = self.get_extraction_review(str(review.extraction_id))
+            if existing is not None and _same_extraction_review(existing, expected):
+                return existing
+            raise RepositoryError("Extraction review identity is already bound") from None
+        return _plan_extraction_review_record(model)
+
+    def get_extraction_review(self, extraction_id: str) -> PlanExtractionReviewRecord | None:
+        model = self._session.get(
+            StoredPlanExtractionReview,
+            _uuid_identifier(extraction_id, "extraction_id"),
+        )
+        return None if model is None else _plan_extraction_review_record(model)
+
+    def find_extraction_review(
+        self,
+        *,
+        draft_hash: str,
+        source_hash: str | None = None,
+    ) -> PlanExtractionReviewRecord | None:
+        filters = [StoredPlanExtractionReview.draft_hash == _sha256_hash(draft_hash, "draft_hash")]
+        if source_hash is not None:
+            filters.append(
+                StoredPlanExtractionReview.source_hash == _sha256_hash(source_hash, "source_hash")
+            )
+        model = self._session.scalar(
+            select(StoredPlanExtractionReview)
+            .where(*filters)
+            .order_by(
+                StoredPlanExtractionReview.completed_at.desc(),
+                StoredPlanExtractionReview.id.desc(),
+            )
+            .limit(1)
+        )
+        return None if model is None else _plan_extraction_review_record(model)
+
     def save_draft(
         self,
         plan: TradePlan,
         *,
         source_text: str,
         review_issues: Sequence[DraftReviewIssue] = (),
+        review_origin: PlanReviewOrigin = PlanReviewOrigin.MANUAL,
+        extraction_id: str | None = None,
+        review_confirmed_at: datetime | None = None,
     ) -> PlanVersionRecord:
         if not isinstance(plan, TradePlan):
             raise TypeError("plan must be a TradePlan")
         if not isinstance(source_text, str):
             raise TypeError("source_text must be a string")
+        try:
+            normalized_origin = PlanReviewOrigin(review_origin)
+        except TypeError, ValueError:
+            raise ValueError("review_origin is invalid") from None
+        normalized_extraction_id = (
+            None if extraction_id is None else _uuid_identifier(extraction_id, "extraction_id")
+        )
+        if (normalized_origin in {PlanReviewOrigin.LEGACY_PENDING, PlanReviewOrigin.MANUAL}) != (
+            normalized_extraction_id is None
+        ):
+            raise ValueError("review origin and extraction identity are inconsistent")
+        normalized_confirmed_at = (
+            None
+            if review_confirmed_at is None
+            else _aware_datetime(review_confirmed_at, "review_confirmed_at")
+        )
         normalized_review_issues = _plan_review_issues(review_issues)
+        if normalized_origin in {PlanReviewOrigin.LEGACY_PENDING, PlanReviewOrigin.MANUAL}:
+            if normalized_confirmed_at is not None:
+                raise ValueError("manual and legacy review state cannot have a confirmation time")
+        elif normalized_origin is PlanReviewOrigin.AI_EXTRACTION:
+            if (normalized_confirmed_at is not None) != all(
+                issue.resolved for issue in normalized_review_issues
+            ):
+                raise ValueError("AI extraction confirmation state is inconsistent")
+        elif normalized_confirmed_at is not None or any(
+            issue.resolved for issue in normalized_review_issues
+        ):
+            raise ValueError("AI reimport review state must remain unresolved")
         if not validate_trade_plan(
             plan,
             available_market_evidence=set(),
@@ -487,9 +609,19 @@ class PlanRepository:
             plan_version_id=version.id,
             review_issues_json=_plan_review_issues_json(normalized_review_issues),
         )
+        provenance = PlanReviewProvenance(
+            plan_version_id=version.id,
+            origin=normalized_origin.value,
+            extraction_id=normalized_extraction_id,
+            source_hash=source.source_hash,
+            draft_hash=version.plan_hash,
+            confirmed_at=(
+                None if normalized_confirmed_at is None else normalized_confirmed_at.isoformat()
+            ),
+        )
         try:
             with self._session.begin_nested():
-                self._session.add_all((source, version, review))
+                self._session.add_all((source, version))
                 self._session.execute(
                     sqlite_insert(PlanActivationState)
                     .values(
@@ -500,6 +632,8 @@ class PlanRepository:
                     )
                     .on_conflict_do_nothing(index_elements=[PlanActivationState.symbol])
                 )
+                self._session.flush()
+                self._session.add_all((review, provenance))
                 self._session.flush()
         except IntegrityError:
             existing = self.get_version(plan.plan_id, plan.version)
@@ -534,19 +668,33 @@ class PlanRepository:
     def get_version_details(self, version_id: str) -> PlanVersionDetailsRecord | None:
         normalized_id = _uuid_identifier(version_id, "version_id")
         row = self._session.execute(
-            select(PlanVersion, PlanSource, PlanVersionReview)
+            select(
+                PlanVersion,
+                PlanSource,
+                PlanVersionReview,
+                PlanReviewProvenance,
+                StoredPlanExtractionReview,
+            )
             .outerjoin(PlanSource, PlanSource.id == PlanVersion.source_id)
             .outerjoin(
                 PlanVersionReview,
                 PlanVersionReview.plan_version_id == PlanVersion.id,
             )
+            .outerjoin(
+                PlanReviewProvenance,
+                PlanReviewProvenance.plan_version_id == PlanVersion.id,
+            )
+            .outerjoin(
+                StoredPlanExtractionReview,
+                StoredPlanExtractionReview.id == PlanReviewProvenance.extraction_id,
+            )
             .where(PlanVersion.id == normalized_id)
         ).one_or_none()
         if row is None:
             return None
-        if row[1] is None or row[2] is None:
+        if row[1] is None or row[2] is None or row[3] is None:
             raise RepositoryError("Stored plan version details are invalid")
-        return _plan_version_details_record(row[0], row[1], row[2])
+        return _plan_version_details_record(row[0], row[1], row[2], row[3], row[4])
 
     def list_version_details(
         self,
@@ -576,11 +724,25 @@ class PlanRepository:
         if type(total) is not int or not 0 <= total <= self._MAX_READ_ROWS:
             raise RepositoryError("Plan-version collection exceeds its read limit")
         rows = self._session.execute(
-            select(PlanVersion, PlanSource, PlanVersionReview)
+            select(
+                PlanVersion,
+                PlanSource,
+                PlanVersionReview,
+                PlanReviewProvenance,
+                StoredPlanExtractionReview,
+            )
             .outerjoin(PlanSource, PlanSource.id == PlanVersion.source_id)
             .outerjoin(
                 PlanVersionReview,
                 PlanVersionReview.plan_version_id == PlanVersion.id,
+            )
+            .outerjoin(
+                PlanReviewProvenance,
+                PlanReviewProvenance.plan_version_id == PlanVersion.id,
+            )
+            .outerjoin(
+                StoredPlanExtractionReview,
+                StoredPlanExtractionReview.id == PlanReviewProvenance.extraction_id,
             )
             .where(*filters)
             .order_by(PlanVersion.created_at.desc(), PlanVersion.id.desc())
@@ -589,9 +751,9 @@ class PlanRepository:
         ).all()
         details: list[PlanVersionDetailsRecord] = []
         for row in rows:
-            if row[1] is None or row[2] is None:
+            if row[1] is None or row[2] is None or row[3] is None:
                 raise RepositoryError("Stored plan version details are invalid")
-            details.append(_plan_version_details_record(row[0], row[1], row[2]))
+            details.append(_plan_version_details_record(row[0], row[1], row[2], row[3], row[4]))
         return tuple(details), total
 
     def get_activation_state(self, symbol: str) -> PlanActivationStateRecord | None:
@@ -648,14 +810,11 @@ class PlanRepository:
                 if target is None or target.plan_hash != plan_sha256(plan):
                     raise PlanVersionNotFoundError("Plan version was not found")
                 unresolved_close = self._session.scalar(
-                    select(PendingOfficialClose).where(
-                        PendingOfficialClose.symbol == plan.symbol
-                    )
+                    select(PendingOfficialClose).where(PendingOfficialClose.symbol == plan.symbol)
                 )
                 if unresolved_close is not None and (
                     unresolved_close.plan_hash != target.plan_hash
-                    or unresolved_close.formula_version
-                    != plan.monitoring.indicator_formula_version
+                    or unresolved_close.formula_version != plan.monitoring.indicator_formula_version
                 ):
                     raise PlanActivationBlockedError(
                         "Another plan has an unresolved official close"
@@ -799,9 +958,7 @@ class PlanRepository:
                     )
                 )
                 if unresolved_close is not None:
-                    raise PlanActivationBlockedError(
-                        "Plan has an unresolved official close"
-                    )
+                    raise PlanActivationBlockedError("Plan has an unresolved official close")
 
                 changed_at = _aware_now(self._clock)
                 state_result = self._session.execute(
@@ -2372,20 +2529,98 @@ def _plan_version_record(model: PlanVersion) -> PlanVersionRecord:
     )
 
 
+def _plan_extraction_review_record(
+    model: StoredPlanExtractionReview,
+) -> PlanExtractionReviewRecord:
+    record: PlanExtractionReviewRecord | None = None
+    try:
+        review = PlanExtractionReview(
+            extraction_id=UUID(model.id),
+            provider_id=UUID(model.provider_id),
+            model=model.model,
+            prompt_version=model.prompt_version,
+            source_text_sha256=model.source_hash,
+            draft_sha256=model.draft_hash,
+            review_issues=_load_plan_review_issues(model.review_issues_json),
+        )
+        completed_at = datetime.fromisoformat(model.completed_at)
+        if completed_at.tzinfo is not None and completed_at.utcoffset() is not None:
+            record = PlanExtractionReviewRecord(
+                extraction_id=str(review.extraction_id),
+                provider_id=str(review.provider_id),
+                model=review.model,
+                prompt_version=review.prompt_version,
+                source_hash=review.source_text_sha256,
+                draft_hash=review.draft_sha256,
+                review_issues=review.review_issues,
+                completed_at=completed_at,
+            )
+    except TypeError, ValueError, RecursionError, UnicodeError:
+        pass
+    if record is None:
+        raise RepositoryError("Stored extraction review is invalid")
+    return record
+
+
 def _plan_version_details_record(
     version: PlanVersion,
     source: PlanSource,
     review: PlanVersionReview,
+    provenance: PlanReviewProvenance,
+    extraction: StoredPlanExtractionReview | None,
 ) -> PlanVersionDetailsRecord:
     record: PlanVersionDetailsRecord | None = None
     try:
         plan = load_plan_json(version.payload_json)
         review_issues = _load_plan_review_issues(review.review_issues_json)
         created_at = datetime.fromisoformat(version.created_at)
+        origin = PlanReviewOrigin(provenance.origin)
+        confirmed_at = (
+            None
+            if provenance.confirmed_at is None
+            else datetime.fromisoformat(provenance.confirmed_at)
+        )
+        extraction_record = (
+            None if extraction is None else _plan_extraction_review_record(extraction)
+        )
+        extraction_valid = (
+            origin in {PlanReviewOrigin.LEGACY_PENDING, PlanReviewOrigin.MANUAL}
+            and provenance.extraction_id is None
+            and extraction_record is None
+        ) or (
+            origin in {PlanReviewOrigin.AI_EXTRACTION, PlanReviewOrigin.AI_REIMPORT}
+            and extraction_record is not None
+            and provenance.extraction_id == extraction_record.extraction_id
+            and provenance.draft_hash == extraction_record.draft_hash
+            and (
+                origin is PlanReviewOrigin.AI_REIMPORT
+                or provenance.source_hash == extraction_record.source_hash
+            )
+            and _review_issues_match_required(
+                review_issues,
+                extraction_record.review_issues,
+            )
+        )
+        confirmation_valid = (
+            origin is PlanReviewOrigin.MANUAL
+            or (origin is PlanReviewOrigin.LEGACY_PENDING and confirmed_at is None)
+            or (
+                origin is PlanReviewOrigin.AI_EXTRACTION
+                and (confirmed_at is not None) == all(issue.resolved for issue in review_issues)
+            )
+            or (
+                origin is PlanReviewOrigin.AI_REIMPORT
+                and confirmed_at is None
+                and all(not issue.resolved for issue in review_issues)
+            )
+        )
         valid = (
             version.id == review.plan_version_id
+            and version.id == provenance.plan_version_id
             and version.source_id == source.id
             and source.source_hash == sha256(source.source_text.encode("utf-8")).hexdigest()
+            and provenance.source_hash == source.source_hash
+            and provenance.draft_hash == version.plan_hash
             and dump_plan_json(plan) == version.payload_json
             and plan.plan_id == version.plan_id
             and plan.version == version.version
@@ -2395,18 +2630,52 @@ def _plan_version_details_record(
             and version.revision >= 0
             and created_at.tzinfo is not None
             and created_at.utcoffset() is not None
+            and (confirmed_at is None or confirmed_at.tzinfo is not None)
+            and (confirmed_at is None or confirmed_at.utcoffset() is not None)
+            and extraction_valid
+            and confirmation_valid
         )
         if valid:
             record = PlanVersionDetailsRecord(
                 **_plan_version_record(version).model_dump(mode="python"),
                 source_text=source.source_text,
                 review_issues=review_issues,
+                review_origin=origin,
+                extraction_id=provenance.extraction_id,
+                review_confirmed_at=confirmed_at,
             )
     except TypeError, ValueError, RecursionError, UnicodeError:
         pass
     if record is None:
         raise RepositoryError("Stored plan version details are invalid")
     return record
+
+
+def _review_issues_match_required(
+    actual: Sequence[DraftReviewIssue],
+    required: Sequence[DraftReviewIssue],
+) -> bool:
+    return len(actual) == len(required) and all(
+        (item.kind, item.path, item.material) == (expected.kind, expected.path, expected.material)
+        for item, expected in zip(actual, required, strict=True)
+    )
+
+
+def _same_extraction_review(
+    left: PlanExtractionReviewRecord,
+    right: PlanExtractionReviewRecord,
+) -> bool:
+    """Treat retried writes as idempotent while preserving the first completion time."""
+
+    return (
+        left.extraction_id == right.extraction_id
+        and left.provider_id == right.provider_id
+        and left.model == right.model
+        and left.prompt_version == right.prompt_version
+        and left.source_hash == right.source_hash
+        and left.draft_hash == right.draft_hash
+        and left.review_issues == right.review_issues
+    )
 
 
 def _plan_review_issues(
@@ -3083,6 +3352,7 @@ __all__ = [
     "MarketReferenceRepository",
     "PlanActivationBlockedError",
     "PlanActivationStateRecord",
+    "PlanExtractionReviewRecord",
     "PlanRepository",
     "PlanSaveBlockedError",
     "PlanVersionNotFoundError",

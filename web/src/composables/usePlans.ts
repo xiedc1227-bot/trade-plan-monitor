@@ -36,6 +36,7 @@ export interface UsePlansOptions {
 }
 
 export interface ExtractedPlanDraftIntent {
+  readonly extractionId: string;
   readonly planJson: string;
   readonly reviewIssues: readonly DraftReviewIssue[];
   readonly sourceText: string;
@@ -246,6 +247,7 @@ export function usePlans(options: UsePlansOptions = {}): UsePlansResult {
     if (revision === null) return false;
     const command: PlanDraftCommand = {
       expectedRevision: revision,
+      extractionId: intent.extractionId,
       planJson: intent.planJson,
       reviewIssues: [...intent.reviewIssues],
       sourceText: intent.sourceText,

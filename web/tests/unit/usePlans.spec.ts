@@ -250,6 +250,7 @@ describe("usePlans", () => {
     await flushPromises();
 
     const saved = await plans.saveExtractedDraft({
+      extractionId: "00000000-0000-4000-8000-000000000201",
       planJson: version.planJson,
       reviewIssues: reviewedVersion.reviewIssues ?? [],
       sourceText: version.sourceText,
@@ -260,6 +261,7 @@ describe("usePlans", () => {
     expect(savePlanDraft).toHaveBeenCalledWith(
       {
         expectedRevision: 0,
+        extractionId: "00000000-0000-4000-8000-000000000201",
         planJson: version.planJson,
         reviewIssues: reviewedVersion.reviewIssues,
         sourceText: version.sourceText,
@@ -292,6 +294,7 @@ describe("usePlans", () => {
     await flushPromises();
 
     const saved = await plans.saveExtractedDraft({
+      extractionId: "00000000-0000-4000-8000-000000000201",
       planJson: version.planJson,
       reviewIssues: [],
       sourceText: version.sourceText,

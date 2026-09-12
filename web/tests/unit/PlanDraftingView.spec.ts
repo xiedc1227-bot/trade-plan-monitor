@@ -378,6 +378,7 @@ describe("PlanDraftingView", () => {
     expect(savePlanDraft).toHaveBeenCalledWith(
       {
         expectedRevision: 0,
+        extractionId: OPERATION_ID,
         planJson: planVersion.planJson,
         reviewIssues: [
           { kind: "MISSING_EVIDENCE", material: true, path: "draft", resolved: true },

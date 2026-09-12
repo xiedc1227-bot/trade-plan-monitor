@@ -27,8 +27,13 @@ from pydantic import (
     model_validator,
 )
 
+from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
-from trade_plan_monitor.domain.plan_validation import ValidationIssue
+from trade_plan_monitor.domain.plan_validation import (
+    DraftReviewIssue,
+    ReviewIssueKind,
+    ValidationIssue,
+)
 
 DisplayName = Annotated[
     str,
@@ -262,6 +267,71 @@ class PlanExtractionResult(_AIValue):
         return self
 
 
+class PlanExtractionReview(_AIValue):
+    """Server-owned activation review facts derived from one successful extraction."""
+
+    extraction_id: UUID
+    provider_id: UUID
+    model: ModelName
+    prompt_version: PromptVersion
+    source_text_sha256: SourceTextSha256
+    draft_sha256: SourceTextSha256
+    review_issues: tuple[DraftReviewIssue, ...] = Field(max_length=512)
+
+
+def build_plan_extraction_review(result: PlanExtractionResult) -> PlanExtractionReview:
+    """Derive the immutable issue set a client may resolve but cannot replace."""
+
+    if not isinstance(result, PlanExtractionResult):
+        raise TypeError("result must be a PlanExtractionResult")
+    if result.status is not PlanExtractionStatus.SUCCEEDED or result.draft is None:
+        raise ValueError("only a successful extraction can create a review snapshot")
+    review_issues = (
+        *(
+            DraftReviewIssue(
+                kind=ReviewIssueKind.ASSUMPTION,
+                path=issue.path,
+                material=issue.material,
+            )
+            for issue in result.assumptions
+        ),
+        *(
+            DraftReviewIssue(
+                kind=ReviewIssueKind.WARNING,
+                path=issue.path,
+                material=issue.material,
+            )
+            for issue in result.warnings
+        ),
+        *(
+            DraftReviewIssue(
+                kind=ReviewIssueKind.UNMAPPED_TEXT,
+                path=issue.path,
+                material=True,
+            )
+            for issue in result.unmapped_text
+        ),
+        *(
+            DraftReviewIssue(
+                kind=ReviewIssueKind.MISSING_EVIDENCE,
+                path=issue.path,
+                material=True,
+            )
+            for issue in result.validation_issues
+            if issue.code == "AI_EVIDENCE_REVIEW_REQUIRED" and issue.activation_blocking
+        ),
+    )
+    return PlanExtractionReview(
+        extraction_id=result.request_id,
+        provider_id=result.provider_id,
+        model=result.model,
+        prompt_version=result.prompt_version,
+        source_text_sha256=result.source_text_sha256,
+        draft_sha256=plan_sha256(result.draft),
+        review_issues=review_issues,
+    )
+
+
 def _is_explicit_loopback(host: str) -> bool:
     normalized = host.casefold().strip("[]")
     if normalized == "localhost":
@@ -291,9 +361,11 @@ __all__ = [
     "ExtractionIssue",
     "FieldEvidence",
     "PlanExtractionOutput",
+    "PlanExtractionReview",
     "PlanExtractionResult",
     "PlanExtractionStatus",
     "SecretReference",
     "TradePlanDraft",
     "UnmappedText",
+    "build_plan_extraction_review",
 ]
