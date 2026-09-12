@@ -96,6 +96,11 @@ tests/integration/
 - Pending-close recovery uses the pending close's historical market date for activation
   eligibility. A close that belonged to a valid date can therefore be restored after midnight
   or after the date range ends, while an invalid target date cannot create a new action alert.
+- Delivery rechecks the current active plan identity and current Shanghai market date before
+  sending a queued alert. Expired buy/sell queues remain durable history but are excluded from
+  delivery and exposed to the Web without a current-action prefill. A `RISK_BREACH` created by
+  cross-day recovery remains deliverable only when its own historical target date was valid;
+  it is still exposed as historical rather than as a current action.
 - Before provider or decision work, an exact read-only lookup of `(plan_hash, symbol, OFFICIAL_CLOSE, trade_date, formula_version)` short-circuits an already committed date as `DUPLICATE`. This prevents later configured attempts or restart from re-evaluating a completed identity without weakening result-hash conflict detection.
 
 ## Request Control

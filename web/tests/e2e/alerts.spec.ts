@@ -22,6 +22,7 @@ const alert: AlertView = {
   bucket: "CORE",
   causeId: "episode-21",
   createdAt: "2026-08-24T10:05:05+08:00",
+  currentActionable: true,
   dataAgeSeconds: 5,
   dedupKey: "a".repeat(64),
   evaluatedAt: "2026-08-24T10:05:00+08:00",

@@ -559,6 +559,10 @@
             "title": "Createdat",
             "type": "string"
           },
+          "currentActionable": {
+            "title": "Currentactionable",
+            "type": "boolean"
+          },
           "dataAgeSeconds": {
             "anyOf": [
               {
@@ -788,7 +792,8 @@
           "nextStep",
           "messageText",
           "createdAt",
-          "revision"
+          "revision",
+          "currentActionable"
         ],
         "title": "AlertView",
         "type": "object"

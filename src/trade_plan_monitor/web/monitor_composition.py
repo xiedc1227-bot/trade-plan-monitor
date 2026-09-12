@@ -690,6 +690,7 @@ def create_monitor_composition(
             session_factory,
             channels=(InAppChannel(),),
             clock=clock.now,
+            enforce_current_plan=True,
         )
         state = _ProductionRuntimeState(
             config_path=config_path,
@@ -743,6 +744,7 @@ def create_monitor_composition(
         ),
         alert_service=PersistentAlertOperationService(
             unit_of_work_factory=unit_of_work_factory,
+            clock=clock.now,
         ),
         market_index_read_service=market_index_read_service,
     )

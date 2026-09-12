@@ -100,6 +100,7 @@ export type AlertView = {
   bucket: ("CORE" | "TACTICAL") | (null);
   causeId: string;
   createdAt: string;
+  currentActionable: boolean;
   dataAgeSeconds: (number) | (null);
   dedupKey: string;
   evaluatedAt: string;

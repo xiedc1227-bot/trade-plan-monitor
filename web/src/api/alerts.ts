@@ -293,6 +293,7 @@ function isAlert(value: unknown): value is AlertView {
       "bucket",
       "causeId",
       "createdAt",
+      "currentActionable",
       "dataAgeSeconds",
       "dedupKey",
       "evaluatedAt",
@@ -325,6 +326,7 @@ function isAlert(value: unknown): value is AlertView {
       "bucket",
       "causeId",
       "createdAt",
+      "currentActionable",
       "dataAgeSeconds",
       "dedupKey",
       "evaluatedAt",
@@ -357,6 +359,7 @@ function isAlert(value: unknown): value is AlertView {
     !isSha256(value.planHash) ||
     !isShareSymbol(value.symbol) ||
     !isBoundedText(value.name, 100) ||
+    typeof value.currentActionable !== "boolean" ||
     typeof value.signalType !== "string" ||
     !actionableSignals.has(value.signalType as ActionableSignalType) ||
     !isCalendarDate(value.tradingDate) ||
@@ -418,6 +421,16 @@ function isAlert(value: unknown): value is AlertView {
 function validateSignalRelationships(item: AlertView): boolean {
   const prefill = item.positionPrefill ?? null;
   if (prefill !== null && !prefillMatchesAlert(prefill, item)) return false;
+  if (!item.currentActionable) {
+    if (prefill !== null) return false;
+    if (item.signalType === "BUY_CORE_READY" || item.signalType === "BUY_TACTICAL_READY") {
+      return item.zone === "LOW_BUY" && item.relevantZone?.zone === "LOW_BUY";
+    }
+    if (item.signalType === "PRESSURE_REDUCE_READY") {
+      return item.zone === "PRESSURE" && item.relevantZone?.zone === "PRESSURE";
+    }
+    return item.relevantZone === null;
+  }
   if (item.signalType === "BUY_CORE_READY" || item.signalType === "BUY_TACTICAL_READY") {
     return (
       item.zone === "LOW_BUY" &&

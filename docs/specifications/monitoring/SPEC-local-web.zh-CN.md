@@ -119,6 +119,8 @@ web/src/
 
 ### T038 持仓、提醒与诊断边界
 
+只有同一不可变计划版本仍处于活动状态，且其激活策略允许当前上海市场日期时，`currentActionable` 才为 true。已过期、已停用或已轮换的提醒继续作为可查询的历史证据，但暴露 `currentActionable=false`、不提供持仓预填，并显示明确的历史标记。
+
 - `create_app(position_service=..., alert_service=...)` 接收明确注入的 `PositionOperationService` 和 `AlertOperationService` 适配器，但不构造仓储、不打开 SQLite、不判断计划，也不启动工作。缺少服务时以 `SERVICE_UNAVAILABLE` 封闭失败。应用服务负责原子幂等、乐观修订检查、计划所属最大仓位策略、T+1/日历策略、持久化和审计写入。
 - T038 实现 `GET /position-lots`、`POST /position-lots`、`POST /position-lot-closures`、`GET /alerts`、`POST /alert-acknowledgements` 和 `POST /diagnostic-evaluations`。它不实现 T039 WebSocket 发布/回放、T040 Origin/安全/静态资源提供、生产服务组合，也不修改任何 T024 判断优先级、hash 或回放行为。
 - 持仓分页要求一个精确股票和显式 `asOfTradeDate`，回显请求的分页/筛选 identity，并且只暴露有界的人工批次事实与 T+1 可卖投影。人工建仓要求显式的 100 股整手数量、仓位桶、买入交易日、整数分成本、可选关联提醒和 `expectedRevision=0`；新批次从修订 `0` 开始。减仓是针对一个批次、数量、交易日和预期修订的独立明确命令。批次的持久修订为 `(quantity - remainingQuantity) / 100`，因此每减少一手就前进一步，且无需新增存储列。减仓响应将精确应用数量和交易日绑定到操作前/后的剩余数量及结果批次，且不能报告买入当日或更早日期的成功减仓。应用服务必须在提交持仓审计前拒绝最大仓位、剩余数量、交易日历 T+1 和过期修订冲突。
@@ -137,7 +139,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`89e2279a1aa6bcf649602a65424a675e222056adf2c55a4091691c25b73e6034`
+OpenAPI 快照 SHA-256：`5dac634614a5bfa5b16c74f14ebd07fe2d350cb1c36d952d0a23a949818d936a`
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 42 个已批准 REST 路径：27 个实时路径（包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars` 和 `GET /plan-activation-states/{symbol}`）加精确 15 个回测路径，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
@@ -408,6 +410,7 @@ T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` �
 - 分页显示文本交易提醒和健康提醒。
 - 按股票、类型、时间及确认状态筛选。
 - 展开查看证据、阻断条件、事件 ID 和图表时间链接。
+- 已过期或已轮换的提醒继续作为历史证据显示，并明确标记为当前不可操作。
 - 确认文案必须明确说明“确认提醒不代表成交”。
 
 ### `/system` — 系统健康

@@ -112,6 +112,7 @@ class AlertRecord(ApiValue):
 
     event: AlertEvent
     revision: NonNegativeRevision
+    current_actionable: bool = Field(strict=True)
     position_prefill: PositionPrefillView | None = None
 
     @model_validator(mode="after")
@@ -120,6 +121,8 @@ class AlertRecord(ApiValue):
         if self.revision != expected_revision:
             raise ValueError("alert revision must equal its durable acknowledgement state")
         prefill = self.position_prefill
+        if not self.current_actionable and prefill is not None:
+            raise ValueError("a historical alert cannot retain a position prefill")
         if prefill is None:
             return self
         event = self.event
@@ -226,6 +229,7 @@ class AlertView(ApiValue):
     created_at: ShanghaiDatetime
     acknowledged_at: ShanghaiDatetime | None = None
     revision: NonNegativeRevision
+    current_actionable: bool = Field(strict=True)
     position_prefill: PositionPrefillView | None = None
 
     @model_validator(mode="after")
@@ -233,6 +237,8 @@ class AlertView(ApiValue):
         expected_revision = 0 if self.acknowledged_at is None else 1
         if self.revision != expected_revision:
             raise ValueError("alert revision must equal its acknowledgement state")
+        if not self.current_actionable and self.position_prefill is not None:
+            raise ValueError("a historical alert cannot retain a position prefill")
         return self
 
 
@@ -467,6 +473,7 @@ def _alert_view(record: AlertRecord) -> AlertView:
         created_at=event.created_at,
         acknowledged_at=event.acknowledged_at,
         revision=record.revision,
+        current_actionable=record.current_actionable,
         position_prefill=record.position_prefill,
     )
 

@@ -32,6 +32,7 @@ function alert(
     bucket: "CORE",
     causeId: `episode-${sequence}`,
     createdAt: "2026-08-24T10:05:05+08:00",
+    currentActionable: true,
     dataAgeSeconds: 5,
     dedupKey: sequence.toString(16).padStart(64, "0"),
     evaluatedAt: marketTime,
@@ -183,6 +184,23 @@ describe("AlertsView", () => {
     expect(wrapper.text()).toContain("AUTHORITATIVE_SATISFIED");
     expect(wrapper.text()).toContain("AUTHORITATIVE_UNMET");
     expect(wrapper.text()).toContain("缺失输入：COMPLETE_5M_BAR");
+  });
+
+  it("retains an expired alert as history without presenting it as current", () => {
+    const wrapper = mount(AlertsView, {
+      props: {
+        initialPage: page([
+          alert(firstId, 21, {
+            currentActionable: false,
+            positionPrefill: null,
+          }),
+        ]),
+        operations: operations(),
+      },
+    });
+
+    expect(wrapper.text()).toContain("历史提醒 · 当前不可操作");
+    expect(wrapper.text()).toContain("服务端提醒");
   });
 
   it("issues pagination and symbol/type/time/acknowledgement filters as an authoritative query", async () => {

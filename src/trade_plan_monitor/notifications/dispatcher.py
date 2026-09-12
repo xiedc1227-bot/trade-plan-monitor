@@ -23,8 +23,11 @@ from trade_plan_monitor.notifications.channels import (
 )
 from trade_plan_monitor.notifications.models import AlertEvent
 from trade_plan_monitor.notifications.outbox import AlertOutbox, OutboxError
+from trade_plan_monitor.state.models import ActivePlan as ActivePlanRow
 from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
 from trade_plan_monitor.state.models import DeliveryAttempt as DeliveryAttemptRow
+from trade_plan_monitor.state.models import PlanVersion as PlanVersionRow
+from trade_plan_monitor.state.models import PlanVersionStatus
 
 SessionFactory = Callable[[], Session]
 Clock = Callable[[], datetime]
@@ -110,6 +113,7 @@ class NotificationDispatcher:
         clock: Clock | None = None,
         id_factory: IdFactory | None = None,
         retry_backoff: tuple[timedelta, ...] = DEFAULT_RETRY_BACKOFF,
+        enforce_current_plan: bool = False,
     ) -> None:
         if not callable(session_factory):
             raise TypeError("session_factory must be callable")
@@ -117,6 +121,9 @@ class NotificationDispatcher:
         self._clock = clock or _system_clock
         self._id_factory = id_factory or _system_id
         self._retry_backoff = _validated_retry_backoff(retry_backoff)
+        if type(enforce_current_plan) is not bool:
+            raise TypeError("enforce_current_plan must be a boolean")
+        self._enforce_current_plan = enforce_current_plan
 
         configured = (
             (InAppChannel(), ConsoleChannel()) if channels is None else _bounded_channels(channels)
@@ -168,6 +175,8 @@ class NotificationDispatcher:
 
         normalized_id = _event_id(event_id)
         event = self._load_event(normalized_id)
+        if not self._event_is_delivery_allowed(event, self._now()):
+            return ()
         attempts: list[DeliveryAttemptRecord] = []
         for channel in self._enabled_channels():
             attempt = await self._dispatch_if_due(event, channel)
@@ -192,6 +201,8 @@ class NotificationDispatcher:
         channel: NotificationChannel,
     ) -> DeliveryAttemptRecord | None:
         claim_started_at = self._now()
+        if not self._event_is_delivery_allowed(event, claim_started_at):
+            return None
         plan = self._next_attempt_plan(event.event_id, channel.channel, claim_started_at)
         if plan is None:
             return None
@@ -245,16 +256,34 @@ class NotificationDispatcher:
         )
         latest = aliased(DeliveryAttemptRow)
         known_statuses = tuple(status.value for status in DeliveryAttemptStatus)
-        statement = (
-            select(AlertEventRow)
-            .outerjoin(
-                latest,
+        statement = select(AlertEventRow).outerjoin(
+            latest,
+            and_(
+                latest.event_id == AlertEventRow.id,
+                latest.channel == channel.channel.value,
+                latest.attempt == latest_number,
+            ),
+        )
+        if self._enforce_current_plan:
+            statement = statement.join(
+                ActivePlanRow,
+                ActivePlanRow.symbol
+                == func.json_extract(AlertEventRow.payload_json, "$.symbol"),
+            ).join(
+                PlanVersionRow,
                 and_(
-                    latest.event_id == AlertEventRow.id,
-                    latest.channel == channel.channel.value,
-                    latest.attempt == latest_number,
+                    PlanVersionRow.id == ActivePlanRow.plan_version_id,
+                    PlanVersionRow.plan_id
+                    == func.json_extract(AlertEventRow.payload_json, "$.plan_id"),
+                    PlanVersionRow.version
+                    == func.json_extract(AlertEventRow.payload_json, "$.plan_version"),
+                    PlanVersionRow.plan_hash
+                    == func.json_extract(AlertEventRow.payload_json, "$.plan_hash"),
+                    PlanVersionRow.status == PlanVersionStatus.ACTIVE,
                 ),
             )
+        statement = (
+            statement
             .where(
                 or_(
                     latest.id.is_(None),
@@ -287,7 +316,13 @@ class NotificationDispatcher:
                     clock=self._clock,
                     id_factory=self._id_factory,
                 )
-                loaded = tuple(outbox.get(UUID(row.id)) for row in rows)
+                candidates = tuple(outbox.get(UUID(row.id)) for row in rows)
+                loaded = tuple(
+                    event
+                    for event in candidates
+                    if not self._enforce_current_plan
+                    or outbox.is_delivery_allowed(event, market_date=now.date())
+                )[:limit]
         except OutboxError, SQLAlchemyError, TypeError, ValueError:
             pass
         if loaded is None:
@@ -308,6 +343,23 @@ class NotificationDispatcher:
         if loaded is None:
             raise DeliveryStorageError("Committed alert event is unavailable")
         return loaded
+
+    def _event_is_delivery_allowed(self, event: AlertEvent, now: datetime) -> bool:
+        if not self._enforce_current_plan:
+            return True
+        allowed: bool | None = None
+        try:
+            with self._session_factory() as session:
+                allowed = AlertOutbox(
+                    session,
+                    clock=self._clock,
+                    id_factory=self._id_factory,
+                ).is_delivery_allowed(event, market_date=now.date())
+        except OutboxError, SQLAlchemyError, TypeError, ValueError:
+            pass
+        if allowed is None:
+            raise DeliveryStorageError("Alert delivery validity is unavailable")
+        return allowed
 
     def _next_attempt_plan(
         self,

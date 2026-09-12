@@ -15,6 +15,10 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from trade_plan_monitor.decision.models import ActionableSignalType
+from trade_plan_monitor.domain.plan_codec import load_plan_json
+from trade_plan_monitor.domain.plan_hash import plan_sha256
+from trade_plan_monitor.domain.plan_models import TradePlan, activation_is_eligible_on
 from trade_plan_monitor.notifications.models import AlertEvent, AlertPayload
 from trade_plan_monitor.notifications.render import render_alert
 from trade_plan_monitor.state.events import (
@@ -26,8 +30,8 @@ from trade_plan_monitor.state.events import (
     MonitorEventType,
     monitor_event_id,
 )
+from trade_plan_monitor.state.models import ActivePlan, AuditLog, PlanVersion, PlanVersionStatus
 from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
-from trade_plan_monitor.state.models import AuditLog
 
 Clock = Callable[[], datetime]
 IdFactory = Callable[[], str]
@@ -201,6 +205,70 @@ class AlertOutbox:
         if row is None:
             raise AlertNotFoundError("Alert event was not found")
         return _event_from_row(row)
+
+    def is_current_actionable(
+        self,
+        event: AlertEvent,
+        *,
+        market_date: date,
+    ) -> bool:
+        """Return whether a retained alert still belongs to the current active plan."""
+
+        if type(event) is not AlertEvent:
+            raise TypeError("event must be an AlertEvent")
+        if isinstance(market_date, datetime) or not isinstance(market_date, date):
+            raise TypeError("market_date must be a date")
+        plan = self._active_plan_for_event(event)
+        return plan is not None and activation_is_eligible_on(plan.activation, market_date)
+
+    def is_delivery_allowed(
+        self,
+        event: AlertEvent,
+        *,
+        market_date: date,
+    ) -> bool:
+        """Allow current alerts plus target-date-valid cross-day risk recovery."""
+
+        if type(event) is not AlertEvent:
+            raise TypeError("event must be an AlertEvent")
+        if isinstance(market_date, datetime) or not isinstance(market_date, date):
+            raise TypeError("market_date must be a date")
+        plan = self._active_plan_for_event(event)
+        if plan is None:
+            return False
+        if activation_is_eligible_on(plan.activation, market_date):
+            return True
+        return (
+            event.signal_type is ActionableSignalType.RISK_BREACH
+            and event.created_at.astimezone(_SHANGHAI).date() > event.trading_date
+            and activation_is_eligible_on(plan.activation, event.trading_date)
+        )
+
+    def _active_plan_for_event(self, event: AlertEvent) -> TradePlan | None:
+        row = self._session.execute(
+            select(PlanVersion, ActivePlan)
+            .join(ActivePlan, ActivePlan.plan_version_id == PlanVersion.id)
+            .where(ActivePlan.symbol == event.symbol)
+        ).one_or_none()
+        if row is None:
+            return False
+        version, active = row
+        if (
+            version.id != active.plan_version_id
+            or version.status != PlanVersionStatus.ACTIVE
+            or version.plan_id != event.plan_id
+            or version.version != event.plan_version
+            or version.plan_hash != event.plan_hash
+            or version.symbol != event.symbol
+        ):
+            return False
+        try:
+            plan = load_plan_json(version.payload_json)
+        except (TypeError, ValueError):
+            raise OutboxStorageError("Stored plan data is invalid") from None
+        if plan_sha256(plan) != event.plan_hash:
+            raise OutboxStorageError("Stored plan data is invalid")
+        return plan
 
     def list_events(
         self,

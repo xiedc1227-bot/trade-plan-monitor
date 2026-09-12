@@ -226,6 +226,9 @@ function toLocalInput(value: string | null): string {
               <td>
                 <strong>{{ item.name }} · {{ item.symbol }}</strong>
                 <span class="alert-history__signal">{{ item.signalType }} · {{ item.severity }}</span>
+                <span v-if="!item.currentActionable" class="alert-history__historical">
+                  历史提醒 · 当前不可操作
+                </span>
                 <pre class="alert-history__message">{{ item.messageText }}</pre>
               </td>
               <td>
@@ -396,11 +399,16 @@ td {
 }
 
 .alert-history__signal,
+.alert-history__historical,
 .alert-history__event-id,
 .alert-history time {
   display: block;
   margin-block: var(--space-1);
   font-family: var(--font-numeric);
+}
+
+.alert-history__historical {
+  color: var(--color-text-muted);
 }
 
 .alert-history__message {

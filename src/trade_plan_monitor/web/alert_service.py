@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from functools import partial
+from zoneinfo import ZoneInfo
 
 from anyio import to_thread
 
@@ -34,6 +35,9 @@ from trade_plan_monitor.web.routers.alerts import (
 )
 from trade_plan_monitor.web.schemas import MutationContext
 
+_SHANGHAI = ZoneInfo("Asia/Shanghai")
+Clock = Callable[[], datetime]
+
 
 class PersistentAlertOperationService:
     """Query and acknowledge canonical alerts in the shared local transaction boundary."""
@@ -42,10 +46,12 @@ class PersistentAlertOperationService:
         self,
         *,
         unit_of_work_factory: Callable[[], SqlAlchemyUnitOfWork],
+        clock: Clock | None = None,
     ) -> None:
         if not callable(unit_of_work_factory):
             raise TypeError("unit_of_work_factory must be callable")
         self._unit_of_work_factory = unit_of_work_factory
+        self._clock = clock or (lambda: datetime.now(_SHANGHAI))
 
     async def list_alerts(
         self,
@@ -119,6 +125,7 @@ class PersistentAlertOperationService:
         offset: int,
         limit: int,
     ) -> AlertRecordPage:
+        market_date = self._current_market_date()
         with self._unit_of_work_factory() as work:
             events, total = work.alerts.list_events(
                 symbol=symbol,
@@ -129,7 +136,16 @@ class PersistentAlertOperationService:
                 offset=offset,
                 limit=limit,
             )
-            records = tuple(_alert_record(event) for event in events)
+            records = tuple(
+                _alert_record(
+                    event,
+                    current_actionable=work.alerts.is_current_actionable(
+                        event,
+                        market_date=market_date,
+                    ),
+                )
+                for event in events
+            )
         return AlertRecordPage(
             items=records,
             symbol=symbol,
@@ -157,12 +173,24 @@ class PersistentAlertOperationService:
                 model_type=AlertRecord,
             )
             if replay is not None:
-                return replay
+                return _alert_record(
+                    replay.event,
+                    current_actionable=work.alerts.is_current_actionable(
+                        replay.event,
+                        market_date=self._current_market_date(),
+                    ),
+                )
             event = work.alerts.acknowledge(
                 command.alert_id,
                 expected_revision=command.expected_revision,
             )
-            result = _alert_record(event)
+            result = _alert_record(
+                event,
+                current_actionable=work.alerts.is_current_actionable(
+                    event,
+                    market_date=self._current_market_date(),
+                ),
+            )
             complete_replay(
                 work,
                 context=context,
@@ -172,12 +200,23 @@ class PersistentAlertOperationService:
             work.commit()
             return result
 
+    def _current_market_date(self) -> date:
+        current = self._clock()
+        if (
+            not isinstance(current, datetime)
+            or current.tzinfo is None
+            or current.utcoffset() is None
+        ):
+            raise RuntimeError("alert clock must return an aware datetime")
+        return current.astimezone(_SHANGHAI).date()
 
-def _alert_record(event: AlertEvent) -> AlertRecord:
+
+def _alert_record(event: AlertEvent, *, current_actionable: bool) -> AlertRecord:
     return AlertRecord(
         event=event,
         revision=0 if event.acknowledged_at is None else 1,
-        position_prefill=_position_prefill(event),
+        current_actionable=current_actionable,
+        position_prefill=_position_prefill(event) if current_actionable else None,
     )
 
 

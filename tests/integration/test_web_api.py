@@ -2747,6 +2747,7 @@ def _alert_record_payload(
             acknowledged_at=acknowledged_at,
         ),
         "revision": 1 if acknowledged_at is not None else 0,
+        "currentActionable": True,
         "positionPrefill": {
             "action": "BUY",
             "symbol": "003043.SZ",

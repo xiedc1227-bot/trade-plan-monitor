@@ -28,7 +28,10 @@ from trade_plan_monitor.decision.models import (
     NextStepCode,
     SignalIntent,
 )
-from trade_plan_monitor.domain.plan_models import OfficialCloseBelowLevelCondition
+from trade_plan_monitor.domain.plan_codec import load_plan_yaml
+from trade_plan_monitor.domain.plan_hash import plan_sha256
+from trade_plan_monitor.domain.plan_models import OfficialCloseBelowLevelCondition, TradePlan
+from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
 from trade_plan_monitor.notifications.channels import (
     ChannelDeliveryResult,
     ChannelErrorCode,
@@ -68,11 +71,13 @@ from trade_plan_monitor.state.models import (
     PositionLot,
 )
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 NOW = datetime(2026, 8, 21, 10, 30, tzinfo=SHANGHAI)
 PLAN_HASH = "a" * 64
 SYMBOL = "003043.SZ"
+SAMPLE_PLAN_PATH = Path(__file__).parents[2] / "config" / "plans" / "003043.SZ.sample.yaml"
 
 
 @pytest.fixture
@@ -152,6 +157,47 @@ def _payload(
         risk_line_fen=6080,
         next_step=signal.next_step,
     )
+
+
+def _expiring_plan() -> TradePlan:
+    payload = load_plan_yaml(SAMPLE_PLAN_PATH.read_text(encoding="utf-8")).model_dump(
+        mode="python",
+        round_trip=True,
+    )
+    payload["activation"] = {
+        "mode": "DATE_RANGE",
+        "start_date": NOW.date(),
+        "end_date": NOW.date(),
+    }
+    return TradePlan.model_validate(payload)
+
+
+def _payload_for_plan(identity: int, plan: TradePlan) -> AlertPayload:
+    payload = _payload(identity).model_dump(mode="python", round_trip=True)
+    payload.update(
+        {
+            "plan_id": plan.plan_id,
+            "plan_version": plan.version,
+            "plan_hash": plan_sha256(plan),
+            "symbol": plan.symbol,
+            "name": plan.name,
+        }
+    )
+    signal = SignalIntent(
+        signal_type=payload["signal_type"],
+        plan_hash=payload["plan_hash"],
+        symbol=payload["symbol"],
+        trading_date=payload["trading_date"],
+        cause_id=payload["cause_id"],
+        quantity=payload["quantity"],
+        bucket=payload["bucket"],
+        target_lot_id=payload["target_lot_id"],
+        matched_conditions=payload["matched_conditions"],
+        blockers=(),
+        next_step=payload["next_step"],
+    )
+    payload["dedup_key"] = alert_dedup_key(signal)
+    return AlertPayload.model_validate(payload)
 
 
 def _row_counts(engine: Engine) -> tuple[int, int, int]:
@@ -703,6 +749,122 @@ def test_dispatcher_recovers_a_committed_event_after_restart_and_skips_disabled_
             )
             == 0
         )
+
+
+def test_expired_queued_alert_is_retained_but_not_dispatched_as_current(
+    database_engine: Engine,
+) -> None:
+    plan = _expiring_plan()
+    source_text = SAMPLE_PLAN_PATH.read_text(encoding="utf-8")
+    with _unit_of_work(database_engine) as work:
+        work.plans.save_draft(plan, source_text=source_text)
+        work.plans.activate(
+            plan,
+            expected_revision=0,
+            validation=validate_trade_plan(
+                plan,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        committed = work.alerts.enqueue(_payload_for_plan(801, plan))
+        assert work.alerts.is_current_actionable(
+            committed,
+            market_date=NOW.date(),
+        )
+        work.commit()
+
+    expired_at = NOW + timedelta(days=1)
+    console_lines: list[str] = []
+    dispatcher = NotificationDispatcher(
+        create_session_factory(database_engine),
+        channels=(ConsoleChannel(write_line=console_lines.append),),
+        clock=lambda: expired_at,
+        enforce_current_plan=True,
+    )
+    try:
+        assert asyncio.run(dispatcher.dispatch_pending()) == ()
+        assert asyncio.run(dispatcher.dispatch_event(committed.event_id)) == ()
+    finally:
+        asyncio.run(dispatcher.aclose())
+
+    assert console_lines == []
+    alert_service = PersistentAlertOperationService(
+        unit_of_work_factory=lambda: _unit_of_work(database_engine, now=expired_at),
+        clock=lambda: expired_at,
+    )
+    page = asyncio.run(
+        alert_service.list_alerts(
+            symbol=plan.symbol,
+            signal_type=None,
+            acknowledged=None,
+            start_at=None,
+            end_at=None,
+            offset=0,
+            limit=20,
+        )
+    )
+    assert page.total == 1
+    assert page.items[0].event == committed
+    assert page.items[0].current_actionable is False
+    assert page.items[0].position_prefill is None
+    with _unit_of_work(database_engine, now=expired_at) as work:
+        assert work.alerts.get(committed.event_id) == committed
+        assert not work.alerts.is_current_actionable(
+            committed,
+            market_date=expired_at.date(),
+        )
+    with create_session_factory(database_engine)() as session:
+        assert session.scalars(select(DeliveryAttempt)).all() == []
+
+
+def test_target_date_valid_cross_day_risk_recovery_is_delivered_as_history(
+    database_engine: Engine,
+) -> None:
+    plan = _expiring_plan()
+    source_text = SAMPLE_PLAN_PATH.read_text(encoding="utf-8")
+    with _unit_of_work(database_engine) as work:
+        work.plans.save_draft(plan, source_text=source_text)
+        work.plans.activate(
+            plan,
+            expected_revision=0,
+            validation=validate_trade_plan(
+                plan,
+                available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        work.commit()
+
+    recovered_at = NOW + timedelta(days=1)
+    with _unit_of_work(database_engine, now=recovered_at) as work:
+        recovered = work.alerts.enqueue(_payload_for_plan(802, plan))
+        assert not work.alerts.is_current_actionable(
+            recovered,
+            market_date=recovered_at.date(),
+        )
+        assert work.alerts.is_delivery_allowed(
+            recovered,
+            market_date=recovered_at.date(),
+        )
+        work.commit()
+
+    console_lines: list[str] = []
+    dispatcher = NotificationDispatcher(
+        create_session_factory(database_engine),
+        channels=(ConsoleChannel(write_line=console_lines.append),),
+        clock=lambda: recovered_at,
+        enforce_current_plan=True,
+    )
+    try:
+        attempts = asyncio.run(dispatcher.dispatch_pending())
+    finally:
+        asyncio.run(dispatcher.aclose())
+
+    assert tuple(attempt.channel for attempt in attempts) == (
+        DeliveryChannel.IN_APP,
+        DeliveryChannel.CONSOLE,
+    )
+    assert all(attempt.status is DeliveryAttemptStatus.DELIVERED for attempt in attempts)
+    assert str(recovered.event_id) in console_lines[0]
 
 
 def test_console_and_webhook_failures_remain_isolated_from_mandatory_in_app_delivery(

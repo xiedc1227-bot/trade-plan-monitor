@@ -119,6 +119,8 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 
 ### T038 Position, Alert, and Diagnostic Boundary
 
+`currentActionable` is true only while the same immutable plan version remains active and its activation policy authorizes the current Shanghai market date. Expired, disabled, or rotated alerts remain queryable historical evidence, but expose `currentActionable=false`, no position prefill, and an explicit historical label.
+
 - `create_app(position_service=..., alert_service=...)` accepts explicit `PositionOperationService` and `AlertOperationService` adapters without constructing repositories, opening SQLite, evaluating a plan, or starting work. Missing services fail closed with `SERVICE_UNAVAILABLE`. The application services own atomic idempotency, optimistic revision checks, plan-owned maximum-position policy, T+1/calendar policy, persistence, and audit insertion.
 - T038 implements `GET /position-lots`, `POST /position-lots`, `POST /position-lot-closures`, `GET /alerts`, `POST /alert-acknowledgements`, and `POST /diagnostic-evaluations`. It does not implement T039 WebSocket publication/replay, T040 Origin/security/static serving, production service composition, or any T024 decision priority/hash/replay change.
 - Position pages require one exact symbol and explicit `asOfTradeDate`, echo the requested pagination/filter identity, and expose only bounded manual-lot facts plus the T+1 sellable projection. Manual creation requires an explicit 100-share board-lot quantity, bucket, acquisition trade date, integer-fen cost, optional related alert, and `expectedRevision=0`; a new lot starts at revision `0`. Reduction is a separate explicit command over one lot, quantity, trade date, and expected revision. A lot's durable revision is `(quantity - remainingQuantity) / 100`, so every reduced board lot advances it once without a new storage column. The reduction response binds the exact applied quantity and trade date to before/after remaining quantities and the resulting lot, and it cannot report a successful reduction on or before acquisition. The application service rejects maximum-position, remaining-quantity, trading-calendar T+1, and stale-revision conflicts before committing its position audit.
@@ -137,7 +139,7 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
 
 ### T041 Frozen OpenAPI and Frontend-Type Boundary
 
-OpenAPI snapshot SHA-256: `89e2279a1aa6bcf649602a65424a675e222056adf2c55a4091691c25b73e6034`
+OpenAPI snapshot SHA-256: `5dac634614a5bfa5b16c74f14ebd07fe2d350cb1c36d952d0a23a949818d936a`
 
 - The side-effect-free `create_app()` is the sole OpenAPI source. Its document contains exactly 42 approved REST paths: 27 live paths, including read-only `GET /ai-runtime`, `GET /market-indexes/{indexCode}/bars`, and `GET /plan-activation-states/{symbol}`, plus exactly 15 backtest paths, including reference-market coverage and frozen index-series reads. It documents every stable public error status with `ErrorResponse`; FastAPI's default `HTTPValidationError`/`ValidationError` schemas are excluded because runtime validation already uses the bounded secret-free envelope.
 - `scripts/generate_frontend_types.py` serializes `openapi.json` as sorted, indented UTF-8 with LF line endings and one final newline. It derives TypeScript component schemas, path methods, grouped parameters, request bodies, response statuses, media types, references, unions, intersections, arrays, objects, enums, and literals from that same document; API fields are never copied by hand.
@@ -408,6 +410,7 @@ The six-module backtest direction and this boundary were approved on 2026-08-26.
 - Paginated textual reminders and health alerts.
 - Symbol/type/time/acknowledgement filters.
 - Expandable evidence, blockers, event ID, and chart-time link.
+- Expired or rotated reminders remain visible as historical evidence and are explicitly marked as currently non-actionable.
 - Acknowledgement language explicitly states that it is not a fill.
 
 ### `/system` — System Health
