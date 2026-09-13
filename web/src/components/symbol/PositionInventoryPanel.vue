@@ -166,10 +166,10 @@ function parseBoardLot(value: string): number | null {
 
 <style scoped>
 .position-inventory { display: grid; gap: var(--space-3); padding: var(--space-4); background: var(--color-surface-graphite); border: var(--border-technical); }
-.position-inventory dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--space-2); margin: 0; }
+.position-inventory dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--space-2); margin: 0; }
 .position-inventory dt { color: var(--color-text-muted); }
 .position-inventory dd { margin: var(--space-1) 0 0; font-family: var(--font-numeric); }
 .position-inventory form { display: grid; gap: var(--space-2); padding-block-start: var(--space-3); border-block-start: var(--border-technical); }
 .position-inventory label { display: grid; gap: var(--space-1); }
-.position-inventory input, .position-inventory select, .position-inventory button { min-height: 2.75rem; }
+.position-inventory input, .position-inventory select, .position-inventory button { box-sizing: border-box; min-width: 0; max-width: 100%; min-height: 2.75rem; }
 </style>

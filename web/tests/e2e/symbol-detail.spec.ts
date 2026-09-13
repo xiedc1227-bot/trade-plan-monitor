@@ -374,6 +374,37 @@ test("keeps the separated detail sections responsive and accessible", async ({ p
   expect(seriousViolations).toEqual([]);
 });
 
+test("keeps history range inputs visible and operable at 320px with 200 percent text", async ({ page }) => {
+  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
+  await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges));
+
+  await page.setViewportSize({ height: 900, width: 320 });
+  await page.goto(`${baseUrl}/stocks/${symbol}`);
+  await expect(page.getByRole("heading", { level: 2, name: "计划指数条件" })).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+
+  const startInput = page.locator("#symbol-history-start-at");
+  const endInput = page.locator("#symbol-history-end-at");
+  for (const input of [startInput, endInput]) {
+    await expect(input).toBeVisible();
+    const bounds = await input.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds?.x).toBeGreaterThanOrEqual(0);
+    expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(320);
+  }
+
+  const startAt = "2026-08-22T09:30:00.000000+08:00";
+  const endAt = "2026-08-22T15:00:00.000000+08:00";
+  await startInput.fill(startAt);
+  await endInput.fill(endAt);
+  await expect(startInput).toHaveValue(startAt);
+  await expect(endInput).toHaveValue(endAt);
+  await endInput.focus();
+  await expect(endInput).toBeFocused();
+});
+
 test("submits position commands for backend-only T+1 and maximum-policy decisions", async ({ page }) => {
   const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
   const positionRequests: PositionRequests = { closures: [], creates: [], reads: [] };

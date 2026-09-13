@@ -1,0 +1,7 @@
+{
+  "baselineManifest": "../R13/workspace-before.json",
+  "checkedAt": "2026-09-13T10:52:17+08:00",
+  "protectedFileCount": 16,
+  "allMatched": true,
+  "note": "Every SHA-256 value in the original R13 manifest matched after the N03 work. These pre-existing user changes remain unstaged."
+}

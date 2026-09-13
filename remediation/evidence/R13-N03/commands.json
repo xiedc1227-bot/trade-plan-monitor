@@ -1,0 +1,48 @@
+{
+  "task": "R13-N03",
+  "baseline": "456d53c894844b4923b5911b5ddee41ab7e07195",
+  "commands": [
+    {
+      "phase": "RED-original",
+      "cwd": "web",
+      "command": "npm run test:e2e -- tests/e2e/symbol-detail.spec.ts",
+      "exitCode": 1,
+      "result": "N03 reproduced unchanged at 320px / 200% text: document scrollWidth 412 > clientWidth 320. The later viewports and axe assertion did not execute. The separate N04 alert-selector failure also remained."
+    },
+    {
+      "phase": "GREEN-responsive",
+      "cwd": "web",
+      "command": "npx playwright test tests/e2e/symbol-detail.spec.ts --grep \"responsive and accessible|visible and operable\" --trace=on",
+      "exitCode": 0,
+      "result": "2 passed in 4.4s. The original responsive assertion ran unchanged across 320, 768, 1024 and 1440px at 200% text and completed axe; the added narrow-input regression checked bounds, fill and focus."
+    },
+    {
+      "phase": "GREEN-related-browser",
+      "cwd": "web",
+      "command": "npx playwright test tests/e2e/symbol-detail.spec.ts --grep \"reads backend detail|keeps current-plan|keeps both sections|marks a mapped|responsive and accessible|visible and operable|confirms plan-scoped\"",
+      "exitCode": 0,
+      "result": "7 passed in 5.4s: normal detail reading, reference-index evidence, index-history failure isolation, no-index paths, responsive/axe, narrow input operation and manual-risk flow."
+    },
+    {
+      "phase": "GREEN-unit",
+      "cwd": "web",
+      "command": "npm test -- tests/unit/SymbolDetailRoute.spec.ts tests/unit/SymbolDetailView.spec.ts tests/unit/PositionInventoryPanel.spec.ts tests/unit/ManualEventRiskPanel.spec.ts",
+      "exitCode": 0,
+      "result": "27 passed in 4 files, 1.54s."
+    },
+    {
+      "phase": "GREEN-type-build",
+      "cwd": "web",
+      "command": "npm run type-check; npm run build",
+      "exitCode": 0,
+      "result": "vue-tsc passed; Vite production build passed in 700ms."
+    },
+    {
+      "phase": "REGRESSION-full-file",
+      "cwd": "web",
+      "command": "npm run test:e2e -- tests/e2e/symbol-detail.spec.ts",
+      "exitCode": 1,
+      "result": "7 passed, 1 failed in 6.8s. N03 passed; the only failure is the pre-existing N04 global role=alert strict-selector collision in the position-command fixture."
+    }
+  ]
+}

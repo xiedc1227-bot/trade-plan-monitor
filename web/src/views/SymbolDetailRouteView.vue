@@ -255,6 +255,7 @@ function isInventoryApi(value: PositionApi): value is PositionApi & PositionInve
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: end;
+  min-width: 0;
   padding: var(--space-3);
   background: var(--color-surface-graphite);
   border: var(--border-technical);
@@ -268,10 +269,15 @@ function isInventoryApi(value: PositionApi): value is PositionApi & PositionInve
 .symbol-detail-route__label {
   display: grid;
   gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .symbol-detail-route__input {
-  min-width: min(100%, 20rem);
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding: var(--space-2);
   color: var(--color-text-mineral);
   font-family: var(--font-numeric);

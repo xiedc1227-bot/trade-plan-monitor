@@ -166,9 +166,10 @@ function isCalendarDate(value: string): boolean {
 .manual-event-risk__status, .manual-event-risk__warning, .manual-event-risk__error { margin: 0; padding: var(--space-3); border-inline-start: 0.25rem solid var(--color-signal-watch-amber); }
 .manual-event-risk__error { border-inline-start-color: var(--color-signal-risk-vermilion); }
 .manual-event-risk__facts, .manual-event-risk__facts div, .manual-event-risk__form, .manual-event-risk__form fieldset, .manual-event-risk__form label { display: grid; gap: var(--space-2); }
-.manual-event-risk__facts { grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); margin: 0; }
+.manual-event-risk__facts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); margin: 0; }
 .manual-event-risk__facts dd { margin: 0; font-family: var(--font-numeric); overflow-wrap: anywhere; }
 .manual-event-risk__form fieldset { margin: 0; padding: var(--space-4); border: var(--border-technical); }
+.manual-event-risk__form input, .manual-event-risk__form select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
 .manual-event-risk dialog { max-width: 32rem; color: inherit; background: var(--color-surface-raised); border: var(--border-technical); }
 @media (max-width: 47.999rem) { .manual-event-risk__header, .manual-event-risk__actions { flex-direction: column; } }
 </style>

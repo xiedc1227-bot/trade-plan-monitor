@@ -1,0 +1,14 @@
+{
+  "viewport": { "width": 320, "height": 900 },
+  "textZoom": "200%",
+  "before": {
+    "file": "before-320-200.jpeg",
+    "sha256": "CF6BEA56135C39E78DA4D2AF733ABE29A0722DA353D6589662E55B50A0505390",
+    "result": "The trace captured the horizontally clipped pre-fix page."
+  },
+  "after": {
+    "file": "after-320-200-focused-input.jpeg",
+    "sha256": "67A5E28CEC59D66C45D1CCFE9F8DD656E2C08F7BA6BBE56C28D9306D24138744",
+    "result": "The focused end-time input stays within the viewport; the test filled both full Shanghai timestamps and confirmed focus."
+  }
+}
