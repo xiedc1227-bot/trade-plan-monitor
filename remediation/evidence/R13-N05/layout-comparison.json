@@ -1,0 +1,38 @@
+[
+  {
+    "route": "/backtests",
+    "viewport": 320,
+    "beforeImmediate": 320,
+    "beforeSettled": 338,
+    "afterImmediate": 320,
+    "afterSettled": 320,
+    "afterUncontainedElements": 0
+  },
+  {
+    "route": "/backtests/new",
+    "viewport": 320,
+    "beforeImmediate": 320,
+    "beforeSettled": 476,
+    "afterImmediate": 320,
+    "afterSettled": 320,
+    "afterUncontainedElements": 0
+  },
+  {
+    "route": "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28&warmupStart=2026-07-01",
+    "viewport": 320,
+    "beforeImmediate": 320,
+    "beforeSettled": 617,
+    "afterImmediate": 320,
+    "afterSettled": 320,
+    "afterUncontainedElements": 0
+  },
+  {
+    "route": "/backtests/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "viewport": 320,
+    "beforeImmediate": 320,
+    "beforeSettled": 411,
+    "afterImmediate": 320,
+    "afterSettled": 320,
+    "afterUncontainedElements": 0
+  }
+]
