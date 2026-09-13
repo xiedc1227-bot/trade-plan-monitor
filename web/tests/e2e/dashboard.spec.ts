@@ -183,6 +183,18 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("requestfailed", (request) => audit.failedRequests.push(request.url()));
   await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
+  await page.route(/\/api\/v1\/plan-versions\?/, async (route) => {
+    const url = new URL(route.request().url());
+    expect(url.pathname).toBe("/api/v1/plan-versions");
+    expect([...url.searchParams.entries()]).toEqual([
+      ["offset", "0"], ["limit", "100"], ["status", "ACTIVE"],
+    ]);
+    await route.fulfill({
+      body: JSON.stringify({ items: [], limit: 100, offset: 0, total: 0 }),
+      contentType: "application/json; charset=utf-8",
+      status: 200,
+    });
+  });
   await page.route(/\/api\/v1\/market-indexes\/[^/]+\/bars\?/, async (route) => {
     const requestUrl = new URL(route.request().url());
     const indexCode = decodeURIComponent(requestUrl.pathname.split("/")[4] ?? "");
@@ -270,6 +282,7 @@ test("renders the authoritative dashboard and shared board-index summary at the 
     await mainContent.evaluate((element) => getComputedStyle(element).outlineStyle),
   ).toBe("none");
   await expect(page.getByText("华兴源创")).toBeVisible();
+  await expect(page.getByText("没有活动的明确规则计划。")).toBeVisible();
   await expect(page.getByTestId("market-status-strip")).toHaveCount(0);
   await expect(page.getByText("主要指数走势 · 当日")).toBeVisible();
   await expect(page.getByText("科创50").first()).toBeVisible();

@@ -3,10 +3,10 @@ import {
   spawn,
   type ChildProcessWithoutNullStreams,
 } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { expect, test } from "@playwright/test";
@@ -22,6 +22,7 @@ interface InstalledServer {
 
 let server: InstalledServer | null = null;
 let stateDirectory = "";
+let ownedStateDirectory = "";
 let configPath = "";
 let diagnostics = "";
 let port = 0;
@@ -34,6 +35,7 @@ test.describe("installed production restart", () => {
     port = await allocateLoopbackPort();
     baseUrl = `http://127.0.0.1:${port}`;
     stateDirectory = mkdtempSync(join(tmpdir(), "trade-plan-monitor-production-e2e-"));
+    ownedStateDirectory = realpathSync(stateDirectory);
     configPath = join(stateDirectory, "app.yaml");
     writeFileSync(configPath, "{}\n", { encoding: "utf8" });
     server = await startInstalledServer();
@@ -46,14 +48,17 @@ test.describe("installed production restart", () => {
     } catch (error) {
       stopError = error;
     }
-    if (server === null && stateDirectory.startsWith(tmpdir())) {
-      resetWindowsCursorKeyAcl();
+    if (server === null && ownedStateDirectory !== "") {
+      requireOwnedStateDirectory();
+      prepareTestCursorKeysForCleanup();
       rmSync(stateDirectory, {
         force: true,
         maxRetries: 10,
         recursive: true,
         retryDelay: 100,
       });
+      expect(existsSync(stateDirectory), "test-owned state directory cleanup").toBe(false);
+      console.log("installed restart cleanup: test-owned state directory removed");
     }
     if (stopError !== undefined) {
       throw stopError;
@@ -61,20 +66,13 @@ test.describe("installed production restart", () => {
   });
 
   test("serves the packaged SPA and keeps typed availability across process restart", async ({
-    page,
+    context,
+    request,
   }) => {
-    const browserConsoleFailures: string[] = [];
-    const requestFailures: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error" || message.type() === "warning") {
-        browserConsoleFailures.push(`${message.type()}: ${message.text()}`);
-      }
-    });
-    page.on("requestfailed", (request) => {
-      requestFailures.push(`${request.method()} ${request.url()}`);
-    });
+    const beforeRestart = await context.newPage();
+    const beforeAudit = auditPage(beforeRestart);
 
-    const first = await page.request.get(`${baseUrl}/api/v1/dashboard`);
+    const first = await request.get(`${baseUrl}/api/v1/dashboard`);
     expect(first.status()).toBe(200);
     expect(await first.json()).toMatchObject({
       availability: "UNAVAILABLE",
@@ -82,27 +80,61 @@ test.describe("installed production restart", () => {
       sequence: 0,
     });
 
-    await page.goto(baseUrl);
-    await expect(page.getByRole("heading", { name: "监控总览" })).toBeVisible();
-    await expect(page.getByText(/EMPTY_DATABASE/)).toBeVisible();
+    await beforeRestart.goto(baseUrl);
+    await expect(beforeRestart.getByRole("heading", { name: "监控总览" })).toBeVisible();
+    await expect(beforeRestart.getByText(/EMPTY_DATABASE/)).toBeVisible();
     expect(existsSync(join(stateDirectory, "data", "monitor.sqlite3"))).toBe(true);
+    await beforeRestart.close();
+    expect(beforeAudit.consoleFailures).toEqual([]);
+    expect(beforeAudit.requestFailures).toEqual([]);
+    console.log("installed restart before stop: browser console=0, failed requests=0");
 
     await stopInstalledServer();
+    const offlineError: unknown = await fetch(`${baseUrl}/api/v1/health`).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(offlineError).toBeInstanceOf(TypeError);
+    expect((offlineError as { cause?: NodeJS.ErrnoException }).cause?.code).toBe("ECONNREFUSED");
+    console.log("installed restart intentional offline probe: ECONNREFUSED");
     server = await startInstalledServer();
 
-    await page.reload();
-    await expect(page.getByRole("heading", { name: "监控总览" })).toBeVisible();
-    await expect(page.getByText(/EMPTY_DATABASE/)).toBeVisible();
-    const restarted = await page.request.get(`${baseUrl}/api/v1/dashboard`);
+    const afterRestart = await context.newPage();
+    const afterAudit = auditPage(afterRestart);
+    await afterRestart.goto(baseUrl);
+    await expect(afterRestart.getByRole("heading", { name: "监控总览" })).toBeVisible();
+    await expect(afterRestart.getByText(/EMPTY_DATABASE/)).toBeVisible();
+    const restarted = await request.get(`${baseUrl}/api/v1/dashboard`);
+    expect(restarted.status()).toBe(200);
     expect(await restarted.json()).toMatchObject({
       availability: "UNAVAILABLE",
       reason: "EMPTY_DATABASE",
       sequence: 0,
     });
-    expect(browserConsoleFailures).toEqual([]);
-    expect(requestFailures).toEqual([]);
+    await afterRestart.close();
+    expect(afterAudit.consoleFailures).toEqual([]);
+    expect(afterAudit.requestFailures).toEqual([]);
+    console.log("installed restart after recovery: browser console=0, failed requests=0");
   });
 });
+
+interface PageAudit {
+  consoleFailures: string[];
+  requestFailures: string[];
+}
+
+function auditPage(page: import("@playwright/test").Page): PageAudit {
+  const audit: PageAudit = { consoleFailures: [], requestFailures: [] };
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      audit.consoleFailures.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("requestfailed", (request) => {
+    audit.requestFailures.push(`${request.method()} ${request.url()} (${request.failure()?.errorText ?? "unknown"})`);
+  });
+  return audit;
+}
 
 async function startInstalledServer(): Promise<InstalledServer> {
   diagnostics = "";
@@ -288,13 +320,47 @@ async function allocateLoopbackPort(): Promise<number> {
   return address.port;
 }
 
-function resetWindowsCursorKeyAcl(): void {
-  const cursorKey = join(stateDirectory, "data", "backtest-cursor.key");
-  if (process.platform !== "win32" || !existsSync(cursorKey)) {
+function requireOwnedStateDirectory(): void {
+  const resolved = resolve(stateDirectory);
+  const temporaryRoot = realpathSync(tmpdir());
+  if (
+    resolved !== ownedStateDirectory ||
+    dirname(ownedStateDirectory).toLowerCase() !== temporaryRoot.toLowerCase() ||
+    !/^trade-plan-monitor-production-e2e-[A-Za-z0-9]{6}$/u.test(basename(ownedStateDirectory)) ||
+    realpathSync(stateDirectory) !== ownedStateDirectory ||
+    !lstatSync(stateDirectory).isDirectory() ||
+    lstatSync(stateDirectory).isSymbolicLink()
+  ) {
+    throw new Error("refusing cleanup outside the owned production test directory");
+  }
+  const dataDirectory = join(stateDirectory, "data");
+  if (existsSync(dataDirectory) && (
+    !lstatSync(dataDirectory).isDirectory() ||
+    lstatSync(dataDirectory).isSymbolicLink() ||
+    realpathSync(dataDirectory) !== resolve(dataDirectory)
+  )) {
+    throw new Error("refusing cleanup through a substituted test data directory");
+  }
+}
+
+function prepareTestCursorKeysForCleanup(): void {
+  if (process.platform !== "win32") {
     return;
   }
-  execFileSync("icacls.exe", [cursorKey, "/reset"], {
-    stdio: "ignore",
-    timeout: PROCESS_TOOL_TIMEOUT_MS,
-  });
+  for (const name of ["monitor.cursor.key", "backtest-cursor.key"]) {
+    const cursorKey = join(stateDirectory, "data", name);
+    if (!existsSync(cursorKey)) continue;
+    if (
+      dirname(resolve(cursorKey)) !== resolve(stateDirectory, "data") ||
+      !lstatSync(cursorKey).isFile() ||
+      lstatSync(cursorKey).isSymbolicLink() ||
+      realpathSync(cursorKey) !== resolve(cursorKey)
+    ) {
+      throw new Error(`refusing ACL change outside the test-generated ${name}`);
+    }
+    execFileSync("icacls.exe", [cursorKey, "/reset"], {
+      stdio: "ignore",
+      timeout: PROCESS_TOOL_TIMEOUT_MS,
+    });
+  }
 }

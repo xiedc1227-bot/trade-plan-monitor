@@ -436,7 +436,11 @@ test("submits position commands for backend-only T+1 and maximum-policy decision
     relatedAlertId: null,
     symbol,
   });
-  await expect(page.getByRole("alert")).toHaveText(
+  await expect(page.getByRole("region", { name: "独立库存登记与成交减记" })).toContainText("未知");
+  await expect(page.getByRole("region", { name: "人工事件风险确认" }).getByRole("alert"))
+    .toHaveText("当前没有可确认的启用计划");
+  await expect(page.getByRole("region", { name: "人工持仓批次" }).getByRole("alert"))
+    .toHaveText(
     "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
   );
 
@@ -453,7 +457,8 @@ test("submits position commands for backend-only T+1 and maximum-policy decision
     tradeDate: "2026-08-24",
   });
   await expect.poll(() => positionRequests.reads.length).toBe(3);
-  await expect(page.getByRole("alert")).toHaveText(
+  await expect(page.getByRole("region", { name: "人工持仓批次" }).getByRole("alert"))
+    .toHaveText(
     "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
   );
   await expect(page.locator("body")).not.toContainText("backend policy detail");
@@ -641,6 +646,32 @@ async function fulfillApi(
         offset: Number(url.searchParams.get("offset")),
         symbol: url.searchParams.get("symbol"),
         total: positionRequests === undefined ? 0 : 1,
+      }),
+      contentType: "application/json",
+    });
+    return;
+  }
+  if (url.pathname === "/api/v1/position-inventory" && route.request().method() === "GET") {
+    expect([...url.searchParams.entries()]).toEqual([
+      ["asOfTradeDate", "2026-08-24"], ["symbol", symbol],
+    ]);
+    await route.fulfill({
+      body: JSON.stringify({
+        asOfTradeDate: "2026-08-24", confirmationId: null, confirmedAt: null,
+        cutoff: observedAt, includedLotIds: [], inventoryRevision: 0,
+        missingReasons: ["POSITION_UNKNOWN"], openingBalances: [], sellableQuantity: null,
+        status: "UNKNOWN", symbol, totalQuantity: null,
+      }),
+      contentType: "application/json",
+    });
+    return;
+  }
+  if (url.pathname === "/api/v1/manual-event-risk" && route.request().method() === "GET") {
+    expect([...url.searchParams.entries()]).toEqual([["symbol", symbol]]);
+    await route.fulfill({
+      body: JSON.stringify({
+        confirmedAt: null, expiresOn: null, planVersionId: null,
+        reason: "NO_ACTIVE_PLAN", revision: 0, status: "UNKNOWN", symbol,
       }),
       contentType: "application/json",
     });
