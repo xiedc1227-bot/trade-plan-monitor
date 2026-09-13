@@ -1,0 +1,24 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/dashboard.spec.ts tests/e2e/symbol-detail.spec.ts
+
+
+Running 12 tests using 1 worker
+
+
+(node:19552) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+[2/12] [chrome] › tests\e2e\dashboard.spec.ts:354:1 › keeps the shared-index and per-plan dashboard boundary responsive and accessible
+[3/12] [chrome] › tests\e2e\dashboard.spec.ts:401:1 › distinguishes typed unavailable monitoring from a real disconnected service
+[4/12] [chrome] › tests\e2e\dashboard.spec.ts:464:1 › recovers a sequence gap with a fresh dashboard snapshot before replaying from its cursor
+[5/12] [chrome] › tests\e2e\symbol-detail.spec.ts:173:1 › reads backend detail, bars, and events for an explicit Shanghai history range
+[6/12] [chrome] › tests\e2e\symbol-detail.spec.ts:228:1 › keeps current-plan evidence visible when shared index history fails
+[7/12] [chrome] › tests\e2e\symbol-detail.spec.ts:243:1 › keeps both sections explicit when the current plan has no index conditions
+[8/12] [chrome] › tests\e2e\symbol-detail.spec.ts:281:1 › marks a mapped Schema v2 plan with zero index leaves as unused
+[9/12] [chrome] › tests\e2e\symbol-detail.spec.ts:323:1 › keeps the separated detail sections responsive and accessible
+[10/12] [chrome] › tests\e2e\symbol-detail.spec.ts:377:1 › keeps history range inputs visible and operable at 320px with 200 percent text
+[11/12] [chrome] › tests\e2e\symbol-detail.spec.ts:408:1 › submits position commands for backend-only T+1 and maximum-policy decisions
+[12/12] [chrome] › tests\e2e\symbol-detail.spec.ts:468:1 › confirms plan-scoped manual event risk through the normal symbol page
+  12 passed (8.9s)

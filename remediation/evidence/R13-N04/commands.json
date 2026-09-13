@@ -1,0 +1,24 @@
+{
+  "taskId": "01a098b6-f70d-7380-8d8d-dc7e74cbc4ee",
+  "timezone": "Asia/Shanghai",
+  "workdir": "web",
+  "runs": [
+    { "stage": "red", "command": "npm run test:e2e -- tests/e2e/dashboard.spec.ts tests/e2e/symbol-detail.spec.ts tests/e2e/production-restart.spec.ts", "exitCode": 1, "elapsedSeconds": 20.774, "result": "7 passed, 6 failed of 13", "log": "red-browser.log" },
+    { "stage": "fixture-green", "command": "npm run test:e2e -- tests/e2e/dashboard.spec.ts tests/e2e/symbol-detail.spec.ts", "exitCode": 0, "elapsedSeconds": 9.637, "result": "12 passed", "log": "green-fixtures.log" },
+    { "stage": "restart-first-green", "command": "npm run test:e2e -- tests/e2e/production-restart.spec.ts", "exitCode": 0, "elapsedSeconds": 5.778, "result": "1 passed", "log": "green-restart.log" },
+    { "stage": "complete-before-audit-telemetry", "command": "npm run test:e2e", "exitCode": 0, "elapsedSeconds": 147.93, "result": "30 passed", "log": "full-browser.log" },
+    { "stage": "independent-stream-recovery", "command": "npm run test:e2e -- tests/e2e/r13-live-stream.spec.ts", "exitCode": 0, "elapsedSeconds": 38.077, "result": "1 passed", "log": "stream-recovery.log" },
+    { "stage": "restart-final", "command": "npm run test:e2e -- tests/e2e/production-restart.spec.ts", "exitCode": 0, "elapsedSeconds": 5.948, "result": "1 passed", "log": "restart-final.log" },
+    { "stage": "complete-final", "command": "npm run test:e2e", "exitCode": 0, "elapsedSeconds": 147.722, "result": "30 passed", "log": "full-browser-final.log" },
+    { "stage": "unit-final", "command": "npm run test -- --run", "exitCode": 0, "elapsedSeconds": 7.586, "result": "45 files, 644 passed", "log": "full-unit-final.log" },
+    { "stage": "type-final", "command": "npm run type-check", "exitCode": 0, "elapsedSeconds": 8.229, "result": "passed", "log": "type-check-final.log" },
+    { "stage": "build-final", "command": "npm run build", "exitCode": 0, "elapsedSeconds": 2.454, "result": "passed; Vite built in 1.52s", "log": "build-final.log" }
+  ],
+  "intermediateFailure": "After resetting only monitor.cursor.key, the installed-process test still failed after its behavior assertions because backtest-cursor.key also lacked delete permission. That exploratory run's elapsed time was not captured; its test result was 1 failed. Both test-owned residual directories were inspected and removed by exact-path PowerShell cleanup before final validation.",
+  "browserAudit": {
+    "beforeStop": { "consoleFailures": 0, "requestFailures": 0 },
+    "intentionalOfflineNodeProbe": "ECONNREFUSED against this test's stopped loopback listener",
+    "afterRestart": { "consoleFailures": 0, "requestFailures": 0 },
+    "testOwnedStateDirectoryRemoved": true
+  }
+}

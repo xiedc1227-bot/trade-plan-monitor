@@ -1,0 +1,649 @@
+{
+  "isolation": {
+    "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-3zfcpgg7",
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-3zfcpgg7\\monitor.sqlite3",
+    "config": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-3zfcpgg7\\config\\app.yaml",
+    "provider": "IN_PROCESS_FAKE",
+    "now": "2026-09-14T10:04:15+08:00",
+    "sdkCalls": [
+      "trade_cal"
+    ],
+    "aiRequests": [],
+    "deadlines": [
+      "2026-09-14T10:05:12+08:00"
+    ]
+  },
+  "records": [
+    {
+      "blockedReviewChecks": 0
+    },
+    {
+      "reviewStatus": 200,
+      "body": {
+        "planVersionId": "a39a07f5-9cee-49a2-a52a-9ec573d2f397",
+        "reviewId": "6e2e2b13-06e3-4620-97cc-bf82a0c2671d",
+        "contentHash": "9cee2e2b8f9b872fd27174e36817fa2be2042fac1178b45cbf9a6eb13616ba2e",
+        "sourceHash": "0b8b389b9b083adff268186c2d6ac8a2589b4ad02e0b4d3b5b8ca37ce1452191",
+        "reviewEvidenceHash": "aff29867b88d3880e040b468dc36e9b7a0716601cb53654e93a969245b8dc491",
+        "revision": 1,
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+        "unresolvedIssues": [],
+        "canActivate": true
+      }
+    },
+    {
+      "time": "10:05",
+      "alerts": {
+        "items": [],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 0
+      }
+    },
+    {
+      "time": "10:10",
+      "alerts": {
+        "items": [
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+            "sequence": 18,
+            "dedupKey": "e17c3fa3e2a72a151fa1b00a56da9ac919cc08d9677956113accdd2486685257",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:10:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          }
+        ],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 1
+      }
+    },
+    {
+      "time": "10:15",
+      "alerts": {
+        "items": [
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+            "sequence": 18,
+            "dedupKey": "e17c3fa3e2a72a151fa1b00a56da9ac919cc08d9677956113accdd2486685257",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:10:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+            "sequence": 29,
+            "dedupKey": "153198d5be03dc54ed5b663f8d640bcd86a55e85a8c92360cd92fa1a2c8f1b69",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "SELL",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "sell-100",
+            "ruleId": "sell-100",
+            "targetBucketEnd": "2026-09-14T10:15:00+08:00",
+            "evaluatedAt": "2026-09-14T10:15:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:15:00+08:00"
+              ]
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_SELL_REMINDER",
+            "messageText": "[卖出提醒] SYNTHETIC R11 API 003043.SZ\n规则: sell-100\n完成K线: 2026-09-14T10:15:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后另行登记实际减仓\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:15:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          }
+        ],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 2
+      }
+    },
+    {
+      "time": "10:20",
+      "alerts": {
+        "items": [
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+            "sequence": 18,
+            "dedupKey": "e17c3fa3e2a72a151fa1b00a56da9ac919cc08d9677956113accdd2486685257",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:10:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+            "sequence": 29,
+            "dedupKey": "153198d5be03dc54ed5b663f8d640bcd86a55e85a8c92360cd92fa1a2c8f1b69",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "SELL",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "sell-100",
+            "ruleId": "sell-100",
+            "targetBucketEnd": "2026-09-14T10:15:00+08:00",
+            "evaluatedAt": "2026-09-14T10:15:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:15:00+08:00"
+              ]
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_SELL_REMINDER",
+            "messageText": "[卖出提醒] SYNTHETIC R11 API 003043.SZ\n规则: sell-100\n完成K线: 2026-09-14T10:15:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后另行登记实际减仓\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:15:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+            "sequence": 40,
+            "dedupKey": "c24a47d5a139f2bd9350cbd8278bcfd9afe0966fff03c3498a2be07ae0f6c0ca",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "RISK_ALERT",
+            "severity": "RISK",
+            "tradingDate": "2026-09-14",
+            "causeId": "risk-950",
+            "ruleId": "risk-950",
+            "targetBucketEnd": "2026-09-14T10:20:00+08:00",
+            "evaluatedAt": "2026-09-14T10:20:15+08:00",
+            "quantity": null,
+            "conditionEvidence": {
+              "planPath": "rules[2].condition",
+              "code": "COMPLETED_CLOSE_BELOW",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 949,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "price_fen",
+                  "value": 950,
+                  "unit": "FEN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:20:00+08:00"
+              ]
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_RISK_REMINDER",
+            "messageText": "[风险提醒] SYNTHETIC R11 API 003043.SZ\n规则: risk-950\n完成K线: 2026-09-14T10:20:00+08:00\n条件证据: 已满足\n下一步: 人工复核风险，不会自动卖出或改变风险状态\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:20:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          }
+        ],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 3
+      }
+    }
+  ]
+}
