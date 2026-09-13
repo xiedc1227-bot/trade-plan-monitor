@@ -1,0 +1,947 @@
+{
+  "originalLiteralALL": {
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-8b35nunv\\monitor.sqlite3",
+    "readOnly": true,
+    "sourceTextUnchanged": true,
+    "versions": [
+      {
+        "id": "cc8748db-0176-41b8-8d6d-be9bfab4330d",
+        "version": 1,
+        "plan_hash": "9da565dd8f64930e53b7675983d59cca543e9f615f627d2a98becc85805a9b64",
+        "status": "DRAFT",
+        "content_hash": "6f03325ef0703bb3d8452e8cfcd37eeff8efa7a843923dd2162c85d516ebf819",
+        "review_id": null,
+        "review_evidence_hash": "a6c10e4cd98b1e3c6348ea78842228cadb6b7e34c9f676b4802bdc786dccdf9e",
+        "operator": "ALL",
+        "low_fen": 980,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "ff762b94-1710-4175-9ad2-b8bf9999351e",
+        "version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "status": "SUPERSEDED",
+        "content_hash": "9cee2e2b8f9b872fd27174e36817fa2be2042fac1178b45cbf9a6eb13616ba2e",
+        "review_id": "544d1bd3-4631-434c-ac63-b60dd51590f6",
+        "review_evidence_hash": "9549eafee74a67a1e150a9b27893d8ae63945ce8eab0382cd86f1c25b8038382",
+        "operator": "ALL",
+        "low_fen": 980,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "event_id": "e5928068-29c4-5554-9469-80e72628afdf",
+        "plan_version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "activation_revision": 1,
+        "target_bucket_end": "2026-09-14T10:10:00+08:00",
+        "signal_type": "BUY",
+        "quantity": 100,
+        "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:20:15+08:00"
+      },
+      {
+        "event_id": "00f68439-e072-5f51-8cd8-9559f9091e63",
+        "plan_version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "activation_revision": 1,
+        "target_bucket_end": "2026-09-14T10:15:00+08:00",
+        "signal_type": "SELL",
+        "quantity": 100,
+        "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:20:15+08:00"
+      },
+      {
+        "event_id": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+        "plan_version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "activation_revision": 1,
+        "target_bucket_end": "2026-09-14T10:20:00+08:00",
+        "signal_type": "RISK_ALERT",
+        "quantity": null,
+        "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:20:15+08:00"
+      }
+    ],
+    "validatedResultCount": 4,
+    "activation": {
+      "symbol": "003043.SZ",
+      "plan_version_id": null,
+      "revision": 2,
+      "changed_at": "2026-09-14T10:20:15+08:00"
+    }
+  },
+  "corrections": {
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-kqpbojv6\\monitor.sqlite3",
+    "readOnly": true,
+    "sourceTextUnchanged": true,
+    "versions": [
+      {
+        "id": "b978a4c3-5a5d-4b86-bed1-dc86578641ce",
+        "version": 1,
+        "plan_hash": "9da565dd8f64930e53b7675983d59cca543e9f615f627d2a98becc85805a9b64",
+        "status": "DRAFT",
+        "content_hash": "6f03325ef0703bb3d8452e8cfcd37eeff8efa7a843923dd2162c85d516ebf819",
+        "review_id": null,
+        "review_evidence_hash": "a6c10e4cd98b1e3c6348ea78842228cadb6b7e34c9f676b4802bdc786dccdf9e",
+        "operator": "ALL",
+        "low_fen": 980,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "0ec25534-4117-4493-8cac-19e9b8500c47",
+        "version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "status": "SUPERSEDED",
+        "content_hash": "9cee2e2b8f9b872fd27174e36817fa2be2042fac1178b45cbf9a6eb13616ba2e",
+        "review_id": "137e8a63-d4d3-4291-9e2b-b4f21507af6b",
+        "review_evidence_hash": "a2569eef540cd5c542628eb74861580ebaa3e16b1721f844b97b02c6e13c1132",
+        "operator": "ALL",
+        "low_fen": 980,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "09ae5b57-1c03-4f66-9fd5-effa2b3af027",
+        "version": 3,
+        "plan_hash": "668c57a8ddf1a7b564a4f6ac34cd8b683376f4cd72d30ab41b0a90a6414420de",
+        "status": "DRAFT",
+        "content_hash": "005b5ed1d10878b8867f9eaed2666079c04fb94e5a193b6ee8c88d17cc3441f5",
+        "review_id": "37e69626-75e3-4153-a8a1-5bc57b109671",
+        "review_evidence_hash": "ffb6f7d851b63b47f1a140dac8ef79194033642329dcea37d9da675d5b7bdbcd",
+        "operator": "ALL",
+        "low_fen": 981,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "bbaa7f4c-bc17-4ed6-ba48-01669ae00fde",
+        "version": 4,
+        "plan_hash": "eb8a4efbbecab364a26ea50d110bd8555ab0a867e95397398ab15d153c2b6f47",
+        "status": "DRAFT",
+        "content_hash": "51078a5710ff01af1b0d78141a075d82889828c9c0ca06bade2aaed1f5eb2e32",
+        "review_id": "90518597-c000-47fd-bd88-614bf19a92c9",
+        "review_evidence_hash": "cf54f07ec7de01c2608386038289a3c7a1001cb8d124ca5aeb420a9af1526bbc",
+        "operator": "ALL",
+        "low_fen": 981,
+        "quantity": 200,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "872f661e-cd88-431a-95f0-b7055b476147",
+        "version": 5,
+        "plan_hash": "883da58c96ef35b12573fe5de8df04d06597f7418c03359366ea7680c3d959a1",
+        "status": "SUPERSEDED",
+        "content_hash": "46e41afad38578febba1afad73b5c5630cb0667015fe2124371bde24407cd99f",
+        "review_id": "673b89e4-58d9-4618-a1c6-f0f36f8f76a1",
+        "review_evidence_hash": "ecfac69c714aa0b2dfd92e3e4d835d3859ba606f84b715a985e7fff38168bd64",
+        "operator": "ANY",
+        "low_fen": 981,
+        "quantity": 200,
+        "logicalBindings": [
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition",
+            "supplement_id": "user-supplement-1789271722139-0",
+            "unit": "NONE",
+            "value": "ANY"
+          },
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition.type",
+            "supplement_id": "user-supplement-1789271722139-1",
+            "unit": "NONE",
+            "value": "ANY"
+          }
+        ]
+      },
+      {
+        "id": "84261bc2-96e9-4301-8096-ca901543142f",
+        "version": 6,
+        "plan_hash": "76a4a391f46d312657f3968e053fcede7a58a58039fb9be6a53a665418062af0",
+        "status": "DRAFT",
+        "content_hash": "7740d632f4240c2dd210f368b574ea0b85a2bd284ca787a9b8e52993bc2a82f9",
+        "review_id": "4de412f2-a4c7-44a9-8fb9-e127e86a8058",
+        "review_evidence_hash": "bb80957f06ab8f3eb30e29c37b438fa9bb4c05b919b21329b045a33c64c3cefb",
+        "operator": "ANY",
+        "low_fen": 982,
+        "quantity": 200,
+        "logicalBindings": [
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition",
+            "supplement_id": "user-supplement-1789271722139-0",
+            "unit": "NONE",
+            "value": "ANY"
+          },
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition.type",
+            "supplement_id": "user-supplement-1789271722139-1",
+            "unit": "NONE",
+            "value": "ANY"
+          }
+        ]
+      },
+      {
+        "id": "cea0f3b7-77f2-4965-b96f-9927a9f9a2c1",
+        "version": 7,
+        "plan_hash": "04e3d301134ff3d92f1c5bf330d4e4e7288c45565033e7c111b8230ef90218c7",
+        "status": "DRAFT",
+        "content_hash": "b28eb612128331218846eb3318f5c044a99f56c6d564a4b32518458ee253949d",
+        "review_id": "4c8f3f29-1a21-4a1c-85e4-716fcd62b9ee",
+        "review_evidence_hash": "b9773faf53676e892109226ed7ec4981a741566033931f842ab711b27d5c35f0",
+        "operator": "ANY",
+        "low_fen": 982,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition",
+            "supplement_id": "user-supplement-1789271722139-0",
+            "unit": "NONE",
+            "value": "ANY"
+          },
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition.type",
+            "supplement_id": "user-supplement-1789271722139-1",
+            "unit": "NONE",
+            "value": "ANY"
+          }
+        ]
+      },
+      {
+        "id": "64d7805f-c128-4082-bcec-60960b60d1c1",
+        "version": 8,
+        "plan_hash": "407b040a1966cde7b2030ab7685003548deb1b7ce2486fb0826b145c9d28e092",
+        "status": "ACTIVE",
+        "content_hash": "315e74534848440fb59daf8e615798ba07f9e33a525d6744fff9d99c0541ef84",
+        "review_id": "6eae7064-e6d9-48a7-9654-6002fc024988",
+        "review_evidence_hash": "e06c5fe6c8ac8af68f79666551d6c4174f4e71b12b2b291b0f024915cef3dfb1",
+        "operator": "ALL",
+        "low_fen": 982,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition",
+            "supplement_id": "user-supplement-1789271729771-0",
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition.type",
+            "supplement_id": "user-supplement-1789271729771-1",
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "event_id": "6cc2f626-f811-5814-89a3-8a7085d4dc3d",
+        "plan_version": 5,
+        "plan_hash": "883da58c96ef35b12573fe5de8df04d06597f7418c03359366ea7680c3d959a1",
+        "activation_revision": 2,
+        "target_bucket_end": "2026-09-14T10:05:00+08:00",
+        "signal_type": "BUY",
+        "quantity": 200,
+        "resultHash": "d24a399b40859d3a9acc8f6379849f7caeb3a83398f1edf942e8fac4ff88788c",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:10:15+08:00"
+      },
+      {
+        "event_id": "a530ab57-4f98-5d69-8c78-f75056c6583d",
+        "plan_version": 8,
+        "plan_hash": "407b040a1966cde7b2030ab7685003548deb1b7ce2486fb0826b145c9d28e092",
+        "activation_revision": 3,
+        "target_bucket_end": "2026-09-14T10:10:00+08:00",
+        "signal_type": "BUY",
+        "quantity": 100,
+        "resultHash": "2e7063380247521e5deb0809e9d86f1c321c90d30588f8ba159cf0005c56c08a",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:10:15+08:00"
+      }
+    ],
+    "validatedResultCount": 2,
+    "activation": {
+      "symbol": "003043.SZ",
+      "plan_version_id": "64d7805f-c128-4082-bcec-60960b60d1c1",
+      "revision": 3,
+      "changed_at": "2026-09-14T10:05:15+08:00"
+    }
+  },
+  "restart-active": {
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi\\monitor.sqlite3",
+    "readOnly": true,
+    "transition": "active",
+    "processIds": [
+      44852,
+      28196
+    ],
+    "sourceTextUnchanged": true,
+    "versions": [
+      {
+        "id": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+        "version": 2,
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "status": "ACTIVE",
+        "review_id": "a07899de-50c4-4afd-a8ab-a7095e99a116"
+      }
+    ],
+    "events": [
+      {
+        "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+        "planVersion": 2,
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "cutoff": "2026-09-14T10:10:00+08:00",
+        "resultHash": "9bc58863594d1c622f09ae7197cac6fe03f90659260e990c9bc979a16e012b5b",
+        "action": "BUY",
+        "quantity": 100,
+        "acknowledgedAt": "2026-09-14T10:10:15+08:00",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ]
+      },
+      {
+        "eventId": "f2e82f21-ac2c-59bf-b772-a1c0470f3379",
+        "planVersion": 2,
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "cutoff": "2026-09-14T10:15:00+08:00",
+        "resultHash": "1e8e609eee4184894498d4053b3a675ae2e2aeee0d05e91d2759f350710989aa",
+        "action": "SELL",
+        "quantity": 100,
+        "acknowledgedAt": "2026-09-14T10:30:15+08:00",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ]
+      },
+      {
+        "eventId": "b8cd9b0b-1719-5ac0-809c-e22e7ec60502",
+        "planVersion": 2,
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "cutoff": "2026-09-14T10:20:00+08:00",
+        "resultHash": "63ce993967b32d10948b58b89e2b2ef213f9cd1cdf7950a3bf2c4c8450a95418",
+        "action": "RISK_ALERT",
+        "quantity": null,
+        "acknowledgedAt": "2026-09-14T10:30:15+08:00",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ]
+      },
+      {
+        "eventId": "446a7872-28e6-53d4-a08c-b12216c0f38a",
+        "planVersion": 2,
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "cutoff": "2026-09-14T10:30:00+08:00",
+        "resultHash": "edd0c2282920b901dc674a785d46a4870ea6024e969fe8fd13efcf993664d755",
+        "action": "BUY",
+        "quantity": 100,
+        "acknowledgedAt": "2026-09-14T10:30:15+08:00",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ]
+      }
+    ],
+    "ruleStates": [
+      {
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "symbol": "003043.SZ",
+        "activation_revision": 1,
+        "rule_id": "buy-100",
+        "revision": 2,
+        "has_emitted": 1,
+        "last_emitted_bucket_end": "2026-09-14T10:30:00+08:00"
+      },
+      {
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "symbol": "003043.SZ",
+        "activation_revision": 1,
+        "rule_id": "sell-100",
+        "revision": 1,
+        "has_emitted": 1,
+        "last_emitted_bucket_end": "2026-09-14T10:15:00+08:00"
+      },
+      {
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "symbol": "003043.SZ",
+        "activation_revision": 1,
+        "rule_id": "risk-950",
+        "revision": 1,
+        "has_emitted": 1,
+        "last_emitted_bucket_end": "2026-09-14T10:20:00+08:00"
+      }
+    ],
+    "validatedResultCount": 6,
+    "inventory": {
+      "symbol": "003043.SZ",
+      "status": "KNOWN",
+      "asOfTradeDate": "2026-09-14",
+      "cutoff": "2026-09-14T10:30:15+08:00",
+      "inventoryRevision": 1,
+      "totalQuantity": 100,
+      "sellableQuantity": 100,
+      "confirmationId": "4ad6b66f-c3ac-4cd4-b469-8faf911469f4",
+      "confirmedAt": "2026-09-14T10:04:15+08:00",
+      "includedLotIds": [],
+      "openingBalances": [
+        {
+          "openingBalanceId": "c1d1f8a3-ef2d-4e79-96e2-0e581bb35584",
+          "symbol": "003043.SZ",
+          "originalQuantity": 100,
+          "remainingQuantity": 100,
+          "sellableFrom": "2026-09-14",
+          "revision": 0
+        }
+      ],
+      "missingReasons": []
+    },
+    "activation": {
+      "symbol": "003043.SZ",
+      "planVersionId": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+      "active": true,
+      "revision": 1,
+      "changedAt": "2026-09-14T10:04:15+08:00"
+    },
+    "consoleErrors": [],
+    "externalRequests": [],
+    "offlineProbe": "ECONNREFUSED",
+    "stopMode": "forced owned OS process exit"
+  },
+  "restart-replace": {
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-j2llk5pl\\monitor.sqlite3",
+    "readOnly": true,
+    "transition": "replace",
+    "processIds": [
+      5544,
+      24684
+    ],
+    "sourceTextUnchanged": true,
+    "versions": [
+      {
+        "id": "cd425e22-cd73-4dd7-954f-608d611bea94",
+        "version": 2,
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "status": "SUPERSEDED",
+        "review_id": "072eb45c-d668-4b48-b0ea-e5132be8e265"
+      },
+      {
+        "id": "11c3e271-db94-426c-8720-c6c63bed56fd",
+        "version": 3,
+        "plan_hash": "75529626a424aa7c6093403d4248ce6c5fb7608961a0c19294b7600223de5e4d",
+        "status": "ACTIVE",
+        "review_id": "243cc274-cf18-45a5-aab7-7f0b1fe6009f"
+      }
+    ],
+    "events": [
+      {
+        "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+        "planVersion": 2,
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "cutoff": "2026-09-14T10:10:00+08:00",
+        "resultHash": "9bc58863594d1c622f09ae7197cac6fe03f90659260e990c9bc979a16e012b5b",
+        "action": "BUY",
+        "quantity": 100,
+        "acknowledgedAt": "2026-09-14T10:10:15+08:00",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ]
+      },
+      {
+        "eventId": "55431386-649a-5c30-960f-f1fc9123be69",
+        "planVersion": 3,
+        "planHash": "75529626a424aa7c6093403d4248ce6c5fb7608961a0c19294b7600223de5e4d",
+        "activationRevision": 2,
+        "cutoff": "2026-09-14T10:15:00+08:00",
+        "resultHash": "c588721fd9646281bb8466fb6c69075ff4b9d985def203eab0b3795816bc1f71",
+        "action": "SELL",
+        "quantity": 100,
+        "acknowledgedAt": null,
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ]
+      }
+    ],
+    "ruleStates": [
+      {
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "symbol": "003043.SZ",
+        "activation_revision": 1,
+        "rule_id": "buy-100",
+        "revision": 1,
+        "has_emitted": 1,
+        "last_emitted_bucket_end": "2026-09-14T10:10:00+08:00"
+      },
+      {
+        "plan_hash": "75529626a424aa7c6093403d4248ce6c5fb7608961a0c19294b7600223de5e4d",
+        "symbol": "003043.SZ",
+        "activation_revision": 2,
+        "rule_id": "sell-100",
+        "revision": 1,
+        "has_emitted": 1,
+        "last_emitted_bucket_end": "2026-09-14T10:15:00+08:00"
+      }
+    ],
+    "validatedResultCount": 3,
+    "inventory": {
+      "symbol": "003043.SZ",
+      "status": "KNOWN",
+      "asOfTradeDate": "2026-09-14",
+      "cutoff": "2026-09-14T10:15:15+08:00",
+      "inventoryRevision": 1,
+      "totalQuantity": 100,
+      "sellableQuantity": 100,
+      "confirmationId": "333a6e75-9a49-4afa-adcd-77715065a882",
+      "confirmedAt": "2026-09-14T10:04:15+08:00",
+      "includedLotIds": [],
+      "openingBalances": [
+        {
+          "openingBalanceId": "2a73874a-9402-4f5d-8751-7f1c8bbae4b7",
+          "symbol": "003043.SZ",
+          "originalQuantity": 100,
+          "remainingQuantity": 100,
+          "sellableFrom": "2026-09-14",
+          "revision": 0
+        }
+      ],
+      "missingReasons": []
+    },
+    "activation": {
+      "symbol": "003043.SZ",
+      "planVersionId": "11c3e271-db94-426c-8720-c6c63bed56fd",
+      "active": true,
+      "revision": 2,
+      "changedAt": "2026-09-14T10:10:15+08:00"
+    },
+    "consoleErrors": [],
+    "externalRequests": [],
+    "offlineProbe": "ECONNREFUSED",
+    "stopMode": "forced owned OS process exit"
+  },
+  "restart-disable": {
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-1ja4z41y\\monitor.sqlite3",
+    "readOnly": true,
+    "transition": "disable",
+    "processIds": [
+      49216,
+      42768
+    ],
+    "sourceTextUnchanged": true,
+    "versions": [
+      {
+        "id": "848cccf0-bdbf-4ba7-bdf0-6bd3e5649c97",
+        "version": 2,
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "status": "SUPERSEDED",
+        "review_id": "e9e31c14-e72e-403d-956b-0c936b03fe20"
+      }
+    ],
+    "events": [
+      {
+        "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+        "planVersion": 2,
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "cutoff": "2026-09-14T10:10:00+08:00",
+        "resultHash": "9bc58863594d1c622f09ae7197cac6fe03f90659260e990c9bc979a16e012b5b",
+        "action": "BUY",
+        "quantity": 100,
+        "acknowledgedAt": "2026-09-14T10:10:15+08:00",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ]
+      }
+    ],
+    "ruleStates": [
+      {
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "symbol": "003043.SZ",
+        "activation_revision": 1,
+        "rule_id": "buy-100",
+        "revision": 1,
+        "has_emitted": 1,
+        "last_emitted_bucket_end": "2026-09-14T10:10:00+08:00"
+      }
+    ],
+    "validatedResultCount": 2,
+    "inventory": {
+      "symbol": "003043.SZ",
+      "status": "KNOWN",
+      "asOfTradeDate": "2026-09-14",
+      "cutoff": "2026-09-14T10:15:15+08:00",
+      "inventoryRevision": 1,
+      "totalQuantity": 100,
+      "sellableQuantity": 100,
+      "confirmationId": "6f13bdd2-ba81-449b-ab48-280daf51de89",
+      "confirmedAt": "2026-09-14T10:04:15+08:00",
+      "includedLotIds": [],
+      "openingBalances": [
+        {
+          "openingBalanceId": "0a6abe00-a18a-418c-88c9-2b8f795b1cc4",
+          "symbol": "003043.SZ",
+          "originalQuantity": 100,
+          "remainingQuantity": 100,
+          "sellableFrom": "2026-09-14",
+          "revision": 0
+        }
+      ],
+      "missingReasons": []
+    },
+    "activation": {
+      "symbol": "003043.SZ",
+      "planVersionId": null,
+      "active": false,
+      "revision": 2,
+      "changedAt": "2026-09-14T10:10:15+08:00"
+    },
+    "consoleErrors": [],
+    "externalRequests": [],
+    "offlineProbe": "ECONNREFUSED",
+    "stopMode": "forced owned OS process exit"
+  },
+  "restart-expire": {
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-r0eswo75\\monitor.sqlite3",
+    "readOnly": true,
+    "transition": "expire",
+    "processIds": [
+      39188,
+      17680
+    ],
+    "sourceTextUnchanged": true,
+    "versions": [
+      {
+        "id": "4c5d43cf-bf37-41e5-9377-7d8e280503a1",
+        "version": 2,
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "status": "ACTIVE",
+        "review_id": "fcc80c9d-0ab0-4b4c-baf2-d98aef12055b"
+      }
+    ],
+    "events": [
+      {
+        "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+        "planVersion": 2,
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "cutoff": "2026-09-14T10:10:00+08:00",
+        "resultHash": "9bc58863594d1c622f09ae7197cac6fe03f90659260e990c9bc979a16e012b5b",
+        "action": "BUY",
+        "quantity": 100,
+        "acknowledgedAt": "2026-09-14T10:10:15+08:00",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ]
+      }
+    ],
+    "ruleStates": [
+      {
+        "plan_hash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "symbol": "003043.SZ",
+        "activation_revision": 1,
+        "rule_id": "buy-100",
+        "revision": 1,
+        "has_emitted": 1,
+        "last_emitted_bucket_end": "2026-09-14T10:10:00+08:00"
+      }
+    ],
+    "validatedResultCount": 2,
+    "inventory": {
+      "symbol": "003043.SZ",
+      "status": "KNOWN",
+      "asOfTradeDate": "2026-09-14",
+      "cutoff": "2026-09-15T10:15:15+08:00",
+      "inventoryRevision": 1,
+      "totalQuantity": 100,
+      "sellableQuantity": 100,
+      "confirmationId": "321d6b5a-477a-4dd6-89e3-3001004f85f1",
+      "confirmedAt": "2026-09-14T10:04:15+08:00",
+      "includedLotIds": [],
+      "openingBalances": [
+        {
+          "openingBalanceId": "b0b0a16a-c2f1-4813-b608-7f8aa395c21b",
+          "symbol": "003043.SZ",
+          "originalQuantity": 100,
+          "remainingQuantity": 100,
+          "sellableFrom": "2026-09-14",
+          "revision": 0
+        }
+      ],
+      "missingReasons": []
+    },
+    "activation": {
+      "symbol": "003043.SZ",
+      "planVersionId": "4c5d43cf-bf37-41e5-9377-7d8e280503a1",
+      "active": true,
+      "revision": 1,
+      "changedAt": "2026-09-14T10:04:15+08:00"
+    },
+    "consoleErrors": [],
+    "externalRequests": [],
+    "offlineProbe": "ECONNREFUSED",
+    "stopMode": "forced owned OS process exit"
+  }
+}

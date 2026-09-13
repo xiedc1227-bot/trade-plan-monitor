@@ -1,0 +1,193 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test backtests.spec.ts --grep keeps 320 --repeat-each 5 --trace on --output ../remediation/evidence/R13-reacceptance/backtest-repeat-traces
+
+
+Running 5 tests using 1 worker
+
+
+
+(node:15160) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/5] [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries
+  1) [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+
+    Error: /backtests overflow at 320px and 200% text: [{"left":32,"name":"ul.app-shell__navigation-list","right":592},{"left":224,"name":"li.","right":400},{"left":224,"name":"a.app-shell__navigation-link","right":400},{"left":416,"name":"li.","right":592},{"left":416,"name":"a.app-shell__navigation-link","right":592}]
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 320
+    Received:    338
+
+      838 |         sizes.scrollWidth,
+      839 |         `${route.path} overflow at ${width}px and 200% text: ${JSON.stringify(sizes.overflow)}`,
+    > 840 |       ).toBeLessThanOrEqual(sizes.clientWidth);
+          |         ^
+      841 |     }
+      842 |   }
+      843 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\backtests.spec.ts:840:9
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\error-context.md
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:29936) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/5] [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries
+  2) [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+
+    Error: /backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28&warmupStart=2026-07-01 overflow at 320px and 200% text: [{"left":32,"name":"ul.app-shell__navigation-list","right":592},{"left":224,"name":"li.","right":400},{"left":224,"name":"a.app-shell__navigation-link","right":400},{"left":416,"name":"li.","right":592},{"left":416,"name":"a.router-link-active router-link-exact-active app-shell__navigation-link app-shell__navigation-link--current","right":592}]
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 320
+    Received:    617
+
+      838 |         sizes.scrollWidth,
+      839 |         `${route.path} overflow at ${width}px and 200% text: ${JSON.stringify(sizes.overflow)}`,
+    > 840 |       ).toBeLessThanOrEqual(sizes.clientWidth);
+          |         ^
+      841 |     }
+      842 |   }
+      843 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\backtests.spec.ts:840:9
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat1\error-context.md
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat1\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat1\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:17540) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[3/5] [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries
+  3) [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+
+    Error: /backtests/new overflow at 320px and 200% text: [{"left":32,"name":"ul.app-shell__navigation-list","right":592},{"left":224,"name":"li.","right":400},{"left":224,"name":"a.router-link-active router-link-exact-active app-shell__navigation-link app-shell__navigation-link--current","right":400},{"left":416,"name":"li.","right":592},{"left":416,"name":"a.app-shell__navigation-link","right":592}]
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 320
+    Received:    476
+
+      838 |         sizes.scrollWidth,
+      839 |         `${route.path} overflow at ${width}px and 200% text: ${JSON.stringify(sizes.overflow)}`,
+    > 840 |       ).toBeLessThanOrEqual(sizes.clientWidth);
+          |         ^
+      841 |     }
+      842 |   }
+      843 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\backtests.spec.ts:840:9
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat2\error-context.md
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat2\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat2\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat2\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:36584) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/5] [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries
+  4) [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+
+    Error: /backtests/new overflow at 320px and 200% text: [{"left":32,"name":"ul.app-shell__navigation-list","right":592},{"left":224,"name":"li.","right":400},{"left":224,"name":"a.router-link-active router-link-exact-active app-shell__navigation-link app-shell__navigation-link--current","right":400},{"left":416,"name":"li.","right":592},{"left":416,"name":"a.app-shell__navigation-link","right":592}]
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 320
+    Received:    476
+
+      838 |         sizes.scrollWidth,
+      839 |         `${route.path} overflow at ${width}px and 200% text: ${JSON.stringify(sizes.overflow)}`,
+    > 840 |       ).toBeLessThanOrEqual(sizes.clientWidth);
+          |         ^
+      841 |     }
+      842 |   }
+      843 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\backtests.spec.ts:840:9
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat3\error-context.md
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat3\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat3\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat3\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:43368) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[5/5] [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries
+  5) [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+
+    Error: /backtests overflow at 320px and 200% text: [{"left":32,"name":"ul.app-shell__navigation-list","right":592},{"left":224,"name":"li.","right":400},{"left":224,"name":"a.app-shell__navigation-link","right":400},{"left":416,"name":"li.","right":592},{"left":416,"name":"a.app-shell__navigation-link","right":592}]
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 320
+    Received:    338
+
+      838 |         sizes.scrollWidth,
+      839 |         `${route.path} overflow at ${width}px and 200% text: ${JSON.stringify(sizes.overflow)}`,
+    > 840 |       ).toBeLessThanOrEqual(sizes.clientWidth);
+          |         ^
+      841 |     }
+      842 |   }
+      843 |
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\backtests.spec.ts:840:9
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat4\error-context.md
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat4\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat4\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\backtest-repeat-traces\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat4\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  5 failed
+    [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+    [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+    [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+    [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 
+    [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries 

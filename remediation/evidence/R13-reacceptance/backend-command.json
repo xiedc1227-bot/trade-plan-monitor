@@ -1,0 +1,29 @@
+{
+  "command": ".venv/Scripts/python.exe -m pytest -m 'not live' -vv -ra --durations=25 --junitxml=remediation/evidence/R13-reacceptance/backend.xml",
+  "start": "2026-09-13T11:37:49.8759295+08:00",
+  "end": "2026-09-13T12:20:45.0957206+08:00",
+  "exitCode": 0,
+  "passed": 2634,
+  "skipped": 1,
+  "deselected": 4,
+  "warnings": 1,
+  "pytestDurationSeconds": 2572.52,
+  "collected": 2639,
+  "selected": 2635,
+  "skipDetails": [
+    {
+      "test": {
+        "classname": "tests.integration.test_backtest_production_composition",
+        "name": "test_cursor_key_rejects_foreign_posix_owner_before_use",
+        "time": "0.000"
+      },
+      "reason": {
+        "type": "pytest.skip",
+        "message": "requires POSIX ownership semantics"
+      }
+    }
+  ],
+  "deselectReason": "4 live-provider cases outside authorization, deselected before credential/client fixtures",
+  "log": "backend.log",
+  "junit": "backend.xml"
+}

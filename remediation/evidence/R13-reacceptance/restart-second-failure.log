@@ -1,0 +1,196 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test r13-active-process-restart.spec.ts --trace on --output ../remediation/evidence/R13-reacceptance/restart-final-traces
+
+
+Running 4 tests using 1 worker
+
+
+
+(node:17760) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity
+R13 OS active evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-s_rcok0b
+
+  1) [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity 
+
+    TimeoutError: locator.click: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('[data-acknowledge="f3985236-96c8-5d8c-9773-80154a0f3ef0"]')
+        - locator resolved to <button type="button" data-v-f4058c2b="" aria-disabled="true" data-acknowledge="f3985236-96c8-5d8c-9773-80154a0f3ef0">…</button>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+          - waiting 100ms
+        29 × waiting for element to be visible, enabled and stable
+           - element is not enabled
+         - retrying click action
+           - waiting 500ms
+
+
+      179 |           for (const event of (await alerts()).items) {
+      180 |             await expect(after.locator(`[data-acknowledge="${event.eventId}"]`)).toBeVisible();
+    > 181 |             await after.locator(`[data-acknowledge="${event.eventId}"]`).click();
+          |                                                                          ^
+      182 |           }
+      183 |         }
+      184 |       }
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:181:74
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:17196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity
+R13 OS replace evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-xujhrajc
+
+  2) [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+    @@ -1,10 +1,10 @@
+      Object {
+        "asOfTradeDate": "2026-09-14",
+        "confirmationId": "7c003b05-98a7-4886-b398-277470d1b2cc",
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+    -   "cutoff": "2026-09-14T10:10:15+08:00",
+    +   "cutoff": "2026-09-14T10:15:15+08:00",
+        "includedLotIds": Array [],
+        "inventoryRevision": 1,
+        "missingReasons": Array [],
+        "openingBalances": Array [
+          Object {
+
+      183 |         }
+      184 |       }
+    > 185 |       expect(await inventory()).toEqual(inventoryBefore);
+          |                                 ^
+      186 |       await after.screenshot({path: join(root, 'restart-after.png'), fullPage: true});
+      187 |       records.push({finalAlerts: await alerts(), finalInventory: await inventory(), finalActivation: await activation(), finalIsolation: await read('/_test/isolation')});
+      188 |       await after.close();
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:185:33
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:21828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[3/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity
+R13 OS disable evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-4iew7q_m
+
+  3) [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity 
+
+    Error: /api/v1/explicit-plan-runtime/003043.SZ
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 404
+
+      28 |     const read = async (path: string) => {
+      29 |       const response = await request.get(`${base}${path}`);
+    > 30 |       expect(response.status(), path).toBe(200);
+         |                                       ^
+      31 |       return response.json();
+      32 |     };
+      33 |     const inventory = () => read('/api/v1/position-inventory?symbol=003043.SZ&asOfTradeDate=2026-09-14');
+        at read (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:30:39)
+        at advance (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:86:49)
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:163:9
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:29368) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity
+R13 OS expire evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-q885nnkq
+
+  4) [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+    @@ -1,10 +1,10 @@
+      Object {
+        "asOfTradeDate": "2026-09-14",
+        "confirmationId": "68bd30ca-a862-430e-bdbd-ec9ed8e0bebd",
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+    -   "cutoff": "2026-09-14T10:10:15+08:00",
+    +   "cutoff": "2026-09-15T10:10:15+08:00",
+        "includedLotIds": Array [],
+        "inventoryRevision": 1,
+        "missingReasons": Array [],
+        "openingBalances": Array [
+          Object {
+
+      153 |       expect(secondProcess.database).toBe(firstProcess.database);
+      154 |       expect(await activation()).toEqual(stateBefore);
+    > 155 |       expect(await inventory()).toEqual(inventoryBefore);
+          |                                 ^
+      156 |       const after = await open('/alerts');
+      157 |       await expect(after.locator(`[data-acknowledge="${initialEvent.eventId}"]`)).toContainText('已确认');
+      158 |       expect((await alerts()).total).toBe(1);
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:155:33
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\restart-final-traces\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  4 failed
+    [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity 
+    [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity 
+    [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity 
+    [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity 

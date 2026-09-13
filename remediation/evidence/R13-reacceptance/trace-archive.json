@@ -1,0 +1,674 @@
+[
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\.last-run.json",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\.last-run.json",
+    "sha256": "95AC4525107120DD8C8F3086BE7FF504A31B669B37FA03277C379F43ED2091FF",
+    "bytes": 96
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\accessibility-fits-320-768-bdd30-without-horizontal-overflow-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\accessibility-fits-320-768-bdd30-without-horizontal-overflow-chrome\\trace.zip",
+    "sha256": "7FF62727D9B4D8C89A52CA8357ECBA78FAFBA363CAA91A568CF3A42C7B8FFD39",
+    "bytes": 359858
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\accessibility-has-no-WCAG-2-1-A-AA-axe-violations-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\accessibility-has-no-WCAG-2-1-A-AA-axe-violations-chrome\\trace.zip",
+    "sha256": "46D93C39ED4E6FBECF9D6B1C92F7E5BFB6835DA6E25C681C88FDC3685DB02031",
+    "bytes": 398862
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\accessibility-keeps-native-1aadb-ic-state-and-reduced-motion-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\accessibility-keeps-native-1aadb-ic-state-and-reduced-motion-chrome\\trace.zip",
+    "sha256": "340FB168511445816CC12717B2CFE6E78611F2D242EADACEE012DFFB11CFCDAA",
+    "bytes": 118239
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\accessibility-loads-system-8b9d9-the-production-system-route-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\accessibility-loads-system-8b9d9-the-production-system-route-chrome\\trace.zip",
+    "sha256": "B83FB8BA17640AADF0F97A06BEB11586FE3E3A7F050A426F483C3F79305E6410",
+    "bytes": 82566
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\alert-recovery-shows-a-per-a23aa-h-after-snapshot-then-alert-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\alert-recovery-shows-a-per-a23aa-h-after-snapshot-then-alert-chrome\\trace.zip",
+    "sha256": "FC6F7CD46A3BCF2CE35B28E7C89AB15EC9B4CDF7D5342701181208FB40059454",
+    "bytes": 147029
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\alert-recovery-shows-a-per-bbf35-esh-after-snapshot-required-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\alert-recovery-shows-a-per-bbf35-esh-after-snapshot-required-chrome\\trace.zip",
+    "sha256": "B90BFF7099E76023D6C8132B1F3F3C8347D5DF91919F2EEA215B056A19CFEEE2",
+    "bytes": 126218
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\alerts-queries-filters-exp-c5fa1--without-a-position-request-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\alerts-queries-filters-exp-c5fa1--without-a-position-request-chrome\\trace.zip",
+    "sha256": "5B05CB5D10FF7A6CC80C6E9BD1EBBAF6B8BFB4F404CF314DFF6C356CE86DAADF",
+    "bytes": 442953
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\backtests-covers-the-four--ed216-lows-and-serious-axe-checks-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\backtests-covers-the-four--ed216-lows-and-serious-axe-checks-chrome\\trace.zip",
+    "sha256": "5591F8170BD1069EED2CA60EDA79D758E03928FF963A8DBB2CC2CCEFB2B0AD8A",
+    "bytes": 3000497
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\backtests-enforces-request-bf91f-d-pre-equity-ECharts-bounds-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\backtests-enforces-request-bf91f-d-pre-equity-ECharts-bounds-chrome\\trace.zip",
+    "sha256": "A9ADF9527B6DD763954F5B746FA14C1702103C97BB72E8FED4F7500E82BF0A3F",
+    "bytes": 1409424
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\error-context.md",
+    "sha256": "E5A8F985C883339EC876921AB15076790EA8D958F2BD89559152C5FE7394ADB5",
+    "bytes": 14435
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\trace.zip",
+    "sha256": "B56B2665023E1905B98E3AC8588BA634C55C7DA8B3FD069AEAB7150D5C90C96B",
+    "bytes": 220083
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\backtests-submits-a-comple-44af0-oritative-job-to-its-result-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\backtests-submits-a-comple-44af0-oritative-job-to-its-result-chrome\\trace.zip",
+    "sha256": "E5DA90985B1205F63F7E30D828E299A943753E9C00E0490F05B93F6DF71578F0",
+    "bytes": 1048022
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\dashboard-distinguishes-ty-1f40c-a-real-disconnected-service-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\dashboard-distinguishes-ty-1f40c-a-real-disconnected-service-chrome\\trace.zip",
+    "sha256": "37D27071E1846EE068DD7D4B9745797F39B516C4C12DF14E10BFBBF2DC5047F6",
+    "bytes": 71227
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\dashboard-keeps-the-shared-d638b-y-responsive-and-accessible-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\dashboard-keeps-the-shared-d638b-y-responsive-and-accessible-chrome\\trace.zip",
+    "sha256": "40EFF5487E469BC485ECAF57F85D82465083AC4315B40CFD0AEAB7F935D92FC8",
+    "bytes": 1931875
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\dashboard-recovers-a-seque-656c7-e-replaying-from-its-cursor-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\dashboard-recovers-a-seque-656c7-e-replaying-from-its-cursor-chrome\\trace.zip",
+    "sha256": "1BA1C7E9EE90C1BBF9E9A56BDD362E86ACFDEC09B16FD8682C2AB43157286CB6",
+    "bytes": 950901
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome\\trace.zip",
+    "sha256": "47D23C83268DAFC9B15D5BE00ED1B25190C49F34785E488D54E80E08D6D6EA47",
+    "bytes": 347969
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\explicit-sqlite-literal-v3-08e58-te-and-production-scheduler-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\explicit-sqlite-literal-v3-08e58-te-and-production-scheduler-chrome\\trace.zip",
+    "sha256": "5CD2D421306A68DE43A90988DAC20F952081BEA39DB7F2283696EB98D8E6411F",
+    "bytes": 6683958
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\plans-requires-explicit-re-80ca5-activation-for-an-AI-result-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\plans-requires-explicit-re-80ca5-activation-for-an-AI-result-chrome\\trace.zip",
+    "sha256": "5DF1E46435C881E158476D5199447BCC11A7F10E15F1EB13A588E98D4B21F55B",
+    "bytes": 453381
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\plans-runs-the-configured--63ef0-h-flow-in-isolated-Chromium-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\plans-runs-the-configured--63ef0-h-flow-in-isolated-Chromium-chrome\\trace.zip",
+    "sha256": "CA25D38FF9B15814F3E841264AE1A86B90D76575FC72D1549A4F95EC7A36D89D",
+    "bytes": 1932050
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\production-restart-install-884ef-lity-across-process-restart-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\production-restart-install-884ef-lity-across-process-restart-chrome\\trace.zip",
+    "sha256": "2BCCA2E4370A1A81FD538C2A0BBCAA1C61A40D60384E9FB0E1B67B2D73AE794D",
+    "bytes": 109580
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\r13-ai-faults-R13-failed-A-f7073-sly-reviewed-active-version-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\r13-ai-faults-R13-failed-A-f7073-sly-reviewed-active-version-chrome\\trace.zip",
+    "sha256": "0494AB2538EFEA3E7B0A28D8BA230C9BC6B612E1DA7BD8E9C4B07BEBB08C3355",
+    "bytes": 3480734
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\r13-corrections-R13-substa-9706d--review-and-remain-editable-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\r13-corrections-R13-substa-9706d--review-and-remain-editable-chrome\\trace.zip",
+    "sha256": "4D29307310B7F275F68B21F87E4B94C82578C857E9CE66A261B2D08BFA086271",
+    "bytes": 15047424
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\r13-live-stream-R13-real-e-3d06d-y-across-browser-disconnect-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\r13-live-stream-R13-real-e-3d06d-y-across-browser-disconnect-chrome\\trace.zip",
+    "sha256": "2DB549423915875F069677F06D62A30A68F4FA32A8101F836ACCF15491CFE905",
+    "bytes": 5573303
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\symbol-detail-confirms-pla-3914e-ough-the-normal-symbol-page-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\symbol-detail-confirms-pla-3914e-ough-the-normal-symbol-page-chrome\\trace.zip",
+    "sha256": "47C9F36D2350C650D1F13D7313788934A8A53B6A55AB9FFD864834A995BD0B16",
+    "bytes": 261570
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\symbol-detail-keeps-both-s-39fb5-lan-has-no-index-conditions-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\symbol-detail-keeps-both-s-39fb5-lan-has-no-index-conditions-chrome\\trace.zip",
+    "sha256": "56B48180DE5F2350BD6C81C6484AA4D2E5BEA724A6458A1EB6503314BB94BB1D",
+    "bytes": 75033
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\symbol-detail-keeps-curren-366f6--shared-index-history-fails-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\symbol-detail-keeps-curren-366f6--shared-index-history-fails-chrome\\trace.zip",
+    "sha256": "B631D3C9719938B8C470152FF3DBC34830E523D2FB8FC4D68A8028931F103702",
+    "bytes": 175081
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\symbol-detail-keeps-histor-da910-320px-with-200-percent-text-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\symbol-detail-keeps-histor-da910-320px-with-200-percent-text-chrome\\trace.zip",
+    "sha256": "3D14F64A17965EE4BFA9EE8658F361D3C8F56925375C72103EB9788127DADE20",
+    "bytes": 162324
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\symbol-detail-keeps-the-se-8f2e1-s-responsive-and-accessible-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\symbol-detail-keeps-the-se-8f2e1-s-responsive-and-accessible-chrome\\trace.zip",
+    "sha256": "4C3373D1445B8C6350084AEDC67B6FC5C2767DDABAD3AC2FF9A48BF79E684E02",
+    "bytes": 1008134
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\symbol-detail-marks-a-mapp-d7647-zero-index-leaves-as-unused-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\symbol-detail-marks-a-mapp-d7647-zero-index-leaves-as-unused-chrome\\trace.zip",
+    "sha256": "209EBE1444DB93AA07DD7CB2C02A0AEB50B8D8359F6D4C613A5FEA179C95C8C3",
+    "bytes": 174567
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\symbol-detail-reads-backen-0a75f-icit-Shanghai-history-range-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\symbol-detail-reads-backen-0a75f-icit-Shanghai-history-range-chrome\\trace.zip",
+    "sha256": "A589EAF995591675E8FA0480DF4BBD04C41A9F9A2E183A81CC06781890B0E2B7",
+    "bytes": 285211
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\browser-traces\\symbol-detail-submits-posi-7d853-nd-maximum-policy-decisions-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\browser-traces\\symbol-detail-submits-posi-7d853-nd-maximum-policy-decisions-chrome\\trace.zip",
+    "sha256": "6CF663F3CC4B2AC5C095FDEB6F4F50DEB8DC6F647E391D8FB1559538FCE1B5DF",
+    "bytes": 435022
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\.last-run.json",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\.last-run.json",
+    "sha256": "95AC4525107120DD8C8F3086BE7FF504A31B669B37FA03277C379F43ED2091FF",
+    "bytes": 96
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\accessibility-fits-320-768-bdd30-without-horizontal-overflow-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\accessibility-fits-320-768-bdd30-without-horizontal-overflow-chrome\\trace.zip",
+    "sha256": "0EC7A017BFF90AB527F66BCF458934B6715559B80F1147F3D7A5E83B62C841B8",
+    "bytes": 370759
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\accessibility-has-no-WCAG-2-1-A-AA-axe-violations-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\accessibility-has-no-WCAG-2-1-A-AA-axe-violations-chrome\\trace.zip",
+    "sha256": "4D3315F7F7280C3ED4024E1AEA24CE86EF10528BEB377CFC6145AD993BA4B73B",
+    "bytes": 398924
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\accessibility-keeps-native-1aadb-ic-state-and-reduced-motion-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\accessibility-keeps-native-1aadb-ic-state-and-reduced-motion-chrome\\trace.zip",
+    "sha256": "5B907E8C899222D00B400FFAF4E75341E6FF2045D9A9864F531CEC73C7BB407F",
+    "bytes": 118224
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\accessibility-loads-system-8b9d9-the-production-system-route-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\accessibility-loads-system-8b9d9-the-production-system-route-chrome\\trace.zip",
+    "sha256": "9B1DB57EA0935FABFAEFBBA67CB963A954076D966E96CA024568158F74BEA55C",
+    "bytes": 82595
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\alert-recovery-shows-a-per-a23aa-h-after-snapshot-then-alert-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\alert-recovery-shows-a-per-a23aa-h-after-snapshot-then-alert-chrome\\trace.zip",
+    "sha256": "76CC48F9BC95989208250D8319D4420A6BAE6287DA65AFD7E82FFA15270400E7",
+    "bytes": 185829
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\alert-recovery-shows-a-per-bbf35-esh-after-snapshot-required-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\alert-recovery-shows-a-per-bbf35-esh-after-snapshot-required-chrome\\trace.zip",
+    "sha256": "BC184476175ECAA49DDD2E5F4B7E6831E5966992E10FDCBD1CABFC1E9ACC8B00",
+    "bytes": 164917
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\alerts-queries-filters-exp-c5fa1--without-a-position-request-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\alerts-queries-filters-exp-c5fa1--without-a-position-request-chrome\\trace.zip",
+    "sha256": "61CFD23D1A43DA673ABCEB15A683259974A69E2C2101A9B49A9A5D79E590DEE5",
+    "bytes": 467315
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-covers-the-four--ed216-lows-and-serious-axe-checks-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-covers-the-four--ed216-lows-and-serious-axe-checks-chrome\\trace.zip",
+    "sha256": "A827A7A78A36B4806FA76954908AEFC6F374C0C4824AEE6DA7244586027B27C6",
+    "bytes": 3288346
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-enforces-request-bf91f-d-pre-equity-ECharts-bounds-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-enforces-request-bf91f-d-pre-equity-ECharts-bounds-chrome\\trace.zip",
+    "sha256": "05CA1693C750C333A50AEFC46BB7A9960BE77B28D951F90BE5850A91B85D3DC5",
+    "bytes": 1311983
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\error-context.md",
+    "sha256": "D33843C697B934656E2E3F3368B47E09226CB1E0624514C9BBF8BF7DE1648A1A",
+    "bytes": 16867
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\trace.zip",
+    "sha256": "1EDBE13AFF7C37AC8DD68C006E920D864EC66C4A17AFC1DDC98D748B7CABF825",
+    "bytes": 282584
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\layout-0.png",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\layout-0.png",
+    "sha256": "561D129CFA23F5F91D40C4F90D32987BB297119AF935BB52B846F7DA4BBD65BE",
+    "bytes": 245660
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\layout-1.png",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\layout-1.png",
+    "sha256": "6C0E6CC7413488CF9E45B6DC886F05CA2AFE9BE998EDAC05A7CA3CF483D61C26",
+    "bytes": 428234
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\layout-2.png",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\layout-2.png",
+    "sha256": "44CFDB1C8B8838FCB238D1340AB1F444FE71688E4FE2B5219BFB43C2AA4ADD94",
+    "bytes": 347390
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\layout-3.png",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\layout-3.png",
+    "sha256": "657F81EF51606DE6A1E827A258675EFEDD72D3633F4A20AB240AB475E9EC563A",
+    "bytes": 787054
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome\\trace.zip",
+    "sha256": "8E251E523EC231733117E183D29261ABCAE239F7A1DE501A0AAEBCAACF739196",
+    "bytes": 988937
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\backtests-submits-a-comple-44af0-oritative-job-to-its-result-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\backtests-submits-a-comple-44af0-oritative-job-to-its-result-chrome\\trace.zip",
+    "sha256": "6A48B0EE8E41737141632F446C2DD074EE5DCB8BED60256024F0109EF580D559",
+    "bytes": 980320
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\dashboard-distinguishes-ty-1f40c-a-real-disconnected-service-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\dashboard-distinguishes-ty-1f40c-a-real-disconnected-service-chrome\\trace.zip",
+    "sha256": "C979D20CFF691B19FE23816018F16B6BF70FB3A510D2B1439FB8A413739619E8",
+    "bytes": 71238
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\dashboard-keeps-the-shared-d638b-y-responsive-and-accessible-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\dashboard-keeps-the-shared-d638b-y-responsive-and-accessible-chrome\\trace.zip",
+    "sha256": "2D6E377670AF565A93E3121313B78DDE98CC036DC233E680D52DD3577BA93F52",
+    "bytes": 1853924
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\dashboard-recovers-a-seque-656c7-e-replaying-from-its-cursor-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\dashboard-recovers-a-seque-656c7-e-replaying-from-its-cursor-chrome\\trace.zip",
+    "sha256": "11DF1ACF57CD47A843249FFD158F443DA83CF2CE2DF5DEEC772803FC907FC643",
+    "bytes": 1013906
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome\\trace.zip",
+    "sha256": "44D4BCA6D00B92A57CEADC5A3425BECB4F2BA8823402F5AA7421E520C1D7FA39",
+    "bytes": 380711
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\explicit-sqlite-literal-v3-08e58-te-and-production-scheduler-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\explicit-sqlite-literal-v3-08e58-te-and-production-scheduler-chrome\\trace.zip",
+    "sha256": "97FC44C652F1AE72DB47D1AE5AB135148F6FDF37CEDAA8BDE939E0F603FAF703",
+    "bytes": 6617333
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\plans-requires-explicit-re-80ca5-activation-for-an-AI-result-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\plans-requires-explicit-re-80ca5-activation-for-an-AI-result-chrome\\trace.zip",
+    "sha256": "CBD3FCC4A4E048CBBBCA7ED4207524C850664281B7D32C98AC247C6DEF55140B",
+    "bytes": 462407
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\plans-runs-the-configured--63ef0-h-flow-in-isolated-Chromium-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\plans-runs-the-configured--63ef0-h-flow-in-isolated-Chromium-chrome\\trace.zip",
+    "sha256": "0C6DFB65350E85A44FFC020CBFA82B80F3B801A605163A6F54E2F2D4C55EAFC7",
+    "bytes": 1860078
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\production-restart-install-884ef-lity-across-process-restart-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\production-restart-install-884ef-lity-across-process-restart-chrome\\trace.zip",
+    "sha256": "3548013A08734F2C6BDA0477BE6941F8768064D707839DAAA201C59766AE332F",
+    "bytes": 97535
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "3ED11BE464D3BFB27A7012C3A053FE03122EE311279854C653B8D41FC7A14C10",
+    "bytes": 6780090
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "4F856B8EE6FC4C6952ECEC754FAAB5BFFBC1C842AF24EFDC26D07FE50F1A9770",
+    "bytes": 4765035
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "4C46882B8B340C4CBA9C5C87A79D37B3A95F13CA3160CC049B26F03D93B764C3",
+    "bytes": 6172166
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "A62F3AB39F90B3A1F4FFD460B8A49FDA5B1DC51A84865CD1EBDF11F188707964",
+    "bytes": 4939596
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\r13-ai-faults-R13-failed-A-f7073-sly-reviewed-active-version-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\r13-ai-faults-R13-failed-A-f7073-sly-reviewed-active-version-chrome\\trace.zip",
+    "sha256": "4288143025CB280AE3D310F2CCD093E65E3D5745A59BF52B5482B2BB640A6977",
+    "bytes": 3549921
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\r13-corrections-R13-substa-9706d--review-and-remain-editable-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\r13-corrections-R13-substa-9706d--review-and-remain-editable-chrome\\trace.zip",
+    "sha256": "1C2DF459C5E4031DB031349DDFF0BFDF9F4A00AEC2487B95D6A2F8BA7E50474E",
+    "bytes": 17536139
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\r13-live-stream-R13-real-e-3d06d-y-across-browser-disconnect-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\r13-live-stream-R13-real-e-3d06d-y-across-browser-disconnect-chrome\\trace.zip",
+    "sha256": "A42C0356A495D24D579104C25332A2571593CE2AA39DE14472E8DD97F19CBB95",
+    "bytes": 5180022
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\symbol-detail-confirms-pla-3914e-ough-the-normal-symbol-page-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\symbol-detail-confirms-pla-3914e-ough-the-normal-symbol-page-chrome\\trace.zip",
+    "sha256": "3C708BBA2B7F2B63D5D0F1956C502D0641DAAE5DAF67C09471C186489D513648",
+    "bytes": 261540
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\symbol-detail-keeps-both-s-39fb5-lan-has-no-index-conditions-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\symbol-detail-keeps-both-s-39fb5-lan-has-no-index-conditions-chrome\\trace.zip",
+    "sha256": "EBDDFC275041CEAF1454952161737D073FBE4D927A0FAEF5B90C0630AA5F3131",
+    "bytes": 177526
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\symbol-detail-keeps-curren-366f6--shared-index-history-fails-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\symbol-detail-keeps-curren-366f6--shared-index-history-fails-chrome\\trace.zip",
+    "sha256": "AF73016B50229B0597DD8634C93465A095B64A2BFE4C6027B1761824299249EF",
+    "bytes": 175201
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\symbol-detail-keeps-histor-da910-320px-with-200-percent-text-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\symbol-detail-keeps-histor-da910-320px-with-200-percent-text-chrome\\trace.zip",
+    "sha256": "137A4C53629E39DBE60314183D413F03ACF1BD2CB25236FFB08D7121B1F76208",
+    "bytes": 167137
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\symbol-detail-keeps-the-se-8f2e1-s-responsive-and-accessible-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\symbol-detail-keeps-the-se-8f2e1-s-responsive-and-accessible-chrome\\trace.zip",
+    "sha256": "771E483FEE8BB1A4C31DAE5C728C026AE9E520DC88E0BCE751DF2D0AC4A05AFD",
+    "bytes": 1069414
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\symbol-detail-marks-a-mapp-d7647-zero-index-leaves-as-unused-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\symbol-detail-marks-a-mapp-d7647-zero-index-leaves-as-unused-chrome\\trace.zip",
+    "sha256": "E42FDCACE81578C396A42B12CDCD1B7F67922C8A3BAE5A1309115C5BA837B1F7",
+    "bytes": 174491
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\symbol-detail-reads-backen-0a75f-icit-Shanghai-history-range-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\symbol-detail-reads-backen-0a75f-icit-Shanghai-history-range-chrome\\trace.zip",
+    "sha256": "12B30489E340900C8CEB88DA7715A7CA554C41F87BDF34EB0307A1607B0E179D",
+    "bytes": 249444
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\final-browser-traces\\symbol-detail-submits-posi-7d853-nd-maximum-policy-decisions-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\final-browser-traces\\symbol-detail-submits-posi-7d853-nd-maximum-policy-decisions-chrome\\trace.zip",
+    "sha256": "EDB14BA6EB2410C4AA09A71026213EBC3639F7481461DC3E84E2776C16106B83",
+    "bytes": 429474
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\.last-run.json",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\.last-run.json",
+    "sha256": "AB7101027A46BF732D90AD570EFB3FEC27D7F748D807658A7A63248F6F21B7A7",
+    "bytes": 292
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\error-context.md",
+    "sha256": "E5A8F985C883339EC876921AB15076790EA8D958F2BD89559152C5FE7394ADB5",
+    "bytes": 14435
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome\\trace.zip",
+    "sha256": "3B287D36E96D9D6B68D04B674FE0848E76556B7110C5149C13B4A7D3F17880F2",
+    "bytes": 265080
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat1\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat1\\error-context.md",
+    "sha256": "172D85A5502858B618D17AF5527DC6E1C0530561A9FE9E2754E140DC41F7F6F1",
+    "bytes": 13425
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat1\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat1\\trace.zip",
+    "sha256": "35BF30E5BA0158D7D4D002D69759014B3B1D394B5581A436C8D7B969032E5661",
+    "bytes": 618300
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat2\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat2\\error-context.md",
+    "sha256": "BC8FC8C8F367ACD48A0B45330EAFC95D516AFC52ED47E2187BC27FFF31501DA3",
+    "bytes": 14607
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat2\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat2\\trace.zip",
+    "sha256": "BD8F2A62946A24BADA8F2A4AAD914C53F6031A0EEEE1B568CC270174529C78AC",
+    "bytes": 426531
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat3\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat3\\error-context.md",
+    "sha256": "BC8FC8C8F367ACD48A0B45330EAFC95D516AFC52ED47E2187BC27FFF31501DA3",
+    "bytes": 14607
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat3\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat3\\trace.zip",
+    "sha256": "AAFFC0C2E64332096927828B05C0C597394EE4D9BB42A1AF38BE3F932614853D",
+    "bytes": 282317
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat4\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat4\\error-context.md",
+    "sha256": "E5A8F985C883339EC876921AB15076790EA8D958F2BD89559152C5FE7394ADB5",
+    "bytes": 14435
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat4\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\backtest-repeat-traces\\backtests-keeps-320-768-10-8ec70-ext-inside-route-boundaries-chrome-repeat4\\trace.zip",
+    "sha256": "E2995D517A204CFC73010192BC87AFB524E4D5DF1014EAA14A8A354CFFC50B50",
+    "bytes": 264960
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\.last-run.json",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\.last-run.json",
+    "sha256": "612656AEE3571FC70202A12D9E59389C426346C9ED78DDACA727FC31DB86DD3F",
+    "bytes": 243
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\error-context.md",
+    "sha256": "7C5D3B8B67DF7403F9376D00EA292F953F7FB4B467E9E48EAE097A0F5CD32761",
+    "bytes": 11902
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "E78260A0DD950A095233720194193BED099BDCFD87E5D988AA607A1ED5A38B24",
+    "bytes": 6152444
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\error-context.md",
+    "sha256": "650F6E69B251280DE40F9566BEFFB68F068F66B8B8F3F4A29CF2E1E512AF7167",
+    "bytes": 11902
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "F0C4581B1F922F1F64F60047723F08F33B00538B5CD5A73E299989E3A1279D15",
+    "bytes": 4653177
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\error-context.md",
+    "sha256": "E87BDCDC1561F5332E7B619CD672BD4FDF19B3019A92BA20F060A8F4CDF5DB8E",
+    "bytes": 11901
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "DCB37ED2E7502A90B0C2803D9FC12751825502A5FF299EB423FD1670942A7862",
+    "bytes": 3976498
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\error-context.md",
+    "sha256": "133430B38B9286719AACAEB4FAE776465B234ACF641A81D4A4C64F70098D0CFE",
+    "bytes": 11812
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "0DE1296FD0838217008A56CF80FB15E790E7D9EE007CBB03D3AD57DA146526E6",
+    "bytes": 3962448
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\.last-run.json",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\.last-run.json",
+    "sha256": "612656AEE3571FC70202A12D9E59389C426346C9ED78DDACA727FC31DB86DD3F",
+    "bytes": 243
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\error-context.md",
+    "sha256": "C87B34F593C7D59E477A6EA56281219A92FA70FE814CEB0AC595ACAE71C0C5E5",
+    "bytes": 10365
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "FAB079AD2251CD7B899717662EC9A986599DB6E7401D74A242F8AAC2826389E5",
+    "bytes": 6902150
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\error-context.md",
+    "sha256": "72AD56DFDF7A365D689C05FCEEA16734966FEC8DB51787E9656C3B9F8BF93332",
+    "bytes": 9587
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "D54E1FD7B8FEFB7371ED0FC2123C00168C34E297C1FEECD86EBE5055B69FD57B",
+    "bytes": 4465237
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\error-context.md",
+    "sha256": "E216F9C7597049629C18BC0AD74AE4E1A31EA5822F066C48B4497CD447E3871A",
+    "bytes": 10832
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "85B249338543A6EEEF963C38CDBAE4DB362F30A24CD5F27886976384AA72D576",
+    "bytes": 4940841
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\error-context.md",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\error-context.md",
+    "sha256": "067D73BDCA973CEEC9972C5EC82942E5DD5EBD9E5C875269128D04D53ADCC4FB",
+    "bytes": 12375
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-final-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-final-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "F397CF268A0EF410388180ECF01EFC43836F2F21B4EBE3E20340C0D13028EFA5",
+    "bytes": 4328920
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-verified-traces\\.last-run.json",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-verified-traces\\.last-run.json",
+    "sha256": "91D1C43004802CD49950D78EB11C8FA7D05DA8FFFFE219A8B13B2F561BC00903",
+    "bytes": 45
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-verified-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-verified-traces\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "798690B36D3DB6C9BC1655EB417A0E4F30A61986AC175064312D1885FBD2F88A",
+    "bytes": 6604395
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-verified-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-verified-traces\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "0DE4F1C0A75952B95C6ED384460092FFCE7C4D322B2BF25920936542744E4C42",
+    "bytes": 4887894
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-verified-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-verified-traces\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "C7A62D2144E976809DABEB85B62DBA1BEAF2A2BD1116A1D40CFAAE08F5BD6C0B",
+    "bytes": 5776338
+  },
+  {
+    "originalPath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\remediation\\evidence\\R13-reacceptance\\restart-verified-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-verified-traces\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "D968432CA0AC70F73E5937D8365EC2DB2E4C75EA0E046FD04E25ADA9BD06EF34",
+    "bytes": 3987724
+  },
+  {
+    "originalPath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\.last-run.json",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\.last-run.json",
+    "sha256": "91D1C43004802CD49950D78EB11C8FA7D05DA8FFFFE219A8B13B2F561BC00903",
+    "bytes": 45
+  },
+  {
+    "originalPath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "2158DE436E0490B202460D6AF257CBCF039705B1CD889F9245CB30DAF52B91C5",
+    "bytes": 5934221
+  },
+  {
+    "originalPath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "F9C4CC79160C08E1A366146D097BA50DE4CB9D9FFFFA0D4EBEBCFCE55A906767",
+    "bytes": 4605841
+  },
+  {
+    "originalPath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "BB2541DFEE64546DE7D4511778A03F9BF1C8BA23812376286CE8811A860EF4CB",
+    "bytes": 4942940
+  },
+  {
+    "originalPath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "archivePath": "C:\\Users\\xiedc\\.codex\\visualizations\\2026\\09\\13\\01a098d6-b8b2-7953-80de-942d4ea78fdd\\r13-reacceptance-traces\\restart-cleanup-check\\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\\trace.zip",
+    "sha256": "9D4797FE7A12D5C239E706C1D2C567D72A2C95CF72D9667402E7B28DEC381A83",
+    "bytes": 3907041
+  }
+]

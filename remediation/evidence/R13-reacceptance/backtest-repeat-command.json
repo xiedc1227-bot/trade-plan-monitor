@@ -1,0 +1,6 @@
+{
+  "command": "npm run test:e2e -- backtests.spec.ts --grep 'keeps 320' --repeat-each 5 --trace on",
+  "start": "2026-09-13T11:47:27.0165218+08:00",
+  "end": "2026-09-13T11:47:37.0209714+08:00",
+  "exitCode": 1
+}

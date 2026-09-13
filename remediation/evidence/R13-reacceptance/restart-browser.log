@@ -1,0 +1,28 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test r13-active-process-restart.spec.ts --trace on --output ../remediation/evidence/R13-reacceptance/restart-verified-traces
+
+
+Running 4 tests using 1 worker
+
+
+
+(node:50992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity
+R13 OS active evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-ygi8cu_y
+
+[2/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity
+R13 OS replace evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-cseta2gl
+
+[3/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity
+R13 OS disable evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-pt528mnw
+
+[4/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity
+R13 OS expire evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-lun13yvr
+
+  4 passed (1.8m)

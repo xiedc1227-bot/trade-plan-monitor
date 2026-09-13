@@ -1,0 +1,26 @@
+[
+  {
+    "english": "docs/verification/R13-reacceptance.md",
+    "chinese": "docs/verification/R13-reacceptance.zh-CN.md",
+    "sameSectionIDs": true,
+    "sameNumericTokens": true,
+    "sameVerdictAndNOT_RUNBoundary": true,
+    "manualSemanticReview": "Source/independent policies, S/F/N scopes, quantities, threshold, paths, actual results and residual N05 are equivalent"
+  },
+  {
+    "english": "remediation/R13-reacceptance-matrix.md",
+    "chinese": "remediation/R13-reacceptance-matrix.zh-CN.md",
+    "sameSectionIDs": true,
+    "sameNumericTokens": true,
+    "sameVerdictAndNOT_RUNBoundary": true,
+    "manualSemanticReview": "Source/independent policies, S/F/N scopes, quantities, threshold, paths, actual results and residual N05 are equivalent"
+  },
+  {
+    "english": "remediation/handoffs/R13-reacceptance.md",
+    "chinese": "remediation/handoffs/R13-reacceptance.zh-CN.md",
+    "sameSectionIDs": true,
+    "sameNumericTokens": true,
+    "sameVerdictAndNOT_RUNBoundary": true,
+    "manualSemanticReview": "Source/independent policies, S/F/N scopes, quantities, threshold, paths, actual results and residual N05 are equivalent"
+  }
+]

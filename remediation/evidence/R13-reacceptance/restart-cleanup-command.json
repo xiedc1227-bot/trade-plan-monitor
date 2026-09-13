@@ -1,0 +1,8 @@
+{
+  "command": "npm run type-check; npm run test:e2e -- r13-active-process-restart.spec.ts --trace on",
+  "start": "2026-09-13T12:05:22.1763385+08:00",
+  "end": "2026-09-13T12:07:14.6936035+08:00",
+  "exitCode": 0,
+  "typeExitCode": 0,
+  "reason": "Cleanup failure now propagates after evidence is saved"
+}

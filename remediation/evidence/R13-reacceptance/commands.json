@@ -1,0 +1,138 @@
+[
+  {
+    "command": ".venv/Scripts/python.exe -m pytest -m 'not live' -vv -ra --durations=25 --junitxml=remediation/evidence/R13-reacceptance/backend.xml",
+    "start": "2026-09-13T11:37:49.8759295+08:00",
+    "end": "2026-09-13T12:20:45.0957206+08:00",
+    "exitCode": 0,
+    "passed": 2634,
+    "skipped": 1,
+    "deselected": 4,
+    "warnings": 1,
+    "pytestDurationSeconds": 2572.52,
+    "collected": 2639,
+    "selected": 2635,
+    "skipDetails": [
+      {
+        "test": {
+          "classname": "tests.integration.test_backtest_production_composition",
+          "name": "test_cursor_key_rejects_foreign_posix_owner_before_use",
+          "time": "0.000"
+        },
+        "reason": {
+          "type": "pytest.skip",
+          "message": "requires POSIX ownership semantics"
+        }
+      }
+    ],
+    "deselectReason": "4 live-provider cases outside authorization, deselected before credential/client fixtures",
+    "log": "backend.log",
+    "junit": "backend.xml"
+  },
+  {
+    "gate": "unit",
+    "start": "2026-09-13T11:38:14.0344279+08:00",
+    "end": "2026-09-13T11:38:19.8230195+08:00",
+    "exitCode": 0,
+    "log": "../remediation/evidence/R13-reacceptance/frontend-unit.log"
+  },
+  {
+    "gate": "type",
+    "start": "2026-09-13T11:38:19.8474462+08:00",
+    "end": "2026-09-13T11:38:23.6583371+08:00",
+    "exitCode": 0,
+    "log": "../remediation/evidence/R13-reacceptance/frontend-type.log"
+  },
+  {
+    "gate": "build",
+    "start": "2026-09-13T11:38:23.6610043+08:00",
+    "end": "2026-09-13T11:38:24.8399560+08:00",
+    "exitCode": 0,
+    "log": "../remediation/evidence/R13-reacceptance/frontend-build.log"
+  },
+  {
+    "gate": "browser",
+    "start": "2026-09-13T11:38:24.8411393+08:00",
+    "end": "2026-09-13T11:41:07.7988359+08:00",
+    "exitCode": 1,
+    "log": "../remediation/evidence/R13-reacceptance/frontend-browser.log"
+  },
+  {
+    "command": "npm run test:e2e -- --trace on",
+    "start": "2026-09-13T11:52:04.0601035+08:00",
+    "end": "2026-09-13T11:56:34.9850516+08:00",
+    "exitCode": 1,
+    "scope": "Final full suite after additive restart and diagnostic tests",
+    "recordFile": "final-browser-command.json"
+  },
+  {
+    "command": "npm run test:e2e -- backtests.spec.ts --grep 'keeps 320' --repeat-each 5 --trace on",
+    "start": "2026-09-13T11:47:27.0165218+08:00",
+    "end": "2026-09-13T11:47:37.0209714+08:00",
+    "exitCode": 1,
+    "recordFile": "backtest-repeat-command.json"
+  },
+  {
+    "command": "npm run test:e2e -- backtests.spec.ts --grep 'R13 records immediate' --trace on",
+    "start": "2026-09-13T11:49:48.0838708+08:00",
+    "end": "2026-09-13T11:49:52.1622048+08:00",
+    "exitCode": 0,
+    "scope": "Measurement probe, not a passing layout gate",
+    "recordFile": "backtest-diagnostic-command.json"
+  },
+  {
+    "command": "npm run test:e2e -- r13-active-process-restart.spec.ts --trace on",
+    "start": "2026-09-13T11:43:01.5286541+08:00",
+    "end": "2026-09-13T11:45:07.7335879+08:00",
+    "exitCode": 1,
+    "recordFile": "restart-initial-command.json"
+  },
+  {
+    "command": "npm run test:e2e -- r13-active-process-restart.spec.ts --trace on",
+    "start": "2026-09-13T11:45:53.5429663+08:00",
+    "end": "2026-09-13T11:47:58.3844270+08:00",
+    "exitCode": 1,
+    "recordFile": "restart-second-command.json"
+  },
+  {
+    "command": "npm run test:e2e -- r13-active-process-restart.spec.ts --trace on",
+    "start": "2026-09-13T11:48:49.5344722+08:00",
+    "end": "2026-09-13T11:50:37.9411700+08:00",
+    "exitCode": 0,
+    "recordFile": "restart-command.json"
+  },
+  {
+    "command": "npm run type-check; npm run test:e2e -- r13-active-process-restart.spec.ts --trace on",
+    "start": "2026-09-13T12:05:22.1763385+08:00",
+    "end": "2026-09-13T12:07:14.6936035+08:00",
+    "exitCode": 0,
+    "typeExitCode": 0,
+    "reason": "Cleanup failure now propagates after evidence is saved",
+    "recordFile": "restart-cleanup-command.json"
+  },
+  {
+    "scope": "generated types / Ruff / readonly lineage / protected source / OpenAPI / bilingual checks",
+    "result": "PASSED",
+    "logs": [
+      "generated-types.log",
+      "lint.log",
+      "lineage-check.log"
+    ],
+    "evidence": [
+      "workspace-protection.json",
+      "openapi-check.json",
+      "bilingual-parity.json"
+    ]
+  },
+  {
+    "gate": "type",
+    "start": "2026-09-13T11:51:37.4983983+08:00",
+    "end": "2026-09-13T11:51:41.3460003+08:00",
+    "exitCode": 0
+  },
+  {
+    "gate": "build",
+    "start": "2026-09-13T11:51:41.3465234+08:00",
+    "end": "2026-09-13T11:51:42.4613944+08:00",
+    "exitCode": 0
+  }
+]

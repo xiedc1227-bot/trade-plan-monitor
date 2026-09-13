@@ -1,0 +1,13 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test backtests.spec.ts --grep R13 records immediate --trace on --output ../remediation/evidence/R13-reacceptance/backtest-diagnostic
+
+
+Running 1 test using 1 worker
+
+
+
+(node:10960) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/1] [chrome] › tests\e2e\backtests.spec.ts:849:1 › R13 records immediate and settled narrow backtest layout without changing its gate
+  1 passed (3.4s)

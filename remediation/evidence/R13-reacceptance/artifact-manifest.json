@@ -1,0 +1,580 @@
+{
+  "scope": "Authored documents and evidence at final staging; excludes this self-referential manifest and externally archived traces",
+  "files": [
+    {
+      "path": "docs/verification/R13-reacceptance.md",
+      "bytes": 16085,
+      "sha256": "eda56eaacec5d420007680416a8c69cfb92dc14d6d0785c2a7e9b8b8018e51cd"
+    },
+    {
+      "path": "docs/verification/R13-reacceptance.zh-CN.md",
+      "bytes": 13984,
+      "sha256": "c041144de735fa913c54f069a37c9557aed3fed8faf579036a2a42b3c77b2d4b"
+    },
+    {
+      "path": "remediation/R13-reacceptance-matrix.md",
+      "bytes": 14653,
+      "sha256": "4a1efd8818da63633e1dcfbe045a0090220ff28ed79d503b065c0a8366fd89da"
+    },
+    {
+      "path": "remediation/R13-reacceptance-matrix.zh-CN.md",
+      "bytes": 13214,
+      "sha256": "18248c8e880e6d8a07e92245622e49f209c5db6a10d731086e8ffbc9533a1f5e"
+    },
+    {
+      "path": "remediation/handoffs/R13-reacceptance.md",
+      "bytes": 7612,
+      "sha256": "bdd5d950ea225c8c3a247f08210deb2331c14875b96b9eadc16a9aacf05127dd"
+    },
+    {
+      "path": "remediation/handoffs/R13-reacceptance.zh-CN.md",
+      "bytes": 6516,
+      "sha256": "802507e6d8c48176537fa9d696b3c3415677836a4d5ddc33c5f62125592fcd4c"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backend-command.json",
+      "bytes": 953,
+      "sha256": "b2368633544c279b801943017f756b14ad1c1ae647ee30f3cc7cd0766a06bac5"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backend-scenario-results.json",
+      "bytes": 218536,
+      "sha256": "237d51403f5e793128a8c265df34b6a3d91884fc53657306fa1f22925f436dfb"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backend.log",
+      "bytes": 366754,
+      "sha256": "fcaf931026fb7e41f4a56b2044a48ec49516bbb567f37a7c0b0ecbdc310dc566"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backend.xml",
+      "bytes": 429403,
+      "sha256": "49db6ef87a7e9faf6183a24fa3f38afb82f3a74999244733a9c0a3f9f2b5a43c"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-diagnostic/.last-run.json",
+      "bytes": 45,
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-diagnostic/backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome/layout-0.png",
+      "bytes": 245660,
+      "sha256": "561d129cfa23f5f91d40c4f90d32987bb297119af935bb52b846f7da4bbd65be"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-diagnostic/backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome/layout-1.png",
+      "bytes": 428234,
+      "sha256": "6c0e6cc7413488cf9e45b6dc886f05ca2afe9be998edac05a7ca3cf483d61c26"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-diagnostic/backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome/layout-2.png",
+      "bytes": 347390,
+      "sha256": "44cfdb1c8b8838fcb238d1340ab1f444fe71688e4fe2b5219bfb43c2aa4add94"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-diagnostic/backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome/layout-3.png",
+      "bytes": 787054,
+      "sha256": "657f81ef51606de6a1e827a258675efedd72d3633f4a20ab240ab475e9ec563a"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-diagnostic/backtests-R13-records-imme-d22d3-t-without-changing-its-gate-chrome/trace.zip",
+      "bytes": 1080342,
+      "sha256": "361f13c50dca854542d5fca50246df9f9c5d087de718b37879b381ad37221aa3"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-diagnostic-command.json",
+      "bytes": 276,
+      "sha256": "b962816e107b9db83023fc0b804efbb88d0b4fef457dd264dbe52771cd070ed6"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-diagnostic.log",
+      "bytes": 557,
+      "sha256": "a670ede1fdd403f69ab8c212fa4e8efba5add56d118732fdd368b1dbfe42db6a"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-layout-measurements.json",
+      "bytes": 138028,
+      "sha256": "d7d1eb8482e14098b122f055f411a714511d05fc32672ca503ffbe13bcaf9ad1"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-repeat-command.json",
+      "bytes": 220,
+      "sha256": "cdb673707707dc14b607cdfa900bfecd226630de5824c7acd0286274ddb60464"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/backtest-repeat.log",
+      "bytes": 13641,
+      "sha256": "a03e7350f1a9f53073e13afe5e239c9886d01cf193c3b32a1e5cf3c17d2529b3"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/bilingual-parity.json",
+      "bytes": 1174,
+      "sha256": "9043afa2c1ed2cf65493f6072d2669ac8c435a85803ee8c5c62d540cb1aa6a91"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/browser-roots.json",
+      "bytes": 322,
+      "sha256": "328cae70ce114b25bcbb3e2948df0b3d643a05fa9d8e7c07987c6f3e70a10658"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/cleanup-check-records/restart-active.json",
+      "bytes": 141844,
+      "sha256": "b6013bd080a8b607fcda365228655956b34c7483c41da9067162d33c47c98822"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/cleanup-check-records/restart-disable.json",
+      "bytes": 94730,
+      "sha256": "8d9df6486658c996dc97a4537cd5480729823a2afdbb91bee1394631db010ee6"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/cleanup-check-records/restart-expire.json",
+      "bytes": 82633,
+      "sha256": "d58ed675e01efd444954de11d6b9acb3582135e6223ce883e34f6eb538888996"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/cleanup-check-records/restart-replace.json",
+      "bytes": 106363,
+      "sha256": "9e42ab76b7cb9fb42fcd625d32cdf787731b32ff64a309d1eafccdc46f2228b5"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/commands.json",
+      "bytes": 4701,
+      "sha256": "24823c766a9e5725b933c4b0f364729919c00c6d7d52611b0378c20a7b8bd12a"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/corrections/r13-correction-alerts.png",
+      "bytes": 173017,
+      "sha256": "9136d7eef86454161fbd4222659deaa05478a29cd920f13928c1dfab8aa96609"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/corrections/r13-corrections-final.png",
+      "bytes": 570199,
+      "sha256": "25ab3cbbd5d76e7c2a4d63988a7c7be71c70d745f523c8167dcc1234a1e72245"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/corrections/r13-corrections.json",
+      "bytes": 1420742,
+      "sha256": "707eee10f13394f03bb7436ea9e12189eafd801f56e5f70636fbc9058533a65f"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/corrections/r13-corrections.png",
+      "bytes": 50002,
+      "sha256": "b9564b3c9a7872c5a13c310c0f39bc275b04b9ff5c34fdb8f7680231aea0dafa"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/corrections/r13-runtime-ALL.png",
+      "bytes": 134505,
+      "sha256": "1b850f61860e1d784d57a948997c6b5d18d32e5a3093683c2de76f0e4ff64995"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/corrections/r13-runtime-ANY.png",
+      "bytes": 135430,
+      "sha256": "75bffcb85b044bb3baf002b1d092abcb88088cc06d6e5a2928a9d645258f760e"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/faults/r13-faults.json",
+      "bytes": 6755,
+      "sha256": "abb0aa36fbb66d57c062e55a8fb734be4ec39041230efa5ac4f3358e89b13c79"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-browser-command.json",
+      "bytes": 243,
+      "sha256": "7abf3a3e94d3993d1757914e5f40aef279028af86e5ef6bfc173d151c893559b"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-browser-roots.json",
+      "bytes": 704,
+      "sha256": "c8027665a8cb89c5e67e00b0610fd76bdd231a572e74efb79ab83de2951685fd"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-browser.log",
+      "bytes": 12431,
+      "sha256": "f0228c6477aeba4839a122ee0409e491c391281e36fe0a9cda0028dd8a4a6751"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-build.log",
+      "bytes": 3595,
+      "sha256": "1633562953d2d5e3e4bc72a3dbc88a74ff32e4d36a922968696a6f6910327995"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-frontend-checks.json",
+      "bytes": 308,
+      "sha256": "bf7cba095a58404e305a624fcc5e3475ab98a7bafc9cc0d4a688c3ae65a54477"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/corrections/r13-correction-alerts.png",
+      "bytes": 173017,
+      "sha256": "9136d7eef86454161fbd4222659deaa05478a29cd920f13928c1dfab8aa96609"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/corrections/r13-corrections-final.png",
+      "bytes": 570224,
+      "sha256": "aef04a6771a88469eae57add0871a54023faec30b5b3a3125012ea8e8589bbe8"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/corrections/r13-corrections.json",
+      "bytes": 1420782,
+      "sha256": "d1afaeee7a03621540be27bb4d68eb88d58dca715dcd0d030c0bf909c9440aed"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/corrections/r13-corrections.png",
+      "bytes": 50002,
+      "sha256": "b9564b3c9a7872c5a13c310c0f39bc275b04b9ff5c34fdb8f7680231aea0dafa"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/corrections/r13-runtime-ALL.png",
+      "bytes": 134505,
+      "sha256": "1b850f61860e1d784d57a948997c6b5d18d32e5a3093683c2de76f0e4ff64995"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/corrections/r13-runtime-ANY.png",
+      "bytes": 135430,
+      "sha256": "75bffcb85b044bb3baf002b1d092abcb88088cc06d6e5a2928a9d645258f760e"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/faults/r13-faults.json",
+      "bytes": 6795,
+      "sha256": "b3f52a3f9d18fa35f332e801573990e594c9a06209c791f1797056685177d2bc"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/01-review.png",
+      "bytes": 1333249,
+      "sha256": "dd0b03f331e3b4259428ee7977ce25354b2708069273eb1786576bdc81ca2634"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/02-dashboard.png",
+      "bytes": 148556,
+      "sha256": "1712121d3d17977aab82bd37006bbdc67879b146360b3d14fa83c74927c9e63e"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/03-alerts.png",
+      "bytes": 200691,
+      "sha256": "8781872edafdb9aa8c90cc7d8f91a531ff5234d46af66c9eefd44132d5f6ea9f"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/04-deactivated.png",
+      "bytes": 456927,
+      "sha256": "917abd45fb4652e95c27311b8c36bc994a14ad2c6de1c724f4206abec4f47e53"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/browser-evidence.json",
+      "bytes": 880324,
+      "sha256": "f2e873ea0f62aaadaa3343a1c3e3ed95fdf3ae92fb94b1194da21abcab06c3a7"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/last-page.png",
+      "bytes": 456778,
+      "sha256": "5fed14b24038b4ea58212db2fdb6563086de286a895f2736968bf21b4c9924cf"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/runtime-1005.png",
+      "bytes": 134050,
+      "sha256": "57372ebd0fdbdbfbc53a9372f3436f1df30bd1e9b837c58d4747a1149d9a7dd1"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/runtime-1010.png",
+      "bytes": 130803,
+      "sha256": "f1280d43edb5ceb0a7abf86eefe8ec6976b13826e8a05aeca55cbfdeabebc1cd"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/runtime-1015.png",
+      "bytes": 131857,
+      "sha256": "31788f5ea0938a95e741b5f3a5d31e9119781819d00d2ada2141ff715d6b4cf8"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/originalLiteralALL/runtime-1020.png",
+      "bytes": 132692,
+      "sha256": "fffe6d7d9302e5c0d5a4f7b5c8d30726a813a6f75209b32ddb3bfef8dc534537"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-active/restart-active.json",
+      "bytes": 141844,
+      "sha256": "ffb378669d53762b99ddb437dc9dc48c7410f060f649b8c97560e948a87a2e08"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-active/restart-after.png",
+      "bytes": 263049,
+      "sha256": "0d3639e660012d5383fdaa15078af95cca659b40e14553a1235ef8ddcd886bb5"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-active/restart-before.png",
+      "bytes": 123586,
+      "sha256": "748b127f4c5a16b0386b6cd022dfa23810f0e157e671cbedb4b526843f1f3c1a"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-disable/restart-after.png",
+      "bytes": 116784,
+      "sha256": "c37c5bb7d0b1ad286ac4e526798c3487af9a07c8b622e731b0345a1ec22275f3"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-disable/restart-before.png",
+      "bytes": 123586,
+      "sha256": "748b127f4c5a16b0386b6cd022dfa23810f0e157e671cbedb4b526843f1f3c1a"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-disable/restart-disable.json",
+      "bytes": 94730,
+      "sha256": "a97fc40245e089251cc45798394fb21ae5f9736275dc6c79445d97cc1345a632"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-expire/restart-after.png",
+      "bytes": 116784,
+      "sha256": "c37c5bb7d0b1ad286ac4e526798c3487af9a07c8b622e731b0345a1ec22275f3"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-expire/restart-before.png",
+      "bytes": 123586,
+      "sha256": "748b127f4c5a16b0386b6cd022dfa23810f0e157e671cbedb4b526843f1f3c1a"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-expire/restart-expire.json",
+      "bytes": 82633,
+      "sha256": "22b24f792d561fe3ee4410be7187cd00903af345dd0483a053ae03773163a132"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-replace/restart-after.png",
+      "bytes": 162273,
+      "sha256": "8ae16ae09cebefa5f4e62907ba77841507e6ac24f7229ff376385145ba90ecda"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-replace/restart-before.png",
+      "bytes": 123586,
+      "sha256": "748b127f4c5a16b0386b6cd022dfa23810f0e157e671cbedb4b526843f1f3c1a"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/restart-replace/restart-replace.json",
+      "bytes": 106361,
+      "sha256": "b9de7af48a4ba1d8f2cf1784894c78cf2ea2131fe51d3d691ae9c55c6cb0a092"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/stream/r13-stream-final.png",
+      "bytes": 217120,
+      "sha256": "8c7ad461b1d86d98db89c747cbbff3fd77eba29318486e5d4e957abb0ca0ad26"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/stream/r13-stream.json",
+      "bytes": 23589,
+      "sha256": "699ac22b284805678afb8727dd8099d37bbc4e262256ffc54c3ee18087ae24e3"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-journeys/stream/r13-stream.png",
+      "bytes": 217120,
+      "sha256": "8c7ad461b1d86d98db89c747cbbff3fd77eba29318486e5d4e957abb0ca0ad26"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-sqlite-lineage.json",
+      "bytes": 32049,
+      "sha256": "d553a4ca159ce17d72cc6f48c450958bace8d2ad37317631cfca5db3d60605a9"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-test-type.log",
+      "bytes": 84,
+      "sha256": "371ff3843c379bcaaa87bff6f8bc5b158d2ca8333237f83e9e8a999880571add"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/final-type.log",
+      "bytes": 84,
+      "sha256": "371ff3843c379bcaaa87bff6f8bc5b158d2ca8333237f83e9e8a999880571add"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/frontend-browser.log",
+      "bytes": 10688,
+      "sha256": "d476ed1ce67efed9f046df55bbaf4ededd3133ec03f756c04762051f42d94a43"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/frontend-build.log",
+      "bytes": 3595,
+      "sha256": "258652a9b6f67ee3e030d0d98aa36b5de4e6b1ce3a805b0a280618c45b689131"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/frontend-commands.json",
+      "bytes": 913,
+      "sha256": "cd1709d03740b969ea22447645fdf5c2f59407a7d60178e9887463f45c4809d2"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/frontend-type.log",
+      "bytes": 84,
+      "sha256": "371ff3843c379bcaaa87bff6f8bc5b158d2ca8333237f83e9e8a999880571add"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/frontend-unit.log",
+      "bytes": 322,
+      "sha256": "1abe21db7ec4356e8d0ae53451f16c4e6c8a6db87bf7d11c45240bc5b2d32ef2"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/generated-types.log",
+      "bytes": 49,
+      "sha256": "6d7dde7362138a6541070eb49617f05898ed9281779042b9ae4cb5c1ba1b16fe"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/lineage-check.log",
+      "bytes": 91,
+      "sha256": "b1c1eec25339b69f5eede143cce0fa34f8611480cc6e98f0bf0c37677ba11966"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/lint.log",
+      "bytes": 20,
+      "sha256": "a4443afdcfb6d7363adb285762515ccf7cf50473b1a05c20c1a50f6bed4d26b0"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/openapi-check.json",
+      "bytes": 146,
+      "sha256": "64ff0caf0d5e370cffbba1d2d96fbc8d7adfcd6715090fe68e0803ab9810136d"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/01-review.png",
+      "bytes": 1333257,
+      "sha256": "c1611508353f2b302faa905f8b1dae9f91f65f813d55b9d60d8d2660b64814a3"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/02-dashboard.png",
+      "bytes": 148556,
+      "sha256": "1712121d3d17977aab82bd37006bbdc67879b146360b3d14fa83c74927c9e63e"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/03-alerts.png",
+      "bytes": 200691,
+      "sha256": "8781872edafdb9aa8c90cc7d8f91a531ff5234d46af66c9eefd44132d5f6ea9f"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/04-deactivated.png",
+      "bytes": 456954,
+      "sha256": "29b9b2f059d920cb090266e6b2dbb45e0f15c8614ee0f88a66d94ec6256d415c"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/browser-evidence.json",
+      "bytes": 880283,
+      "sha256": "36da3e6ff323a52c933dc63b5e819f0a5ec17a07f720669b180de38994edb3bb"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/last-page.png",
+      "bytes": 456806,
+      "sha256": "53b4bb2a2873a6893b977fc042f55d8aabe1d2b839be792fa6126e32c1311846"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/runtime-1005.png",
+      "bytes": 134050,
+      "sha256": "57372ebd0fdbdbfbc53a9372f3436f1df30bd1e9b837c58d4747a1149d9a7dd1"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/runtime-1010.png",
+      "bytes": 130803,
+      "sha256": "f1280d43edb5ceb0a7abf86eefe8ec6976b13826e8a05aeca55cbfdeabebc1cd"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/runtime-1015.png",
+      "bytes": 131857,
+      "sha256": "31788f5ea0938a95e741b5f3a5d31e9119781819d00d2ada2141ff715d6b4cf8"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/originalLiteralALL/runtime-1020.png",
+      "bytes": 132692,
+      "sha256": "fffe6d7d9302e5c0d5a4f7b5c8d30726a813a6f75209b32ddb3bfef8dc534537"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/owned-process-exit-check.json",
+      "bytes": 1523,
+      "sha256": "b011a244f1d134b6f7817bab54144deab162c4e0239122f9ce2f1b795275646a"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/owned-process-ids.json",
+      "bytes": 133,
+      "sha256": "a8a2083e0f83482136c0bf8ec661c936531a3d1fac9e61c9385700bcffc5e079"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/restart-browser.log",
+      "bytes": 1887,
+      "sha256": "e8642b3f5603c6852b6829e91f0cad0797e70338dc4e112eafceddf0e068bb1c"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/restart-cleanup-check.log",
+      "bytes": 1920,
+      "sha256": "15cf601cc83053979390956de8115ef21340a514d6967445e0720e1684a10d04"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/restart-cleanup-command.json",
+      "bytes": 315,
+      "sha256": "beebdbcf2d1a598a4b5ec9e675127b99397ee6c3c42d3e0a2da19a4dbf9754f5"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/restart-command.json",
+      "bytes": 202,
+      "sha256": "91174942e3e4b62d77751d868a2a335043ceda67b4665de642b73404a455753f"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/restart-initial-command.json",
+      "bytes": 202,
+      "sha256": "c5bb67cabbf45ed2b9be7e9bc6c4bfd996a81e41a77de308ec597d586d2443dd"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/restart-initial-failure.log",
+      "bytes": 10284,
+      "sha256": "60661cdb6c00e6d2932036f788f0323af5fe79db3f176deee7b5fd2b8f328bc0"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/restart-second-command.json",
+      "bytes": 202,
+      "sha256": "a29e5df8c649cf8795c24735b1ef64ac9765a19b95acab243c1a858f8dc09a48"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/restart-second-failure.log",
+      "bytes": 12379,
+      "sha256": "a8022496c4c619e98988e4712c61b378ee634ffb32542aaf542f677c0db443aa"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/source-index.json",
+      "bytes": 40687,
+      "sha256": "6a85741db3a579fbcfac66a41713970f7c63208b28c9c22856180c771e2af0af"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/sqlite-lineage.json",
+      "bytes": 17218,
+      "sha256": "563aa3afdbed92772012e9162f2e90c1205937c39a1333f71e39d1ebae515170"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/stream/r13-stream-final.png",
+      "bytes": 217120,
+      "sha256": "8c7ad461b1d86d98db89c747cbbff3fd77eba29318486e5d4e957abb0ca0ad26"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/stream/r13-stream.json",
+      "bytes": 23590,
+      "sha256": "737f84f914a7a91c82b6748c6e6b78477c9d8b4ca6607b9823098d43226d9bb5"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/stream/r13-stream.png",
+      "bytes": 217120,
+      "sha256": "8c7ad461b1d86d98db89c747cbbff3fd77eba29318486e5d4e957abb0ca0ad26"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/test-commit.json",
+      "bytes": 219,
+      "sha256": "e66f11cfa1a64df77ccbcae8a156a1aa4e4183be3126dadd38c579863149dbbf"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/trace-archive.json",
+      "bytes": 64619,
+      "sha256": "bd9961f7b62d53ffbb226c14fe1c925c9dc90166aca4af8593d40b027cf5a820"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/verify_evidence.py",
+      "bytes": 8042,
+      "sha256": "54bc9d628842de1d7f48da94ae1b31fe77acbfdc6468a86cacb348788e61413b"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/workspace-before.diff",
+      "bytes": 17921,
+      "sha256": "dc56668f1df19aa5fed3d0f0632e8b316c5bf51c9ad18027ccdc6b64c494bc3f"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/workspace-before.json",
+      "bytes": 4123,
+      "sha256": "f0167ce40f7d0f964d6bf5aaa9cfc456d41ec74ea8f117726243e4f059c10696"
+    },
+    {
+      "path": "remediation/evidence/R13-reacceptance/workspace-protection.json",
+      "bytes": 8052,
+      "sha256": "bf06659f1c4fd74cfd521c57ce824f116bba60dda8f6097c9e56bcd4b2527d4d"
+    }
+  ]
+}

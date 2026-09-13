@@ -1,0 +1,5254 @@
+[
+  {
+    "route": "/backtests",
+    "immediate": {
+      "width": 320,
+      "scrollWidth": 338,
+      "fontStatus": "loaded",
+      "overflow": [
+        {
+          "element": "UL.app-shell__navigation-list",
+          "left": 32,
+          "right": 592,
+          "width": 560,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "HEADER.backtest-runs-view__hero",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.backtest-runs-view__eyebrow",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H1.",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "NAV.",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "ASIDE.backtest-runs-view__boundary",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.run-filters",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.run-table",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "TABLE.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "THEAD.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TR.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 98,
+          "right": 452.140625,
+          "width": 354.140625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 452.140625,
+          "right": 660.03125,
+          "width": 207.890625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 660.03125,
+          "right": 1302.78125,
+          "width": 642.75,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 1302.78125,
+          "right": 1738.40625,
+          "width": 435.625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 1738.40625,
+          "right": 1971.296875,
+          "width": 232.890625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 1971.296875,
+          "right": 2125.5625,
+          "width": 154.265625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 2125.5625,
+          "right": 2253.625,
+          "width": 128.0625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 2253.625,
+          "right": 2402,
+          "width": 148.375,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TBODY.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TR.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 98,
+          "right": 452.140625,
+          "width": 354.140625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TIME.",
+          "left": 122,
+          "right": 417.8125,
+          "width": 295.8125,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 452.140625,
+          "right": 660.03125,
+          "width": 207.890625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 660.03125,
+          "right": 1302.78125,
+          "width": 642.75,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "A.run-table__run-link",
+          "left": 684.03125,
+          "right": 1260.03125,
+          "width": 576,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 1302.78125,
+          "right": 1738.40625,
+          "width": 435.625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.run-table__number",
+          "left": 1738.40625,
+          "right": 1971.296875,
+          "width": 232.890625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.run-table__number",
+          "left": 1971.296875,
+          "right": 2125.5625,
+          "width": 154.265625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.run-table__number",
+          "left": 2125.5625,
+          "right": 2253.625,
+          "width": 128.0625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 2253.625,
+          "right": 2402,
+          "width": 148.375,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        }
+      ]
+    },
+    "settled": {
+      "width": 320,
+      "scrollWidth": 338,
+      "fontStatus": "loaded",
+      "overflow": [
+        {
+          "element": "UL.app-shell__navigation-list",
+          "left": 32,
+          "right": 592,
+          "width": 560,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "HEADER.backtest-runs-view__hero",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.backtest-runs-view__eyebrow",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H1.",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "NAV.",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "ASIDE.backtest-runs-view__boundary",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.run-filters",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.run-table",
+          "left": 64,
+          "right": 338.296875,
+          "width": 274.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "TABLE.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "THEAD.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TR.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 98,
+          "right": 452.140625,
+          "width": 354.140625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 452.140625,
+          "right": 660.03125,
+          "width": 207.890625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 660.03125,
+          "right": 1302.78125,
+          "width": 642.75,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 1302.78125,
+          "right": 1738.40625,
+          "width": 435.625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 1738.40625,
+          "right": 1971.296875,
+          "width": 232.890625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 1971.296875,
+          "right": 2125.5625,
+          "width": 154.265625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 2125.5625,
+          "right": 2253.625,
+          "width": 128.0625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TH.",
+          "left": 2253.625,
+          "right": 2402,
+          "width": 148.375,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TBODY.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TR.",
+          "left": 98,
+          "right": 2402,
+          "width": 2304,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 98,
+          "right": 452.140625,
+          "width": 354.140625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TIME.",
+          "left": 122,
+          "right": 417.8125,
+          "width": 295.8125,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 452.140625,
+          "right": 660.03125,
+          "width": 207.890625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 660.03125,
+          "right": 1302.78125,
+          "width": 642.75,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "A.run-table__run-link",
+          "left": 684.03125,
+          "right": 1260.03125,
+          "width": 576,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 1302.78125,
+          "right": 1738.40625,
+          "width": 435.625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.run-table__number",
+          "left": 1738.40625,
+          "right": 1971.296875,
+          "width": 232.890625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.run-table__number",
+          "left": 1971.296875,
+          "right": 2125.5625,
+          "width": 154.265625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.run-table__number",
+          "left": 2125.5625,
+          "right": 2253.625,
+          "width": 128.0625,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        },
+        {
+          "element": "TD.",
+          "left": 2253.625,
+          "right": 2402,
+          "width": 148.375,
+          "overflowX": "visible",
+          "scroller": "DIV.run-table__scroll"
+        }
+      ]
+    }
+  },
+  {
+    "route": "/backtests/new",
+    "immediate": {
+      "width": 320,
+      "scrollWidth": 476,
+      "fontStatus": "loaded",
+      "overflow": [
+        {
+          "element": "UL.app-shell__navigation-list",
+          "left": 32,
+          "right": 592,
+          "width": 560,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.router-link-active router-link-exact-active app-shell__navigation-link app-shell__navigation-link--current",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "HEADER.backtest-new-view__hero",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.backtest-new-view__eyebrow",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H1.",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "A.",
+          "left": 64,
+          "right": 356,
+          "width": 292,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "ASIDE.backtest-new-view__boundary",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.run-form",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "HEADER.run-form__header",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__eyebrow",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "FORM.run-form__grid",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.plan-version-selector",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SELECT.",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.plan-version-selector__help",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.plan-version-selector__status",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.plan-version-selector__pagination",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SELECT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.lots-editor",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "HEADER.lots-editor__header",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 98,
+          "right": 408.609375,
+          "width": 310.609375,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.lots-editor__empty",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__actions",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 148.03125,
+          "right": 392.03125,
+          "width": 244,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.coverage-panel",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 114,
+          "right": 426.078125,
+          "width": 312.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.coverage-panel__eyebrow",
+          "left": 114,
+          "right": 426.078125,
+          "width": 312.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 114,
+          "right": 426.078125,
+          "width": 312.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 114,
+          "right": 426.078125,
+          "width": 312.078125,
+          "overflowX": "visible",
+          "scroller": null
+        }
+      ]
+    },
+    "settled": {
+      "width": 320,
+      "scrollWidth": 476,
+      "fontStatus": "loaded",
+      "overflow": [
+        {
+          "element": "UL.app-shell__navigation-list",
+          "left": 32,
+          "right": 592,
+          "width": 560,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.router-link-active router-link-exact-active app-shell__navigation-link app-shell__navigation-link--current",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "HEADER.backtest-new-view__hero",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.backtest-new-view__eyebrow",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H1.",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "A.",
+          "left": 64,
+          "right": 356,
+          "width": 292,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "ASIDE.backtest-new-view__boundary",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.run-form",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "HEADER.run-form__header",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__eyebrow",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "FORM.run-form__grid",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.plan-version-selector",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SELECT.",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.plan-version-selector__help",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.plan-version-selector__status",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.plan-version-selector__pagination",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 132,
+          "right": 408.078125,
+          "width": 276.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__field",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SELECT.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.run-form__help",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.lots-editor",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "HEADER.lots-editor__header",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 98,
+          "right": 408.609375,
+          "width": 310.609375,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.lots-editor__empty",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.run-form__actions",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 148.03125,
+          "right": 392.03125,
+          "width": 244,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 442.078125,
+          "width": 344.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.coverage-panel",
+          "left": 64,
+          "right": 476.078125,
+          "width": 412.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 114,
+          "right": 426.078125,
+          "width": 312.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.coverage-panel__eyebrow",
+          "left": 114,
+          "right": 426.078125,
+          "width": 312.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 114,
+          "right": 426.078125,
+          "width": 312.078125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 114,
+          "right": 426.078125,
+          "width": 312.078125,
+          "overflowX": "visible",
+          "scroller": null
+        }
+      ]
+    }
+  },
+  {
+    "route": "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28&warmupStart=2026-07-01",
+    "immediate": {
+      "width": 320,
+      "scrollWidth": 617,
+      "fontStatus": "loaded",
+      "overflow": [
+        {
+          "element": "UL.app-shell__navigation-list",
+          "left": 32,
+          "right": 592,
+          "width": 560,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.router-link-active router-link-exact-active app-shell__navigation-link app-shell__navigation-link--current",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "HEADER.dataset-scope-form__header",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 98,
+          "right": 386,
+          "width": 288,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.dataset-scope-form__eyebrow",
+          "left": 98,
+          "right": 386,
+          "width": 288,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 98,
+          "right": 386,
+          "width": 288,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "FORM.dataset-scope-form__grid",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__field dataset-scope-form__field--wide",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 233.265625,
+          "right": 447.03125,
+          "width": 213.765625,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__field",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 297.265625,
+          "right": 468.21875,
+          "width": 170.953125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__field",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 297.265625,
+          "right": 468.21875,
+          "width": 170.953125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__field",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 297.265625,
+          "right": 468.21875,
+          "width": 170.953125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__actions dataset-scope-form__field--wide",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 98,
+          "right": 393.9375,
+          "width": 295.9375,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 98,
+          "right": 358,
+          "width": 260,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 98,
+          "right": 390,
+          "width": 292,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.dataset-scope-form__checkbox",
+          "left": 98,
+          "right": 358,
+          "width": 260,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "FORM.dataset-scope-form__filters",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__filter-grid",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        }
+      ]
+    },
+    "settled": {
+      "width": 320,
+      "scrollWidth": 617,
+      "fontStatus": "loaded",
+      "overflow": [
+        {
+          "element": "UL.app-shell__navigation-list",
+          "left": 32,
+          "right": 592,
+          "width": 560,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.router-link-active router-link-exact-active app-shell__navigation-link app-shell__navigation-link--current",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "HEADER.dataset-scope-form__header",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 98,
+          "right": 386,
+          "width": 288,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.dataset-scope-form__eyebrow",
+          "left": 98,
+          "right": 386,
+          "width": 288,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 98,
+          "right": 386,
+          "width": 288,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "FORM.dataset-scope-form__grid",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__field dataset-scope-form__field--wide",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 233.265625,
+          "right": 447.03125,
+          "width": 213.765625,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__field",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 297.265625,
+          "right": 468.21875,
+          "width": 170.953125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__field",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 297.265625,
+          "right": 468.21875,
+          "width": 170.953125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__field",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 297.265625,
+          "right": 468.21875,
+          "width": 170.953125,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__actions dataset-scope-form__field--wide",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 98,
+          "right": 393.9375,
+          "width": 295.9375,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 98,
+          "right": 358,
+          "width": 260,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 98,
+          "right": 390,
+          "width": 292,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.dataset-scope-form__checkbox",
+          "left": 98,
+          "right": 358,
+          "width": 260,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "FORM.dataset-scope-form__filters",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.dataset-scope-form__filter-grid",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        },
+        {
+          "element": "LABEL.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "INPUT.",
+          "left": 98,
+          "right": 617,
+          "width": 519,
+          "overflowX": "clip",
+          "scroller": null
+        }
+      ]
+    }
+  },
+  {
+    "route": "/backtests/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "immediate": {
+      "width": 320,
+      "scrollWidth": 411,
+      "fontStatus": "loaded",
+      "overflow": [
+        {
+          "element": "UL.app-shell__navigation-list",
+          "left": 32,
+          "right": 592,
+          "width": 560,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "DIV.run-detail-view__results-heading",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.run-detail-view__eyebrow",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.result-actions",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.result-actions__controls",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 132,
+          "right": 344,
+          "width": 212,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "A.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "A.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.result-actions__boundary",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "NAV.run-detail-view__tabs",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "ARTICLE.metrics-summary",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "HEADER.metrics-summary__header",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.metrics-summary__eyebrow",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__identity",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "TIME.",
+          "left": 155,
+          "right": 330.9375,
+          "width": 175.9375,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__grid",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "UL.metrics-summary__definitions",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 195,
+          "right": 361.296875,
+          "width": 166.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 195,
+          "right": 361.296875,
+          "width": 166.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 195,
+          "right": 361.296875,
+          "width": 166.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 195,
+          "right": 361.296875,
+          "width": 166.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__grid",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "ASIDE.metrics-summary__boundary",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "STRONG.",
+          "left": 179,
+          "right": 335.265625,
+          "width": 156.265625,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__grid",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__grid",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "UL.metrics-summary__limitations",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "CODE.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        }
+      ]
+    },
+    "settled": {
+      "width": 320,
+      "scrollWidth": 411,
+      "fontStatus": "loaded",
+      "overflow": [
+        {
+          "element": "UL.app-shell__navigation-list",
+          "left": 32,
+          "right": 592,
+          "width": 560,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 224,
+          "right": 400,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "LI.",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "A.app-shell__navigation-link",
+          "left": 416,
+          "right": 592,
+          "width": 176,
+          "overflowX": "visible",
+          "scroller": "NAV.app-shell__backtest-navigation"
+        },
+        {
+          "element": "DIV.run-detail-view__results-heading",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.run-detail-view__eyebrow",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.result-actions",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.result-actions__controls",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "BUTTON.",
+          "left": 132,
+          "right": 344,
+          "width": 212,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "A.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "A.",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.result-actions__boundary",
+          "left": 132,
+          "right": 377.296875,
+          "width": 245.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "NAV.run-detail-view__tabs",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "ARTICLE.metrics-summary",
+          "left": 98,
+          "right": 411.296875,
+          "width": 313.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "HEADER.metrics-summary__header",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.metrics-summary__eyebrow",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H2.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__identity",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "TIME.",
+          "left": 155,
+          "right": 330.9375,
+          "width": 175.9375,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__grid",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "UL.metrics-summary__definitions",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 195,
+          "right": 361.296875,
+          "width": 166.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 195,
+          "right": 361.296875,
+          "width": 166.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 195,
+          "right": 361.296875,
+          "width": 166.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 195,
+          "right": 361.296875,
+          "width": 166.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__grid",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "ASIDE.metrics-summary__boundary",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "STRONG.",
+          "left": 179,
+          "right": 335.265625,
+          "width": 156.265625,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__grid",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DL.metrics-summary__grid",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DIV.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DT.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "DD.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SECTION.metrics-summary__section",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "H3.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "P.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "UL.metrics-summary__limitations",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "LI.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "CODE.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        },
+        {
+          "element": "SPAN.",
+          "left": 155,
+          "right": 361.296875,
+          "width": 206.296875,
+          "overflowX": "visible",
+          "scroller": null
+        }
+      ]
+    }
+  }
+]

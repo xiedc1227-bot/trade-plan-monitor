@@ -1,0 +1,1574 @@
+{
+  "src/trade_plan_monitor/web/monitor_composition.py": [
+    {
+      "line": 79,
+      "declaration": "class MonitorRuntime(Protocol):"
+    },
+    {
+      "line": 82,
+      "declaration": "async def start(self) -> object: ..."
+    },
+    {
+      "line": 84,
+      "declaration": "async def run(self) -> None: ..."
+    },
+    {
+      "line": 86,
+      "declaration": "async def stop(self) -> None: ..."
+    },
+    {
+      "line": 88,
+      "declaration": "def health(self) -> RuntimeHealthSnapshot: ..."
+    },
+    {
+      "line": 91,
+      "declaration": "class MonitorWebComposition:"
+    },
+    {
+      "line": 94,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 136,
+      "declaration": "def read_service(self) -> object:"
+    },
+    {
+      "line": 140,
+      "declaration": "def websocket_service(self) -> object | None:"
+    },
+    {
+      "line": 144,
+      "declaration": "def position_service(self) -> object | None:"
+    },
+    {
+      "line": 148,
+      "declaration": "def manual_event_risk_service(self) -> object | None:"
+    },
+    {
+      "line": 152,
+      "declaration": "def alert_service(self) -> object | None:"
+    },
+    {
+      "line": 156,
+      "declaration": "def market_index_read_service(self) -> object | None:"
+    },
+    {
+      "line": 159,
+      "declaration": "async def start(self) -> RuntimeHealthSnapshot:"
+    },
+    {
+      "line": 202,
+      "declaration": "def health(self) -> RuntimeHealthSnapshot:"
+    },
+    {
+      "line": 238,
+      "declaration": "async def stop(self) -> None:"
+    },
+    {
+      "line": 273,
+      "declaration": "async def _supervise_runtime(self) -> None:"
+    },
+    {
+      "line": 360,
+      "declaration": "async def _stop_runtime(self, runtime: MonitorRuntime | None = None) -> None:"
+    },
+    {
+      "line": 369,
+      "declaration": "def _observe_runner(self, task: asyncio.Task[None]) -> None:"
+    },
+    {
+      "line": 374,
+      "declaration": "def _validate_runtime(runtime: object) -> None:"
+    },
+    {
+      "line": 380,
+      "declaration": "def _validate_startup(startup: object) -> RuntimeServiceStatus:"
+    },
+    {
+      "line": 390,
+      "declaration": "def _validated_health(value: object) -> RuntimeHealthSnapshot:"
+    },
+    {
+      "line": 396,
+      "declaration": "class _HealthBinding:"
+    },
+    {
+      "line": 399,
+      "declaration": "def __init__(self) -> None:"
+    },
+    {
+      "line": 402,
+      "declaration": "def bind(self, health: Callable[[], RuntimeHealthSnapshot]) -> None:"
+    },
+    {
+      "line": 409,
+      "declaration": "def __call__(self) -> RuntimeHealthSnapshot:"
+    },
+    {
+      "line": 415,
+      "declaration": "class _ProductionRuntimeState:"
+    },
+    {
+      "line": 418,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 448,
+      "declaration": "async def validate_configuration(self) -> None:"
+    },
+    {
+      "line": 451,
+      "declaration": "async def open_database(self) -> None:"
+    },
+    {
+      "line": 454,
+      "declaration": "def _open_database_sync(self) -> None:"
+    },
+    {
+      "line": 465,
+      "declaration": "async def load_active_symbols(self) -> tuple[str, ...]:"
+    },
+    {
+      "line": 468,
+      "declaration": "def _load_active_symbols_sync(self) -> tuple[str, ...]:"
+    },
+    {
+      "line": 477,
+      "declaration": "def probe_capabilities(self) -> ProviderCapabilities:"
+    },
+    {
+      "line": 514,
+      "declaration": "async def refresh_references(self, trade_date: date) -> None:"
+    },
+    {
+      "line": 523,
+      "declaration": "async def recover_startup(self, trade_date: date) -> None:"
+    },
+    {
+      "line": 533,
+      "declaration": "def is_open_on(self, trade_date: date) -> bool | None:"
+    },
+    {
+      "line": 544,
+      "declaration": "async def run_deadline(self, deadline: MarketDeadline) -> object:"
+    },
+    {
+      "line": 552,
+      "declaration": "async def checkpoint_wal(self) -> None:"
+    },
+    {
+      "line": 555,
+      "declaration": "def _checkpoint_wal_sync(self) -> None:"
+    },
+    {
+      "line": 562,
+      "declaration": "async def close_database(self) -> None:"
+    },
+    {
+      "line": 567,
+      "declaration": "def health_details(self) -> RuntimeHealthDetails:"
+    },
+    {
+      "line": 599,
+      "declaration": "def _delivery_health(self) -> DeliveryHealthSnapshot:"
+    },
+    {
+      "line": 643,
+      "declaration": "def unit_of_work_factory(self) -> SqlAlchemyUnitOfWork:"
+    },
+    {
+      "line": 650,
+      "declaration": "def create_monitor_composition_factory("
+    },
+    {
+      "line": 662,
+      "declaration": "def factory() -> MonitorWebComposition:"
+    },
+    {
+      "line": 671,
+      "declaration": "def create_monitor_composition("
+    },
+    {
+      "line": 686,
+      "declaration": "def unit_of_work_factory() -> SqlAlchemyUnitOfWork:"
+    },
+    {
+      "line": 696,
+      "declaration": "def runtime_factory() -> RuntimeLifecycleService:"
+    }
+  ],
+  "src/trade_plan_monitor/runtime/service.py": [
+    {
+      "line": 134,
+      "declaration": "def _ceil_to_whole_second(value: datetime) -> datetime:"
+    },
+    {
+      "line": 141,
+      "declaration": "class _RuntimeValue(BaseModel):"
+    },
+    {
+      "line": 144,
+      "declaration": "def model_copy("
+    },
+    {
+      "line": 157,
+      "declaration": "class _PersistedSymbolHealth(_RuntimeValue):"
+    },
+    {
+      "line": 180,
+      "declaration": "def snapshot(self) -> SymbolHealthSnapshot:"
+    },
+    {
+      "line": 203,
+      "declaration": "class IntradayMarketFacts(_RuntimeValue):"
+    },
+    {
+      "line": 223,
+      "declaration": "def validate_exact_source(self) -> Self:"
+    },
+    {
+      "line": 261,
+      "declaration": "class IntradayCycleStatus(StrEnum):"
+    },
+    {
+      "line": 269,
+      "declaration": "class IntradayCycleResult(_RuntimeValue):"
+    },
+    {
+      "line": 279,
+      "declaration": "def validate_status_shape(self) -> Self:"
+    },
+    {
+      "line": 299,
+      "declaration": "class OfficialCloseErrorCode(StrEnum):"
+    },
+    {
+      "line": 308,
+      "declaration": "class OfficialCloseMarketFacts(_RuntimeValue):"
+    },
+    {
+      "line": 326,
+      "declaration": "def validate_official_source(self) -> Self:"
+    },
+    {
+      "line": 368,
+      "declaration": "class OfficialCloseCycleStatus(StrEnum):"
+    },
+    {
+      "line": 377,
+      "declaration": "class OfficialCloseCycleResult(_RuntimeValue):"
+    },
+    {
+      "line": 392,
+      "declaration": "def validate_status_shape(self) -> Self:"
+    },
+    {
+      "line": 449,
+      "declaration": "class StaleActivationGenerationError(RuntimeError):"
+    },
+    {
+      "line": 452,
+      "declaration": "def __init__(self, symbol: str) -> None:"
+    },
+    {
+      "line": 457,
+      "declaration": "class RuntimeEvaluationService:"
+    },
+    {
+      "line": 460,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 518,
+      "declaration": "async def _post_fetch_official_observed_at("
+    },
+    {
+      "line": 533,
+      "declaration": "async def run_intraday("
+    },
+    {
+      "line": 557,
+      "declaration": "async def run_intraday_batch("
+    },
+    {
+      "line": 573,
+      "declaration": "async def run_intraday_batch_from_minutes("
+    },
+    {
+      "line": 597,
+      "declaration": "async def prepare_intraday_market_indexes("
+    },
+    {
+      "line": 621,
+      "declaration": "def load_persisted_symbol_health("
+    },
+    {
+      "line": 664,
+      "declaration": "async def persist_symbol_health_batch("
+    },
+    {
+      "line": 754,
+      "declaration": "async def _run_intraday_batch("
+    },
+    {
+      "line": 830,
+      "declaration": "async def _run_intraday_with_snapshot("
+    },
+    {
+      "line": 986,
+      "declaration": "def pending_close_date(self, symbol: str) -> date | None:"
+    },
+    {
+      "line": 1001,
+      "declaration": "async def run_official_close_batch("
+    },
+    {
+      "line": 1056,
+      "declaration": "async def run_official_close("
+    },
+    {
+      "line": 1087,
+      "declaration": "async def _run_official_close_unlocked("
+    },
+    {
+      "line": 1335,
+      "declaration": "def _append_snapshot_event("
+    },
+    {
+      "line": 1359,
+      "declaration": "async def _official_close_completed("
+    },
+    {
+      "line": 1397,
+      "declaration": "def _persist_official_market_context("
+    },
+    {
+      "line": 1447,
+      "declaration": "def _validated_official_fetch("
+    },
+    {
+      "line": 1476,
+      "declaration": "def _persist_market_context("
+    },
+    {
+      "line": 1519,
+      "declaration": "def _validated_fetch("
+    },
+    {
+      "line": 1542,
+      "declaration": "def _validated_prefetched_minutes("
+    },
+    {
+      "line": 1565,
+      "declaration": "def _validate_context("
+    },
+    {
+      "line": 1606,
+      "declaration": "def _validate_runtime_health_snapshot("
+    },
+    {
+      "line": 1622,
+      "declaration": "def _validate_result("
+    },
+    {
+      "line": 1647,
+      "declaration": "def _validate_official_context("
+    },
+    {
+      "line": 1674,
+      "declaration": "def _validate_official_result("
+    },
+    {
+      "line": 1703,
+      "declaration": "def _mark_close_pending("
+    },
+    {
+      "line": 1815,
+      "declaration": "def _clear_close_pending("
+    },
+    {
+      "line": 1956,
+      "declaration": "def _persist_market_index_batch("
+    },
+    {
+      "line": 2042,
+      "declaration": "def _require_evaluated_plan_active("
+    },
+    {
+      "line": 2074,
+      "declaration": "def _require_symbol_activation_revision("
+    },
+    {
+      "line": 2093,
+      "declaration": "def _capture_plan_activation_revision(self, plan: TradePlan) -> int:"
+    },
+    {
+      "line": 2111,
+      "declaration": "def _persist_projection_dependencies("
+    },
+    {
+      "line": 2223,
+      "declaration": "async def _publish_committed_events("
+    },
+    {
+      "line": 2237,
+      "declaration": "def _apply_transitions(unit_of_work: UnitOfWork, result: EvaluationResult) -> None:"
+    },
+    {
+      "line": 2255,
+      "declaration": "def _apply_episode("
+    },
+    {
+      "line": 2290,
+      "declaration": "class RuntimeDeadlineCoordinator:"
+    },
+    {
+      "line": 2293,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 2323,
+      "declaration": "async def run_deadline("
+    },
+    {
+      "line": 2461,
+      "declaration": "def _validated_active_plans(value: object) -> tuple[ExecutableTradePlan, ...]:"
+    },
+    {
+      "line": 2471,
+      "declaration": "class ActiveSymbolLimitError(RuntimeError):"
+    },
+    {
+      "line": 2474,
+      "declaration": "def __init__(self, count: int) -> None:"
+    },
+    {
+      "line": 2479,
+      "declaration": "class RuntimeShutdownError(RuntimeError):"
+    },
+    {
+      "line": 2482,
+      "declaration": "def __init__(self, pending_count: int) -> None:"
+    },
+    {
+      "line": 2487,
+      "declaration": "class RuntimeStartupResult(_RuntimeValue):"
+    },
+    {
+      "line": 2497,
+      "declaration": "def validate_startup_state(self) -> Self:"
+    },
+    {
+      "line": 2507,
+      "declaration": "class RuntimeLifecycleService:"
+    },
+    {
+      "line": 2510,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 2601,
+      "declaration": "def status(self) -> RuntimeServiceStatus:"
+    },
+    {
+      "line": 2605,
+      "declaration": "def owned_task_count(self) -> int:"
+    },
+    {
+      "line": 2617,
+      "declaration": "def runtime_generation(self) -> UUID:"
+    },
+    {
+      "line": 2620,
+      "declaration": "def health(self) -> RuntimeHealthSnapshot:"
+    },
+    {
+      "line": 2648,
+      "declaration": "async def start(self) -> RuntimeStartupResult:"
+    },
+    {
+      "line": 2681,
+      "declaration": "async def _start_sequence(self) -> RuntimeStartupResult:"
+    },
+    {
+      "line": 2723,
+      "declaration": "async def run_once(self) -> object | None:"
+    },
+    {
+      "line": 2744,
+      "declaration": "async def run(self) -> None:"
+    },
+    {
+      "line": 2785,
+      "declaration": "def _advance_progress_deadline(self, deadline: MarketDeadline) -> None:"
+    },
+    {
+      "line": 2795,
+      "declaration": "def unexpected_run_exit(self) -> bool:"
+    },
+    {
+      "line": 2801,
+      "declaration": "def cleanup_failed(self) -> bool:"
+    },
+    {
+      "line": 2806,
+      "declaration": "async def stop(self) -> None:"
+    },
+    {
+      "line": 2828,
+      "declaration": "async def _stop_sequence(self, *, initiator: asyncio.Task[object] | None) -> None:"
+    },
+    {
+      "line": 2926,
+      "declaration": "async def _wait_for_next(self, *, after: datetime | None) -> MarketDeadline | None:"
+    },
+    {
+      "line": 2938,
+      "declaration": "def _claim_schedule_owner(self) -> asyncio.Task[object]:"
+    },
+    {
+      "line": 2948,
+      "declaration": "def _release_schedule_owner(self, owner: asyncio.Task[object]) -> None:"
+    },
+    {
+      "line": 2952,
+      "declaration": "async def _execute_deadline(self, deadline: MarketDeadline) -> object:"
+    },
+    {
+      "line": 2960,
+      "declaration": "async def _finish_owned_tasks("
+    },
+    {
+      "line": 2979,
+      "declaration": "def _observe_stop_result(self, task: asyncio.Task[None]) -> None:"
+    },
+    {
+      "line": 2987,
+      "declaration": "def _record_cleanup_failure(self, error: BaseException) -> None:"
+    },
+    {
+      "line": 2994,
+      "declaration": "async def _invoke(operation: Callable[..., object], *args: object) -> object:"
+    },
+    {
+      "line": 2999,
+      "declaration": "def _active_symbols(raw_symbols: object) -> tuple[str, ...]:"
+    },
+    {
+      "line": 3011,
+      "declaration": "def _all_capabilities_ready(capabilities: ProviderCapabilities) -> bool:"
+    },
+    {
+      "line": 3024,
+      "declaration": "def _age_seconds(value: datetime | None, observed_at: datetime) -> int | None:"
+    },
+    {
+      "line": 3033,
+      "declaration": "def _equivalent_market_index_capture("
+    },
+    {
+      "line": 3044,
+      "declaration": "def bar_content(bar: MarketIndexBar) -> object:"
+    },
+    {
+      "line": 3109,
+      "declaration": "class MaintenanceCommandService:"
+    },
+    {
+      "line": 3112,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 3131,
+      "declaration": "async def validate(self) -> object:"
+    },
+    {
+      "line": 3134,
+      "declaration": "async def once(self) -> object:"
+    },
+    {
+      "line": 3137,
+      "declaration": "async def run(self) -> object:"
+    },
+    {
+      "line": 3140,
+      "declaration": "async def replay(self) -> object:"
+    },
+    {
+      "line": 3143,
+      "declaration": "async def backup(self) -> object:"
+    },
+    {
+      "line": 3147,
+      "declaration": "def _five_minute_value(record: FiveMinuteBarRecord) -> FiveMinuteBar:"
+    },
+    {
+      "line": 3151,
+      "declaration": "def _json_value(value: str) -> object:"
+    },
+    {
+      "line": 3161,
+      "declaration": "def _validate_persisted_symbol_health(value: object) -> _PersistedSymbolHealth:"
+    },
+    {
+      "line": 3176,
+      "declaration": "def _optional_market_datetime(value: object, *, name: str) -> datetime | None:"
+    },
+    {
+      "line": 3191,
+      "declaration": "def _runtime_generation(value: object, *, name: str) -> UUID:"
+    },
+    {
+      "line": 3203,
+      "declaration": "def _legacy_resume_gaps(value: object) -> tuple[datetime, ...]:"
+    },
+    {
+      "line": 3221,
+      "declaration": "def _json_wire_default(value: object) -> object:"
+    },
+    {
+      "line": 3227,
+      "declaration": "def _close_pending_payload(value: str) -> tuple[date, dict[str, object]]:"
+    }
+  ],
+  "src/trade_plan_monitor/runtime/scheduler.py": [
+    {
+      "line": 31,
+      "declaration": "class DeadlineKind(StrEnum):"
+    },
+    {
+      "line": 39,
+      "declaration": "class MarketDeadline:"
+    },
+    {
+      "line": 48,
+      "declaration": "def __post_init__(self) -> None:"
+    },
+    {
+      "line": 73,
+      "declaration": "class MarketSessionScheduler:"
+    },
+    {
+      "line": 83,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 113,
+      "declaration": "def _validate_official_close_attempts(attempts: tuple[time, ...]) -> None:"
+    },
+    {
+      "line": 132,
+      "declaration": "def _calendar_state(self, trade_date: date) -> bool | None:"
+    },
+    {
+      "line": 140,
+      "declaration": "def _deadlines_for_open_date(self, trade_date: date) -> tuple[MarketDeadline, ...]:"
+    },
+    {
+      "line": 165,
+      "declaration": "def deadlines_for_date(self, trade_date: date) -> tuple[MarketDeadline, ...]:"
+    },
+    {
+      "line": 174,
+      "declaration": "def next_deadline(self, *, after: datetime | None = None) -> MarketDeadline | None:"
+    },
+    {
+      "line": 201,
+      "declaration": "async def wait_for_next(self, *, after: datetime | None = None) -> MarketDeadline | None:"
+    }
+  ],
+  "src/trade_plan_monitor/runtime/production.py": [
+    {
+      "line": 67,
+      "declaration": "def _load_active_plan(document: str) -> ExecutableTradePlan:"
+    },
+    {
+      "line": 79,
+      "declaration": "def create_explicit_runtime_evaluation_service("
+    },
+    {
+      "line": 92,
+      "declaration": "class _CertifiedTushareClient:"
+    },
+    {
+      "line": 95,
+      "declaration": "def __init__(self, client: object, current: Callable[[], bool]) -> None:"
+    },
+    {
+      "line": 99,
+      "declaration": "def __getattr__(self, operation: str):"
+    },
+    {
+      "line": 113,
+      "declaration": "def _ensure_recovery_complete(result: RecoveryBatchResult) -> None:"
+    },
+    {
+      "line": 124,
+      "declaration": "class _FreshIndexProvider:"
+    },
+    {
+      "line": 127,
+      "declaration": "def __init__(self, provider: TushareMarketIndexProvider, current: Callable[[], bool]) -> None:"
+    },
+    {
+      "line": 131,
+      "declaration": "async def acquire_index_data("
+    },
+    {
+      "line": 149,
+      "declaration": "class ProductionMonitorPipeline:"
+    },
+    {
+      "line": 152,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 258,
+      "declaration": "def _stock_certification_current(self) -> bool:"
+    },
+    {
+      "line": 266,
+      "declaration": "def _index_certification_current(self) -> bool:"
+    },
+    {
+      "line": 274,
+      "declaration": "def _persisted_active_plans(self) -> tuple[ExecutableTradePlan, ...]:"
+    },
+    {
+      "line": 290,
+      "declaration": "def active_plans("
+    },
+    {
+      "line": 305,
+      "declaration": "def active_symbols(self) -> tuple[str, ...]:"
+    },
+    {
+      "line": 308,
+      "declaration": "def deadline_plans(self) -> tuple[ExecutableTradePlan, ...]:"
+    },
+    {
+      "line": 313,
+      "declaration": "def is_open_on(self, trade_date: date) -> bool | None:"
+    },
+    {
+      "line": 317,
+      "declaration": "def _realtime_pending(self) -> bool:"
+    },
+    {
+      "line": 327,
+      "declaration": "def _next_deadline_due_at(self, deadline: MarketDeadline) -> datetime | None:"
+    },
+    {
+      "line": 350,
+      "declaration": "async def _repair_detected_gaps("
+    },
+    {
+      "line": 382,
+      "declaration": "async def _request(self, operation: TushareOperation, call: Callable[[], object], key: str):"
+    },
+    {
+      "line": 391,
+      "declaration": "async def refresh_references(self, trade_date: date) -> None:"
+    },
+    {
+      "line": 438,
+      "declaration": "async def recover_startup(self, trade_date: date) -> None:"
+    },
+    {
+      "line": 455,
+      "declaration": "async def _recover_pending_close_batches(self, startup_date: date) -> None:"
+    },
+    {
+      "line": 488,
+      "declaration": "async def fetch_official_daily(self, symbol: str, trade_date: date, attempt: int):"
+    },
+    {
+      "line": 497,
+      "declaration": "async def _reject_refetch(symbol: str, bucket_end: datetime):"
+    },
+    {
+      "line": 500,
+      "declaration": "def persist_minutes(self, bars: tuple[MinuteBar, ...]) -> None:"
+    },
+    {
+      "line": 505,
+      "declaration": "def load_minutes(self, symbol: str, *, start: datetime, end: datetime):"
+    },
+    {
+      "line": 509,
+      "declaration": "def persist_five_minute(self, bar: FiveMinuteBar) -> None:"
+    },
+    {
+      "line": 514,
+      "declaration": "async def run_deadline(self, deadline: MarketDeadline):"
+    },
+    {
+      "line": 582,
+      "declaration": "async def _refresh_dashboard_indexes("
+    }
+  ],
+  "src/trade_plan_monitor/runtime/symbol_service.py": [
+    {
+      "line": 47,
+      "declaration": "def _ceil_to_whole_second(value: datetime) -> datetime:"
+    },
+    {
+      "line": 54,
+      "declaration": "class SymbolHealthRestoreState(BaseModel):"
+    },
+    {
+      "line": 64,
+      "declaration": "def validate_identity(self) -> Self:"
+    },
+    {
+      "line": 72,
+      "declaration": "class _RuntimeContextValue(BaseModel):"
+    },
+    {
+      "line": 75,
+      "declaration": "def model_copy("
+    },
+    {
+      "line": 88,
+      "declaration": "class SymbolRuntimeContext(_RuntimeContextValue):"
+    },
+    {
+      "line": 98,
+      "declaration": "def validate_context(self) -> Self:"
+    },
+    {
+      "line": 113,
+      "declaration": "class RealtimeBatchResult(_RuntimeContextValue):"
+    },
+    {
+      "line": 124,
+      "declaration": "def context_for(self, symbol: str) -> SymbolRuntimeContext:"
+    },
+    {
+      "line": 131,
+      "declaration": "def validate_result(self) -> Self:"
+    },
+    {
+      "line": 141,
+      "declaration": "class SymbolService:"
+    },
+    {
+      "line": 144,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 183,
+      "declaration": "def restore_health("
+    },
+    {
+      "line": 211,
+      "declaration": "async def run_realtime_batch("
+    },
+    {
+      "line": 302,
+      "declaration": "async def _post_fetch_observed_at(self, requested_at: datetime) -> datetime:"
+    },
+    {
+      "line": 314,
+      "declaration": "def _build_symbol_context("
+    },
+    {
+      "line": 444,
+      "declaration": "def _blocked_batch("
+    },
+    {
+      "line": 494,
+      "declaration": "def _validated_active_symbols(value: object) -> tuple[str, ...]:"
+    },
+    {
+      "line": 508,
+      "declaration": "def _isolate_rows("
+    }
+  ],
+  "src/trade_plan_monitor/runtime/explicit_service.py": [
+    {
+      "line": 31,
+      "declaration": "class UnitOfWorkFactory(Protocol):"
+    },
+    {
+      "line": 32,
+      "declaration": "def __call__(self) -> UnitOfWork: ..."
+    },
+    {
+      "line": 35,
+      "declaration": "class StaleExplicitDecisionError(RuntimeError):"
+    },
+    {
+      "line": 41,
+      "declaration": "class ExplicitRuntimeCycleStatus(StrEnum):"
+    },
+    {
+      "line": 46,
+      "declaration": "class ExplicitRuntimeCycleResult(BaseModel):"
+    },
+    {
+      "line": 54,
+      "declaration": "class _CapturedContext(BaseModel):"
+    },
+    {
+      "line": 65,
+      "declaration": "class ExplicitRuntimeEvaluationService:"
+    },
+    {
+      "line": 68,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 85,
+      "declaration": "async def run_intraday_and_publish("
+    },
+    {
+      "line": 118,
+      "declaration": "def run_intraday("
+    },
+    {
+      "line": 205,
+      "declaration": "def _capture(self, plan: ExplicitTradePlan, target: datetime) -> _CapturedContext:"
+    },
+    {
+      "line": 267,
+      "declaration": "def _load_rule_states(self, plan: ExplicitTradePlan, revision: int):"
+    },
+    {
+      "line": 276,
+      "declaration": "def _require_active(work: UnitOfWork, plan: ExplicitTradePlan, revision: int | None):"
+    },
+    {
+      "line": 290,
+      "declaration": "def _contains_manual_risk(condition: object) -> bool:"
+    },
+    {
+      "line": 298,
+      "declaration": "def _manual_risk_value("
+    }
+  ],
+  "src/trade_plan_monitor/decision/explicit_conditions.py": [
+    {
+      "line": 34,
+      "declaration": "class ExplicitConditionEvidence(BaseModel):"
+    },
+    {
+      "line": 48,
+      "declaration": "def validate_shape(self) -> ExplicitConditionEvidence:"
+    },
+    {
+      "line": 63,
+      "declaration": "def _fact(key: str, value: object, unit: EvidenceUnit) -> EvidenceFact:"
+    },
+    {
+      "line": 67,
+      "declaration": "def _missing("
+    },
+    {
+      "line": 80,
+      "declaration": "def _current_bar("
+    },
+    {
+      "line": 99,
+      "declaration": "def _bars_are_adjacent("
+    },
+    {
+      "line": 127,
+      "declaration": "def _evaluate_range("
+    },
+    {
+      "line": 167,
+      "declaration": "def _evaluate_below("
+    },
+    {
+      "line": 198,
+      "declaration": "def _evaluate_volume_mean("
+    },
+    {
+      "line": 257,
+      "declaration": "def _logical_outcome("
+    },
+    {
+      "line": 274,
+      "declaration": "def evaluate_explicit_condition("
+    }
+  ],
+  "src/trade_plan_monitor/decision/explicit_rules.py": [
+    {
+      "line": 37,
+      "declaration": "class ExplicitExecutionCapabilityError(RuntimeError):"
+    },
+    {
+      "line": 43,
+      "declaration": "class _ExplicitValue(BaseModel):"
+    },
+    {
+      "line": 46,
+      "declaration": "def model_copy("
+    },
+    {
+      "line": 59,
+      "declaration": "class ExplicitInventorySnapshot(_ExplicitValue):"
+    },
+    {
+      "line": 72,
+      "declaration": "def fill_legacy_buy_only_shape(cls, value: object) -> object:"
+    },
+    {
+      "line": 83,
+      "declaration": "def validate_known_shape(self) -> Self:"
+    },
+    {
+      "line": 100,
+      "declaration": "class ExplicitRuleStateSnapshot(_ExplicitValue):"
+    },
+    {
+      "line": 110,
+      "declaration": "def validate_emission_shape(self) -> Self:"
+    },
+    {
+      "line": 116,
+      "declaration": "class ExplicitRuleStateTransition(_ExplicitValue):"
+    },
+    {
+      "line": 126,
+      "declaration": "def validate_revision_step(self) -> Self:"
+    },
+    {
+      "line": 132,
+      "declaration": "class ExplicitSignalIntent(_ExplicitValue):"
+    },
+    {
+      "line": 151,
+      "declaration": "def validate_next_step(self) -> Self:"
+    },
+    {
+      "line": 162,
+      "declaration": "class ExplicitRuleResult(_ExplicitValue):"
+    },
+    {
+      "line": 174,
+      "declaration": "class _ExplicitEvaluationPayload(_ExplicitValue):"
+    },
+    {
+      "line": 188,
+      "declaration": "def validate_identity(self) -> Self:"
+    },
+    {
+      "line": 217,
+      "declaration": "class ExplicitEvaluationResult(_ExplicitEvaluationPayload):"
+    },
+    {
+      "line": 223,
+      "declaration": "def build(cls, **payload: object) -> Self:"
+    },
+    {
+      "line": 235,
+      "declaration": "def validate_result_hash(self) -> Self:"
+    },
+    {
+      "line": 244,
+      "declaration": "def _result_digest(payload: Mapping[str, object]) -> str:"
+    },
+    {
+      "line": 249,
+      "declaration": "def _plan_is_active(plan: ExplicitTradePlan, target_date: date) -> bool:"
+    },
+    {
+      "line": 258,
+      "declaration": "def _state_for("
+    },
+    {
+      "line": 269,
+      "declaration": "def evaluate_explicit_rules("
+    },
+    {
+      "line": 413,
+      "declaration": "def _root_state("
+    },
+    {
+      "line": 427,
+      "declaration": "def _apply_conflicts("
+    }
+  ],
+  "src/trade_plan_monitor/notifications/channels.py": [
+    {
+      "line": 35,
+      "declaration": "class DeliveryChannel(StrEnum):"
+    },
+    {
+      "line": 43,
+      "declaration": "class ChannelErrorCode(StrEnum):"
+    },
+    {
+      "line": 56,
+      "declaration": "class ChannelDeliveryResult(BaseModel):"
+    },
+    {
+      "line": 68,
+      "declaration": "def validate_outcome(self) -> Self:"
+    },
+    {
+      "line": 77,
+      "declaration": "class NotificationChannel(Protocol):"
+    },
+    {
+      "line": 83,
+      "declaration": "async def deliver(self, event: NotificationEvent) -> ChannelDeliveryResult: ..."
+    },
+    {
+      "line": 86,
+      "declaration": "class WebhookConfig(BaseModel):"
+    },
+    {
+      "line": 103,
+      "declaration": "def model_copy("
+    },
+    {
+      "line": 119,
+      "declaration": "def remove_validation_inputs("
+    },
+    {
+      "line": 140,
+      "declaration": "def require_safe_endpoint(cls, value: AnyHttpUrl | None) -> AnyHttpUrl | None:"
+    },
+    {
+      "line": 155,
+      "declaration": "def normalize_allowlisted_hosts(cls, value: tuple[str, ...]) -> tuple[str, ...]:"
+    },
+    {
+      "line": 167,
+      "declaration": "def require_enabled_endpoint_in_allowlist(self) -> Self:"
+    },
+    {
+      "line": 178,
+      "declaration": "class InAppChannel:"
+    },
+    {
+      "line": 184,
+      "declaration": "async def deliver(self, event: NotificationEvent) -> ChannelDeliveryResult:"
+    },
+    {
+      "line": 189,
+      "declaration": "class ConsoleChannel:"
+    },
+    {
+      "line": 195,
+      "declaration": "def __init__(self, *, write_line: ConsoleWriter = print) -> None:"
+    },
+    {
+      "line": 200,
+      "declaration": "async def deliver(self, event: NotificationEvent) -> ChannelDeliveryResult:"
+    },
+    {
+      "line": 214,
+      "declaration": "class WebhookChannel:"
+    },
+    {
+      "line": 219,
+      "declaration": "def __init__(self, *, client: httpx.AsyncClient, config: WebhookConfig) -> None:"
+    },
+    {
+      "line": 228,
+      "declaration": "def enabled(self) -> bool:"
+    },
+    {
+      "line": 233,
+      "declaration": "async def deliver(self, event: NotificationEvent) -> ChannelDeliveryResult:"
+    },
+    {
+      "line": 272,
+      "declaration": "async def aclose(self) -> None:"
+    },
+    {
+      "line": 278,
+      "declaration": "def _webhook_payload(event: NotificationEvent) -> dict[str, object]:"
+    },
+    {
+      "line": 293,
+      "declaration": "def _http_result(status_code: int) -> ChannelDeliveryResult:"
+    },
+    {
+      "line": 318,
+      "declaration": "def _delivered("
+    },
+    {
+      "line": 332,
+      "declaration": "def _failed("
+    },
+    {
+      "line": 348,
+      "declaration": "def _require_event(event: NotificationEvent) -> None:"
+    },
+    {
+      "line": 353,
+      "declaration": "def _validation_error_without_inputs(error: ValidationError) -> ValidationError:"
+    }
+  ],
+  "src/trade_plan_monitor/notifications/outbox.py": [
+    {
+      "line": 54,
+      "declaration": "class OutboxError(RuntimeError):"
+    },
+    {
+      "line": 60,
+      "declaration": "class AlertIdentityConflictError(OutboxError):"
+    },
+    {
+      "line": 66,
+      "declaration": "class AlertNotFoundError(OutboxError):"
+    },
+    {
+      "line": 72,
+      "declaration": "class AlertRevisionConflictError(OutboxError):"
+    },
+    {
+      "line": 78,
+      "declaration": "class OutboxStorageError(OutboxError):"
+    },
+    {
+      "line": 84,
+      "declaration": "class AlertOutbox:"
+    },
+    {
+      "line": 87,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 108,
+      "declaration": "def enqueue(self, payload: AlertPayload) -> AlertEvent:"
+    },
+    {
+      "line": 196,
+      "declaration": "def enqueue_explicit(self, payload: ExplicitAlertPayload) -> ExplicitAlertEvent:"
+    },
+    {
+      "line": 269,
+      "declaration": "def has_dedup_key(self, dedup_key: str) -> bool:"
+    },
+    {
+      "line": 281,
+      "declaration": "def get(self, event_id: UUID) -> AlertEvent | ExplicitAlertEvent:"
+    },
+    {
+      "line": 290,
+      "declaration": "def is_current_actionable("
+    },
+    {
+      "line": 305,
+      "declaration": "def is_delivery_allowed("
+    },
+    {
+      "line": 328,
+      "declaration": "def _active_plan_for_event("
+    },
+    {
+      "line": 356,
+      "declaration": "def list_events("
+    },
+    {
+      "line": 430,
+      "declaration": "def replay_after("
+    },
+    {
+      "line": 454,
+      "declaration": "def acknowledge("
+    },
+    {
+      "line": 537,
+      "declaration": "def _deduplicated_event("
+    },
+    {
+      "line": 556,
+      "declaration": "def _deduplicated_explicit_event("
+    },
+    {
+      "line": 575,
+      "declaration": "def _now(self) -> datetime:"
+    },
+    {
+      "line": 582,
+      "declaration": "def _event_id(value: UUID) -> str:"
+    },
+    {
+      "line": 588,
+      "declaration": "def _dedup_key(value: str) -> str:"
+    },
+    {
+      "line": 611,
+      "declaration": "def _is_share_symbol(value: str) -> bool:"
+    },
+    {
+      "line": 622,
+      "declaration": "def _query_datetime(value: datetime) -> datetime:"
+    },
+    {
+      "line": 631,
+      "declaration": "def _audit_id(value: str) -> str:"
+    },
+    {
+      "line": 637,
+      "declaration": "def _payload_json(payload: AlertPayload | ExplicitAlertPayload) -> str:"
+    },
+    {
+      "line": 641,
+      "declaration": "def _semantic_payload(payload: AlertPayload | ExplicitAlertPayload) -> object:"
+    },
+    {
+      "line": 646,
+      "declaration": "def _semantic_value(value: object) -> object:"
+    },
+    {
+      "line": 684,
+      "declaration": "def _canonical_decimal(value: Decimal) -> str:"
+    },
+    {
+      "line": 702,
+      "declaration": "def _event_hash(event: AlertEvent | ExplicitAlertEvent) -> str:"
+    },
+    {
+      "line": 707,
+      "declaration": "def _event_from_row(row: AlertEventRow) -> AlertEvent | ExplicitAlertEvent:"
+    },
+    {
+      "line": 741,
+      "declaration": "def _canonical_json(value: object) -> str:"
+    }
+  ],
+  "src/trade_plan_monitor/web/plan_service.py": [
+    {
+      "line": 119,
+      "declaration": "class _PlanVersionDetails(Protocol):"
+    },
+    {
+      "line": 144,
+      "declaration": "class _ActivationState(Protocol):"
+    },
+    {
+      "line": 151,
+      "declaration": "class PersistentPlanWebLifecycle:"
+    },
+    {
+      "line": 154,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 170,
+      "declaration": "def operation_service(self) -> PersistentPlanWebLifecycle:"
+    },
+    {
+      "line": 173,
+      "declaration": "async def start(self) -> None:"
+    },
+    {
+      "line": 178,
+      "declaration": "async def stop(self) -> None:"
+    },
+    {
+      "line": 183,
+      "declaration": "async def list_plan_versions("
+    },
+    {
+      "line": 201,
+      "declaration": "async def get_plan_version(self, *, version_id: str) -> PlanVersionView | None:"
+    },
+    {
+      "line": 204,
+      "declaration": "async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None:"
+    },
+    {
+      "line": 207,
+      "declaration": "async def get_explicit_plan_runtime(self, *, symbol: str) -> ExplicitPlanRuntimeView | None:"
+    },
+    {
+      "line": 210,
+      "declaration": "async def save_plan_draft("
+    },
+    {
+      "line": 228,
+      "declaration": "async def confirm_plan_review("
+    },
+    {
+      "line": 241,
+      "declaration": "async def record_plan_extraction(self, result: PlanExtractionResult) -> None:"
+    },
+    {
+      "line": 251,
+      "declaration": "async def import_plan("
+    },
+    {
+      "line": 277,
+      "declaration": "async def activate_plan("
+    },
+    {
+      "line": 290,
+      "declaration": "async def deactivate_plan("
+    },
+    {
+      "line": 303,
+      "declaration": "async def submit_plan_extraction("
+    },
+    {
+      "line": 312,
+      "declaration": "async def get_plan_extraction(self, *, operation_id: str) -> PlanExtractionView | None:"
+    },
+    {
+      "line": 316,
+      "declaration": "def _start_sync(self) -> None:"
+    },
+    {
+      "line": 331,
+      "declaration": "def _stop_sync(self) -> None:"
+    },
+    {
+      "line": 338,
+      "declaration": "async def _run[ResultT]("
+    },
+    {
+      "line": 347,
+      "declaration": "async def _run_mutation[ResultT]("
+    },
+    {
+      "line": 381,
+      "declaration": "def _list_plan_versions_sync("
+    },
+    {
+      "line": 430,
+      "declaration": "def _get_plan_version_sync(self, *, version_id: str) -> PlanVersionView | None:"
+    },
+    {
+      "line": 435,
+      "declaration": "def _get_plan_activation_state_sync(self, *, symbol: str) -> ActivePlanView | None:"
+    },
+    {
+      "line": 448,
+      "declaration": "def _get_explicit_plan_runtime_sync(self, *, symbol: str) -> ExplicitPlanRuntimeView | None:"
+    },
+    {
+      "line": 503,
+      "declaration": "def _save_plan_sync("
+    },
+    {
+      "line": 578,
+      "declaration": "def _record_plan_extraction_sync("
+    },
+    {
+      "line": 591,
+      "declaration": "def _confirm_plan_review_sync("
+    },
+    {
+      "line": 631,
+      "declaration": "def _activate_plan_sync("
+    },
+    {
+      "line": 711,
+      "declaration": "def _deactivate_plan_sync("
+    },
+    {
+      "line": 744,
+      "declaration": "def _unit_of_work(self) -> SqlAlchemyUnitOfWork:"
+    },
+    {
+      "line": 750,
+      "declaration": "def _require_session_factory(self) -> sessionmaker[Session]:"
+    },
+    {
+      "line": 756,
+      "declaration": "def _plan_version_summary(record: object) -> PlanVersionSummary:"
+    },
+    {
+      "line": 772,
+      "declaration": "def _resolve_server_review("
+    },
+    {
+      "line": 902,
+      "declaration": "def _pending_edited_review("
+    },
+    {
+      "line": 920,
+      "declaration": "def _merge_review_confirmations("
+    },
+    {
+      "line": 925,
+      "declaration": "def identity(issue: DraftReviewIssue) -> tuple[object, str, bool]:"
+    },
+    {
+      "line": 954,
+      "declaration": "def _plan_version_view(record: object) -> PlanVersionView:"
+    },
+    {
+      "line": 992,
+      "declaration": "def _validated_plan_state("
+    },
+    {
+      "line": 1062,
+      "declaration": "def _validated_persisted_plan("
+    },
+    {
+      "line": 1088,
+      "declaration": "def _active_plan_view(record: object) -> ActivePlanView:"
+    },
+    {
+      "line": 1099,
+      "declaration": "def _require_web_safe_plan(plan: TradePlan | ExplicitPlanDraft) -> None:"
+    },
+    {
+      "line": 1104,
+      "declaration": "def _load_reviewable_plan(document: str) -> TradePlan | ExplicitPlanDraft:"
+    },
+    {
+      "line": 1111,
+      "declaration": "def _plan_review_confirmation_view("
+    },
+    {
+      "line": 1131,
+      "declaration": "def _shanghai_datetime(value: datetime) -> datetime:"
+    },
+    {
+      "line": 1137,
+      "declaration": "def _reject_incompatible_database(path: Path) -> None:"
+    }
+  ],
+  "src/trade_plan_monitor/web/alert_service.py": [
+    {
+      "line": 42,
+      "declaration": "class PersistentAlertOperationService:"
+    },
+    {
+      "line": 45,
+      "declaration": "def __init__("
+    },
+    {
+      "line": 56,
+      "declaration": "async def list_alerts("
+    },
+    {
+      "line": 83,
+      "declaration": "async def acknowledge_alert("
+    },
+    {
+      "line": 108,
+      "declaration": "async def evaluate_diagnostic("
+    },
+    {
+      "line": 117,
+      "declaration": "def _list_alerts_sync("
+    },
+    {
+      "line": 161,
+      "declaration": "def _acknowledge_alert_sync("
+    },
+    {
+      "line": 203,
+      "declaration": "def _current_market_date(self) -> date:"
+    },
+    {
+      "line": 214,
+      "declaration": "def _alert_record("
+    },
+    {
+      "line": 227,
+      "declaration": "def _position_prefill("
+    }
+  ]
+}

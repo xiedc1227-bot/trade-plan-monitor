@@ -1,0 +1,337 @@
+diff --git a/config/app.example.yaml b/config/app.example.yaml
+index 6ae31b9..afa7d55 100644
+--- a/config/app.example.yaml
++++ b/config/app.example.yaml
+@@ -20,7 +20,7 @@ ai:
+   profile: DEEPSEEK
+   display_name: DeepSeek
+   base_url: https://api.deepseek.com
+-  model: deepseek-v4-flash
++  model: deepseek-flash
+   additional_models:
+     - display_name: DeepSeek Pro
+       model: deepseek-v4-pro
+diff --git a/docs/specifications/monitoring/SPEC-ai-plan-drafting.md b/docs/specifications/monitoring/SPEC-ai-plan-drafting.md
+index efa9f20..f576c83 100644
+--- a/docs/specifications/monitoring/SPEC-ai-plan-drafting.md
++++ b/docs/specifications/monitoring/SPEC-ai-plan-drafting.md
+@@ -66,7 +66,7 @@ Stable first-release bounds are: base URL at most 2,048 characters; direct API k
+ 
+ ### Provider Adapter Contract
+ 
+-The adapter sends `POST {baseUrl}/chat/completions` with Bearer authentication, never sends tools, and returns model content only as untrusted raw text. The generic `OPENAI_COMPATIBLE` profile uses `messages`, `temperature`, `max_completion_tokens`, and `stream=false`. The default `DEEPSEEK` profile follows the current DeepSeek contract: it uses `max_tokens`, sets `thinking={"type":"disabled"}`, adds `response_format={"type":"json_object"}` for plan extraction, and keeps `stream=false`. DeepSeek defaults are `https://api.deepseek.com`, primary model `deepseek-v4-flash`, and the configured `deepseek-v4-pro` additional model; the user places the shared key in `ai.api_key` in the ignored `config/app.yaml`.
++The adapter sends `POST {baseUrl}/chat/completions` with Bearer authentication, never sends tools, and returns model content only as untrusted raw text. The generic `OPENAI_COMPATIBLE` profile uses `messages`, `temperature`, `max_completion_tokens`, and `stream=false`. The default `DEEPSEEK` profile follows the current DeepSeek contract: it uses `max_tokens`, sets `thinking={"type":"disabled"}`, adds `response_format={"type":"json_object"}` for plan extraction, and keeps `stream=false`. DeepSeek defaults are `https://api.deepseek.com`, primary model `deepseek-flash` (currently DeepSeek-V4.1-Flash), and the configured `deepseek-v4-pro` additional model. The legacy `deepseek-v4-flash` identifier remains a provider-side compatibility alias but is not the project default. The user places the shared key in `ai.api_key` in the ignored `config/app.yaml`.
+ 
+ Both Web and CLI use the non-empty `ai.api_key` value loaded directly from YAML. No environment-variable or separate-file credential fallback exists. The Web composition reads configuration once during startup, keeps it immutable for that server lifetime, and exposes extraction through `/plans`. The maintenance CLI keeps `ai test [--config PATH]` and `ai extract [--config PATH] --source FILE`; `test` sends one bounded connectivity request, while `extract` reads one strict UTF-8 regular source file, enforces byte and configured character limits, validates the returned draft, and prints it without activating it.
+ 
+diff --git a/docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md b/docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md
+index 59878d6..5d4932f 100644
+--- a/docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md
++++ b/docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md
+@@ -65,7 +65,7 @@ class AIProvider(Protocol):
+ 
+ ### 服务适配器契约
+ 
+-适配器使用 Bearer 鉴权发送 `POST {baseUrl}/chat/completions`，绝不发送工具，只把模型内容作为不可信原始文本返回。通用 `OPENAI_COMPATIBLE` profile 使用 `messages`、`temperature`、`max_completion_tokens` 和 `stream=false`。默认 `DEEPSEEK` profile 遵循 DeepSeek 当前契约：使用 `max_tokens`，设置 `thinking={"type":"disabled"}`，提取计划时增加 `response_format={"type":"json_object"}`，并保持 `stream=false`。DeepSeek 默认值为 `https://api.deepseek.com`、主模型 `deepseek-v4-flash` 和已配置的附加模型 `deepseek-v4-pro`；用户把共享密钥放在被忽略的 `config/app.yaml` 的 `ai.api_key` 中。
++适配器使用 Bearer 鉴权发送 `POST {baseUrl}/chat/completions`，绝不发送工具，只把模型内容作为不可信原始文本返回。通用 `OPENAI_COMPATIBLE` profile 使用 `messages`、`temperature`、`max_completion_tokens` 和 `stream=false`。默认 `DEEPSEEK` profile 遵循 DeepSeek 当前契约：使用 `max_tokens`，设置 `thinking={"type":"disabled"}`，提取计划时增加 `response_format={"type":"json_object"}`，并保持 `stream=false`。DeepSeek 默认值为 `https://api.deepseek.com`、主模型 `deepseek-flash`（当前对应 DeepSeek-V4.1-Flash）和已配置的附加模型 `deepseek-v4-pro`。旧标识 `deepseek-v4-flash` 仍是服务商侧的兼容别名，但不再作为项目默认值。用户把共享密钥放在被忽略的 `config/app.yaml` 的 `ai.api_key` 中。
+ 
+ Web 与 CLI 都使用从 YAML 直接读取的非空 `ai.api_key`，不存在环境变量或独立文件凭证后备。Web 组合在启动时只读取一次配置，并在该次服务生命周期内保持不变，通过 `/plans` 提供提取。维护用途的 CLI 保留 `ai test [--config 路径]` 和 `ai extract [--config 路径] --source 文件`；`test` 发送一次有边界的连通性请求，`extract` 读取严格 UTF-8 普通来源文件、检查字节数和配置字符上限、校验返回草稿并输出，但不会激活计划。
+ 
+diff --git a/src/trade_plan_monitor/config.py b/src/trade_plan_monitor/config.py
+index e02b8c3..aa2f65b 100644
+--- a/src/trade_plan_monitor/config.py
++++ b/src/trade_plan_monitor/config.py
+@@ -145,7 +145,7 @@ class AIConfiguration(_ConfigurationModel):
+         validate_default=True,
+     )
+     model: str = Field(
+-        default="deepseek-v4-flash",
++        default="deepseek-flash",
+         min_length=1,
+         max_length=200,
+         pattern=r"^[^\s\x00-\x1f\x7f]+$",
+diff --git a/tests/unit/test_config.py b/tests/unit/test_config.py
+index c5036e3..2009eb4 100644
+--- a/tests/unit/test_config.py
++++ b/tests/unit/test_config.py
+@@ -34,7 +34,7 @@ def test_empty_yaml_uses_loopback_web_and_unconfigured_credentials(tmp_path: Pat
+     assert config.ai.api_key is None
+     assert config.ai.profile is AIProviderProfile.DEEPSEEK
+     assert str(config.ai.base_url) == "https://api.deepseek.com/"
+-    assert config.ai.model == "deepseek-v4-flash"
++    assert config.ai.model == "deepseek-flash"
+ 
+ 
+ def test_yaml_accepts_direct_credentials(tmp_path: Path) -> None:
+@@ -149,13 +149,13 @@ def test_example_configuration_is_valid_and_contains_direct_placeholders() -> No
+     assert config.ai.profile is AIProviderProfile.DEEPSEEK
+     assert config.ai.display_name == "DeepSeek"
+     assert str(config.ai.base_url) == "https://api.deepseek.com/"
+-    assert config.ai.model == "deepseek-v4-flash"
++    assert config.ai.model == "deepseek-flash"
+ 
+     provider_config = config.ai.to_provider_config()
+     assert provider_config is not None
+     assert provider_config.display_name == "DeepSeek"
+     assert str(provider_config.base_url) == "https://api.deepseek.com/"
+-    assert provider_config.model == "deepseek-v4-flash"
++    assert provider_config.model == "deepseek-flash"
+     assert [model.model for model in config.ai.additional_models] == ["deepseek-v4-pro"]
+ 
+ 
+@@ -174,7 +174,7 @@ def test_ai_composition_selects_the_configured_profile_without_reading_the_secre
+ 
+     assert binding is not None
+     assert binding.profile is AIProviderProfile.DEEPSEEK
+-    assert binding.config.model == "deepseek-v4-flash"
++    assert binding.config.model == "deepseek-flash"
+ 
+ 
+ def test_direct_ai_key_drives_provider_without_project_secret_file(
+diff --git a/web/src/components/market-index/MarketIndexSparkline.vue b/web/src/components/market-index/MarketIndexSparkline.vue
+index b295c49..463e13e 100644
+--- a/web/src/components/market-index/MarketIndexSparkline.vue
++++ b/web/src/components/market-index/MarketIndexSparkline.vue
+@@ -14,6 +14,7 @@ import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "v
+ 
+ import type { MarketIndexBarView } from "../../api/generated";
+ import {
++  buildMarketIndexChartPoints,
+   calculateIndexAxisBounds,
+   marketIndexDirectionColor,
+   marketIndexShowSymbol,
+@@ -90,9 +91,9 @@ function buildOption(
+   priorClosePoints: string | null,
+   sessionChangeRatio: string | null,
+ ): EChartsCoreOption {
+-  const visibleBars = bars.filter((bar) => Number.isFinite(Number(bar.closePoints)));
++  const points = buildMarketIndexChartPoints(bars);
+   const priorClose = priorClosePoints === null ? null : Number(priorClosePoints);
+-  const values = visibleBars.map((bar) => Number(bar.closePoints));
++  const values = points.map((point) => point.value);
+   const bounds = calculateIndexAxisBounds(values, Number.isFinite(priorClose) ? priorClose : null);
+   const trendColor = marketIndexDirectionColor(sessionChangeRatio);
+   return {
+@@ -109,7 +110,7 @@ function buildOption(
+           color: "#0b1114",
+           formatter: (parameters: { value: number }) => Number(parameters.value).toFixed(2),
+           padding: [2, 4],
+-          show: visibleBars.length > 0,
++          show: points.length > 0,
+         },
+         emphasis: { disabled: true },
+         lineStyle: { color: trendColor, width: 2 },
+@@ -123,7 +124,7 @@ function buildOption(
+             }
+           : undefined,
+         name: props.displayName,
+-        showSymbol: marketIndexShowSymbol(visibleBars.length),
++        showSymbol: marketIndexShowSymbol(points.length),
+         symbolSize: 6,
+         type: "line",
+       },
+@@ -145,11 +146,15 @@ function buildOption(
+       valueFormatter: (value: unknown) => Number(value).toFixed(2),
+     },
+     xAxis: {
+-      axisLabel: { color: "#a8b4b3", formatter: (value: string) => value.slice(11, 16) },
++      axisLabel: {
++        color: "#a8b4b3",
++        formatter: (value: string) => value.slice(11, 16),
++        showMinLabel: true,
++      },
+       axisLine: { lineStyle: { color: "#405158" } },
+       axisTick: { show: false },
+       boundaryGap: false,
+-      data: visibleBars.map((bar) => bar.barAt),
++      data: points.map((point) => point.at),
+       type: "category",
+     },
+     yAxis: {
+diff --git a/web/src/components/market-index/marketIndexChartOptions.ts b/web/src/components/market-index/marketIndexChartOptions.ts
+index 1509681..162af8a 100644
+--- a/web/src/components/market-index/marketIndexChartOptions.ts
++++ b/web/src/components/market-index/marketIndexChartOptions.ts
+@@ -1,8 +1,15 @@
++import type { MarketIndexBarView } from "../../api/generated";
++
+ export interface IndexAxisBounds {
+   readonly maximum: number;
+   readonly minimum: number;
+ }
+ 
++export interface MarketIndexChartPoint {
++  readonly at: string;
++  readonly value: number;
++}
++
+ export type MarketIndexDirection = "down" | "flat" | "up";
+ 
+ const directionColors: Readonly<Record<MarketIndexDirection, string>> = Object.freeze({
+@@ -11,6 +18,29 @@ const directionColors: Readonly<Record<MarketIndexDirection, string>> = Object.f
+   up: "#e45d43",
+ });
+ 
++const openingBucketAt = /^(\d{4}-\d{2}-\d{2})T09:35:00(?:\.\d{1,6})?\+08:00$/;
++
++export function buildMarketIndexChartPoints(
++  bars: readonly MarketIndexBarView[],
++): readonly MarketIndexChartPoint[] {
++  const points = bars.flatMap((bar) => {
++    const value = Number(bar.closePoints);
++    return Number.isFinite(value) ? [{ at: bar.barAt, value }] : [];
++  });
++  const firstBar = bars[0];
++  if (firstBar === undefined || !Number.isFinite(Number(firstBar.closePoints))) {
++    return points;
++  }
++  const openingMatch = openingBucketAt.exec(firstBar.barAt);
++  const openingValue = Number(firstBar.openPoints);
++  if (openingMatch === null || !Number.isFinite(openingValue)) return points;
++
++  return [
++    { at: `${openingMatch[1]}T09:30:00+08:00`, value: openingValue },
++    ...points,
++  ];
++}
++
+ export function marketIndexDirection(
+   sessionChangeRatio: string | null | undefined,
+ ): MarketIndexDirection {
+diff --git a/web/src/layouts/AppShell.vue b/web/src/layouts/AppShell.vue
+index 71a430f..e016dcc 100644
+--- a/web/src/layouts/AppShell.vue
++++ b/web/src/layouts/AppShell.vue
+@@ -387,6 +387,10 @@ onBeforeUnmount(() => {
+   outline: none;
+ }
+ 
++.app-shell__main :deep(h1[tabindex="-1"]:focus-visible) {
++  outline: none;
++}
++
+ @media (min-width: 48rem) {
+   .app-shell__desktop-navigation {
+     display: block;
+diff --git a/web/tests/e2e/accessibility.spec.ts b/web/tests/e2e/accessibility.spec.ts
+index d41533a..c6b26a0 100644
+--- a/web/tests/e2e/accessibility.spec.ts
++++ b/web/tests/e2e/accessibility.spec.ts
+@@ -143,7 +143,12 @@ test("loads system health through the production /system route", async ({ page }
+   });
+ 
+   await page.goto(`${baseUrl}/system`);
+-  await expect(page.getByRole("heading", { level: 1, name: "系统健康" })).toBeVisible();
++  const pageHeading = page.getByRole("heading", { level: 1, name: "系统健康" });
++  await expect(pageHeading).toBeVisible();
++  await expect(pageHeading).toBeFocused();
++  expect(
++    await pageHeading.evaluate((element) => getComputedStyle(element).outlineStyle),
++  ).toBe("none");
+   await expect(page).toHaveTitle("系统健康 · Trade Plan Monitor");
+   expect(healthRequests).toBe(1);
+   expect(consoleFailures).toEqual([]);
+diff --git a/web/tests/e2e/dashboard.spec.ts b/web/tests/e2e/dashboard.spec.ts
+index 47198f2..46840bc 100644
+--- a/web/tests/e2e/dashboard.spec.ts
++++ b/web/tests/e2e/dashboard.spec.ts
+@@ -201,12 +201,20 @@ test.beforeEach(async ({ page }) => {
+     await route.fulfill({
+       body: JSON.stringify({
+         hasMore: false,
+-        items: [{
+-          amount: null, barAt: "2026-09-02T10:35:00+08:00", closePoints: "1234.56",
+-          highPoints: "1235.20", indexCode, interval: "FIVE_MINUTE",
+-          lowPoints: "1229.90", observedAt: "2026-09-02T10:35:02+08:00", openPoints: "1230.10",
+-          providerRevision: 3, sourceKind: "PROVISIONAL", volume: "1000",
+-        }],
++        items: [
++          {
++            amount: null, barAt: "2026-09-02T09:35:00+08:00", closePoints: "1231.25",
++            highPoints: "1235.20", indexCode, interval: "FIVE_MINUTE",
++            lowPoints: "1229.90", observedAt: "2026-09-02T10:35:02+08:00", openPoints: "1230.10",
++            providerRevision: 3, sourceKind: "PROVISIONAL", volume: "1000",
++          },
++          {
++            amount: null, barAt: "2026-09-02T10:35:00+08:00", closePoints: "1234.56",
++            highPoints: "1235.20", indexCode, interval: "FIVE_MINUTE",
++            lowPoints: "1229.90", observedAt: "2026-09-02T10:35:02+08:00", openPoints: "1231.25",
++            providerRevision: 3, sourceKind: "PROVISIONAL", volume: "1000",
++          },
++        ],
+         limit: 64, nextCursor: null, snapshotHash: "a".repeat(64),
+       }),
+       contentType: "application/json; charset=utf-8",
+diff --git a/web/tests/unit/AppShell.spec.ts b/web/tests/unit/AppShell.spec.ts
+index e34ac78..5742bcf 100644
+--- a/web/tests/unit/AppShell.spec.ts
++++ b/web/tests/unit/AppShell.spec.ts
+@@ -280,6 +280,14 @@ describe("AppShell", () => {
+     );
+   });
+ 
++  it("suppresses the focus ring on the programmatically focused route heading", () => {
++    const source = readFileSync(resolve(process.cwd(), "src/layouts/AppShell.vue"), "utf8");
++
++    expect(source).toMatch(
++      /\.app-shell__main\s+:deep\(h1\[tabindex="-1"\]:focus-visible\)\s*\{[^}]*outline:\s*none;/s,
++    );
++  });
++
+   it("styles a reachable service with unavailable monitoring as a warning", () => {
+     const source = readFileSync(resolve(process.cwd(), "src/layouts/AppShell.vue"), "utf8");
+ 
+diff --git a/web/tests/unit/marketIndexChartOptions.spec.ts b/web/tests/unit/marketIndexChartOptions.spec.ts
+index 04dfea2..5091075 100644
+--- a/web/tests/unit/marketIndexChartOptions.spec.ts
++++ b/web/tests/unit/marketIndexChartOptions.spec.ts
+@@ -1,6 +1,8 @@
+ import { describe, expect, it } from "vitest";
+ 
++import type { MarketIndexBarView } from "../../src/api/generated";
+ import {
++  buildMarketIndexChartPoints,
+   calculateIndexAxisBounds,
+   marketIndexDirection,
+   marketIndexDirectionColor,
+@@ -8,7 +10,40 @@ import {
+   marketIndexValueDirection,
+ } from "../../src/components/market-index/marketIndexChartOptions";
+ 
++const openingBar = Object.freeze({
++  amount: "1000",
++  barAt: "2026-09-11T09:35:00.000000+08:00",
++  closePoints: "3320.25",
++  highPoints: "3322.00",
++  indexCode: "399006.SZ",
++  interval: "FIVE_MINUTE",
++  lowPoints: "3310.50",
++  observedAt: "2026-09-11T09:35:12.000000+08:00",
++  openPoints: "3312.75",
++  providerRevision: 1,
++  sourceKind: "PROVISIONAL",
++  volume: "100",
++} satisfies MarketIndexBarView);
++
+ describe("market index chart options", () => {
++  it("starts an opening five-minute series at 09:30 with the opening price", () => {
++    expect(buildMarketIndexChartPoints([openingBar])).toEqual([
++      { at: "2026-09-11T09:30:00+08:00", value: 3312.75 },
++      { at: "2026-09-11T09:35:00.000000+08:00", value: 3320.25 },
++    ]);
++  });
++
++  it("does not invent an opening point when the 09:35 bar is unavailable", () => {
++    const laterBar = Object.freeze({
++      ...openingBar,
++      barAt: "2026-09-11T09:40:00.000000+08:00",
++    });
++
++    expect(buildMarketIndexChartPoints([laterBar])).toEqual([
++      { at: "2026-09-11T09:40:00.000000+08:00", value: 3320.25 },
++    ]);
++  });
++
+   it("keeps a prior close above the intraday range inside the visible y-axis", () => {
+     const bounds = calculateIndexAxisBounds([3931.4, 3948.015, 3934.375], 3951.5068);
+ 

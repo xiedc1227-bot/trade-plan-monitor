@@ -1,0 +1,4 @@
+
+> trade-plan-monitor-web@0.1.0 type-check
+> vue-tsc --noEmit -p tsconfig.json
+

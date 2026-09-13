@@ -1,0 +1,3868 @@
+{
+  "transition": "active",
+  "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi",
+  "records": [
+    {
+      "process": {
+        "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi",
+        "pid": 44852,
+        "resumed": false,
+        "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi\\monitor.sqlite3",
+        "config": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi\\config\\app.yaml",
+        "provider": "IN_PROCESS_FAKE",
+        "now": "2026-09-14T10:04:15+08:00",
+        "sdkCalls": [
+          "trade_cal"
+        ],
+        "aiRequests": [],
+        "deadlines": [
+          "2026-09-14T10:05:12+08:00"
+        ]
+      }
+    },
+    {
+      "checkpoint": "10:10",
+      "runtimeStatus": 200,
+      "runtime": {
+        "symbol": "003043.SZ",
+        "planVersionId": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "status": "CURRENT",
+        "evaluatedAt": "2026-09-14T10:10:15+08:00",
+        "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+        "ruleOutcomes": [
+          {
+            "ruleId": "buy-100",
+            "action": "BUY",
+            "conditionCode": "ALL",
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "outcome": "SATISFIED",
+            "missingInputs": [],
+            "blockers": [],
+            "suppressionReason": null
+          },
+          {
+            "ruleId": "sell-100",
+            "action": "SELL",
+            "conditionCode": "COMPLETED_CLOSE_IN_RANGE",
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "UNSATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 990,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:10:00+08:00"
+              ]
+            },
+            "outcome": "UNSATISFIED",
+            "missingInputs": [],
+            "blockers": [
+              "CONDITION_UNSATISFIED"
+            ],
+            "suppressionReason": null
+          },
+          {
+            "ruleId": "risk-950",
+            "action": "RISK_ALERT",
+            "conditionCode": "COMPLETED_CLOSE_BELOW",
+            "conditionEvidence": {
+              "planPath": "rules[2].condition",
+              "code": "COMPLETED_CLOSE_BELOW",
+              "outcome": "UNSATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 990,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "price_fen",
+                  "value": 950,
+                  "unit": "FEN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:10:00+08:00"
+              ]
+            },
+            "outcome": "UNSATISFIED",
+            "missingInputs": [],
+            "blockers": [
+              "CONDITION_UNSATISFIED"
+            ],
+            "suppressionReason": null
+          }
+        ]
+      },
+      "alerts": {
+        "items": [
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+            "sequence": 18,
+            "dedupKey": "00d324dc6e94fbfb222af6175490ac9965950908ded2363896eefc5377e3400d",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:10:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          }
+        ],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 1
+      },
+      "inventory": {
+        "symbol": "003043.SZ",
+        "status": "KNOWN",
+        "asOfTradeDate": "2026-09-14",
+        "cutoff": "2026-09-14T10:10:15+08:00",
+        "inventoryRevision": 1,
+        "totalQuantity": 100,
+        "sellableQuantity": 100,
+        "confirmationId": "4ad6b66f-c3ac-4cd4-b469-8faf911469f4",
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+        "includedLotIds": [],
+        "openingBalances": [
+          {
+            "openingBalanceId": "c1d1f8a3-ef2d-4e79-96e2-0e581bb35584",
+            "symbol": "003043.SZ",
+            "originalQuantity": 100,
+            "remainingQuantity": 100,
+            "sellableFrom": "2026-09-14",
+            "revision": 0
+          }
+        ],
+        "missingReasons": []
+      }
+    },
+    {
+      "original": {
+        "id": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+        "planId": "synthetic-r11-api",
+        "version": 2,
+        "symbol": "003043.SZ",
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "status": "ACTIVE",
+        "canActivate": true,
+        "revision": 1,
+        "createdAt": "2026-09-14T10:04:15+08:00",
+        "planJson": "{\"activation\":{\"mode\":\"TRADING_DAY\",\"trading_day\":\"2026-09-14\"},\"conflict_policy\":{\"risk_conflict\":\"RISK_ONLY\",\"trade_conflict\":\"BLOCK_BOTH\"},\"execution_mode\":\"EXPLICIT_RULES\",\"execution_version\":\"explicit-rules-v1\",\"market\":\"SZSE\",\"metadata\":{\"reference_price_fen\":null,\"report_at\":null},\"monitoring\":{\"indicator_formula_version\":\"ta-v1\",\"timeframe_minutes\":5},\"name\":\"SYNTHETIC R11 API\",\"plan_id\":\"synthetic-r11-api\",\"position\":{\"inventory_scope\":\"ALL_REGISTERED\",\"lot_size\":100,\"max_qty\":300},\"rules\":[{\"action\":{\"quantity\":100,\"type\":\"BUY\"},\"condition\":{\"conditions\":[{\"high_fen\":1000,\"include_high\":true,\"include_low\":true,\"low_fen\":980,\"type\":\"COMPLETED_CLOSE_IN_RANGE\"},{\"history_scope\":\"CONTIGUOUS_TRADING_BARS\",\"minimum_ratio\":\"1.5\",\"type\":\"VOLUME_TO_MEAN_GTE\",\"window_bars\":5}],\"type\":\"ALL\"},\"confirmation\":{\"kind\":\"COMPLETED_BAR_CLOSE\",\"timeframe_minutes\":5},\"repeat_policy\":{\"mode\":\"EACH_QUALIFYING_BAR\"},\"rule_id\":\"buy-100\",\"safety_conditions\":null},{\"action\":{\"inventory_scope\":\"ALL_REGISTERED\",\"quantity\":100,\"type\":\"SELL\"},\"condition\":{\"high_fen\":1100,\"include_high\":true,\"include_low\":true,\"low_fen\":1080,\"type\":\"COMPLETED_CLOSE_IN_RANGE\"},\"confirmation\":{\"kind\":\"COMPLETED_BAR_CLOSE\",\"timeframe_minutes\":5},\"repeat_policy\":{\"mode\":\"EACH_QUALIFYING_BAR\"},\"rule_id\":\"sell-100\",\"safety_conditions\":null},{\"action\":{\"type\":\"RISK_ALERT\"},\"condition\":{\"price_fen\":950,\"type\":\"COMPLETED_CLOSE_BELOW\"},\"confirmation\":{\"kind\":\"COMPLETED_BAR_CLOSE\",\"timeframe_minutes\":5},\"repeat_policy\":{\"mode\":\"EACH_QUALIFYING_BAR\"},\"rule_id\":\"risk-950\",\"safety_conditions\":null}],\"schema_version\":3,\"symbol\":\"003043.SZ\",\"version\":2}",
+        "sourceText": "003043.SZ当前持仓100股，均为测试日前已持有且当日可卖；\n最大计划持仓300股。\n当一根已完成的5分钟K线收盘价处于9.80至10.00元之间，\n包含两端边界，且该根成交量不低于前5根已完成5分钟K线\n平均成交量的1.5倍时，提醒买入100股。\n当已完成5分钟K线收盘价处于10.80至11.00元之间，\n包含两端边界时，提醒卖出100股。\n当已完成5分钟K线收盘价低于9.50元时，发出风险提醒。\n提醒及确认收到提醒不代表成交，未登记成交时持仓不变。",
+        "reviewIssues": [],
+        "validationIssues": [],
+        "contentHash": "2e7479a267e3efd47fc861b6e1b858809b3c2a074335db2087f6a765f57ef033",
+        "sourceHash": "0b8b389b9b083adff268186c2d6ac8a2589b4ad02e0b4d3b5b8ca37ce1452191",
+        "reviewEvidenceHash": "2282cbbac641c18a4f50e5ea612fea64a52f5bc113798146a7eaf26094bac917",
+        "reviewRevision": 1,
+        "reviewId": "a07899de-50c4-4afd-a8ab-a7095e99a116",
+        "mapping": {
+          "mappingVersion": "plan-mapping-v2",
+          "sourceClauses": [
+            {
+              "clauseId": "clause-32ab81ca770a5c6e",
+              "start": 0,
+              "end": 18,
+              "excerpt": "003043.SZ当前持仓100股，",
+              "disposition": "MAPPED",
+              "paths": [
+                "symbol"
+              ]
+            },
+            {
+              "clauseId": "clause-9aeafc2761e2931a",
+              "start": 18,
+              "end": 33,
+              "excerpt": "均为测试日前已持有且当日可卖；",
+              "disposition": "UNRESOLVED",
+              "paths": []
+            },
+            {
+              "clauseId": "clause-65679715d973e211",
+              "start": 34,
+              "end": 45,
+              "excerpt": "最大计划持仓300股。",
+              "disposition": "MAPPED",
+              "paths": [
+                "position.max_qty"
+              ]
+            },
+            {
+              "clauseId": "clause-3ae0a673aa7913b5",
+              "start": 46,
+              "end": 77,
+              "excerpt": "当一根已完成的5分钟K线收盘价处于9.80至10.00元之间，",
+              "disposition": "MAPPED",
+              "paths": [
+                "monitoring.timeframe_minutes",
+                "rules[0].condition.conditions[0].type",
+                "rules[0].condition.conditions[0].low_fen",
+                "rules[0].condition.conditions[0].high_fen",
+                "rules[0].confirmation.kind",
+                "rules[0].confirmation.timeframe_minutes"
+              ]
+            },
+            {
+              "clauseId": "clause-bbb0e32b5a9cc4b4",
+              "start": 78,
+              "end": 85,
+              "excerpt": "包含两端边界，",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[0].condition.conditions[0].include_low",
+                "rules[0].condition.conditions[0].include_high"
+              ]
+            },
+            {
+              "clauseId": "clause-d30d310a8c9ca22d",
+              "start": 85,
+              "end": 105,
+              "excerpt": "且该根成交量不低于前5根已完成5分钟K线",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[0].condition.type",
+                "rules[0].condition.conditions[1].type",
+                "rules[0].condition.conditions[1].window_bars",
+                "rules[0].condition"
+              ]
+            },
+            {
+              "clauseId": "clause-eac4f96f10d41930",
+              "start": 106,
+              "end": 118,
+              "excerpt": "平均成交量的1.5倍时，",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[0].condition.conditions[1].minimum_ratio"
+              ]
+            },
+            {
+              "clauseId": "clause-5ae98b1b47866436",
+              "start": 118,
+              "end": 127,
+              "excerpt": "提醒买入100股。",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[0].action.type",
+                "rules[0].action.quantity"
+              ]
+            },
+            {
+              "clauseId": "clause-b5c4707eb9cfb303",
+              "start": 128,
+              "end": 157,
+              "excerpt": "当已完成5分钟K线收盘价处于10.80至11.00元之间，",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[1].condition.type",
+                "rules[1].condition.low_fen",
+                "rules[1].condition.high_fen",
+                "rules[1].confirmation.kind",
+                "rules[1].confirmation.timeframe_minutes"
+              ]
+            },
+            {
+              "clauseId": "clause-ec82437425d10d44",
+              "start": 158,
+              "end": 166,
+              "excerpt": "包含两端边界时，",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[1].condition.include_low",
+                "rules[1].condition.include_high"
+              ]
+            },
+            {
+              "clauseId": "clause-002fcc97746611fc",
+              "start": 166,
+              "end": 175,
+              "excerpt": "提醒卖出100股。",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[1].action.type",
+                "rules[1].action.quantity",
+                "rules[1].action.inventory_scope"
+              ]
+            },
+            {
+              "clauseId": "clause-8f80074b9a81467b",
+              "start": 176,
+              "end": 197,
+              "excerpt": "当已完成5分钟K线收盘价低于9.50元时，",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[2].condition.type",
+                "rules[2].condition.price_fen",
+                "rules[2].confirmation.kind",
+                "rules[2].confirmation.timeframe_minutes"
+              ]
+            },
+            {
+              "clauseId": "clause-bdfe4536a0cbae53",
+              "start": 197,
+              "end": 204,
+              "excerpt": "发出风险提醒。",
+              "disposition": "MAPPED",
+              "paths": [
+                "rules[2].action.type"
+              ]
+            },
+            {
+              "clauseId": "clause-030e4f2489148e6f",
+              "start": 205,
+              "end": 220,
+              "excerpt": "提醒及确认收到提醒不代表成交，",
+              "disposition": "UNRESOLVED",
+              "paths": []
+            },
+            {
+              "clauseId": "clause-abb79423936e3cd0",
+              "start": 220,
+              "end": 231,
+              "excerpt": "未登记成交时持仓不变。",
+              "disposition": "UNRESOLVED",
+              "paths": []
+            }
+          ],
+          "fieldBindings": [
+            {
+              "path": "schema_version",
+              "value": 3,
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "execution_mode",
+              "value": "EXPLICIT_RULES",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "execution_version",
+              "value": "explicit-rules-v1",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "plan_id",
+              "value": "synthetic-r11-api",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "version",
+              "value": 2,
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "symbol",
+              "value": "003043.SZ",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-32ab81ca770a5c6e"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "name",
+              "value": "SYNTHETIC R11 API",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "market",
+              "value": "SZSE",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "position.inventory_scope",
+              "value": "ALL_REGISTERED",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "position.lot_size",
+              "value": 100,
+              "unit": "SHARES",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "position.max_qty",
+              "value": 300,
+              "unit": "SHARES",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-65679715d973e211"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "monitoring.timeframe_minutes",
+              "value": 5,
+              "unit": "MINUTES",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-3ae0a673aa7913b5"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "monitoring.indicator_formula_version",
+              "value": "ta-v1",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "rules[0].rule_id",
+              "value": "buy-100",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "rules[0].condition.type",
+              "value": "ALL",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-d30d310a8c9ca22d"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[0].type",
+              "value": "COMPLETED_CLOSE_IN_RANGE",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-3ae0a673aa7913b5"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[0].low_fen",
+              "value": 980,
+              "unit": "FEN",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-3ae0a673aa7913b5"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[0].high_fen",
+              "value": 1000,
+              "unit": "FEN",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-3ae0a673aa7913b5"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[0].include_low",
+              "value": true,
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-bbb0e32b5a9cc4b4"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[0].include_high",
+              "value": true,
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-bbb0e32b5a9cc4b4"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[1].type",
+              "value": "VOLUME_TO_MEAN_GTE",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-d30d310a8c9ca22d"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[1].window_bars",
+              "value": 5,
+              "unit": "BARS",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-d30d310a8c9ca22d"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[1].minimum_ratio",
+              "value": "1.5",
+              "unit": "RATIO",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-eac4f96f10d41930"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].action.type",
+              "value": "BUY",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-5ae98b1b47866436"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].action.quantity",
+              "value": 100,
+              "unit": "SHARES",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-5ae98b1b47866436"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].confirmation.kind",
+              "value": "COMPLETED_BAR_CLOSE",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-3ae0a673aa7913b5"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].confirmation.timeframe_minutes",
+              "value": 5,
+              "unit": "MINUTES",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-3ae0a673aa7913b5"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].rule_id",
+              "value": "sell-100",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "rules[1].condition.type",
+              "value": "COMPLETED_CLOSE_IN_RANGE",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-b5c4707eb9cfb303"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].condition.low_fen",
+              "value": 1080,
+              "unit": "FEN",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-b5c4707eb9cfb303"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].condition.high_fen",
+              "value": 1100,
+              "unit": "FEN",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-b5c4707eb9cfb303"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].condition.include_low",
+              "value": true,
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-ec82437425d10d44"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].condition.include_high",
+              "value": true,
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-ec82437425d10d44"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].action.type",
+              "value": "SELL",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-002fcc97746611fc"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].action.quantity",
+              "value": 100,
+              "unit": "SHARES",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-002fcc97746611fc"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].action.inventory_scope",
+              "value": "ALL_REGISTERED",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-002fcc97746611fc"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].confirmation.kind",
+              "value": "COMPLETED_BAR_CLOSE",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-b5c4707eb9cfb303"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[1].confirmation.timeframe_minutes",
+              "value": 5,
+              "unit": "MINUTES",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-b5c4707eb9cfb303"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[2].rule_id",
+              "value": "risk-950",
+              "unit": "NONE",
+              "origin": "CONTRACT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": null,
+              "contractId": "explicit-rules-v1"
+            },
+            {
+              "path": "rules[2].condition.type",
+              "value": "COMPLETED_CLOSE_BELOW",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-8f80074b9a81467b"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[2].condition.price_fen",
+              "value": 950,
+              "unit": "FEN",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-8f80074b9a81467b"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[2].action.type",
+              "value": "RISK_ALERT",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-bdfe4536a0cbae53"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[2].confirmation.kind",
+              "value": "COMPLETED_BAR_CLOSE",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-8f80074b9a81467b"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[2].confirmation.timeframe_minutes",
+              "value": 5,
+              "unit": "MINUTES",
+              "origin": "SOURCE",
+              "bindingKind": "VALUE",
+              "clauseIds": [
+                "clause-8f80074b9a81467b"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition",
+              "value": "ALL",
+              "unit": "NONE",
+              "origin": "SOURCE",
+              "bindingKind": "STRUCTURE",
+              "clauseIds": [
+                "clause-d30d310a8c9ca22d"
+              ],
+              "supplementId": null,
+              "contractId": null
+            },
+            {
+              "path": "activation.mode",
+              "value": "TRADING_DAY",
+              "unit": "NONE",
+              "origin": "USER_SUPPLEMENT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": "user-supplement-1789271604993-0",
+              "contractId": null
+            },
+            {
+              "path": "activation.trading_day",
+              "value": "2026-09-14",
+              "unit": "NONE",
+              "origin": "USER_SUPPLEMENT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": "user-supplement-1789271604993-1",
+              "contractId": null
+            },
+            {
+              "path": "rules[0].condition.conditions[1].history_scope",
+              "value": "CONTIGUOUS_TRADING_BARS",
+              "unit": "NONE",
+              "origin": "USER_SUPPLEMENT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": "user-supplement-1789271604993-2",
+              "contractId": null
+            },
+            {
+              "path": "rules[0].repeat_policy.mode",
+              "value": "EACH_QUALIFYING_BAR",
+              "unit": "NONE",
+              "origin": "USER_SUPPLEMENT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": "user-supplement-1789271604993-3",
+              "contractId": null
+            },
+            {
+              "path": "rules[1].repeat_policy.mode",
+              "value": "EACH_QUALIFYING_BAR",
+              "unit": "NONE",
+              "origin": "USER_SUPPLEMENT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": "user-supplement-1789271604993-4",
+              "contractId": null
+            },
+            {
+              "path": "rules[2].repeat_policy.mode",
+              "value": "EACH_QUALIFYING_BAR",
+              "unit": "NONE",
+              "origin": "USER_SUPPLEMENT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": "user-supplement-1789271604993-5",
+              "contractId": null
+            },
+            {
+              "path": "conflict_policy.trade_conflict",
+              "value": "BLOCK_BOTH",
+              "unit": "NONE",
+              "origin": "USER_SUPPLEMENT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": "user-supplement-1789271604993-6",
+              "contractId": null
+            },
+            {
+              "path": "conflict_policy.risk_conflict",
+              "value": "RISK_ONLY",
+              "unit": "NONE",
+              "origin": "USER_SUPPLEMENT",
+              "bindingKind": "VALUE",
+              "clauseIds": [],
+              "supplementId": "user-supplement-1789271604993-7",
+              "contractId": null
+            }
+          ],
+          "userSupplements": [
+            {
+              "supplementId": "user-supplement-1789271604993-0",
+              "path": "activation.mode",
+              "value": "TRADING_DAY",
+              "unit": "NONE",
+              "suppliedAt": "2026-09-14T10:04:15+08:00",
+              "label": "human_confirmed_supplement"
+            },
+            {
+              "supplementId": "user-supplement-1789271604993-1",
+              "path": "activation.trading_day",
+              "value": "2026-09-14",
+              "unit": "NONE",
+              "suppliedAt": "2026-09-14T10:04:15+08:00",
+              "label": "human_confirmed_supplement"
+            },
+            {
+              "supplementId": "user-supplement-1789271604993-2",
+              "path": "rules[0].condition.conditions[1].history_scope",
+              "value": "CONTIGUOUS_TRADING_BARS",
+              "unit": "NONE",
+              "suppliedAt": "2026-09-14T10:04:15+08:00",
+              "label": "human_confirmed_supplement"
+            },
+            {
+              "supplementId": "user-supplement-1789271604993-3",
+              "path": "rules[0].repeat_policy.mode",
+              "value": "EACH_QUALIFYING_BAR",
+              "unit": "NONE",
+              "suppliedAt": "2026-09-14T10:04:15+08:00",
+              "label": "human_confirmed_supplement"
+            },
+            {
+              "supplementId": "user-supplement-1789271604993-4",
+              "path": "rules[1].repeat_policy.mode",
+              "value": "EACH_QUALIFYING_BAR",
+              "unit": "NONE",
+              "suppliedAt": "2026-09-14T10:04:15+08:00",
+              "label": "human_confirmed_supplement"
+            },
+            {
+              "supplementId": "user-supplement-1789271604993-5",
+              "path": "rules[2].repeat_policy.mode",
+              "value": "EACH_QUALIFYING_BAR",
+              "unit": "NONE",
+              "suppliedAt": "2026-09-14T10:04:15+08:00",
+              "label": "human_confirmed_supplement"
+            },
+            {
+              "supplementId": "user-supplement-1789271604993-6",
+              "path": "conflict_policy.trade_conflict",
+              "value": "BLOCK_BOTH",
+              "unit": "NONE",
+              "suppliedAt": "2026-09-14T10:04:15+08:00",
+              "label": "human_confirmed_supplement"
+            },
+            {
+              "supplementId": "user-supplement-1789271604993-7",
+              "path": "conflict_policy.risk_conflict",
+              "value": "RISK_ONLY",
+              "unit": "NONE",
+              "suppliedAt": "2026-09-14T10:04:15+08:00",
+              "label": "human_confirmed_supplement"
+            }
+          ],
+          "sourceProcessing": {
+            "version": "source-processing-v1",
+            "treatments": [
+              {
+                "kind": "INVENTORY_ASSERTION",
+                "treatmentId": "treatment-a39369bd9876b191f304a239",
+                "contractId": "independent-inventory-v1",
+                "spans": [
+                  {
+                    "clauseId": "clause-32ab81ca770a5c6e",
+                    "start": 9,
+                    "end": 18,
+                    "excerpt": "当前持仓100股，"
+                  },
+                  {
+                    "clauseId": "clause-9aeafc2761e2931a",
+                    "start": 18,
+                    "end": 33,
+                    "excerpt": "均为测试日前已持有且当日可卖；"
+                  }
+                ],
+                "symbolSpan": {
+                  "clauseId": "clause-32ab81ca770a5c6e",
+                  "start": 0,
+                  "end": 9,
+                  "excerpt": "003043.SZ"
+                },
+                "symbol": "003043.SZ",
+                "totalQuantity": 100,
+                "sellableQuantity": 100,
+                "settlementBasis": "HELD_BEFORE_TEST_DATE_ALL_SELLABLE",
+                "requiredOperation": "/api/v1/position-inventory-confirmations",
+                "ledgerEffect": "NONE_REQUIRES_INDEPENDENT_CONFIRMATION"
+              },
+              {
+                "kind": "PRODUCT_GUARANTEE",
+                "treatmentId": "treatment-f17cf709984c2a50efdbf378",
+                "contractId": "alert-position-isolation-v1",
+                "spans": [
+                  {
+                    "clauseId": "clause-030e4f2489148e6f",
+                    "start": 205,
+                    "end": 220,
+                    "excerpt": "提醒及确认收到提醒不代表成交，"
+                  },
+                  {
+                    "clauseId": "clause-abb79423936e3cd0",
+                    "start": 220,
+                    "end": 231,
+                    "excerpt": "未登记成交时持仓不变。"
+                  }
+                ],
+                "guarantee": "ALERTS_AND_ACKNOWLEDGEMENTS_DO_NOT_CHANGE_POSITIONS"
+              }
+            ]
+          }
+        },
+        "requiredReviewIssues": [
+          {
+            "issueId": "issue-d1d6ab105fd406bf438d5700",
+            "code": "USER_SUPPLEMENT_REVIEW_REQUIRED",
+            "path": "activation.mode",
+            "reason": "Confirm the separately supplied current value or policy.",
+            "clauseId": null,
+            "bindingPath": "activation.mode",
+            "allowedResolutions": [
+              "CONFIRM_POLICY"
+            ]
+          },
+          {
+            "issueId": "issue-bb6518642ebf67605e2aca33",
+            "code": "USER_SUPPLEMENT_REVIEW_REQUIRED",
+            "path": "activation.trading_day",
+            "reason": "Confirm the separately supplied current value or policy.",
+            "clauseId": null,
+            "bindingPath": "activation.trading_day",
+            "allowedResolutions": [
+              "CONFIRM_POLICY"
+            ]
+          },
+          {
+            "issueId": "issue-f1476718fd347efd70cd5ab4",
+            "code": "USER_SUPPLEMENT_REVIEW_REQUIRED",
+            "path": "conflict_policy.risk_conflict",
+            "reason": "Confirm the separately supplied current value or policy.",
+            "clauseId": null,
+            "bindingPath": "conflict_policy.risk_conflict",
+            "allowedResolutions": [
+              "CONFIRM_POLICY"
+            ]
+          },
+          {
+            "issueId": "issue-7c0c137b6e1eef881e855d74",
+            "code": "USER_SUPPLEMENT_REVIEW_REQUIRED",
+            "path": "conflict_policy.trade_conflict",
+            "reason": "Confirm the separately supplied current value or policy.",
+            "clauseId": null,
+            "bindingPath": "conflict_policy.trade_conflict",
+            "allowedResolutions": [
+              "CONFIRM_POLICY"
+            ]
+          },
+          {
+            "issueId": "issue-1eeb9f663a7026130c961998",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "monitoring.timeframe_minutes",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-3ae0a673aa7913b5",
+            "bindingPath": "monitoring.timeframe_minutes",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-c1648cce4329465a5415fe75",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "position.max_qty",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-65679715d973e211",
+            "bindingPath": "position.max_qty",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-59143ddf0a57e5621865d6fc",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].action.quantity",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-5ae98b1b47866436",
+            "bindingPath": "rules[0].action.quantity",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-9c1348d36ce3652305722b67",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].action.type",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-5ae98b1b47866436",
+            "bindingPath": "rules[0].action.type",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-3581d5ef4d2db10026652427",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-d30d310a8c9ca22d",
+            "bindingPath": "rules[0].condition",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-b2bfb0ebff649206b8c4a1db",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[0].high_fen",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-3ae0a673aa7913b5",
+            "bindingPath": "rules[0].condition.conditions[0].high_fen",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-bdeb09a8c6a5777e6c8cd83a",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[0].include_high",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-bbb0e32b5a9cc4b4",
+            "bindingPath": "rules[0].condition.conditions[0].include_high",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-a8b254610abdda9983918e00",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[0].include_low",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-bbb0e32b5a9cc4b4",
+            "bindingPath": "rules[0].condition.conditions[0].include_low",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-2574562e37fd04f5d0f64248",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[0].low_fen",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-3ae0a673aa7913b5",
+            "bindingPath": "rules[0].condition.conditions[0].low_fen",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-fdc5f56dfe660eee7978365c",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[0].type",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-3ae0a673aa7913b5",
+            "bindingPath": "rules[0].condition.conditions[0].type",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-71a72d0593364c4fa047d420",
+            "code": "USER_SUPPLEMENT_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[1].history_scope",
+            "reason": "Confirm the separately supplied current value or policy.",
+            "clauseId": null,
+            "bindingPath": "rules[0].condition.conditions[1].history_scope",
+            "allowedResolutions": [
+              "CONFIRM_POLICY"
+            ]
+          },
+          {
+            "issueId": "issue-a11929ec67fcd1516f285b29",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[1].minimum_ratio",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-eac4f96f10d41930",
+            "bindingPath": "rules[0].condition.conditions[1].minimum_ratio",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-d81d8017a859c6527a211b18",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[1].type",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-d30d310a8c9ca22d",
+            "bindingPath": "rules[0].condition.conditions[1].type",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-29410810f6e28e71045ef806",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.conditions[1].window_bars",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-d30d310a8c9ca22d",
+            "bindingPath": "rules[0].condition.conditions[1].window_bars",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-88171c13805fc0913e99e1d3",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].condition.type",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-d30d310a8c9ca22d",
+            "bindingPath": "rules[0].condition.type",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-2b05601aeebdaa5211f316d0",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].confirmation.kind",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-3ae0a673aa7913b5",
+            "bindingPath": "rules[0].confirmation.kind",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-e5df7fe417911813c3e7b90f",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[0].confirmation.timeframe_minutes",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-3ae0a673aa7913b5",
+            "bindingPath": "rules[0].confirmation.timeframe_minutes",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-64e1614cfe7bdaf57cdbe67d",
+            "code": "USER_SUPPLEMENT_REVIEW_REQUIRED",
+            "path": "rules[0].repeat_policy.mode",
+            "reason": "Confirm the separately supplied current value or policy.",
+            "clauseId": null,
+            "bindingPath": "rules[0].repeat_policy.mode",
+            "allowedResolutions": [
+              "CONFIRM_POLICY"
+            ]
+          },
+          {
+            "issueId": "issue-6348d56c5741712b5dbf3e82",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].action.inventory_scope",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-002fcc97746611fc",
+            "bindingPath": "rules[1].action.inventory_scope",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-3504a0b74d57c08017e0006d",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].action.quantity",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-002fcc97746611fc",
+            "bindingPath": "rules[1].action.quantity",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-0b20ab57ab143a00399fa8ef",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].action.type",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-002fcc97746611fc",
+            "bindingPath": "rules[1].action.type",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-556075294e5cc5401527634c",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].condition.high_fen",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-b5c4707eb9cfb303",
+            "bindingPath": "rules[1].condition.high_fen",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-13fa7279506c92b9dd02ecc0",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].condition.include_high",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-ec82437425d10d44",
+            "bindingPath": "rules[1].condition.include_high",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-afc688e5d1b6a54483769aa9",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].condition.include_low",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-ec82437425d10d44",
+            "bindingPath": "rules[1].condition.include_low",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-4c6fcc930b20edfc344b8482",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].condition.low_fen",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-b5c4707eb9cfb303",
+            "bindingPath": "rules[1].condition.low_fen",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-0fdb3cce0316afc8bd08f4ed",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].condition.type",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-b5c4707eb9cfb303",
+            "bindingPath": "rules[1].condition.type",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-182cf9f33e072ea580e7b356",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].confirmation.kind",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-b5c4707eb9cfb303",
+            "bindingPath": "rules[1].confirmation.kind",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-537de20a85ef28718d727e85",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[1].confirmation.timeframe_minutes",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-b5c4707eb9cfb303",
+            "bindingPath": "rules[1].confirmation.timeframe_minutes",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-797d3bcbc3fbf9f3d08616fa",
+            "code": "USER_SUPPLEMENT_REVIEW_REQUIRED",
+            "path": "rules[1].repeat_policy.mode",
+            "reason": "Confirm the separately supplied current value or policy.",
+            "clauseId": null,
+            "bindingPath": "rules[1].repeat_policy.mode",
+            "allowedResolutions": [
+              "CONFIRM_POLICY"
+            ]
+          },
+          {
+            "issueId": "issue-00f436f582275234eb15a912",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[2].action.type",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-bdfe4536a0cbae53",
+            "bindingPath": "rules[2].action.type",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-7da84f42383081ea0a835430",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[2].condition.price_fen",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-8f80074b9a81467b",
+            "bindingPath": "rules[2].condition.price_fen",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-1d00ec667b30569d33cc2260",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[2].condition.type",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-8f80074b9a81467b",
+            "bindingPath": "rules[2].condition.type",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-de51bb35c42be421b290cc8c",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[2].confirmation.kind",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-8f80074b9a81467b",
+            "bindingPath": "rules[2].confirmation.kind",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-1df807491a09270ad262165e",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "rules[2].confirmation.timeframe_minutes",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-8f80074b9a81467b",
+            "bindingPath": "rules[2].confirmation.timeframe_minutes",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          },
+          {
+            "issueId": "issue-0e4a59711540bb417ae20bb7",
+            "code": "USER_SUPPLEMENT_REVIEW_REQUIRED",
+            "path": "rules[2].repeat_policy.mode",
+            "reason": "Confirm the separately supplied current value or policy.",
+            "clauseId": null,
+            "bindingPath": "rules[2].repeat_policy.mode",
+            "allowedResolutions": [
+              "CONFIRM_POLICY"
+            ]
+          },
+          {
+            "issueId": "issue-3cbdf38bdb1f594bc79c531a",
+            "code": "SOURCE_TREATMENT_REVIEW_REQUIRED",
+            "path": "source_processing.treatments[0]",
+            "reason": "Confirm the extracted inventory assertion and route it to independent POST /api/v1/position-inventory-confirmations with a chosen as-of date. This review does not register holdings or confirm ledger truth.",
+            "clauseId": null,
+            "bindingPath": "source_processing.treatments[0]",
+            "allowedResolutions": [
+              "CONFIRM_SOURCE_TREATMENT"
+            ]
+          },
+          {
+            "issueId": "issue-fd4d0ca442eb419fb6cd9c0a",
+            "code": "SOURCE_TREATMENT_REVIEW_REQUIRED",
+            "path": "source_processing.treatments[1]",
+            "reason": "Confirm the exact source guarantee: alerts and acknowledgements do not change positions; only independent position commands can do so.",
+            "clauseId": null,
+            "bindingPath": "source_processing.treatments[1]",
+            "allowedResolutions": [
+              "CONFIRM_SOURCE_TREATMENT"
+            ]
+          },
+          {
+            "issueId": "issue-0a8ca50370cf56bac8714272",
+            "code": "SOURCE_MAPPING_REVIEW_REQUIRED",
+            "path": "symbol",
+            "reason": "Review this source clause against the current typed value and meaning.",
+            "clauseId": "clause-32ab81ca770a5c6e",
+            "bindingPath": "symbol",
+            "allowedResolutions": [
+              "CONFIRM_MAPPING"
+            ]
+          }
+        ],
+        "resolvedIssueIds": [
+          "issue-00f436f582275234eb15a912",
+          "issue-0a8ca50370cf56bac8714272",
+          "issue-0b20ab57ab143a00399fa8ef",
+          "issue-0e4a59711540bb417ae20bb7",
+          "issue-0fdb3cce0316afc8bd08f4ed",
+          "issue-13fa7279506c92b9dd02ecc0",
+          "issue-182cf9f33e072ea580e7b356",
+          "issue-1d00ec667b30569d33cc2260",
+          "issue-1df807491a09270ad262165e",
+          "issue-1eeb9f663a7026130c961998",
+          "issue-2574562e37fd04f5d0f64248",
+          "issue-29410810f6e28e71045ef806",
+          "issue-2b05601aeebdaa5211f316d0",
+          "issue-3504a0b74d57c08017e0006d",
+          "issue-3581d5ef4d2db10026652427",
+          "issue-3cbdf38bdb1f594bc79c531a",
+          "issue-4c6fcc930b20edfc344b8482",
+          "issue-537de20a85ef28718d727e85",
+          "issue-556075294e5cc5401527634c",
+          "issue-59143ddf0a57e5621865d6fc",
+          "issue-6348d56c5741712b5dbf3e82",
+          "issue-64e1614cfe7bdaf57cdbe67d",
+          "issue-71a72d0593364c4fa047d420",
+          "issue-797d3bcbc3fbf9f3d08616fa",
+          "issue-7c0c137b6e1eef881e855d74",
+          "issue-7da84f42383081ea0a835430",
+          "issue-88171c13805fc0913e99e1d3",
+          "issue-9c1348d36ce3652305722b67",
+          "issue-a11929ec67fcd1516f285b29",
+          "issue-a8b254610abdda9983918e00",
+          "issue-afc688e5d1b6a54483769aa9",
+          "issue-b2bfb0ebff649206b8c4a1db",
+          "issue-bb6518642ebf67605e2aca33",
+          "issue-bdeb09a8c6a5777e6c8cd83a",
+          "issue-c1648cce4329465a5415fe75",
+          "issue-d1d6ab105fd406bf438d5700",
+          "issue-d81d8017a859c6527a211b18",
+          "issue-de51bb35c42be421b290cc8c",
+          "issue-e5df7fe417911813c3e7b90f",
+          "issue-f1476718fd347efd70cd5ab4",
+          "issue-fd4d0ca442eb419fb6cd9c0a",
+          "issue-fdc5f56dfe660eee7978365c"
+        ],
+        "unresolvedReviewIssues": [],
+        "executionReadiness": "NOT_EVALUATED"
+      },
+      "inventoryBefore": {
+        "symbol": "003043.SZ",
+        "status": "KNOWN",
+        "asOfTradeDate": "2026-09-14",
+        "cutoff": "2026-09-14T10:10:15+08:00",
+        "inventoryRevision": 1,
+        "totalQuantity": 100,
+        "sellableQuantity": 100,
+        "confirmationId": "4ad6b66f-c3ac-4cd4-b469-8faf911469f4",
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+        "includedLotIds": [],
+        "openingBalances": [
+          {
+            "openingBalanceId": "c1d1f8a3-ef2d-4e79-96e2-0e581bb35584",
+            "symbol": "003043.SZ",
+            "originalQuantity": 100,
+            "remainingQuantity": 100,
+            "sellableFrom": "2026-09-14",
+            "revision": 0
+          }
+        ],
+        "missingReasons": []
+      },
+      "stateBefore": {
+        "symbol": "003043.SZ",
+        "planVersionId": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+        "active": true,
+        "revision": 1,
+        "changedAt": "2026-09-14T10:04:15+08:00"
+      },
+      "initialEvent": {
+        "payloadSchemaVersion": "explicit-rule-alert-v1",
+        "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+        "sequence": 18,
+        "dedupKey": "00d324dc6e94fbfb222af6175490ac9965950908ded2363896eefc5377e3400d",
+        "planId": "synthetic-r11-api",
+        "planVersion": 2,
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "symbol": "003043.SZ",
+        "name": "SYNTHETIC R11 API",
+        "signalType": "BUY",
+        "severity": "ACTION",
+        "tradingDate": "2026-09-14",
+        "causeId": "buy-100",
+        "ruleId": "buy-100",
+        "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+        "evaluatedAt": "2026-09-14T10:10:15+08:00",
+        "quantity": 100,
+        "conditionEvidence": {
+          "planPath": "rules[0].condition",
+          "code": "ALL",
+          "outcome": "SATISFIED",
+          "facts": [],
+          "missingInputs": [],
+          "children": [
+            {
+              "planPath": "rules[0].condition.conditions[0]",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 990,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 980,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1000,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:10:00+08:00"
+              ]
+            },
+            {
+              "planPath": "rules[0].condition.conditions[1]",
+              "code": "VOLUME_TO_MEAN_GTE",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "current_volume_shares",
+                  "value": 300,
+                  "unit": "SHARES"
+                },
+                {
+                  "key": "sum_volume_shares",
+                  "value": 1000,
+                  "unit": "SHARES"
+                },
+                {
+                  "key": "window_bars",
+                  "value": 5,
+                  "unit": "BARS"
+                },
+                {
+                  "key": "mean_volume_shares",
+                  "value": "200",
+                  "unit": "SHARES"
+                },
+                {
+                  "key": "minimum_ratio",
+                  "value": "1.5",
+                  "unit": "RATIO"
+                },
+                {
+                  "key": "threshold_volume_shares",
+                  "value": "300.0",
+                  "unit": "SHARES"
+                },
+                {
+                  "key": "history_scope",
+                  "value": "CONTIGUOUS_TRADING_BARS",
+                  "unit": "CODE"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T09:45:00+08:00",
+                "2026-09-14T09:50:00+08:00",
+                "2026-09-14T09:55:00+08:00",
+                "2026-09-14T10:00:00+08:00",
+                "2026-09-14T10:05:00+08:00",
+                "2026-09-14T10:10:00+08:00"
+              ]
+            }
+          ],
+          "barEnds": []
+        },
+        "safetyEvidence": null,
+        "nextStep": "REVIEW_BUY_REMINDER",
+        "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+        "createdAt": "2026-09-14T10:10:15+08:00",
+        "acknowledgedAt": null,
+        "revision": 0,
+        "currentActionable": true
+      }
+    },
+    {
+      "terminatedOwnedPid": 44852,
+      "serverExited": true,
+      "launcherExitCode": 1,
+      "launcherSignalCode": null
+    },
+    {
+      "oldProcessExited": true,
+      "offlineProbe": "ECONNREFUSED"
+    },
+    {
+      "process": {
+        "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi",
+        "pid": 28196,
+        "resumed": true,
+        "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi\\monitor.sqlite3",
+        "config": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi\\config\\app.yaml",
+        "provider": "IN_PROCESS_FAKE",
+        "now": "2026-09-14T10:10:15+08:00",
+        "sdkCalls": [
+          "trade_cal",
+          "trade_cal",
+          "rt_min_daily"
+        ],
+        "aiRequests": [],
+        "deadlines": [
+          "2026-09-14T10:11:12+08:00"
+        ]
+      }
+    },
+    {
+      "checkpoint": "10:11",
+      "runtimeStatus": 200,
+      "runtime": {
+        "symbol": "003043.SZ",
+        "planVersionId": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "status": "CURRENT",
+        "evaluatedAt": "2026-09-14T10:10:15+08:00",
+        "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+        "ruleOutcomes": [
+          {
+            "ruleId": "buy-100",
+            "action": "BUY",
+            "conditionCode": "ALL",
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "outcome": "SATISFIED",
+            "missingInputs": [],
+            "blockers": [],
+            "suppressionReason": null
+          },
+          {
+            "ruleId": "sell-100",
+            "action": "SELL",
+            "conditionCode": "COMPLETED_CLOSE_IN_RANGE",
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "UNSATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 990,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:10:00+08:00"
+              ]
+            },
+            "outcome": "UNSATISFIED",
+            "missingInputs": [],
+            "blockers": [
+              "CONDITION_UNSATISFIED"
+            ],
+            "suppressionReason": null
+          },
+          {
+            "ruleId": "risk-950",
+            "action": "RISK_ALERT",
+            "conditionCode": "COMPLETED_CLOSE_BELOW",
+            "conditionEvidence": {
+              "planPath": "rules[2].condition",
+              "code": "COMPLETED_CLOSE_BELOW",
+              "outcome": "UNSATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 990,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "price_fen",
+                  "value": 950,
+                  "unit": "FEN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:10:00+08:00"
+              ]
+            },
+            "outcome": "UNSATISFIED",
+            "missingInputs": [],
+            "blockers": [
+              "CONDITION_UNSATISFIED"
+            ],
+            "suppressionReason": null
+          }
+        ]
+      },
+      "alerts": {
+        "items": [
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+            "sequence": 18,
+            "dedupKey": "00d324dc6e94fbfb222af6175490ac9965950908ded2363896eefc5377e3400d",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:10:15+08:00",
+            "acknowledgedAt": "2026-09-14T10:10:15+08:00",
+            "revision": 1,
+            "currentActionable": true
+          }
+        ],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 1
+      },
+      "inventory": {
+        "symbol": "003043.SZ",
+        "status": "KNOWN",
+        "asOfTradeDate": "2026-09-14",
+        "cutoff": "2026-09-14T10:11:15+08:00",
+        "inventoryRevision": 1,
+        "totalQuantity": 100,
+        "sellableQuantity": 100,
+        "confirmationId": "4ad6b66f-c3ac-4cd4-b469-8faf911469f4",
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+        "includedLotIds": [],
+        "openingBalances": [
+          {
+            "openingBalanceId": "c1d1f8a3-ef2d-4e79-96e2-0e581bb35584",
+            "symbol": "003043.SZ",
+            "originalQuantity": 100,
+            "remainingQuantity": 100,
+            "sellableFrom": "2026-09-14",
+            "revision": 0
+          }
+        ],
+        "missingReasons": []
+      }
+    },
+    {
+      "checkpoint": "10:15",
+      "runtimeStatus": 200,
+      "runtime": {
+        "symbol": "003043.SZ",
+        "planVersionId": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "status": "CURRENT",
+        "evaluatedAt": "2026-09-14T10:15:15+08:00",
+        "targetBucketEnd": "2026-09-14T10:15:00+08:00",
+        "ruleOutcomes": [
+          {
+            "ruleId": "buy-100",
+            "action": "BUY",
+            "conditionCode": "ALL",
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "UNSATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "UNSATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 1080,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:15:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "UNSATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 100,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1125,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "225",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "337.5",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00",
+                    "2026-09-14T10:15:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "outcome": "UNSATISFIED",
+            "missingInputs": [],
+            "blockers": [
+              "CONDITION_UNSATISFIED"
+            ],
+            "suppressionReason": null
+          },
+          {
+            "ruleId": "sell-100",
+            "action": "SELL",
+            "conditionCode": "COMPLETED_CLOSE_IN_RANGE",
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:15:00+08:00"
+              ]
+            },
+            "outcome": "SATISFIED",
+            "missingInputs": [],
+            "blockers": [],
+            "suppressionReason": null
+          },
+          {
+            "ruleId": "risk-950",
+            "action": "RISK_ALERT",
+            "conditionCode": "COMPLETED_CLOSE_BELOW",
+            "conditionEvidence": {
+              "planPath": "rules[2].condition",
+              "code": "COMPLETED_CLOSE_BELOW",
+              "outcome": "UNSATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "price_fen",
+                  "value": 950,
+                  "unit": "FEN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:15:00+08:00"
+              ]
+            },
+            "outcome": "UNSATISFIED",
+            "missingInputs": [],
+            "blockers": [
+              "CONDITION_UNSATISFIED"
+            ],
+            "suppressionReason": null
+          }
+        ]
+      },
+      "alerts": {
+        "items": [
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+            "sequence": 18,
+            "dedupKey": "00d324dc6e94fbfb222af6175490ac9965950908ded2363896eefc5377e3400d",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:10:15+08:00",
+            "acknowledgedAt": "2026-09-14T10:10:15+08:00",
+            "revision": 1,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "f2e82f21-ac2c-59bf-b772-a1c0470f3379",
+            "sequence": 30,
+            "dedupKey": "5854cb4abf2a2200b2830d1e4246a50b9ae933150e61f324bbb1d26f2ca0d885",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "SELL",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "sell-100",
+            "ruleId": "sell-100",
+            "targetBucketEnd": "2026-09-14T10:15:00+08:00",
+            "evaluatedAt": "2026-09-14T10:15:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:15:00+08:00"
+              ]
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_SELL_REMINDER",
+            "messageText": "[卖出提醒] SYNTHETIC R11 API 003043.SZ\n规则: sell-100\n完成K线: 2026-09-14T10:15:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后另行登记实际减仓\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:15:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          }
+        ],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 2
+      },
+      "inventory": {
+        "symbol": "003043.SZ",
+        "status": "KNOWN",
+        "asOfTradeDate": "2026-09-14",
+        "cutoff": "2026-09-14T10:15:15+08:00",
+        "inventoryRevision": 1,
+        "totalQuantity": 100,
+        "sellableQuantity": 100,
+        "confirmationId": "4ad6b66f-c3ac-4cd4-b469-8faf911469f4",
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+        "includedLotIds": [],
+        "openingBalances": [
+          {
+            "openingBalanceId": "c1d1f8a3-ef2d-4e79-96e2-0e581bb35584",
+            "symbol": "003043.SZ",
+            "originalQuantity": 100,
+            "remainingQuantity": 100,
+            "sellableFrom": "2026-09-14",
+            "revision": 0
+          }
+        ],
+        "missingReasons": []
+      }
+    },
+    {
+      "checkpoint": "10:30",
+      "runtimeStatus": 200,
+      "runtime": {
+        "symbol": "003043.SZ",
+        "planVersionId": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+        "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+        "activationRevision": 1,
+        "status": "CURRENT",
+        "evaluatedAt": "2026-09-14T10:30:15+08:00",
+        "targetBucketEnd": "2026-09-14T10:30:00+08:00",
+        "ruleOutcomes": [
+          {
+            "ruleId": "buy-100",
+            "action": "BUY",
+            "conditionCode": "ALL",
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:30:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 301,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 899,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "179.8",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "269.7",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00",
+                    "2026-09-14T10:15:00+08:00",
+                    "2026-09-14T10:20:00+08:00",
+                    "2026-09-14T10:25:00+08:00",
+                    "2026-09-14T10:30:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "outcome": "SATISFIED",
+            "missingInputs": [],
+            "blockers": [],
+            "suppressionReason": null
+          },
+          {
+            "ruleId": "sell-100",
+            "action": "SELL",
+            "conditionCode": "COMPLETED_CLOSE_IN_RANGE",
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "UNSATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 990,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:30:00+08:00"
+              ]
+            },
+            "outcome": "UNSATISFIED",
+            "missingInputs": [],
+            "blockers": [
+              "CONDITION_UNSATISFIED"
+            ],
+            "suppressionReason": null
+          },
+          {
+            "ruleId": "risk-950",
+            "action": "RISK_ALERT",
+            "conditionCode": "COMPLETED_CLOSE_BELOW",
+            "conditionEvidence": {
+              "planPath": "rules[2].condition",
+              "code": "COMPLETED_CLOSE_BELOW",
+              "outcome": "UNSATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 990,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "price_fen",
+                  "value": 950,
+                  "unit": "FEN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:30:00+08:00"
+              ]
+            },
+            "outcome": "UNSATISFIED",
+            "missingInputs": [],
+            "blockers": [
+              "CONDITION_UNSATISFIED"
+            ],
+            "suppressionReason": null
+          }
+        ]
+      },
+      "alerts": {
+        "items": [
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+            "sequence": 18,
+            "dedupKey": "00d324dc6e94fbfb222af6175490ac9965950908ded2363896eefc5377e3400d",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:10:15+08:00",
+            "acknowledgedAt": "2026-09-14T10:10:15+08:00",
+            "revision": 1,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "f2e82f21-ac2c-59bf-b772-a1c0470f3379",
+            "sequence": 30,
+            "dedupKey": "5854cb4abf2a2200b2830d1e4246a50b9ae933150e61f324bbb1d26f2ca0d885",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "SELL",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "sell-100",
+            "ruleId": "sell-100",
+            "targetBucketEnd": "2026-09-14T10:15:00+08:00",
+            "evaluatedAt": "2026-09-14T10:15:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:15:00+08:00"
+              ]
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_SELL_REMINDER",
+            "messageText": "[卖出提醒] SYNTHETIC R11 API 003043.SZ\n规则: sell-100\n完成K线: 2026-09-14T10:15:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后另行登记实际减仓\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:15:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "b8cd9b0b-1719-5ac0-809c-e22e7ec60502",
+            "sequence": 41,
+            "dedupKey": "5dfb28af86adedfa8b887580a304814a7da5c12fc15bb77ebef57a388ff9187d",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "RISK_ALERT",
+            "severity": "RISK",
+            "tradingDate": "2026-09-14",
+            "causeId": "risk-950",
+            "ruleId": "risk-950",
+            "targetBucketEnd": "2026-09-14T10:20:00+08:00",
+            "evaluatedAt": "2026-09-14T10:20:15+08:00",
+            "quantity": null,
+            "conditionEvidence": {
+              "planPath": "rules[2].condition",
+              "code": "COMPLETED_CLOSE_BELOW",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 949,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "price_fen",
+                  "value": 950,
+                  "unit": "FEN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:20:00+08:00"
+              ]
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_RISK_REMINDER",
+            "messageText": "[风险提醒] SYNTHETIC R11 API 003043.SZ\n规则: risk-950\n完成K线: 2026-09-14T10:20:00+08:00\n条件证据: 已满足\n下一步: 人工复核风险，不会自动卖出或改变风险状态\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:20:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "446a7872-28e6-53d4-a08c-b12216c0f38a",
+            "sequence": 62,
+            "dedupKey": "da0b739e32584797a20742a802768fe95b6832e48c45ec5da8e49542dc1f1d83",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:30:00+08:00",
+            "evaluatedAt": "2026-09-14T10:30:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:30:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 301,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 899,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "179.8",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "269.7",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00",
+                    "2026-09-14T10:15:00+08:00",
+                    "2026-09-14T10:20:00+08:00",
+                    "2026-09-14T10:25:00+08:00",
+                    "2026-09-14T10:30:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:30:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:30:15+08:00",
+            "acknowledgedAt": null,
+            "revision": 0,
+            "currentActionable": true
+          }
+        ],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 4
+      },
+      "inventory": {
+        "symbol": "003043.SZ",
+        "status": "KNOWN",
+        "asOfTradeDate": "2026-09-14",
+        "cutoff": "2026-09-14T10:30:15+08:00",
+        "inventoryRevision": 1,
+        "totalQuantity": 100,
+        "sellableQuantity": 100,
+        "confirmationId": "4ad6b66f-c3ac-4cd4-b469-8faf911469f4",
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+        "includedLotIds": [],
+        "openingBalances": [
+          {
+            "openingBalanceId": "c1d1f8a3-ef2d-4e79-96e2-0e581bb35584",
+            "symbol": "003043.SZ",
+            "originalQuantity": 100,
+            "remainingQuantity": 100,
+            "sellableFrom": "2026-09-14",
+            "revision": 0
+          }
+        ],
+        "missingReasons": []
+      }
+    },
+    {
+      "finalAlerts": {
+        "items": [
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "f3985236-96c8-5d8c-9773-80154a0f3ef0",
+            "sequence": 18,
+            "dedupKey": "00d324dc6e94fbfb222af6175490ac9965950908ded2363896eefc5377e3400d",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:10:00+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 300,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 1000,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "200",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "300.0",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T09:45:00+08:00",
+                    "2026-09-14T09:50:00+08:00",
+                    "2026-09-14T09:55:00+08:00",
+                    "2026-09-14T10:00:00+08:00",
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:10:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:10:15+08:00",
+            "acknowledgedAt": "2026-09-14T10:10:15+08:00",
+            "revision": 1,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "f2e82f21-ac2c-59bf-b772-a1c0470f3379",
+            "sequence": 30,
+            "dedupKey": "5854cb4abf2a2200b2830d1e4246a50b9ae933150e61f324bbb1d26f2ca0d885",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "SELL",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "sell-100",
+            "ruleId": "sell-100",
+            "targetBucketEnd": "2026-09-14T10:15:00+08:00",
+            "evaluatedAt": "2026-09-14T10:15:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[1].condition",
+              "code": "COMPLETED_CLOSE_IN_RANGE",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "low_fen",
+                  "value": 1080,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "high_fen",
+                  "value": 1100,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "include_low",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                },
+                {
+                  "key": "include_high",
+                  "value": true,
+                  "unit": "BOOLEAN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:15:00+08:00"
+              ]
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_SELL_REMINDER",
+            "messageText": "[卖出提醒] SYNTHETIC R11 API 003043.SZ\n规则: sell-100\n完成K线: 2026-09-14T10:15:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后另行登记实际减仓\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:15:15+08:00",
+            "acknowledgedAt": "2026-09-14T10:30:15+08:00",
+            "revision": 1,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "b8cd9b0b-1719-5ac0-809c-e22e7ec60502",
+            "sequence": 41,
+            "dedupKey": "5dfb28af86adedfa8b887580a304814a7da5c12fc15bb77ebef57a388ff9187d",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "RISK_ALERT",
+            "severity": "RISK",
+            "tradingDate": "2026-09-14",
+            "causeId": "risk-950",
+            "ruleId": "risk-950",
+            "targetBucketEnd": "2026-09-14T10:20:00+08:00",
+            "evaluatedAt": "2026-09-14T10:20:15+08:00",
+            "quantity": null,
+            "conditionEvidence": {
+              "planPath": "rules[2].condition",
+              "code": "COMPLETED_CLOSE_BELOW",
+              "outcome": "SATISFIED",
+              "facts": [
+                {
+                  "key": "close_fen",
+                  "value": 949,
+                  "unit": "FEN"
+                },
+                {
+                  "key": "price_fen",
+                  "value": 950,
+                  "unit": "FEN"
+                }
+              ],
+              "missingInputs": [],
+              "children": [],
+              "barEnds": [
+                "2026-09-14T10:20:00+08:00"
+              ]
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_RISK_REMINDER",
+            "messageText": "[风险提醒] SYNTHETIC R11 API 003043.SZ\n规则: risk-950\n完成K线: 2026-09-14T10:20:00+08:00\n条件证据: 已满足\n下一步: 人工复核风险，不会自动卖出或改变风险状态\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:20:15+08:00",
+            "acknowledgedAt": "2026-09-14T10:30:15+08:00",
+            "revision": 1,
+            "currentActionable": true
+          },
+          {
+            "payloadSchemaVersion": "explicit-rule-alert-v1",
+            "eventId": "446a7872-28e6-53d4-a08c-b12216c0f38a",
+            "sequence": 62,
+            "dedupKey": "da0b739e32584797a20742a802768fe95b6832e48c45ec5da8e49542dc1f1d83",
+            "planId": "synthetic-r11-api",
+            "planVersion": 2,
+            "planHash": "ed31005b41cba6659641733534df6bcf0e222b7ea3d1cb72136f527bd8401556",
+            "activationRevision": 1,
+            "symbol": "003043.SZ",
+            "name": "SYNTHETIC R11 API",
+            "signalType": "BUY",
+            "severity": "ACTION",
+            "tradingDate": "2026-09-14",
+            "causeId": "buy-100",
+            "ruleId": "buy-100",
+            "targetBucketEnd": "2026-09-14T10:30:00+08:00",
+            "evaluatedAt": "2026-09-14T10:30:15+08:00",
+            "quantity": 100,
+            "conditionEvidence": {
+              "planPath": "rules[0].condition",
+              "code": "ALL",
+              "outcome": "SATISFIED",
+              "facts": [],
+              "missingInputs": [],
+              "children": [
+                {
+                  "planPath": "rules[0].condition.conditions[0]",
+                  "code": "COMPLETED_CLOSE_IN_RANGE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "close_fen",
+                      "value": 990,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "low_fen",
+                      "value": 980,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "high_fen",
+                      "value": 1000,
+                      "unit": "FEN"
+                    },
+                    {
+                      "key": "include_low",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    },
+                    {
+                      "key": "include_high",
+                      "value": true,
+                      "unit": "BOOLEAN"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:30:00+08:00"
+                  ]
+                },
+                {
+                  "planPath": "rules[0].condition.conditions[1]",
+                  "code": "VOLUME_TO_MEAN_GTE",
+                  "outcome": "SATISFIED",
+                  "facts": [
+                    {
+                      "key": "current_volume_shares",
+                      "value": 301,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "sum_volume_shares",
+                      "value": 899,
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "window_bars",
+                      "value": 5,
+                      "unit": "BARS"
+                    },
+                    {
+                      "key": "mean_volume_shares",
+                      "value": "179.8",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "minimum_ratio",
+                      "value": "1.5",
+                      "unit": "RATIO"
+                    },
+                    {
+                      "key": "threshold_volume_shares",
+                      "value": "269.7",
+                      "unit": "SHARES"
+                    },
+                    {
+                      "key": "history_scope",
+                      "value": "CONTIGUOUS_TRADING_BARS",
+                      "unit": "CODE"
+                    }
+                  ],
+                  "missingInputs": [],
+                  "children": [],
+                  "barEnds": [
+                    "2026-09-14T10:05:00+08:00",
+                    "2026-09-14T10:10:00+08:00",
+                    "2026-09-14T10:15:00+08:00",
+                    "2026-09-14T10:20:00+08:00",
+                    "2026-09-14T10:25:00+08:00",
+                    "2026-09-14T10:30:00+08:00"
+                  ]
+                }
+              ],
+              "barEnds": []
+            },
+            "safetyEvidence": null,
+            "nextStep": "REVIEW_BUY_REMINDER",
+            "messageText": "[买入提醒] SYNTHETIC R11 API 003043.SZ\n规则: buy-100\n完成K线: 2026-09-14T10:30:00+08:00\n提醒数量: 100股\n条件证据: 已满足\n下一步: 人工复核后自行决定是否下单\n仅提醒，不会自动下单。",
+            "createdAt": "2026-09-14T10:30:15+08:00",
+            "acknowledgedAt": "2026-09-14T10:30:15+08:00",
+            "revision": 1,
+            "currentActionable": true
+          }
+        ],
+        "symbol": null,
+        "signalType": null,
+        "acknowledged": null,
+        "startAt": null,
+        "endAt": null,
+        "offset": 0,
+        "limit": 100,
+        "total": 4
+      },
+      "finalInventory": {
+        "symbol": "003043.SZ",
+        "status": "KNOWN",
+        "asOfTradeDate": "2026-09-14",
+        "cutoff": "2026-09-14T10:30:15+08:00",
+        "inventoryRevision": 1,
+        "totalQuantity": 100,
+        "sellableQuantity": 100,
+        "confirmationId": "4ad6b66f-c3ac-4cd4-b469-8faf911469f4",
+        "confirmedAt": "2026-09-14T10:04:15+08:00",
+        "includedLotIds": [],
+        "openingBalances": [
+          {
+            "openingBalanceId": "c1d1f8a3-ef2d-4e79-96e2-0e581bb35584",
+            "symbol": "003043.SZ",
+            "originalQuantity": 100,
+            "remainingQuantity": 100,
+            "sellableFrom": "2026-09-14",
+            "revision": 0
+          }
+        ],
+        "missingReasons": []
+      },
+      "finalActivation": {
+        "symbol": "003043.SZ",
+        "planVersionId": "ac2e3f9a-c4b8-4610-b2ec-ff9838325237",
+        "active": true,
+        "revision": 1,
+        "changedAt": "2026-09-14T10:04:15+08:00"
+      },
+      "finalIsolation": {
+        "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi",
+        "pid": 28196,
+        "resumed": true,
+        "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi\\monitor.sqlite3",
+        "config": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6h45efoi\\config\\app.yaml",
+        "provider": "IN_PROCESS_FAKE",
+        "now": "2026-09-14T10:30:15+08:00",
+        "sdkCalls": [
+          "trade_cal",
+          "trade_cal",
+          "rt_min_daily",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min",
+          "rt_min"
+        ],
+        "aiRequests": [],
+        "deadlines": [
+          "2026-09-14T10:11:12+08:00",
+          "2026-09-14T10:12:12+08:00",
+          "2026-09-14T10:13:12+08:00",
+          "2026-09-14T10:14:12+08:00",
+          "2026-09-14T10:15:12+08:00",
+          "2026-09-14T10:16:12+08:00",
+          "2026-09-14T10:17:12+08:00",
+          "2026-09-14T10:18:12+08:00",
+          "2026-09-14T10:19:12+08:00",
+          "2026-09-14T10:20:12+08:00",
+          "2026-09-14T10:21:12+08:00",
+          "2026-09-14T10:22:12+08:00",
+          "2026-09-14T10:23:12+08:00",
+          "2026-09-14T10:24:12+08:00",
+          "2026-09-14T10:25:12+08:00",
+          "2026-09-14T10:26:12+08:00",
+          "2026-09-14T10:27:12+08:00",
+          "2026-09-14T10:28:12+08:00",
+          "2026-09-14T10:29:12+08:00",
+          "2026-09-14T10:30:12+08:00",
+          "2026-09-14T10:31:12+08:00"
+        ]
+      }
+    },
+    {
+      "terminatedOwnedPid": 28196,
+      "serverExited": true,
+      "launcherExitCode": 1,
+      "launcherSignalCode": null
+    }
+  ],
+  "consoleErrors": [],
+  "externalRequests": [],
+  "log": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\r\n  from starlette.testclient import TestClient as TestClient  # noqa\r\n{\"port\": 56993, \"root\": \"C:\\\\Users\\\\xiedc\\\\AppData\\\\Local\\\\Temp\\\\tpm-r12-browser-6h45efoi\", \"database\": \"C:\\\\Users\\\\xiedc\\\\AppData\\\\Local\\\\Temp\\\\tpm-r12-browser-6h45efoi\\\\monitor.sqlite3\"}\r\nD:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\r\n  from starlette.testclient import TestClient as TestClient  # noqa\r\n{\"port\": 56993, \"root\": \"C:\\\\Users\\\\xiedc\\\\AppData\\\\Local\\\\Temp\\\\tpm-r12-browser-6h45efoi\", \"database\": \"C:\\\\Users\\\\xiedc\\\\AppData\\\\Local\\\\Temp\\\\tpm-r12-browser-6h45efoi\\\\monitor.sqlite3\"}\r\n"
+}

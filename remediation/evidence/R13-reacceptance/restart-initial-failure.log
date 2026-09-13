@@ -1,0 +1,140 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test r13-active-process-restart.spec.ts --trace on --output ../remediation/evidence/R13-reacceptance/restart-traces
+
+
+Running 4 tests using 1 worker
+
+
+
+(node:32676) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity
+R13 OS active evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-r8no67p5
+
+  1) [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity 
+
+    Error: Owned process did not exit
+
+      58 |         const exited = new Promise<void>(done => server!.once('exit', () => done()));
+      59 |         await request.post(`${base}/_test/shutdown`);
+    > 60 |         await Promise.race([exited, new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Owned process did not exit')), 15000))]);
+         |                                                                                              ^
+      61 |         expect(server.exitCode).toBe(0);
+      62 |       }
+      63 |     };
+        at Timeout._onTimeout (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:60:94)
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-6ed9a-d-durable-reminder-identity-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:29324) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity
+R13 OS replace evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-n2fgmu12
+
+  2) [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity 
+
+    Error: Owned process did not exit
+
+      58 |         const exited = new Promise<void>(done => server!.once('exit', () => done()));
+      59 |         await request.post(`${base}/_test/shutdown`);
+    > 60 |         await Promise.race([exited, new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Owned process did not exit')), 15000))]);
+         |                                                                                              ^
+      61 |         expect(server.exitCode).toBe(0);
+      62 |       }
+      63 |     };
+        at Timeout._onTimeout (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:60:94)
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-2b443-d-durable-reminder-identity-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:38156) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[3/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity
+R13 OS disable evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-m1a_bbkk
+
+  3) [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity 
+
+    Error: Owned process did not exit
+
+      58 |         const exited = new Promise<void>(done => server!.once('exit', () => done()));
+      59 |         await request.post(`${base}/_test/shutdown`);
+    > 60 |         await Promise.race([exited, new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Owned process did not exit')), 15000))]);
+         |                                                                                              ^
+      61 |         expect(server.exitCode).toBe(0);
+      62 |       }
+      63 |     };
+        at Timeout._onTimeout (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:60:94)
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-4073d-d-durable-reminder-identity-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:6888) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/4] [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity
+[chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity
+R13 OS expire evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-r684yv5u
+
+  4) [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity 
+
+    Error: Owned process did not exit
+
+      58 |     const stop = async () => {
+      59 |       if (serverPid !== undefined) {
+    > 60 |         const ownedPid = serverPid;
+         |                                    ^
+      61 |         // Windows venv Python has a launcher and a separate Uvicorn process.
+      62 |         // Terminate the server PID reported by our own isolated endpoint.
+      63 |         try { process.kill(ownedPid, 'SIGKILL'); }
+        at Timeout._onTimeout (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-active-process-restart.spec.ts:60:94)
+
+    Error Context: ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\remediation\evidence\R13-reacceptance\restart-traces\r13-active-process-restart-b9b90-d-durable-reminder-identity-chrome\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  4 failed
+    [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity 
+    [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity 
+    [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity 
+    [chrome] › tests\e2e\r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity 

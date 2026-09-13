@@ -1,0 +1,13 @@
+
+> trade-plan-monitor-web@0.1.0 test
+> vitest --run
+
+
+ RUN  v4.1.10 D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/web
+
+
+ Test Files  45 passed (45)
+      Tests  644 passed (644)
+   Start at  11:38:14
+   Duration  5.10s (transform 17.75s, setup 0ms, import 27.88s, tests 15.54s, environment 49.62s)
+
