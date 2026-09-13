@@ -53,7 +53,6 @@ function limitationDescription(token: string): string {
   >
     <header class="metrics-summary__header">
       <div>
-        <p class="metrics-summary__eyebrow">MATERIALIZED RESEARCH RESULT</p>
         <h2 id="metrics-summary-title">已物化回测结果</h2>
       </div>
       <p class="metrics-summary__status"><span aria-hidden="true">●</span> 已完成</p>
@@ -197,14 +196,6 @@ function limitationDescription(token: string): string {
 .metrics-summary__grid,
 .metrics-summary__grid dd {
   margin: 0;
-}
-
-.metrics-summary__eyebrow {
-  color: var(--color-signal-live-sea-glass);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  overflow-wrap: anywhere;
 }
 
 .metrics-summary__status {

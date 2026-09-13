@@ -108,7 +108,6 @@ function isCalendarDate(value: string): boolean {
   <section class="manual-event-risk" aria-labelledby="manual-event-risk-title">
     <header class="manual-event-risk__header">
       <div>
-        <p class="manual-event-risk__eyebrow">MANUAL EVENT RISK</p>
         <h2 id="manual-event-risk-title">人工事件风险确认</h2>
       </div>
       <p>股票 {{ symbol }}</p>
@@ -162,7 +161,6 @@ function isCalendarDate(value: string): boolean {
 <style scoped>
 .manual-event-risk { display: grid; gap: var(--space-4); padding: var(--space-4); background: var(--color-surface-graphite); border: var(--border-technical); }
 .manual-event-risk__header, .manual-event-risk__actions { display: flex; gap: var(--space-4); align-items: start; justify-content: space-between; }
-.manual-event-risk__eyebrow { color: var(--color-signal-info-cyan); font-family: var(--font-numeric); }
 .manual-event-risk__status, .manual-event-risk__warning, .manual-event-risk__error { margin: 0; padding: var(--space-3); border-inline-start: 0.25rem solid var(--color-signal-watch-amber); }
 .manual-event-risk__error { border-inline-start-color: var(--color-signal-risk-vermilion); }
 .manual-event-risk__facts, .manual-event-risk__facts div, .manual-event-risk__form, .manual-event-risk__form fieldset, .manual-event-risk__form label { display: grid; gap: var(--space-2); }

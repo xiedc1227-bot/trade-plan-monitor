@@ -113,7 +113,6 @@ function focusErrorField(field: string, event: MouseEvent): void {
   <section class="run-form" aria-labelledby="run-form-title">
     <header class="run-form__header">
       <div>
-        <p class="run-form__eyebrow">DETERMINISTIC RUN INPUT</p>
         <h2 id="run-form-title">创建回测运行</h2>
       </div>
       <p>金额、数量、费率与滑点在校验前始终保留为原始字符串。</p>
@@ -238,14 +237,6 @@ function focusErrorField(field: string, event: MouseEvent): void {
 .run-form__actions p,
 .run-form__field p {
   margin: 0;
-}
-
-.run-form__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  overflow-wrap: anywhere;
 }
 
 .run-form__grid {

@@ -50,7 +50,6 @@ const countLabels: ReadonlyArray<{
   <section class="dataset-coverage" aria-labelledby="dataset-coverage-title">
     <header class="dataset-coverage__header">
       <div>
-        <p class="dataset-coverage__eyebrow">SERVER-AUTHORED FACTS</p>
         <h2 id="dataset-coverage-title">数据覆盖与已验证数据集</h2>
       </div>
       <p>浏览器只展示服务端计数和 blocker，不推断交易日或数据完整性。</p>
@@ -177,13 +176,6 @@ const countLabels: ReadonlyArray<{
 .dataset-coverage__blockers h4,
 .dataset-coverage__footer p {
   margin: 0;
-}
-
-.dataset-coverage__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
 }
 
 .dataset-coverage__verification,

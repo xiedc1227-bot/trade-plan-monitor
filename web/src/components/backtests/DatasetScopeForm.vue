@@ -249,7 +249,6 @@ function handleDialogKeydown(event: KeyboardEvent): void {
   <section class="dataset-scope-form" aria-labelledby="dataset-scope-title">
     <header class="dataset-scope-form__header">
       <div>
-        <p class="dataset-scope-form__eyebrow">DATASET SCOPE</p>
         <h2 id="dataset-scope-title">历史数据范围</h2>
       </div>
       <p>仅接受沪深 A 股；数据完整性始终由服务端验证。</p>
@@ -433,13 +432,6 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 .dataset-scope-form__errors h3,
 .dataset-scope-form__header p {
   margin: 0;
-}
-
-.dataset-scope-form__eyebrow {
-  color: var(--color-signal-watch-amber);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
 }
 
 .dataset-scope-form__grid {

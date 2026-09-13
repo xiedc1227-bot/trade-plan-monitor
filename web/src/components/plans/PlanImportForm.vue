@@ -97,7 +97,6 @@ function utf8ByteLengthAtMost(value: string, maximum: number): number | null {
   <section class="plan-import" aria-labelledby="portable-plan-import-title">
     <header class="plan-import__header">
       <div>
-        <p class="plan-import__eyebrow">DURABLE PLAN IMPORT</p>
         <h2 id="portable-plan-import-title">导入计划版本</h2>
       </div>
       <p class="plan-import__boundary">
@@ -189,13 +188,6 @@ function utf8ByteLengthAtMost(value: string, maximum: number): number | null {
 .plan-import__hint,
 .plan-import__error {
   margin: 0;
-}
-
-.plan-import__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-family: var(--font-numeric);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
 }
 
 .plan-import__boundary {

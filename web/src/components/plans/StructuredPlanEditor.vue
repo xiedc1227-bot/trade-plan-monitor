@@ -409,7 +409,6 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
   <section class="structured-editor" :aria-labelledby="idFor('structured-editor-title')">
     <header class="structured-editor__header">
       <div>
-        <p class="structured-editor__eyebrow">STRUCTURED DRAFT</p>
         <h2 :id="idFor('structured-editor-title')" class="structured-editor__title">结构化计划编辑</h2>
       </div>
       <span class="structured-editor__status">
@@ -564,14 +563,12 @@ function conditionType(document: PlanRecord, section: SectionKey): string {
   justify-content: space-between;
 }
 
-.structured-editor__eyebrow,
 .structured-editor__title,
 .structured-editor__boundary,
 .structured-editor__conflict p {
   margin: 0;
 }
 
-.structured-editor__eyebrow,
 .structured-editor__status {
   color: var(--color-signal-info-cyan);
   font-family: var(--font-numeric);

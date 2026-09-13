@@ -83,7 +83,6 @@ async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<voi
 <template>
   <section class="plan-drafting-view" aria-labelledby="plan-workspace-title">
     <header class="plan-drafting-view__header">
-      <p class="plan-drafting-view__eyebrow">PLAN VERSION WORKSPACE</p>
       <h1 id="plan-workspace-title">计划工作台</h1>
       <p class="plan-drafting-view__description">
         创建、审核和管理交易计划版本。浏览器只提交操作意图，后端负责解析、校验与状态决策。
@@ -218,13 +217,6 @@ async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<voi
 .plan-drafting-view__header h1,
 .plan-drafting-view__header p {
   margin: 0;
-}
-
-.plan-drafting-view__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-family: var(--font-numeric);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
 }
 
 .plan-drafting-view__header h1 {

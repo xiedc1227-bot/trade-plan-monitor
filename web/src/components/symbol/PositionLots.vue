@@ -298,7 +298,6 @@ function canReduce(lot: (typeof positions.lots.value)[number]): boolean {
   <section class="position-lots" aria-labelledby="position-lots-title">
     <header class="position-lots__header">
       <div>
-        <p class="position-lots__eyebrow">MANUAL POSITION LOTS</p>
         <h2 id="position-lots-title" ref="focusFallback" tabindex="-1">人工持仓批次</h2>
       </div>
       <p>股票 {{ symbol }} · 权威日期 {{ asOfTradeDate }}</p>
@@ -457,11 +456,6 @@ function canReduce(lot: (typeof positions.lots.value)[number]): boolean {
   gap: var(--space-4);
   align-items: start;
   justify-content: space-between;
-}
-
-.position-lots__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-family: var(--font-numeric);
 }
 
 .position-lots__notice,

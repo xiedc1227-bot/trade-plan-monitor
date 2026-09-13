@@ -137,7 +137,6 @@ onBeforeUnmount(() => {
   <div class="backtest-data-view">
     <header class="backtest-data-view__hero">
       <div>
-        <p class="backtest-data-view__eyebrow">OFFLINE RESEARCH DATA</p>
         <h1>历史数据管理</h1>
         <p>管理回测数据范围、查看服务端覆盖事实，并以显式授权启动联网同步。</p>
       </div>
@@ -240,14 +239,6 @@ onBeforeUnmount(() => {
 .backtest-data-view__hero h1 {
   font-size: clamp(2rem, 5vw, 4rem);
   line-height: 1;
-}
-
-.backtest-data-view__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  overflow-wrap: anywhere;
 }
 
 .backtest-data-view__hero a,

@@ -24,7 +24,6 @@ function selectModeFromKeyboard(event: KeyboardEvent): void {
   <section class="creation-switcher" aria-label="创建计划版本">
     <div class="creation-switcher__intro">
       <div>
-        <p class="creation-switcher__eyebrow">NEW PLAN VERSION</p>
         <p class="creation-switcher__title">选择创建方式</p>
       </div>
       <p class="creation-switcher__description">
@@ -109,17 +108,9 @@ function selectModeFromKeyboard(event: KeyboardEvent): void {
   justify-content: space-between;
 }
 
-.creation-switcher__eyebrow,
 .creation-switcher__title,
 .creation-switcher__description {
   margin: 0;
-}
-
-.creation-switcher__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-family: var(--font-numeric);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
 }
 
 .creation-switcher__title {

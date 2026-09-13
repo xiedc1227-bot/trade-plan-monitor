@@ -64,7 +64,6 @@ onBeforeUnmount(() => {
   <div class="backtest-runs-view">
     <header class="backtest-runs-view__hero">
       <div>
-        <p class="backtest-runs-view__eyebrow">OFFLINE RESEARCH CATALOG</p>
         <h1 ref="pageTitle" tabindex="-1">回测运行记录</h1>
         <p>查看服务端已完整物化的研究运行；失败与取消诊断不属于运行结果。</p>
       </div>
@@ -149,14 +148,6 @@ onBeforeUnmount(() => {
   border: var(--border-technical);
   background: var(--color-surface-raised);
   color: var(--color-text-mineral);
-}
-
-.backtest-runs-view__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  overflow-wrap: anywhere;
 }
 
 .backtest-runs-view__boundary,

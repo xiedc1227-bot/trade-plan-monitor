@@ -197,7 +197,6 @@ function resolveIssue(issue: DraftReviewIssue): void {
   <section class="plan-workbench" aria-labelledby="plan-workbench-title">
     <header class="plan-workbench__header">
       <div>
-        <p class="plan-workbench__eyebrow">REVIEWED DRAFT PIPELINE</p>
         <h2 id="plan-workbench-title" class="plan-workbench__title">AI 计划提取审核</h2>
       </div>
       <p class="plan-workbench__boundary">草稿隔离 · 不自动启用</p>
@@ -275,20 +274,12 @@ function resolveIssue(issue: DraftReviewIssue): void {
   border-block-end: var(--border-technical);
 }
 
-.plan-workbench__eyebrow,
 .plan-workbench__title,
 .plan-workbench__boundary,
 .plan-workbench__intro,
 .plan-workbench__empty,
 .plan-workbench__stale-review {
   margin: 0;
-}
-
-.plan-workbench__eyebrow {
-  color: var(--color-signal-watch-amber);
-  font-family: var(--font-numeric);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
 }
 
 .plan-workbench__title {

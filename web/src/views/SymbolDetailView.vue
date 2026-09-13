@@ -172,7 +172,6 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
   <section class="symbol-detail" aria-labelledby="symbol-detail-title">
     <header class="symbol-detail__header">
       <div>
-        <p class="symbol-detail__eyebrow">AUTHORITATIVE SYMBOL DETAIL</p>
         <h1 id="symbol-detail-title">
           {{ detail === null ? "个股详情" : `${detail.summary.name} · ${detail.summary.symbol}` }}
         </h1>
@@ -417,12 +416,6 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
   border-block-end: var(--border-technical);
 }
 
-.symbol-detail__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-family: var(--font-numeric);
-}
-
-.symbol-detail__eyebrow,
 .symbol-detail__header h1 {
   overflow-wrap: anywhere;
 }

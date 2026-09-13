@@ -402,7 +402,6 @@ onBeforeUnmount(() => {
   <div class="run-detail-view">
     <header class="run-detail-view__hero">
       <div>
-        <p class="run-detail-view__eyebrow">OFFLINE RESEARCH RESULT</p>
         <h1>回测结果</h1>
         <p>仅展示服务端权威任务状态与已物化历史模拟结果。</p>
       </div>
@@ -488,7 +487,6 @@ onBeforeUnmount(() => {
     >
       <div class="run-detail-view__results-heading">
         <div>
-          <p class="run-detail-view__eyebrow">BOUNDED RESULT REVIEW</p>
           <h2 id="result-review-title">结果审阅</h2>
         </div>
         <p>每次仅读取 URL 当前选择的一页结果，不执行历史重放或明细重建。</p>
@@ -826,13 +824,6 @@ onBeforeUnmount(() => {
 .run-detail-view__state,
 .run-detail-view__availability {
   margin: 0;
-}
-
-.run-detail-view__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
 }
 
 .run-detail-view__visually-hidden {

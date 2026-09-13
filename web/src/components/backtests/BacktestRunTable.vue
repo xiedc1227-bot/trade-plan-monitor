@@ -27,7 +27,6 @@ const emit = defineEmits<Emits>();
   <section class="run-table" aria-labelledby="run-table-title">
     <header class="run-table__header">
       <div>
-        <p class="run-table__eyebrow">MATERIALIZED RESEARCH RUNS</p>
         <h2 id="run-table-title">已完成运行</h2>
       </div>
       <button data-testid="refresh-run-list" type="button" @click="emit('refresh')">
@@ -152,13 +151,6 @@ const emit = defineEmits<Emits>();
 .run-table__header p,
 .run-table__state {
   margin: 0;
-}
-
-.run-table__eyebrow {
-  color: var(--color-signal-watch-amber);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
 }
 
 .run-table__scroll {

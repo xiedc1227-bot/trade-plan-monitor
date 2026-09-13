@@ -75,7 +75,6 @@ function isResolved(item: ReviewItem): boolean {
   <section class="extraction-evidence" aria-labelledby="extraction-evidence-title">
     <div class="extraction-evidence__heading">
       <div>
-        <p class="extraction-evidence__eyebrow">EXTRACTION REVIEW</p>
         <h2 id="extraction-evidence-title" class="extraction-evidence__title">提取证据与问题</h2>
       </div>
       <span class="extraction-evidence__state">{{ extraction.status }}</span>
@@ -247,7 +246,6 @@ function isResolved(item: ReviewItem): boolean {
   justify-content: space-between;
 }
 
-.extraction-evidence__eyebrow,
 .extraction-evidence__title,
 .extraction-evidence__notice,
 .extraction-evidence__success,
@@ -259,7 +257,6 @@ function isResolved(item: ReviewItem): boolean {
   margin: 0;
 }
 
-.extraction-evidence__eyebrow,
 .extraction-evidence__state,
 .extraction-evidence__item-heading span {
   color: var(--color-signal-live-sea-glass);

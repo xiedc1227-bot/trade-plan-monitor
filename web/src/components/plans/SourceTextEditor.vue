@@ -74,7 +74,6 @@ function submitSource(): void {
   <section class="source-editor" aria-labelledby="source-editor-title">
     <div class="source-editor__heading">
       <div>
-        <p class="source-editor__eyebrow">UNTRUSTED PLAIN TEXT</p>
         <h2 id="source-editor-title" class="source-editor__title">交易计划原文</h2>
       </div>
       <output class="source-editor__count" for="plan-source-text">
@@ -135,7 +134,6 @@ function submitSource(): void {
   justify-content: space-between;
 }
 
-.source-editor__eyebrow,
 .source-editor__title,
 .source-editor__hint {
   margin: 0;
@@ -146,7 +144,6 @@ function submitSource(): void {
   color: var(--color-signal-risk-vermilion);
 }
 
-.source-editor__eyebrow,
 .source-editor__count {
   color: var(--color-signal-watch-amber);
   font-family: var(--font-numeric);

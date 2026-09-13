@@ -86,7 +86,6 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
   <section class="run-filters" aria-labelledby="run-filters-title">
     <header class="run-filters__header">
       <div>
-        <p class="run-filters__eyebrow">URL FILTERS</p>
         <h2 id="run-filters-title">运行记录筛选</h2>
       </div>
       <p>筛选、排序、页码与游标始终写入当前 URL。</p>
@@ -240,13 +239,6 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 .run-filters__header p,
 .run-filters__errors h3 {
   margin: 0;
-}
-
-.run-filters__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
 }
 
 .run-filters__grid {

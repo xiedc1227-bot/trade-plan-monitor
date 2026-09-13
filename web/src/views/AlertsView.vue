@@ -582,7 +582,6 @@ function isConflict(value: unknown): boolean {
 <template>
   <section class="alerts-view" aria-labelledby="alerts-title">
     <header class="alerts-view__header">
-      <p class="alerts-view__eyebrow">AUTHORITATIVE ALERT CENTER</p>
       <h1 id="alerts-title">文字提醒中心</h1>
       <p>提醒、确认与人工成交是彼此独立的操作。</p>
     </header>
@@ -636,13 +635,6 @@ function isConflict(value: unknown): boolean {
 
 .alerts-view__header h1 {
   margin-block: var(--space-1);
-}
-
-.alerts-view__eyebrow {
-  margin: 0;
-  color: var(--color-signal-info-cyan);
-  font-family: var(--font-numeric);
-  letter-spacing: 0.08em;
 }
 
 .alerts-view__error {

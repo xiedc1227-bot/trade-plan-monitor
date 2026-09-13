@@ -19,7 +19,6 @@ defineProps<Props>();
     aria-labelledby="reference-market-coverage-title"
   >
     <div>
-      <p class="coverage-panel__eyebrow">SERVER-RESOLVED REFERENCE MARKET</p>
       <h2 id="reference-market-coverage-title">参考指数覆盖预览</h2>
     </div>
     <p v-if="state === 'IDLE'" role="status">选择计划版本并填写规范数据集哈希后由后端解析。</p>
@@ -71,13 +70,6 @@ defineProps<Props>();
 .coverage-panel h3,
 .coverage-panel p {
   margin: 0;
-}
-
-.coverage-panel__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
 }
 
 .coverage-panel__facts {

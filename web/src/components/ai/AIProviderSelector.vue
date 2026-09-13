@@ -35,7 +35,6 @@ function handleSelect(event: Event): void {
   <section class="provider-selector" aria-labelledby="provider-selector-title">
     <div class="provider-selector__heading">
       <div>
-        <p class="provider-selector__eyebrow">AI PROVIDER</p>
         <h2 id="provider-selector-title" class="provider-selector__title">当前 AI 配置</h2>
       </div>
       <span class="provider-selector__boundary">配置文件只读</span>
@@ -105,14 +104,12 @@ function handleSelect(event: Event): void {
   justify-content: space-between;
 }
 
-.provider-selector__eyebrow,
 .provider-selector__title,
 .provider-selector__hint,
 .provider-selector__facts dd {
   margin: 0;
 }
 
-.provider-selector__eyebrow,
 .provider-selector__boundary {
   color: var(--color-signal-info-cyan);
   font-family: var(--font-numeric);

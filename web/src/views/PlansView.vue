@@ -249,7 +249,6 @@ function deactivate(command: PlanDeactivationCommand): void {
   <section class="plans-view" aria-labelledby="plans-view-title">
     <header class="plans-view__header">
       <div>
-        <p class="plans-view__eyebrow">VERSIONED PLAN CONTROL</p>
         <h2 id="plans-view-title">计划版本与激活</h2>
       </div>
       <p>活动版本不可原地编辑。</p>
@@ -391,11 +390,6 @@ function deactivate(command: PlanDeactivationCommand): void {
   align-items: end;
   justify-content: space-between;
   border-block-end: var(--border-technical);
-}
-
-.plans-view__eyebrow {
-  color: var(--color-signal-watch-amber);
-  font-family: var(--font-numeric);
 }
 
 .plans-view__layout {

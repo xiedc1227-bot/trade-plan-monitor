@@ -213,7 +213,6 @@ function explicitReviewBinding(
   >
     <section class="activation-dialog__content">
       <header>
-        <p class="activation-dialog__eyebrow">EXPLICIT PLAN CHANGE</p>
         <h2 id="plan-action-title">
           {{ action === "ACTIVATE" ? "确认激活计划" : "确认停用计划" }}
         </h2>
@@ -283,11 +282,6 @@ function explicitReviewBinding(
   display: grid;
   gap: var(--space-4);
   padding: var(--space-6);
-}
-
-.activation-dialog__eyebrow {
-  color: var(--color-signal-risk-vermilion);
-  font-family: var(--font-numeric);
 }
 
 .activation-dialog__comparison {

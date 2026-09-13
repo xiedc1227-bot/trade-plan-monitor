@@ -60,7 +60,6 @@ onBeforeUnmount(() => {
   <div class="backtest-new-view">
     <header class="backtest-new-view__hero">
       <div>
-        <p class="backtest-new-view__eyebrow">OFFLINE RESEARCH RUN</p>
         <h1 ref="pageTitle" tabindex="-1">创建回测</h1>
         <p>选择不可变计划版本与已验证数据集，提交可复现的回测运行。</p>
       </div>
@@ -148,14 +147,6 @@ onBeforeUnmount(() => {
 .backtest-new-view__hero h1 {
   font-size: clamp(2rem, 5vw, 4rem);
   line-height: 1;
-}
-
-.backtest-new-view__eyebrow {
-  color: var(--color-signal-info-cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  overflow-wrap: anywhere;
 }
 
 .backtest-new-view__hero a,

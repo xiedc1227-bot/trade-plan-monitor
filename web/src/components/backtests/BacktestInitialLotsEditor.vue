@@ -33,7 +33,7 @@ function inputValue(event: Event): string {
   <section class="lots-editor" aria-labelledby="initial-lots-title">
     <header class="lots-editor__header">
       <div>
-        <h3 id="initial-lots-title">初始持仓 lots</h3>
+        <h3 id="initial-lots-title">初始持仓批次</h3>
         <p>可选，最多 200 个。这里只校验生成契约的输入形状，不推断计划资格或 T+1。</p>
       </div>
       <button
@@ -56,7 +56,7 @@ function inputValue(event: Event): string {
         data-testid="initial-lot-row"
       >
         <header>
-          <h4>Lot {{ index + 1 }}</h4>
+          <h4>批次 {{ index + 1 }}</h4>
           <button type="button" :disabled="disabled" @click="emit('remove', lot.draftId)">
             删除
           </button>
