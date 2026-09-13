@@ -26,18 +26,19 @@ import httpx
 from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V4, build_plan_extraction_prompt
 
 APPROVED_MODEL = "deepseek-v4-pro"
-AUTHORIZATION = "R14_3_AI_30_MARKET_IN_APP_15MIN"
+AUTHORIZATION = "R14_3_AI_60_MARKET_IN_APP_15MIN"
+APPROVED_DATES = frozenset({date(2026, 9, day) for day in (14, 15, 16)})
 _ROOT = Path(__file__).resolve().parents[1]
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _INDEXES = frozenset({"000001.SH", "399001.SZ", "399006.SZ", "000688.SH", "399107.SZ"})
 _MARKET_CAPS = {
-    "trade_cal": 2,
+    "trade_cal": 3,
     "stk_limit": 0,
     "daily": 0,
     "rt_min_daily": 3,
-    "rt_min": 4,
+    "rt_min": 15,
     "idx_mins": 5,
-    "rt_idx_min_daily": 12,
+    "rt_idx_min_daily": 25,
     "index_daily": 5,
 }
 
@@ -59,20 +60,24 @@ class Budget:
         per_key: Mapping[str, int],
         seconds: int,
         on_denied: Callable[[], None] | None = None,
+        gate_lock: threading.Lock | None = None,
+        stopped: threading.Event | None = None,
     ) -> None:
         self._total = total
         self._caps = dict(per_key)
         self._deadline = monotonic() + seconds
         self._attempts: dict[str, int] = {}
         self._denied = 0
-        self._lock = threading.Lock()
+        self._lock = gate_lock if gate_lock is not None else threading.Lock()
+        self._stopped = stopped if stopped is not None else threading.Event()
         self._on_denied = on_denied
 
     def admit(self, key: str) -> None:
         with self._lock:
             count = self._attempts.get(key, 0)
             allowed = (
-                key in self._caps
+                not self._stopped.is_set()
+                and key in self._caps
                 and count < self._caps[key]
                 and sum(self._attempts.values()) < self._total
                 and monotonic() < self._deadline
@@ -81,6 +86,7 @@ class Budget:
                 self._attempts[key] = count + 1
                 return
             self._denied += 1
+            self._stopped.set()
         if self._on_denied is not None:
             self._on_denied()
         raise BudgetDenied
@@ -90,6 +96,7 @@ class Budget:
 
         with self._lock:
             self._denied += 1
+            self._stopped.set()
         if self._on_denied is not None:
             self._on_denied()
         raise BudgetDenied
@@ -102,6 +109,7 @@ class Budget:
                 "totalAttempts": sum(self._attempts.values()),
                 "attempts": self._attempts.copy(),
                 "deniedBeforeNetwork": self._denied,
+                "stopped": self._stopped.is_set(),
             }
 
 
@@ -122,6 +130,47 @@ def approved_sources() -> dict[str, tuple[str, str]]:
         )
         for case_id, source in sources.items()
     }
+
+
+def _valid_run_id(run_id: str, now: datetime) -> bool:
+    """Bind a single date-labelled run name to the proposed exchange-day range."""
+
+    return now.date() in APPROVED_DATES and run_id == f"r14-{now:%Y%m%d}-a"
+
+
+def _claim_session(root: Path, run_id: str) -> Path:
+    """Atomically consume this local installation's one R14 session slot."""
+
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "_session_claimed").mkdir(exist_ok=False)
+    folder = root / run_id
+    folder.mkdir(parents=True, exist_ok=False)
+    return folder
+
+
+def _session_budgets(on_denied: Callable[[], None]) -> tuple[Budget, Budget]:
+    """Use one shared server-stop signal for either physical-call boundary."""
+
+    gate_lock = threading.Lock()
+    stopped = threading.Event()
+    return (
+        Budget(
+            total=3,
+            per_key={key: 1 for key in approved_sources()},
+            seconds=900,
+            on_denied=on_denied,
+            gate_lock=gate_lock,
+            stopped=stopped,
+        ),
+        Budget(
+            total=60,
+            per_key=_MARKET_CAPS,
+            seconds=900,
+            on_denied=on_denied,
+            gate_lock=gate_lock,
+            stopped=stopped,
+        ),
+    )
 
 
 class AIBudgetTransport(httpx.AsyncBaseTransport):
@@ -156,6 +205,9 @@ class AIBudgetTransport(httpx.AsyncBaseTransport):
                 and len(messages) == 1
                 and messages[0]["role"] == "user"
                 and body.get("max_tokens") == 4096
+                and body.get("thinking") == {"type": "disabled"}
+                and body.get("response_format") == {"type": "json_object"}
+                and body.get("stream") is False
                 and len(prompt.encode("utf-8")) <= 19_000
             )
         except KeyError, IndexError, TypeError, UnicodeError, ValueError:
@@ -183,7 +235,10 @@ class MarketBudget:
         elif name in {"idx_mins", "rt_idx_min_daily", "index_daily"}:
             if symbol not in _INDEXES:
                 self._budget.reject()
-        elif name in {"trade_cal", "stk_limit"}:
+        elif name == "trade_cal":
+            if kwargs.get("exchange") not in {"SSE", "SZSE"}:
+                self._budget.reject()
+        elif name == "stk_limit":
             pass
         else:
             self._budget.reject()
@@ -216,7 +271,7 @@ def _preflight() -> dict[str, object]:
         else None
     )
     now = datetime.now(_SHANGHAI)
-    eligible = now.weekday() < 5 and time(13, 10) <= now.time() <= time(14, 30)
+    eligible = now.date() in APPROVED_DATES and time(13, 10) <= now.time() <= time(14, 30)
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind(("127.0.0.1", 18765))
@@ -263,7 +318,7 @@ def _preflight() -> dict[str, object]:
             "aiPerInputAttempts": 1,
             "aiPromptUtf8Bytes": 19_000,
             "aiOutputTokensPerRequest": 4_096,
-            "marketPhysicalAttempts": 30,
+            "marketPhysicalAttempts": 60,
             "marketPerEndpointAttempts": _MARKET_CAPS,
             "wallSeconds": 900,
             "browserPort": 18765,
@@ -272,7 +327,13 @@ def _preflight() -> dict[str, object]:
     }
 
 
-def _bounded_ai_factory(config_path: Path, plan_lifecycle: object, budget: Budget):
+def _bounded_ai_factory(
+    config_path: Path,
+    plan_lifecycle: object,
+    budget: Budget,
+    *,
+    inner_transport: httpx.AsyncBaseTransport | None = None,
+):
     from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
 
     class BoundedAIWebLifecycle(ConfiguredAIWebLifecycle):
@@ -293,7 +354,7 @@ def _bounded_ai_factory(config_path: Path, plan_lifecycle: object, budget: Budge
             bounded = replace(
                 selected,
                 config=selected.config.model_copy(
-                    update={"max_retries": 0, "max_output_tokens": 4096}
+                    update={"max_retries": 0, "max_output_tokens": 4096, "timeout_seconds": 30}
                 ),
             )
             self._binding = bounded
@@ -303,12 +364,50 @@ def _bounded_ai_factory(config_path: Path, plan_lifecycle: object, budget: Budge
     return BoundedAIWebLifecycle(
         config_path=config_path,
         client_factory=lambda: httpx.AsyncClient(
-            transport=AIBudgetTransport(budget),
+            transport=AIBudgetTransport(budget, inner=inner_transport),
             timeout=httpx.Timeout(30),
             follow_redirects=False,
             trust_env=False,
         ),
         review_store=plan_lifecycle,
+    )
+
+
+def _guarded_market_factory(original_factory: Callable[[object], object], guard: MarketBudget):
+    """Install the same pre-query guard on each production-owned SDK instance."""
+
+    def guarded_factory(settings: object) -> object:
+        client = original_factory(settings)
+        query = client.query
+        client.query = lambda name, fields="", **kwargs: guard.call(query, name, fields, **kwargs)
+        return client
+
+    return guarded_factory
+
+
+def _create_guarded_app(
+    *,
+    config_path: Path,
+    database: Path,
+    plan_lifecycle: object,
+    ai_budget: Budget,
+    static_directory: Path,
+    ai_inner_transport: httpx.AsyncBaseTransport | None = None,
+):
+    from trade_plan_monitor.web.app import create_app
+    from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory
+
+    return create_app(
+        runtime_factory=create_monitor_composition_factory(
+            config_path=config_path, database_path=database
+        ),
+        plan_lifecycle_factory=lambda: plan_lifecycle,
+        ai_lifecycle_factory=lambda: _bounded_ai_factory(
+            config_path, plan_lifecycle, ai_budget, inner_transport=ai_inner_transport
+        ),
+        bind_host="127.0.0.1",
+        bind_port=18765,
+        static_directory=static_directory,
     )
 
 
@@ -321,7 +420,9 @@ async def _deactivate_isolated_plan(database: Path) -> str:
     from trade_plan_monitor.web.routers.plans import PlanDeactivationCommand
     from trade_plan_monitor.web.schemas import MutationContext
 
-    plans = PersistentPlanWebLifecycle(database_path=database)
+    plans = PersistentPlanWebLifecycle(
+        database_path=database, clock=lambda: datetime.now(_SHANGHAI)
+    )
     await plans.start()
     try:
         state = await plans.get_plan_activation_state(symbol="003043.SZ")
@@ -359,8 +460,7 @@ async def _serve(run_id: str) -> int:
 
     from trade_plan_monitor.config import load_application_config
     from trade_plan_monitor.runtime import production
-    from trade_plan_monitor.web.app import create_app, installed_web_assets
-    from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory
+    from trade_plan_monitor.web.app import installed_web_assets
     from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -371,17 +471,21 @@ async def _serve(run_id: str) -> int:
     except OSError:
         listener.close()
         raise BudgetDenied from None
-    folder = _ROOT / "data/r14-acceptance" / run_id
+    root = _ROOT / "data/r14-acceptance"
     try:
-        folder.mkdir(parents=True, exist_ok=False)
+        folder = _claim_session(root, run_id)
     except BaseException:
         listener.close()
         raise
     database = folder / "monitor.sqlite3"
     config_path = _ROOT / "config/app.yaml"
-    configuration = load_application_config(config_path)
-    if configuration.tushare.connect_ip is None:
-        raise BudgetDenied
+    try:
+        configuration = load_application_config(config_path)
+        if configuration.tushare.connect_ip is None:
+            raise BudgetDenied
+    except BaseException:
+        listener.close()
+        raise
     server: uvicorn.Server | None = None
     task: asyncio.Task[None] | None = None
 
@@ -389,22 +493,11 @@ async def _serve(run_id: str) -> int:
         if server is not None:
             server.should_exit = True
 
-    ai_budget = Budget(
-        total=3, per_key={key: 1 for key in approved_sources()}, seconds=900, on_denied=stop_server
-    )
-    market_budget = Budget(total=30, per_key=_MARKET_CAPS, seconds=900, on_denied=stop_server)
+    ai_budget, market_budget = _session_budgets(stop_server)
     market_guard = MarketBudget(market_budget)
     original_factory = production.create_tushare_client
 
-    def guarded_factory(settings: object) -> object:
-        client = original_factory(settings)
-        query = client.query
-        client.query = lambda name, fields="", **kwargs: market_guard.call(
-            query, name, fields, **kwargs
-        )
-        return client
-
-    production.create_tushare_client = guarded_factory
+    production.create_tushare_client = _guarded_market_factory(original_factory, market_guard)
     audit: dict[str, object] = {
         "runId": run_id,
         "startedAt": datetime.now(_SHANGHAI).isoformat(),
@@ -415,18 +508,15 @@ async def _serve(run_id: str) -> int:
         "activationRecovery": "NOT_RUN_NO_ACTIVE_PLAN",
     }
     try:
-        plan_lifecycle = PersistentPlanWebLifecycle(database_path=database)
+        plan_lifecycle = PersistentPlanWebLifecycle(
+            database_path=database, clock=lambda: datetime.now(_SHANGHAI)
+        )
         with installed_web_assets() as static_directory:
-            app = create_app(
-                runtime_factory=create_monitor_composition_factory(
-                    config_path=config_path, database_path=database
-                ),
-                plan_lifecycle_factory=lambda: plan_lifecycle,
-                ai_lifecycle_factory=lambda: _bounded_ai_factory(
-                    config_path, plan_lifecycle, ai_budget
-                ),
-                bind_host="127.0.0.1",
-                bind_port=18765,
+            app = _create_guarded_app(
+                config_path=config_path,
+                database=database,
+                plan_lifecycle=plan_lifecycle,
+                ai_budget=ai_budget,
                 static_directory=static_directory,
             )
             server = uvicorn.Server(
@@ -486,6 +576,7 @@ async def _serve(run_id: str) -> int:
                 audit["status"] = "SHUTDOWN_FAILED"
                 return_code = 1
         listener.close()
+        production.create_tushare_client = original_factory
         try:
             audit["isolatedPlanCleanup"] = await _deactivate_isolated_plan(database)
         except Exception as error:
@@ -495,6 +586,9 @@ async def _serve(run_id: str) -> int:
         audit["finishedAt"] = datetime.now(_SHANGHAI).isoformat()
         audit["ai"] = ai_budget.snapshot()
         audit["market"] = market_budget.snapshot()
+        if audit["ai"]["deniedBeforeNetwork"] > 0 or audit["market"]["deniedBeforeNetwork"] > 0:
+            audit["status"] = "BUDGET_DENIED"
+            return_code = 1
         (folder / "audit.json").write_text(json.dumps(audit, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(audit, sort_keys=True), flush=True)
     return return_code
@@ -513,10 +607,17 @@ def main() -> int:
     if args.authorize != AUTHORIZATION or not preflight.get("ready"):
         print(json.dumps({"status": "NOT_RUN_AUTHORIZATION_OR_PREFLIGHT"}))
         return 2
-    if not args.run_id or not args.run_id.isascii() or not args.run_id.replace("-", "").isalnum():
+    if not _valid_run_id(args.run_id, datetime.now(_SHANGHAI)):
         print(json.dumps({"status": "NOT_RUN_INVALID_ID"}))
         return 2
-    return asyncio.run(_serve(args.run_id))
+    try:
+        return asyncio.run(_serve(args.run_id))
+    except FileExistsError:
+        print(json.dumps({"status": "NOT_RUN_SESSION_ALREADY_CLAIMED"}))
+        return 2
+    except BudgetDenied:
+        print(json.dumps({"status": "NOT_RUN_PRECONDITION_DENIED"}))
+        return 2
 
 
 if __name__ == "__main__":

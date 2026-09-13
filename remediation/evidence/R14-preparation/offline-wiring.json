@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "r14-offline-wiring-v1",
+  "evidenceKind": "SIMULATED_SUPPLIER_TRANSPORT_NOT_REAL_R14",
+  "test": "tests/integration/test_r14_offline_wiring.py",
+  "virtualClock": "2026-09-14T13:12:00+08:00..2026-09-14T13:25:12+08:00",
+  "ai": {
+    "caseIds": ["LITERAL", "SEM-AMB-01", "SEM-UNS-01"],
+    "physicalAttempts": 3,
+    "perRequestTimeoutSeconds": 30,
+    "responses": "SIMULATED_PARTIAL_DRAFTS_NOT_HUMAN_ORACLE_PASS"
+  },
+  "review": {
+    "source": "SYNTHETIC_NUMERIC_EQUIVALENT_SHORTHAND_SEPARATE_FROM_THREE_AI_CASES",
+    "currentReviewAndActivation": true,
+    "activationRecovery": "TEST_TRIGGERED_PRODUCTION_RECOVERY"
+  },
+  "market": {
+    "simulatedStockSourceTimeLabel": "END",
+    "physicalAttempts": 39,
+    "attemptsByEndpoint": {
+      "trade_cal": 3,
+      "idx_mins": 5,
+      "rt_idx_min_daily": 15,
+      "index_daily": 5,
+      "rt_min_daily": 1,
+      "rt_min": 10
+    },
+    "completedFiveMinuteEvaluations": [
+      "2026-09-14T13:20:00+08:00",
+      "2026-09-14T13:25:00+08:00"
+    ],
+    "transportTimeoutSeconds": 15,
+    "controllerInCycleRetries": 0,
+    "physicalDeniedBeforeNetwork": 0
+  },
+  "channel": "IN_APP_ONLY",
+  "launcherDenial": {
+    "server": "TEST_LOCAL_LIFESPAN_ADAPTER_NOT_REAL_UVICORN_SOCKET",
+    "refusedEndpoint": "daily",
+    "refusedBeforePhysicalAttempt": true,
+    "status": "BUDGET_DENIED",
+    "exitCode": 1,
+    "sdkFactoryRestored": true
+  },
+  "cleanup": "ISOLATED_PLAN_DEACTIVATED_AND_ORIGINAL_DATABASE_SENTINEL_UNCHANGED",
+  "unverified": [
+    "LIVE_PROVIDER_ENTITLEMENT_RESPONSE_AND_CACHE_SUCCESS",
+    "LIVE_MARKET_OPEN_STATUS",
+    "REAL_AI_SEMANTIC_ACCURACY_AND_BILLING",
+    "HUMAN_REVIEW_DURATION",
+    "REAL_BROWSER_VISIBLE_RECEIPT"
+  ]
+}

@@ -6,7 +6,7 @@
 
 - `config/app.yaml` 存在且校验通过。仅检查白名单元数据：AI 为 `DEEPSEEK`、主机 `api.deepseek.com`、主模型 `deepseek-flash`、附加模型 `deepseek-v4-pro`、密钥存在；行情主机 `api.quicksync.cn`、token 和已配置的 `connect_ip` 存在；Web 为 `127.0.0.1:8765`。字段存在不证明当前权限、余额、价格或模型可用。未记录凭证值、端点查询串、完整 URL 或供应商响应。
 - 股票认证于 2026-09-09 14:48:40+08:00 观察到 `READY`/`SourceTimeLabel=END`，有效至 2026-09-16 14:48:40+08:00。指数认证于 2026-09-11 10:20:44+08:00 观察到四个展示指数加 `399107.SZ` 为 `READY`，有效至 2026-09-18 10:20:44+08:00；北证50为 `DEFERRED`。这些是有日期的旧真实观察，不是本次 R14 实测。2026-08-31 T058 `TRANSIENT` 报告和 2026-09-09 安装态盘后报告也只保留其原范围。当前余额、额度、权限、休市状态与真实模型响应未知。
-- 本地预检时钟是星期日 2026-09-13 13:29+08:00，未查询交易所。建议的**唯一一次**会话在获批后 2026-09-14、15 或 16 中首个交易所开市日，于 13:10–14:30+08:00 启动并在15分钟内结束。工作日不等于已证明开市；有界的 `trade_cal` 调用确认。若股票认证过期，本批次停止，须重新提出含费用的认证方案。
+- 本地预检时钟是星期日 2026-09-13 13:29+08:00，未查询交易所。建议的**唯一一次**会话在获批后 2026-09-14、15 或 16 中首个交易所开市日，于 13:10–14:30+08:00 启动并在15分钟内结束。代码强制这三个日期、启动时间窗、与日期一致的 `r14-YYYYMMDD-a` run ID 以及一次原子本地会话占位。固定的 `--authorize` 文本**不是用户授权的证明**。预检**不证明**交易所开市：操作员须确认，生产启动后的有界 `trade_cal` 提供运行时日历。若股票认证过期，本批次停止，须重新提出含费用的认证方案。
 - 当前 DeepSeek [官方模型与价格页](https://api-docs.deepseek.com/quick_start/pricing/)列出 `deepseek-v4-pro` 和 `deepseek-v4-flash`，未列出本地主模型 `deepseek-flash`。本方案明确选择**已配置的附加模型** `deepseek-v4-pro`，不修改用户默认配置。模型不存在或权限错误消耗一次失败尝试，不授权切换模型或重试。
 
 ## R14-P2. 精确最小批次与强制停止
@@ -16,11 +16,23 @@
 | 范围 | 精确边界 | 代码强制控制 |
 | --- | --- | --- |
 | AI | 三个仓库内固定输入：`tests/fixtures/ai/explicit-plan-literal-source-v3.json` 的 `LITERAL`，以及 `explicit-plan-semantic-acceptance-v2.json` 的 `SEM-AMB-01`、`SEM-UNS-01`；各一次请求至 `POST https://api.deepseek.com/chat/completions`，模型 `deepseek-v4-pro`，非思考 JSON 输出。完整中文原文测试计划及两段短文本会离开本机。 | **物理尝试总数3、每输入1、应用重试0、传输重试0、单次超时30秒、每次提示词不超过19,000 UTF-8字节、每次输出参数 `max_tokens=4096`。** 其他输入、模型、主机及路径在联网前拒绝。不另做连接测试。 |
-| 行情 | `003043.SZ`；SSE/SZSE交易日历；当前股票分钟数据及现有可选五指数展示上下文 `000001.SH`、`399001.SZ`、`399006.SZ`、`000688.SH`、`399107.SZ`。不请求北证。 | **物理 SDK 查询总数30**，包含初始化、恢复、日历、可选指数、定时轮询、失败和重试。各端点上限：`trade_cal=2`、`stk_limit=0`、`daily=0`、`rt_min_daily=3`、`rt_min=4`、`idx_mins=5`、`rt_idx_min_daily=12`、`index_daily=5`。总上限30优先。仅接受已配置的直连 `connect_ip`：每查询一次 HTTPS POST，验证 TLS Host/SNI，urllib3 重试0；实时请求控制器周期内重试0。 |
+| 行情 | `003043.SZ`；SSE/SZSE交易日历；当前股票分钟数据及生产组合中五个始终启用的指数 `000001.SH`、`399001.SZ`、`399006.SZ`、`000688.SH`、`399107.SZ`。不请求北证。 | **物理 SDK 查询总数60**，包含初始化、恢复、日历、指数批次、定时轮询和失败尝试。各端点上限：`trade_cal=3`、`stk_limit=0`、`daily=0`、`rt_min_daily=3`、`rt_min=15`、`idx_mins=5`、`rt_idx_min_daily=25`、`index_daily=5`；各端点上限之和为56。拒绝的调用单独计数，原子阻止后续 AI 与行情启动，并以 `BUDGET_DENIED` 停服。仅接受已配置的直连 `connect_ip`：每查询一次 HTTPS POST，验证 TLS Host/SNI，urllib3 重试0；实时请求控制器周期内重试0。 |
 | 时间与界面 | 一个15分钟会话，精确回环地址 `127.0.0.1:18765`、一个隔离 SQLite 数据库和一个浏览器。 | 新调用900秒截止，之后最多20秒清理服务；行情传输超时15秒。额度时限后无新物理调用，额度拒绝后不重启。脚本只拥有并停止自身服务；不触碰 `8765`。不安排后台重复运行。 |
 | 提醒与交易 | 现有生产组合只使用 `InAppChannel`。 | 不使用 webhook、邮件、推送、券商、订单、成交或真实库存操作。浏览器仅本地访问；如需持仓，须在隔离库中单独标注为合成测试登记。 |
 
-DeepSeek 页面当前公布 Pro 高峰价为**未命中缓存输入每百万 token 1.32 美元、输出每百万 token 3.96 美元**（低谷半价）。若每个19,000字节提示词对应不超过19,000计费 token 且框架开销可忽略，三次4096-token输出按高峰价约**0.124美元**；这只是规划估算，**不是有保证的金额上限**。DeepSeek 指出真实计费 token 以模型返回 usage 为准；此 API 不提供客户端输入 token 或美元硬上限。代码强制提示词字节、输出 token 参数和物理调用数，但**无法强制精确计费输入 token 或美元上限**。执行前账户所有者应核对当前价格并设置账户侧消费/余额上限，或者明确接受“调用数有界、美元金额无代码保证”的风险。`api.quicksync.cn` 账户的额度/价格也未知；本地只可强制最多30次请求，不猜测其价格。[DeepSeek token 用量说明](https://api-docs.deepseek.com/quick_start/token_usage/)。
+DeepSeek 页面当前公布 Pro 高峰价为**未命中缓存输入每百万 token 1.32 美元、输出每百万 token 3.96 美元**（低谷半价）。若每个19,000字节提示词对应不超过19,000计费 token 且框架开销可忽略，三次4096-token输出按高峰价约**0.124美元**；这只是规划估算，**不是有保证的金额上限**。DeepSeek 指出真实计费 token 以模型返回 usage 为准；此 API 不提供客户端输入 token 或美元硬上限。代码强制提示词字节、输出 token 参数和物理调用数，但**无法强制精确计费输入 token 或美元上限**。执行前账户所有者应核对当前价格并设置账户侧消费/余额上限，或者明确接受“调用数有界、美元金额无代码保证”的风险。`api.quicksync.cn` 账户的额度/价格也未知；本地只可强制最多60次请求，不猜测其价格。[DeepSeek token 用量说明](https://api-docs.deepseek.com/quick_start/token_usage/)。
+
+此前30次查询的方案**尚未授权**，现由本版替代。在实际生产接线中，首次成功的五指数完整批次分别使用 `idx_mins=5`、`rt_idx_min_daily=5`、`index_daily=5`；后续成功批次复用历史/日线缓存，每批使用5次指数实时查询。SZSE计划在启动时的SSE日历之外，激活后还要刷新SSE和SZSE日历；激活股票每分钟轮询。下表用虚拟上海时钟及合成的有效供应商数据演示精确离线情景；这是容量例子，不保证真人能按时完成复核。
+
+| 模拟上海时间 | 正常工作及操作员假设 | 累计受控行情尝试 |
+| --- | --- | --- |
+| 13:12:00–13:15:11 | 服务启动、SSE日历。三次AI请求及人工复核占用同一会话时间；示例假设操作员在13:15:30前完成复核。 | `trade_cal=1`；合计1 |
+| 13:15:12 | 激活前首个完整指数桶；历史、实时及日线各查询五次。有效数据写入当日缓存。 | `idx_mins=5`、`rt_idx_min_daily=5`、`index_daily=5`；合计16 |
+| 13:15:30–13:20:12 | 离线测试激活数值等价的合成计划；一次测试触发 `rt_min_daily` 恢复；激活计划刷新SSE/SZSE；五次股票分钟查询，完成首次五分钟求值。 | `trade_cal=3`、`rt_min_daily=1`、`rt_min=5`、指数实时10；合计29 |
+| 13:20:13–13:25:12 | 再查五次股票分钟数据，取得下一个完整指数桶并完成第二次五分钟求值。 | `rt_min=10`、`rt_idx_min_daily=15`；合计**39** |
+| 13:25:13–13:27:00 | 会话余量和受控关停；本双求值示例不需再请求。 | 总额度60中已用39、全局余21，但各端点上限合计只余17 |
+
+真实启动、AI延迟、人工复核、指数发布滞后、供应商响应和浏览器操作可能不同。若复核/激活错过900秒内可用的两个完整截止点，第二次求值标 `NOT_OBSERVED`；不延时或重启。首次指数批次失败可能导致缓存未建立，发布滞后重试也会增加尝试或提前触及 `idx_mins=5`／`rt_idx_min_daily=25`；防护届时停止运行。离线测试证明有效合成数据路径和强制拒绝，**不证明**真实供应商响应有效性、权限、金额或实际浏览器收悉。
 
 ## R14-P3. 已审阅计划与观察 oracle
 
@@ -40,16 +52,18 @@ DeepSeek 页面当前公布 Pro 高峰价为**未命中缓存输入每百万 tok
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\r14_bounded_acceptance.py
-.\.venv\Scripts\python.exe -m pytest tests\unit\test_r14_bounded_acceptance.py -q
+.\.venv\Scripts\python.exe -m pytest tests\unit\test_r14_bounded_acceptance.py tests\integration\test_r14_offline_wiring.py -q
 # 仅在明确批准后、合适时间窗口执行：
-.\.venv\Scripts\python.exe scripts\r14_bounded_acceptance.py --execute --authorize R14_3_AI_30_MARKET_IN_APP_15MIN --run-id r14-20260914-a
+.\.venv\Scripts\python.exe scripts\r14_bounded_acceptance.py --execute --authorize R14_3_AI_60_MARKET_IN_APP_15MIN --run-id r14-20260914-a
 ```
 
-execute 命令只创建 `data/r14-acceptance/<run-id>/monitor.sqlite3`、脱敏的 `audit.json`、SQLite 附属文件和本地 cursor key。`data/` 被 Git 忽略。浏览器页面 `http://127.0.0.1:18765`；业务 API/WebSocket 仅走此地址。应用 AI 客户端仅向 DeepSeek 发送获准的原文提示词；行情 SDK 向经过验证的 `api.quicksync.cn` TLS 身份发送获准操作/日期/股票请求及配置中的 token。凭证不进入 Git、命令参数、日志或 audit JSON。隔离 SQLite 可能包含原文及供应商行情行；仅留本地复核，对外只导出脱敏 hash/状态。若测试计划仍激活，退出前停止/停用；脚本在超时、额度拒绝或操作员停止时只停自身服务。保留脱敏审计和复核记录；仅在证据不再需要后删除经核实归属的测试文件。
+execute 命令一次性创建 `data/r14-acceptance/_session_claimed`，并只创建 `data/r14-acceptance/<run-id>/monitor.sqlite3`、脱敏的 `audit.json`、SQLite 附属文件和本地 cursor key。失败或中断后占位仍保留，第二次本地运行须重新提出方案；它是本地一次性门禁，不是跨复制工作区的授权证明。`data/` 被 Git 忽略。浏览器页面 `http://127.0.0.1:18765`；业务 API/WebSocket 仅走此地址。应用 AI 客户端仅向 DeepSeek 发送获准的原文提示词；行情 SDK 向经过验证的 `api.quicksync.cn` TLS 身份发送获准操作/日期/股票请求及配置中的 token。凭证不进入 Git、命令参数、日志或 audit JSON。隔离 SQLite 可能包含原文及供应商行情行；仅留本地复核，对外只导出脱敏 hash/状态。若测试计划仍激活，退出前停止/停用；脚本在超时、额度拒绝或操作员停止时只停自身服务。保留脱敏审计和复核记录；仅在证据不再需要后删除经核实归属的测试文件。
 
 本脚本不替用户自动作复核选择，也不强制造成提醒。一次批准只覆盖**一个** run ID/会话及这些固定输入。不由此自动批准重试、次日运行、认证更新、模型替换、外部通道、现价改造计划或额外额度。
 
 ## R14-P5. 真实执行后的判断
+
+离线接线证据见 `remediation/evidence/R14-preparation/offline-wiring.json`。测试进入真实 FastAPI 生命周期与生产组合，把三个固定原文经常规提取 API 送到受控 HTTP 传输，再用**单独的数值等价合成简写**走当前复核/激活 API。十个调度截止点由生产调度器选出、由虚拟时钟推进；两次已持久化的完整求值和39次物理 SDK 查询记录来自合成有效 DataFrame。第二项启动器测试经测试本地服务适配器进入同一生命周期，证明被拒绝的 `daily` 查询会得到 `BUDGET_DENIED`／退出码1，并核对工厂恢复与隔离计划停用。直连 SDK 传输测试验证15秒超时、TLS身份及关闭重试。这些测试**没有**运行真实 Uvicorn socket/浏览器，不证明原 literal 的 AI 输出可复核至激活，也不证明真实供应商权限；这些在有界真实会话及人工复核前仍为 `UNVERIFIED`／`NOT_RUN`。
 
 - 某个真实分支的 `PASS` 要求实际请求/响应记录、当前有效认证和开市日历、完整新鲜数据、正确服务端求值/沿袭，以及 event 匹配的本地浏览器实际收悉和 IN_APP 投递。真实 AI 案例另需人工比对独立 oracle 和当前复核。
 - `PARTIAL` 记录实际有效子集；自然未触发动作、权限不足、模型无输出、认证过期或恢复未观察到时，按事实分别保留 `NOT_OBSERVED`／`NOT_RUN`／`FAILED`。

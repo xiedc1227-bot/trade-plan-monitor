@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,8 +17,11 @@ from scripts.r14_bounded_acceptance import (
     BudgetDenied,
     MarketBudget,
     _bounded_ai_factory,
+    _claim_session,
     _deactivate_isolated_plan,
     _recover_activated_symbol,
+    _session_budgets,
+    _valid_run_id,
     approved_sources,
 )
 
@@ -37,8 +40,121 @@ def test_market_guard_counts_attempts_and_rejects_other_symbols() -> None:
         guard.call(query, "rt_min", ts_code="003043.SZ")
     with pytest.raises(BudgetDenied):
         guard.call(query, "rt_min_daily", ts_code="600000.SH")
+    with pytest.raises(BudgetDenied):
+        guard.call(query, "trade_cal", exchange="NYSE")
     assert budget.snapshot()["attempts"] == {"rt_min": 1}
     assert calls == ["rt_min"]
+
+
+def test_deadline_refusal_stops_before_sdk_and_counts_denial(monkeypatch) -> None:
+    import scripts.r14_bounded_acceptance as launcher
+
+    ticks = [100.0]
+    stopped: list[bool] = []
+    monkeypatch.setattr(launcher, "monotonic", lambda: ticks[0])
+    budget = Budget(
+        total=60,
+        per_key={"rt_min": 15},
+        seconds=1,
+        on_denied=lambda: stopped.append(True),
+    )
+    ticks[0] = 101.0
+    calls: list[str] = []
+    with pytest.raises(BudgetDenied):
+        MarketBudget(budget).call(
+            lambda name, **kwargs: calls.append(name), "rt_min", ts_code="003043.SZ"
+        )
+    assert calls == []
+    assert stopped == [True]
+    assert budget.snapshot()["totalAttempts"] == 0
+    assert budget.snapshot()["deniedBeforeNetwork"] == 1
+
+
+def test_launcher_budgets_signal_server_stop_on_overuse() -> None:
+    stopped: list[str] = []
+    ai, market = _session_budgets(lambda: stopped.append("stop"))
+    assert ai.snapshot()["totalCap"] == 3
+    assert market.snapshot()["totalCap"] == 60
+    market.admit("rt_min")
+    for _ in range(14):
+        market.admit("rt_min")
+    with pytest.raises(BudgetDenied):
+        market.admit("rt_min")
+    with pytest.raises(BudgetDenied):
+        ai.admit("LITERAL")
+    assert stopped == ["stop", "stop"]
+    assert market.snapshot()["attempts"]["rt_min"] == 15
+    assert market.snapshot()["deniedBeforeNetwork"] == 1
+    assert ai.snapshot()["totalAttempts"] == 0
+    assert ai.snapshot()["stopped"] is True
+
+
+def test_proposed_dates_and_one_local_session_slot(tmp_path: Path) -> None:
+    from trade_plan_monitor.runtime.clock import SHANGHAI
+
+    for day in (14, 15, 16):
+        now = datetime(2026, 9, day, 13, 12, tzinfo=SHANGHAI)
+        assert _valid_run_id(f"r14-202609{day}-a", now)
+        assert not _valid_run_id(f"r14-202609{day}-b", now)
+    assert not _valid_run_id("r14-20260917-a", datetime(2026, 9, 17, 13, 12, tzinfo=SHANGHAI))
+    root = tmp_path / "r14"
+    assert _claim_session(root, "r14-20260914-a").is_dir()
+    with pytest.raises(FileExistsError):
+        _claim_session(root, "r14-20260915-a")
+    assert not (root / "r14-20260915-a").exists()
+
+
+def test_direct_market_sdk_enforces_15_seconds_and_no_transport_retry(monkeypatch) -> None:
+    import pandas as pd
+    import urllib3
+
+    from trade_plan_monitor.config import TushareConfiguration
+    from trade_plan_monitor.market_data.tushare_client import create_tushare_client
+
+    observed: dict[str, object] = {}
+
+    class Pool:
+        def __init__(self, **kwargs: object) -> None:
+            observed.update(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def request(self, method: str, path: str, **kwargs: object):
+            observed["method"] = method
+            observed["path"] = path
+            observed["requestRetries"] = kwargs["retries"]
+            return SimpleNamespace(
+                status=200,
+                data=b'{"code":0,"data":{"fields":["ts_code"],"items":[["003043.SZ"]]}}',
+            )
+
+    class DataApi:
+        _DataApi__http_url = ""
+        query = None
+
+        def __init__(self, _token: str, _timeout: int) -> None:
+            pass
+
+    monkeypatch.setattr(urllib3, "HTTPSConnectionPool", Pool)
+    settings = TushareConfiguration(
+        api_url="https://api.quicksync.cn",
+        connect_ip="127.0.0.1",
+        timeout_seconds=15,
+        token="offline-test-token",
+    )
+    client = create_tushare_client(settings, data_api_factory=DataApi)
+    frame = client.query("rt_min", ts_code="003043.SZ")
+    assert isinstance(frame, pd.DataFrame)
+    assert frame.iloc[0]["ts_code"] == "003043.SZ"
+    assert observed["timeout"].total == 15
+    assert observed["retries"] is False
+    assert observed["requestRetries"] is False
+    assert observed["server_hostname"] == "api.quicksync.cn"
+    assert observed["assert_hostname"] == "api.quicksync.cn"
 
 
 def test_ai_guard_allows_only_one_approved_prompt_and_counts_failed_attempt() -> None:
@@ -56,6 +172,9 @@ def test_ai_guard_allows_only_one_approved_prompt_and_counts_failed_attempt() ->
         "model": APPROVED_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 4096,
+        "thinking": {"type": "disabled"},
+        "response_format": {"type": "json_object"},
+        "stream": False,
     }
 
     async def exercise() -> None:
