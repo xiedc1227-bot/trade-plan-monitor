@@ -846,6 +846,43 @@ test("keeps 320/768/1024/1440 layouts and 200 percent text inside route boundari
   await page.close();
 });
 
+test("R13 records immediate and settled narrow backtest layout without changing its gate", async ({ browser }, testInfo) => {
+  const { audit, page } = await openPage(browser, 320);
+  const measurements: unknown[] = [];
+  const measure = () => page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    fontStatus: document.fonts.status,
+    overflow: [...document.querySelectorAll<HTMLElement>('body *')].map(element => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      let scroller: string | null = null;
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        if (['auto', 'scroll', 'hidden', 'clip'].includes(getComputedStyle(parent).overflowX)) {
+          scroller = `${parent.tagName}.${parent.className}`;
+          break;
+        }
+      }
+      return { element: `${element.tagName}.${element.className}`, left: rect.left, right: rect.right, width: rect.width, overflowX: style.overflowX, scroller };
+    }).filter(element => element.left < 0 || element.right > document.documentElement.clientWidth),
+  }));
+  for (const [index, route] of ROUTES.entries()) {
+    await openRoute(page, route);
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    const immediate = await measure();
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+    });
+    const settled = await measure();
+    measurements.push({route: route.path, immediate, settled});
+    await page.screenshot({path: testInfo.outputPath(`layout-${index}.png`), fullPage: true});
+  }
+  await testInfo.attach('layout-measurements', {body: JSON.stringify(measurements, null, 2), contentType: 'application/json'});
+  expectCleanAudit(audit);
+  await page.close();
+});
+
 test("enforces request, DOM, polling, and pre-equity ECharts bounds", async ({ browser }, testInfo) => {
   const { audit, page } = await openPage(browser);
 

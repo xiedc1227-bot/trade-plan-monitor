@@ -9,8 +9,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import tempfile
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -62,9 +63,10 @@ class ControlledClock:
 
 
 class MarketSDK(_ExplicitPipelineSDK):
-    def __init__(self, clock):
+    def __init__(self, clock, *, repeat_probe_tape=False):
         super().__init__(current_volume=59)
         self.clock = clock
+        self.repeat_probe_tape = repeat_probe_tape
 
     def __getattr__(self, name):
         if name not in {"rt_min", "rt_min_daily"}:
@@ -76,6 +78,10 @@ class MarketSDK(_ExplicitPipelineSDK):
             # The oldest 299 rolls out when the next 299 rolls in: mean stays 200.
             volumes = [100, 299, 175, 175, 175, 176, 299, 300, 100, 100, 100]
             prices = [990] * 8 + [1080, 949, 990]
+            if self.repeat_probe_tape:
+                # Separate synthetic restart probe: a later qualifying BUY bar.
+                volumes.append(301)
+                prices.append(990)
             start = TARGET.replace(hour=9, minute=30)
             end = self.clock.now().replace(second=0, microsecond=0)
             rows = []
@@ -105,12 +111,23 @@ class MarketSDK(_ExplicitPipelineSDK):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--resume-root", type=Path)
+    parser.add_argument("--initial-now", type=datetime.fromisoformat)
+    parser.add_argument("--repeat-probe-tape", action="store_true")
     args = parser.parse_args()
     assert args.port != 8765
-    root = Path(tempfile.mkdtemp(prefix="tpm-r12-browser-")).resolve()
+    root = (
+        args.resume_root.resolve()
+        if args.resume_root
+        else Path(tempfile.mkdtemp(prefix="tpm-r12-browser-")).resolve()
+    )
+    if args.resume_root:
+        assert root.parent == Path(tempfile.gettempdir()).resolve()
+        assert root.name.startswith("tpm-r12-browser-")
+        assert (root / "monitor.sqlite3").is_file()
     database = root / "monitor.sqlite3"
     config = root / "config" / "app.yaml"
-    config.parent.mkdir()
+    config.parent.mkdir(exist_ok=True)
     config.write_text(
         "tushare:\n  api_url: https://example.test\n  token: offline-test-token\n"
         "ai:\n  profile: OPENAI_COMPATIBLE\n  display_name: R12 isolated AI\n"
@@ -119,66 +136,70 @@ def main():
         encoding="utf-8",
     )
     clock = ControlledClock()
-    sdk = MarketSDK(clock)
+    if args.initial_now:
+        assert args.initial_now.tzinfo is not None
+        clock.current = args.initial_now
+    sdk = MarketSDK(clock, repeat_probe_tape=args.repeat_probe_tape)
     engine = create_sqlite_engine(database)
     upgrade_database(engine)
     # Seed calendar and prior completed bars only; all plans/reviews/inventory
     # are created later through ordinary browser controls.
     from tests.integration.test_explicit_runtime_production import _work
 
-    with _work(engine) as work:
-        from datetime import date
+    if not args.resume_root:
+        with _work(engine) as work:
+            from datetime import date
 
-        from trade_plan_monitor.market_data.models import TradingDay
+            from trade_plan_monitor.market_data.models import TradingDay
 
-        work.references.upsert_trading_days(
-            (
-                TradingDay(
-                    exchange="SZSE",
-                    cal_date=TARGET.date(),
-                    is_open=True,
-                    previous_trade_date=date(2026, 9, 11),
-                ),
-            )
-        )
-        from decimal import Decimal
-
-        from trade_plan_monitor.market_data.models import MinuteBar
-
-        work.history.upsert_minutes(
-            tuple(
-                MinuteBar(
-                    symbol="003043.SZ",
-                    bar_end=TARGET - timedelta(minutes=offset),
-                    open_fen=990,
-                    high_fen=990,
-                    low_fen=990,
-                    close_fen=990,
-                    volume_shares=59,
-                    amount_yuan=Decimal("0"),
-                    received_at=clock.now(),
+            work.references.upsert_trading_days(
+                (
+                    TradingDay(
+                        exchange="SZSE",
+                        cal_date=TARGET.date(),
+                        is_open=True,
+                        previous_trade_date=date(2026, 9, 11),
+                    ),
                 )
-                for offset in (4, 3, 2, 1)
             )
-        )
-        for index, volume in enumerate((299, 175, 175, 175, 176)):
             from decimal import Decimal
 
-            from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
+            from trade_plan_monitor.market_data.models import MinuteBar
 
-            work.history.upsert_five_minute(
-                **FiveMinuteBar(
-                    symbol="003043.SZ",
-                    bar_end=TARGET - timedelta(minutes=(5 - index) * 5),
-                    open_fen=990,
-                    high_fen=990,
-                    low_fen=990,
-                    close_fen=990,
-                    volume_shares=volume,
-                    amount_yuan=Decimal("0"),
-                ).model_dump()
+            work.history.upsert_minutes(
+                tuple(
+                    MinuteBar(
+                        symbol="003043.SZ",
+                        bar_end=TARGET - timedelta(minutes=offset),
+                        open_fen=990,
+                        high_fen=990,
+                        low_fen=990,
+                        close_fen=990,
+                        volume_shares=59,
+                        amount_yuan=Decimal("0"),
+                        received_at=clock.now(),
+                    )
+                    for offset in (4, 3, 2, 1)
+                )
             )
-        work.commit()
+            for index, volume in enumerate((299, 175, 175, 175, 176)):
+                from decimal import Decimal
+
+                from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
+
+                work.history.upsert_five_minute(
+                    **FiveMinuteBar(
+                        symbol="003043.SZ",
+                        bar_end=TARGET - timedelta(minutes=(5 - index) * 5),
+                        open_fen=990,
+                        high_fen=990,
+                        low_fen=990,
+                        close_fen=990,
+                        volume_shares=volume,
+                        amount_yuan=Decimal("0"),
+                    ).model_dump()
+                )
+            work.commit()
     engine.dispose()
     evidence = create_stock_certification(
         observed_at=clock.now(),
@@ -259,6 +280,8 @@ def main():
     async def isolation():
         return {
             "root": str(root),
+            "pid": os.getpid(),
+            "resumed": bool(args.resume_root),
             "database": str(database),
             "config": str(config),
             "provider": "IN_PROCESS_FAKE",
