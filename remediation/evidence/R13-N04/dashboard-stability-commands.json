@@ -1,0 +1,55 @@
+{
+  "taskId": "01a098b6-f70d-7380-8d8d-dc7e74cbc4ee",
+  "timezone": "Asia/Shanghai",
+  "baselineHead": "49308a621c09436a3a61a96cba309ef0e01e1ff1",
+  "fixCommit": "2b8ef5d945467d6ab99798096b7bf1972799dd99",
+  "coordinatorObserved": {
+    "command": "npm run test:e2e -- tests/e2e/dashboard.spec.ts tests/e2e/symbol-detail.spec.ts tests/e2e/production-restart.spec.ts",
+    "result": "12 passed, 1 failed of 13",
+    "elapsedSeconds": 13.4,
+    "failure": "dashboard.spec.ts:317 high color expected rgb(103, 183, 165), received rgb(238, 241, 232)",
+    "rawLog": "not copied into this task; supplied by coordinator callback",
+    "isolatedFollowUp": "1 passed in 2.0s; not accepted as stability proof"
+  },
+  "localRuns": [
+    {
+      "stage": "before-fix bounded repeat",
+      "command": "npm run test:e2e -- tests/e2e/dashboard.spec.ts --grep \"renders the authoritative dashboard\" --repeat-each=12",
+      "exitCode": 1,
+      "elapsedSeconds": 24.643,
+      "result": "10 passed, 2 failed of 12; both same high color white before trend readiness",
+      "log": "dashboard-before-repeat.log"
+    },
+    {
+      "stage": "after-fix bounded repeat",
+      "command": "npm run test:e2e -- tests/e2e/dashboard.spec.ts --grep \"renders the authoritative dashboard\" --repeat-each=20",
+      "exitCode": 0,
+      "elapsedSeconds": 46.18,
+      "result": "20 passed of 20",
+      "log": "dashboard-after-repeat.log"
+    },
+    {
+      "stage": "after-fix complete browser",
+      "command": "npm run test:e2e",
+      "exitCode": 0,
+      "elapsedSeconds": 148.105,
+      "result": "30 passed of 30",
+      "log": "dashboard-stability-full-browser.log"
+    },
+    {
+      "stage": "after-fix type check",
+      "command": "npm run type-check",
+      "exitCode": 0,
+      "elapsedSeconds": 3.84,
+      "result": "passed",
+      "log": "dashboard-stability-type-check.log"
+    }
+  ],
+  "runnerConfig": {
+    "workers": 1,
+    "retries": 0,
+    "skipOrXfailAdded": false,
+    "arbitrarySleepAdded": false
+  },
+  "productCodeChanged": false
+}

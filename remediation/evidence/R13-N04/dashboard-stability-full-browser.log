@@ -1,0 +1,113 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test
+
+
+Running 30 tests using 1 worker
+
+
+(node:6688) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/30] [chrome] › tests\e2e\accessibility.spec.ts:94:1 › loads system health through the production /system route
+[2/30] [chrome] › tests\e2e\accessibility.spec.ts:199:1 › has no WCAG 2.1 A/AA axe violations
+[3/30] [chrome] › tests\e2e\accessibility.spec.ts:216:1 › fits 320, 768, 1024, and 1440 pixel layouts without horizontal overflow
+[4/30] [chrome] › tests\e2e\accessibility.spec.ts:235:1 › keeps native keyboard order, visible focus, semantic state, and reduced motion
+[5/30] [chrome] › tests\e2e\alert-recovery.spec.ts:99:3 › shows a persisted alert without manual refresh after snapshot-required
+[6/30] [chrome] › tests\e2e\alert-recovery.spec.ts:99:3 › shows a persisted alert without manual refresh after snapshot-then-alert
+[7/30] [chrome] › tests\e2e\alerts.spec.ts:109:1 › queries, filters, expands evidence, and acknowledges without a position request
+[8/30] [chrome] › tests\e2e\backtests.spec.ts:688:1 › covers the four backtest routes with keyboard flows and serious axe checks
+[9/30] [chrome] › tests\e2e\backtests.spec.ts:757:1 › submits a complete new run and follows the authoritative job to its result
+[10/30] [chrome] › tests\e2e\backtests.spec.ts:813:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries
+[11/30] [chrome] › tests\e2e\backtests.spec.ts:849:1 › enforces request, DOM, polling, and pre-equity ECharts bounds
+[12/30] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+[13/30] [chrome] › tests\e2e\dashboard.spec.ts:356:1 › keeps the shared-index and per-plan dashboard boundary responsive and accessible
+[14/30] [chrome] › tests\e2e\dashboard.spec.ts:403:1 › distinguishes typed unavailable monitoring from a real disconnected service
+[15/30] [chrome] › tests\e2e\dashboard.spec.ts:466:1 › recovers a sequence gap with a fresh dashboard snapshot before replaying from its cursor
+[16/30] [chrome] › tests\e2e\explicit-sqlite.spec.ts:39:1 › literal v3 ordinary UI reaches real SQLite and production scheduler
+[chrome] › tests\e2e\explicit-sqlite.spec.ts:39:1 › literal v3 ordinary UI reaches real SQLite and production scheduler
+R12 browser evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-4yexk4ww
+
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+{"port": 58102, "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-4yexk4ww", "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-4yexk4ww\\monitor.sqlite3"}
+
+
+[17/30] [chrome] › tests\e2e\plans.spec.ts:217:1 › requires explicit review, save, and backend-approved activation for an AI result
+[18/30] [chrome] › tests\e2e\plans.spec.ts:348:1 › runs the configured AI and persisted plan workbench flow in isolated Chromium
+[19/30] [chrome] › tests\e2e\production-restart.spec.ts:68:3 › installed production restart › serves the packaged SPA and keeps typed availability across process restart
+[chrome] › tests\e2e\production-restart.spec.ts:68:3 › installed production restart › serves the packaged SPA and keeps typed availability across process restart
+installed restart before stop: browser console=0, failed requests=0
+
+installed restart intentional offline probe: ECONNREFUSED
+
+installed restart after recovery: browser console=0, failed requests=0
+
+installed restart cleanup: test-owned state directory removed
+
+[20/30] [chrome] › tests\e2e\r13-ai-faults.spec.ts:39:1 › R13 failed AI HTTP responses preserve the previously reviewed active version
+[chrome] › tests\e2e\r13-ai-faults.spec.ts:39:1 › R13 failed AI HTTP responses preserve the previously reviewed active version
+R13 approve starting
+
+R13 fault evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-ixqcwvb8
+
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+{"port": 53411, "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-ixqcwvb8", "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-ixqcwvb8\\monitor.sqlite3"}
+
+
+[21/30] [chrome] › tests\e2e\r13-corrections.spec.ts:39:1 › R13 substantive ordinary corrections require current review and remain editable
+[chrome] › tests\e2e\r13-corrections.spec.ts:39:1 › R13 substantive ordinary corrections require current review and remain editable
+R13 approve starting
+
+R13 correcting rules[0].condition.conditions[0].low_fen on version 2
+
+R13 approve starting
+
+R13 correcting rules[0].action.quantity on version 3
+
+R13 approve starting
+
+R13 correcting rules[0].condition on version 4
+
+R13 approve starting
+
+R13 correcting rules[0].condition.conditions[0].low_fen on version 5
+
+R13 approve starting
+
+R13 correcting rules[0].action.quantity on version 6
+
+R13 approve starting
+
+R13 correcting rules[0].condition on version 7
+
+R13 approve starting
+
+R13 correction evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-15m05m8w
+
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+{"port": 50742, "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-15m05m8w", "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-15m05m8w\\monitor.sqlite3"}
+
+
+[22/30] [chrome] › tests\e2e\r13-live-stream.spec.ts:39:1 › R13 real explicit reminders refresh automatically across browser disconnect
+[chrome] › tests\e2e\r13-live-stream.spec.ts:39:1 › R13 real explicit reminders refresh automatically across browser disconnect
+R13 approve starting
+
+R13 stream evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-fz9yt2ov
+
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+{"port": 49678, "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-fz9yt2ov", "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-fz9yt2ov\\monitor.sqlite3"}
+
+
+[23/30] [chrome] › tests\e2e\symbol-detail.spec.ts:173:1 › reads backend detail, bars, and events for an explicit Shanghai history range
+[24/30] [chrome] › tests\e2e\symbol-detail.spec.ts:228:1 › keeps current-plan evidence visible when shared index history fails
+[25/30] [chrome] › tests\e2e\symbol-detail.spec.ts:243:1 › keeps both sections explicit when the current plan has no index conditions
+[26/30] [chrome] › tests\e2e\symbol-detail.spec.ts:281:1 › marks a mapped Schema v2 plan with zero index leaves as unused
+[27/30] [chrome] › tests\e2e\symbol-detail.spec.ts:323:1 › keeps the separated detail sections responsive and accessible
+[28/30] [chrome] › tests\e2e\symbol-detail.spec.ts:377:1 › keeps history range inputs visible and operable at 320px with 200 percent text
+[29/30] [chrome] › tests\e2e\symbol-detail.spec.ts:408:1 › submits position commands for backend-only T+1 and maximum-policy decisions
+[30/30] [chrome] › tests\e2e\symbol-detail.spec.ts:468:1 › confirms plan-scoped manual event risk through the normal symbol page
+  30 passed (2.5m)

@@ -1,0 +1,113 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/dashboard.spec.ts --grep renders the authoritative dashboard --repeat-each=12
+
+
+Running 12 tests using 1 worker
+
+
+
+(node:30060) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:34684) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:44120) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[3/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:24356) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:15368) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[5/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+
+(node:24180) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[6/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:28500) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[7/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+  1) [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rgb(103, 183, 165)"
+    Received: "rgb(238, 241, 232)"
+
+      315 |   expect(await indexCards.locator(".market-index-trend-card__high").evaluate(
+      316 |     (element) => getComputedStyle(element).color,
+    > 317 |   )).toBe("rgb(103, 183, 165)");
+          |      ^
+      318 |   expect(await indexCards.locator(".market-index-trend-card__low").evaluate(
+      319 |     (element) => getComputedStyle(element).color,
+      320 |   )).toBe("rgb(103, 183, 165)");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\dashboard.spec.ts:317:6
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome-repeat6\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome-repeat6\error-context.md
+
+
+
+(node:604) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[8/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:26100) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[9/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:10376) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[10/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:3892) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[11/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:18372) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[12/12] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+  2) [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rgb(103, 183, 165)"
+    Received: "rgb(238, 241, 232)"
+
+      315 |   expect(await indexCards.locator(".market-index-trend-card__high").evaluate(
+      316 |     (element) => getComputedStyle(element).color,
+    > 317 |   )).toBe("rgb(103, 183, 165)");
+          |      ^
+      318 |   expect(await indexCards.locator(".market-index-trend-card__low").evaluate(
+      319 |     (element) => getComputedStyle(element).color,
+      320 |   )).toBe("rgb(103, 183, 165)");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\dashboard.spec.ts:317:6
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome-repeat11\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\dashboard-renders-the-auth-4da80-x-summary-at-the-root-route-chrome-repeat11\error-context.md
+
+
+  2 failed
+    [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route 
+    [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route 
+  10 passed (23.9s)

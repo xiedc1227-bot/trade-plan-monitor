@@ -1,0 +1,108 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/dashboard.spec.ts --grep renders the authoritative dashboard --repeat-each=20
+
+
+Running 20 tests using 1 worker
+
+
+
+(node:32344) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:19892) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:30728) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[3/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:47164) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:51684) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[5/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:39768) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+[6/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:6868) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[7/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:44492) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[8/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:49908) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[9/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:20632) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[10/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:50304) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[11/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+
+(node:14196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[12/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:33520) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[13/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:19772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[14/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:51416) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[15/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:32756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[16/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:50232) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[17/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:10000) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[18/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+(node:50992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[19/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+
+(node:51892) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[20/20] [chrome] › tests\e2e\dashboard.spec.ts:251:1 › renders the authoritative dashboard and shared board-index summary at the root route
+  20 passed (45.5s)
