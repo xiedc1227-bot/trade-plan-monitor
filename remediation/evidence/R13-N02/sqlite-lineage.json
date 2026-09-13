@@ -1,0 +1,493 @@
+{
+  "corrections": {
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-jaw6y27l\\monitor.sqlite3",
+    "readOnly": true,
+    "sourceTextUnchanged": true,
+    "versions": [
+      {
+        "id": "2bd25a34-62c6-4523-a8d3-940a6676bef2",
+        "version": 1,
+        "plan_hash": "9da565dd8f64930e53b7675983d59cca543e9f615f627d2a98becc85805a9b64",
+        "status": "DRAFT",
+        "content_hash": "6f03325ef0703bb3d8452e8cfcd37eeff8efa7a843923dd2162c85d516ebf819",
+        "review_id": null,
+        "review_evidence_hash": "a6c10e4cd98b1e3c6348ea78842228cadb6b7e34c9f676b4802bdc786dccdf9e",
+        "operator": "ALL",
+        "low_fen": 980,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "cad8bfe5-c24e-4ffd-869e-f3030baaa067",
+        "version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "status": "SUPERSEDED",
+        "content_hash": "9cee2e2b8f9b872fd27174e36817fa2be2042fac1178b45cbf9a6eb13616ba2e",
+        "review_id": "724793bf-d74c-4db0-9948-5acaa17aafed",
+        "review_evidence_hash": "f9b878610c6681326274cd27438ccd07ada0f88cc52e928eb2536db26b481333",
+        "operator": "ALL",
+        "low_fen": 980,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "f0206242-726a-4fc5-9f07-362908517b22",
+        "version": 3,
+        "plan_hash": "668c57a8ddf1a7b564a4f6ac34cd8b683376f4cd72d30ab41b0a90a6414420de",
+        "status": "DRAFT",
+        "content_hash": "005b5ed1d10878b8867f9eaed2666079c04fb94e5a193b6ee8c88d17cc3441f5",
+        "review_id": "f77bfbcb-92e9-4fd7-b5e1-c571f88585a9",
+        "review_evidence_hash": "4ddb03850f9c5c7e804d4a4169172534ad5d1b98d31af5350e44d7dcc08f0391",
+        "operator": "ALL",
+        "low_fen": 981,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "b5c2b8a7-0d9d-483e-b5e8-5bb456b70b47",
+        "version": 4,
+        "plan_hash": "eb8a4efbbecab364a26ea50d110bd8555ab0a867e95397398ab15d153c2b6f47",
+        "status": "DRAFT",
+        "content_hash": "51078a5710ff01af1b0d78141a075d82889828c9c0ca06bade2aaed1f5eb2e32",
+        "review_id": "04294e9d-f4f1-4c68-a577-f3a6885d8369",
+        "review_evidence_hash": "cd5a9a7c3b9b8ef4d2af7338bf4534dd4f24870cd38d9f11bf290348b5dffc82",
+        "operator": "ALL",
+        "low_fen": 981,
+        "quantity": 200,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "3ff821e0-8099-4ae2-bfc4-cc60604f59d1",
+        "version": 5,
+        "plan_hash": "883da58c96ef35b12573fe5de8df04d06597f7418c03359366ea7680c3d959a1",
+        "status": "SUPERSEDED",
+        "content_hash": "46e41afad38578febba1afad73b5c5630cb0667015fe2124371bde24407cd99f",
+        "review_id": "afd87f52-848b-4f4b-8374-fadbb0cc0bd9",
+        "review_evidence_hash": "e625348c937382ca3c89ed6514578969b8704942d2d28a796b9f82d232b0d867",
+        "operator": "ANY",
+        "low_fen": 981,
+        "quantity": 200,
+        "logicalBindings": [
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition",
+            "supplement_id": "user-supplement-1789266672724-0",
+            "unit": "NONE",
+            "value": "ANY"
+          },
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition.type",
+            "supplement_id": "user-supplement-1789266672724-1",
+            "unit": "NONE",
+            "value": "ANY"
+          }
+        ]
+      },
+      {
+        "id": "ccde4ddd-9dda-4f3c-8d2c-6bee26006fdc",
+        "version": 6,
+        "plan_hash": "76a4a391f46d312657f3968e053fcede7a58a58039fb9be6a53a665418062af0",
+        "status": "DRAFT",
+        "content_hash": "7740d632f4240c2dd210f368b574ea0b85a2bd284ca787a9b8e52993bc2a82f9",
+        "review_id": "8be55417-3acd-419d-8b0d-338be793b703",
+        "review_evidence_hash": "b6c5e4d953e3dfaebb2c0416ac30e0f631d400d32e49df905f88802f00b27e41",
+        "operator": "ANY",
+        "low_fen": 982,
+        "quantity": 200,
+        "logicalBindings": [
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition",
+            "supplement_id": "user-supplement-1789266672724-0",
+            "unit": "NONE",
+            "value": "ANY"
+          },
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition.type",
+            "supplement_id": "user-supplement-1789266672724-1",
+            "unit": "NONE",
+            "value": "ANY"
+          }
+        ]
+      },
+      {
+        "id": "058cbc09-d650-4ced-8f00-154800ac1795",
+        "version": 7,
+        "plan_hash": "04e3d301134ff3d92f1c5bf330d4e4e7288c45565033e7c111b8230ef90218c7",
+        "status": "DRAFT",
+        "content_hash": "b28eb612128331218846eb3318f5c044a99f56c6d564a4b32518458ee253949d",
+        "review_id": "76b7fffa-a265-40fd-a807-2135cfbc3be1",
+        "review_evidence_hash": "ffa0e3c1898852608b0d9d14018b4eeebe0bc6c6f9c0706a27ccf2358f9549a7",
+        "operator": "ANY",
+        "low_fen": 982,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition",
+            "supplement_id": "user-supplement-1789266672724-0",
+            "unit": "NONE",
+            "value": "ANY"
+          },
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition.type",
+            "supplement_id": "user-supplement-1789266672724-1",
+            "unit": "NONE",
+            "value": "ANY"
+          }
+        ]
+      },
+      {
+        "id": "2820bc4f-8cf3-46b9-b7d6-e1bf60c22e5e",
+        "version": 8,
+        "plan_hash": "407b040a1966cde7b2030ab7685003548deb1b7ce2486fb0826b145c9d28e092",
+        "status": "ACTIVE",
+        "content_hash": "315e74534848440fb59daf8e615798ba07f9e33a525d6744fff9d99c0541ef84",
+        "review_id": "290be572-15d4-4aaf-b840-62a769f6f673",
+        "review_evidence_hash": "16250b88769b29cceea0782a024acacaaef05df25ae4078e2d5dddd471d36ca7",
+        "operator": "ALL",
+        "low_fen": 982,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition",
+            "supplement_id": "user-supplement-1789266678927-0",
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [],
+            "contract_id": null,
+            "origin": "USER_SUPPLEMENT",
+            "path": "rules[0].condition.type",
+            "supplement_id": "user-supplement-1789266678927-1",
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "event_id": "6cc2f626-f811-5814-89a3-8a7085d4dc3d",
+        "plan_version": 5,
+        "plan_hash": "883da58c96ef35b12573fe5de8df04d06597f7418c03359366ea7680c3d959a1",
+        "activation_revision": 2,
+        "target_bucket_end": "2026-09-14T10:05:00+08:00",
+        "signal_type": "BUY",
+        "quantity": 200,
+        "resultHash": "d24a399b40859d3a9acc8f6379849f7caeb3a83398f1edf942e8fac4ff88788c",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:10:15+08:00"
+      },
+      {
+        "event_id": "a530ab57-4f98-5d69-8c78-f75056c6583d",
+        "plan_version": 8,
+        "plan_hash": "407b040a1966cde7b2030ab7685003548deb1b7ce2486fb0826b145c9d28e092",
+        "activation_revision": 3,
+        "target_bucket_end": "2026-09-14T10:10:00+08:00",
+        "signal_type": "BUY",
+        "quantity": 100,
+        "resultHash": "2e7063380247521e5deb0809e9d86f1c321c90d30588f8ba159cf0005c56c08a",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:10:15+08:00"
+      }
+    ],
+    "validatedResultCount": 2,
+    "activation": {
+      "symbol": "003043.SZ",
+      "plan_version_id": "2820bc4f-8cf3-46b9-b7d6-e1bf60c22e5e",
+      "revision": 3,
+      "changed_at": "2026-09-14T10:05:15+08:00"
+    }
+  },
+  "originalLiteralALL": {
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-_4_jt5sd\\monitor.sqlite3",
+    "readOnly": true,
+    "sourceTextUnchanged": true,
+    "versions": [
+      {
+        "id": "72c3a94d-afbb-47cc-8eec-78a92e47db10",
+        "version": 1,
+        "plan_hash": "9da565dd8f64930e53b7675983d59cca543e9f615f627d2a98becc85805a9b64",
+        "status": "DRAFT",
+        "content_hash": "6f03325ef0703bb3d8452e8cfcd37eeff8efa7a843923dd2162c85d516ebf819",
+        "review_id": null,
+        "review_evidence_hash": "a6c10e4cd98b1e3c6348ea78842228cadb6b7e34c9f676b4802bdc786dccdf9e",
+        "operator": "ALL",
+        "low_fen": 980,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      },
+      {
+        "id": "b8f252f0-aeab-4e3e-857d-57847bdff34c",
+        "version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "status": "SUPERSEDED",
+        "content_hash": "9cee2e2b8f9b872fd27174e36817fa2be2042fac1178b45cbf9a6eb13616ba2e",
+        "review_id": "0ad05e95-9a8c-4927-939e-9bb4e093eb54",
+        "review_evidence_hash": "7c53f29fe7609a839e131ccdb79b3cd25b03ce51cc6d62c0fe180b9d8ab1ea82",
+        "operator": "ALL",
+        "low_fen": 980,
+        "quantity": 100,
+        "logicalBindings": [
+          {
+            "binding_kind": "VALUE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition.type",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          },
+          {
+            "binding_kind": "STRUCTURE",
+            "clause_ids": [
+              "clause-d30d310a8c9ca22d"
+            ],
+            "contract_id": null,
+            "origin": "SOURCE",
+            "path": "rules[0].condition",
+            "supplement_id": null,
+            "unit": "NONE",
+            "value": "ALL"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "event_id": "e5928068-29c4-5554-9469-80e72628afdf",
+        "plan_version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "activation_revision": 1,
+        "target_bucket_end": "2026-09-14T10:10:00+08:00",
+        "signal_type": "BUY",
+        "quantity": 100,
+        "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:20:15+08:00"
+      },
+      {
+        "event_id": "00f68439-e072-5f51-8cd8-9559f9091e63",
+        "plan_version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "activation_revision": 1,
+        "target_bucket_end": "2026-09-14T10:15:00+08:00",
+        "signal_type": "SELL",
+        "quantity": 100,
+        "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:20:15+08:00"
+      },
+      {
+        "event_id": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+        "plan_version": 2,
+        "plan_hash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+        "activation_revision": 1,
+        "target_bucket_end": "2026-09-14T10:20:00+08:00",
+        "signal_type": "RISK_ALERT",
+        "quantity": null,
+        "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+        "attempts": [
+          {
+            "channel": "IN_APP",
+            "attempt": 1,
+            "status": "DELIVERED",
+            "error_code": null
+          }
+        ],
+        "acknowledgedAt": "2026-09-14T10:20:15+08:00"
+      }
+    ],
+    "validatedResultCount": 4,
+    "activation": {
+      "symbol": "003043.SZ",
+      "plan_version_id": null,
+      "revision": 2,
+      "changed_at": "2026-09-14T10:20:15+08:00"
+    }
+  }
+}

@@ -1,0 +1,98 @@
+
+Running 1 test using 1 worker
+
+
+
+(node:19548) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/1] [chrome] › tests\e2e\r13-corrections.spec.ts:39:1 › R13 substantive ordinary corrections require current review and remain editable
+[chrome] › tests\e2e\r13-corrections.spec.ts:39:1 › R13 substantive ordinary corrections require current review and remain editable
+R13 approve starting
+
+R13 correcting rules[0].condition.conditions[0].low_fen on version 2
+
+R13 approve starting
+
+R13 correcting rules[0].action.quantity on version 3
+
+R13 approve starting
+
+R13 correcting rules[0].condition on version 4
+
+R13 approve starting
+
+R13 correction evidence: C:\Users\xiedc\AppData\Local\Temp\tpm-r12-browser-u01sc4de
+
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+{"port": 54451, "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-u01sc4de", "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-u01sc4de\\monitor.sqlite3"}
+
+
+  1) [chrome] › tests\e2e\r13-corrections.spec.ts:39:1 › R13 substantive ordinary corrections require current review and remain editable 
+
+    Error: ordinary correction must remain reviewable
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      52 |     const blockedChecks = page.locator('.explicit-review input[type="checkbox"]:disabled');
+      53 |     records.push({blockedReviewChecks: await blockedChecks.count()});
+    > 54 |     expect.soft(await blockedChecks.count(), 'ordinary correction must remain reviewable').toBe(0);
+         |                                                                                            ^
+      55 |     if (await blockedChecks.count() > 0) return;
+      56 |     for (const check of await page.locator('.explicit-review input[type="checkbox"]').all()) await check.check();
+      57 |     const response = page.waitForResponse(r => r.url().endsWith('/plan-review-confirmations') && r.request().method() === 'POST');
+        at approve (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-corrections.spec.ts:54:92)
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-corrections.spec.ts:112:7
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected value: "rules[0].condition.conditions[0].low_fen"
+    Received array: ["", "position.max_qty", "monitoring.timeframe_minutes", "rules[0].condition.conditions[0].type", "rules[0].condition.conditions[0].high_fen", "rules[0].condition.conditions[0].include_low", "rules[0].condition.conditions[0].include_high", "rules[0].condition.conditions[1].type", "rules[0].condition.conditions[1].window_bars", "rules[0].condition.conditions[1].minimum_ratio", …]
+
+      116 |     const options = await page.locator('.explicit-supplement select option').evaluateAll(nodes => nodes.map(n => (n as HTMLOptionElement).value));
+      117 |     records.push({editablePathsAfterCorrections: options});
+    > 118 |     expect.soft(options).toContain('rules[0].condition.conditions[0].low_fen');
+          |                          ^
+      119 |     expect.soft(options).toContain('rules[0].action.quantity');
+      120 |     expect.soft(options).toContain('rules[0].condition');
+      121 |   } finally {
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-corrections.spec.ts:118:26
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected value: "rules[0].action.quantity"
+    Received array: ["", "position.max_qty", "monitoring.timeframe_minutes", "rules[0].condition.conditions[0].type", "rules[0].condition.conditions[0].high_fen", "rules[0].condition.conditions[0].include_low", "rules[0].condition.conditions[0].include_high", "rules[0].condition.conditions[1].type", "rules[0].condition.conditions[1].window_bars", "rules[0].condition.conditions[1].minimum_ratio", …]
+
+      117 |     records.push({editablePathsAfterCorrections: options});
+      118 |     expect.soft(options).toContain('rules[0].condition.conditions[0].low_fen');
+    > 119 |     expect.soft(options).toContain('rules[0].action.quantity');
+          |                          ^
+      120 |     expect.soft(options).toContain('rules[0].condition');
+      121 |   } finally {
+      122 |     await writeFile(join(isolation.root, 'r13-corrections.json'), JSON.stringify({isolation, records}, null, 2));
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-corrections.spec.ts:119:26
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected value: "rules[0].condition"
+    Received array: ["", "position.max_qty", "monitoring.timeframe_minutes", "rules[0].condition.conditions[0].type", "rules[0].condition.conditions[0].high_fen", "rules[0].condition.conditions[0].include_low", "rules[0].condition.conditions[0].include_high", "rules[0].condition.conditions[1].type", "rules[0].condition.conditions[1].window_bars", "rules[0].condition.conditions[1].minimum_ratio", …]
+
+      118 |     expect.soft(options).toContain('rules[0].condition.conditions[0].low_fen');
+      119 |     expect.soft(options).toContain('rules[0].action.quantity');
+    > 120 |     expect.soft(options).toContain('rules[0].condition');
+          |                          ^
+      121 |   } finally {
+      122 |     await writeFile(join(isolation.root, 'r13-corrections.json'), JSON.stringify({isolation, records}, null, 2));
+      123 |     console.log(`R13 correction evidence: ${isolation.root}`);
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\r13-corrections.spec.ts:120:26
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\r13-corrections-R13-substa-9706d--review-and-remain-editable-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\r13-corrections-R13-substa-9706d--review-and-remain-editable-chrome\error-context.md
+
+
+  1 failed
+    [chrome] › tests\e2e\r13-corrections.spec.ts:39:1 › R13 substantive ordinary corrections require current review and remain editable 

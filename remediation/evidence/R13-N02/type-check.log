@@ -1,0 +1,8 @@
+
+> trade-plan-monitor-web@0.1.0 type-check
+> vue-tsc --noEmit -p tsconfig.json
+
+tests/unit/ExplicitPlanSupplementForm.spec.ts(110,32): error TS2375: Type '{ id: string; planJson: string; mapping: PlanMappingView | null | undefined; unresolvedReviewIssues: never[]; canActivate: boolean; contentHash?: (string) | (null); ... 16 more ...; version: number; }' is not assignable to type 'PlanVersionView' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'mapping' are incompatible.
+    Type 'PlanMappingView | null | undefined' is not assignable to type 'PlanMappingView | null'.
+      Type 'undefined' is not assignable to type 'PlanMappingView | null'.

@@ -1,0 +1,133 @@
+{
+  "taskId": "01a09892-d983-7113-b3b4-931d2ce989b7",
+  "baseline": "fc467aa4c68642aa8bc846edba3d8cce2238f8ce",
+  "implementationCommit": "481eaaa3cc7a3ebf54be520c0ec8f24950770406",
+  "commands": [
+    {
+      "phase": "HARNESS",
+      "cwd": ".",
+      "command": "npm exec --prefix web playwright test -- --config web/playwright.config.ts tests/e2e/r13-corrections.spec.ts --reporter=line",
+      "exitCode": 1,
+      "result": "Fixture path lookup failed before tests; corrected working directory to web."
+    },
+    {
+      "phase": "RED-original",
+      "cwd": "web",
+      "command": "npm exec playwright test tests/e2e/r13-corrections.spec.ts -- --reporter=line",
+      "exitCode": 1,
+      "result": "1 failed, four assertions: unreviewable logical edit and three missing editable fields.",
+      "log": "red-browser.log"
+    },
+    {
+      "phase": "RED-unit",
+      "cwd": "web",
+      "command": "npm run test -- --run tests/unit/ExplicitPlanSupplementForm.spec.ts",
+      "exitCode": 1,
+      "result": "2 failed, 2 passed; 1.09s",
+      "log": "red-unit.log"
+    },
+    {
+      "phase": "GREEN-unit",
+      "cwd": "web",
+      "command": "npm run test -- --run tests/unit/ExplicitPlanSupplementForm.spec.ts",
+      "exitCode": 0,
+      "result": "4 passed; 936ms",
+      "log": "green-unit.log"
+    },
+    {
+      "phase": "GREEN-build",
+      "cwd": "web",
+      "command": "npm run build",
+      "exitCode": 0,
+      "result": "Built in 616ms",
+      "log": "build.log"
+    },
+    {
+      "phase": "GREEN-original",
+      "cwd": "web",
+      "command": "npm exec playwright test tests/e2e/r13-corrections.spec.ts -- --reporter=line",
+      "exitCode": 0,
+      "result": "Original assertions unchanged: 1 passed, 9.2s",
+      "log": "green-original-browser.log"
+    },
+    {
+      "phase": "HARNESS-type",
+      "cwd": "web",
+      "command": "npm run type-check",
+      "exitCode": 2,
+      "result": "New unit test optional mapping needed narrowing; no implementation type error.",
+      "log": "type-check.log"
+    },
+    {
+      "phase": "GREEN-expanded-first",
+      "cwd": "web",
+      "command": "npm exec playwright test tests/e2e/r13-corrections.spec.ts -- --reporter=line",
+      "exitCode": 0,
+      "result": "Six edits, current reviews, stale guards, actual activations/runtime: 1 passed, 29.9s. Further strengthened before final run.",
+      "log": "green-expanded-browser.log"
+    },
+    {
+      "phase": "GREEN-type-final",
+      "cwd": "web",
+      "command": "npm run type-check",
+      "exitCode": 0,
+      "result": "Passed after final browser assertions were added.",
+      "log": "type-check-final.log"
+    },
+    {
+      "phase": "GREEN-frontend",
+      "cwd": "web",
+      "command": "npm run test -- --run",
+      "exitCode": 0,
+      "result": "644 passed in 45 files, 5.65s",
+      "log": "frontend.log"
+    },
+    {
+      "phase": "GREEN-backend",
+      "cwd": ".",
+      "command": ".venv/Scripts/python.exe -m pytest tests/unit/test_explicit_plan_review.py tests/unit/test_ai_plan_extraction_v4.py tests/unit/test_source_processing.py tests/integration/test_explicit_plan_review_api.py tests/integration/test_source_treatment_review_api.py tests/integration/test_source_treatment_inventory_isolation.py tests/integration/test_source_treatment_legacy_compatibility.py tests/integration/test_plan_production_composition.py tests/integration/test_openapi_snapshot.py tests/integration/test_r13_channel_acceptance.py -q --junitxml=remediation/evidence/R13-N02/backend.xml",
+      "exitCode": 0,
+      "result": "100 passed, 1 existing warning, 28.44s",
+      "log": "backend.log"
+    },
+    {
+      "phase": "GREEN-compatibility-runtime",
+      "cwd": ".",
+      "command": ".venv/Scripts/python.exe -m pytest tests/unit/test_ai_plan_drafting.py tests/unit/test_explicit_conditions.py tests/unit/test_explicit_rules.py tests/integration/test_r13_independent_oracle.py -q --junitxml=remediation/evidence/R13-N02/compatibility-runtime.xml",
+      "exitCode": 0,
+      "result": "151 passed, 1 existing warning, 103.47s",
+      "log": "compatibility-runtime.log"
+    },
+    {
+      "phase": "GREEN-browser-final",
+      "cwd": "web",
+      "command": "npm exec playwright test tests/e2e/r13-corrections.spec.ts tests/e2e/explicit-sqlite.spec.ts -- --reporter=line",
+      "exitCode": 0,
+      "result": "2 passed, 1.1m; final stronger numeric, visible acknowledgement, and unsupported NOT rejection assertions included.",
+      "log": "browser-final.log"
+    },
+    {
+      "phase": "GREEN-SQLite",
+      "cwd": ".",
+      "command": ".venv/Scripts/python.exe remediation/evidence/R13-N02/verify_sqlite.py",
+      "exitCode": 0,
+      "result": "Read-only lineage: 8 correction versions, 2 changed-plan BUY events, 3 original ALL events, all 5 IN_APP attempts DELIVERED.",
+      "log": "sqlite-check.log"
+    },
+    {
+      "phase": "HARNESS-lint",
+      "cwd": ".",
+      "command": ".venv/Scripts/python.exe -m ruff check remediation/evidence/R13-N02/verify_sqlite.py",
+      "exitCode": 1,
+      "result": "Two E501 overlong string literals in evidence helper, split without changing behavior."
+    },
+    {
+      "phase": "GREEN-lint",
+      "cwd": ".",
+      "command": ".venv/Scripts/python.exe -m ruff check remediation/evidence/R13-N02/verify_sqlite.py",
+      "exitCode": 0,
+      "result": "All checks passed.",
+      "log": "ruff.log"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+
+> trade-plan-monitor-web@0.1.0 test
+> vitest --run tests/unit/ExplicitPlanSupplementForm.spec.ts
+
+
+ RUN  v4.1.10 D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/web
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  10:26:01
+   Duration  936ms (transform 210ms, setup 0ms, import 274ms, tests 43ms, environment 503ms)
+

@@ -1,0 +1,59 @@
+
+> trade-plan-monitor-web@0.1.0 test
+> vitest --run tests/unit/ExplicitPlanSupplementForm.spec.ts
+
+
+ RUN  v4.1.10 D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/web
+
+ ❯ tests/unit/ExplicitPlanSupplementForm.spec.ts (4 tests | 2 failed) 42ms
+     × keeps supplemented trading fields editable while excluding technical contracts 17ms
+     × edits ALL/ANY and its scalar binding together, preserves children, and supports changing back 13ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/ExplicitPlanSupplementForm.spec.ts > ExplicitPlanSupplementForm > keeps supplemented trading fields editable while excluding technical contracts
+AssertionError: expected [] to include 'rules[0].action.quantity'
+ ❯ tests/unit/ExplicitPlanSupplementForm.spec.ts:69:83
+     67|       props: { plan: { ...plan, mapping, unresolvedReviewIssues: [] } …
+     68|     });
+     69|     expect(wrapper.findAll("option").map((option) => option.attributes…
+       |                                                                                   ^
+     70|     expect(wrapper.findAll("option").map((option) => option.attributes…
+     71|     await wrapper.get("select").setValue("rules[0].action.quantity");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/unit/ExplicitPlanSupplementForm.spec.ts > ExplicitPlanSupplementForm > edits ALL/ANY and its scalar binding together, preserves children, and supports changing back
+AssertionError: expected { …(6) } to match object { value: 'ANY', …(2) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "clauseIds": [],
+-   "origin": "USER_SUPPLEMENT",
+-   "value": "ANY",
++   "clauseIds": [
++     "clause-0000000000000001",
++   ],
++   "origin": "SOURCE",
++   "value": "ALL",
+  }
+
+ ❯ tests/unit/ExplicitPlanSupplementForm.spec.ts:105:30
+    103|         const bindings = command.mapping?.fieldBindings?.filter((bindi…
+    104|         expect(bindings).toHaveLength(1);
+    105|         expect(bindings![0]).toMatchObject({ value: operator, origin: …
+       |                              ^
+    106|         expect(command.mapping?.userSupplements).toContainEqual(expect…
+    107|           path, value: operator, supplementId: bindings![0]!.supplemen…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  10:25:18
+   Duration  1.09s (transform 203ms, setup 0ms, import 268ms, tests 42ms, environment 657ms)
+

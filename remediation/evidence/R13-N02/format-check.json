@@ -1,0 +1,18 @@
+{
+  "rawEvidencePreserved": true,
+  "allArtifactCheck": {
+    "command": "git diff --cached --check",
+    "exitCode": 1,
+    "findings": [
+      "frontend.log:13 new blank line at EOF",
+      "green-unit.log:13 new blank line at EOF",
+      "red-browser.log:31,98 trailing whitespace",
+      "red-unit.log:59 new blank line at EOF",
+      "type-check-final.log:4 new blank line at EOF"
+    ]
+  },
+  "authoredArtifactCheck": {
+    "scope": "Three implementation/test files; paired handoff; JSON evidence; verify_sqlite.py",
+    "result": "PASSED"
+  }
+}
