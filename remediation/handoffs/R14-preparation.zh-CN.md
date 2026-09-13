@@ -13,12 +13,13 @@
 ## 2. 离线验证与当前事实
 
 - 聚焦命令：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_r14_bounded_acceptance.py tests/integration/test_r14_offline_wiring.py tests/unit/test_live_certification_launcher.py tests/unit/test_live_certification_runner.py tests/unit/test_live_certification_profiles.py tests/unit/test_ai_plan_extraction_v4.py tests/contract/test_tushare_live.py -q -m "not live"` → **34 passed，3项 live 排除**。Ruff 检查和格式检查通过。新增测试用合成 AI HTTP 与 SDK 传输进入真实 FastAPI 生命周期及生产组合，把三个固定原文送入常规提取 API，复核/激活**单独的数值等价合成简写**，调用测试触发的生产恢复，再推进十个生产调度截止点得到两次持久化五分钟求值。精确记录**39**次受控行情查询：`trade_cal=3`、`idx_mins=5`、`rt_idx_min_daily=15`、`index_daily=5`、`rt_min_daily=1`、`rt_min=10`。启动器拒绝测试记录 `BUDGET_DENIED`／退出码1、隔离计划停用和SDK工厂恢复。直连 SDK 传输验证15秒超时和关闭urllib3重试；选定AI绑定及发出请求均使用30秒超时和零重试。不声称真实恢复、AI、SDK、socket/浏览器收悉或行情响应已发生。
+- 上午虚拟时钟复测覆盖10:12–10:25:12，包括10:15:30激活及至少45根连续的一分钟恢复K线。10:20/10:25仍完成两次求值，受控行情尝试仍为39次。10:10–11:00启动门槛在两端边界及各自相差一秒的外侧均有单元测试；旧下午启动时间会被拒绝。
 - `config/app.yaml` 校验通过，两种凭证字段存在。AI 主机/类型为 `api.deepseek.com`/`DEEPSEEK`；已配置主模型 `deepseek-flash`、附加模型 `deepseek-v4-pro`；行情主机 `api.quicksync.cn`，直连 `connect_ip` 已配置。DeepSeek 当前官方模型列表同时包含两者；本次验收有意选择 Pro 进行语义验证，不修改已配置默认模型。字段存在**不证明**余额或权限。2026-09-09 观察到的股票认证旧记录有效至 2026-09-16 14:48:40+08:00；2026-09-11 观察到的指数认证旧记录有效至 2026-09-18 10:20:44+08:00。两者均非本次 R14 新证据。
 - 星期日 2026-09-13 预检为 `weekdayWindowEligible=false`、`exchangeOpenDayConfirmed=false`、`isolatedPortAvailable=true`、`ready=false`。拒绝命令返回 `NOT_RUN_AUTHORIZATION_OR_PREFLIGHT`，退出码 `2`；测试专属 `dry-run-probe` 数据库目录不存在。真实调用 AI **0**、行情 **0**。12个已有 tracked 用户改动和4个 R00 untracked 文件均与记录的 SHA-256 基线相同；未暂存任何受保护文件。
 
 ## 3. 可审阅的授权边界
 
-修订的**唯一一次会话**使用 `deepseek-v4-pro`，对固定 fixture 输入 `LITERAL`、`SEM-AMB-01`、`SEM-UNS-01` 各一次：最多**3次物理 AI 尝试**（每输入1次、重试0），每次提示词最多**19,000 UTF-8字节**、请求输出**4096 token**。完整中文原文计划与两段短文本将发送至 `api.deepseek.com`。行情仅包括 `003043.SZ`、SSE/SZSE日历和五个生产始终启用的指数代码；`api.quicksync.cn` SDK 最多**60次物理查询**，端点上限 `trade_cal=3`、`stk_limit=0`、`daily=0`、`rt_min_daily=3`、`rt_min=15`、`idx_mins=5`、`rt_idx_min_daily=25`、`index_daily=5`，周期内/传输重试均为0。旧30次查询草案从未获授权；正常双求值离线接线消耗39次，因此由60次方案替代。获批后第一次开市会话须在 2026-09-14/15/16 的13:10–14:30+08:00启动；新调用截止**900秒**，另最多**20秒**关停。只允许本地 IN_APP/浏览器，不允许外部收件人或交易动作。
+修订的**唯一一次会话**使用 `deepseek-v4-pro`，对固定 fixture 输入 `LITERAL`、`SEM-AMB-01`、`SEM-UNS-01` 各一次：最多**3次物理 AI 尝试**（每输入1次、重试0），每次提示词最多**19,000 UTF-8字节**、请求输出**4096 token**。完整中文原文计划与两段短文本将发送至 `api.deepseek.com`。行情仅包括 `003043.SZ`、SSE/SZSE日历和五个生产始终启用的指数代码；`api.quicksync.cn` SDK 最多**60次物理查询**，端点上限 `trade_cal=3`、`stk_limit=0`、`daily=0`、`rt_min_daily=3`、`rt_min=15`、`idx_mins=5`、`rt_idx_min_daily=25`、`index_daily=5`，周期内/传输重试均为0。旧30次查询草案从未获授权；正常双求值离线接线消耗39次，因此由60次方案替代。获批后第一次开市会话须在 2026-09-14/15/16 的10:10–11:00+08:00启动；9月14日容量示例为10:12–10:27+08:00。新调用截止**900秒**，另最多**20秒**关停。本次上午会话**不覆盖**09:30开盘启动验收。只允许本地 IN_APP/浏览器，不允许外部收件人或交易动作。
 
 按当前公开 Pro 高峰价格，并把每次19,000字节暂按19,000 token、每次4096输出 token 规划，合计约**0.124美元**；实际计费输入 token、费用、账户余额及 `api.quicksync.cn` 额度/价格仍未经验证。客户端**无法强制计费输入 token 或美元金额硬上限**。真实运行前账户所有者应确认账户侧消费/额度控制，或明确接受“调用数有界、美元金额无保证”的风险。本任务不应索取密钥，也不应让用户把密钥贴到会话。若获批时间前股票认证过期，本批次不能执行，须另定认证额度。
 
@@ -28,4 +29,4 @@
 
 原 literal fixture 的9.80–10.00元 BUY 且前五根均量1.5倍、10.80–11.00元 SELL、低于9.50元纯风险阈值均保留，不因现价而调整。`TRADING_DAY=2026-09-14` 及其他政策单独标为人工测试补录，须做当前复核；若会话在9月15/16日，必须另审阅日期补录。浏览器操作员须走常规提取/复核/激活路径，并按原文独立 oracle 人工比对三次真实 AI 输出。测试触发的当日恢复必须报告足够连续的一分钟真实K线，以形成前五根已完成K线；不能称为常规启动恢复。须交叉核对新鲜已完成五分钟K线及前五根历史、单位/时间标签/陈旧/空数据、计划/版本/复核/激活/cutoff/resultHash/eventId、SQLite IN_APP 投递和浏览器实际可见。若15分钟内没有条件自然触发，BUY/SELL/风险分别标 `NOT_OBSERVED`；不得注入伪装真实的合成K线、改阈值或推断 PASS。
 
-本任务未提出授权请求。协调任务须先审阅修订的60次查询边界、双语方案中的13:12–13:27精确容量例子、金额/token局限及剩余离线缺口，再决定如何向用户提出授权。复核缓慢、首次指数批次无效、发布滞后或休市仍可能使一次性会话在双求值前结束；按事实标 `NOT_OBSERVED` 或失败，不延长或重启。测试采用虚拟调度时钟和测试本地服务适配器，真实 Uvicorn/浏览器时序、literal AI 至激活的语义、供应商权限及实际 IN_APP 浏览器收悉仍为 `UNVERIFIED`／`NOT_RUN`。R14-A 与 C7 仍待有界真实证据。
+本任务未提出授权请求。协调任务须先审阅修订的60次查询边界、双语方案中的10:12–10:27精确容量例子、金额/token局限及剩余离线缺口，再决定如何向用户提出授权。复核缓慢、首次指数批次无效、发布滞后或休市仍可能使一次性会话在双求值前结束；按事实标 `NOT_OBSERVED` 或失败，不延长或重启。测试采用虚拟调度时钟和测试本地服务适配器，真实 Uvicorn/浏览器时序、literal AI 至激活的语义、供应商权限及实际 IN_APP 浏览器收悉仍为 `UNVERIFIED`／`NOT_RUN`。R14-A 与 C7 仍待有界真实证据。

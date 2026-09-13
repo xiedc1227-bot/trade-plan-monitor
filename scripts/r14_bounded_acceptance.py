@@ -138,6 +138,12 @@ def _valid_run_id(run_id: str, now: datetime) -> bool:
     return now.date() in APPROVED_DATES and run_id == f"r14-{now:%Y%m%d}-a"
 
 
+def _start_window_eligible(now: datetime) -> bool:
+    """Allow one proposed open-day session to start in the morning window."""
+
+    return now.date() in APPROVED_DATES and time(10, 10) <= now.time() <= time(11, 0)
+
+
 def _claim_session(root: Path, run_id: str) -> Path:
     """Atomically consume this local installation's one R14 session slot."""
 
@@ -271,7 +277,7 @@ def _preflight() -> dict[str, object]:
         else None
     )
     now = datetime.now(_SHANGHAI)
-    eligible = now.date() in APPROVED_DATES and time(13, 10) <= now.time() <= time(14, 30)
+    eligible = _start_window_eligible(now)
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind(("127.0.0.1", 18765))

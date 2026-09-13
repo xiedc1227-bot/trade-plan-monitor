@@ -90,7 +90,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
-    clock = ControlledClock(datetime(2026, 9, 14, 13, 12, tzinfo=SHANGHAI))
+    clock = ControlledClock(datetime(2026, 9, 14, 10, 12, tzinfo=SHANGHAI))
     config = _write_configuration_and_evidence(
         tmp_path, observed_at=clock.now(), include_index=True
     )
@@ -218,9 +218,9 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                 assert deadline.bar_end == at.replace(second=0)
                 await runtime._runtime._run_deadline(deadline)
 
-            client.portal.call(run_due, datetime(2026, 9, 14, 13, 15, 12, tzinfo=SHANGHAI))
+            client.portal.call(run_due, datetime(2026, 9, 14, 10, 15, 12, tzinfo=SHANGHAI))
             assert market_budget.snapshot()["attempts"].get("idx_mins") == 5
-            clock.current = datetime(2026, 9, 14, 13, 15, 30, tzinfo=SHANGHAI)
+            clock.current = datetime(2026, 9, 14, 10, 15, 30, tzinfo=SHANGHAI)
 
             # Explicitly synthetic, numeric-equivalent review. The three fixed AI
             # extractions above remain separate and are never passed off as this draft.
@@ -276,11 +276,12 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
             assert activation.status_code == 200, activation.text
             recovery = client.portal.call(_recover_activated_symbol, runtime, clock.now().date())
             assert recovery["mode"] == "TEST_TRIGGERED_PRODUCTION_RECOVERY"
-            assert recovery["persistedMinuteBars"] >= 30
+            # 09:30–10:15 supplies nine complete historical five-minute buckets.
+            assert recovery["persistedMinuteBars"] >= 45
             for minute in range(16, 26):
                 client.portal.call(
                     run_due,
-                    datetime(2026, 9, 14, 13, minute, 12, tzinfo=SHANGHAI),
+                    datetime(2026, 9, 14, 10, minute, 12, tzinfo=SHANGHAI),
                 )
             assert market_budget.snapshot()["deniedBeforeNetwork"] == 0
             assert market_budget.snapshot()["attempts"] == {
@@ -300,7 +301,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                         work.explicit_rules.get(
                             plan_hash=plan_sha256(plan),
                             symbol="003043.SZ",
-                            target_bucket_end=datetime(2026, 9, 14, 13, minute, tzinfo=SHANGHAI),
+                            target_bucket_end=datetime(2026, 9, 14, 10, minute, tzinfo=SHANGHAI),
                             activation_revision=1,
                         )
                         is not None
@@ -324,7 +325,7 @@ def test_launcher_denial_exits_with_sanitized_audit_and_restores_factory(
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
-    clock = ControlledClock(datetime(2026, 9, 14, 13, 12, tzinfo=SHANGHAI))
+    clock = ControlledClock(datetime(2026, 9, 14, 10, 12, tzinfo=SHANGHAI))
     config = _write_configuration_and_evidence(
         tmp_path, observed_at=clock.now(), include_index=True
     )

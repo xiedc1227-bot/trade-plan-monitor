@@ -21,6 +21,7 @@ from scripts.r14_bounded_acceptance import (
     _deactivate_isolated_plan,
     _recover_activated_symbol,
     _session_budgets,
+    _start_window_eligible,
     _valid_run_id,
     approved_sources,
 )
@@ -93,15 +94,29 @@ def test_proposed_dates_and_one_local_session_slot(tmp_path: Path) -> None:
     from trade_plan_monitor.runtime.clock import SHANGHAI
 
     for day in (14, 15, 16):
-        now = datetime(2026, 9, day, 13, 12, tzinfo=SHANGHAI)
+        now = datetime(2026, 9, day, 10, 12, tzinfo=SHANGHAI)
         assert _valid_run_id(f"r14-202609{day}-a", now)
         assert not _valid_run_id(f"r14-202609{day}-b", now)
-    assert not _valid_run_id("r14-20260917-a", datetime(2026, 9, 17, 13, 12, tzinfo=SHANGHAI))
+    assert not _valid_run_id("r14-20260917-a", datetime(2026, 9, 17, 10, 12, tzinfo=SHANGHAI))
     root = tmp_path / "r14"
     assert _claim_session(root, "r14-20260914-a").is_dir()
     with pytest.raises(FileExistsError):
         _claim_session(root, "r14-20260915-a")
     assert not (root / "r14-20260915-a").exists()
+
+
+def test_morning_start_window_boundaries() -> None:
+    from trade_plan_monitor.runtime.clock import SHANGHAI
+
+    def at(day: int, hour: int, minute: int, second: int) -> datetime:
+        return datetime(2026, 9, day, hour, minute, second, tzinfo=SHANGHAI)
+
+    assert not _start_window_eligible(at(14, 10, 9, 59))
+    assert _start_window_eligible(at(14, 10, 10, 0))
+    assert _start_window_eligible(at(14, 11, 0, 0))
+    assert not _start_window_eligible(at(14, 11, 0, 1))
+    assert not _start_window_eligible(at(14, 13, 10, 0))
+    assert not _start_window_eligible(at(17, 10, 12, 0))
 
 
 def test_direct_market_sdk_enforces_15_seconds_and_no_transport_retry(monkeypatch) -> None:

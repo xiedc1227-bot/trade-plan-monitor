@@ -2,7 +2,7 @@
   "schemaVersion": "r14-offline-wiring-v1",
   "evidenceKind": "SIMULATED_SUPPLIER_TRANSPORT_NOT_REAL_R14",
   "test": "tests/integration/test_r14_offline_wiring.py",
-  "virtualClock": "2026-09-14T13:12:00+08:00..2026-09-14T13:25:12+08:00",
+  "virtualClock": "2026-09-14T10:12:00+08:00..2026-09-14T10:25:12+08:00",
   "ai": {
     "caseIds": ["LITERAL", "SEM-AMB-01", "SEM-UNS-01"],
     "physicalAttempts": 3,
@@ -12,7 +12,8 @@
   "review": {
     "source": "SYNTHETIC_NUMERIC_EQUIVALENT_SHORTHAND_SEPARATE_FROM_THREE_AI_CASES",
     "currentReviewAndActivation": true,
-    "activationRecovery": "TEST_TRIGGERED_PRODUCTION_RECOVERY"
+    "activationRecovery": "TEST_TRIGGERED_PRODUCTION_RECOVERY",
+    "minimumRecoveredMinuteBarsAt101530": 45
   },
   "market": {
     "simulatedStockSourceTimeLabel": "END",
@@ -26,8 +27,8 @@
       "rt_min": 10
     },
     "completedFiveMinuteEvaluations": [
-      "2026-09-14T13:20:00+08:00",
-      "2026-09-14T13:25:00+08:00"
+      "2026-09-14T10:20:00+08:00",
+      "2026-09-14T10:25:00+08:00"
     ],
     "transportTimeoutSeconds": 15,
     "controllerInCycleRetries": 0,
@@ -46,6 +47,7 @@
   "unverified": [
     "LIVE_PROVIDER_ENTITLEMENT_RESPONSE_AND_CACHE_SUCCESS",
     "LIVE_MARKET_OPEN_STATUS",
+    "MARKET_OPENING_STARTUP_AT_09_30_NOT_COVERED",
     "REAL_AI_SEMANTIC_ACCURACY_AND_BILLING",
     "HUMAN_REVIEW_DURATION",
     "REAL_BROWSER_VISIBLE_RECEIPT"
