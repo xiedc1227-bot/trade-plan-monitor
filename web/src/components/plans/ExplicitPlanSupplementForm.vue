@@ -46,7 +46,12 @@ const explicit = computed(
 );
 const mapping = computed(() => props.plan.mapping ?? null);
 const editableBindings = computed(() => (mapping.value?.fieldBindings ?? []).filter(
-  (item) => item.origin === "SOURCE" && item.path !== "symbol" && !item.path.endsWith(".rule_id"),
+  (item) => (item.origin === "SOURCE" || item.origin === "USER_SUPPLEMENT") &&
+    item.path !== "symbol" && !item.path.endsWith(".rule_id") &&
+    // The logical node editor owns both STRUCTURE and its scalar type claim.
+    !((item.bindingKind ?? "VALUE") === "VALUE" && item.path.endsWith(".type") &&
+      (mapping.value?.fieldBindings ?? []).some((parent) =>
+        parent.bindingKind === "STRUCTURE" && `${parent.path}.type` === item.path)),
 ));
 const selectedBinding = computed(() => editableBindings.value.find(
   (item) => item.path === selectedBindingPath.value,
@@ -112,7 +117,13 @@ function saveBindingEdit(): void {
     localError.value = "请输入与当前字段类型一致的值；价格使用元，股数必须是 100 的倍数。";
     return;
   }
-  save([{ path: binding.path, value, unit: binding.unit, bindingKind: binding.bindingKind ?? "VALUE" }]);
+  const change = { path: binding.path, value, unit: binding.unit, bindingKind: binding.bindingKind ?? "VALUE" };
+  // Changing ALL/ANY keeps the same ordered children, but both the grouping
+  // relationship and its scalar operator now come from this human edit.
+  save(binding.bindingKind === "STRUCTURE" ? [
+    change,
+    { path: `${binding.path}.type`, value, unit: "NONE", bindingKind: "VALUE" },
+  ] : [change]);
 }
 
 function parseEditedValue(binding: FieldBindingView, raw: string): boolean | number | string | null {
@@ -256,6 +267,13 @@ function writeChild(
       <label v-if="selectedBinding">新值
         <input v-model="editedValue" :aria-label="`${selectedBinding.path} 新值`" required />
       </label>
+      <p v-if="selectedBinding" aria-live="polite">
+        当前值 {{ displayBindingValue(selectedBinding) }}（{{ selectedBinding.origin }}）
+        → 新值 {{ editedValue }}（人工补充 USER_SUPPLEMENT）。
+        <span v-if="selectedBinding.bindingKind === 'STRUCTURE'">
+          ALL 表示所有子条件都需满足；ANY 表示任一子条件满足即可。子条件及其顺序保持不变。
+        </span>
+      </p>
       <button type="submit" :disabled="busy || selectedBinding === null">保存字段修订并重新审核</button>
     </form>
   </section>

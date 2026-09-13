@@ -57,6 +57,66 @@ const plan: PlanVersionView = {
 };
 
 describe("ExplicitPlanSupplementForm", () => {
+  it("keeps supplemented trading fields editable while excluding technical contracts", async () => {
+    const mapping = structuredClone(plan.mapping!);
+    mapping.fieldBindings![0] = {
+      ...mapping.fieldBindings![0]!, origin: "USER_SUPPLEMENT", clauseIds: [], supplementId: "previous-quantity",
+    };
+    mapping.fieldBindings!.push({ path: "version", value: 2, unit: "NONE", origin: "CONTRACT", clauseIds: [] });
+    const wrapper = mount(ExplicitPlanSupplementForm, {
+      props: { plan: { ...plan, mapping, unresolvedReviewIssues: [] } },
+    });
+    expect(wrapper.findAll("option").map((option) => option.attributes("value"))).toContain("rules[0].action.quantity");
+    expect(wrapper.findAll("option").map((option) => option.attributes("value"))).not.toContain("version");
+    await wrapper.get("select").setValue("rules[0].action.quantity");
+    await wrapper.get("input").setValue("200");
+    await wrapper.get("form").trigger("submit");
+    const command = wrapper.emitted("saveDraft")?.[0]?.[0] as PlanDraftCommand;
+    expect(command.mapping?.fieldBindings).toContainEqual(expect.objectContaining({
+      path: "rules[0].action.quantity", value: 200, origin: "USER_SUPPLEMENT",
+    }));
+    expect(command.mapping?.fieldBindings).toContainEqual(expect.objectContaining({
+      path: "version", value: 2, origin: "CONTRACT",
+    }));
+  });
+
+  it("edits ALL/ANY and its scalar binding together, preserves children, and supports changing back", async () => {
+    const mapping = structuredClone(plan.mapping!);
+    mapping.fieldBindings!.push(
+      { path: "rules[0].condition", bindingKind: "STRUCTURE", value: "ALL", unit: "NONE", origin: "SOURCE", clauseIds: ["clause-0000000000000001"] },
+      { path: "rules[0].condition.type", bindingKind: "VALUE", value: "ALL", unit: "NONE", origin: "SOURCE", clauseIds: ["clause-0000000000000001"] },
+    );
+    const document = JSON.parse(plan.planJson);
+    document.rules[0].condition = { type: "ALL", conditions: [{ type: "COMPLETED_CLOSE_BELOW", price_fen: 950 }, { type: "COMPLETED_CLOSE_BELOW", price_fen: 960 }] };
+    const wrapper = mount(ExplicitPlanSupplementForm, {
+      props: { plan: { ...plan, mapping, planJson: JSON.stringify(document), unresolvedReviewIssues: [] } },
+    });
+    for (const [index, operator] of ["ANY", "ALL"].entries()) {
+      await wrapper.get("select").setValue("rules[0].condition");
+      await wrapper.get("input").setValue(operator);
+      await wrapper.get("form").trigger("submit");
+      const command = wrapper.emitted("saveDraft")?.[index]?.[0] as PlanDraftCommand;
+      expect(JSON.parse(command.planJson).rules[0].condition).toEqual({ ...document.rules[0].condition, type: operator });
+      expect(command.sourceText).toBe(plan.sourceText);
+      expect(command.mapping?.sourceClauses).toEqual(plan.mapping?.sourceClauses);
+      for (const path of ["rules[0].condition", "rules[0].condition.type"]) {
+        const bindings = command.mapping?.fieldBindings?.filter((binding) => binding.path === path);
+        expect(bindings).toHaveLength(1);
+        expect(bindings![0]).toMatchObject({ value: operator, origin: "USER_SUPPLEMENT", clauseIds: [] });
+        expect(command.mapping?.userSupplements).toContainEqual(expect.objectContaining({
+          path, value: operator, supplementId: bindings![0]!.supplementId,
+        }));
+      }
+      if (!command.mapping) throw new Error("Missing successor mapping");
+      await wrapper.setProps({ plan: { ...plan, id: `successor-${index}`, planJson: command.planJson, mapping: command.mapping, unresolvedReviewIssues: [] } });
+    }
+    await wrapper.get("select").setValue("rules[0].condition");
+    await wrapper.get("input").setValue("NOT");
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("saveDraft")).toHaveLength(2);
+    expect(wrapper.get('[role="alert"]').text()).toContain("类型一致");
+  });
+
   it("creates a new durable user-supplement mapping instead of pretending policy came from source", async () => {
     const wrapper = mount(ExplicitPlanSupplementForm, { props: { plan } });
     const inputs = wrapper.findAll<HTMLInputElement>('form input:not([type="checkbox"])');
