@@ -29,17 +29,19 @@ const PLAN_VERSION_ID = "123e4567-e89b-42d3-a456-426614174000";
 const TIME = "2026-08-30T10:00:00.000000+08:00";
 const INDEX_TIME = "2026-08-28T15:00:00.000000+08:00";
 const ROUTES = [
-  { heading: "回测运行记录", path: "/backtests", readyTestId: "run-detail-link" },
-  { heading: "创建回测", path: "/backtests/new", readyTestId: "submit-backtest-run" },
+  { heading: "回测运行记录", path: "/backtests", readyTestId: "run-detail-link", viewSelector: ".backtest-runs-view" },
+  { heading: "创建回测", path: "/backtests/new", readyTestId: "submit-backtest-run", viewSelector: ".backtest-new-view" },
   {
     heading: "历史数据管理",
     path: "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28&warmupStart=2026-07-01",
     readyTestId: "request-dataset-sync",
+    viewSelector: ".backtest-data-view",
   },
   {
     heading: "回测结果",
     path: `/backtests/${RUN_ID}`,
     readyTestId: "result-tab-summary",
+    viewSelector: ".run-detail-view",
   },
 ] as const;
 
@@ -819,6 +821,7 @@ test("keeps 320/768/1024/1440 layouts and 200 percent text inside route boundari
     await page.setViewportSize({ height: 900, width });
     for (const route of ROUTES) {
       await openRoute(page, route);
+      await expect(page.locator(route.viewSelector)).toHaveCSS("display", "grid");
       await page.evaluate(() => {
         document.documentElement.style.fontSize = "200%";
       });
