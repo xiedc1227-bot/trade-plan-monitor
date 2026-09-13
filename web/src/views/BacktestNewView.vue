@@ -124,6 +124,7 @@ onBeforeUnmount(() => {
 .backtest-new-view {
   display: grid;
   box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
   width: min(100%, 90rem);
   margin-inline: auto;
@@ -154,6 +155,7 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
 }
 
 .backtest-new-view__hero a,
@@ -196,6 +198,12 @@ onBeforeUnmount(() => {
 
   .backtest-new-view__hero {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 30rem) {
+  .backtest-new-view {
+    padding-inline: 0;
   }
 }
 </style>

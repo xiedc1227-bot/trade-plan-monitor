@@ -169,6 +169,8 @@ function limitationDescription(token: string): string {
 <style scoped>
 .metrics-summary {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--space-5);
   padding: var(--space-6);
   color: var(--color-text-mineral);
@@ -202,6 +204,7 @@ function limitationDescription(token: string): string {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
 }
 
 .metrics-summary__status {
@@ -236,6 +239,7 @@ function limitationDescription(token: string): string {
 
 .metrics-summary__section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
 
@@ -280,6 +284,12 @@ function limitationDescription(token: string): string {
   .metrics-summary__identity,
   .metrics-summary__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 30rem) {
+  .metrics-summary {
+    padding-inline: var(--space-2);
   }
 }
 </style>

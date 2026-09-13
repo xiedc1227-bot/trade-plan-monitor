@@ -297,4 +297,10 @@ onBeforeUnmount(() => {
     flex-direction: column;
   }
 }
+
+@media (max-width: 30rem) {
+  .backtest-data-view {
+    padding-inline: 0;
+  }
+}
 </style>

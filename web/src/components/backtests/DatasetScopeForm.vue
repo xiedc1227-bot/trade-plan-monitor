@@ -409,6 +409,8 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 <style scoped>
 .dataset-scope-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--space-6);
   padding: var(--space-6);
   border: var(--border-technical);
@@ -450,6 +452,7 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 .dataset-scope-form__filters,
 .dataset-scope-form__filter-grid label {
   display: grid;
+  min-width: 0;
   gap: var(--space-2);
 }
 
@@ -470,6 +473,9 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 }
 
 .dataset-scope-form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   min-height: 2.75rem;
   padding: 0 var(--space-3);
   border: var(--border-technical);
@@ -548,7 +554,13 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 
   .dataset-scope-form__grid,
   .dataset-scope-form__filter-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 30rem) {
+  .dataset-scope-form {
+    padding-inline: var(--space-2);
   }
 }
 </style>

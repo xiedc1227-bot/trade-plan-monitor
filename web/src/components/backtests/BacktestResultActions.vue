@@ -195,6 +195,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .result-actions {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--space-3);
   padding: var(--space-4);
   background: var(--color-surface-graphite);
@@ -232,5 +234,11 @@ onBeforeUnmount(() => {
 .result-actions__boundary {
   color: var(--color-text-muted);
   font-size: 0.875rem;
+}
+
+@media (max-width: 30rem) {
+  .result-actions {
+    padding-inline: var(--space-2);
+  }
 }
 </style>

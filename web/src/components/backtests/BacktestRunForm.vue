@@ -216,6 +216,8 @@ function focusErrorField(field: string, event: MouseEvent): void {
 <style scoped>
 .run-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--space-6);
   padding: var(--space-6);
   border: var(--border-technical);
@@ -243,6 +245,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
 }
 
 .run-form__grid {
@@ -346,7 +349,13 @@ function focusErrorField(field: string, event: MouseEvent): void {
   }
 
   .run-form__grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 30rem) {
+  .run-form {
+    padding-inline: var(--space-2);
   }
 }
 

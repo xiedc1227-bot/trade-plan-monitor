@@ -140,6 +140,8 @@ function optionLabel(version: PlanVersionSummary): string {
 .plan-version-selector {
   display: grid;
   grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--space-2);
   padding: var(--space-4);
   border: var(--border-technical);
@@ -159,7 +161,9 @@ function optionLabel(version: PlanVersionSummary): string {
 }
 
 .plan-version-selector select {
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   padding-inline: var(--space-3);
 }
 
@@ -173,6 +177,7 @@ function optionLabel(version: PlanVersionSummary): string {
 .plan-version-selector__error {
   margin: 0;
   font-size: 0.875rem;
+  overflow-wrap: anywhere;
 }
 
 .plan-version-selector__help,
@@ -204,6 +209,14 @@ function optionLabel(version: PlanVersionSummary): string {
 @media (max-width: 47.9375rem) {
   .plan-version-selector__pagination button {
     flex: 1 1 7rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 30rem) {
+  .plan-version-selector {
+    padding-inline: var(--space-2);
   }
 }
 

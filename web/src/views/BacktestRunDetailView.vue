@@ -798,6 +798,7 @@ onBeforeUnmount(() => {
 .run-detail-view {
   display: grid;
   box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
   width: min(100%, 90rem);
   gap: var(--space-6);
   margin-inline: auto;
@@ -963,6 +964,16 @@ onBeforeUnmount(() => {
   .run-detail-view__results-heading,
   .run-detail-view__resource-heading {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 30rem) {
+  .run-detail-view {
+    padding-inline: 0;
+  }
+
+  .run-detail-view__results {
+    padding-inline: var(--space-2);
   }
 }
 

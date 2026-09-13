@@ -822,6 +822,12 @@ test("keeps 320/768/1024/1440 layouts and 200 percent text inside route boundari
       await page.evaluate(() => {
         document.documentElement.style.fontSize = "200%";
       });
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      });
       const sizes = await page.evaluate(() => {
         const clientWidth = document.documentElement.clientWidth;
         const overflow = [...document.querySelectorAll<HTMLElement>("body *")]
@@ -832,8 +838,14 @@ test("keeps 320/768/1024/1440 layouts and 200 percent text inside route boundari
           }))
           .filter((element) => element.left < 0 || element.right > clientWidth)
           .slice(0, 5);
-        return { clientWidth, overflow, scrollWidth: document.documentElement.scrollWidth };
+        return {
+          clientWidth,
+          fontSize: getComputedStyle(document.documentElement).fontSize,
+          overflow,
+          scrollWidth: document.documentElement.scrollWidth,
+        };
       });
+      expect(sizes.fontSize).toBe("32px");
       expect(
         sizes.scrollWidth,
         `${route.path} overflow at ${width}px and 200% text: ${JSON.stringify(sizes.overflow)}`,
@@ -853,6 +865,15 @@ test("R13 records immediate and settled narrow backtest layout without changing 
     width: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
     fontStatus: document.fonts.status,
+    activeElement: `${document.activeElement?.tagName}.${document.activeElement?.className}`,
+    scrollContainers: [...document.querySelectorAll<HTMLElement>('body *')].filter(element => element.scrollWidth > element.clientWidth).map(element => ({
+      element: `${element.tagName}.${element.className}`,
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      left: element.getBoundingClientRect().left,
+      right: element.getBoundingClientRect().right,
+      overflowX: getComputedStyle(element).overflowX,
+    })),
     overflow: [...document.querySelectorAll<HTMLElement>('body *')].map(element => {
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
