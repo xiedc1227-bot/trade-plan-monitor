@@ -1,0 +1,66 @@
+[
+  {
+    "path": "config/app.example.yaml",
+    "sha256": "3da6c0705d6538ef9a64829124cfe953ba526bea949161f3872b41f323e39ac1"
+  },
+  {
+    "path": "docs/specifications/monitoring/SPEC-ai-plan-drafting.md",
+    "sha256": "4c34f3043a3a847179ba136469b5aa3d030e7667259310087ae74e8e0b51f2aa"
+  },
+  {
+    "path": "docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md",
+    "sha256": "612de481971164ec4b8beb559845c5a372ec762e1cafed70088bd201604d443b"
+  },
+  {
+    "path": "src/trade_plan_monitor/config.py",
+    "sha256": "3425c2994ce1ad20fb9c1034de1025999615b6657fd783ce1d1795df3bb7590f"
+  },
+  {
+    "path": "tests/unit/test_config.py",
+    "sha256": "867908c5fe42ea5b71d1b85bd8cbe224ab0877f8b391ad7f42a4f4e246decebe"
+  },
+  {
+    "path": "web/src/components/market-index/MarketIndexSparkline.vue",
+    "sha256": "47b8098d4b4325f0ad02318fb6b823221532c68bdf7434e9531fdf6d9491a049"
+  },
+  {
+    "path": "web/src/components/market-index/marketIndexChartOptions.ts",
+    "sha256": "52ef0d2afcdeb244b848bbfe6145758ed468f13c2caec137351e2a27fba19d38"
+  },
+  {
+    "path": "web/src/layouts/AppShell.vue",
+    "sha256": "952879e15d401cd0d77c1b75fb3d734ec24343e0915575d26661fc347ca344e5"
+  },
+  {
+    "path": "web/tests/e2e/accessibility.spec.ts",
+    "sha256": "f6a7a7677a4bcd2cf4b3c710162143a50c16097375a52a286c846b9ff33046f1"
+  },
+  {
+    "path": "web/tests/e2e/dashboard.spec.ts",
+    "sha256": "272a0854e934969158b2c347544343ca22fcac863b072fd2c99aee16512bde9c"
+  },
+  {
+    "path": "web/tests/unit/AppShell.spec.ts",
+    "sha256": "9db849d99ad6b5a3591cd54453fcc0ace773e2fafd6f1ae5c1efe66916a02719"
+  },
+  {
+    "path": "web/tests/unit/marketIndexChartOptions.spec.ts",
+    "sha256": "d7c4feab6dab88e8a771c7b345016f6736b71bd582a58518b370680cc6717569"
+  },
+  {
+    "path": "remediation/baseline.md",
+    "sha256": "807ec977cde32d31ddef472084f22daca80012b4b91edc4d10bea3ad7a306e45"
+  },
+  {
+    "path": "remediation/baseline.zh-CN.md",
+    "sha256": "1eb4a2777f0b0c377389db94b94188a8a6f43121cd900cfd9895fb9d3237b6b8"
+  },
+  {
+    "path": "remediation/handoffs/R00.md",
+    "sha256": "202e7ad7af3bfc2795ad8e19785f40f4ef08d02771c18fe606ba7cf4cdf2e1de"
+  },
+  {
+    "path": "remediation/handoffs/R00.zh-CN.md",
+    "sha256": "0733ff4a9f18937736c26e0da652329f9cc93ddd0f529c82affec90d57c5ca0b"
+  }
+]

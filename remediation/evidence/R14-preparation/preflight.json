@@ -1,0 +1,40 @@
+{
+  "ai": {
+    "host": "api.deepseek.com",
+    "keyPresent": true,
+    "model": "deepseek-v4-pro",
+    "profile": "DEEPSEEK",
+    "selectedModelConfigured": true
+  },
+  "exchangeOpenDayConfirmed": false,
+  "isolatedPortAvailable": true,
+  "limits": {
+    "aiOutputTokensPerRequest": 4096,
+    "aiPerInputAttempts": 1,
+    "aiPhysicalAttempts": 3,
+    "aiPromptUtf8Bytes": 19000,
+    "browserPort": 18765,
+    "marketPerEndpointAttempts": {
+      "daily": 0,
+      "idx_mins": 5,
+      "index_daily": 5,
+      "rt_idx_min_daily": 12,
+      "rt_min": 4,
+      "rt_min_daily": 3,
+      "stk_limit": 0,
+      "trade_cal": 2
+    },
+    "marketPhysicalAttempts": 30,
+    "wallSeconds": 900
+  },
+  "market": {
+    "connectIpPresent": true,
+    "host": "api.quicksync.cn",
+    "stockCertificateReady": true,
+    "tokenPresent": true
+  },
+  "mode": "DRY_RUN_NO_NETWORK",
+  "ready": false,
+  "timeShanghai": "2026-09-13T13:40:22.643141+08:00",
+  "weekdayWindowEligible": false
+}
