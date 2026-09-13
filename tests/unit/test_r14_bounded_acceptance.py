@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -16,6 +18,7 @@ from scripts.r14_bounded_acceptance import (
     MarketBudget,
     _bounded_ai_factory,
     _deactivate_isolated_plan,
+    _recover_activated_symbol,
     approved_sources,
 )
 
@@ -140,3 +143,34 @@ def test_isolated_app_constructs_without_database_or_network(tmp_path: Path) -> 
         assert "/api/v1/plan-extractions" in app.openapi()["paths"]
     assert not database.exists()
     assert budget.snapshot()["totalAttempts"] == 0
+
+
+def test_activation_recovery_uses_existing_pipeline_once() -> None:
+    requested_dates: list[date] = []
+
+    class Recovery:
+        async def recover_startup(self, *, trade_date: date) -> SimpleNamespace:
+            requested_dates.append(trade_date)
+            return SimpleNamespace(
+                attempted_symbols=("003043.SZ",),
+                persisted_bar_count=31,
+                yielded_to_realtime=False,
+                results=(SimpleNamespace(error_code=None),),
+            )
+
+    class State:
+        _pipeline = SimpleNamespace(recovery=Recovery())
+
+        async def run_deadline(self) -> None:
+            return None
+
+    runtime = SimpleNamespace(_runtime=SimpleNamespace(_run_deadline=State().run_deadline))
+    report = asyncio.run(_recover_activated_symbol(runtime, date(2026, 9, 14)))
+    assert requested_dates == [date(2026, 9, 14)]
+    assert report == {
+        "mode": "TEST_TRIGGERED_PRODUCTION_RECOVERY",
+        "attemptedSymbols": ["003043.SZ"],
+        "persistedMinuteBars": 31,
+        "yieldedToRealtime": False,
+        "errorCodes": [None],
+    }

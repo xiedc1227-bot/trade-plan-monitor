@@ -12,7 +12,7 @@ import socket
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import replace
-from datetime import datetime, time
+from datetime import date, datetime, time
 from hashlib import sha256
 from pathlib import Path
 from time import monotonic
@@ -336,6 +336,24 @@ async def _deactivate_isolated_plan(database: Path) -> str:
         await plans.stop()
 
 
+async def _recover_activated_symbol(runtime: object, trade_date: date) -> dict[str, object]:
+    """Use the existing production recovery service once after UI activation."""
+
+    pipeline = runtime._runtime._run_deadline.__self__._pipeline
+    if pipeline is None:
+        return {"status": "NOT_RUN_PIPELINE_UNAVAILABLE"}
+    result = await pipeline.recovery.recover_startup(trade_date=trade_date)
+    return {
+        "mode": "TEST_TRIGGERED_PRODUCTION_RECOVERY",
+        "attemptedSymbols": list(result.attempted_symbols),
+        "persistedMinuteBars": result.persisted_bar_count,
+        "yieldedToRealtime": result.yielded_to_realtime,
+        "errorCodes": [
+            None if item.error_code is None else item.error_code.value for item in result.results
+        ],
+    }
+
+
 async def _serve(run_id: str) -> int:
     import uvicorn
 
@@ -394,6 +412,7 @@ async def _serve(run_id: str) -> int:
         "channel": "IN_APP_ONLY",
         "aiModel": APPROVED_MODEL,
         "status": "STARTED",
+        "activationRecovery": "NOT_RUN_NO_ACTIVE_PLAN",
     }
     try:
         plan_lifecycle = PersistentPlanWebLifecycle(database_path=database)
@@ -415,11 +434,29 @@ async def _serve(run_id: str) -> int:
                     app, host="127.0.0.1", port=18765, log_level="warning", access_log=False
                 )
             )
+
+            async def recover_after_activation() -> None:
+                while not server.should_exit:
+                    if getattr(app.state, "plan_web_lifecycle", None) is plan_lifecycle:
+                        state = await plan_lifecycle.get_plan_activation_state(symbol="003043.SZ")
+                        if state is not None and state.active:
+                            runtime = app.state.runtime_lifecycle
+                            try:
+                                audit["activationRecovery"] = await _recover_activated_symbol(
+                                    runtime, datetime.now(_SHANGHAI).date()
+                                )
+                            except Exception as error:
+                                audit["activationRecovery"] = "FAILED"
+                                audit["activationRecoveryErrorType"] = type(error).__name__
+                            return
+                    await asyncio.sleep(1)
+
             print(
                 json.dumps({"status": "STARTING_BROWSER", "url": "http://127.0.0.1:18765"}),
                 flush=True,
             )
             task = asyncio.create_task(server.serve(sockets=[listener]))
+            recovery_task = asyncio.create_task(recover_after_activation())
             try:
                 await asyncio.wait_for(asyncio.shield(task), timeout=900)
             except TimeoutError:
@@ -427,13 +464,16 @@ async def _serve(run_id: str) -> int:
                 server.should_exit = True
                 await asyncio.wait_for(task, timeout=20)
             else:
-                audit["status"] = "STOPPED"
+                audit["status"] = "STOPPED" if server.started else "STARTUP_FAILED"
+            finally:
+                recovery_task.cancel()
+                await asyncio.gather(recovery_task, return_exceptions=True)
     except BaseException as error:
         audit["status"] = "FAILED"
         audit["errorType"] = type(error).__name__
         return_code = 1
     else:
-        return_code = 0
+        return_code = 0 if audit["status"] != "STARTUP_FAILED" else 1
     finally:
         if server is not None:
             server.should_exit = True
