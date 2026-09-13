@@ -304,12 +304,14 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   expect(await page.getByTestId("market-index-health-symbol").evaluate(
     (element) => getComputedStyle(element).animationName,
   )).toBe("none");
-  expect(await indexCards.locator(".market-index-trend-card__high").evaluate(
-    (element) => getComputedStyle(element).color,
-  )).toBe("rgb(103, 183, 165)");
-  expect(await indexCards.locator(".market-index-trend-card__low").evaluate(
-    (element) => getComputedStyle(element).color,
-  )).toBe("rgb(103, 183, 165)");
+  const high = indexCards.locator(".market-index-trend-card__high");
+  const low = indexCards.locator(".market-index-trend-card__low");
+  await expect(high).toHaveText("1235.20");
+  await expect(low).toHaveText("1229.90");
+  await expect(high).toHaveAttribute("data-direction", "down");
+  await expect(low).toHaveAttribute("data-direction", "down");
+  await expect(high).toHaveCSS("color", "rgb(103, 183, 165)");
+  await expect(low).toHaveCSS("color", "rgb(103, 183, 165)");
   await expect(page.getByTestId("market-index-sparkline")).toHaveCount(1);
   const turnoverCard = page.getByTestId("market-turnover-card");
   await expect(turnoverCard).toContainText("今日累计成交额");
