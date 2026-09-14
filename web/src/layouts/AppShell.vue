@@ -387,6 +387,10 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
+.app-shell__main :deep(h1[tabindex="-1"]:focus-visible) {
+  outline: none;
+}
+
 @media (min-width: 48rem) {
   .app-shell__desktop-navigation {
     display: block;

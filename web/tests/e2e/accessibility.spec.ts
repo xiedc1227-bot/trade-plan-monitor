@@ -143,7 +143,12 @@ test("loads system health through the production /system route", async ({ page }
   });
 
   await page.goto(`${baseUrl}/system`);
-  await expect(page.getByRole("heading", { level: 1, name: "系统健康" })).toBeVisible();
+  const pageHeading = page.getByRole("heading", { level: 1, name: "系统健康" });
+  await expect(pageHeading).toBeVisible();
+  await expect(pageHeading).toBeFocused();
+  expect(
+    await pageHeading.evaluate((element) => getComputedStyle(element).outlineStyle),
+  ).toBe("none");
   await expect(page).toHaveTitle("系统健康 · Trade Plan Monitor");
   expect(healthRequests).toBe(1);
   expect(consoleFailures).toEqual([]);

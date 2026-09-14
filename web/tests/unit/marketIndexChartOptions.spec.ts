@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import type { MarketIndexBarView } from "../../src/api/generated";
 import {
+  buildMarketIndexChartPoints,
   calculateIndexAxisBounds,
   marketIndexDirection,
   marketIndexDirectionColor,
@@ -8,7 +10,40 @@ import {
   marketIndexValueDirection,
 } from "../../src/components/market-index/marketIndexChartOptions";
 
+const openingBar = Object.freeze({
+  amount: "1000",
+  barAt: "2026-09-11T09:35:00.000000+08:00",
+  closePoints: "3320.25",
+  highPoints: "3322.00",
+  indexCode: "399006.SZ",
+  interval: "FIVE_MINUTE",
+  lowPoints: "3310.50",
+  observedAt: "2026-09-11T09:35:12.000000+08:00",
+  openPoints: "3312.75",
+  providerRevision: 1,
+  sourceKind: "PROVISIONAL",
+  volume: "100",
+} satisfies MarketIndexBarView);
+
 describe("market index chart options", () => {
+  it("starts an opening five-minute series at 09:30 with the opening price", () => {
+    expect(buildMarketIndexChartPoints([openingBar])).toEqual([
+      { at: "2026-09-11T09:30:00+08:00", value: 3312.75 },
+      { at: "2026-09-11T09:35:00.000000+08:00", value: 3320.25 },
+    ]);
+  });
+
+  it("does not invent an opening point when the 09:35 bar is unavailable", () => {
+    const laterBar = Object.freeze({
+      ...openingBar,
+      barAt: "2026-09-11T09:40:00.000000+08:00",
+    });
+
+    expect(buildMarketIndexChartPoints([laterBar])).toEqual([
+      { at: "2026-09-11T09:40:00.000000+08:00", value: 3320.25 },
+    ]);
+  });
+
   it("keeps a prior close above the intraday range inside the visible y-axis", () => {
     const bounds = calculateIndexAxisBounds([3931.4, 3948.015, 3934.375], 3951.5068);
 

@@ -14,6 +14,7 @@ import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "v
 
 import type { MarketIndexBarView } from "../../api/generated";
 import {
+  buildMarketIndexChartPoints,
   calculateIndexAxisBounds,
   marketIndexDirectionColor,
   marketIndexShowSymbol,
@@ -90,9 +91,9 @@ function buildOption(
   priorClosePoints: string | null,
   sessionChangeRatio: string | null,
 ): EChartsCoreOption {
-  const visibleBars = bars.filter((bar) => Number.isFinite(Number(bar.closePoints)));
+  const points = buildMarketIndexChartPoints(bars);
   const priorClose = priorClosePoints === null ? null : Number(priorClosePoints);
-  const values = visibleBars.map((bar) => Number(bar.closePoints));
+  const values = points.map((point) => point.value);
   const bounds = calculateIndexAxisBounds(values, Number.isFinite(priorClose) ? priorClose : null);
   const trendColor = marketIndexDirectionColor(sessionChangeRatio);
   return {
@@ -109,7 +110,7 @@ function buildOption(
           color: "#0b1114",
           formatter: (parameters: { value: number }) => Number(parameters.value).toFixed(2),
           padding: [2, 4],
-          show: visibleBars.length > 0,
+          show: points.length > 0,
         },
         emphasis: { disabled: true },
         lineStyle: { color: trendColor, width: 2 },
@@ -123,7 +124,7 @@ function buildOption(
             }
           : undefined,
         name: props.displayName,
-        showSymbol: marketIndexShowSymbol(visibleBars.length),
+        showSymbol: marketIndexShowSymbol(points.length),
         symbolSize: 6,
         type: "line",
       },
@@ -145,11 +146,15 @@ function buildOption(
       valueFormatter: (value: unknown) => Number(value).toFixed(2),
     },
     xAxis: {
-      axisLabel: { color: "#a8b4b3", formatter: (value: string) => value.slice(11, 16) },
+      axisLabel: {
+        color: "#a8b4b3",
+        formatter: (value: string) => value.slice(11, 16),
+        showMinLabel: true,
+      },
       axisLine: { lineStyle: { color: "#405158" } },
       axisTick: { show: false },
       boundaryGap: false,
-      data: visibleBars.map((bar) => bar.barAt),
+      data: points.map((point) => point.at),
       type: "category",
     },
     yAxis: {

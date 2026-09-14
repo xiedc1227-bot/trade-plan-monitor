@@ -1,6 +1,13 @@
+import type { MarketIndexBarView } from "../../api/generated";
+
 export interface IndexAxisBounds {
   readonly maximum: number;
   readonly minimum: number;
+}
+
+export interface MarketIndexChartPoint {
+  readonly at: string;
+  readonly value: number;
 }
 
 export type MarketIndexDirection = "down" | "flat" | "up";
@@ -10,6 +17,29 @@ const directionColors: Readonly<Record<MarketIndexDirection, string>> = Object.f
   flat: "#eef1e8",
   up: "#e45d43",
 });
+
+const openingBucketAt = /^(\d{4}-\d{2}-\d{2})T09:35:00(?:\.\d{1,6})?\+08:00$/;
+
+export function buildMarketIndexChartPoints(
+  bars: readonly MarketIndexBarView[],
+): readonly MarketIndexChartPoint[] {
+  const points = bars.flatMap((bar) => {
+    const value = Number(bar.closePoints);
+    return Number.isFinite(value) ? [{ at: bar.barAt, value }] : [];
+  });
+  const firstBar = bars[0];
+  if (firstBar === undefined || !Number.isFinite(Number(firstBar.closePoints))) {
+    return points;
+  }
+  const openingMatch = openingBucketAt.exec(firstBar.barAt);
+  const openingValue = Number(firstBar.openPoints);
+  if (openingMatch === null || !Number.isFinite(openingValue)) return points;
+
+  return [
+    { at: `${openingMatch[1]}T09:30:00+08:00`, value: openingValue },
+    ...points,
+  ];
+}
 
 export function marketIndexDirection(
   sessionChangeRatio: string | null | undefined,

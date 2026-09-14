@@ -201,12 +201,20 @@ test.beforeEach(async ({ page }) => {
     await route.fulfill({
       body: JSON.stringify({
         hasMore: false,
-        items: [{
-          amount: null, barAt: "2026-09-02T10:35:00+08:00", closePoints: "1234.56",
-          highPoints: "1235.20", indexCode, interval: "FIVE_MINUTE",
-          lowPoints: "1229.90", observedAt: "2026-09-02T10:35:02+08:00", openPoints: "1230.10",
-          providerRevision: 3, sourceKind: "PROVISIONAL", volume: "1000",
-        }],
+        items: [
+          {
+            amount: null, barAt: "2026-09-02T09:35:00+08:00", closePoints: "1231.25",
+            highPoints: "1235.20", indexCode, interval: "FIVE_MINUTE",
+            lowPoints: "1229.90", observedAt: "2026-09-02T10:35:02+08:00", openPoints: "1230.10",
+            providerRevision: 3, sourceKind: "PROVISIONAL", volume: "1000",
+          },
+          {
+            amount: null, barAt: "2026-09-02T10:35:00+08:00", closePoints: "1234.56",
+            highPoints: "1235.20", indexCode, interval: "FIVE_MINUTE",
+            lowPoints: "1229.90", observedAt: "2026-09-02T10:35:02+08:00", openPoints: "1231.25",
+            providerRevision: 3, sourceKind: "PROVISIONAL", volume: "1000",
+          },
+        ],
         limit: 64, nextCursor: null, snapshotHash: "a".repeat(64),
       }),
       contentType: "application/json; charset=utf-8",

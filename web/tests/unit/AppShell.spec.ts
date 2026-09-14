@@ -280,6 +280,14 @@ describe("AppShell", () => {
     );
   });
 
+  it("suppresses the focus ring on the programmatically focused route heading", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/layouts/AppShell.vue"), "utf8");
+
+    expect(source).toMatch(
+      /\.app-shell__main\s+:deep\(h1\[tabindex="-1"\]:focus-visible\)\s*\{[^}]*outline:\s*none;/s,
+    );
+  });
+
   it("styles a reachable service with unavailable monitoring as a warning", () => {
     const source = readFileSync(resolve(process.cwd(), "src/layouts/AppShell.vue"), "utf8");
 
