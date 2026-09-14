@@ -154,7 +154,9 @@ def _claim_session(root: Path, run_id: str) -> Path:
     return folder
 
 
-def _session_budgets(on_denied: Callable[[], None]) -> tuple[Budget, Budget]:
+def _session_budgets(
+    on_denied: Callable[[], None], *, market_caps: Mapping[str, int] = _MARKET_CAPS
+) -> tuple[Budget, Budget]:
     """Use one shared server-stop signal for either physical-call boundary."""
 
     gate_lock = threading.Lock()
@@ -170,7 +172,7 @@ def _session_budgets(on_denied: Callable[[], None]) -> tuple[Budget, Budget]:
         ),
         Budget(
             total=60,
-            per_key=_MARKET_CAPS,
+            per_key=market_caps,
             seconds=900,
             on_denied=on_denied,
             gate_lock=gate_lock,
@@ -252,7 +254,11 @@ class MarketBudget:
         return query(name, fields=fields, **kwargs)
 
 
-def _preflight() -> dict[str, object]:
+def _preflight(
+    *,
+    start_window_eligible: Callable[[datetime], bool] = _start_window_eligible,
+    market_caps: Mapping[str, int] = _MARKET_CAPS,
+) -> dict[str, object]:
     from trade_plan_monitor.config import load_application_config
     from trade_plan_monitor.live_profiles import load_stock_certification
 
@@ -277,7 +283,7 @@ def _preflight() -> dict[str, object]:
         else None
     )
     now = datetime.now(_SHANGHAI)
-    eligible = _start_window_eligible(now)
+    eligible = start_window_eligible(now)
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind(("127.0.0.1", 18765))
@@ -325,7 +331,7 @@ def _preflight() -> dict[str, object]:
             "aiPromptUtf8Bytes": 19_000,
             "aiOutputTokensPerRequest": 4_096,
             "marketPhysicalAttempts": 60,
-            "marketPerEndpointAttempts": _MARKET_CAPS,
+            "marketPerEndpointAttempts": dict(market_caps),
             "wallSeconds": 900,
             "browserPort": 18765,
         },
@@ -470,7 +476,13 @@ async def _recover_activated_symbol(runtime: object, trade_date: date) -> dict[s
     }
 
 
-async def _serve(run_id: str) -> int:
+async def _serve(
+    run_id: str,
+    *,
+    session_root: Path | None = None,
+    market_caps: Mapping[str, int] = _MARKET_CAPS,
+    proposal_id: str = "R14",
+) -> int:
     import uvicorn
 
     from trade_plan_monitor.config import load_application_config
@@ -486,7 +498,7 @@ async def _serve(run_id: str) -> int:
     except OSError:
         listener.close()
         raise BudgetDenied from None
-    root = _ROOT / "data/r14-acceptance"
+    root = session_root if session_root is not None else _ROOT / "data/r14-acceptance"
     try:
         folder = _claim_session(root, run_id)
     except BaseException:
@@ -508,12 +520,13 @@ async def _serve(run_id: str) -> int:
         if server is not None:
             server.should_exit = True
 
-    ai_budget, market_budget = _session_budgets(stop_server)
+    ai_budget, market_budget = _session_budgets(stop_server, market_caps=market_caps)
     market_guard = MarketBudget(market_budget)
     original_factory = production.create_tushare_client
 
     production.create_tushare_client = _guarded_market_factory(original_factory, market_guard)
     audit: dict[str, object] = {
+        "proposalId": proposal_id,
         "runId": run_id,
         "startedAt": datetime.now(_SHANGHAI).isoformat(),
         "database": "monitor.sqlite3",
@@ -567,7 +580,6 @@ async def _serve(run_id: str) -> int:
             except TimeoutError:
                 audit["status"] = "WALL_LIMIT_REACHED"
                 server.should_exit = True
-                await asyncio.wait_for(task, timeout=20)
             else:
                 audit["status"] = "STOPPED" if server.started else "STARTUP_FAILED"
             finally:
@@ -580,11 +592,14 @@ async def _serve(run_id: str) -> int:
     else:
         return_code = 0 if audit["status"] != "STARTUP_FAILED" else 1
     finally:
+        cleanup_deadline = monotonic() + 20
         if server is not None:
             server.should_exit = True
         if task is not None and not task.done():
             try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=20)
+                await asyncio.wait_for(
+                    asyncio.shield(task), timeout=max(0, cleanup_deadline - monotonic())
+                )
             except BaseException:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
@@ -593,7 +608,10 @@ async def _serve(run_id: str) -> int:
         listener.close()
         production.create_tushare_client = original_factory
         try:
-            audit["isolatedPlanCleanup"] = await _deactivate_isolated_plan(database)
+            audit["isolatedPlanCleanup"] = await asyncio.wait_for(
+                _deactivate_isolated_plan(database),
+                timeout=max(0, cleanup_deadline - monotonic()),
+            )
         except Exception as error:
             audit["isolatedPlanCleanup"] = "FAILED"
             audit["cleanupErrorType"] = type(error).__name__

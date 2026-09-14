@@ -42,6 +42,16 @@ from tests.integration.test_live_pipeline_acceptance import (
     _work_factory,
     _write_configuration_and_evidence,
 )
+from tests.integration.test_source_treatment_review_api import (
+    FIXTURE as LITERAL_FIXTURE,
+)
+from tests.integration.test_source_treatment_review_api import (
+    SOURCE as LITERAL_SOURCE,
+)
+from tests.integration.test_source_treatment_review_api import (
+    _get_path,
+    _literal_mapping,
+)
 from tests.unit.test_ai_plan_extraction_v4 import _partial_draft
 
 from trade_plan_monitor.ai.models import (
@@ -247,13 +257,17 @@ def _write_end_label_stock_evidence(root: Path, observed_at: datetime) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "r17_full_window", [False, True], ids=["r14-two-evaluations", "r17-full-window"]
+)
 def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, r17_full_window: bool
 ) -> None:
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
-    clock = ControlledClock(datetime(2026, 9, 14, 10, 12, tzinfo=SHANGHAI))
+    scenario_day = 15 if r17_full_window else 14
+    clock = ControlledClock(datetime(2026, 9, scenario_day, 10, 12, tzinfo=SHANGHAI))
     config = _write_configuration_and_evidence(
         tmp_path, observed_at=clock.now(), include_index=True
     )
@@ -269,19 +283,35 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
         + "  api_key: offline-test-key\n",
         encoding="utf-8",
     )
-    database = tmp_path / "data/r14-acceptance/offline/monitor.sqlite3"
+    database = tmp_path / (
+        "data/r17-acceptance/offline/monitor.sqlite3"
+        if r17_full_window
+        else "data/r14-acceptance/offline/monitor.sqlite3"
+    )
     database.parent.mkdir(parents=True)
     original_database = tmp_path / "data/monitor.sqlite3"
     original_database.write_bytes(b"untouched-original-database-sentinel")
     plans = PersistentPlanWebLifecycle(database_path=database, clock=clock.now)
     ai_budget = Budget(total=3, per_key={key: 1 for key in approved_sources()}, seconds=900)
-    market_budget = Budget(total=60, per_key=_MARKET_CAPS, seconds=900)
+    if r17_full_window:
+        from scripts.r17_bounded_acceptance import MARKET_CAPS
+    else:
+        MARKET_CAPS = _MARKET_CAPS
+    market_budget = Budget(total=60, per_key=MARKET_CAPS, seconds=900)
     created_sdks: list[QuerySDK] = []
     configured_timeouts: list[int] = []
 
+    class LaggedIndexSDK(QuerySDK):
+        def _index_minutes(self, kwargs: dict[str, object]) -> pd.DataFrame:
+            frame = super()._index_minutes(kwargs)
+            if r17_full_window and self.clock.now().minute in {15, 20, 25}:
+                cutoff = self.clock.now().replace(second=0, microsecond=0)
+                return frame.loc[frame["time"] < cutoff.strftime("%Y-%m-%d %H:%M:%S")]
+            return frame
+
     def make_client(settings: object) -> QuerySDK:
         configured_timeouts.append(settings.timeout_seconds)
-        sdk = QuerySDK(clock, ("003043.SZ",))
+        sdk = LaggedIndexSDK(clock, ("003043.SZ",))
         created_sdks.append(sdk)
         return sdk
 
@@ -311,13 +341,23 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
         sent.append(case_id)
         request_timeouts.append(dict(request.extensions["timeout"]))
         source = sources[case_id][0]
+        if r17_full_window and case_id == "LITERAL":
+            partial = ExplicitPlanDraft.model_validate_json(
+                json.dumps(_draft_payload(complete=False))
+            )
+            literal_mapping = _literal_mapping(partial)
+            draft_payload = partial.model_dump(mode="json")
+            clauses = literal_mapping.source_clauses
+            bindings = literal_mapping.field_bindings
+        else:
+            draft_payload = _partial_draft()
+            clauses = server_source_clauses(source)
+            bindings = ()
         content = {
-            "draft": _partial_draft(),
+            "draft": draft_payload,
             "mapping_version": "plan-mapping-v1",
-            "source_clauses": [
-                clause.model_dump(mode="json") for clause in server_source_clauses(source)
-            ],
-            "field_bindings": [],
+            "source_clauses": [clause.model_dump(mode="json") for clause in clauses],
+            "field_bindings": [binding.model_dump(mode="json") for binding in bindings],
             "assumptions": [],
             "warnings": [],
         }
@@ -391,22 +431,53 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                 assert deadline.bar_end == at.replace(second=0)
                 await runtime._runtime._run_deadline(deadline)
 
-            client.portal.call(run_due, datetime(2026, 9, 14, 10, 15, 12, tzinfo=SHANGHAI))
+            if r17_full_window:
+                for minute in (12, 13, 14):
+                    client.portal.call(
+                        run_due, datetime(2026, 9, scenario_day, 10, minute, 12, tzinfo=SHANGHAI)
+                    )
+            client.portal.call(
+                run_due, datetime(2026, 9, scenario_day, 10, 15, 12, tzinfo=SHANGHAI)
+            )
             assert market_budget.snapshot()["attempts"].get("idx_mins") == 5
-            clock.current = datetime(2026, 9, 14, 10, 15, 30, tzinfo=SHANGHAI)
+            if r17_full_window:
+                assert all(
+                    snapshot.health is not MarketIndexHealth.LIVE
+                    for snapshot in pipeline.index_service.latest_snapshots().values()
+                )
+            clock.current = datetime(2026, 9, scenario_day, 10, 15, 30, tzinfo=SHANGHAI)
 
             # Explicitly synthetic, numeric-equivalent review. The three fixed AI
             # extractions above remain separate and are never passed off as this draft.
-            draft = ExplicitPlanDraft.model_validate_json(json.dumps(_draft_payload()))
+            draft_data = _draft_payload()
+            if r17_full_window:
+                draft_data["version"] = 2
+                draft_data["activation"] = {
+                    "mode": "TRADING_DAY",
+                    "trading_day": "2026-09-15",
+                }
+            draft = ExplicitPlanDraft.model_validate_json(json.dumps(draft_data))
+            review_source = LITERAL_SOURCE if r17_full_window else SYNTHETIC_SOURCE
+            review_mapping = (
+                _literal_mapping(draft, supplemented=True) if r17_full_window else _mapping(draft)
+            )
+            if r17_full_window:
+                assert review_source == approved_sources()["LITERAL"][0]
+                assert {item.path: item.value for item in review_mapping.user_supplements}[
+                    "activation.trading_day"
+                ] == "2026-09-15"
+                for path, expected in LITERAL_FIXTURE["independentExpectedValues"].items():
+                    if expected is not None:
+                        assert _get_path(draft_data, path) == expected, path
             extraction_id = uuid4()
             extraction = PlanExtractionResult(
                 request_id=extraction_id,
                 provider_id=uuid4(),
                 model="offline-simulated-review",
                 prompt_version="plan-extract-v4",
-                source_text_sha256=sha256(SYNTHETIC_SOURCE.encode()).hexdigest(),
+                source_text_sha256=sha256(review_source.encode()).hexdigest(),
                 draft=draft,
-                mapping=_mapping(draft),
+                mapping=review_mapping,
                 usage=None,
                 status=PlanExtractionStatus.SUCCEEDED,
             )
@@ -417,12 +488,33 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                 json={
                     "extractionId": str(extraction_id),
                     "planJson": dump_explicit_plan_draft_json(draft),
-                    "sourceText": SYNTHETIC_SOURCE,
+                    "sourceText": review_source,
                     "expectedRevision": 0,
                 },
             )
             assert saved.status_code == 200, saved.text
             detail = saved.json()
+            resolutions = _confirmation_resolutions(detail)
+            if r17_full_window:
+                supplements = {
+                    item["path"]: item["supplementId"]
+                    for item in detail["mapping"]["userSupplements"]
+                }
+                resolutions = []
+                for issue in detail["requiredReviewIssues"]:
+                    kind = {
+                        "SOURCE_MAPPING_REVIEW_REQUIRED": "CONFIRM_MAPPING",
+                        "SOURCE_TREATMENT_REVIEW_REQUIRED": "CONFIRM_SOURCE_TREATMENT",
+                        "USER_SUPPLEMENT_REVIEW_REQUIRED": "CONFIRM_POLICY",
+                    }.get(issue["code"])
+                    if kind is None:
+                        continue
+                    item = {"issueId": issue["issueId"], "resolution": kind}
+                    if kind in {"CONFIRM_MAPPING", "CONFIRM_SOURCE_TREATMENT"}:
+                        item["bindingPath"] = issue["bindingPath"]
+                    else:
+                        item["supplementId"] = supplements[issue["path"]]
+                    resolutions.append(item)
             reviewed = client.post(
                 "/api/v1/plan-review-confirmations",
                 headers={"Idempotency-Key": "offline-review"},
@@ -432,7 +524,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                     "sourceHash": detail["sourceHash"],
                     "reviewEvidenceHash": detail["reviewEvidenceHash"],
                     "expectedRevision": 0,
-                    "resolutions": _confirmation_resolutions(detail),
+                    "resolutions": resolutions,
                 },
             )
             assert reviewed.status_code == 200, reviewed.text
@@ -451,21 +543,66 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
             assert recovery["mode"] == "TEST_TRIGGERED_PRODUCTION_RECOVERY"
             # 09:30–10:15 supplies nine complete historical five-minute buckets.
             assert recovery["persistedMinuteBars"] >= 45
-            for minute in range(16, 26):
+            for minute in range(16, 27 if r17_full_window else 26):
                 client.portal.call(
                     run_due,
-                    datetime(2026, 9, 14, 10, minute, 12, tzinfo=SHANGHAI),
+                    datetime(2026, 9, scenario_day, 10, minute, 12, tzinfo=SHANGHAI),
                 )
+                if r17_full_window:
+                    index_count = market_budget.snapshot()["attempts"].get("rt_idx_min_daily")
+                    assert (
+                        index_count
+                        == {
+                            16: 10,
+                            17: 10,
+                            18: 10,
+                            19: 10,
+                            20: 15,
+                            21: 20,
+                            22: 20,
+                            23: 20,
+                            24: 20,
+                            25: 25,
+                            26: 30,
+                        }[minute]
+                    )
+                    if minute in {20, 25}:
+                        assert all(
+                            snapshot.health is not MarketIndexHealth.LIVE
+                            for snapshot in pipeline.index_service.latest_snapshots().values()
+                        )
+                    if minute in {16, 21, 26}:
+                        assert all(
+                            snapshot.health is MarketIndexHealth.LIVE
+                            for snapshot in pipeline.index_service.latest_snapshots().values()
+                        )
             assert market_budget.snapshot()["deniedBeforeNetwork"] == 0
-            assert market_budget.snapshot()["attempts"] == {
+            expected_attempts = {
                 "trade_cal": 3,
                 "idx_mins": 5,
-                "rt_idx_min_daily": 15,
+                "rt_idx_min_daily": 30 if r17_full_window else 15,
                 "index_daily": 5,
                 "rt_min_daily": 1,
-                "rt_min": 10,
+                "rt_min": 11 if r17_full_window else 10,
             }
-            assert market_budget.snapshot()["totalAttempts"] == 39
+            assert market_budget.snapshot()["attempts"] == expected_attempts
+            assert market_budget.snapshot()["totalAttempts"] == (55 if r17_full_window else 39)
+            if r17_full_window:
+                assert all(
+                    snapshot.health is MarketIndexHealth.LIVE
+                    for snapshot in pipeline.index_service.latest_snapshots().values()
+                )
+                assert (
+                    len(
+                        [
+                            call
+                            for sdk in created_sdks
+                            for call in sdk.calls
+                            if call[0] == "rt_idx_min_daily"
+                        ]
+                    )
+                    == 30
+                )
             plan = draft.to_executable()
             assert plan is not None
             with pipeline._work() as work:
@@ -474,7 +611,9 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                         work.explicit_rules.get(
                             plan_hash=plan_sha256(plan),
                             symbol="003043.SZ",
-                            target_bucket_end=datetime(2026, 9, 14, 10, minute, tzinfo=SHANGHAI),
+                            target_bucket_end=datetime(
+                                2026, 9, scenario_day, 10, minute, tzinfo=SHANGHAI
+                            ),
                             activation_revision=1,
                         )
                         is not None
@@ -489,8 +628,9 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
     assert original_database.read_bytes() == b"untouched-original-database-sentinel"
 
 
+@pytest.mark.parametrize("cleanup_hangs", [False, True], ids=["normal-cleanup", "cleanup-timeout"])
 def test_launcher_denial_exits_with_sanitized_audit_and_restores_factory(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, cleanup_hangs: bool
 ) -> None:
     import scripts.r14_bounded_acceptance as launcher
     import uvicorn
@@ -549,6 +689,16 @@ def test_launcher_denial_exits_with_sanitized_audit_and_restores_factory(
     import pytest
 
     monkeypatch.setattr(uvicorn, "Server", LocalServer)
+    if cleanup_hangs:
+
+        async def slow_deactivation(_database: Path) -> str:
+            await asyncio.sleep(1)
+            return "INACTIVE"
+
+        monkeypatch.setattr(launcher, "_deactivate_isolated_plan", slow_deactivation)
+        # The cleanup deadline is exhausted by the next clock observation.
+        ticks = iter(range(0, 10_000, 20))
+        monkeypatch.setattr(launcher, "monotonic", lambda: next(ticks))
     assert asyncio.run(_serve("r14-20260914-a")) == 1
     audit = json.loads(
         (tmp_path / "data/r14-acceptance/r14-20260914-a/audit.json").read_text("utf-8")
@@ -556,6 +706,257 @@ def test_launcher_denial_exits_with_sanitized_audit_and_restores_factory(
     assert audit["status"] == "BUDGET_DENIED"
     assert audit["market"]["deniedBeforeNetwork"] == 1
     assert audit["market"]["attempts"] == {"trade_cal": 1}
-    assert audit["isolatedPlanCleanup"] == "INACTIVE"
+    assert audit["isolatedPlanCleanup"] == ("FAILED" if cleanup_hangs else "INACTIVE")
+    if cleanup_hangs:
+        assert audit["cleanupErrorType"] == "TimeoutError"
     assert production.create_tushare_client is original_factory
     assert len(created) == 2
+
+
+@pytest.mark.parametrize(
+    "persistent_lag", [False, True], ids=["recover-next-minute", "persistent-failure"]
+)
+def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
+    tmp_path: Path, monkeypatch, persistent_lag: bool
+) -> None:
+    """SIMULATED failed completions do not activate stock or erase index costs."""
+    from scripts.r17_bounded_acceptance import MARKET_CAPS
+
+    import trade_plan_monitor.runtime.production as production
+    import trade_plan_monitor.web.monitor_composition as monitor_composition
+
+    clock = ControlledClock(datetime(2026, 9, 15, 10, 12, tzinfo=SHANGHAI))
+    config = _write_configuration_and_evidence(
+        tmp_path, observed_at=clock.now(), include_index=True
+    )
+    _write_end_label_stock_evidence(tmp_path, clock.now())
+    config.write_text(
+        config.read_text("utf-8")
+        + "ai:\n  profile: DEEPSEEK\n  model: deepseek-flash\n"
+        + "  additional_models:\n    - display_name: DeepSeek Pro\n"
+        + "      model: deepseek-v4-pro\n  api_key: offline-test-key\n",
+        encoding="utf-8",
+    )
+    database = tmp_path / "data/r17-acceptance/failed-ai/monitor.sqlite3"
+    database.parent.mkdir(parents=True)
+    budget = Budget(total=60, per_key=MARKET_CAPS, seconds=900)
+    ai_budget = Budget(total=3, per_key={key: 1 for key in approved_sources()}, seconds=900)
+
+    class LagSDK(QuerySDK):
+        def _index_minutes(self, kwargs: dict[str, object]) -> pd.DataFrame:
+            frame = super()._index_minutes(kwargs)
+            if persistent_lag or self.clock.now().minute in {15, 20, 25}:
+                cutoff = self.clock.now().replace(
+                    minute=self.clock.now().minute // 5 * 5,
+                    second=0,
+                    microsecond=0,
+                )
+                return frame.loc[frame["time"] < cutoff.strftime("%Y-%m-%d %H:%M:%S")]
+            return frame
+
+    created: list[LagSDK] = []
+
+    def make_client(_settings: object) -> LagSDK:
+        sdk = LagSDK(clock, ("003043.SZ",))
+        created.append(sdk)
+        return sdk
+
+    monkeypatch.setattr(
+        production,
+        "create_tushare_client",
+        _guarded_market_factory(make_client, MarketBudget(budget)),
+    )
+    monkeypatch.setattr(monitor_composition, "SystemClock", lambda: clock)
+    pace = VirtualPace()
+    real_controller = monitor_composition.create_live_tushare_request_controller
+    monkeypatch.setattr(
+        monitor_composition,
+        "create_live_tushare_request_controller",
+        lambda *, clock: real_controller(
+            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep
+        ),
+    )
+    plans = PersistentPlanWebLifecycle(database_path=database, clock=clock.now)
+    sent: list[str] = []
+
+    def invalid_response(request: httpx.Request) -> httpx.Response:
+        prompt = json.loads(request.content)["messages"][0]["content"]
+        sent.append(next(key for key, (_, value) in approved_sources().items() if value == prompt))
+        return httpx.Response(
+            200,
+            json={
+                "id": "offline-invalid",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "deepseek-v4-pro",
+                "usage": {"prompt_tokens": 100, "completion_tokens": 1, "total_tokens": 101},
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "{invalid"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+
+    with installed_web_assets() as assets:
+        app = _create_guarded_app(
+            config_path=config,
+            database=database,
+            plan_lifecycle=plans,
+            ai_budget=ai_budget,
+            static_directory=assets,
+            ai_inner_transport=httpx.MockTransport(invalid_response),
+        )
+        with TestClient(app, base_url="http://127.0.0.1:18765") as client:
+            provider_id = client.get("/api/v1/ai-runtime").json()["providerId"]
+            for case_id, (source, _) in approved_sources().items():
+                response = client.post(
+                    "/api/v1/plan-extractions",
+                    headers={"Idempotency-Key": f"r17-invalid-{case_id}"},
+                    json={"providerId": provider_id, "sourceText": source, "expectedRevision": 0},
+                )
+                assert response.status_code == 202
+                operation_id = response.json()["operationId"]
+                for _ in range(100):
+                    result = client.get(f"/api/v1/plan-extractions/{operation_id}").json()
+                    if result["status"] not in {"QUEUED", "RUNNING"}:
+                        break
+                assert result["status"] == "INVALID_OUTPUT"
+                assert result["diagnosticStatus"] == "RECORDED"
+            runtime = app.state.runtime_lifecycle
+            scheduler = runtime._runtime._scheduler
+            pipeline = runtime._runtime._run_deadline.__self__._pipeline
+            assert pipeline is not None
+            for minute in range(12, 27):
+                clock.current = datetime(2026, 9, 15, 10, minute, 12, tzinfo=SHANGHAI)
+                deadline = scheduler.next_deadline()
+                assert deadline.bar_end == clock.now().replace(second=0)
+                client.portal.call(runtime._runtime._run_deadline, deadline)
+            assert budget.snapshot()["attempts"] == {
+                "trade_cal": 1,
+                "idx_mins": 5,
+                "index_daily": 5,
+                "rt_idx_min_daily": 30,
+            }
+            assert budget.snapshot()["totalAttempts"] == 41
+            assert budget.snapshot()["deniedBeforeNetwork"] == 0
+            assert [name for sdk in created for name, _ in sdk.calls].count(
+                "rt_idx_min_daily"
+            ) == 30
+            assert all(
+                snapshot.health is not MarketIndexHealth.LIVE
+                if persistent_lag
+                else snapshot.health is MarketIndexHealth.LIVE
+                for snapshot in pipeline.index_service.latest_snapshots().values()
+            )
+
+            async def activation_state():
+                return await plans.get_plan_activation_state(symbol="003043.SZ")
+
+            assert client.portal.call(activation_state).active is False
+    diagnostics = [
+        json.loads(line)
+        for line in database.with_suffix(".ai-extraction-diagnostics.jsonl")
+        .read_text("utf-8")
+        .splitlines()
+    ]
+    assert len(diagnostics) == 3
+    assert all(item["status"] == "INVALID_OUTPUT" for item in diagnostics)
+    assert sent == list(approved_sources())
+    assert ai_budget.snapshot()["totalAttempts"] == 3
+
+
+def test_r17_missing_index_daily_cache_denies_extra_physical_starts(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """SIMULATED empty daily frames cannot convert a stale index into LIVE."""
+    from scripts.r14_bounded_acceptance import _session_budgets
+    from scripts.r17_bounded_acceptance import MARKET_CAPS
+
+    import trade_plan_monitor.runtime.production as production
+
+    clock = ControlledClock(datetime(2026, 9, 15, 10, 25, 12, tzinfo=SHANGHAI))
+    config = _write_configuration_and_evidence(
+        tmp_path, observed_at=clock.now(), include_index=True
+    )
+    database = tmp_path / "monitor.sqlite3"
+    engine, work_factory = _work_factory(database, clock)
+    upgrade_database(engine)
+    stop_calls: list[bool] = []
+    ai_budget, market_budget = _session_budgets(
+        lambda: stop_calls.append(True), market_caps=MARKET_CAPS
+    )
+
+    class MissingDailySDK(QuerySDK):
+        def _index_daily(self, kwargs: dict[str, object]) -> pd.DataFrame:
+            return pd.DataFrame()
+
+    created: list[MissingDailySDK] = []
+
+    def make_client(_settings: object) -> MissingDailySDK:
+        sdk = MissingDailySDK(clock, ())
+        created.append(sdk)
+        return sdk
+
+    monkeypatch.setattr(
+        production,
+        "create_tushare_client",
+        _guarded_market_factory(make_client, MarketBudget(market_budget)),
+    )
+    pace = VirtualPace()
+    controller = create_live_tushare_request_controller(
+        clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep
+    )
+    pipeline = ProductionMonitorPipeline(
+        configuration=load_application_config(config).tushare,
+        certification_directory=tmp_path / "data/live-certification",
+        stock_certification=create_stock_certification(
+            observed_at=clock.now(),
+            endpoint_url=ENDPOINT,
+            capabilities=_ready_stock_capabilities(),
+            source_time_label=SourceTimeLabel.START,
+        ),
+        clock=clock,
+        request_controller=controller,
+        unit_of_work_factory=work_factory,
+        runtime_generation=uuid4(),
+        publisher=lambda _event: None,
+    )
+    scheduler = MarketSessionScheduler(clock=clock, is_open_on=lambda _date: True)
+
+    async def scenario() -> None:
+        try:
+            previous = None
+            for minute in (25, 26, 30, 31):
+                clock.current = datetime(2026, 9, 15, 10, minute, 12, tzinfo=SHANGHAI)
+                deadline = scheduler.next_deadline(after=previous)
+                assert deadline is not None
+                try:
+                    await pipeline.run_deadline(deadline)
+                except BudgetDenied:
+                    pass
+                previous = deadline.due_at
+                if market_budget.snapshot()["stopped"]:
+                    break
+            assert market_budget.snapshot()["deniedBeforeNetwork"] == 5
+            assert market_budget.snapshot()["attempts"] == {
+                "idx_mins": 5,
+                "rt_idx_min_daily": 5,
+                "index_daily": 5,
+            }
+            assert market_budget.snapshot()["attempts"].get("index_daily") == 5
+            assert [name for sdk in created for name, _ in sdk.calls].count("index_daily") == 5
+            assert stop_calls
+            with pytest.raises(BudgetDenied):
+                ai_budget.admit("LITERAL")
+            assert all(
+                snapshot.health is not MarketIndexHealth.LIVE
+                for snapshot in pipeline.index_service.latest_snapshots().values()
+            )
+        finally:
+            await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
