@@ -1224,6 +1224,7 @@ export type PlanExtractionOperationStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" |
 export type PlanExtractionView = {
   assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
   completedAt?: (string) | (null);
+  diagnosticStatus?: ("RECORDED" | "WRITE_FAILED") | (null);
   draftPlanJson?: (string) | (null);
   evidence?: Array<components["schemas"]["FieldEvidence"]>;
   id: string;

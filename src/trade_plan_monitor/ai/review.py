@@ -53,6 +53,19 @@ _TECHNICAL_PATHS: Final = frozenset(
 )
 
 
+class MappingValidationError(ValueError):
+    """A static review failure with a server-constructed mapping field location."""
+
+    def __init__(self, message: str, path: str) -> None:
+        self.path = path
+        super().__init__(message)
+
+
+def _mapping_item_path(collection: str, index: int) -> str:
+    # Diagnostic paths deliberately cap indexes independently of collection bounds.
+    return f"{collection}[{index}]" if index <= 255 else collection
+
+
 def _canonical_json(value: object) -> str:
     return json.dumps(
         value,
@@ -200,28 +213,48 @@ def build_server_review_snapshot(
         source_text and _GLOBAL_FIVE_MINUTE_CONTEXT.search(source_text)
     )
 
-    for binding in mapping.field_bindings:
-        actual = _resolve_path(data, binding.path)
+    for index, binding in enumerate(mapping.field_bindings):
+        location = _mapping_item_path("field_bindings", index)
+        try:
+            actual = _resolve_path(data, binding.path)
+        except ValueError:
+            raise MappingValidationError("binding path is invalid", f"{location}.path") from None
+        if binding.binding_kind is BindingKind.STRUCTURE and not isinstance(actual, dict):
+            raise MappingValidationError(
+                "structural binding must address a condition object", f"{location}.path"
+            )
         expected = actual.get("type") if binding.binding_kind is BindingKind.STRUCTURE else actual
         if binding.unit != _binding_unit_for_path(binding.path, binding.binding_kind):
-            raise ValueError("field binding unit does not match the typed plan path")
+            raise MappingValidationError(
+                "field binding unit does not match the typed plan path", f"{location}.unit"
+            )
         if binding.binding_kind is BindingKind.VALUE and isinstance(actual, dict | list):
-            raise ValueError("value binding must address a scalar plan field")
+            raise MappingValidationError(
+                "value binding must address a scalar plan field", f"{location}.path"
+            )
         if type(expected) is not type(binding.value) or expected != binding.value:
-            raise ValueError("field binding does not match the current typed draft value")
+            raise MappingValidationError(
+                "field binding does not match the current typed draft value", f"{location}.value"
+            )
         if binding.origin is BindingOrigin.SOURCE:
             for clause_id in binding.clause_ids:
                 clause = clauses.get(clause_id)
                 if clause is None or clause.disposition.value != "MAPPED":
-                    raise ValueError("SOURCE binding references a non-mapped clause")
+                    raise MappingValidationError(
+                        "SOURCE binding references a non-mapped clause", f"{location}.clause_ids"
+                    )
                 if binding.path not in clause.paths:
-                    raise ValueError("SOURCE binding path is absent from its source clause")
+                    raise MappingValidationError(
+                        "SOURCE binding path is absent from its source clause", f"{location}.path"
+                    )
                 if clause_id in treatment_clauses and not (
                     clause_id in symbol_clauses
                     and binding.path == "symbol"
                     and binding.binding_kind is BindingKind.VALUE
                 ):
-                    raise ValueError("source treatment cannot supply a trading parameter")
+                    raise MappingValidationError(
+                        "source treatment cannot supply a trading parameter", f"{location}.origin"
+                    )
         elif binding.origin is BindingOrigin.USER_SUPPLEMENT:
             supplement = supplements.get(binding.supplement_id or "")
             if (
@@ -231,9 +264,14 @@ def build_server_review_snapshot(
                 or supplement.value != binding.value
                 or supplement.unit is not binding.unit
             ):
-                raise ValueError("USER_SUPPLEMENT binding does not match its durable supplement")
+                raise MappingValidationError(
+                    "USER_SUPPLEMENT binding does not match its durable supplement",
+                    f"{location}.supplement_id",
+                )
         elif binding.path not in _TECHNICAL_PATHS and not binding.path.endswith(".rule_id"):
-            raise ValueError("CONTRACT binding cannot supply a trading parameter")
+            raise MappingValidationError(
+                "CONTRACT binding cannot supply a trading parameter", f"{location}.origin"
+            )
 
     for path in _non_null_scalar_paths(data):
         if (BindingKind.VALUE, path) not in binding_by_identity:
@@ -472,15 +510,17 @@ def _validate_source_clauses(
     expected: tuple[SourceClause, ...],
 ) -> None:
     if len(mapping.source_clauses) != len(expected):
-        raise ValueError("mapping must enumerate every server source clause")
-    for actual, server in zip(mapping.source_clauses, expected, strict=True):
-        if (
-            actual.clause_id != server.clause_id
-            or actual.start != server.start
-            or actual.end != server.end
-            or actual.excerpt != server.excerpt
-        ):
-            raise ValueError("mapping source clauses do not match the exact source text")
+        raise MappingValidationError(
+            "mapping must enumerate every server source clause", "source_clauses"
+        )
+    for index, (actual, server) in enumerate(zip(mapping.source_clauses, expected, strict=True)):
+        for field in ("clause_id", "start", "end", "excerpt"):
+            if getattr(actual, field) != getattr(server, field):
+                location = _mapping_item_path("source_clauses", index)
+                raise MappingValidationError(
+                    "mapping source clauses do not match the exact source text",
+                    f"{location}.{field}",
+                )
 
 
 def _resolve_path(value: object, path: str) -> object:

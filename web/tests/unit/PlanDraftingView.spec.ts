@@ -405,7 +405,7 @@ describe("PlanDraftingView", () => {
     wrapper.unmount();
   });
 
-  it("releases the editor when status polling becomes uncertain without claiming cancellation", async () => {
+  it("retains the accepted operation for query recovery without claiming cancellation", async () => {
     const api = apiWith({
       getExtraction: vi.fn().mockRejectedValue(new Error("Authorization: Bearer secret")),
       getRuntime: vi.fn().mockResolvedValue(runtime),
@@ -428,7 +428,14 @@ describe("PlanDraftingView", () => {
     expect(wrapper.text()).toContain("服务端任务可能仍会继续");
     expect(wrapper.text()).not.toContain("Authorization");
     expect(wrapper.text()).not.toContain("提取已取消");
+    expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.disabled).toBe(true);
+    expect(wrapper.text()).toContain("重新查询提取状态");
+    expect(api.submitExtraction).toHaveBeenCalledTimes(1);
+    await wrapper.get(".source-editor__cancel").trigger("click");
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("已停止在本页等待");
     expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.disabled).toBe(false);
+    expect(api.submitExtraction).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 

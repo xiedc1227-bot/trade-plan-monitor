@@ -209,6 +209,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
     !hasOnlyKeys(value, [
       "assumptions",
       "completedAt",
+      "diagnosticStatus",
       "draftPlanJson",
       "evidence",
       "id",
@@ -232,6 +233,8 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
     !isShanghaiDateTime(value.submittedAt) ||
     !isNullableOptionalShanghaiDateTime(value.startedAt) ||
     !isNullableOptionalShanghaiDateTime(value.completedAt) ||
+    !(value.diagnosticStatus == null ||
+      value.diagnosticStatus === "RECORDED" || value.diagnosticStatus === "WRITE_FAILED") ||
     !isOptionalArray(value.evidence, 10_000, isFieldEvidence) ||
     !isOptionalArray(value.assumptions, 256, isExtractionIssue) ||
     !isOptionalArray(value.warnings, 256, isExtractionIssue) ||
@@ -289,8 +292,8 @@ function isExtractionMapping(value: unknown): boolean {
     value.sourceClauses.length <= 512 && value.sourceClauses.every((clause) =>
       isRecord(clause) && typeof clause.clauseId === "string" && typeof clause.excerpt === "string" &&
       Number.isSafeInteger(clause.start) && Number.isSafeInteger(clause.end)) &&
-    Array.isArray(value.fieldBindings) && value.fieldBindings.length > 0 &&
-    value.fieldBindings.length <= 4096 && value.fieldBindings.every((binding) =>
+    Array.isArray(value.fieldBindings) &&
+    value.fieldBindings.length <= 10_000 && value.fieldBindings.every((binding) =>
       isRecord(binding) && typeof binding.path === "string" && typeof binding.unit === "string" &&
       ["SOURCE", "CONTRACT", "USER_SUPPLEMENT"].includes(String(binding.origin)));
 }

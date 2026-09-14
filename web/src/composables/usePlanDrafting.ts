@@ -19,6 +19,7 @@ const TERMINAL_STATUSES = new Set<PlanExtractionView["status"]>([
   "PROVIDER_ERROR",
   "SUCCEEDED",
 ]);
+const QUERY_FAILURE_MESSAGE = "无法确认 AI 提取状态；服务端任务可能仍会继续，请稍后重新查询提取状态。";
 
 function defaultIdempotencyKey(): string {
   return globalThis.crypto.randomUUID();
@@ -81,13 +82,28 @@ export function usePlanDrafting(options: UsePlanDraftingOptions = {}) {
       await pollExtraction(receipt.operationId, controller);
     } catch {
       if (!controller.signal.aborted) {
-        extraction.value = null;
+        if (!acceptedByServer) extraction.value = null;
         errorMessage.value = acceptedByServer
-          ? "无法确认 AI 提取状态；服务端任务可能仍会继续，请稍后重试查询或重新提交。"
+          ? QUERY_FAILURE_MESSAGE
           : "AI 提取请求失败，未生成计划草稿。请稍后重试。";
       }
     } finally {
       if (!controller.signal.aborted) submitting.value = false;
+      if (extractionController === controller) extractionController = null;
+    }
+  }
+
+  async function retryExtraction(): Promise<void> {
+    const current = extraction.value;
+    if (current === null || TERMINAL_STATUSES.has(current.status) || extractionController !== null) return;
+    const controller = new AbortController();
+    extractionController = controller;
+    errorMessage.value = null;
+    try {
+      await pollExtraction(current.id, controller);
+    } catch {
+      if (!controller.signal.aborted) errorMessage.value = QUERY_FAILURE_MESSAGE;
+    } finally {
       if (extractionController === controller) extractionController = null;
     }
   }
@@ -106,11 +122,12 @@ export function usePlanDrafting(options: UsePlanDraftingOptions = {}) {
   }
 
   function stopWaiting(operationId: string): void {
-    if (extraction.value?.id !== operationId || extractionController === null) return;
-    extractionController.abort();
+    if (extraction.value?.id !== operationId || TERMINAL_STATUSES.has(extraction.value.status)) return;
+    extractionController?.abort();
     extractionController = null;
     submitting.value = false;
     extraction.value = null;
+    errorMessage.value = null;
     stoppedMessage.value = "已停止在本页等待；服务端已接收的任务可能仍会继续执行。";
   }
 
@@ -127,6 +144,7 @@ export function usePlanDrafting(options: UsePlanDraftingOptions = {}) {
     runtime: shallowReadonly(runtime),
     stoppedMessage: shallowReadonly(stoppedMessage),
     submitting: shallowReadonly(submitting),
+    retryExtraction,
     stopWaiting,
     submitExtraction,
   });

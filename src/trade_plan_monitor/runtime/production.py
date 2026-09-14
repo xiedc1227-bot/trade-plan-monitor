@@ -64,6 +64,10 @@ from trade_plan_monitor.state.models import EvaluationKind, PlanVersionStatus
 _REFERENCE_DAYS = 366
 
 
+class ReferenceDataUnavailableError(RuntimeError):
+    """A completed reference request yielded no usable data required for monitoring."""
+
+
 def _load_active_plan(document: str) -> ExecutableTradePlan:
     """Load only a complete persisted plan; active partial drafts fail closed."""
 
@@ -402,7 +406,7 @@ class ProductionMonitorPipeline:
                 f"calendar:{exchange}:{trade_date}",
             )
             if not any(day.cal_date == trade_date for day in days):
-                raise RuntimeError("current trading calendar is unavailable")
+                raise ReferenceDataUnavailableError("current trading calendar is unavailable")
             with self._work() as work:
                 work.references.upsert_trading_days(days)
                 work.commit()
@@ -429,7 +433,7 @@ class ProductionMonitorPipeline:
                 f"daily-history:{plan.symbol}:{trade_date}",
             )
             if not bars:
-                raise RuntimeError("official reference history is unavailable")
+                raise ReferenceDataUnavailableError("official reference history is unavailable")
             with self._work() as work:
                 work.history.upsert_daily_bars(bars)
                 work.commit()

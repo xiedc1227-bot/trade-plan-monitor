@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sqlite3
 from collections.abc import Awaitable, Callable
 from contextlib import closing
@@ -13,6 +14,7 @@ from uuid import UUID
 
 from anyio import to_thread
 from sqlalchemy import Engine, and_, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from trade_plan_monitor.config import load_application_config
@@ -35,8 +37,12 @@ from trade_plan_monitor.runtime.health import (
     RuntimeResourceStatus,
     RuntimeServiceStatus,
 )
-from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
+from trade_plan_monitor.runtime.production import (
+    ProductionMonitorPipeline,
+    ReferenceDataUnavailableError,
+)
 from trade_plan_monitor.runtime.request_control import (
+    RequestControlError,
     TushareRequestController,
     create_live_tushare_request_controller,
 )
@@ -67,6 +73,7 @@ from trade_plan_monitor.web.websocket import CommittedMonitorEventStream
 _RUNNER_SHUTDOWN_SECONDS = 5.0
 _RUNTIME_RESTART_DELAYS_SECONDS = (1.0, 2.0, 4.0)
 _ACTIVE_PLAN_READ_LIMIT = 11
+_LOGGER = logging.getLogger(__name__)
 _PROVIDER_CAPABILITIES = (
     "current_day_minutes",
     "daily_bars",
@@ -443,6 +450,7 @@ class _ProductionRuntimeState:
         self._runtime_generation = runtime_generation
         self._publisher = publisher
         self._stage_errors: dict[str, str] = {}
+        self._stage_retry_at: dict[str, datetime] = {}
         self._dispatcher = dispatcher
 
     async def validate_configuration(self) -> None:
@@ -478,6 +486,7 @@ class _ProductionRuntimeState:
         self._capabilities = ProviderCapabilities()
         self._pipeline = None
         self._stage_errors.clear()
+        self._stage_retry_at.clear()
         self._provider_checked_at = self._clock.now()
         configuration = load_application_config(self._config_path).tushare
         if configuration.api_url is None:
@@ -515,10 +524,26 @@ class _ProductionRuntimeState:
         if self._pipeline is not None:
             try:
                 await self._pipeline.refresh_references(trade_date)
-            except Exception:
+            except Exception as error:
                 stage = self._pipeline.reference_stage.value
-                self._stage_errors[stage] = "REFERENCE_REFRESH_FAILED"
+                code = "REFERENCE_REFRESH_FAILED"
+                if isinstance(error, RequestControlError):
+                    code = f"REFERENCE_{error.code.value}"
+                elif isinstance(error, SQLAlchemyError):
+                    code = "REFERENCE_STORAGE_ERROR"
+                elif isinstance(error, ReferenceDataUnavailableError):
+                    code = "REFERENCE_DATA_UNAVAILABLE"
+                self._stage_errors[stage] = code
+                self._stage_retry_at.pop(stage, None)
+                if isinstance(error, RequestControlError) and error.next_retry_at is not None:
+                    self._stage_retry_at[stage] = error.next_retry_at
+                # Only closed categories; never log exception text, traceback or provider data.
+                _LOGGER.warning("Reference refresh failed: stage=%s code=%s", stage, code)
                 raise
+            else:
+                for stage in ("trading_calendar", "daily_limits", "daily_bars"):
+                    self._stage_errors.pop(stage, None)
+                    self._stage_retry_at.pop(stage, None)
 
     async def recover_startup(self, trade_date: date) -> None:
         if self._pipeline is not None:
@@ -577,6 +602,7 @@ class _ProductionRuntimeState:
                 checked_at=checked_at,
                 latency_ms=0,
                 error_code=self._stage_errors.get(capability),
+                next_retry_at=self._stage_retry_at.get(capability),
             )
             for capability in _PROVIDER_CAPABILITIES
         )

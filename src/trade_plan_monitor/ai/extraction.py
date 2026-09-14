@@ -33,7 +33,7 @@ from trade_plan_monitor.ai.provider import (
     PlanExtractionRequest,
     RawAIResponse,
 )
-from trade_plan_monitor.ai.review import build_server_review_snapshot
+from trade_plan_monitor.ai.review import MappingValidationError, build_server_review_snapshot
 from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
     DraftReviewIssue,
@@ -227,7 +227,7 @@ async def extract_plan(
                 draft=output.draft,
                 mapping=mapping,
             )
-        except TypeError, UnicodeError, ValueError, RecursionError, ValidationError:
+        except (TypeError, UnicodeError, ValueError, RecursionError) as error:
             return _failure_result(
                 request_id=request_id,
                 config=config,
@@ -239,6 +239,16 @@ async def extract_plan(
                 raw=raw,
                 stage="mapping",
                 reason="MAPPING",
+                diagnostic_path=(
+                    error.path
+                    if isinstance(error, MappingValidationError)
+                    else _safe_schema_path(error)
+                    if isinstance(error, ValidationError)
+                    else "mapping"
+                ),
+                schema_error_type=(
+                    _safe_schema_error_type(error) if isinstance(error, ValidationError) else None
+                ),
             )
         validation_issues = tuple(
             _blocking_warning(issue.code, issue.path, issue.reason)

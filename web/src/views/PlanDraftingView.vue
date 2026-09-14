@@ -139,6 +139,14 @@ async function saveExtractedDraft(intent: ExtractedPlanDraftIntent): Promise<voi
           >
             {{ drafting.stoppedMessage.value }}
           </p>
+          <button
+            v-if="drafting.errorMessage.value && drafting.extraction.value"
+            class="plan-drafting-view__retry"
+            type="button"
+            @click="drafting.retryExtraction"
+          >
+            重新查询提取状态
+          </button>
           <PlanWorkbench
             :extraction="drafting.extraction.value"
             :initial-provider-id="drafting.runtime.value.providerId"

@@ -1,0 +1,278 @@
+{
+  "id": "51e37676-d62d-4bbc-873a-2b389f8d4611",
+  "providerId": "c738345b-8265-497c-9a8e-6da9154e233c",
+  "status": "SUCCEEDED",
+  "submittedAt": "2026-09-14T10:00:00+08:00",
+  "startedAt": "2026-09-14T10:00:00+08:00",
+  "completedAt": "2026-09-14T10:00:00+08:00",
+  "sourceTextSha256": "46df0f39ee38e2f26b432ace4682614d7c0553c77807da8f21b2ca14ddc93446",
+  "model": "offline-v4",
+  "promptVersion": "plan-extract-v4",
+  "draftPlanJson": "{\"activation\":null,\"conflict_policy\":null,\"execution_mode\":\"EXPLICIT_RULES\",\"execution_version\":\"explicit-rules-v1\",\"market\":\"SZSE\",\"metadata\":{\"reference_price_fen\":null,\"report_at\":null},\"monitoring\":{\"indicator_formula_version\":\"ta-v1\",\"timeframe_minutes\":5},\"name\":\"SYNTHETIC V4\",\"plan_id\":\"synthetic-v4\",\"position\":{\"inventory_scope\":\"ALL_REGISTERED\",\"lot_size\":100,\"max_qty\":null},\"rules\":[{\"action\":{\"quantity\":100,\"type\":\"BUY\"},\"condition\":{\"conditions\":[{\"high_fen\":1000,\"include_high\":null,\"include_low\":null,\"low_fen\":980,\"type\":\"COMPLETED_CLOSE_IN_RANGE\"},{\"history_scope\":null,\"minimum_ratio\":null,\"type\":\"VOLUME_TO_MEAN_GTE\",\"window_bars\":null}],\"type\":\"ALL\"},\"confirmation\":{\"kind\":\"COMPLETED_BAR_CLOSE\",\"timeframe_minutes\":5},\"repeat_policy\":null,\"rule_id\":\"buy-100\",\"safety_conditions\":null}],\"schema_version\":3,\"symbol\":\"003043.SZ\",\"version\":1}",
+  "mapping": {
+    "mappingVersion": "plan-mapping-v1",
+    "sourceClauses": [
+      {
+        "clauseId": "clause-c27c2b6896eeb123",
+        "start": 0,
+        "end": 37,
+        "excerpt": "003043.SZ五分钟收盘在9.80至10.00元且放量时买入100股。",
+        "disposition": "UNRESOLVED",
+        "paths": []
+      }
+    ],
+    "fieldBindings": [],
+    "userSupplements": [],
+    "sourceProcessing": null
+  },
+  "evidence": [],
+  "assumptions": [],
+  "warnings": [],
+  "unmappedText": [],
+  "validationIssues": [
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "activation",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "conflict_policy",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "execution_mode",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "execution_version",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "market",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "monitoring.indicator_formula_version",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "monitoring.timeframe_minutes",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "name",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "plan_id",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "position.inventory_scope",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "position.lot_size",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "position.max_qty",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].action.quantity",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].action.type",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_STRUCTURE",
+      "path": "rules[0].condition",
+      "severity": "WARNING",
+      "message": "The current ALL/ANY parent-child structure has no origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].condition.conditions[0].high_fen",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "rules[0].condition.conditions[0].include_high",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "rules[0].condition.conditions[0].include_low",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].condition.conditions[0].low_fen",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].condition.conditions[0].type",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "rules[0].condition.conditions[1].history_scope",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "rules[0].condition.conditions[1].minimum_ratio",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].condition.conditions[1].type",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "rules[0].condition.conditions[1].window_bars",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].condition.type",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].confirmation.kind",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].confirmation.timeframe_minutes",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "path": "rules[0].repeat_policy",
+      "severity": "WARNING",
+      "message": "A required executable value or policy remains unresolved.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "rules[0].rule_id",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "schema_version",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_SEMANTICS",
+      "path": "source",
+      "severity": "WARNING",
+      "message": "The phrase 放量 has no deterministic supported definition.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNRESOLVED_SEMANTICS",
+      "path": "source",
+      "severity": "WARNING",
+      "message": "The material source clause is not represented by supported current content.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "symbol",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    },
+    {
+      "code": "UNMAPPED_PLAN_FIELD",
+      "path": "version",
+      "severity": "WARNING",
+      "message": "The current non-null plan field has no validated origin binding.",
+      "activationBlocking": true
+    }
+  ],
+  "usage": {
+    "promptTokens": 100,
+    "completionTokens": 100,
+    "totalTokens": 200
+  },
+  "diagnosticStatus": "RECORDED"
+}

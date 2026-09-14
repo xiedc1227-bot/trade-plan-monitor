@@ -7897,6 +7897,21 @@
             ],
             "title": "Completedat"
           },
+          "diagnosticStatus": {
+            "anyOf": [
+              {
+                "enum": [
+                  "RECORDED",
+                  "WRITE_FAILED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diagnosticstatus"
+          },
           "draftPlanJson": {
             "anyOf": [
               {

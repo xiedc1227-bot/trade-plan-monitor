@@ -140,7 +140,9 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`1aed810d751d7c1dee623b1eb6afb7f2538928c8ea091bdf79027dd34e58951a`
+OpenAPI 快照 SHA-256：`74a31150073502cbd291be9fe0fe6d4bfbb562ba31f3dd8b15bc3b9c3d0f65db`
+
+R17 契约修复（2026-09-14）：将后端已有的 `PlanExtractionView.diagnosticStatus` 同步到此快照及前端生成契约。该字段可省略/为 null，仅接受 `RECORDED` 或 `WRITE_FAILED`；它表示诊断持久化状态，不表示提取成功。浏览器必须接受生产 QUEUED/RUNNING/终态 DTO，包括含 0–10,000 项字段映射的 v4 部分审核草稿，并保留激活阻断。轮询失败时保留已受理操作，提供仅 GET 的查询恢复，不再次发起提取 POST。本次用户要求的修复不新增 API 路径或供应商调用；证据与验证见 `../../verification/R17-contract-diagnostics-remediation.zh-CN.md`。
 
 - 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 48 个已批准 REST 路径：33 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式命令 `POST /position-inventory-confirmations`、`POST /position-inventory-closures` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
 - `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
