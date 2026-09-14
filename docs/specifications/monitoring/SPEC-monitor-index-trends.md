@@ -195,7 +195,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 5. The feature adds no dependency; `marketTurnover` remains nullable, the obsolete dashboard-level `dataAgeSeconds` field is absent, and all commands listed above pass.
 6. Keyboard controls, screen-reader chart labeling, reduced-motion, responsive layout with non-overlapping section spacing, and 200% text acceptance checks pass.
 7. Every changed persisted index head appends `market.index.updated` in the same transaction and publishes it only after commit, so an already-open dashboard refreshes through the existing authoritative snapshot recovery path without frontend polling.
-8. A snapshot missing only a just-completed five-minute bucket may be reacquired once on the immediately following minute; permission, quota, provider, identity, formula, and gap failures never enter this publication-lag retry. A one-point series renders a visible symbol while longer series remain uncluttered.
+8. A snapshot missing only a just-completed five-minute bucket may be reacquired once on the immediately following minute; only eligible lagging indexes are retried and unchanged index heads are preserved. Permission, quota, provider, identity, formula, and gap failures never enter this publication-lag retry. A one-point series renders a visible symbol while longer series remain uncluttered.
 
 ## Market Turnover Extension
 

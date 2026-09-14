@@ -690,6 +690,104 @@ def test_production_pipeline_retries_a_late_index_bucket_once_on_the_next_minute
     asyncio.run(scenario())
 
 
+def test_optional_index_failure_does_not_change_stock_only_plan_evaluation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Schema v2 plan without index leaves keeps its stock decision when display data fails."""
+    import trade_plan_monitor.runtime.production as production
+
+    async def run_case(fail_index: bool) -> tuple[object, MarketIndexHealth]:
+        case_root = tmp_path / ("index-failed" if fail_index else "index-live")
+        case_root.mkdir()
+        clock = ControlledClock(INDEX_CUTOFF.replace(hour=9, minute=0))
+        plan = _plan(
+            plan_id="stock-only-v2",
+            symbol="300001.SZ",
+            market="SZSE",
+            condition={"type": "NON_DECREASING_CLOSE"},
+        )
+        database = case_root / "monitor.sqlite3"
+        _activate_plans(database, clock, (plan,))
+        clock.current = INDEX_CUTOFF + timedelta(seconds=12)
+        config = _write_configuration_and_evidence(
+            case_root, observed_at=clock.now(), include_index=True
+        )
+
+        class OptionalIndexSDK(OfflineSDK):
+            def __getattr__(self, name: str):
+                request = super().__getattr__(name)
+
+                def checked(**kwargs: object) -> pd.DataFrame:
+                    if (
+                        fail_index
+                        and name == "rt_idx_min_daily"
+                        and kwargs.get("ts_code") == MarketIndexCode.CHINEXT.value
+                    ):
+                        self.calls.append((name, dict(kwargs)))
+                        raise RuntimeError("SIMULATED optional index failure")
+                    return request(**kwargs)
+
+                return checked
+
+        sdk = OptionalIndexSDK(clock, (plan.symbol,))
+        monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
+        pace = VirtualPace()
+        controller = create_live_tushare_request_controller(
+            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep
+        )
+        engine, work_factory = _work_factory(database, clock)
+        pipeline = ProductionMonitorPipeline(
+            configuration=load_application_config(config).tushare,
+            certification_directory=case_root / "data/live-certification",
+            stock_certification=create_stock_certification(
+                observed_at=clock.now(),
+                endpoint_url=ENDPOINT,
+                capabilities=_ready_stock_capabilities(),
+                source_time_label=SourceTimeLabel.START,
+            ),
+            clock=clock,
+            request_controller=controller,
+            unit_of_work_factory=work_factory,
+            runtime_generation=uuid4(),
+            publisher=lambda _event: None,
+        )
+        try:
+            await pipeline.refresh_references(INDEX_CUTOFF.date())
+            await pipeline.recover_startup(INDEX_CUTOFF.date())
+            results = await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=INDEX_CUTOFF.date(),
+                    due_at=clock.now(),
+                    bar_end=INDEX_CUTOFF,
+                )
+            )
+            assert len(results) == 1 and results[0].status is IntradayCycleStatus.COMMITTED
+            decision = results[0].evaluation_result
+            assert decision is not None
+            assert decision.snapshot.reference_market is None
+            return decision, pipeline.index_service.latest_snapshots()[
+                MarketIndexCode.CHINEXT
+            ].health
+        finally:
+            await controller.aclose()
+            engine.dispose()
+
+    async def scenario() -> None:
+        healthy, healthy_index = await run_case(False)
+        failed, failed_index = await run_case(True)
+        assert healthy_index is MarketIndexHealth.LIVE
+        assert failed_index is MarketIndexHealth.BLOCKED
+        assert failed.result_hash == healthy.result_hash
+        assert failed.signal_intent == healthy.signal_intent
+        assert failed.next_step == healthy.next_step
+        assert failed.satisfied_conditions == healthy.satisfied_conditions
+        assert failed.unmet_conditions == healthy.unmet_conditions
+
+    asyncio.run(scenario())
+
+
 def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1423,6 +1521,24 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
             assert first_snapshot is not None and second_snapshot is not None
             assert first_snapshot.snapshot_hash == second_snapshot.snapshot_hash
             assert first_snapshot.health is MarketIndexHealth.LIVE
+            with work_factory() as work:
+                for mismatched in (
+                    None,
+                    pipeline.index_service.latest_snapshots()[MarketIndexCode.SSE_COMPOSITE],
+                ):
+                    with pytest.raises(
+                        ValueError,
+                        match="reference-market snapshots must agree|immutable snapshot",
+                    ):
+                        RuntimeEvaluationService._persist_projection_dependencies(
+                            work,
+                            decisions[same_index_one.symbol],
+                            plan=same_index_one,
+                            reference_market_snapshot=mismatched,
+                            health_snapshot=None,
+                            activation_revision=1,
+                            runtime_generation=uuid4(),
+                        )
             assert decisions[other_index.symbol].snapshot.reference_market.health is (
                 MarketIndexHealth.LIVE
             )

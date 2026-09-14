@@ -302,10 +302,85 @@ def test_dashboard_indexes_are_acquired_without_active_plans() -> None:
     )
     assert set(prepared.snapshots_by_index) == set(ALWAYS_ON_INDEX_CODES)
     assert all(
-        snapshot.health is MarketIndexHealth.LIVE
-        and snapshot.fact_requests == ()
+        snapshot.health is MarketIndexHealth.LIVE and snapshot.fact_requests == ()
         for snapshot in prepared.snapshots_by_index.values()
     )
+    assert (
+        asyncio.run(
+            service.retry_publication_lag(
+                decision_cutoff=CUTOFF,
+                observed_no_later_than=OBSERVED_AT + timedelta(minutes=1),
+            )
+        )
+        is None
+    )
+    assert len(provider.calls) == len(ALWAYS_ON_INDEX_CODES)
+
+
+def test_normal_prepare_refetches_new_requirements_revision_cutoff_and_day() -> None:
+    class RevisingProvider(_DashboardProvider):
+        revision = 3
+
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            batch = await super().acquire_index_data(**kwargs)
+            cutoff = kwargs["decision_cutoff"]
+            assert isinstance(cutoff, datetime)
+            return batch.model_copy(
+                update={
+                    "content_revision": self.revision,
+                    "observed_at": cutoff + timedelta(seconds=2),
+                    "five_minute_bars": tuple(
+                        bar.model_copy(
+                            update={
+                                "bar_at": cutoff - (CUTOFF - bar.bar_at),
+                                "observed_at": cutoff + timedelta(seconds=2),
+                            }
+                        )
+                        for bar in batch.five_minute_bars
+                    ),
+                }
+            )
+
+    provider = RevisingProvider()
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    initial = asyncio.run(
+        service.prepare(plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    assert len(provider.calls) == 5
+    plan = _plan(
+        22,
+        {"type": "INDEX_CLOSE_GTE_MA", "index_role": "BOARD_REFERENCE", "period": 5},
+    )
+    richer = asyncio.run(
+        service.prepare(plans=(plan,), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    assert len(provider.calls) == 10
+    requested = richer.snapshot_for_plan(plan)
+    assert requested is not None and requested.health is MarketIndexHealth.LIVE
+    assert len(requested.fact_requests) == 1
+    assert requested is not initial.snapshot_for_plan(plan)
+    assert (MarketIndexCode.SHENZHEN_COMPONENT, CUTOFF, 1, 5) in provider.requests
+
+    provider.revision = 4
+    revised = asyncio.run(
+        service.prepare(plans=(plan,), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    assert len(provider.calls) == 15
+    assert revised.snapshot_for_plan(plan).revision == 4
+    assert revised.snapshot_for_plan(plan).snapshot_hash != requested.snapshot_hash
+
+    for cutoff in (CUTOFF + timedelta(minutes=5), CUTOFF + timedelta(days=1)):
+        next_batch = asyncio.run(
+            service.prepare(
+                plans=(plan,),
+                decision_cutoff=cutoff,
+                observed_no_later_than=cutoff + timedelta(seconds=2),
+            )
+        )
+        assert next_batch.decision_cutoff == cutoff
+        assert len(provider.calls) == (20 if cutoff.date() == CUTOFF.date() else 25)
+        assert {request[0] for request in provider.requests[-5:]} == set(ALWAYS_ON_INDEX_CODES)
+        assert all(request[1] == cutoff for request in provider.requests[-5:])
 
 
 def test_publication_lag_retry_is_not_claimed_for_provider_unavailability() -> None:
@@ -341,6 +416,176 @@ def test_publication_lag_retry_is_not_claimed_for_provider_unavailability() -> N
     }
 
     assert service.claim_publication_lag_retry(CUTOFF) is False
+
+
+def test_publication_lag_retry_only_acquires_stale_index_and_preserves_live_snapshots() -> None:
+    class DelayedProvider(_DashboardProvider):
+        lag = True
+
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            batch = await super().acquire_index_data(**kwargs)
+            if self.lag and kwargs["index_code"] is MarketIndexCode.STAR_50:
+                return batch.model_copy(
+                    update={
+                        "five_minute_bars": tuple(
+                            bar.model_copy(update={"bar_at": bar.bar_at - timedelta(minutes=5)})
+                            for bar in batch.five_minute_bars
+                        )
+                    }
+                )
+            return batch
+
+    provider = DelayedProvider()
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    initial = asyncio.run(
+        service.prepare(plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    assert (
+        sum(
+            snapshot.health is MarketIndexHealth.LIVE
+            for snapshot in initial.snapshots_by_index.values()
+        )
+        == 4
+    )
+    assert initial.snapshots_by_index[MarketIndexCode.STAR_50].health is MarketIndexHealth.STALE
+
+    provider.lag = False
+    retry = asyncio.run(
+        service.retry_publication_lag(
+            decision_cutoff=CUTOFF,
+            observed_no_later_than=OBSERVED_AT + timedelta(minutes=1),
+        )
+    )
+    assert retry is not None
+    assert set(retry.snapshots_by_index) == {MarketIndexCode.STAR_50}
+    assert provider.calls[5:] == [MarketIndexCode.STAR_50]
+    assert service.latest_snapshots()[MarketIndexCode.STAR_50].health is MarketIndexHealth.LIVE
+    for index_code in set(ALWAYS_ON_INDEX_CODES) - {MarketIndexCode.STAR_50}:
+        assert service.latest_snapshots()[index_code] is initial.snapshots_by_index[index_code]
+    assert (
+        asyncio.run(
+            service.retry_publication_lag(
+                decision_cutoff=CUTOFF,
+                observed_no_later_than=OBSERVED_AT + timedelta(minutes=2),
+            )
+        )
+        is None
+    )
+    assert len(provider.calls) == 6
+
+
+def test_publication_lag_retry_ignores_provider_failure_and_keeps_failed_retry_blocked() -> None:
+    class MixedProvider(_DashboardProvider):
+        retry = False
+
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            index_code = kwargs["index_code"]
+            if index_code is MarketIndexCode.CHINEXT or (
+                self.retry and index_code is MarketIndexCode.STAR_50
+            ):
+                self.calls.append(index_code)
+                raise RuntimeError("SIMULATED provider unavailable")
+            batch = await super().acquire_index_data(**kwargs)
+            if index_code is MarketIndexCode.STAR_50:
+                return batch.model_copy(
+                    update={
+                        "five_minute_bars": tuple(
+                            bar.model_copy(update={"bar_at": bar.bar_at - timedelta(minutes=5)})
+                            for bar in batch.five_minute_bars
+                        )
+                    }
+                )
+            return batch
+
+    provider = MixedProvider()
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    initial = asyncio.run(
+        service.prepare(plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    assert initial.snapshots_by_index[MarketIndexCode.CHINEXT].health is MarketIndexHealth.BLOCKED
+    assert initial.snapshots_by_index[MarketIndexCode.STAR_50].health is MarketIndexHealth.STALE
+    provider.retry = True
+    retry = asyncio.run(
+        service.retry_publication_lag(
+            decision_cutoff=CUTOFF,
+            observed_no_later_than=OBSERVED_AT + timedelta(minutes=1),
+        )
+    )
+    assert retry is not None
+    assert provider.calls[5:] == [MarketIndexCode.STAR_50]
+    assert retry.snapshots_by_index[MarketIndexCode.STAR_50].health is MarketIndexHealth.BLOCKED
+    assert service.latest_snapshots()[MarketIndexCode.STAR_50].health is MarketIndexHealth.BLOCKED
+    assert (
+        service.latest_snapshots()[MarketIndexCode.CHINEXT]
+        is initial.snapshots_by_index[MarketIndexCode.CHINEXT]
+    )
+
+
+def test_delayed_retry_cannot_replace_new_same_cutoff_fact_requirements() -> None:
+    class InterleavedProvider(_DashboardProvider):
+        def __init__(self) -> None:
+            super().__init__()
+            self.serve_stale = True
+            self.hold_retry = False
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            batch = await super().acquire_index_data(**kwargs)
+            if kwargs["index_code"] is not MarketIndexCode.SHENZHEN_COMPONENT:
+                return batch
+            if self.hold_retry:
+                self.hold_retry = False
+                self.started.set()
+                await self.release.wait()
+                return batch
+            if self.serve_stale:
+                return batch.model_copy(
+                    update={
+                        "five_minute_bars": tuple(
+                            bar.model_copy(update={"bar_at": bar.bar_at - timedelta(minutes=5)})
+                            for bar in batch.five_minute_bars
+                        )
+                    }
+                )
+            return batch.model_copy(update={"content_revision": 4})
+
+    async def scenario() -> None:
+        provider = InterleavedProvider()
+        service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+        initial = await service.prepare(
+            plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT
+        )
+        assert (
+            initial.snapshots_by_index[MarketIndexCode.SHENZHEN_COMPONENT].health
+            is MarketIndexHealth.STALE
+        )
+        provider.serve_stale = False
+        provider.hold_retry = True
+        retry_task = asyncio.create_task(
+            service.retry_publication_lag(
+                decision_cutoff=CUTOFF,
+                observed_no_later_than=OBSERVED_AT + timedelta(minutes=1),
+            )
+        )
+        await provider.started.wait()
+        plan = _plan(
+            21,
+            {"type": "INDEX_CLOSE_GTE_MA", "index_role": "BOARD_REFERENCE", "period": 5},
+        )
+        current = await service.prepare(
+            plans=(plan,),
+            decision_cutoff=CUTOFF,
+            observed_no_later_than=OBSERVED_AT + timedelta(seconds=30),
+        )
+        richer = current.snapshots_by_index[MarketIndexCode.SHENZHEN_COMPONENT]
+        assert richer.health is MarketIndexHealth.LIVE
+        assert len(richer.fact_requests) == 1
+        provider.release.set()
+        assert await retry_task is None
+        assert service.latest_snapshots()[MarketIndexCode.SHENZHEN_COMPONENT] is richer
+
+    asyncio.run(scenario())
 
 
 def test_index_snapshot_uses_post_fetch_whole_second_as_future_data_fence() -> None:

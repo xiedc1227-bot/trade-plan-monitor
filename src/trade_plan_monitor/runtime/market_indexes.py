@@ -85,17 +85,63 @@ class RuntimeMarketIndexService:
         }
         if decision_cutoff in self._publication_lag_retry_cutoffs:
             return False
-        retryable = any(
-            snapshot.decision_cutoff == decision_cutoff
-            and snapshot.health is not MarketIndexHealth.LIVE
-            and bool(snapshot.issues)
-            and set(snapshot.issues).issubset(_PUBLICATION_LAG_ISSUES)
-            for snapshot in self._latest_by_index.values()
-        )
-        if not retryable:
+        if not self._publication_lag_targets(decision_cutoff):
             return False
         self._publication_lag_retry_cutoffs.add(decision_cutoff)
         return True
+
+    def _publication_lag_targets(
+        self, decision_cutoff: datetime
+    ) -> dict[MarketIndexCode, MarketIndexSnapshot]:
+        return {
+            index_code: snapshot
+            for index_code, snapshot in self._latest_by_index.items()
+            if snapshot.decision_cutoff == decision_cutoff
+            and snapshot.health is not MarketIndexHealth.LIVE
+            and bool(snapshot.issues)
+            and set(snapshot.issues).issubset(_PUBLICATION_LAG_ISSUES)
+        }
+
+    async def retry_publication_lag(
+        self,
+        *,
+        decision_cutoff: datetime,
+        observed_no_later_than: datetime,
+    ) -> RuntimeMarketIndexBatch | None:
+        """Reacquire only lagging same-cutoff indexes once, preserving their fact needs.
+
+        The returned batch contains only retried indexes so persistence leaves every
+        unchanged healthy or independently blocked head untouched.
+        """
+
+        if not self.claim_publication_lag_retry(decision_cutoff):
+            return None
+        targets = self._publication_lag_targets(decision_cutoff)
+        turnover_bucket_count = max(1, completed_market_turnover_bucket_count(decision_cutoff))
+        snapshots = await self._coordinator.get_snapshots(
+            requirements={
+                index_code: snapshot.fact_requests for index_code, snapshot in targets.items()
+            },
+            decision_cutoff=decision_cutoff,
+            observed_no_later_than=observed_no_later_than,
+            minimum_bar_counts={
+                index_code: (turnover_bucket_count, 2)
+                for index_code in targets
+                if index_code in MARKET_TURNOVER_INDEX_CODES
+            },
+        )
+        accepted = {
+            index_code: snapshot
+            for index_code, snapshot in snapshots.items()
+            if self._latest_by_index.get(index_code) is targets[index_code]
+        }
+        if not accepted:
+            return None
+        self._latest_by_index.update(accepted)
+        return RuntimeMarketIndexBatch(
+            decision_cutoff=decision_cutoff,
+            snapshots_by_index=MappingProxyType(accepted),
+        )
 
     async def prepare(
         self,

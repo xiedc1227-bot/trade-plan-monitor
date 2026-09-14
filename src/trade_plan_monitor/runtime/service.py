@@ -62,6 +62,7 @@ from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.market_index.canonical import validate_market_index_snapshot_integrity
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import MarketIndexBar, MarketIndexSnapshot
+from trade_plan_monitor.market_index.requirements import iter_plan_index_conditions
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
 from trade_plan_monitor.runtime.clock import Clock, SystemClock, _canonical_shanghai
@@ -618,6 +619,26 @@ class RuntimeEvaluationService:
         await self._publish_committed_events(events)
         return prepared
 
+    async def retry_intraday_market_indexes(
+        self,
+        *,
+        bucket_end: datetime,
+        evaluated_at: datetime,
+    ) -> RuntimeMarketIndexBatch | None:
+        """Persist only the indexes still lagging at the prior five-minute cutoff."""
+
+        if self._market_index_service is None:
+            return None
+        prepared = await self._market_index_service.retry_publication_lag(
+            decision_cutoff=expected_five_minute_ends(bucket_end)[-1],
+            observed_no_later_than=_ceil_to_whole_second(evaluated_at),
+        )
+        if prepared is None:
+            return None
+        prepared, events = self._persist_market_index_batch(prepared)
+        await self._publish_committed_events(events)
+        return prepared
+
     def load_persisted_symbol_health(
         self,
         symbols: tuple[str, ...],
@@ -934,6 +955,7 @@ class RuntimeEvaluationService:
                 health_event = self._persist_projection_dependencies(
                     unit_of_work,
                     result,
+                    plan=plan,
                     reference_market_snapshot=reference_market_snapshot,
                     health_snapshot=health_snapshot,
                     activation_revision=activation_revision,
@@ -1261,6 +1283,7 @@ class RuntimeEvaluationService:
                 projection_health_event = self._persist_projection_dependencies(
                     unit_of_work,
                     result,
+                    plan=plan,
                     reference_market_snapshot=reference_market_snapshot,
                     health_snapshot=None,
                     activation_revision=activation_revision,
@@ -2112,15 +2135,19 @@ class RuntimeEvaluationService:
         unit_of_work: UnitOfWork,
         result: EvaluationResult,
         *,
+        plan: TradePlan,
         reference_market_snapshot: MarketIndexSnapshot | None,
         health_snapshot: SymbolHealthSnapshot | None,
         activation_revision: int,
         runtime_generation: UUID,
     ) -> MonitorEvent:
         reference = result.snapshot.reference_market
-        if (reference is None) != (reference_market_snapshot is None):
+        uses_index = bool(iter_plan_index_conditions(plan))
+        if not uses_index and reference is not None:
+            raise ValueError("stock-only plan cannot persist index-condition evidence")
+        if uses_index and (reference is None) != (reference_market_snapshot is None):
             raise ValueError("result and context reference-market snapshots must agree")
-        if reference_market_snapshot is not None:
+        if uses_index and reference_market_snapshot is not None:
             if (
                 reference is None
                 or reference.snapshot_hash != reference_market_snapshot.snapshot_hash

@@ -598,17 +598,16 @@ class ProductionMonitorPipeline:
             else:
                 candidate = deadline.bar_end - timedelta(minutes=1)
                 try:
-                    follows_five_minute_boundary = (
-                        five_minute_bucket_end(candidate) == candidate
-                    )
+                    follows_five_minute_boundary = five_minute_bucket_end(candidate) == candidate
                 except ValueError:
                     follows_five_minute_boundary = False
-                if (
-                    not follows_five_minute_boundary
-                    or not self.index_service.claim_publication_lag_retry(candidate)
-                ):
+                if not follows_five_minute_boundary:
                     return
-                bucket_end = candidate
+                await self.evaluations.retry_intraday_market_indexes(
+                    bucket_end=candidate,
+                    evaluated_at=observed_at,
+                )
+                return
             await self.evaluations.prepare_intraday_market_indexes(
                 plans=(),
                 bucket_end=bucket_end,

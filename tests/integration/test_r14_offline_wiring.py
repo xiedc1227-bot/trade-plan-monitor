@@ -10,6 +10,8 @@ from pathlib import Path
 from uuid import uuid4
 
 import httpx
+import pandas as pd
+import pytest
 from fastapi.testclient import TestClient
 from scripts.r14_bounded_acceptance import (
     _MARKET_CAPS,
@@ -37,6 +39,7 @@ from tests.integration.test_live_pipeline_acceptance import (
     OfflineSDK,
     VirtualPace,
     _ready_stock_capabilities,
+    _work_factory,
     _write_configuration_and_evidence,
 )
 from tests.unit.test_ai_plan_extraction_v4 import _partial_draft
@@ -47,11 +50,18 @@ from trade_plan_monitor.ai.models import (
     PlanExtractionStatus,
 )
 from trade_plan_monitor.ai.review import dump_explicit_plan_draft_json, server_source_clauses
+from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.live_profiles import create_stock_certification, write_live_certification
 from trade_plan_monitor.market_data.sessions import SourceTimeLabel
+from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.market_index.models import MarketIndexHealth
 from trade_plan_monitor.runtime.clock import SHANGHAI
-from trade_plan_monitor.runtime.scheduler import DeadlineKind
+from trade_plan_monitor.runtime.market_indexes import ALWAYS_ON_INDEX_CODES
+from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
+from trade_plan_monitor.runtime.request_control import create_live_tushare_request_controller
+from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketSessionScheduler
+from trade_plan_monitor.state.database import upgrade_database
 from trade_plan_monitor.web.app import installed_web_assets
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
@@ -70,6 +80,159 @@ class QuerySDK(OfflineSDK):
 
     def __getattr__(self, name: str):
         return lambda **kwargs: self.query(name, **kwargs)
+
+
+@pytest.mark.parametrize("all_stale", [False, True], ids=["mixed", "all-stale"])
+def test_simulated_scheduler_retries_only_lagging_physical_index_request(
+    tmp_path: Path, monkeypatch, all_stale: bool
+) -> None:
+    """SIMULATED SDK frames enter production scheduling, adapter, and SQLite heads."""
+    import trade_plan_monitor.runtime.production as production
+
+    clock = ControlledClock(datetime(2026, 9, 14, 10, 25, 12, tzinfo=SHANGHAI))
+    config = _write_configuration_and_evidence(
+        tmp_path, observed_at=clock.now(), include_index=True
+    )
+    database = tmp_path / "monitor.sqlite3"
+    engine, work_factory = _work_factory(database, clock)
+    upgrade_database(engine)
+    budget = Budget(total=60, per_key=_MARKET_CAPS, seconds=900)
+    created_sdks: list[QuerySDK] = []
+
+    class MixedPublicationSDK(QuerySDK):
+        def _index_minutes(self, kwargs: dict[str, object]) -> pd.DataFrame:
+            frame = super()._index_minutes(kwargs)
+            if (
+                all_stale or kwargs["ts_code"] == MarketIndexCode.STAR_50.value
+            ) and self.clock.now().minute in ({25, 30, 35} if all_stale else {25}):
+                cutoff = self.clock.now().replace(second=0, microsecond=0)
+                frame = frame.loc[frame["time"] < cutoff.strftime("%Y-%m-%d %H:%M:%S")]
+            return frame
+
+    def make_client(_settings: object) -> QuerySDK:
+        sdk = MixedPublicationSDK(clock, ())
+        created_sdks.append(sdk)
+        return sdk
+
+    monkeypatch.setattr(
+        production,
+        "create_tushare_client",
+        _guarded_market_factory(make_client, MarketBudget(budget)),
+    )
+    pace = VirtualPace()
+    controller = create_live_tushare_request_controller(
+        clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep
+    )
+    pipeline = ProductionMonitorPipeline(
+        configuration=load_application_config(config).tushare,
+        certification_directory=tmp_path / "data/live-certification",
+        stock_certification=create_stock_certification(
+            observed_at=clock.now(),
+            endpoint_url=ENDPOINT,
+            capabilities=_ready_stock_capabilities(),
+            source_time_label=SourceTimeLabel.START,
+        ),
+        clock=clock,
+        request_controller=controller,
+        unit_of_work_factory=work_factory,
+        runtime_generation=uuid4(),
+        publisher=lambda _event: None,
+    )
+    scheduler = MarketSessionScheduler(clock=clock, is_open_on=lambda _date: True)
+
+    async def scenario() -> None:
+        try:
+            previous = None
+            minutes = (25, 26, 30, 31, 35, 36) if all_stale else (25, 26, 27, 30)
+            for minute in minutes:
+                clock.current = datetime(2026, 9, 14, 10, minute, 12, tzinfo=SHANGHAI)
+                deadline = scheduler.next_deadline(after=previous)
+                assert deadline is not None and deadline.bar_end == clock.now().replace(second=0)
+                assert await pipeline.run_deadline(deadline) == ()
+                previous = deadline.due_at
+                physical = budget.snapshot()["attempts"].get("rt_idx_min_daily", 0)
+                expected = (
+                    {25: 5, 26: 10, 30: 15, 31: 20, 35: 25, 36: 25}
+                    if all_stale
+                    else {25: 5, 26: 6, 27: 6, 30: 11}
+                )
+                assert physical == expected[minute]
+                if minute == 25:
+                    initial = dict(pipeline.index_service.latest_snapshots())
+                    assert initial[MarketIndexCode.STAR_50].health is MarketIndexHealth.STALE
+                    if not all_stale:
+                        assert all(
+                            snapshot.health is MarketIndexHealth.LIVE
+                            for code, snapshot in initial.items()
+                            if code is not MarketIndexCode.STAR_50
+                        )
+                if minute == 26:
+                    assert (
+                        pipeline.index_service.latest_snapshots()[MarketIndexCode.STAR_50].health
+                        is MarketIndexHealth.LIVE
+                    )
+                    if not all_stale:
+                        for code in set(ALWAYS_ON_INDEX_CODES) - {MarketIndexCode.STAR_50}:
+                            assert pipeline.index_service.latest_snapshots()[code] is initial[code]
+                            with work_factory() as work:
+                                head = work.projections.get_market_index_head(
+                                    mapping_version=initial[code].mapping_version,
+                                    index_code=code,
+                                    decision_cutoff=initial[code].decision_cutoff,
+                                    request_set_hash=initial[code].request_set_hash,
+                                )
+                                assert head is not None
+                                assert head.snapshot.snapshot_hash == initial[code].snapshot_hash
+                    with work_factory() as work:
+                        retried = pipeline.index_service.latest_snapshots()[MarketIndexCode.STAR_50]
+                        head = work.projections.get_market_index_head(
+                            mapping_version=retried.mapping_version,
+                            index_code=MarketIndexCode.STAR_50,
+                            decision_cutoff=retried.decision_cutoff,
+                            request_set_hash=retried.request_set_hash,
+                        )
+                        assert head is not None
+                        assert head.snapshot.snapshot_hash == retried.snapshot_hash
+                if minute == 36:
+                    assert all(
+                        snapshot.health is MarketIndexHealth.BLOCKED
+                        for snapshot in pipeline.index_service.latest_snapshots().values()
+                    )
+                    with work_factory() as work:
+                        for snapshot in pipeline.index_service.latest_snapshots().values():
+                            head = work.projections.get_market_index_head(
+                                mapping_version=snapshot.mapping_version,
+                                index_code=snapshot.index_code,
+                                decision_cutoff=snapshot.decision_cutoff,
+                                request_set_hash=snapshot.request_set_hash,
+                            )
+                            assert head is not None
+                            assert head.snapshot.health is MarketIndexHealth.BLOCKED
+            assert budget.snapshot()["deniedBeforeNetwork"] == (5 if all_stale else 0)
+            assert budget.snapshot()["attempts"] == {
+                "idx_mins": 5,
+                "index_daily": 5,
+                "rt_idx_min_daily": 25 if all_stale else 11,
+            }
+            index_sdk = created_sdks[1]
+            realtime_codes = [
+                kwargs["ts_code"] for name, kwargs in index_sdk.calls if name == "rt_idx_min_daily"
+            ]
+            assert len(realtime_codes) == (25 if all_stale else 11)
+            if not all_stale:
+                assert realtime_codes.count(MarketIndexCode.STAR_50.value) == 3
+                assert all(
+                    realtime_codes.count(code.value) == 2
+                    for code in ALWAYS_ON_INDEX_CODES
+                    if code is not MarketIndexCode.STAR_50
+                )
+            # Observed R14 pattern: 4 lag at 10:25, then all 5 at two later cutoffs.
+            assert 5 + 4 + 5 + 5 + 5 + 5 == 29 > _MARKET_CAPS["rt_idx_min_daily"]
+        finally:
+            await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
 
 
 def _write_end_label_stock_evidence(root: Path, observed_at: datetime) -> None:

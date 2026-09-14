@@ -63,6 +63,8 @@ tests/integration/test_market_index_snapshots.py
 
 完成快照的缓存键为 `(mappingVersion, indexCode, decisionCutoff, requestSetHash, providerContentRevision, minimumFiveMinuteBarCount, minimumOfficialDailyBarCount)`。由于不能在获取前猜测供应商修订号，内部 `(mappingVersion, indexCode, decisionCutoff, requestSetHash, minimumFiveMinuteBarCount, minimumOfficialDailyBarCount, observedNoLaterThan)` 预取键只去重并发获取，并在任务完成时删除。最小数量属于成交额投影使用的已校验采集要求，不会构造虚假的事实请求，也不影响计划 hash。可用的完成快照不可变，并在有界的 512 项缓存中驻留；后续调用会先重新获取，因此不会遮蔽新的供应商修订号。不可用快照不保留。一个指数失败会发布该指数的阻断健康状态，但不会取消或替换其他指数。实时监控可以为没有指数条件的计划提供信息性快照，但其判断不要求该快照；回测也不为该计划强制要求指数历史覆盖。
 
+普通每 cutoff 一次采集批次的唯一例外，是 `SPEC-monitor-index-trends` 允许的下一分钟发布滞后补取：每 cutoff 最多一次，仅重新获取同 cutoff 最新快照只有 `MISSING_FIVE_MINUTE_BAR` 或 `STALE_DATA` 问题的指数。补取保留每个被选快照的事实请求与成交额最小 K 线数量。其部分批次只持久化重新获取的指数；未变化的健康 head 与独立阻断的 head 保持不动。若获取期间新 cutoff 或不同请求集已取代该指数，丢弃旧补取结果。普通 `prepare` 始终通过按 revision 识别的协调器重新获取，包括新计划需求和下一个交易日。
+
 ## 规范化与哈希规则
 
 - 十进制使用有限、非指数形式的规范文本：正负零统一为 `0`，去除多余前导/尾随零，并拒绝二进制浮点数。准确定点展开超过 10,000 个字符时，在格式化前失败关闭。
