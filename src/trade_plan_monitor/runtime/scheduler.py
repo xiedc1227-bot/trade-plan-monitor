@@ -33,6 +33,7 @@ class DeadlineKind(StrEnum):
 
     REALTIME_MINUTE = "REALTIME_MINUTE"
     OFFICIAL_CLOSE = "OFFICIAL_CLOSE"
+    INDEX_RECOVERY = "INDEX_RECOVERY"
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +55,11 @@ class MarketDeadline:
         object.__setattr__(self, "due_at", canonical_due)
         if canonical_due.date() != self.trade_date:
             raise ValueError("due_at must match trade_date")
+
+        if self.kind is DeadlineKind.INDEX_RECOVERY:
+            if self.bar_end is not None or self.close_attempt is not None:
+                raise ValueError("index recovery has no market bar or close attempt")
+            return
 
         if self.kind is DeadlineKind.REALTIME_MINUTE:
             if self.bar_end is None or self.close_attempt is not None:
@@ -77,6 +83,7 @@ class MarketSessionScheduler:
         "_clock",
         "_grace",
         "_is_open_on",
+        "_next_index_recovery_at",
         "_official_close_attempts",
     )
 
@@ -87,6 +94,7 @@ class MarketSessionScheduler:
         is_open_on: Callable[[date], bool | None],
         grace: timedelta = DEFAULT_DATA_GRACE,
         official_close_attempts: tuple[time, ...] = DEFAULT_OFFICIAL_CLOSE_ATTEMPTS,
+        next_index_recovery_at: Callable[[], datetime | None] | None = None,
     ) -> None:
         if not isinstance(clock, Clock):
             raise TypeError("clock must implement Clock")
@@ -108,6 +116,7 @@ class MarketSessionScheduler:
         self._is_open_on = is_open_on
         self._grace = grace
         self._official_close_attempts = official_close_attempts
+        self._next_index_recovery_at = next_index_recovery_at
 
     @staticmethod
     def _validate_official_close_attempts(attempts: tuple[time, ...]) -> None:
@@ -176,6 +185,23 @@ class MarketSessionScheduler:
 
         now = _canonical_shanghai(self._clock.now())
         canonical_after = None if after is None else _canonical_shanghai(after)
+        recovery_at = (
+            None if self._next_index_recovery_at is None else self._next_index_recovery_at()
+        )
+        recovery_deadline = None
+        if recovery_at is not None:
+            recovery_due = max(
+                _canonical_shanghai(recovery_at),
+                now,
+                (canonical_after + timedelta(microseconds=1))
+                if canonical_after is not None
+                else now,
+            )
+            recovery_deadline = MarketDeadline(
+                kind=DeadlineKind.INDEX_RECOVERY,
+                trade_date=recovery_due.date(),
+                due_at=recovery_due,
+            )
         start_date = max(
             now.date(),
             canonical_after.date() if canonical_after is not None else now.date(),
@@ -185,18 +211,20 @@ class MarketSessionScheduler:
         for _ in range(MAX_CALENDAR_LOOKAHEAD_DAYS):
             calendar_state = self._calendar_state(trade_date)
             if calendar_state is None:
-                return None
+                return recovery_deadline
             if calendar_state:
                 for deadline in self._deadlines_for_open_date(trade_date):
                     if deadline.due_at < now:
                         continue
                     if canonical_after is not None and deadline.due_at <= canonical_after:
                         continue
+                    if recovery_deadline is not None and recovery_deadline.due_at < deadline.due_at:
+                        return recovery_deadline
                     return deadline
             if trade_date == date.max:
-                return None
+                return recovery_deadline
             trade_date += _ONE_DAY
-        return None
+        return recovery_deadline
 
     async def wait_for_next(self, *, after: datetime | None = None) -> MarketDeadline | None:
         """Sleep through the injected clock until the next known deadline."""

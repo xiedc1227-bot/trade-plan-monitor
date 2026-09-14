@@ -185,9 +185,15 @@ class MarketIndexSnapshotView(ReadModel):
     mapping_version: Literal["board-index-map-v1"]
     revision: Annotated[int, Field(strict=True, ge=1, le=2_147_483_647)]
     snapshot_hash: Sha256Hex
+    recovery_attempts: Annotated[int, Field(strict=True, ge=0, le=2)] | None = None
+    next_retry_at: ShanghaiDatetime | None = None
 
     @model_validator(mode="after")
     def validate_snapshot_projection(self) -> Self:
+        if (self.recovery_attempts is None) != (self.next_retry_at is None):
+            raise ValueError("market-index recovery fields must appear together")
+        if self.recovery_attempts is not None and self.health is not MarketIndexHealth.BLOCKED:
+            raise ValueError("only blocked market indexes can have a pending recovery")
         expected_board, expected_name = identity_for_index_code(self.index_code)
         if self.board is not expected_board or self.display_name != expected_name:
             raise ValueError("market-index projection identity is inconsistent")

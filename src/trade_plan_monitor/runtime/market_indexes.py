@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import MappingProxyType
 
 from trade_plan_monitor.domain.plan_models import TradePlan
@@ -40,6 +40,16 @@ _PUBLICATION_LAG_ISSUES = frozenset(
         MarketIndexIssueCode.STALE_DATA,
     }
 )
+_RECOVERY_DELAYS = (timedelta(seconds=30), timedelta(seconds=60), timedelta(seconds=120))
+_RECOVERY_WINDOW = timedelta(minutes=5)
+
+
+@dataclass(frozen=True, slots=True)
+class _Recovery:
+    decision_cutoff: datetime
+    first_failed_at: datetime
+    attempts: int
+    due_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +77,131 @@ class RuntimeMarketIndexService:
         self._coordinator = coordinator
         self._latest_by_index: dict[MarketIndexCode, MarketIndexSnapshot] = {}
         self._publication_lag_retry_cutoffs: set[datetime] = set()
+        self._recoveries: dict[MarketIndexCode, _Recovery] = {}
+
+    def next_recovery_due_at(self, *, now: datetime | None = None) -> datetime | None:
+        """Earliest pending retry for the existing serial runtime scheduler."""
+        if now is not None:
+            self._expire_recoveries(now)
+        return min((state.due_at for state in self._recoveries.values()), default=None)
+
+    def _expire_recoveries(self, now: datetime) -> None:
+        self._recoveries = {
+            code: state
+            for code, state in self._recoveries.items()
+            if now <= state.first_failed_at + _RECOVERY_WINDOW
+        }
+
+    def recovery_records(
+        self,
+    ) -> tuple[tuple[MarketIndexCode, datetime, datetime, int, datetime], ...]:
+        return tuple(
+            (code, state.decision_cutoff, state.first_failed_at, state.attempts, state.due_at)
+            for code, state in sorted(self._recoveries.items(), key=lambda item: item[0].value)
+        )
+
+    def restore_recoveries(
+        self,
+        *,
+        snapshots: Mapping[MarketIndexCode, MarketIndexSnapshot],
+        records: tuple[tuple[MarketIndexCode, datetime, datetime, int, datetime], ...],
+        now: datetime,
+    ) -> None:
+        """Resume only unexpired retries whose persisted failed head is still current."""
+        self._latest_by_index.update(snapshots)
+        for code, cutoff, first_failed_at, attempts, due_at in records:
+            snapshot = snapshots.get(code)
+            if (
+                snapshot is not None
+                and snapshot.decision_cutoff == cutoff
+                and snapshot.health is MarketIndexHealth.BLOCKED
+                and MarketIndexIssueCode.PROVIDER_UNAVAILABLE in snapshot.issues
+                and now <= first_failed_at + _RECOVERY_WINDOW
+                and due_at <= first_failed_at + _RECOVERY_WINDOW
+                and 0 <= attempts < len(_RECOVERY_DELAYS)
+            ):
+                self._recoveries[code] = _Recovery(cutoff, first_failed_at, attempts, due_at)
+
+    def _track_recoveries(
+        self,
+        snapshots: Mapping[MarketIndexCode, MarketIndexSnapshot],
+        *,
+        retry: bool = False,
+    ) -> None:
+        for code, snapshot in snapshots.items():
+            latest = self._latest_by_index.get(code)
+            if latest is not snapshot:
+                if latest is not None and latest.health is MarketIndexHealth.LIVE:
+                    self._recoveries.pop(code, None)
+                continue
+            current = self._recoveries.get(code)
+            if current is not None and current.decision_cutoff > snapshot.decision_cutoff:
+                continue
+            if snapshot.health is MarketIndexHealth.LIVE or not self._coordinator.failure_for(
+                code, snapshot.decision_cutoff
+            ):
+                self._recoveries.pop(code, None)
+                continue
+            if current is not None and current.decision_cutoff == snapshot.decision_cutoff:
+                if not retry:
+                    continue
+                attempts = current.attempts + 1
+                first_failed_at = current.first_failed_at
+            else:
+                attempts = 0
+                first_failed_at = snapshot.observed_at
+            if attempts >= len(_RECOVERY_DELAYS):
+                self._recoveries.pop(code, None)
+                continue
+            due_at = snapshot.observed_at + _RECOVERY_DELAYS[attempts]
+            if due_at > first_failed_at + _RECOVERY_WINDOW:
+                self._recoveries.pop(code, None)
+                continue
+            self._recoveries[code] = _Recovery(
+                snapshot.decision_cutoff, first_failed_at, attempts, due_at
+            )
+
+    async def retry_recoverable(
+        self, *, observed_no_later_than: datetime
+    ) -> RuntimeMarketIndexBatch | None:
+        """Reacquire only due transient failures without rerunning plan evaluations."""
+        self._expire_recoveries(observed_no_later_than)
+        due = {
+            code: state
+            for code, state in self._recoveries.items()
+            if state.due_at <= observed_no_later_than
+            and self._latest_by_index.get(code) is not None
+            and self._latest_by_index[code].decision_cutoff == state.decision_cutoff
+        }
+        if not due:
+            return None
+        # A new market cutoff supersedes an older recovery. Grouping by cutoff
+        # preserves the coordinator's exact snapshot identity.
+        cutoff = min(state.decision_cutoff for state in due.values())
+        targets = {
+            code: self._latest_by_index[code]
+            for code, state in due.items()
+            if state.decision_cutoff == cutoff
+        }
+        turnover_bucket_count = max(1, completed_market_turnover_bucket_count(cutoff))
+        snapshots = await self._coordinator.get_snapshots(
+            requirements={code: snapshot.fact_requests for code, snapshot in targets.items()},
+            decision_cutoff=cutoff,
+            observed_no_later_than=observed_no_later_than,
+            minimum_bar_counts={
+                code: (turnover_bucket_count, 2)
+                for code in targets
+                if code in MARKET_TURNOVER_INDEX_CODES
+            },
+        )
+        accepted = {
+            code: snapshot
+            for code, snapshot in snapshots.items()
+            if self._latest_by_index.get(code) is targets[code]
+        }
+        self._latest_by_index.update(accepted)
+        self._track_recoveries(accepted, retry=True)
+        return RuntimeMarketIndexBatch(cutoff, MappingProxyType(accepted)) if accepted else None
 
     def latest_snapshots(self) -> Mapping[MarketIndexCode, MarketIndexSnapshot]:
         """Return an immutable plan-neutral view of the latest shared data."""
@@ -138,6 +273,7 @@ class RuntimeMarketIndexService:
         if not accepted:
             return None
         self._latest_by_index.update(accepted)
+        self._track_recoveries(accepted)
         return RuntimeMarketIndexBatch(
             decision_cutoff=decision_cutoff,
             snapshots_by_index=MappingProxyType(accepted),
@@ -200,6 +336,7 @@ class RuntimeMarketIndexService:
             )
             if current_rank is None or snapshot_rank > current_rank:
                 self._latest_by_index[index_code] = snapshot
+        self._track_recoveries(snapshots)
         return RuntimeMarketIndexBatch(
             decision_cutoff=decision_cutoff,
             snapshots_by_index=MappingProxyType(dict(snapshots)),

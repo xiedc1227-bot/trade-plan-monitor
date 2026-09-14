@@ -24,6 +24,7 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const bars = computed(() => props.trend.page?.items ?? []);
+const lastValidBarAt = computed(() => bars.value.at(-1)?.barAt ?? null);
 const highPoints = computed(() => extrema("highPoints", Math.max));
 const lowPoints = computed(() => extrema("lowPoints", Math.min));
 const currentDirection = computed(() => marketIndexValueDirection(
@@ -153,6 +154,20 @@ function extrema(
       :prior-close-points="summary?.priorClosePoints ?? null"
       :session-change-ratio="summary?.sessionChangeRatio ?? null"
     />
+    <p
+      v-if="summary?.health === 'BLOCKED' && summary.issues.includes('PROVIDER_UNAVAILABLE')"
+      class="market-index-trend-card__status"
+      role="status"
+    >
+      指数数据暂不可用。
+      <template v-if="summary?.nextRetryAt !== null && summary?.nextRetryAt !== undefined">
+        系统将于 {{ formatDisplayDateTime(summary.nextRetryAt, "未知") }}
+        执行第 {{ (summary.recoveryAttempts ?? 0) + 1 }}/3 次恢复。
+      </template>
+      <template v-else>等待下一次计划采集。</template>
+      图表仅供参考，数据截至
+      {{ formatDisplayDateTime(lastValidBarAt, "不可用") }}。
+    </p>
     <p
       v-if="trend.status === 'LOADING'"
       class="market-index-trend-card__status"

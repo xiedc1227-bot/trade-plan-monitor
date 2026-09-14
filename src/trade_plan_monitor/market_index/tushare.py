@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -34,12 +35,15 @@ from trade_plan_monitor.market_index.models import (
 )
 from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
 from trade_plan_monitor.runtime.request_control import (
+    RequestControlError,
+    RequestControlErrorCode,
     RequestPriority,
     TushareOperation,
     TushareRequestController,
 )
 
 _PROFILE_ID: Final = "tushare-board-index-live-v1"
+_LOGGER = logging.getLogger(__name__)
 _SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
 _INDEX_MINUTE_ENDPOINT: Final = "idx_mins"
 _INDEX_REALTIME_MINUTE_ENDPOINT: Final = "rt_idx_min_daily"
@@ -182,8 +186,21 @@ def certified_tushare_market_index_profile(
 class TushareMarketIndexProviderError(RuntimeError):
     """Stable index-provider failure without SDK response or credential context."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        stage: str = "CERTIFICATION",
+        reason: RequestControlErrorCode | None = None,
+        next_retry_at: datetime | None = None,
+    ) -> None:
         self.code = MarketIndexIssueCode.PROVIDER_UNAVAILABLE.value
+        self.stage = stage
+        self.reason = reason
+        self.retryable = reason in {
+            RequestControlErrorCode.TRANSIENT,
+            RequestControlErrorCode.TIMEOUT,
+        }
+        self.next_retry_at = next_retry_at
         super().__init__("Tushare market-index provider unavailable")
 
 
@@ -268,23 +285,27 @@ class TushareMarketIndexProvider:
 
         cutoff = decision_cutoff.astimezone(_SHANGHAI)
         work_prefix = f"index:{index_code.value}:{cutoff.strftime('%Y%m%dT%H%M')}"
+        stage = "HISTORICAL_MINUTES"
         try:
             historical_minute_frame, cache_historical_minutes = await self._historical_minutes(
                 index_code=index_code,
                 cutoff=cutoff,
                 work_key=f"{work_prefix}:minutes",
             )
+            stage = "REALTIME_MINUTES"
             realtime_minute_frame = await self._request_controller.execute(
                 TushareOperation.INDEX_MINUTES,
                 lambda: self._fetch_realtime_index_minutes(index_code),
                 work_key=f"{work_prefix}:realtime-minutes",
                 priority=RequestPriority.MARKET_DEADLINE,
             )
+            stage = "OFFICIAL_DAILY"
             daily_frame, cache_intraday_daily = await self._official_daily(
                 index_code=index_code,
                 cutoff=cutoff,
                 work_key=f"{work_prefix}:daily",
             )
+            stage = "PROCESSING"
             if (
                 not isinstance(historical_minute_frame, pd.DataFrame)
                 or not isinstance(realtime_minute_frame, pd.DataFrame)
@@ -337,8 +358,25 @@ class TushareMarketIndexProvider:
                     frame=daily_frame,
                 )
             return batch
+        except RequestControlError as error:
+            _LOGGER.warning(
+                "Market-index acquisition failed: index=%s stage=%s code=%s",
+                index_code.value,
+                stage,
+                error.code.value,
+            )
+            raise TushareMarketIndexProviderError(
+                stage=stage,
+                reason=error.code,
+                next_retry_at=error.next_retry_at,
+            ) from None
         except Exception:
-            raise TushareMarketIndexProviderError from None
+            _LOGGER.warning(
+                "Market-index acquisition failed: index=%s stage=%s code=ERROR",
+                index_code.value,
+                stage,
+            )
+            raise TushareMarketIndexProviderError(stage=stage) from None
 
     async def _historical_minutes(
         self,

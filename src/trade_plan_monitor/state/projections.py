@@ -40,6 +40,7 @@ from trade_plan_monitor.state.models import (
 from trade_plan_monitor.state.models import (
     EvaluationResult as EvaluationResultRow,
 )
+from trade_plan_monitor.state.models import MarketIndexRecoveryState as MarketIndexRecoveryRow
 from trade_plan_monitor.state.models import (
     MarketIndexSnapshot as MarketIndexSnapshotRow,
 )
@@ -555,6 +556,44 @@ class ProjectionRepository:
         )
         self._session.flush()
         return result.rowcount == 1
+
+    def list_market_index_recoveries(
+        self,
+    ) -> tuple[tuple[MarketIndexCode, datetime, datetime, int, datetime], ...]:
+        rows = self._session.scalars(select(MarketIndexRecoveryRow)).all()
+        return tuple(
+            (
+                MarketIndexCode(row.index_code),
+                _market_datetime(row.decision_cutoff, "decision_cutoff"),
+                _market_datetime(row.first_failed_at, "first_failed_at"),
+                row.attempts,
+                _market_datetime(row.due_at, "due_at"),
+            )
+            for row in rows
+        )
+
+    def replace_market_index_recoveries(
+        self,
+        records: tuple[tuple[MarketIndexCode, datetime, datetime, int, datetime], ...],
+    ) -> None:
+        existing = self._session.scalars(select(MarketIndexRecoveryRow)).all()
+        selected = {record[0].value for record in records}
+        for row in existing:
+            if row.index_code not in selected:
+                self._session.delete(row)
+        for code, cutoff, first_failed_at, attempts, due_at in records:
+            if not 0 <= attempts < 3 or due_at <= first_failed_at:
+                raise ValueError("market-index recovery state is invalid")
+            row = self._session.get(MarketIndexRecoveryRow, code.value)
+            if row is None:
+                row = MarketIndexRecoveryRow(index_code=code.value)
+                self._session.add(row)
+            row.decision_cutoff = _market_datetime(cutoff, "decision_cutoff").isoformat()
+            row.first_failed_at = _market_datetime(
+                first_failed_at, "first_failed_at"
+            ).isoformat()
+            row.attempts = attempts
+            row.due_at = _market_datetime(due_at, "due_at").isoformat()
 
     def put_market_index_snapshot(
         self,

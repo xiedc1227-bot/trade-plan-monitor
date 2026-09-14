@@ -36,7 +36,10 @@ from trade_plan_monitor.market_index.tushare import (
 from trade_plan_monitor.runtime.clock import Clock
 from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
 from trade_plan_monitor.runtime.health import SymbolHealthTracker
-from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexService
+from trade_plan_monitor.runtime.market_indexes import (
+    ALWAYS_ON_INDEX_CODES,
+    RuntimeMarketIndexService,
+)
 from trade_plan_monitor.runtime.production_context import ProductionContextBuilder
 from trade_plan_monitor.runtime.recovery import RecoveryBatchResult, RecoveryService
 from trade_plan_monitor.runtime.request_control import (
@@ -455,6 +458,17 @@ class ProductionMonitorPipeline:
         await self._recover_pending_close_batches(trade_date)
         result = await self.recovery.recover_startup(trade_date=trade_date)
         _ensure_recovery_complete(result)
+        with self._work() as work:
+            latest = work.projections.list_latest_market_index_snapshots(
+                mapping_version="board-index-map-v1",
+                index_codes=ALWAYS_ON_INDEX_CODES,
+            )
+            records = work.projections.list_market_index_recoveries()
+        self.index_service.restore_recoveries(
+            snapshots={record.snapshot.index_code: record.snapshot for record in latest},
+            records=records,
+            now=self._clock.now(),
+        )
 
     async def _recover_pending_close_batches(self, startup_date: date) -> None:
         grouped: dict[date, list[TradePlan]] = {}
@@ -516,6 +530,10 @@ class ProductionMonitorPipeline:
             work.commit()
 
     async def run_deadline(self, deadline: MarketDeadline):
+        if deadline.kind is DeadlineKind.INDEX_RECOVERY:
+            return await self.evaluations.recover_transient_market_indexes(
+                evaluated_at=max(self._clock.now(), deadline.due_at)
+            )
         if not self._stock_certification_current():
             raise RuntimeError("stock certification must be refreshed before execution")
         plans = self.active_plans(deadline.trade_date)

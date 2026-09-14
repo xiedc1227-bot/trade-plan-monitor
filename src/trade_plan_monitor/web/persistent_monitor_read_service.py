@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from inspect import isawaitable
 from typing import cast
@@ -26,9 +26,11 @@ from trade_plan_monitor.domain.plan_codec import PlanDocumentError, load_plan_js
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.market_index.identity import (
     MAPPING_VERSION,
+    MarketIndexCode,
     identity_for_index_code,
 )
 from trade_plan_monitor.market_index.models import (
+    MarketIndexHealth,
     MarketIndexIndicatorFact,
     MarketIndexSnapshot,
     ReturnFactRequest,
@@ -146,6 +148,13 @@ class PersistentMonitorReadService:
                 for index_code in DASHBOARD_INDEX_CODES
                 if index_code in stored_by_code
             )
+            recoveries = {
+                code: (cutoff, attempts, due_at)
+                for code, cutoff, first_failed_at, attempts, due_at in (
+                    work.projections.list_market_index_recoveries()
+                )
+                if observed_at <= first_failed_at + timedelta(minutes=5)
+            }
             turnover_summary = build_market_turnover_summary(
                 tuple(
                     stored_by_code[index_code]
@@ -168,6 +177,7 @@ class PersistentMonitorReadService:
                 if display_snapshots:
                     return self._index_only_dashboard(
                         display_snapshots,
+                        recoveries=recoveries,
                         observed_at=observed_at,
                         sequence=sequence,
                         market_turnover=market_turnover,
@@ -182,6 +192,7 @@ class PersistentMonitorReadService:
                 if display_snapshots:
                     return self._index_only_dashboard(
                         display_snapshots,
+                        recoveries=recoveries,
                         observed_at=observed_at,
                         sequence=sequence,
                         market_turnover=market_turnover,
@@ -202,6 +213,7 @@ class PersistentMonitorReadService:
                 if display_snapshots:
                     return self._index_only_dashboard(
                         display_snapshots,
+                        recoveries=recoveries,
                         observed_at=observed_at,
                         sequence=sequence,
                         runtime_identity=runtime_identity,
@@ -216,6 +228,7 @@ class PersistentMonitorReadService:
             market_indexes = _dashboard_market_indexes(
                 projections,
                 display_snapshots=display_snapshots,
+                recoveries=recoveries,
             )
             return DashboardResponse(
                 sequence=sequence,
@@ -234,6 +247,7 @@ class PersistentMonitorReadService:
         self,
         display_snapshots: tuple[MarketIndexSnapshot, ...],
         *,
+        recoveries: Mapping[MarketIndexCode, tuple[datetime, int, datetime]],
         observed_at: datetime,
         sequence: int,
         runtime_identity: tuple[datetime, UUID] | None = None,
@@ -255,6 +269,7 @@ class PersistentMonitorReadService:
             market_indexes=_dashboard_market_indexes(
                 (),
                 display_snapshots=display_snapshots,
+                recoveries=recoveries,
             ),
             market_turnover=market_turnover,
         )
@@ -861,6 +876,7 @@ def _dashboard_market_indexes(
     projections: tuple[_SymbolProjection, ...],
     *,
     display_snapshots: tuple[MarketIndexSnapshot, ...] = (),
+    recoveries: Mapping[MarketIndexCode, tuple[datetime, int, datetime]] | None = None,
 ) -> tuple[MarketIndexSnapshotView, ...]:
     snapshots = {snapshot.index_code.value: snapshot for snapshot in display_snapshots}
     mapped_counts: dict[str, int] = {}
@@ -886,7 +902,11 @@ def _dashboard_market_indexes(
     return tuple(
         sorted(
             (
-                _market_index_view(snapshot, mapped_symbol_count=mapped_counts.get(index_code, 0))
+                _market_index_view(
+                    snapshot,
+                    mapped_symbol_count=mapped_counts.get(index_code, 0),
+                    recovery=(None if recoveries is None else recoveries.get(snapshot.index_code)),
+                )
                 for index_code, snapshot in snapshots.items()
             ),
             key=lambda item: str(item.index_code),
@@ -898,11 +918,19 @@ def _market_index_view(
     snapshot: MarketIndexSnapshot,
     *,
     mapped_symbol_count: int,
+    recovery: tuple[datetime, int, datetime] | None = None,
 ) -> MarketIndexSnapshotView:
     latest = snapshot.latest_completed_five_minute
     close = None if latest is None else latest.close_points
     prior = snapshot.prior_official_close_points
     change = None if close is None or prior is None else (close - prior) / prior
+    pending_recovery = (
+        recovery
+        if recovery is not None
+        and recovery[0] == snapshot.decision_cutoff
+        and snapshot.health is MarketIndexHealth.BLOCKED
+        else None
+    )
     return MarketIndexSnapshotView(
         index_code=snapshot.index_code,
         display_name=snapshot.display_name,
@@ -919,6 +947,8 @@ def _market_index_view(
         mapping_version=snapshot.mapping_version,
         revision=snapshot.revision,
         snapshot_hash=snapshot.snapshot_hash,
+        recovery_attempts=None if pending_recovery is None else pending_recovery[1],
+        next_retry_at=None if pending_recovery is None else pending_recovery[2],
     )
 
 

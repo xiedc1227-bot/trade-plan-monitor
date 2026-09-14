@@ -351,6 +351,13 @@ class MarketIndexSnapshotCoordinator:
         self._lock = asyncio.Lock()
         self._inflight: dict[_PrefetchKey, asyncio.Task[MarketIndexSnapshot]] = {}
         self._snapshots: OrderedDict[_SnapshotKey, MarketIndexSnapshot] = OrderedDict()
+        self._failures: dict[tuple[MarketIndexCode, datetime], bool] = {}
+
+    def failure_for(
+        self, index_code: MarketIndexCode, decision_cutoff: datetime
+    ) -> bool:
+        """Whether the latest failure was explicitly classified as transient."""
+        return self._failures.get((index_code, decision_cutoff), False)
 
     async def get_snapshot(
         self,
@@ -479,7 +486,12 @@ class MarketIndexSnapshotCoordinator:
                 five_minute_bar_count=five_minute_count,
                 official_daily_bar_count=official_daily_count,
             )
-        except Exception:
+        except Exception as error:
+            self._failures[(index_code, decision_cutoff)] = (
+                getattr(error, "retryable", False) is True
+            )
+            if len(self._failures) > 512:
+                self._failures.pop(next(iter(self._failures)))
             observed_no_later_than = await self._post_fetch_observed_at(observed_no_later_than)
             return _blocked_snapshot(
                 index_code=index_code,
@@ -489,6 +501,7 @@ class MarketIndexSnapshotCoordinator:
                 observed_at=observed_no_later_than,
             )
         observed_no_later_than = await self._post_fetch_observed_at(observed_no_later_than)
+        self._failures.pop((index_code, decision_cutoff), None)
         if type(batch) is not MarketIndexProviderBatch or batch.index_code is not index_code:
             return _blocked_snapshot(
                 index_code=index_code,

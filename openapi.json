@@ -7388,6 +7388,18 @@
             "title": "Mappingversion",
             "type": "string"
           },
+          "nextRetryAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextretryat"
+          },
           "observedAt": {
             "format": "date-time",
             "title": "Observedat",
@@ -7404,6 +7416,19 @@
               }
             ],
             "title": "Priorclosepoints"
+          },
+          "recoveryAttempts": {
+            "anyOf": [
+              {
+                "maximum": 2.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recoveryattempts"
           },
           "revision": {
             "maximum": 2147483647.0,

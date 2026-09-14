@@ -8,6 +8,8 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from trade_plan_monitor.domain.plan_models import TradePlan
 from trade_plan_monitor.market_index.identity import MarketIndexCode
@@ -21,11 +23,241 @@ from trade_plan_monitor.market_index.models import (
 from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
 from trade_plan_monitor.market_index.turnover import MARKET_TURNOVER_INDEX_CODES
+from trade_plan_monitor.market_index.tushare import TushareMarketIndexProviderError
 from trade_plan_monitor.runtime.market_indexes import (
     ALWAYS_ON_INDEX_CODES,
     RuntimeMarketIndexService,
 )
+from trade_plan_monitor.runtime.request_control import RequestControlErrorCode
 from trade_plan_monitor.runtime.service import RuntimeEvaluationService
+from trade_plan_monitor.state.database import create_session_factory
+from trade_plan_monitor.state.events import MonitorEventType
+from trade_plan_monitor.state.models import Base, MonitorSequence
+from trade_plan_monitor.state.projections import ProjectionRepository
+from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+from trade_plan_monitor.web.persistent_monitor_read_service import _dashboard_market_indexes
+
+
+def test_transient_index_recovery_targets_one_index_and_stops_after_success() -> None:
+    class OnceFailingProvider(_DashboardProvider):
+        failed = False
+
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            if kwargs["index_code"] is MarketIndexCode.SSE_COMPOSITE and not self.failed:
+                self.failed = True
+                self.calls.append(MarketIndexCode.SSE_COMPOSITE)
+                raise TushareMarketIndexProviderError(
+                    stage="REALTIME_MINUTES", reason=RequestControlErrorCode.TIMEOUT
+                )
+            return await super().acquire_index_data(**kwargs)
+
+    provider = OnceFailingProvider()
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    initial = asyncio.run(
+        service.prepare(plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    assert (
+        initial.snapshots_by_index[MarketIndexCode.SSE_COMPOSITE].health
+        is MarketIndexHealth.BLOCKED
+    )
+    assert service.next_recovery_due_at() == OBSERVED_AT + timedelta(seconds=30)
+    failed_view = _dashboard_market_indexes(
+        (),
+        display_snapshots=(initial.snapshots_by_index[MarketIndexCode.SSE_COMPOSITE],),
+        recoveries={
+            MarketIndexCode.SSE_COMPOSITE: (
+                CUTOFF,
+                0,
+                OBSERVED_AT + timedelta(seconds=30),
+            )
+        },
+    )[0]
+    assert failed_view.recovery_attempts == 0
+    assert failed_view.next_retry_at == OBSERVED_AT + timedelta(seconds=30)
+    assert asyncio.run(service.retry_recoverable(observed_no_later_than=OBSERVED_AT)) is None
+
+    retry = asyncio.run(
+        service.retry_recoverable(observed_no_later_than=OBSERVED_AT + timedelta(seconds=30))
+    )
+    assert retry is not None
+    assert set(retry.snapshots_by_index) == {MarketIndexCode.SSE_COMPOSITE}
+    assert retry.snapshots_by_index[MarketIndexCode.SSE_COMPOSITE].health is MarketIndexHealth.LIVE
+    assert service.next_recovery_due_at() is None
+
+
+def test_processing_failure_is_not_retried() -> None:
+    provider = _Provider(TushareMarketIndexProviderError(stage="PROCESSING"))
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    asyncio.run(
+        service.prepare(plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    assert service.next_recovery_due_at() is None
+
+
+def test_later_failed_fetch_does_not_schedule_recovery_over_a_live_same_cutoff() -> None:
+    class LaterFailingProvider(_DashboardProvider):
+        fail = False
+
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            if self.fail and kwargs["index_code"] is MarketIndexCode.SSE_COMPOSITE:
+                raise TushareMarketIndexProviderError(
+                    stage="REALTIME_MINUTES", reason=RequestControlErrorCode.TIMEOUT
+                )
+            return await super().acquire_index_data(**kwargs)
+
+    provider = LaterFailingProvider()
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    asyncio.run(
+        service.prepare(plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    provider.fail = True
+    asyncio.run(
+        service.prepare(
+            plans=(),
+            decision_cutoff=CUTOFF,
+            observed_no_later_than=OBSERVED_AT + timedelta(seconds=30),
+        )
+    )
+    assert (
+        service.latest_snapshots()[MarketIndexCode.SSE_COMPOSITE].health
+        is MarketIndexHealth.LIVE
+    )
+    assert service.next_recovery_due_at() is None
+
+
+def test_transient_recovery_budget_survives_restart_and_expires() -> None:
+    class FailingProvider(_DashboardProvider):
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            if kwargs["index_code"] is MarketIndexCode.SSE_COMPOSITE:
+                self.calls.append(MarketIndexCode.SSE_COMPOSITE)
+                raise TushareMarketIndexProviderError(
+                    stage="HISTORICAL_MINUTES", reason=RequestControlErrorCode.TRANSIENT
+                )
+            return await super().acquire_index_data(**kwargs)
+
+    provider = FailingProvider()
+    original = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    asyncio.run(
+        original.prepare(plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    first_retry_at = OBSERVED_AT + timedelta(seconds=30)
+    asyncio.run(original.retry_recoverable(observed_no_later_than=first_retry_at))
+    records = original.recovery_records()
+    assert len(records) == 1
+    assert records[0][3] == 1
+
+    expired = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    expired.restore_recoveries(
+        snapshots=original.latest_snapshots(),
+        records=records,
+        now=OBSERVED_AT + timedelta(minutes=6),
+    )
+    assert expired.next_recovery_due_at() is None
+
+    resumed = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    resumed.restore_recoveries(
+        snapshots=original.latest_snapshots(),
+        records=records,
+        now=first_retry_at + timedelta(seconds=1),
+    )
+    assert resumed.next_recovery_due_at() == first_retry_at + timedelta(seconds=60)
+    asyncio.run(
+        resumed.retry_recoverable(
+            observed_no_later_than=first_retry_at + timedelta(seconds=60)
+        )
+    )
+    asyncio.run(
+        resumed.retry_recoverable(
+            observed_no_later_than=first_retry_at + timedelta(seconds=180)
+        )
+    )
+    assert resumed.next_recovery_due_at() is None
+    assert provider.calls.count(MarketIndexCode.SSE_COMPOSITE) == 4
+
+
+def test_recovery_budget_is_saved_and_removed_with_projection_transaction() -> None:
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    record = (
+        MarketIndexCode.SSE_COMPOSITE,
+        CUTOFF,
+        OBSERVED_AT,
+        1,
+        OBSERVED_AT + timedelta(seconds=90),
+    )
+    with Session(engine) as session:
+        ProjectionRepository(session).replace_market_index_recoveries((record,))
+        session.commit()
+    with Session(engine) as session:
+        repository = ProjectionRepository(session)
+        assert repository.list_market_index_recoveries() == (record,)
+        repository.replace_market_index_recoveries(())
+        session.commit()
+    with Session(engine) as session:
+        assert ProjectionRepository(session).list_market_index_recoveries() == ()
+    engine.dispose()
+
+
+def test_failed_recovery_updates_retry_status_without_replacing_blocked_head() -> None:
+    class FailingProvider(_DashboardProvider):
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            if kwargs["index_code"] is MarketIndexCode.SSE_COMPOSITE:
+                raise TushareMarketIndexProviderError(
+                    stage="REALTIME_MINUTES", reason=RequestControlErrorCode.TIMEOUT
+                )
+            return await super().acquire_index_data(**kwargs)
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add(MonitorSequence(singleton_id=1, last_sequence=0))
+        session.commit()
+    index_service = RuntimeMarketIndexService(
+        MarketIndexSnapshotCoordinator(FailingProvider())
+    )
+    session_factory = create_session_factory(engine)
+    service = RuntimeEvaluationService(
+        fetch_minutes=lambda *_args: (),
+        unit_of_work_factory=lambda: SqlAlchemyUnitOfWork(
+            session_factory, clock=lambda: OBSERVED_AT + timedelta(minutes=5)
+        ),
+        context_builder=lambda *_args: None,
+        committed_event_publisher=lambda _event: None,
+        market_index_service=index_service,
+    )
+    initial = asyncio.run(
+        index_service.prepare(plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT)
+    )
+    first, first_events = service._persist_market_index_batch(initial)
+    first_head = first.snapshots_by_index[MarketIndexCode.SSE_COMPOSITE]
+    assert any(
+        event.event_type is MonitorEventType.MARKET_INDEX_UPDATED
+        and event.aggregate_id == MarketIndexCode.SSE_COMPOSITE.value
+        for event in first_events
+    )
+
+    failed_retry = asyncio.run(
+        index_service.retry_recoverable(observed_no_later_than=OBSERVED_AT + timedelta(seconds=30))
+    )
+    assert failed_retry is not None
+    second, retry_events = service._persist_market_index_batch(failed_retry)
+    assert second.snapshots_by_index[MarketIndexCode.SSE_COMPOSITE] == first_head
+    assert len(retry_events) == 1
+    assert retry_events[0].aggregate_id == MarketIndexCode.SSE_COMPOSITE.value
+    assert retry_events[0].event_type is MonitorEventType.MARKET_INDEX_UPDATED
+    with Session(engine) as session:
+        repository = ProjectionRepository(session)
+        assert repository.list_market_index_recoveries()[0][3] == 1
+        assert (
+            repository.get_market_index_head(
+                mapping_version=first_head.mapping_version,
+                index_code=first_head.index_code,
+                decision_cutoff=first_head.decision_cutoff,
+                request_set_hash=first_head.request_set_hash,
+            ).snapshot
+            == first_head
+        )
+    engine.dispose()
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 CUTOFF = datetime(2026, 9, 2, 10, 35, tzinfo=SHANGHAI)

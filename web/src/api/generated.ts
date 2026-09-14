@@ -1143,8 +1143,10 @@ export type MarketIndexSnapshotView = {
   issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
   mappedSymbolCount: number;
   mappingVersion: "board-index-map-v1";
+  nextRetryAt?: (string) | (null);
   observedAt: string;
   priorClosePoints: (string) | (null);
+  recoveryAttempts?: (number) | (null);
   revision: number;
   sessionChangeRatio: (string) | (null);
   snapshotHash: string;

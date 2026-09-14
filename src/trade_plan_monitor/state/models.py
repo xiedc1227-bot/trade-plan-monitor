@@ -830,6 +830,21 @@ class MarketIndexSnapshotHead(Base):
     updated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class MarketIndexRecoveryState(Base):
+    """Bounded transient retry budget persisted across runtime restarts."""
+
+    __tablename__ = "market_index_recovery_state"
+    __table_args__ = (
+        CheckConstraint("attempts BETWEEN 0 AND 2", name="ck_index_recovery_attempts"),
+    )
+
+    index_code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    decision_cutoff: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    first_failed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    attempts: Mapped[int] = mapped_column(Integer)
+    due_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
 class AIProviderConfiguration(Base):
     """Persist only non-secret AI settings and secret lookup references."""
 
@@ -1083,6 +1098,7 @@ __all__ = [
     "LatestQuote",
     "MarketIndexSnapshot",
     "MarketIndexSnapshotHead",
+    "MarketIndexRecoveryState",
     "MinuteBar",
     "MonitorEvent",
     "MonitorSequence",

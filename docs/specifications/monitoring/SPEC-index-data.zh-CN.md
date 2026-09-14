@@ -63,7 +63,9 @@ tests/integration/test_market_index_snapshots.py
 
 完成快照的缓存键为 `(mappingVersion, indexCode, decisionCutoff, requestSetHash, providerContentRevision, minimumFiveMinuteBarCount, minimumOfficialDailyBarCount)`。由于不能在获取前猜测供应商修订号，内部 `(mappingVersion, indexCode, decisionCutoff, requestSetHash, minimumFiveMinuteBarCount, minimumOfficialDailyBarCount, observedNoLaterThan)` 预取键只去重并发获取，并在任务完成时删除。最小数量属于成交额投影使用的已校验采集要求，不会构造虚假的事实请求，也不影响计划 hash。可用的完成快照不可变，并在有界的 512 项缓存中驻留；后续调用会先重新获取，因此不会遮蔽新的供应商修订号。不可用快照不保留。一个指数失败会发布该指数的阻断健康状态，但不会取消或替换其他指数。实时监控可以为没有指数条件的计划提供信息性快照，但其判断不要求该快照；回测也不为该计划强制要求指数历史覆盖。
 
-普通每 cutoff 一次采集批次的唯一例外，是 `SPEC-monitor-index-trends` 允许的下一分钟发布滞后补取：每 cutoff 最多一次，仅重新获取同 cutoff 最新快照只有 `MISSING_FIVE_MINUTE_BAR` 或 `STALE_DATA` 问题的指数。补取保留每个被选快照的事实请求与成交额最小 K 线数量。其部分批次只持久化重新获取的指数；未变化的健康 head 与独立阻断的 head 保持不动。若获取期间新 cutoff 或不同请求集已取代该指数，丢弃旧补取结果。普通 `prepare` 始终通过按 revision 识别的协调器重新获取，包括新计划需求和下一个交易日。
+普通每 cutoff 一次采集批次的一个有界例外，是 `SPEC-monitor-index-trends` 允许的下一分钟发布滞后补取：每 cutoff 最多一次，仅重新获取同 cutoff 最新快照只有 `MISSING_FIVE_MINUTE_BAR` 或 `STALE_DATA` 问题的指数。补取保留每个被选快照的事实请求与成交额最小 K 线数量。其部分批次只持久化重新获取的指数；未变化的健康 head 与独立阻断的 head 保持不动。若获取期间新 cutoff 或不同请求集已取代该指数，丢弃旧补取结果。普通 `prepare` 始终通过按 revision 识别的协调器重新获取，包括新计划需求和下一个交易日。
+
+第二个例外只恢复发生临时 `PROVIDER_UNAVAILABLE` 的指数。指数适配器仅将请求控制器的 `TIMEOUT` 和 `TRANSIENT` 归为可重试；权限、限流、能力认证、处理和未知错误不进入短期重试。同一串行调度器和共享请求控制器最多执行三次额外尝试，分别在前次失败后 30、60、120 秒到期，且不超过首次失败后的五分钟。请求控制器退避和共享冷却仍然生效。恢复状态（`indexCode`、cutoff、首次失败时间、已完成尝试次数、下次到期时间）与快照 head 一同提交；重启后仅在该 head 仍阻断且窗口未过期时恢复。新 cutoff 或成功 head 会取代恢复任务；旧结果或失败结果不能覆盖同 cutoff 已为 `LIVE` 的 head。恢复仅提交指数数据和总览失效事件，不重放已完成的计划评估或通知。总览可展示同一交易日的历史五分钟走势，并明确标出最后有效时间；当前判断事实仍保持阻断。`recoveryAttempts` 和 `nextRetryAt` 表示待执行的短期重试；缺失则使用普通调度。日志只包含指数 identity、固定阶段和封闭错误代码，不包含供应商响应或异常正文。
 
 ## 规范化与哈希规则
 
@@ -101,3 +103,4 @@ tests/integration/test_market_index_snapshots.py
 ## 审核状态
 
 当前用户于 `2026-09-02` 的请求已授权实施和离线验证。真实供应商能力仍明确未验证，不在本次授权范围内。
+用户于 `2026-09-14` 的请求另行授权了有界的指数临时故障恢复及总览状态展示；这不改变供应商能力认证或交易判断规则。

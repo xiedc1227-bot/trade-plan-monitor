@@ -453,6 +453,13 @@ class _ProductionRuntimeState:
         self._stage_retry_at: dict[str, datetime] = {}
         self._dispatcher = dispatcher
 
+    def next_index_recovery_at(self) -> datetime | None:
+        return (
+            None
+            if self._pipeline is None
+            else self._pipeline.index_service.next_recovery_due_at(now=self._clock.now())
+        )
+
     async def validate_configuration(self) -> None:
         await to_thread.run_sync(load_application_config, self._config_path)
 
@@ -738,7 +745,11 @@ def create_monitor_composition(
             publisher=stream.publish_committed,
             dispatcher=dispatcher,
         )
-        scheduler = MarketSessionScheduler(clock=clock, is_open_on=state.is_open_on)
+        scheduler = MarketSessionScheduler(
+            clock=clock,
+            is_open_on=state.is_open_on,
+            next_index_recovery_at=state.next_index_recovery_at,
+        )
         lifecycle = RuntimeLifecycleService(
             clock=clock,
             validate_configuration=state.validate_configuration,

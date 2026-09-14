@@ -20,7 +20,11 @@ from trade_plan_monitor.market_index.tushare import (
     certified_tushare_market_index_profile,
     unverified_tushare_market_index_profile,
 )
-from trade_plan_monitor.runtime.request_control import TushareOperation
+from trade_plan_monitor.runtime.request_control import (
+    RequestControlError,
+    RequestControlErrorCode,
+    TushareOperation,
+)
 
 
 def test_unverified_index_profile_is_separate_and_fails_before_any_sdk_call() -> None:
@@ -75,6 +79,48 @@ class _Controller:
         self.calls.append((operation, work_key))
         assert callable(call)
         return call()
+
+
+@pytest.mark.parametrize(
+    ("reason", "retryable"),
+    [
+        (RequestControlErrorCode.TIMEOUT, True),
+        (RequestControlErrorCode.TRANSIENT, True),
+        (RequestControlErrorCode.BLOCKED_PERMISSION, False),
+        (RequestControlErrorCode.RATE_LIMITED, False),
+    ],
+)
+def test_index_adapter_classifies_transient_fetch_separately_from_processing(
+    reason: RequestControlErrorCode, retryable: bool
+) -> None:
+    class FailingController(_Controller):
+        async def execute(self, operation, call, *, work_key, priority):
+            del call, work_key, priority
+            raise RequestControlError(
+                reason, operation, attempts=1
+            )
+
+    provider = TushareMarketIndexProvider(
+        client=_Client(),
+        profile=_ready_profile(),
+        request_controller=FailingController(),
+        now=lambda: datetime(2026, 9, 7, 10, 0, 2, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    with pytest.raises(TushareMarketIndexProviderError) as caught:
+        asyncio.run(
+            provider.acquire_index_data(
+                index_code=MarketIndexCode.SHENZHEN_COMPONENT,
+                decision_cutoff=datetime(
+                    2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")
+                ),
+                five_minute_bar_count=1,
+                official_daily_bar_count=2,
+            )
+        )
+    assert caught.value.retryable is retryable
+    assert caught.value.stage == "HISTORICAL_MINUTES"
+    assert caught.value.reason is reason
+    assert caught.value.__cause__ is None
 
 
 class _SingleLaneController:

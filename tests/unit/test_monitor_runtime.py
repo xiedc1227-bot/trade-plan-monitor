@@ -11,6 +11,7 @@ from typing import Final
 from zoneinfo import ZoneInfo
 
 import pytest
+import requests
 
 from trade_plan_monitor.market_data.models import MinuteBar
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
@@ -148,6 +149,26 @@ def _scheduler(
         official_close_attempts=official_close_attempts,
     )
     return clock, market_calendar, scheduler
+
+
+def test_index_recovery_deadline_precedes_official_close_without_extra_scheduler() -> None:
+    clock = _FakeClock(_shanghai(15, 20, 16))
+    due_at = _shanghai(15, 20, 46)
+    pending: list[datetime] = [due_at]
+    scheduler = MarketSessionScheduler(
+        clock=clock,
+        is_open_on=_Calendar({OPEN_MONDAY: True}),
+        next_index_recovery_at=lambda: pending[0] if pending else None,
+    )
+
+    deadline = scheduler.next_deadline()
+    assert deadline is not None
+    assert deadline.kind is DeadlineKind.INDEX_RECOVERY
+    assert deadline.due_at == due_at
+    pending.clear()
+    following = scheduler.next_deadline(after=due_at)
+    assert following is not None
+    assert following.kind is DeadlineKind.OFFICIAL_CLOSE
 
 
 def test_monitor_clock_protocol_accepts_injected_fake_clock() -> None:
@@ -2295,3 +2316,35 @@ def test_recovery_symbol_result_requires_a_complete_gap_partition() -> None:
             recovered_ends=(first,),
             remaining_gaps=(),
         )
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (requests.Timeout("temporary"), RequestControlErrorCode.TIMEOUT),
+        (requests.ConnectionError("temporary"), RequestControlErrorCode.TRANSIENT),
+    ],
+)
+def test_live_request_controller_classifies_transport_failures_for_index_recovery(
+    failure: Exception, expected: RequestControlErrorCode
+) -> None:
+    async def scenario() -> RequestControlError:
+        controller = create_live_tushare_request_controller(clock=_FakeClock(_shanghai(9, 0)))
+
+        def fail() -> None:
+            raise failure
+
+        try:
+            with pytest.raises(RequestControlError) as caught:
+                await controller.execute(
+                    TushareOperation.INDEX_MINUTES,
+                    fail,
+                    work_key="index:test:transport",
+                )
+            return caught.value
+        finally:
+            controller.close()
+
+    result = asyncio.run(scenario())
+    assert result.code is expected
+    assert result.attempts == 1

@@ -15,6 +15,8 @@ from enum import IntEnum, StrEnum
 from itertools import count
 from typing import Final, TypeVar
 
+import requests
+
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.clock import Clock, _canonical_shanghai
 
@@ -571,6 +573,10 @@ class TushareRequestController:
                 )
             except TimeoutError:
                 failure_code = RequestControlErrorCode.TIMEOUT
+            except requests.Timeout:
+                failure_code = RequestControlErrorCode.TIMEOUT
+            except requests.ConnectionError:
+                failure_code = RequestControlErrorCode.TRANSIENT
             except TushareProviderError as caught:
                 failure_code = _TUSHARE_ERROR_CODES[caught.code]
             except Exception:

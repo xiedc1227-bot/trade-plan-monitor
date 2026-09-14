@@ -225,6 +225,30 @@ describe("market index monitor views", () => {
     expect(wrapper.text()).not.toContain("查看当日点位数据");
   });
 
+  it("labels historical chart data while a blocked index awaits recovery", () => {
+    const wrapper = mount(MarketIndexTrendCard, {
+      props: {
+        connectionStatus: "CONNECTED",
+        identity: { board: "CHINEXT", displayName: "创业板指", indexCode: "399006.SZ" },
+        summary: {
+          ...blockedSnapshot,
+          recoveryAttempts: 0,
+          nextRetryAt: "2026-09-02T10:35:32+08:00",
+        },
+        trend: {
+          error: null,
+          page: { hasMore: false, items: [...bars], limit: 64, nextCursor: null, snapshotHash: hash },
+          status: "READY",
+        },
+      },
+    });
+
+    expect(wrapper.text()).toContain("第 1/3 次恢复");
+    expect(wrapper.text()).toContain("图表仅供参考");
+    expect(wrapper.text()).toContain("数据截至");
+    expect(wrapper.find('[data-testid="market-index-sparkline"]').exists()).toBe(true);
+  });
+
   it("restarts a one-shot live pulse only when a new healthy snapshot arrives", async () => {
     const wrapper = mount(MarketIndexTrendCard, {
       props: {

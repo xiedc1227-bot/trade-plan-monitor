@@ -61,7 +61,11 @@ from trade_plan_monitor.market_data.reconciliation import (
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.market_index.canonical import validate_market_index_snapshot_integrity
 from trade_plan_monitor.market_index.identity import MarketIndexCode
-from trade_plan_monitor.market_index.models import MarketIndexBar, MarketIndexSnapshot
+from trade_plan_monitor.market_index.models import (
+    MarketIndexBar,
+    MarketIndexHealth,
+    MarketIndexSnapshot,
+)
 from trade_plan_monitor.market_index.requirements import iter_plan_index_conditions
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
@@ -634,6 +638,21 @@ class RuntimeEvaluationService:
             observed_no_later_than=_ceil_to_whole_second(evaluated_at),
         )
         if prepared is None:
+            return None
+        prepared, events = self._persist_market_index_batch(prepared)
+        await self._publish_committed_events(events)
+        return prepared
+
+    async def recover_transient_market_indexes(
+        self, *, evaluated_at: datetime
+    ) -> RuntimeMarketIndexBatch | None:
+        """Publish a due, index-only recovery without replaying plan decisions."""
+        if self._market_index_service is None:
+            return None
+        prepared = await self._market_index_service.retry_recoverable(
+            observed_no_later_than=_ceil_to_whole_second(evaluated_at)
+        )
+        if prepared is None or not prepared.snapshots_by_index:
             return None
         prepared, events = self._persist_market_index_batch(prepared)
         await self._publish_committed_events(events)
@@ -1985,6 +2004,10 @@ class RuntimeEvaluationService:
         canonical: dict[MarketIndexCode, MarketIndexSnapshot] = {}
         events: list[MonitorEvent] = []
         with self._unit_of_work_factory() as unit_of_work:
+            previous_recoveries = {
+                record[0]: record
+                for record in unit_of_work.projections.list_market_index_recoveries()
+            }
             for index_code, snapshot in sorted(
                 prepared.snapshots_by_index.items(),
                 key=lambda item: item[0].value,
@@ -2004,6 +2027,18 @@ class RuntimeEvaluationService:
                     decision_cutoff=snapshot.decision_cutoff,
                     request_set_hash=snapshot.request_set_hash,
                 )
+                if (
+                    current_head is not None
+                    and current_head.snapshot.health is MarketIndexHealth.LIVE
+                    and snapshot.health is not MarketIndexHealth.LIVE
+                ) or (
+                    current_head is not None
+                    and current_head.snapshot.health is MarketIndexHealth.BLOCKED
+                    and snapshot.health is MarketIndexHealth.BLOCKED
+                    and current_head.snapshot.issues == snapshot.issues
+                ):
+                    canonical[index_code] = current_head.snapshot
+                    continue
                 if stored is not None:
                     if not _equivalent_market_index_capture(stored.snapshot, snapshot):
                         raise ProjectionIdentityConflictError(
@@ -2049,6 +2084,41 @@ class RuntimeEvaluationService:
                                     status=canonical_snapshot.health.value,
                                 ),
                                 occurred_at=snapshot.observed_at,
+                            )
+                        )
+                    )
+            if self._market_index_service is not None:
+                recovery_records = self._market_index_service.recovery_records()
+                current_recoveries = {record[0]: record for record in recovery_records}
+                unit_of_work.projections.replace_market_index_recoveries(recovery_records)
+                already_notified = {event.aggregate_id for event in events}
+                for code, canonical_snapshot in canonical.items():
+                    if (
+                        code.value in already_notified
+                        or previous_recoveries.get(code) == current_recoveries.get(code)
+                    ):
+                        continue
+                    observed_at = prepared.snapshots_by_index[code].observed_at
+                    state = current_recoveries.get(code)
+                    events.append(
+                        unit_of_work.events.append(
+                            MonitorEventDraft(
+                                event_id=monitor_event_id(
+                                    MonitorEventType.MARKET_INDEX_UPDATED,
+                                    code.value,
+                                    canonical_snapshot.decision_cutoff.isoformat(),
+                                    "recovery-state",
+                                    observed_at.isoformat(),
+                                    "done" if state is None else str(state[3]),
+                                ),
+                                event_type=MonitorEventType.MARKET_INDEX_UPDATED,
+                                aggregate_id=code.value,
+                                payload=MonitorEventPayload(
+                                    entity_id=code.value,
+                                    revision=canonical_snapshot.revision,
+                                    status=canonical_snapshot.health.value,
+                                ),
+                                occurred_at=observed_at,
                             )
                         )
                     )
@@ -2794,6 +2864,8 @@ class RuntimeLifecycleService:
                 self._advance_progress_deadline(deadline)
                 try:
                     await self._execute_deadline(deadline)
+                    following = self._scheduler.next_deadline(after=self._last_deadline_at)
+                    self._next_poll_at = None if following is None else following.due_at
                 except asyncio.CancelledError:
                     if not self._accepting_work:
                         break
