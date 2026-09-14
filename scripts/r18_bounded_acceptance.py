@@ -1,4 +1,4 @@
-"""R18 one-shot candidate for 2026-09-15. Default invocation makes no network calls."""
+"""R18 opening-session candidate. Default invocation makes no network calls."""
 
 from __future__ import annotations
 
@@ -9,25 +9,33 @@ from datetime import date, datetime, time
 
 from scripts import r14_bounded_acceptance as bounded
 
-PROPOSAL_ID = "R18-20260915-AFTERNOON-60"
-AUTHORIZATION = "R18_20260915_3_AI_60_MARKET_IN_APP_15MIN"
+PROPOSAL_ID = "R18-20260915-OPEN-105"
+AUTHORIZATION = "R18_20260915_3_AI_105_MARKET_IN_APP_38MIN"
 RUN_ID = "r18-20260915-a"
 MARKET_CAPS = {
     **bounded._MARKET_CAPS,
     "rt_min_daily": 2,
-    "rt_idx_min_daily": 30,
+    "rt_min": 40,
+    "rt_idx_min_daily": 50,
 }
+MARKET_TOTAL = 105
+WALL_SECONDS = 2280
 
 
 def _eligible(now: datetime) -> bool:
-    return now.date() == date(2026, 9, 15) and time(14, 30) <= now.time() <= time(14, 40)
+    return now.date() == date(2026, 9, 15) and time(9, 30) <= now.time() <= time(9, 31)
 
 
 def _preflight() -> dict[str, object]:
     from trade_plan_monitor.config import load_application_config
     from trade_plan_monitor.live_profiles import load_index_certification
 
-    result = bounded._preflight(start_window_eligible=_eligible, market_caps=MARKET_CAPS)
+    result = bounded._preflight(
+        start_window_eligible=_eligible,
+        market_caps=MARKET_CAPS,
+        market_total=MARKET_TOTAL,
+        wall_seconds=WALL_SECONDS,
+    )
     index_ready = False
     try:
         configuration = load_application_config(bounded._ROOT / "config/app.yaml")
@@ -73,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
                 RUN_ID,
                 session_root=bounded._ROOT / "data/r18-acceptance",
                 market_caps=MARKET_CAPS,
+                market_total=MARKET_TOTAL,
+                wall_seconds=WALL_SECONDS,
                 proposal_id=PROPOSAL_ID,
             )
         )

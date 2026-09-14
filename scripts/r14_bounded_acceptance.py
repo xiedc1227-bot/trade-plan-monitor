@@ -155,7 +155,11 @@ def _claim_session(root: Path, run_id: str) -> Path:
 
 
 def _session_budgets(
-    on_denied: Callable[[], None], *, market_caps: Mapping[str, int] = _MARKET_CAPS
+    on_denied: Callable[[], None],
+    *,
+    market_caps: Mapping[str, int] = _MARKET_CAPS,
+    market_total: int = 60,
+    wall_seconds: int = 900,
 ) -> tuple[Budget, Budget]:
     """Use one shared server-stop signal for either physical-call boundary."""
 
@@ -165,15 +169,15 @@ def _session_budgets(
         Budget(
             total=3,
             per_key={key: 1 for key in approved_sources()},
-            seconds=900,
+            seconds=wall_seconds,
             on_denied=on_denied,
             gate_lock=gate_lock,
             stopped=stopped,
         ),
         Budget(
-            total=60,
+            total=market_total,
             per_key=market_caps,
-            seconds=900,
+            seconds=wall_seconds,
             on_denied=on_denied,
             gate_lock=gate_lock,
             stopped=stopped,
@@ -258,6 +262,8 @@ def _preflight(
     *,
     start_window_eligible: Callable[[datetime], bool] = _start_window_eligible,
     market_caps: Mapping[str, int] = _MARKET_CAPS,
+    market_total: int = 60,
+    wall_seconds: int = 900,
 ) -> dict[str, object]:
     from trade_plan_monitor.config import load_application_config
     from trade_plan_monitor.live_profiles import load_stock_certification
@@ -330,9 +336,9 @@ def _preflight(
             "aiPerInputAttempts": 1,
             "aiPromptUtf8Bytes": 19_000,
             "aiOutputTokensPerRequest": 4_096,
-            "marketPhysicalAttempts": 60,
+            "marketPhysicalAttempts": market_total,
             "marketPerEndpointAttempts": dict(market_caps),
-            "wallSeconds": 900,
+            "wallSeconds": wall_seconds,
             "browserPort": 18765,
         },
         "mode": "DRY_RUN_NO_NETWORK",
@@ -481,6 +487,8 @@ async def _serve(
     *,
     session_root: Path | None = None,
     market_caps: Mapping[str, int] = _MARKET_CAPS,
+    market_total: int = 60,
+    wall_seconds: int = 900,
     proposal_id: str = "R14",
 ) -> int:
     import uvicorn
@@ -520,7 +528,12 @@ async def _serve(
         if server is not None:
             server.should_exit = True
 
-    ai_budget, market_budget = _session_budgets(stop_server, market_caps=market_caps)
+    ai_budget, market_budget = _session_budgets(
+        stop_server,
+        market_caps=market_caps,
+        market_total=market_total,
+        wall_seconds=wall_seconds,
+    )
     market_guard = MarketBudget(market_budget)
     original_factory = production.create_tushare_client
 
@@ -576,7 +589,7 @@ async def _serve(
             task = asyncio.create_task(server.serve(sockets=[listener]))
             recovery_task = asyncio.create_task(recover_after_activation())
             try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=900)
+                await asyncio.wait_for(asyncio.shield(task), timeout=wall_seconds)
             except TimeoutError:
                 audit["status"] = "WALL_LIMIT_REACHED"
                 server.should_exit = True
