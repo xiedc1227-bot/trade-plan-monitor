@@ -69,6 +69,16 @@ describe("production extraction diagnostic contract", () => {
     },
   );
 
+  it("accepts an omitted diagnostic status but rejects an unknown extraction status", async () => {
+    const { diagnosticStatus: _omitted, ...compatible } = extraction("INVALID_OUTPUT", null);
+    const api = createAIPlanApi(vi.fn(async () => json(compatible)) as typeof fetch);
+    await expect(api.getExtraction(operationId)).resolves.toEqual(compatible);
+    const invalid = createAIPlanApi(vi.fn(async () => json({
+      ...compatible, status: "READY_TO_ACTIVATE",
+    })) as typeof fetch);
+    await expect(invalid.getExtraction(operationId)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
   it("still rejects unrelated response fields", async () => {
     const api = createAIPlanApi(vi.fn(async () => json({
       ...extraction("INVALID_OUTPUT", "RECORDED"), rawProviderResponse: "private",
