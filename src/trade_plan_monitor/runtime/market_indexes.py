@@ -189,9 +189,8 @@ class RuntimeMarketIndexService:
             decision_cutoff=cutoff,
             observed_no_later_than=observed_no_later_than,
             minimum_bar_counts={
-                code: (turnover_bucket_count, 2)
+                code: (turnover_bucket_count if code in MARKET_TURNOVER_INDEX_CODES else 1, 2)
                 for code in targets
-                if code in MARKET_TURNOVER_INDEX_CODES
             },
         )
         accepted = {
@@ -260,9 +259,10 @@ class RuntimeMarketIndexService:
             decision_cutoff=decision_cutoff,
             observed_no_later_than=observed_no_later_than,
             minimum_bar_counts={
-                index_code: (turnover_bucket_count, 2)
+                index_code: (
+                    turnover_bucket_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1, 2
+                )
                 for index_code in targets
-                if index_code in MARKET_TURNOVER_INDEX_CODES
             },
         )
         accepted = {
@@ -310,8 +310,10 @@ class RuntimeMarketIndexService:
             decision_cutoff=decision_cutoff,
             observed_no_later_than=observed_no_later_than,
             minimum_bar_counts={
-                index_code: (turnover_bucket_count, 2)
-                for index_code in MARKET_TURNOVER_INDEX_CODES
+                index_code: (
+                    turnover_bucket_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1, 2
+                )
+                for index_code in requirements
             },
         )
         for index_code, snapshot in snapshots.items():

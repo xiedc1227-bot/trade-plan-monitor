@@ -526,9 +526,11 @@ def test_market_index_persistence_reuses_an_older_canonical_content_revision(
         engine.dispose()
 
 
+@pytest.mark.parametrize("close_attempt", [None, 2, 3])
 def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    close_attempt: int | None,
 ) -> None:
     import trade_plan_monitor.runtime.production as production
 
@@ -567,12 +569,44 @@ def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
             publisher=published.append,
         )
         try:
+            after_sequence = 0
+            if close_attempt is not None:
+                clock.current = INDEX_CUTOFF.replace(hour=15, minute=20, second=12)
+                original_minutes = sdk._index_minutes
+
+                def unavailable_minutes(kwargs: dict[str, object]) -> pd.DataFrame:
+                    if kwargs["ts_code"] == MarketIndexCode.SSE_COMPOSITE.value:
+                        raise RuntimeError("index response unavailable")
+                    return original_minutes(kwargs)
+
+                with monkeypatch.context() as patch:
+                    patch.setattr(sdk, "_index_minutes", unavailable_minutes)
+                    await pipeline.run_deadline(
+                        MarketDeadline(
+                            kind=DeadlineKind.OFFICIAL_CLOSE,
+                            trade_date=INDEX_CUTOFF.date(),
+                            due_at=clock.now(),
+                            close_attempt=1,
+                        )
+                    )
+                assert (
+                    pipeline.index_service.latest_snapshots()[MarketIndexCode.SSE_COMPOSITE].health
+                    is MarketIndexHealth.BLOCKED
+                )
+                after_sequence = published[-1].sequence
+                published.clear()
+                clock.current = clock.current.replace(hour=14 + close_attempt, minute=0)
             result = await pipeline.run_deadline(
                 MarketDeadline(
-                    kind=DeadlineKind.REALTIME_MINUTE,
+                    kind=(
+                        DeadlineKind.REALTIME_MINUTE
+                        if close_attempt is None
+                        else DeadlineKind.OFFICIAL_CLOSE
+                    ),
                     trade_date=INDEX_CUTOFF.date(),
                     due_at=clock.now(),
-                    bar_end=INDEX_CUTOFF,
+                    bar_end=INDEX_CUTOFF if close_attempt is None else None,
+                    close_attempt=close_attempt,
                 )
             )
 
@@ -585,7 +619,14 @@ def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
                     mapping_version="board-index-map-v1",
                     index_codes=DASHBOARD_INDEX_CODES,
                 )
-                events = work.events.replay_page_after(0).events
+                events = work.events.replay_page_after(after_sequence).events
+            if close_attempt is not None:
+                recovered = next(
+                    item.snapshot for item in snapshots
+                    if item.snapshot.index_code is MarketIndexCode.SSE_COMPOSITE
+                )
+                assert recovered.health is MarketIndexHealth.LIVE
+                assert recovered.completed_bucket_at == INDEX_CUTOFF.replace(hour=15, minute=0)
             assert tuple(
                 snapshot.snapshot.index_code for snapshot in snapshots
             ) == DASHBOARD_INDEX_CODES
@@ -1049,6 +1090,7 @@ def test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity(
                 )
             )
             assert results == ()
+            clock.current = NOW.replace(hour=17, minute=0)
             official_results = await pipeline.run_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.OFFICIAL_CLOSE,

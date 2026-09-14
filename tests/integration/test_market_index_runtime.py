@@ -21,7 +21,10 @@ from trade_plan_monitor.market_index.models import (
     MarketIndexSourceKind,
 )
 from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
-from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
+from trade_plan_monitor.market_index.snapshots import (
+    MarketIndexSnapshotCoordinator,
+    build_market_index_snapshot,
+)
 from trade_plan_monitor.market_index.turnover import MARKET_TURNOVER_INDEX_CODES
 from trade_plan_monitor.market_index.tushare import TushareMarketIndexProviderError
 from trade_plan_monitor.runtime.market_indexes import (
@@ -36,6 +39,38 @@ from trade_plan_monitor.state.models import Base, MonitorSequence
 from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.persistent_monitor_read_service import _dashboard_market_indexes
+
+
+@pytest.mark.parametrize("include_prior", [True, False])
+def test_close_dashboard_uses_previous_session_instead_of_today_daily_close(
+    include_prior: bool,
+) -> None:
+    cutoff = CUTOFF.replace(hour=15, minute=0)
+    observed = cutoff + timedelta(minutes=20)
+    today = _bar(interval=MarketIndexInterval.OFFICIAL_DAILY, bar_at=cutoff, close="110")
+    prior = _bar(
+        interval=MarketIndexInterval.OFFICIAL_DAILY,
+        bar_at=cutoff - timedelta(days=1), close="100",
+    )
+    latest = today.model_copy(update={
+        "interval": MarketIndexInterval.FIVE_MINUTE,
+        "source_kind": MarketIndexSourceKind.PROVISIONAL,
+        "observed_at": observed,
+    })
+    daily = (prior, today) if include_prior else (today,)
+    snapshot = build_market_index_snapshot(
+        index_code=MarketIndexCode.SHENZHEN_COMPONENT, decision_cutoff=cutoff,
+        requests=(), five_minute_bars=(latest,), official_daily_bars=daily,
+        content_revision=3, observed_at=observed, observed_no_later_than=observed,
+        minimum_official_daily_bar_count=len(daily),
+    )
+    view = _dashboard_market_indexes((), display_snapshots=(snapshot,))[0]
+    if include_prior:
+        assert view.prior_close_points == Decimal("100")
+        assert view.session_change_ratio == Decimal("0.1")
+    else:
+        assert view.health is MarketIndexHealth.BLOCKED
+        assert view.session_change_ratio is None
 
 
 def test_transient_index_recovery_targets_one_index_and_stops_after_success() -> None:
@@ -495,7 +530,7 @@ def test_ten_plans_union_requirements_and_share_one_snapshot_instance() -> None:
             if index_code is MarketIndexCode.SHENZHEN_COMPONENT
             else (13, 2)
             if index_code in MARKET_TURNOVER_INDEX_CODES
-            else (1, 1)
+            else (1, 2)
         )
         for index_code in ALWAYS_ON_INDEX_CODES
     }
@@ -524,7 +559,7 @@ def test_dashboard_indexes_are_acquired_without_active_plans() -> None:
     assert all(
         decision_cutoff == CUTOFF
         and (five_minute_count, official_daily_count)
-        == ((13, 2) if _index_code in MARKET_TURNOVER_INDEX_CODES else (1, 1))
+        == ((13, 2) if _index_code in MARKET_TURNOVER_INDEX_CODES else (1, 2))
         for (
             _index_code,
             decision_cutoff,
@@ -940,7 +975,7 @@ def test_v2_no_condition_plan_gets_informational_failure_without_a_requirement()
     )
     snapshot = prepared.snapshot_for_plan(plan)
 
-    assert provider.calls == [(1, 1)]
+    assert provider.calls == [(1, 2)]
     assert {request[0] for request in provider.requests} == set(ALWAYS_ON_INDEX_CODES)
     assert all(request[1] == CUTOFF for request in provider.requests)
     assert snapshot is not None

@@ -636,7 +636,7 @@ class ProductionMonitorPipeline:
                 evaluated_at=observed_at,
             )
             return
-        if deadline.close_attempt == 1:
+        if deadline.kind is DeadlineKind.OFFICIAL_CLOSE:
             await self.evaluations.run_official_close_batch(
                 plans=(),
                 trade_date=deadline.trade_date,

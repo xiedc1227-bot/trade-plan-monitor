@@ -32,6 +32,7 @@ from trade_plan_monitor.market_index.identity import (
 from trade_plan_monitor.market_index.models import (
     MarketIndexHealth,
     MarketIndexIndicatorFact,
+    MarketIndexIssueCode,
     MarketIndexSnapshot,
     ReturnFactRequest,
     SmaFactRequest,
@@ -922,7 +923,21 @@ def _market_index_view(
 ) -> MarketIndexSnapshotView:
     latest = snapshot.latest_completed_five_minute
     close = None if latest is None else latest.close_points
-    prior = snapshot.prior_official_close_points
+    prior = next(
+        (
+            bar.close_points for bar in reversed(snapshot.official_daily_bars)
+            if bar.bar_at.date() < snapshot.decision_cutoff.date()
+        ),
+        None,
+    )
+    health = snapshot.health
+    issues = snapshot.issues
+    completed_at = snapshot.completed_bucket_at
+    if close is not None and prior is None:
+        close = None
+        completed_at = None
+        health = MarketIndexHealth.BLOCKED
+        issues = tuple(dict.fromkeys((*issues, MarketIndexIssueCode.MISSING_OFFICIAL_DAILY_BAR)))
     change = None if close is None or prior is None else (close - prior) / prior
     pending_recovery = (
         recovery
@@ -938,10 +953,10 @@ def _market_index_view(
         close_points=close,
         prior_close_points=prior,
         session_change_ratio=change,
-        completed_bucket_at=snapshot.completed_bucket_at,
+        completed_bucket_at=completed_at,
         observed_at=snapshot.observed_at,
-        health=snapshot.health,
-        issues=snapshot.issues,
+        health=health,
+        issues=issues,
         indicator_facts=tuple(_indicator_fact_view(item) for item in snapshot.indicator_facts),
         mapped_symbol_count=mapped_symbol_count,
         mapping_version=snapshot.mapping_version,
