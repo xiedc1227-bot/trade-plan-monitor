@@ -1,0 +1,77 @@
+{
+  "status": "DEGRADED",
+  "readOnly": true,
+  "observedAt": "2026-09-14T14:41:55.433445+08:00",
+  "startedAt": "2026-09-14T14:37:10.706979+08:00",
+  "stoppedAt": null,
+  "lastCompletedMinute": null,
+  "lastCompletedMinuteAgeSeconds": null,
+  "latestEvaluationAt": null,
+  "latestEvaluationAgeSeconds": null,
+  "gaps": [],
+  "nextRetryAt": null,
+  "cooldownUntil": null,
+  "providers": [
+    {
+      "capability": "current_day_minutes",
+      "status": "READY",
+      "checkedAt": "2026-09-14T14:37:10.786660+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    },
+    {
+      "capability": "daily_bars",
+      "status": "READY",
+      "checkedAt": "2026-09-14T14:37:10.786660+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    },
+    {
+      "capability": "daily_limits",
+      "status": "READY",
+      "checkedAt": "2026-09-14T14:37:10.786660+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    },
+    {
+      "capability": "realtime_minutes",
+      "status": "READY",
+      "checkedAt": "2026-09-14T14:37:10.786660+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    },
+    {
+      "capability": "trading_calendar",
+      "status": "ERROR",
+      "checkedAt": "2026-09-14T14:37:10.786660+08:00",
+      "latencyMs": 0,
+      "errorCode": "REFERENCE_REFRESH_FAILED",
+      "nextRetryAt": null
+    }
+  ],
+  "executor": {
+    "maxWorkers": 1,
+    "activeCount": 0,
+    "waitingCount": 0
+  },
+  "database": {
+    "status": "READY",
+    "walStatus": "READY",
+    "lastCheckpointAt": null,
+    "lastBackupAt": null,
+    "errorCode": null
+  },
+  "delivery": {
+    "status": "READY",
+    "pendingCount": 0,
+    "failedCount": 0,
+    "lastDeliveredAt": null,
+    "nextRetryAt": null,
+    "errorCode": null
+  },
+  "nextPollAt": null
+}

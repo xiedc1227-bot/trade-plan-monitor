@@ -1,0 +1,86 @@
+[
+  {
+    "id": "5d9864ac-bd54-4935-9d84-6c79ee23e099",
+    "providerId": "6feb75dd-a829-5d16-beda-f52b3ae3ec45",
+    "status": "PROVIDER_ERROR",
+    "submittedAt": "2026-09-14T14:38:12.596764+08:00",
+    "startedAt": "2026-09-14T14:38:12.597590+08:00",
+    "completedAt": "2026-09-14T14:38:42.610018+08:00",
+    "sourceTextSha256": null,
+    "model": null,
+    "promptVersion": null,
+    "draftPlanJson": null,
+    "mapping": null,
+    "evidence": [],
+    "assumptions": [],
+    "warnings": [],
+    "unmappedText": [],
+    "validationIssues": [
+      {
+        "code": "AI_PROVIDER_ERROR",
+        "path": "provider",
+        "severity": "ERROR",
+        "message": "AI provider extraction failed.",
+        "activationBlocking": true
+      }
+    ],
+    "usage": null,
+    "diagnosticStatus": "RECORDED"
+  },
+  {
+    "id": "0d39693f-78e1-420a-9295-421d3044eb03",
+    "providerId": "6feb75dd-a829-5d16-beda-f52b3ae3ec45",
+    "status": "INVALID_OUTPUT",
+    "submittedAt": "2026-09-14T14:40:08.470841+08:00",
+    "startedAt": "2026-09-14T14:40:08.471179+08:00",
+    "completedAt": "2026-09-14T14:40:14.299822+08:00",
+    "sourceTextSha256": null,
+    "model": null,
+    "promptVersion": null,
+    "draftPlanJson": null,
+    "mapping": null,
+    "evidence": [],
+    "assumptions": [],
+    "warnings": [],
+    "unmappedText": [],
+    "validationIssues": [
+      {
+        "code": "AI_FIELD_EVIDENCE_INVALID",
+        "path": "mapping",
+        "severity": "ERROR",
+        "message": "AI mapping did not match the submitted source and current draft.",
+        "activationBlocking": true
+      }
+    ],
+    "usage": null,
+    "diagnosticStatus": "RECORDED"
+  },
+  {
+    "id": "d00f5f13-e7ed-46d7-b0ff-12171824ebdf",
+    "providerId": "6feb75dd-a829-5d16-beda-f52b3ae3ec45",
+    "status": "INVALID_OUTPUT",
+    "submittedAt": "2026-09-14T14:40:31.673907+08:00",
+    "startedAt": "2026-09-14T14:40:31.674067+08:00",
+    "completedAt": "2026-09-14T14:40:39.797327+08:00",
+    "sourceTextSha256": null,
+    "model": null,
+    "promptVersion": null,
+    "draftPlanJson": null,
+    "mapping": null,
+    "evidence": [],
+    "assumptions": [],
+    "warnings": [],
+    "unmappedText": [],
+    "validationIssues": [
+      {
+        "code": "AI_FIELD_EVIDENCE_INVALID",
+        "path": "mapping",
+        "severity": "ERROR",
+        "message": "AI mapping did not match the submitted source and current draft.",
+        "activationBlocking": true
+      }
+    ],
+    "usage": null,
+    "diagnosticStatus": "RECORDED"
+  }
+]

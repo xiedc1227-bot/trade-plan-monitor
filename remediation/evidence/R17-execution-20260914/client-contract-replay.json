@@ -1,0 +1,41 @@
+{
+  "mode": "OFFLINE_REAL_RESPONSE_REPLAY_NO_NETWORK",
+  "results": [
+    {
+      "operationId": "5d9864ac-bd54-4935-9d84-6c79ee23e099",
+      "actualResponse": {
+        "accepted": false,
+        "code": "INVALID_RESPONSE",
+        "httpStatus": 200
+      },
+      "offlineCounterfactualWithoutDiagnosticStatus": {
+        "accepted": true,
+        "status": "PROVIDER_ERROR"
+      }
+    },
+    {
+      "operationId": "0d39693f-78e1-420a-9295-421d3044eb03",
+      "actualResponse": {
+        "accepted": false,
+        "code": "INVALID_RESPONSE",
+        "httpStatus": 200
+      },
+      "offlineCounterfactualWithoutDiagnosticStatus": {
+        "accepted": true,
+        "status": "INVALID_OUTPUT"
+      }
+    },
+    {
+      "operationId": "d00f5f13-e7ed-46d7-b0ff-12171824ebdf",
+      "actualResponse": {
+        "accepted": false,
+        "code": "INVALID_RESPONSE",
+        "httpStatus": 200
+      },
+      "offlineCounterfactualWithoutDiagnosticStatus": {
+        "accepted": true,
+        "status": "INVALID_OUTPUT"
+      }
+    }
+  ]
+}

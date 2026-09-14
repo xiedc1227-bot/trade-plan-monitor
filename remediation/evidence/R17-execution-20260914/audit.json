@@ -1,0 +1,47 @@
+{
+  "proposalId": "R17-20260914-AFTERNOON-60",
+  "runId": "r17-20260914-a",
+  "startedAt": "2026-09-14T14:37:10.665445+08:00",
+  "database": "monitor.sqlite3",
+  "channel": "IN_APP_ONLY",
+  "aiModel": "deepseek-v4-pro",
+  "status": "WALL_LIMIT_REACHED",
+  "activationRecovery": "NOT_RUN_NO_ACTIVE_PLAN",
+  "isolatedPlanCleanup": "INACTIVE",
+  "finishedAt": "2026-09-14T14:52:10.867411+08:00",
+  "ai": {
+    "totalCap": 3,
+    "perKeyCaps": {
+      "LITERAL": 1,
+      "SEM-AMB-01": 1,
+      "SEM-UNS-01": 1
+    },
+    "totalAttempts": 3,
+    "attempts": {
+      "LITERAL": 1,
+      "SEM-AMB-01": 1,
+      "SEM-UNS-01": 1
+    },
+    "deniedBeforeNetwork": 0,
+    "stopped": false
+  },
+  "market": {
+    "totalCap": 60,
+    "perKeyCaps": {
+      "trade_cal": 3,
+      "stk_limit": 0,
+      "daily": 0,
+      "rt_min_daily": 2,
+      "rt_min": 15,
+      "idx_mins": 5,
+      "rt_idx_min_daily": 30,
+      "index_daily": 5
+    },
+    "totalAttempts": 1,
+    "attempts": {
+      "trade_cal": 1
+    },
+    "deniedBeforeNetwork": 0,
+    "stopped": false
+  }
+}

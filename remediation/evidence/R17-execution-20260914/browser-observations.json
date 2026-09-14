@@ -1,0 +1,13 @@
+{
+  "mode": "REAL_CHROME_UI_OBSERVATIONS",
+  "runId": "r17-20260914-a",
+  "origin": "http://127.0.0.1:18765",
+  "observations": [
+    {"page":"/plans","scope":"each of three separately approved submissions","result":"Accepted operation status could not be shown; generic status-query error; no review draft shown","duplicateSourceSubmissions":0},
+    {"page":"/","result":"Service connected but real-time monitoring not ready; EMPTY_DATABASE; no index snapshot; no active explicit plan"},
+    {"page":"/system","displayedObservedAt":"2026-09-14 14:41:00","result":"DEGRADED read-only; trading_calendar ERROR REFERENCE_REFRESH_FAILED; no completed minute, evaluation, next poll or retry"},
+    {"page":"/alerts","filters":"default all","totalRows":0,"result":"No alert history or new real-time alert updates"}
+  ],
+  "actionsNotTaken":["save plan","confirm plan review","activate plan","acknowledge alert","register inventory or fill","retry a source","restart session"],
+  "note":"Structured notes transcribed from actual accessibility trees/screenshots; not simulated UI results. Precise capture times are only stated where the page itself supplied them."
+}
