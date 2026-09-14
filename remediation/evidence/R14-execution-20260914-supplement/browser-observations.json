@@ -1,0 +1,59 @@
+{
+  "evidenceKind": "REAL_BROWSER_OBSERVATIONS_NOT_SIMULATED",
+  "recordedAt": "2026-09-14T10:33:38.549295+08:00",
+  "runId": "r14-20260914-a",
+  "browser": "Chrome, isolated http://127.0.0.1:18765",
+  "baselineCommit": "70e2a92d5375207d33da69bf727d50342a63e866",
+  "cases": [
+    {
+      "caseId": "LITERAL",
+      "sourceSha256": "0b8b389b9b083adff268186c2d6ac8a2589b4ad02e0b4d3b5b8ca37ce1452191",
+      "submittedThrough": "/plans source text form",
+      "visibleFinalStatus": "INVALID_OUTPUT",
+      "visibleExplanation": "AI output failed the closed contract and was not saved as executable rules.",
+      "retryClicked": false
+    },
+    {
+      "caseId": "SEM-AMB-01",
+      "sourceSha256": "26760155a5c87044b514ab2cff3a162dcef45d739dc863961ee629573e9e991e",
+      "submittedThrough": "/plans source text form",
+      "visibleFinalStatus": "INVALID_OUTPUT",
+      "visibleExplanation": "AI output failed the closed contract and was not saved as executable rules.",
+      "retryClicked": false
+    },
+    {
+      "caseId": "SEM-UNS-01",
+      "sourceSha256": "23401380e6f188abe6da02c2e77db8e4f67bb8e7133efa191329cf505baa11b0",
+      "submittedThrough": "/plans source text form",
+      "visibleFinalStatus": "INVALID_OUTPUT",
+      "visibleExplanation": "AI output failed the closed contract and was not saved as executable rules.",
+      "retryClicked": false
+    }
+  ],
+  "systemObservation": {
+    "observedAt": "2026-09-14T10:29:06+08:00",
+    "startupShown": "2026-09-14T10:22:09+08:00",
+    "statusShown": "RUNNING / MONITORABLE",
+    "lastStockMinuteShown": null,
+    "lastDecisionShown": null,
+    "note": "Capability readiness alone does not prove current stock data or plan execution."
+  },
+  "dashboardObservation": {
+    "stockPlanStatus": "NO_ACTIVE_EXPLICIT_PLAN",
+    "indexCode": "000001.SH",
+    "lastCutoffShown": "2026-09-14T10:25:00+08:00",
+    "closeShown": "3892.72",
+    "source": "Live isolated browser AX snapshot; screenshot of third AI failure is retained in conversation tool output."
+  },
+  "alertsObservation": {
+    "page": "/alerts",
+    "filters": "default all",
+    "countShown": 0,
+    "realtimeUpdatesShown": false
+  },
+  "limits": [
+    "No raw model response, finish_reason or validation-path detail was captured by this harness; the exact failure cause remains unverified.",
+    "All three UI states were observed separately in the CUA execution log; these rows are an observer record, not exported provider responses.",
+    "No successful plan review, activation, stock-condition evaluation, delivery or acknowledgement was performed."
+  ]
+}

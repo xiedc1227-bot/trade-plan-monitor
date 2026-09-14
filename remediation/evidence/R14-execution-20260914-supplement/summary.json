@@ -1,0 +1,183 @@
+{
+  "kind": "REAL_R14_SUPPLEMENT",
+  "baselineCommit": "70e2a92d5375207d33da69bf727d50342a63e866",
+  "executionStatus": "PARTIAL_EXECUTION",
+  "coreAcceptance": "FAILED_LITERAL_EXTRACTION",
+  "processExitCode": 1,
+  "elapsedSeconds": 848.425396,
+  "tableCounts": {
+    "active_plan": 0,
+    "plan_version": 0,
+    "plan_extraction_review": 0,
+    "minute_bar": 0,
+    "five_minute_bar": 0,
+    "explicit_evaluation_ledger": 0,
+    "alert_event": 0,
+    "delivery_attempt": 0,
+    "position_inventory_state": 0,
+    "position_inventory_confirmation": 0,
+    "position_opening_balance": 0,
+    "position_lot": 0
+  },
+  "calendar": [
+    {
+      "exchange": "SSE",
+      "cal_date": "2026-09-14",
+      "is_open": 1
+    }
+  ],
+  "indexHeads": [
+    {
+      "index_code": "000001.SH",
+      "decision_cutoff": "2026-09-14T10:25:00.000000+08:00",
+      "observed_at": "2026-09-14T10:26:12.934307+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:25:00.000000+08:00",
+      "snapshot_hash": "e02e6e09ea66ec27e17cd97015ed2f222625fc37b9cf60e3b0b0b4c68fd0b15c"
+    },
+    {
+      "index_code": "000688.SH",
+      "decision_cutoff": "2026-09-14T10:25:00.000000+08:00",
+      "observed_at": "2026-09-14T10:26:13.584451+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:25:00.000000+08:00",
+      "snapshot_hash": "7bc0ab26e3dcb623fa57260baf9b6d8c2898e918bc59d7ee44013a249aeec423"
+    },
+    {
+      "index_code": "399001.SZ",
+      "decision_cutoff": "2026-09-14T10:25:00.000000+08:00",
+      "observed_at": "2026-09-14T10:26:15.679920+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:25:00.000000+08:00",
+      "snapshot_hash": "e3da30f974144f86062f57d881764553578177f264e23e51ef12865085233caa"
+    },
+    {
+      "index_code": "399006.SZ",
+      "decision_cutoff": "2026-09-14T10:25:00.000000+08:00",
+      "observed_at": "2026-09-14T10:26:16.109008+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:25:00.000000+08:00",
+      "snapshot_hash": "63fd91a2d25e992e7fb2854d467c3f5b7e07b56d0471db1aebbc05a0f7fe208b"
+    },
+    {
+      "index_code": "399107.SZ",
+      "decision_cutoff": "2026-09-14T10:25:00.000000+08:00",
+      "observed_at": "2026-09-14T10:25:41.214131+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:25:00.000000+08:00",
+      "snapshot_hash": "7d33ffa1af9aecb6f2b656371c686ef91072d01512eaa9af3cd377dc5fb874e3"
+    },
+    {
+      "index_code": "000001.SH",
+      "decision_cutoff": "2026-09-14T10:30:00.000000+08:00",
+      "observed_at": "2026-09-14T10:31:12.503633+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:30:00.000000+08:00",
+      "snapshot_hash": "49955bf536913b0ed182527fd23b537c6827ff32b47891a5d202d7bf06917de3"
+    },
+    {
+      "index_code": "000688.SH",
+      "decision_cutoff": "2026-09-14T10:30:00.000000+08:00",
+      "observed_at": "2026-09-14T10:31:29.000000+08:00",
+      "health": "BLOCKED",
+      "issues": [
+        "PROVIDER_UNAVAILABLE"
+      ],
+      "completed_bucket_at": null,
+      "snapshot_hash": "4ebcc0390c908ff8e326a7e8595d9459b61a5d9b8ff2690f427ac7e6e9fafdb1"
+    },
+    {
+      "index_code": "399001.SZ",
+      "decision_cutoff": "2026-09-14T10:30:00.000000+08:00",
+      "observed_at": "2026-09-14T10:31:30.175716+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:30:00.000000+08:00",
+      "snapshot_hash": "d6f36bf92cb05cf8113a13057d280ba84187fa412dc0a0816dc70a305feb3b3b"
+    },
+    {
+      "index_code": "399006.SZ",
+      "decision_cutoff": "2026-09-14T10:30:00.000000+08:00",
+      "observed_at": "2026-09-14T10:31:30.740924+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:30:00.000000+08:00",
+      "snapshot_hash": "d73c1c86f213f87cf2a2947e4dd80d97b80a73020c761a97d4182d0ddf36a8fa"
+    },
+    {
+      "index_code": "399107.SZ",
+      "decision_cutoff": "2026-09-14T10:30:00.000000+08:00",
+      "observed_at": "2026-09-14T10:31:31.982317+08:00",
+      "health": "LIVE",
+      "issues": [],
+      "completed_bucket_at": "2026-09-14T10:30:00.000000+08:00",
+      "snapshot_hash": "d3f8e49641429fa52820597081fb5dac193464cd5b4022f2f3ca68d22282e7b3"
+    },
+    {
+      "index_code": "000001.SH",
+      "decision_cutoff": "2026-09-14T10:35:00.000000+08:00",
+      "observed_at": "2026-09-14T10:36:13.000000+08:00",
+      "health": "BLOCKED",
+      "issues": [
+        "PROVIDER_UNAVAILABLE"
+      ],
+      "completed_bucket_at": null,
+      "snapshot_hash": "15f88dfc4cc6f53eb93a8f73c9bc61f9d4b6b0abd4ad988733611ade778315ea"
+    },
+    {
+      "index_code": "000688.SH",
+      "decision_cutoff": "2026-09-14T10:35:00.000000+08:00",
+      "observed_at": "2026-09-14T10:36:14.000000+08:00",
+      "health": "BLOCKED",
+      "issues": [
+        "PROVIDER_UNAVAILABLE"
+      ],
+      "completed_bucket_at": null,
+      "snapshot_hash": "d002438ef028d2a3f3782159366fb519b8059b4435987d6814a169a58dc00555"
+    },
+    {
+      "index_code": "399001.SZ",
+      "decision_cutoff": "2026-09-14T10:35:00.000000+08:00",
+      "observed_at": "2026-09-14T10:36:15.000000+08:00",
+      "health": "BLOCKED",
+      "issues": [
+        "PROVIDER_UNAVAILABLE"
+      ],
+      "completed_bucket_at": null,
+      "snapshot_hash": "b65d25fa2f7a68c65b93bde28cfc7cafb8713fe4a7baac55fcc47dd75d232fba"
+    },
+    {
+      "index_code": "399006.SZ",
+      "decision_cutoff": "2026-09-14T10:35:00.000000+08:00",
+      "observed_at": "2026-09-14T10:36:16.000000+08:00",
+      "health": "BLOCKED",
+      "issues": [
+        "PROVIDER_UNAVAILABLE"
+      ],
+      "completed_bucket_at": null,
+      "snapshot_hash": "d8ae114b8d349f33e36d4d6e2fd2aa1cd3719d8bc9fa984d4c52807cca2c9963"
+    },
+    {
+      "index_code": "399107.SZ",
+      "decision_cutoff": "2026-09-14T10:35:00.000000+08:00",
+      "observed_at": "2026-09-14T10:36:18.000000+08:00",
+      "health": "BLOCKED",
+      "issues": [
+        "PROVIDER_UNAVAILABLE"
+      ],
+      "completed_bucket_at": null,
+      "snapshot_hash": "be770792fa5fe142d127dcf677a447cc44d26856d92fa05962ff5ba82033a1c3"
+    }
+  ],
+  "listener18765AfterExit": false,
+  "protectedFileCount": 16,
+  "protectedMismatches": [],
+  "aiFailureRootCause": "UNVERIFIED_NO_RAW_RESPONSE_OR_VALIDATION_DETAIL_CAPTURED",
+  "stockEvaluationAndNotificationAcceptance": "NOT_RUN_BLOCKED_BY_EXTRACTION"
+}
