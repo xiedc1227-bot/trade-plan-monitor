@@ -175,12 +175,14 @@ def create_production_app(
         plan_lifecycle_factory = create_persistent_plan_lifecycle
         plan_snapshot_reader = persistent_plan_lifecycle
     if ai_service is None and ai_lifecycle_factory is None:
+        from trade_plan_monitor.web.ai_diagnostics import diagnostic_path_for_database
         from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
 
         def create_configured_ai_lifecycle() -> ConfiguredAIWebLifecycle:
             return ConfiguredAIWebLifecycle(
                 config_path=config_path,
                 review_store=persistent_plan_lifecycle,
+                diagnostic_path=diagnostic_path_for_database(database_path),
             )
 
         ai_lifecycle_factory = create_configured_ai_lifecycle

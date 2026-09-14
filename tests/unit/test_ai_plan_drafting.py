@@ -1105,6 +1105,18 @@ def test_single_character_field_evidence_is_rejected_as_degenerate() -> None:
     assert result.validation_issues[0].code == "AI_FIELD_EVIDENCE_INVALID"
 
 
+def test_simulated_field_evidence_failure_has_no_provider_excerpt_in_diagnostic() -> None:
+    output = _valid_model_output()
+    output["evidence"][0]["excerpt"] = "SECRET-provider-evidence"
+    result, _ = _run_extraction(json.dumps(output, ensure_ascii=False))
+
+    assert result.status is PlanExtractionStatus.INVALID_OUTPUT
+    assert result.diagnostic is not None
+    assert result.diagnostic.stage == "evidence"
+    assert result.diagnostic.reason == "FIELD_EVIDENCE"
+    assert "SECRET-provider-evidence" not in result.model_dump_json()
+
+
 def test_null_metadata_fields_do_not_require_fabricated_evidence() -> None:
     output = _valid_model_output()
     output["draft"]["metadata"] = {

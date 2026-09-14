@@ -202,6 +202,16 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                         break
                 assert result.json()["status"] == "SUCCEEDED", result.text
 
+            # SIMULATED HTTP responses exercise the same bounded-launcher diagnostic path.
+            diagnostic_path = database.with_suffix(".ai-extraction-diagnostics.jsonl")
+            diagnostics = [
+                json.loads(line) for line in diagnostic_path.read_text("utf-8").splitlines()
+            ]
+            assert len(diagnostics) == 3
+            assert all(item["status"] == "SUCCEEDED" for item in diagnostics)
+            assert all(item["model"] == "deepseek-v4-pro" for item in diagnostics)
+            assert all(item["modelMatchesConfigured"] is True for item in diagnostics)
+
             runtime = app.state.runtime_lifecycle
             assert runtime._runtime._request_controller._in_cycle_retries == 0
             assert [

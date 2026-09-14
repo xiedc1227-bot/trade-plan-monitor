@@ -29,6 +29,10 @@ from trade_plan_monitor.ai.review import dump_explicit_plan_draft_json
 from trade_plan_monitor.ai.secrets import InMemorySecretStore
 from trade_plan_monitor.config import AIConfiguration, load_application_config
 from trade_plan_monitor.domain.plan_codec import dump_plan_json
+from trade_plan_monitor.web.ai_diagnostics import (
+    append_extraction_diagnostic,
+    ensure_diagnostic_sink,
+)
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.routers.ai import (
     AIProviderConfiguration,
@@ -75,12 +79,15 @@ class ConfiguredAIWebLifecycle:
         config_path: Path,
         client_factory: AIClientFactory | None = None,
         review_store: PlanExtractionReviewStore | None = None,
+        diagnostic_path: Path | None = None,
     ) -> None:
         if not isinstance(config_path, Path):
             raise TypeError("config_path must be a Path")
         self._config_path = config_path
         self._client_factory = client_factory or _default_client
         self._review_store = review_store
+        self._diagnostic_path = diagnostic_path
+        self._diagnostic_sink_available: bool | None = None
         self._client: httpx.AsyncClient | None = None
         self._settings: AIConfiguration | None = None
         self._secret_store: InMemorySecretStore | None = None
@@ -106,6 +113,13 @@ class ConfiguredAIWebLifecycle:
         if self._client is not None:
             raise RuntimeError("configured AI Web lifecycle is already started")
         settings = load_application_config(self._config_path).ai
+        if self._diagnostic_path is not None:
+            try:
+                await asyncio.to_thread(ensure_diagnostic_sink, self._diagnostic_path)
+            except OSError:
+                self._diagnostic_sink_available = False
+            else:
+                self._diagnostic_sink_available = True
         client = self._client_factory()
         if not isinstance(client, httpx.AsyncClient):
             raise TypeError("client_factory must return an httpx.AsyncClient")
@@ -124,6 +138,7 @@ class ConfiguredAIWebLifecycle:
         return {
             "configured": self._binding is not None,
             "providerCount": len(self._bindings),
+            "diagnosticAvailable": self._diagnostic_sink_available,
         }
 
     async def stop(self) -> None:
@@ -142,6 +157,7 @@ class ConfiguredAIWebLifecycle:
         self._binding = None
         self._bindings = {}
         self._configured_at = None
+        self._diagnostic_sink_available = None
         if client is not None:
             await client.aclose()
 
@@ -285,17 +301,35 @@ class ConfiguredAIWebLifecycle:
                     config=binding.config,
                     provider=binding.provider,
                 )
-                completed_view = _completed_extraction_view(
-                    result=result,
-                    submitted_at=queued.submitted_at,
-                    started_at=started_at,
-                    completed_at=_now(),
-                )
+                completed_at = _now()
                 if result.status is PlanExtractionStatus.SUCCEEDED:
                     review_store = self._review_store
                     if review_store is None:
                         raise RuntimeError("plan extraction review store is unavailable")
                     await review_store.record_plan_extraction(result)
+                diagnostic_status = None
+                if self._diagnostic_path is not None:
+                    try:
+                        await asyncio.to_thread(
+                            append_extraction_diagnostic,
+                            self._diagnostic_path,
+                            result=result,
+                            configured_model=binding.config.model,
+                            completed_at=completed_at,
+                        )
+                    except OSError, ValueError:
+                        self._diagnostic_sink_available = False
+                        diagnostic_status = "WRITE_FAILED"
+                    else:
+                        self._diagnostic_sink_available = True
+                        diagnostic_status = "RECORDED"
+                completed_view = _completed_extraction_view(
+                    result=result,
+                    submitted_at=queued.submitted_at,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    diagnostic_status=diagnostic_status,
+                )
                 self._operations[operation_id] = completed_view
         except asyncio.CancelledError:
             current = self._operations[operation_id]
@@ -405,6 +439,7 @@ def _completed_extraction_view(
     submitted_at: datetime,
     started_at: datetime,
     completed_at: datetime,
+    diagnostic_status: str | None = None,
 ) -> PlanExtractionView:
     status = PlanExtractionOperationStatus(result.status.value)
     if result.status is not PlanExtractionStatus.SUCCEEDED:
@@ -416,6 +451,7 @@ def _completed_extraction_view(
             started_at=started_at,
             completed_at=completed_at,
             validation_issues=result.validation_issues,
+            diagnostic_status=diagnostic_status,
         )
     usage = None
     if result.usage is not None:
@@ -439,15 +475,14 @@ def _completed_extraction_view(
             if isinstance(result.draft, ExplicitPlanDraft)
             else dump_plan_json(result.draft)
         ),
-        mapping=(
-            None if result.mapping is None else PlanMappingView.from_domain(result.mapping)
-        ),
+        mapping=(None if result.mapping is None else PlanMappingView.from_domain(result.mapping)),
         evidence=result.evidence,
         assumptions=result.assumptions,
         warnings=result.warnings,
         unmapped_text=result.unmapped_text,
         validation_issues=result.validation_issues,
         usage=usage,
+        diagnostic_status=diagnostic_status,
     )
 
 

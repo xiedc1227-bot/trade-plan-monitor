@@ -253,6 +253,41 @@ def test_isolated_ai_lifecycle_selects_pro_and_removes_retries(tmp_path: Path) -
     assert budget.snapshot()["totalAttempts"] == 0
 
 
+def test_simulated_r14_launcher_refuses_unwritable_diagnostics_before_ai(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "app.yaml"
+    config.write_text(
+        "ai:\n"
+        "  profile: DEEPSEEK\n"
+        "  model: deepseek-flash\n"
+        "  additional_models:\n"
+        "    - display_name: DeepSeek Pro\n"
+        "      model: deepseek-v4-pro\n"
+        "  api_key: test-only-key\n",
+        encoding="utf-8",
+    )
+    budget = Budget(total=3, per_key={key: 1 for key in approved_sources()}, seconds=60)
+
+    def fail_sink(_path: Path) -> None:
+        raise OSError("SIMULATED diagnostic disk denial")
+
+    monkeypatch.setattr("trade_plan_monitor.web.ai_service.ensure_diagnostic_sink", fail_sink)
+    lifecycle = _bounded_ai_factory(
+        config, None, budget, database=tmp_path / "isolated/monitor.sqlite3"
+    )
+
+    async def exercise() -> None:
+        try:
+            with pytest.raises(BudgetDenied):
+                await lifecycle.start()
+        finally:
+            await lifecycle.stop()
+
+    asyncio.run(exercise())
+    assert budget.snapshot()["totalAttempts"] == 0
+
+
 def test_isolated_app_constructs_without_database_or_network(tmp_path: Path) -> None:
     from trade_plan_monitor.web.app import create_app, installed_web_assets
     from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory

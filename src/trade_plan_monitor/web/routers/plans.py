@@ -534,6 +534,7 @@ class PlanExtractionView(ApiValue):
     unmapped_text: tuple[UnmappedText, ...] = Field(default=(), max_length=256)
     validation_issues: tuple[ValidationIssue, ...] = Field(default=(), max_length=512)
     usage: AIUsageView | None = None
+    diagnostic_status: Literal["RECORDED", "WRITE_FAILED"] | None = None
 
     @model_validator(mode="after")
     def validate_status_payload(self) -> Self:

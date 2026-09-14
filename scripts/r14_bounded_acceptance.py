@@ -338,13 +338,17 @@ def _bounded_ai_factory(
     plan_lifecycle: object,
     budget: Budget,
     *,
+    database: Path | None = None,
     inner_transport: httpx.AsyncBaseTransport | None = None,
 ):
+    from trade_plan_monitor.web.ai_diagnostics import diagnostic_path_for_database
     from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
 
     class BoundedAIWebLifecycle(ConfiguredAIWebLifecycle):
         async def start(self) -> dict[str, object]:
             outcome = await super().start()
+            if self._diagnostic_sink_available is False:
+                raise BudgetDenied
             selected = self._bindings.get(
                 next(
                     (
@@ -376,6 +380,7 @@ def _bounded_ai_factory(
             trust_env=False,
         ),
         review_store=plan_lifecycle,
+        diagnostic_path=(diagnostic_path_for_database(database) if database is not None else None),
     )
 
 
@@ -409,7 +414,11 @@ def _create_guarded_app(
         ),
         plan_lifecycle_factory=lambda: plan_lifecycle,
         ai_lifecycle_factory=lambda: _bounded_ai_factory(
-            config_path, plan_lifecycle, ai_budget, inner_transport=ai_inner_transport
+            config_path,
+            plan_lifecycle,
+            ai_budget,
+            database=database,
+            inner_transport=ai_inner_transport,
         ),
         bind_host="127.0.0.1",
         bind_port=18765,

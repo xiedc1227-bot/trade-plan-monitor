@@ -5,10 +5,14 @@ import json
 from hashlib import sha256
 from uuid import UUID
 
+import pytest
+from pydantic import ValidationError
+
 from trade_plan_monitor.ai.extraction import extract_plan
 from trade_plan_monitor.ai.models import (
     AIProviderConfig,
     AIProviderType,
+    ExtractionDiagnostic,
     PlanExtractionStatus,
     SecretReference,
 )
@@ -154,6 +158,45 @@ def _extract(payload: object, *, finish_reason: str = "stop"):
             ),
         )
     )
+
+
+def test_simulated_schema_diagnostic_keeps_known_nested_path_and_redacts_unknown_key() -> None:
+    nested = _valid_output()
+    nested["draft"]["rules"][0]["action"]["quantity"] = "SECRET-model-value"
+    nested_result = _extract(nested)
+    assert nested_result.status is PlanExtractionStatus.INVALID_OUTPUT
+    assert nested_result.diagnostic is not None
+    assert nested_result.diagnostic.reason == "SCHEMA"
+    assert nested_result.diagnostic.schema_error_type == "int_type"
+    assert nested_result.diagnostic.path == "draft.rules[0].action.variant.quantity"
+    assert "SECRET-model-value" not in nested_result.model_dump_json()
+
+    unknown = _valid_output()
+    unknown["SECRET-unknown-key"] = "SECRET-model-value"
+    unknown_result = _extract(unknown)
+    assert unknown_result.diagnostic is not None
+    assert unknown_result.diagnostic.schema_error_type == "extra_forbidden"
+    assert unknown_result.diagnostic.path == "unknown"
+    assert "SECRET" not in unknown_result.model_dump_json()
+
+
+def test_simulated_nonfinite_json_has_closed_diagnostic_reason() -> None:
+    payload = _valid_output()
+    payload["draft"]["rules"][0]["action"]["quantity"] = float("nan")
+    result = _extract(payload)
+    assert result.status is PlanExtractionStatus.INVALID_OUTPUT
+    assert result.diagnostic is not None
+    assert result.diagnostic.reason == "JSON_NON_FINITE"
+    assert result.diagnostic.stage == "json"
+
+
+def test_diagnostic_model_rejects_untrusted_path_segments() -> None:
+    with pytest.raises(ValidationError):
+        ExtractionDiagnostic(
+            stage="schema",
+            reason="SCHEMA",
+            path="draft.rules[0].SECRET-private-input",
+        )
 
 
 def test_v4_has_a_separate_schema_and_preserves_all_old_prompt_bytes() -> None:

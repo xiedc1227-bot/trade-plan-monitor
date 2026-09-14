@@ -16,8 +16,10 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from trade_plan_monitor.ai.models import (
+    DIAGNOSTIC_SCHEMA_FIELDS,
     AIProviderConfig,
     AIUsageSnapshot,
+    ExtractionDiagnostic,
     PlanExtractionOutput,
     PlanExtractionOutputV4,
     PlanExtractionResult,
@@ -48,7 +50,11 @@ MIN_FIELD_EVIDENCE_CHARS: Final = 4
 
 
 class _UntrustedOutputError(ValueError):
-    """Internal sentinel whose detail must never cross the extraction boundary."""
+    """Internal closed category; never carry untrusted content across the boundary."""
+
+    def __init__(self, category: str) -> None:
+        self.category = category
+        super().__init__(category)
 
 
 async def extract_plan(
@@ -87,11 +93,13 @@ async def extract_plan(
             issue_code="AI_INPUT_TOO_LARGE",
             issue_path="source_text",
             issue_message="The source text and extraction schema exceed the input limit.",
+            stage="request",
+            reason="INPUT_LIMIT",
         )
 
     try:
         raw = await provider.extract_plan(request)
-    except AIProviderError:
+    except AIProviderError as error:
         return _failure_result(
             request_id=request_id,
             config=config,
@@ -100,6 +108,10 @@ async def extract_plan(
             issue_code="AI_PROVIDER_ERROR",
             issue_path="provider",
             issue_message="AI provider extraction failed.",
+            stage="provider",
+            reason="PROVIDER_ERROR",
+            provider_error_code=error.code.value,
+            attempts=error.attempts,
         )
 
     if (
@@ -116,11 +128,17 @@ async def extract_plan(
             issue_path="draft",
             issue_message="AI output did not satisfy the extraction contract.",
             raw=raw,
+            stage="response",
+            reason=(
+                "ENVELOPE_MISMATCH"
+                if raw.request_id != request_id or raw.provider_id != config.provider_id
+                else "FINISH_REASON"
+            ),
         )
 
     try:
         output = _parse_untrusted_output(raw.content, prompt_version=config.prompt_version)
-    except UnicodeError, ValueError, RecursionError, ValidationError:
+    except _UntrustedOutputError as error:
         return _failure_result(
             request_id=request_id,
             config=config,
@@ -130,6 +148,75 @@ async def extract_plan(
             issue_path="draft",
             issue_message="AI output did not satisfy the extraction contract.",
             raw=raw,
+            stage="json",
+            reason=error.category,
+        )
+    except json.JSONDecodeError:
+        return _failure_result(
+            request_id=request_id,
+            config=config,
+            source_text_sha256=source_text_sha256,
+            status=PlanExtractionStatus.INVALID_OUTPUT,
+            issue_code="AI_OUTPUT_INVALID",
+            issue_path="draft",
+            issue_message="AI output did not satisfy the extraction contract.",
+            raw=raw,
+            stage="json",
+            reason="JSON_SYNTAX",
+        )
+    except ValidationError as error:
+        return _failure_result(
+            request_id=request_id,
+            config=config,
+            source_text_sha256=source_text_sha256,
+            status=PlanExtractionStatus.INVALID_OUTPUT,
+            issue_code="AI_OUTPUT_INVALID",
+            issue_path="draft",
+            issue_message="AI output did not satisfy the extraction contract.",
+            raw=raw,
+            stage="schema",
+            reason="SCHEMA",
+            diagnostic_path=_safe_schema_path(error),
+            schema_error_type=_safe_schema_error_type(error),
+        )
+    except UnicodeError:
+        return _failure_result(
+            request_id=request_id,
+            config=config,
+            source_text_sha256=source_text_sha256,
+            status=PlanExtractionStatus.INVALID_OUTPUT,
+            issue_code="AI_OUTPUT_INVALID",
+            issue_path="draft",
+            issue_message="AI output did not satisfy the extraction contract.",
+            raw=raw,
+            stage="json",
+            reason="JSON_ENCODING",
+        )
+    except RecursionError:
+        return _failure_result(
+            request_id=request_id,
+            config=config,
+            source_text_sha256=source_text_sha256,
+            status=PlanExtractionStatus.INVALID_OUTPUT,
+            issue_code="AI_OUTPUT_INVALID",
+            issue_path="draft",
+            issue_message="AI output did not satisfy the extraction contract.",
+            raw=raw,
+            stage="json",
+            reason="JSON_RECURSION",
+        )
+    except ValueError:
+        return _failure_result(
+            request_id=request_id,
+            config=config,
+            source_text_sha256=source_text_sha256,
+            status=PlanExtractionStatus.INVALID_OUTPUT,
+            issue_code="AI_OUTPUT_INVALID",
+            issue_path="draft",
+            issue_message="AI output did not satisfy the extraction contract.",
+            raw=raw,
+            stage="json",
+            reason="JSON_OTHER",
         )
 
     if isinstance(output, PlanExtractionOutputV4):
@@ -140,7 +227,7 @@ async def extract_plan(
                 draft=output.draft,
                 mapping=mapping,
             )
-        except (TypeError, UnicodeError, ValueError, RecursionError, ValidationError):
+        except TypeError, UnicodeError, ValueError, RecursionError, ValidationError:
             return _failure_result(
                 request_id=request_id,
                 config=config,
@@ -150,6 +237,8 @@ async def extract_plan(
                 issue_path="mapping",
                 issue_message="AI mapping did not match the submitted source and current draft.",
                 raw=raw,
+                stage="mapping",
+                reason="MAPPING",
             )
         validation_issues = tuple(
             _blocking_warning(issue.code, issue.path, issue.reason)
@@ -158,7 +247,7 @@ async def extract_plan(
         return PlanExtractionResult(
             request_id=request_id,
             provider_id=raw.provider_id,
-            model=raw.model,
+            model=config.model,
             prompt_version=config.prompt_version,
             source_text_sha256=source_text_sha256,
             draft=output.draft,
@@ -167,6 +256,9 @@ async def extract_plan(
             warnings=output.warnings,
             validation_issues=validation_issues,
             usage=_usage_snapshot(raw),
+            diagnostic=_diagnostic(
+                stage="completed", reason="NONE", raw=raw, configured_model=config.model
+            ),
             status=PlanExtractionStatus.SUCCEEDED,
         )
 
@@ -178,9 +270,12 @@ async def extract_plan(
             source_text_sha256=source_text_sha256,
             status=PlanExtractionStatus.INVALID_OUTPUT,
             issue_code=evidence_issue.code,
-            issue_path=evidence_issue.path,
+            issue_path=_safe_path(evidence_issue.path),
             issue_message=evidence_issue.message,
             raw=raw,
+            stage="evidence",
+            reason="FIELD_EVIDENCE",
+            diagnostic_path=_safe_path(evidence_issue.path),
         )
 
     unmapped_text = tuple(
@@ -228,7 +323,7 @@ async def extract_plan(
     return PlanExtractionResult(
         request_id=request_id,
         provider_id=raw.provider_id,
-        model=raw.model,
+        model=config.model,
         prompt_version=config.prompt_version,
         source_text_sha256=source_text_sha256,
         draft=output.draft,
@@ -245,6 +340,9 @@ async def extract_plan(
             ),
         ),
         usage=_usage_snapshot(raw),
+        diagnostic=_diagnostic(
+            stage="completed", reason="NONE", raw=raw, configured_model=config.model
+        ),
         status=PlanExtractionStatus.SUCCEEDED,
     )
 
@@ -255,18 +353,18 @@ def _parse_untrusted_output(
     prompt_version: str,
 ) -> PlanExtractionOutput | PlanExtractionOutputV4:
     if len(content.encode("utf-8")) > MAX_EXTRACTION_OUTPUT_BYTES:
-        raise _UntrustedOutputError("output byte limit exceeded")
+        raise _UntrustedOutputError("JSON_BUDGET")
 
     def reject_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
         result: dict[str, object] = {}
         for key, value in pairs:
             if key in result:
-                raise _UntrustedOutputError("duplicate JSON key")
+                raise _UntrustedOutputError("JSON_DUPLICATE_KEY")
             result[key] = value
         return result
 
     def reject_non_finite(value: str) -> None:
-        raise _UntrustedOutputError(f"non-finite number: {value}")
+        raise _UntrustedOutputError("JSON_NON_FINITE")
 
     parsed = json.loads(
         content,
@@ -295,9 +393,9 @@ def _enforce_json_budget(value: object) -> None:
         item, depth = stack.pop()
         nodes += 1
         if nodes > MAX_EXTRACTION_JSON_NODES:
-            raise _UntrustedOutputError("JSON node limit exceeded")
+            raise _UntrustedOutputError("JSON_BUDGET")
         if depth > MAX_EXTRACTION_JSON_DEPTH:
-            raise _UntrustedOutputError("JSON depth limit exceeded")
+            raise _UntrustedOutputError("JSON_BUDGET")
         if isinstance(item, dict):
             stack.extend((child, depth + 1) for child in item.values())
         elif isinstance(item, list):
@@ -419,17 +517,152 @@ def _failure_result(
     issue_path: str,
     issue_message: str,
     raw: RawAIResponse | None = None,
+    stage: str,
+    reason: str,
+    provider_error_code: str | None = None,
+    attempts: int | None = None,
+    diagnostic_path: str = "unknown",
+    schema_error_type: str | None = None,
 ) -> PlanExtractionResult:
     return PlanExtractionResult(
         request_id=request_id,
         provider_id=config.provider_id,
-        model=raw.model if raw is not None else config.model,
+        model=config.model,
         prompt_version=config.prompt_version,
         source_text_sha256=source_text_sha256,
         draft=None,
         validation_issues=(_blocking_error(issue_code, issue_path, issue_message),),
         usage=_usage_snapshot(raw) if raw is not None else None,
+        diagnostic=_diagnostic(
+            stage=stage,
+            reason=reason,
+            path=diagnostic_path,
+            provider_error_code=provider_error_code,
+            schema_error_type=schema_error_type,
+            attempts=attempts,
+            raw=raw,
+            configured_model=config.model,
+        ),
         status=status,
+    )
+
+
+_SAFE_PATHS: Final = frozenset(
+    {
+        "source_text",
+        "provider",
+        "draft",
+        "mapping",
+        "mapping_version",
+        "source_clauses",
+        "field_bindings",
+        "evidence",
+        "assumptions",
+        "warnings",
+        "unmapped_text",
+    }
+)
+_SAFE_SCHEMA_ERROR_TYPES: Final = frozenset(
+    {
+        "missing",
+        "extra_forbidden",
+        "literal_error",
+        "enum",
+        "string_pattern_mismatch",
+        "string_too_short",
+        "string_too_long",
+        "int_type",
+        "int_parsing",
+        "greater_than",
+        "greater_than_equal",
+        "less_than",
+        "less_than_equal",
+        "bool_type",
+        "model_type",
+        "union_tag_invalid",
+        "value_error",
+        "assertion_error",
+        "json_invalid",
+    }
+)
+
+
+_SAFE_SCHEMA_FIELDS: Final = DIAGNOSTIC_SCHEMA_FIELDS
+_SAFE_SCHEMA_VARIANTS: Final = frozenset({"BUY", "SELL", "RISK"})
+
+
+def _safe_path(value: str) -> str:
+    head = value.split(".", 1)[0].split("[", 1)[0]
+    return head if head in _SAFE_PATHS else "unknown"
+
+
+def _safe_schema_path(error: ValidationError) -> str:
+    locations = error.errors(include_input=False, include_context=False, include_url=False)
+    if not locations or not locations[0]["loc"]:
+        return "unknown"
+    path = ""
+    for segment in locations[0]["loc"][:12]:
+        if isinstance(segment, str):
+            if segment in _SAFE_SCHEMA_VARIANTS:
+                candidate = path + (".variant" if path else "variant")
+                if len(candidate) > 160:
+                    break
+                path = candidate
+                continue
+            if segment not in _SAFE_SCHEMA_FIELDS:
+                candidate = path + (".unknown" if path else "unknown")
+                if len(candidate) <= 160:
+                    path = candidate
+                break
+            candidate = path + (f".{segment}" if path else segment)
+        elif isinstance(segment, int) and 0 <= segment <= 255:
+            candidate = path + f"[{segment}]"
+        else:
+            candidate = path + (".unknown" if path else "unknown")
+            if len(candidate) <= 160:
+                path = candidate
+            break
+        if len(candidate) > 160:
+            break
+        path = candidate
+    return path or "unknown"
+
+
+def _safe_schema_error_type(error: ValidationError) -> str:
+    errors = error.errors(include_input=False, include_context=False, include_url=False)
+    if not errors:
+        return "other"
+    kind = errors[0]["type"]
+    return kind if kind in _SAFE_SCHEMA_ERROR_TYPES else "other"
+
+
+def _diagnostic(
+    *,
+    stage: str,
+    reason: str,
+    path: str = "unknown",
+    provider_error_code: str | None = None,
+    schema_error_type: str | None = None,
+    attempts: int | None = None,
+    raw: RawAIResponse | None = None,
+    configured_model: str,
+) -> ExtractionDiagnostic:
+    finish_reason = "unknown"
+    if raw is not None:
+        finish_reason = (
+            raw.finish_reason
+            if raw.finish_reason in {"stop", "length", "content_filter", "tool_calls"}
+            else "other"
+        )
+    return ExtractionDiagnostic(
+        stage=stage,
+        reason=reason,
+        path=path,
+        provider_error_code=provider_error_code,
+        schema_error_type=schema_error_type,
+        finish_reason=finish_reason,
+        model_matches_configured=(raw.model == configured_model if raw is not None else None),
+        attempts=raw.attempts if raw is not None else attempts,
     )
 
 

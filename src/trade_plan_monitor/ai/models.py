@@ -9,11 +9,12 @@ https://docs.python.org/3/library/ipaddress.html#ipaddress.IPv4Address.is_loopba
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import datetime
 from enum import StrEnum
 from ipaddress import ip_address
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Self, get_args
 from uuid import UUID
 
 from pydantic import (
@@ -632,6 +633,133 @@ class AIUsageSnapshot(_AIValue):
     total_tokens: int = Field(ge=0)
 
 
+def _diagnostic_schema_fields() -> frozenset[str]:
+    names: set[str] = set()
+    pending: list[object] = [PlanExtractionOutput, PlanExtractionOutputV4]
+    visited: set[type[BaseModel]] = set()
+    while pending:
+        candidate = pending.pop()
+        if isinstance(candidate, type) and issubclass(candidate, BaseModel):
+            if candidate in visited:
+                continue
+            visited.add(candidate)
+            names.update(candidate.model_fields)
+            pending.extend(field.annotation for field in candidate.model_fields.values())
+        else:
+            pending.extend(get_args(candidate))
+    return frozenset(names)
+
+
+DIAGNOSTIC_SCHEMA_FIELDS = _diagnostic_schema_fields()
+_DIAGNOSTIC_PATH_FIELDS = DIAGNOSTIC_SCHEMA_FIELDS | {
+    "unknown",
+    "variant",
+    "source_text",
+    "provider",
+    "mapping",
+}
+_DIAGNOSTIC_PATH_PATTERN = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*|\[[0-9]{1,3}\])*")
+
+
+class ExtractionDiagnostic(_AIValue):
+    """Closed, content-free explanation of one extraction outcome."""
+
+    stage: Literal[
+        "request",
+        "provider",
+        "response",
+        "json",
+        "schema",
+        "mapping",
+        "evidence",
+        "completed",
+    ]
+    reason: Literal[
+        "NONE",
+        "INPUT_LIMIT",
+        "PROVIDER_ERROR",
+        "ENVELOPE_MISMATCH",
+        "FINISH_REASON",
+        "JSON_SYNTAX",
+        "JSON_DUPLICATE_KEY",
+        "JSON_NON_FINITE",
+        "JSON_BUDGET",
+        "JSON_ENCODING",
+        "JSON_RECURSION",
+        "JSON_OTHER",
+        "SCHEMA",
+        "MAPPING",
+        "FIELD_EVIDENCE",
+    ]
+    path: Annotated[str, StringConstraints(min_length=1, max_length=160)] = "unknown"
+    schema_error_type: (
+        Literal[
+            "missing",
+            "extra_forbidden",
+            "literal_error",
+            "enum",
+            "string_pattern_mismatch",
+            "string_too_short",
+            "string_too_long",
+            "int_type",
+            "int_parsing",
+            "greater_than",
+            "greater_than_equal",
+            "less_than",
+            "less_than_equal",
+            "bool_type",
+            "model_type",
+            "union_tag_invalid",
+            "value_error",
+            "assertion_error",
+            "json_invalid",
+            "other",
+        ]
+        | None
+    ) = None
+    provider_error_code: (
+        Literal[
+            "AUTHENTICATION",
+            "RATE_LIMITED",
+            "TRANSIENT",
+            "TIMEOUT",
+            "INVALID_RESPONSE",
+            "RESPONSE_TOO_LARGE",
+            "UNSAFE_REDIRECT",
+            "CONFIGURATION",
+            "REJECTED",
+        ]
+        | None
+    ) = None
+    finish_reason: Literal[
+        "unknown",
+        "stop",
+        "length",
+        "content_filter",
+        "tool_calls",
+        "other",
+    ] = "unknown"
+    model_matches_configured: bool | None = None
+    attempts: int | None = Field(default=None, ge=0, le=3)
+
+    @field_validator("path")
+    @classmethod
+    def reject_unknown_path_segments(cls, value: str) -> str:
+        if _DIAGNOSTIC_PATH_PATTERN.fullmatch(value) is None:
+            raise ValueError("diagnostic path must use known schema segments")
+        segments = re.findall(r"[a-z][a-z0-9_]*|\[[0-9]{1,3}\]", value)
+        if any(
+            (
+                int(segment[1:-1]) > 255
+                if segment.startswith("[")
+                else segment not in _DIAGNOSTIC_PATH_FIELDS
+            )
+            for segment in segments
+        ):
+            raise ValueError("diagnostic path must use known schema segments")
+        return value
+
+
 class PlanExtractionResult(_AIValue):
     """Review-only extraction receipt with draft provenance and local issues."""
 
@@ -648,6 +776,7 @@ class PlanExtractionResult(_AIValue):
     unmapped_text: tuple[UnmappedText, ...] = ()
     validation_issues: tuple[ValidationIssue, ...] = ()
     usage: AIUsageSnapshot | None
+    diagnostic: ExtractionDiagnostic | None = Field(default=None, exclude=True)
     status: PlanExtractionStatus
 
     @model_validator(mode="after")
