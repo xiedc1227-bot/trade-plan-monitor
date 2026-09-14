@@ -20,7 +20,7 @@ ai:
   profile: DEEPSEEK
   display_name: DeepSeek
   base_url: https://api.deepseek.com
-  model: deepseek-v4-flash
+  model: deepseek-flash
   additional_models:
     - display_name: DeepSeek Pro
       model: deepseek-v4-pro

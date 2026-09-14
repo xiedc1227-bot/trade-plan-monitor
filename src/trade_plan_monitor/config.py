@@ -145,7 +145,7 @@ class AIConfiguration(_ConfigurationModel):
         validate_default=True,
     )
     model: str = Field(
-        default="deepseek-v4-flash",
+        default="deepseek-flash",
         min_length=1,
         max_length=200,
         pattern=r"^[^\s\x00-\x1f\x7f]+$",

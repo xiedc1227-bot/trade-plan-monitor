@@ -34,7 +34,7 @@ def test_empty_yaml_uses_loopback_web_and_unconfigured_credentials(tmp_path: Pat
     assert config.ai.api_key is None
     assert config.ai.profile is AIProviderProfile.DEEPSEEK
     assert str(config.ai.base_url) == "https://api.deepseek.com/"
-    assert config.ai.model == "deepseek-v4-flash"
+    assert config.ai.model == "deepseek-flash"
 
 
 def test_yaml_accepts_direct_credentials(tmp_path: Path) -> None:
@@ -149,13 +149,13 @@ def test_example_configuration_is_valid_and_contains_direct_placeholders() -> No
     assert config.ai.profile is AIProviderProfile.DEEPSEEK
     assert config.ai.display_name == "DeepSeek"
     assert str(config.ai.base_url) == "https://api.deepseek.com/"
-    assert config.ai.model == "deepseek-v4-flash"
+    assert config.ai.model == "deepseek-flash"
 
     provider_config = config.ai.to_provider_config()
     assert provider_config is not None
     assert provider_config.display_name == "DeepSeek"
     assert str(provider_config.base_url) == "https://api.deepseek.com/"
-    assert provider_config.model == "deepseek-v4-flash"
+    assert provider_config.model == "deepseek-flash"
     assert [model.model for model in config.ai.additional_models] == ["deepseek-v4-pro"]
 
 
@@ -174,7 +174,7 @@ def test_ai_composition_selects_the_configured_profile_without_reading_the_secre
 
     assert binding is not None
     assert binding.profile is AIProviderProfile.DEEPSEEK
-    assert binding.config.model == "deepseek-v4-flash"
+    assert binding.config.model == "deepseek-flash"
 
 
 def test_direct_ai_key_drives_provider_without_project_secret_file(
