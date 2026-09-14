@@ -63,7 +63,7 @@ from trade_plan_monitor.ai.review import dump_explicit_plan_draft_json, server_s
 from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.live_profiles import create_stock_certification, write_live_certification
-from trade_plan_monitor.market_data.sessions import SourceTimeLabel
+from trade_plan_monitor.market_data.sessions import SourceTimeLabel, session_for_minute_end
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import MarketIndexHealth
 from trade_plan_monitor.runtime.clock import SHANGHAI
@@ -266,8 +266,12 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
-    scenario_day = 15 if r17_full_window else 14
-    clock = ControlledClock(datetime(2026, 9, scenario_day, 10, 12, tzinfo=SHANGHAI))
+    scenario_day = 14
+    scenario_hour = 14 if r17_full_window else 10
+    start_minute = 35 if r17_full_window else 12
+    clock = ControlledClock(
+        datetime(2026, 9, scenario_day, scenario_hour, start_minute, tzinfo=SHANGHAI)
+    )
     config = _write_configuration_and_evidence(
         tmp_path, observed_at=clock.now(), include_index=True
     )
@@ -302,9 +306,31 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
     configured_timeouts: list[int] = []
 
     class LaggedIndexSDK(QuerySDK):
+        def _stock_minutes(self, name: str, kwargs: dict[str, object]) -> pd.DataFrame:
+            frame = super()._stock_minutes(name, kwargs)
+            if r17_full_window and name == "rt_min_daily":
+                minutes = pd.to_datetime(frame["time"])
+                frame = frame.loc[
+                    ((minutes.dt.hour == 9) & (minutes.dt.minute >= 30))
+                    | (minutes.dt.hour == 10)
+                    | ((minutes.dt.hour == 11) & (minutes.dt.minute < 30))
+                    | ((minutes.dt.hour == 13) & (minutes.dt.minute >= 0))
+                    | (minutes.dt.hour == 14)
+                ]
+            return frame
+
         def _index_minutes(self, kwargs: dict[str, object]) -> pd.DataFrame:
             frame = super()._index_minutes(kwargs)
-            if r17_full_window and self.clock.now().minute in {15, 20, 25}:
+            if r17_full_window:
+                minutes = pd.to_datetime(frame["time"])
+                frame = frame.loc[
+                    [
+                        session_for_minute_end(value.to_pydatetime().replace(tzinfo=SHANGHAI))
+                        is not None
+                        for value in minutes
+                    ]
+                ]
+            if r17_full_window and self.clock.now().minute in {35, 40, 45}:
                 cutoff = self.clock.now().replace(second=0, microsecond=0)
                 return frame.loc[frame["time"] < cutoff.strftime("%Y-%m-%d %H:%M:%S")]
             return frame
@@ -431,13 +457,23 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                 assert deadline.bar_end == at.replace(second=0)
                 await runtime._runtime._run_deadline(deadline)
 
-            if r17_full_window:
+            if not r17_full_window:
                 for minute in (12, 13, 14):
                     client.portal.call(
-                        run_due, datetime(2026, 9, scenario_day, 10, minute, 12, tzinfo=SHANGHAI)
+                        run_due,
+                        datetime(2026, 9, scenario_day, 10, minute, 12, tzinfo=SHANGHAI),
                     )
             client.portal.call(
-                run_due, datetime(2026, 9, scenario_day, 10, 15, 12, tzinfo=SHANGHAI)
+                run_due,
+                datetime(
+                    2026,
+                    9,
+                    scenario_day,
+                    scenario_hour,
+                    35 if r17_full_window else 15,
+                    12,
+                    tzinfo=SHANGHAI,
+                ),
             )
             assert market_budget.snapshot()["attempts"].get("idx_mins") == 5
             if r17_full_window:
@@ -445,7 +481,16 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                     snapshot.health is not MarketIndexHealth.LIVE
                     for snapshot in pipeline.index_service.latest_snapshots().values()
                 )
-            clock.current = datetime(2026, 9, scenario_day, 10, 15, 30, tzinfo=SHANGHAI)
+            if r17_full_window:
+                for minute in (36, 37, 38):
+                    client.portal.call(
+                        run_due,
+                        datetime(2026, 9, scenario_day, scenario_hour, minute, 12, tzinfo=SHANGHAI),
+                    )
+                assert market_budget.snapshot()["attempts"].get("rt_idx_min_daily") == 10
+            clock.current = datetime(
+                2026, 9, scenario_day, scenario_hour, start_minute + 3, 30, tzinfo=SHANGHAI
+            )
 
             # Explicitly synthetic, numeric-equivalent review. The three fixed AI
             # extractions above remain separate and are never passed off as this draft.
@@ -454,7 +499,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                 draft_data["version"] = 2
                 draft_data["activation"] = {
                     "mode": "TRADING_DAY",
-                    "trading_day": "2026-09-15",
+                    "trading_day": "2026-09-14",
                 }
             draft = ExplicitPlanDraft.model_validate_json(json.dumps(draft_data))
             review_source = LITERAL_SOURCE if r17_full_window else SYNTHETIC_SOURCE
@@ -465,7 +510,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                 assert review_source == approved_sources()["LITERAL"][0]
                 assert {item.path: item.value for item in review_mapping.user_supplements}[
                     "activation.trading_day"
-                ] == "2026-09-15"
+                ] == "2026-09-14"
                 for path, expected in LITERAL_FIXTURE["independentExpectedValues"].items():
                     if expected is not None:
                         assert _get_path(draft_data, path) == expected, path
@@ -541,37 +586,37 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
             assert activation.status_code == 200, activation.text
             recovery = client.portal.call(_recover_activated_symbol, runtime, clock.now().date())
             assert recovery["mode"] == "TEST_TRIGGERED_PRODUCTION_RECOVERY"
-            # 09:30–10:15 supplies nine complete historical five-minute buckets.
-            assert recovery["persistedMinuteBars"] >= 45
-            for minute in range(16, 27 if r17_full_window else 26):
+            # Afternoon recovery spans real sessions; lunch minutes are excluded.
+            assert recovery["persistedMinuteBars"] >= (210 if r17_full_window else 45)
+            for minute in range(39 if r17_full_window else 16, 50 if r17_full_window else 26):
                 client.portal.call(
                     run_due,
-                    datetime(2026, 9, scenario_day, 10, minute, 12, tzinfo=SHANGHAI),
+                    datetime(2026, 9, scenario_day, scenario_hour, minute, 12, tzinfo=SHANGHAI),
                 )
                 if r17_full_window:
                     index_count = market_budget.snapshot()["attempts"].get("rt_idx_min_daily")
                     assert (
                         index_count
                         == {
-                            16: 10,
-                            17: 10,
-                            18: 10,
-                            19: 10,
-                            20: 15,
-                            21: 20,
-                            22: 20,
-                            23: 20,
-                            24: 20,
-                            25: 25,
-                            26: 30,
+                            39: 10,
+                            40: 15,
+                            41: 20,
+                            42: 20,
+                            43: 20,
+                            44: 20,
+                            45: 25,
+                            46: 30,
+                            47: 30,
+                            48: 30,
+                            49: 30,
                         }[minute]
                     )
-                    if minute in {20, 25}:
+                    if minute in {40, 45}:
                         assert all(
                             snapshot.health is not MarketIndexHealth.LIVE
                             for snapshot in pipeline.index_service.latest_snapshots().values()
                         )
-                    if minute in {16, 21, 26}:
+                    if minute in {36, 41, 46}:
                         assert all(
                             snapshot.health is MarketIndexHealth.LIVE
                             for snapshot in pipeline.index_service.latest_snapshots().values()
@@ -606,13 +651,13 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
             plan = draft.to_executable()
             assert plan is not None
             with pipeline._work() as work:
-                for minute in (20, 25):
+                for minute in (40, 45) if r17_full_window else (20, 25):
                     assert (
                         work.explicit_rules.get(
                             plan_hash=plan_sha256(plan),
                             symbol="003043.SZ",
                             target_bucket_end=datetime(
-                                2026, 9, scenario_day, 10, minute, tzinfo=SHANGHAI
+                                2026, 9, scenario_day, scenario_hour, minute, tzinfo=SHANGHAI
                             ),
                             activation_revision=1,
                         )
@@ -725,7 +770,7 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
-    clock = ControlledClock(datetime(2026, 9, 15, 10, 12, tzinfo=SHANGHAI))
+    clock = ControlledClock(datetime(2026, 9, 14, 14, 35, tzinfo=SHANGHAI))
     config = _write_configuration_and_evidence(
         tmp_path, observed_at=clock.now(), include_index=True
     )
@@ -745,7 +790,15 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
     class LagSDK(QuerySDK):
         def _index_minutes(self, kwargs: dict[str, object]) -> pd.DataFrame:
             frame = super()._index_minutes(kwargs)
-            if persistent_lag or self.clock.now().minute in {15, 20, 25}:
+            minutes = pd.to_datetime(frame["time"])
+            frame = frame.loc[
+                [
+                    session_for_minute_end(value.to_pydatetime().replace(tzinfo=SHANGHAI))
+                    is not None
+                    for value in minutes
+                ]
+            ]
+            if persistent_lag or self.clock.now().minute in {35, 40, 45}:
                 cutoff = self.clock.now().replace(
                     minute=self.clock.now().minute // 5 * 5,
                     second=0,
@@ -829,8 +882,8 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
             scheduler = runtime._runtime._scheduler
             pipeline = runtime._runtime._run_deadline.__self__._pipeline
             assert pipeline is not None
-            for minute in range(12, 27):
-                clock.current = datetime(2026, 9, 15, 10, minute, 12, tzinfo=SHANGHAI)
+            for minute in range(35, 50):
+                clock.current = datetime(2026, 9, 14, 14, minute, 12, tzinfo=SHANGHAI)
                 deadline = scheduler.next_deadline()
                 assert deadline.bar_end == clock.now().replace(second=0)
                 client.portal.call(runtime._runtime._run_deadline, deadline)
@@ -877,7 +930,7 @@ def test_r17_missing_index_daily_cache_denies_extra_physical_starts(
 
     import trade_plan_monitor.runtime.production as production
 
-    clock = ControlledClock(datetime(2026, 9, 15, 10, 25, 12, tzinfo=SHANGHAI))
+    clock = ControlledClock(datetime(2026, 9, 14, 14, 45, 12, tzinfo=SHANGHAI))
     config = _write_configuration_and_evidence(
         tmp_path, observed_at=clock.now(), include_index=True
     )
@@ -929,8 +982,8 @@ def test_r17_missing_index_daily_cache_denies_extra_physical_starts(
     async def scenario() -> None:
         try:
             previous = None
-            for minute in (25, 26, 30, 31):
-                clock.current = datetime(2026, 9, 15, 10, minute, 12, tzinfo=SHANGHAI)
+            for minute in (45, 46, 50, 51):
+                clock.current = datetime(2026, 9, 14, 14, minute, 12, tzinfo=SHANGHAI)
                 deadline = scheduler.next_deadline(after=previous)
                 assert deadline is not None
                 try:

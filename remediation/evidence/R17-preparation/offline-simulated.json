@@ -1,11 +1,11 @@
 {
-  "proposalId": "R17-20260915-MORNING-60",
+  "proposalId": "R17-20260914-AFTERNOON-60",
   "status": "SIMULATED_NOT_LIVE",
   "virtualWindowShanghai": {
-    "proposedStart": "2026-09-15T10:12:00+08:00",
-    "scheduledDeadlinesTested": "2026-09-15T10:12:12+08:00 through 2026-09-15T10:26:12+08:00",
-    "newCallStop": "2026-09-15T10:27:00+08:00",
-    "scheduledPollAt102712": "NOT_RUN_OUTSIDE_900_SECONDS"
+    "proposedStart": "2026-09-14T14:35:00+08:00",
+    "scheduledDeadlinesTested": "2026-09-14T14:35:12+08:00 through 2026-09-14T14:49:12+08:00",
+    "newCallStop": "2026-09-14T14:50:00+08:00",
+    "scheduledPollAt145012": "NOT_RUN_OUTSIDE_900_SECONDS"
   },
   "caps": {
     "aiTotal": 3,
@@ -24,13 +24,27 @@
   "scenarios": {
     "literalReviewAndAllFiveLagRecovered": {
       "aiMockPhysical": 3,
-      "aiMockCases": ["LITERAL", "SEM-AMB-01", "SEM-UNS-01"],
+      "aiMockCases": [
+        "LITERAL",
+        "SEM-AMB-01",
+        "SEM-UNS-01"
+      ],
       "aiDeniedBeforeNetwork": 0,
-      "reviewDraft": "SEPARATE_INJECTED_LITERAL_SOURCE_MAPPING_WITH_HUMAN_TRADING_DAY_2026-09-15",
-      "activationAssumedAt": "2026-09-15T10:15:30+08:00",
-      "recovery": "TEST_TRIGGERED_PRODUCTION_RECOVERY_ONCE_AT_LEAST_45_MINUTE_BARS",
-      "persistedCompletedEvaluations": ["10:20", "10:25"],
-      "indexRealtimeCumulative": {"10:15": 5, "10:16": 10, "10:20": 15, "10:21": 20, "10:25": 25, "10:26": 30},
+      "reviewDraft": "SEPARATE_INJECTED_LITERAL_SOURCE_MAPPING_WITH_HUMAN_TRADING_DAY_2026-09-14",
+      "activationAssumedAt": "2026-09-14T14:38:30+08:00",
+      "recovery": "TEST_TRIGGERED_PRODUCTION_RECOVERY_VALID_MORNING_AND_AFTERNOON_MINUTES_NO_LUNCH",
+      "persistedCompletedEvaluations": [
+        "14:40",
+        "14:45"
+      ],
+      "indexRealtimeCumulative": {
+        "14:35": 5,
+        "14:36": 10,
+        "14:40": 15,
+        "14:41": 20,
+        "14:45": 25,
+        "14:46": 30
+      },
       "marketMockPhysical": {
         "trade_cal": 3,
         "rt_min_daily": 1,
@@ -41,15 +55,20 @@
       },
       "marketMockTotal": 55,
       "marketDeniedBeforeNetwork": 0,
-      "latestFiveIndexesAt1026": "LIVE",
       "browserReceipt": "NOT_RUN",
-      "realAIAndMarket": "NOT_RUN"
+      "realAIAndMarket": "NOT_RUN",
+      "latestFiveIndexesAt1449": "LIVE"
     },
     "allAiInvalidNoActivationLagRecovered": {
       "aiMockPhysical": 3,
       "diagnosticRecords": 3,
       "aiOutcome": "INVALID_OUTPUT_SIMULATED_MALFORMED_JSON",
-      "marketMockPhysical": {"trade_cal": 1, "idx_mins": 5, "rt_idx_min_daily": 30, "index_daily": 5},
+      "marketMockPhysical": {
+        "trade_cal": 1,
+        "idx_mins": 5,
+        "rt_idx_min_daily": 30,
+        "index_daily": 5
+      },
       "marketMockTotal": 41,
       "marketDeniedBeforeNetwork": 0,
       "stockPhysical": 0,
@@ -58,15 +77,24 @@
     "allAiInvalidNoActivationPersistentIndexLag": {
       "aiMockPhysical": 3,
       "diagnosticRecords": 3,
-      "marketMockPhysical": {"trade_cal": 1, "idx_mins": 5, "rt_idx_min_daily": 30, "index_daily": 5},
+      "marketMockPhysical": {
+        "trade_cal": 1,
+        "idx_mins": 5,
+        "rt_idx_min_daily": 30,
+        "index_daily": 5
+      },
       "marketMockTotal": 41,
       "marketDeniedBeforeNetwork": 0,
-      "latestFiveIndexesAt1026": "NOT_LIVE",
-      "activation": "INACTIVE"
+      "activation": "INACTIVE",
+      "latestFiveIndexesAt1449": "NOT_LIVE"
     },
     "missingIndexDailyCache": {
       "aiMockPhysical": 0,
-      "marketMockPhysical": {"idx_mins": 5, "rt_idx_min_daily": 5, "index_daily": 5},
+      "marketMockPhysical": {
+        "idx_mins": 5,
+        "rt_idx_min_daily": 5,
+        "index_daily": 5
+      },
       "marketMockTotal": 15,
       "marketDeniedBeforeNetwork": 5,
       "sharedAiMarketStopped": true,

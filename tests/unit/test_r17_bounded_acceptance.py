@@ -15,19 +15,20 @@ def test_distinct_date_run_id_and_endpoint_sum() -> None:
     assert r17.PROPOSAL_ID != "R14"
     assert r17.AUTHORIZATION != r14.AUTHORIZATION
     assert r17.RUN_ID != "r14-20260914-a"
+    assert r17.PROPOSAL_ID == "R17-20260914-AFTERNOON-60"
     assert sum(r17.MARKET_CAPS.values()) == 60
     assert r17.MARKET_CAPS["trade_cal"] == 3
     assert r17.MARKET_CAPS["rt_min"] == 15
     assert r17.MARKET_CAPS["rt_min_daily"] == 2
     assert r17.MARKET_CAPS["rt_idx_min_daily"] == 30
     assert r14._MARKET_CAPS["rt_idx_min_daily"] == 25
-    assert r17._eligible(datetime(2026, 9, 15, 10, 10))
-    assert r17._eligible(datetime(2026, 9, 15, 10, 30))
+    assert r17._eligible(datetime(2026, 9, 14, 14, 30))
+    assert r17._eligible(datetime(2026, 9, 14, 14, 40))
     for value in (
         datetime(2026, 9, 14, 10, 12),
-        datetime(2026, 9, 15, 10, 9),
-        datetime(2026, 9, 15, 10, 30, 0, 1),
-        datetime(2026, 9, 16, 10, 12),
+        datetime(2026, 9, 14, 14, 29, 59),
+        datetime(2026, 9, 14, 14, 40, 0, 1),
+        datetime(2026, 9, 15, 10, 12),
     ):
         assert not r17._eligible(value)
 
