@@ -565,25 +565,27 @@ function isDashboardMarketIndexes(value: unknown, observedAt: unknown): boolean 
 }
 
 function isMarketIndexSnapshot(value: unknown): boolean {
+  const requiredKeys = [
+    "board",
+    "closePoints",
+    "completedBucketAt",
+    "displayName",
+    "health",
+    "indexCode",
+    "indicatorFacts",
+    "issues",
+    "mappedSymbolCount",
+    "mappingVersion",
+    "observedAt",
+    "priorClosePoints",
+    "revision",
+    "sessionChangeRatio",
+    "snapshotHash",
+  ];
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, [
-      "board",
-      "closePoints",
-      "completedBucketAt",
-      "displayName",
-      "health",
-      "indexCode",
-      "indicatorFacts",
-      "issues",
-      "mappedSymbolCount",
-      "mappingVersion",
-      "observedAt",
-      "priorClosePoints",
-      "revision",
-      "sessionChangeRatio",
-      "snapshotHash",
-    ]) ||
+    !hasOnlyKeys(value, [...requiredKeys, "recoveryAttempts", "nextRetryAt"]) ||
+    !hasKeys(value, requiredKeys) ||
     !isCanonicalMarketIndexIdentity(value) ||
     typeof value.health !== "string" ||
     !marketIndexHealth.has(value.health) ||
@@ -599,6 +601,22 @@ function isMarketIndexSnapshot(value: unknown): boolean {
     !Array.isArray(value.indicatorFacts) ||
     value.indicatorFacts.length > 50 ||
     !value.indicatorFacts.every(isMarketIndexIndicatorFact)
+  ) {
+    return false;
+  }
+  const hasRecoveryAttempts = Object.hasOwn(value, "recoveryAttempts");
+  const hasNextRetryAt = Object.hasOwn(value, "nextRetryAt");
+  if (hasRecoveryAttempts !== hasNextRetryAt) return false;
+  if (
+    hasRecoveryAttempts &&
+    !(
+      (value.recoveryAttempts === null && value.nextRetryAt === null) ||
+      (isNonnegativeInteger(value.recoveryAttempts) &&
+        value.recoveryAttempts <= 2 &&
+        isShanghaiDateTime(value.nextRetryAt) &&
+        value.health === "BLOCKED" &&
+        value.issues.includes("PROVIDER_UNAVAILABLE"))
+    )
   ) {
     return false;
   }

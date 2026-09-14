@@ -316,6 +316,46 @@ describe("monitor store", () => {
 });
 
 describe("API client", () => {
+  it("accepts dashboard index snapshots with recovery fields", async () => {
+    const response = structuredClone(snapshot);
+    response.marketIndexes = [{
+      board: "SSE_MAIN",
+      closePoints: null,
+      completedBucketAt: null,
+      displayName: "上证指数",
+      health: "BLOCKED",
+      indexCode: "000001.SH",
+      indicatorFacts: [],
+      issues: ["PROVIDER_UNAVAILABLE"],
+      mappedSymbolCount: 0,
+      mappingVersion: "board-index-map-v1",
+      nextRetryAt: null,
+      observedAt: response.observedAt,
+      priorClosePoints: null,
+      recoveryAttempts: null,
+      revision: 1,
+      sessionChangeRatio: null,
+      snapshotHash: "c".repeat(64),
+    }];
+    const client = createApiClient(async () =>
+      new Response(JSON.stringify(response), { status: 200 }),
+    );
+
+    await expect(client.getDashboard()).resolves.toEqual(response);
+
+    response.marketIndexes[0]!.recoveryAttempts = 0;
+    response.marketIndexes[0]!.nextRetryAt = "2026-08-24T10:30:30+08:00";
+    await expect(client.getDashboard()).resolves.toEqual(response);
+
+    for (const attempts of [-1, 3, 0.5]) {
+      response.marketIndexes[0]!.recoveryAttempts = attempts;
+      await expect(client.getDashboard()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    }
+    response.marketIndexes[0]!.recoveryAttempts = 0;
+    delete response.marketIndexes[0]!.nextRetryAt;
+    await expect(client.getDashboard()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
   it("parses the generated camelCase dashboard contract", async () => {
     const fetchImplementation = vi.fn(async () =>
       new Response(JSON.stringify(snapshot), {
