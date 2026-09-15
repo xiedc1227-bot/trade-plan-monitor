@@ -258,6 +258,8 @@ def test_launcher_calendar_failure_closes_and_writes_normal_audit(
     assert audit["isolatedPlanCleanup"] == "INACTIVE"
     assert journal["normalAuditPresent"] is True
     assert journal["status"] == "REFERENCE_FAILED"
+    assert journal["ai"] == audit["ai"]
+    assert journal["market"] == audit["market"]
 
 
 def test_journal_write_failure_denies_before_physical_start() -> None:

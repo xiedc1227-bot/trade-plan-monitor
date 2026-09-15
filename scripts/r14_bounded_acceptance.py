@@ -123,10 +123,18 @@ class PhysicalAttemptJournal:
             self._state["status"] = "FAILURE_STOP_REQUESTED"
             _write_json_atomic(self._path, self._state)
 
-    def complete(self, *, status: str) -> None:
+    def complete(
+        self,
+        *,
+        status: str,
+        ai: dict[str, object],
+        market: dict[str, object],
+    ) -> None:
         with self._lock:
             self._state["status"] = status
             self._state["normalAuditPresent"] = True
+            self._state["ai"] = ai
+            self._state["market"] = market
             _write_json_atomic(self._path, self._state)
 
 
@@ -912,7 +920,11 @@ async def _serve(
             audit["status"] = "BUDGET_DENIED"
             return_code = 1
         _write_json_atomic(folder / "audit.json", audit)
-        journal.complete(status=str(audit["status"]))
+        journal.complete(
+            status=str(audit["status"]),
+            ai=audit["ai"],
+            market=audit["market"],
+        )
         print(json.dumps(audit, sort_keys=True), flush=True)
     return return_code
 
