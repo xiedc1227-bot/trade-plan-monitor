@@ -1,6 +1,6 @@
 # R18 same-morning restart proposal — authorized
 
-Canonical English; `R18-restart-proposal-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal ID `R18-20260915-RESTART-105`; run ID `r18-20260915-b`. Status **AUTHORIZED / NOT_RUN**.
+Canonical English; `R18-restart-proposal-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal ID `R18-20260915-RESTART-105`; run ID `r18-20260915-b`. Status **CONSUMED / AI_INVALID_OUTPUT / BUSINESS_FAILED**. The execution record is `R18-execution-20260915-restart.md`.
 
 At 2026-09-15 09:36 Asia/Shanghai, after candidate `r18-20260915-a` made zero external calls because its exact time gate had closed, the user explicitly requested that R18 be restarted. This is treated as fresh authorization for one replacement candidate with the same accepted physical limits and possible charges: at most three `deepseek-v4-pro` POST starts, at most 105 market-data starts, and a 2,280-second call deadline with 20 seconds of cooperative cleanup.
 

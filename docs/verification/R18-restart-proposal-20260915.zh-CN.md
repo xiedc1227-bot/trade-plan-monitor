@@ -1,6 +1,6 @@
 # R18 同日上午重启方案——已授权
 
-英文原版为 `R18-restart-proposal-20260915.md`，本文是等价中文审阅副本。方案 ID `R18-20260915-RESTART-105`；运行 ID `r18-20260915-b`。状态 **AUTHORIZED / NOT_RUN**。
+英文原版为 `R18-restart-proposal-20260915.md`，本文是等价中文审阅副本。方案 ID `R18-20260915-RESTART-105`；运行 ID `r18-20260915-b`。状态 **CONSUMED / AI_INVALID_OUTPUT / BUSINESS_FAILED**。执行记录见 `R18-execution-20260915-restart.md`。
 
 2026-09-15 09:36（Asia/Shanghai），候选 `r18-20260915-a` 因准确时间门禁关闭且外部调用为零后，用户明确要求重启 R18。本请求视为对一个替代候选的全新授权，沿用已接受的物理上限及可能费用：`deepseek-v4-pro` POST 物理启动最多三次、行情物理启动最多 105 次、调用截止 2,280 秒，另有 20 秒协作清理。
 
