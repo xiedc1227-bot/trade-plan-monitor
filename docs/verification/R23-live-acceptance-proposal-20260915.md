@@ -1,6 +1,10 @@
 # R23 afternoon bounded live-acceptance plan
 
-Canonical English; `R23-live-acceptance-proposal-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal ID `R23-20260915-PM-105`; run ID `r23-20260915-a`. Status **AUTHORIZED / NOT_STARTED / WINDOW_PENDING**.
+Canonical English; `R23-live-acceptance-proposal-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal ID `R23-20260915-PM-105`; run ID `r23-20260915-a`. Status **REFERENCE_FAILED / AUTHORIZATION_CONSUMED / CLOSED / FULL_WORKFLOW_NOT_PROVEN**.
+
+## Execution disposition
+
+R23 executed on 2026-09-15 from `12:51:26.061589+08:00` to `12:51:26.553170+08:00`. The first `trade_cal` failed with `REFERENCE_TIMEOUT / TRANSPORT_TIMEOUT`; market starts were 1/105 and AI starts 0/3. Normal audit completed, isolated-plan cleanup was `INACTIVE`, and the one-shot claim remains present. The remaining sections preserve the historical candidate contract; they do not authorize another start. See [execution record](R23-live-acceptance-execution-20260915.md) and [handoff](../../remediation/handoffs/R23.md).
 
 ## Admission and isolation
 
@@ -26,9 +30,9 @@ Canonical English; `R23-live-acceptance-proposal-20260915.zh-CN.md` is the equiv
 
 ## Route and cost acknowledgement
 
-The official DeepSeek pricing page and 2026-09-10 notice state that, from 2026-09-14 12:00 Beijing time until V4.1 Pro launches, requests using `deepseek-v4-pro` route to V4.1 Flash and are billed at Flash rates. The 13:00 candidate is in the documented weekday off-peak period. At off-peak cache-miss input USD 0.15/M and output USD 0.60/M, three requests with approximately 5,100 input tokens each and the full 8,192 output-token cap estimate to **USD 0.017041**. The older V4-Pro peak-rate arithmetic **USD 0.117523** is retained as a more conservative comparison. Both are estimates, not monetary caps, and exclude taxes, actual token use, cache behavior, account adjustments, currency conversion, and unknown market-data charging.
+The original proposal assumed that `deepseek-v4-pro` would route to V4.1 Flash at off-peak rates and recorded a three-request estimate of **USD 0.017041**, alongside V4-Pro peak-rate arithmetic of **USD 0.117523**. The handoff reports conflicting official pricing and announcement information; these historical assumptions are not a verified current route, price, or spending ceiling. This closeout does not recheck external pricing. Before any new live proposal, verify the current official route and prices, disclose assumptions and unknown market-data fees/taxes, and obtain authorization for that specific candidate. R23 made zero AI starts, so it produced no returned-model or AI-billing evidence; market charges remain unknown.
 
-Official sources:
+Official pages referenced by the historical proposal, to recheck for a future candidate:
 
 - https://api-docs.deepseek.com/quick_start/pricing/
 - https://api-docs.deepseek.com/news/news260910/

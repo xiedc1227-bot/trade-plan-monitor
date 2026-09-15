@@ -1,6 +1,10 @@
 # R23 午后有界真实验收计划
 
-英文原版为 `R23-live-acceptance-proposal-20260915.md`，本文是等价中文审阅副本。提案 ID `R23-20260915-PM-105`；运行 ID `r23-20260915-a`。状态 **AUTHORIZED / NOT_STARTED / WINDOW_PENDING**。
+英文原版为 `R23-live-acceptance-proposal-20260915.md`，本文是等价中文审阅副本。提案 ID `R23-20260915-PM-105`；运行 ID `r23-20260915-a`。状态 **REFERENCE_FAILED / AUTHORIZATION_CONSUMED / CLOSED / FULL_WORKFLOW_NOT_PROVEN**。
+
+## 执行结论
+
+R23 已于 2026-09-15 的 `12:51:26.061589+08:00` 至 `12:51:26.553170+08:00` 执行。首次 `trade_cal` 以 `REFERENCE_TIMEOUT / TRANSPORT_TIMEOUT` 失败；行情启动为 1/105，AI 启动为 0/3。正常审计已完成，隔离计划清理为 `INACTIVE`，一次性占位仍然存在。以下章节保留历史候选契约，不授权再次启动。详见[执行记录](R23-live-acceptance-execution-20260915.zh-CN.md)及[交接](../../remediation/handoffs/R23.zh-CN.md)。
 
 ## 准入与隔离
 
@@ -26,9 +30,9 @@
 
 ## 路由与费用确认
 
-DeepSeek 官方价格页及 2026-09-10 公告说明：从北京时间 2026-09-14 12:00 至 V4.1 Pro 上线前，使用 `deepseek-v4-pro` 的请求会路由到 V4.1 Flash，并按 Flash 单价计费。13:00 候选处于官方定义的工作日空闲时段。按空闲时段缓存未命中输入 USD 0.15/百万 token、输出 USD 0.60/百万 token 计算，三次请求每次约 5,100 输入 token 且使用完整 8,192 输出 token 上限时，估算为 **USD 0.017041**。同时保留较旧的 V4-Pro 高峰价算法 **USD 0.117523** 作为更保守对照。两者均为估算而非金额上限，且不含税费、实际 token、缓存行为、账户调整、汇率及未知行情收费。
+原提案假设 `deepseek-v4-pro` 会路由到 V4.1 Flash 并按空闲时段计费，记录了三次请求估算 **USD 0.017041**，以及 V4-Pro 高峰价算法 **USD 0.117523**。接续信息指出官方价格页与公告存在冲突；这些历史假设不能作为已核实的当前路由、价格或费用上限。本次收尾没有重新查询外部价格。任何新的真实提案均须先核实官方当前路由与价格，披露估算假设及未知行情费用/税费，并取得该具体候选的授权。R23 的 AI 启动为零，因此没有返回模型或 AI 账单证据；行情收费仍未知。
 
-官方来源：
+历史提案引用的官方页面，供未来候选重新核实：
 
 - https://api-docs.deepseek.com/quick_start/pricing/
 - https://api-docs.deepseek.com/news/news260910/
