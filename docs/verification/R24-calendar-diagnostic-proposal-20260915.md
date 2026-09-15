@@ -1,6 +1,10 @@
 # R24 bounded calendar diagnostic plan
 
-Canonical English; `R24-calendar-diagnostic-proposal-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal ID `R24-20260915-PM-CALENDAR-1`; run ID `r24-20260915-a`. Status **READY / NOT_RUN**.
+Canonical English; `R24-calendar-diagnostic-proposal-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal ID `R24-20260915-PM-CALENDAR-1`; run ID `r24-20260915-a`. Status **READY / NOT_RUN_SYSTEM_APPROVAL_REJECTED / ALLOWANCE_UNCONSUMED**.
+
+## Attempt disposition
+
+At `2026-09-15T14:18:20+08:00`, offline preflight passed on clean commit `1a2d89d079920aad2a4896470425dc84749df3ff`: the stock certificate was valid, port 18769 was free, the configuration hash matched, and no R24 claim existed. The host rejected execution before creating the process because it requires a user approval explicitly naming the authenticated request and data-egress risk. No claim or run directory was created, no credential was used, no market or AI request started, no fee was incurred, and no listener opened. The candidate remains eligible only inside its original time gate after that exact approval; it must not be started by a workaround.
 
 ## Purpose and evidence boundary
 
