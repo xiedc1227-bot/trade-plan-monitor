@@ -1,10 +1,10 @@
 # R24 bounded calendar diagnostic plan
 
-Canonical English; `R24-calendar-diagnostic-proposal-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal ID `R24-20260915-PM-CALENDAR-1`; run ID `r24-20260915-a`. Status **READY / NOT_RUN_SYSTEM_APPROVAL_REJECTED / ALLOWANCE_UNCONSUMED**.
+Canonical English; `R24-calendar-diagnostic-proposal-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal ID `R24-20260915-PM-CALENDAR-1`; run ID `r24-20260915-a`. Status **CALENDAR_DIAGNOSTIC_PASS / ALLOWANCE_CONSUMED / CLOSED / FULL_WORKFLOW_NOT_PROVEN**.
 
 ## Attempt disposition
 
-At `2026-09-15T14:18:20+08:00`, offline preflight passed on clean commit `1a2d89d079920aad2a4896470425dc84749df3ff`: the stock certificate was valid, port 18769 was free, the configuration hash matched, and no R24 claim existed. The host rejected execution before creating the process because it requires a user approval explicitly naming the authenticated request and data-egress risk. No claim or run directory was created, no credential was used, no market or AI request started, no fee was incurred, and no listener opened. The candidate remains eligible only inside its original time gate after that exact approval; it must not be started by a workaround.
+At `2026-09-15T14:18:20+08:00`, offline preflight passed on clean candidate commit `1a2d89d079920aad2a4896470425dc84749df3ff`, but the host rejected execution before process creation pending exact user approval. After that approval, final preflight passed on clean documentation-closeout HEAD `05181319e84b011086440a6ff581603059f470fb` at `14:27:20+08:00`. R24 then ran from `14:27:35.883636+08:00` through `14:27:56.083854+08:00`. Its only `trade_cal` physical start succeeded and persisted 399 calendar rows; the lifecycle reached the 20-second wall limit and completed normal cleanup. See [execution record](R24-calendar-diagnostic-execution-20260915.md). The claim and allowance are consumed and must not be reused.
 
 ## Purpose and evidence boundary
 
