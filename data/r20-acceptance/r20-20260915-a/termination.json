@@ -1,0 +1,31 @@
+{
+  "proposalId": "R20-20260915-A-105",
+  "runId": "r20-20260915-a",
+  "status": "STOPPED_AFTER_TRADE_CAL_TRANSIENT",
+  "sessionClaimedAt": "2026-09-15T10:40:25.420+08:00",
+  "stoppedObservedAtOrBefore": "2026-09-15T10:43:05.864+08:00",
+  "normalAuditPresent": false,
+  "terminationMethod": "EXTERNAL_SAFE_STOP",
+  "reasonCode": "REFERENCE_TRANSIENT",
+  "ai": {
+    "physicalStarts": 0,
+    "deniedBeforeNetwork": 0
+  },
+  "market": {
+    "physicalStarts": 1,
+    "attempts": {
+      "trade_cal": 1
+    },
+    "deniedBeforeNetwork": 0
+  },
+  "isolatedState": {
+    "plans": 0,
+    "positions": 0,
+    "minuteBars": 0,
+    "fiveMinuteBars": 0,
+    "evaluations": 0,
+    "alerts": 0,
+    "deliveryAttempts": 0
+  },
+  "port18766ListeningAfterStop": false
+}

@@ -113,7 +113,9 @@ class Budget:
             }
 
 
-def approved_sources() -> dict[str, tuple[str, str]]:
+def approved_sources(
+    *, prompt_version: str = PLAN_EXTRACTION_PROMPT_V4
+) -> dict[str, tuple[str, str]]:
     literal = json.loads(
         (_ROOT / "tests/fixtures/ai/explicit-plan-literal-source-v3.json").read_text("utf-8")
     )["sourceText"]
@@ -126,7 +128,7 @@ def approved_sources() -> dict[str, tuple[str, str]]:
     return {
         case_id: (
             source,
-            build_plan_extraction_prompt(source, prompt_version=PLAN_EXTRACTION_PROMPT_V4),
+            build_plan_extraction_prompt(source, prompt_version=prompt_version),
         )
         for case_id, source in sources.items()
     }
@@ -188,13 +190,26 @@ def _session_budgets(
 class AIBudgetTransport(httpx.AsyncBaseTransport):
     """Allow only the three exact prompts, selected model, endpoint and output cap."""
 
-    def __init__(self, budget: Budget, *, inner: httpx.AsyncBaseTransport | None = None) -> None:
+    def __init__(
+        self,
+        budget: Budget,
+        *,
+        inner: httpx.AsyncBaseTransport | None = None,
+        prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
+        max_output_tokens: int = 4096,
+    ) -> None:
         self._budget = budget
         self._inner = inner or httpx.AsyncHTTPTransport(retries=0, trust_env=False)
+        sources = (
+            approved_sources()
+            if prompt_version == PLAN_EXTRACTION_PROMPT_V4
+            else approved_sources(prompt_version=prompt_version)
+        )
         self._prompt_ids = {
             sha256(prompt.encode("utf-8")).hexdigest(): case_id
-            for case_id, (_, prompt) in approved_sources().items()
+            for case_id, (_, prompt) in sources.items()
         }
+        self._max_output_tokens = max_output_tokens
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -216,7 +231,8 @@ class AIBudgetTransport(httpx.AsyncBaseTransport):
                 body["model"] == APPROVED_MODEL
                 and len(messages) == 1
                 and messages[0]["role"] == "user"
-                and body.get("max_tokens") == 4096
+                and body.get("max_tokens") == self._max_output_tokens
+                and body.get("temperature") == 0
                 and body.get("thinking") == {"type": "disabled"}
                 and body.get("response_format") == {"type": "json_object"}
                 and body.get("stream") is False
@@ -264,6 +280,9 @@ def _preflight(
     market_caps: Mapping[str, int] = _MARKET_CAPS,
     market_total: int = 60,
     wall_seconds: int = 900,
+    bind_port: int = 18765,
+    ai_output_tokens: int = 4096,
+    prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
 ) -> dict[str, object]:
     from trade_plan_monitor.config import load_application_config
     from trade_plan_monitor.live_profiles import load_stock_certification
@@ -292,7 +311,7 @@ def _preflight(
     eligible = start_window_eligible(now)
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-            probe.bind(("127.0.0.1", 18765))
+            probe.bind(("127.0.0.1", bind_port))
         port_available = True
     except OSError:
         port_available = False
@@ -335,11 +354,12 @@ def _preflight(
             "aiPhysicalAttempts": 3,
             "aiPerInputAttempts": 1,
             "aiPromptUtf8Bytes": 19_000,
-            "aiOutputTokensPerRequest": 4_096,
+            "aiOutputTokensPerRequest": ai_output_tokens,
+            "promptVersion": prompt_version,
             "marketPhysicalAttempts": market_total,
             "marketPerEndpointAttempts": dict(market_caps),
             "wallSeconds": wall_seconds,
-            "browserPort": 18765,
+            "browserPort": bind_port,
         },
         "mode": "DRY_RUN_NO_NETWORK",
     }
@@ -352,6 +372,8 @@ def _bounded_ai_factory(
     *,
     database: Path | None = None,
     inner_transport: httpx.AsyncBaseTransport | None = None,
+    prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
+    max_output_tokens: int = 4096,
 ):
     from trade_plan_monitor.web.ai_diagnostics import diagnostic_path_for_database
     from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
@@ -376,7 +398,12 @@ def _bounded_ai_factory(
             bounded = replace(
                 selected,
                 config=selected.config.model_copy(
-                    update={"max_retries": 0, "max_output_tokens": 4096, "timeout_seconds": 30}
+                    update={
+                        "max_retries": 0,
+                        "max_output_tokens": max_output_tokens,
+                        "timeout_seconds": 30,
+                        "prompt_version": prompt_version,
+                    }
                 ),
             )
             self._binding = bounded
@@ -386,7 +413,12 @@ def _bounded_ai_factory(
     return BoundedAIWebLifecycle(
         config_path=config_path,
         client_factory=lambda: httpx.AsyncClient(
-            transport=AIBudgetTransport(budget, inner=inner_transport),
+            transport=AIBudgetTransport(
+                budget,
+                inner=inner_transport,
+                prompt_version=prompt_version,
+                max_output_tokens=max_output_tokens,
+            ),
             timeout=httpx.Timeout(30),
             follow_redirects=False,
             trust_env=False,
@@ -416,6 +448,9 @@ def _create_guarded_app(
     ai_budget: Budget,
     static_directory: Path,
     ai_inner_transport: httpx.AsyncBaseTransport | None = None,
+    bind_port: int = 18765,
+    prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
+    ai_output_tokens: int = 4096,
 ):
     from trade_plan_monitor.web.app import create_app
     from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory
@@ -431,9 +466,11 @@ def _create_guarded_app(
             ai_budget,
             database=database,
             inner_transport=ai_inner_transport,
+            prompt_version=prompt_version,
+            max_output_tokens=ai_output_tokens,
         ),
         bind_host="127.0.0.1",
-        bind_port=18765,
+        bind_port=bind_port,
         static_directory=static_directory,
     )
 
@@ -490,6 +527,9 @@ async def _serve(
     market_total: int = 60,
     wall_seconds: int = 900,
     proposal_id: str = "R14",
+    bind_port: int = 18765,
+    prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
+    ai_output_tokens: int = 4096,
 ) -> int:
     import uvicorn
 
@@ -500,7 +540,7 @@ async def _serve(
 
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        listener.bind(("127.0.0.1", 18765))
+        listener.bind(("127.0.0.1", bind_port))
         listener.listen(128)
         listener.setblocking(False)
     except OSError:
@@ -559,10 +599,13 @@ async def _serve(
                 plan_lifecycle=plan_lifecycle,
                 ai_budget=ai_budget,
                 static_directory=static_directory,
+                bind_port=bind_port,
+                prompt_version=prompt_version,
+                ai_output_tokens=ai_output_tokens,
             )
             server = uvicorn.Server(
                 uvicorn.Config(
-                    app, host="127.0.0.1", port=18765, log_level="warning", access_log=False
+                    app, host="127.0.0.1", port=bind_port, log_level="warning", access_log=False
                 )
             )
 
@@ -583,7 +626,9 @@ async def _serve(
                     await asyncio.sleep(1)
 
             print(
-                json.dumps({"status": "STARTING_BROWSER", "url": "http://127.0.0.1:18765"}),
+                json.dumps(
+                    {"status": "STARTING_BROWSER", "url": f"http://127.0.0.1:{bind_port}"}
+                ),
                 flush=True,
             )
             task = asyncio.create_task(server.serve(sockets=[listener]))
