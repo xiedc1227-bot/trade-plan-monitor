@@ -282,6 +282,8 @@ def _claim_session(root: Path, run_id: str) -> Path:
 def _session_budgets(
     on_denied: Callable[[], None],
     *,
+    ai_total: int = 3,
+    ai_caps: Mapping[str, int] | None = None,
     market_caps: Mapping[str, int] = _MARKET_CAPS,
     market_total: int = 60,
     wall_seconds: int = 900,
@@ -294,8 +296,10 @@ def _session_budgets(
     stopped = threading.Event()
     return (
         Budget(
-            total=3,
-            per_key={key: 1 for key in approved_sources()},
+            total=ai_total,
+            per_key=(
+                {key: 1 for key in approved_sources()} if ai_caps is None else ai_caps
+            ),
             seconds=wall_seconds,
             on_denied=on_denied,
             on_snapshot=on_ai_snapshot,
@@ -430,6 +434,8 @@ def _preflight(
     bind_port: int = 18765,
     ai_output_tokens: int = 4096,
     prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
+    ai_total: int = 3,
+    require_ai: bool = True,
 ) -> dict[str, object]:
     from trade_plan_monitor.config import load_application_config
     from trade_plan_monitor.live_profiles import load_stock_certification
@@ -463,16 +469,19 @@ def _preflight(
     except OSError:
         port_available = False
     selected = APPROVED_MODEL in {ai.model, *(item.model for item in ai.additional_models)}
-    ready = bool(
-        market.token
-        and market.connect_ip
-        and ai.api_key
-        and market_url
-        and market_url.scheme == "https"
-        and market_url.hostname == "api.quicksync.cn"
+    ai_ready = bool(
+        ai.api_key
         and ai_url.scheme == "https"
         and ai_url.hostname == "api.deepseek.com"
         and selected
+    )
+    ready = bool(
+        market.token
+        and market.connect_ip
+        and market_url
+        and market_url.scheme == "https"
+        and market_url.hostname == "api.quicksync.cn"
+        and (ai_ready or not require_ai)
         and profile is not None
         and profile.ready
         and eligible
@@ -498,7 +507,7 @@ def _preflight(
             "stockCertificateReady": bool(profile is not None and profile.ready),
         },
         "limits": {
-            "aiPhysicalAttempts": 3,
+            "aiPhysicalAttempts": ai_total,
             "aiPerInputAttempts": 1,
             "aiPromptUtf8Bytes": 19_000,
             "aiOutputTokensPerRequest": ai_output_tokens,
@@ -680,6 +689,8 @@ async def _serve(
     bind_port: int = 18765,
     prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
     ai_output_tokens: int = 4096,
+    ai_total: int = 3,
+    ai_caps: Mapping[str, int] | None = None,
     stop_on_market_failure_keys: frozenset[str] = frozenset(),
     stop_on_reference_failure: bool = False,
 ) -> int:
@@ -744,6 +755,8 @@ async def _serve(
 
     ai_budget, market_budget = _session_budgets(
         stop_server,
+        ai_total=ai_total,
+        ai_caps=ai_caps,
         market_caps=market_caps,
         market_total=market_total,
         wall_seconds=wall_seconds,
