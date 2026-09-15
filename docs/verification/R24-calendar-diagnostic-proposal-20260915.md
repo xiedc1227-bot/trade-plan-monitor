@@ -10,7 +10,7 @@ The local journal closeout defect observed in R23 is fixed before this candidate
 
 ## Admission and isolation
 
-- Candidate date: **2026-09-15**. Admission gate: **14:25:00–14:45:00 Asia/Shanghai inclusive**. The 20-second wall limit ends new calls well before market close.
+- Candidate date: **2026-09-15**. Admission gate: **14:18:00–14:35:00 Asia/Shanghai inclusive**. The 20-second wall limit ends new calls well before market close.
 - Fresh one-shot root: `data/r24-calendar-diagnostic/`; fresh claim: `_session_claimed`; isolated database: `r24-20260915-a/monitor.sqlite3`; loopback port: `18769`.
 - The default invocation is `DRY_RUN_NO_NETWORK`. Execution requires the exact R24 authorization and run ID. It validates the current configuration, endpoint identity, direct-route presence, stock certificate, port, and time gate without exposing credentials or the direct address.
 - The locally recorded stock certificate expires at `2026-09-16T14:48:40.405317+08:00`; the five-index certificate expires at `2026-09-18T10:20:44.522358+08:00`. R24 needs only the stock certificate and does not recertify either file.

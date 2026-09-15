@@ -9,9 +9,9 @@ _SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 def test_r24_contract_allows_only_one_calendar_start_and_no_ai() -> None:
-    assert r24._eligible(datetime(2026, 9, 15, 14, 25, tzinfo=_SHANGHAI))
-    assert r24._eligible(datetime(2026, 9, 15, 14, 45, tzinfo=_SHANGHAI))
-    assert not r24._eligible(datetime(2026, 9, 15, 14, 45, 1, tzinfo=_SHANGHAI))
+    assert r24._eligible(datetime(2026, 9, 15, 14, 18, tzinfo=_SHANGHAI))
+    assert r24._eligible(datetime(2026, 9, 15, 14, 35, tzinfo=_SHANGHAI))
+    assert not r24._eligible(datetime(2026, 9, 15, 14, 35, 1, tzinfo=_SHANGHAI))
     assert r24.PROPOSAL_ID == "R24-20260915-PM-CALENDAR-1"
     assert r24.RUN_ID == "r24-20260915-a"
     assert r24.BIND_PORT == 18769

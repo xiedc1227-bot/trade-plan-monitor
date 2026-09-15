@@ -31,7 +31,7 @@ STOP_ON_REFERENCE_FAILURE = True
 
 
 def _eligible(now: datetime) -> bool:
-    return now.date() == date(2026, 9, 15) and time(14, 25) <= now.time() <= time(14, 45)
+    return now.date() == date(2026, 9, 15) and time(14, 18) <= now.time() <= time(14, 35)
 
 
 def _preflight() -> dict[str, object]:
