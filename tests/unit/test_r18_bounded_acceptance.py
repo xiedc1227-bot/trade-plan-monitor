@@ -17,17 +17,17 @@ from scripts import r18_bounded_acceptance as r18
 def test_window_and_limits_are_bound_to_the_new_session() -> None:
     assert r18.AUTHORIZATION not in {r14.AUTHORIZATION, r17.AUTHORIZATION}
     assert r18.RUN_ID not in {"r14-20260914-a", r17.RUN_ID}
-    assert r18.PROPOSAL_ID == "R18-20260915-OPEN-105"
+    assert r18.PROPOSAL_ID == "R18-20260915-RESTART-105"
     assert r18.MARKET_CAPS["rt_idx_min_daily"] == 50
     assert r18.MARKET_CAPS["rt_min"] == 40
     assert sum(r18.MARKET_CAPS.values()) == r18.MARKET_TOTAL == 105
     assert r18.WALL_SECONDS == 2280
-    assert r18._eligible(datetime(2026, 9, 15, 9, 30))
-    assert r18._eligible(datetime(2026, 9, 15, 9, 31))
+    assert r18._eligible(datetime(2026, 9, 15, 9, 40))
+    assert r18._eligible(datetime(2026, 9, 15, 9, 45))
     for instant in (
         datetime(2026, 9, 14, 14, 35),
-        datetime(2026, 9, 15, 9, 29, 59),
-        datetime(2026, 9, 15, 9, 31, 0, 1),
+        datetime(2026, 9, 15, 9, 39, 59),
+        datetime(2026, 9, 15, 9, 45, 0, 1),
         datetime(2026, 9, 16, 14, 35),
     ):
         assert not r18._eligible(instant)

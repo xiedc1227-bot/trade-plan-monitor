@@ -9,9 +9,9 @@ from datetime import date, datetime, time
 
 from scripts import r14_bounded_acceptance as bounded
 
-PROPOSAL_ID = "R18-20260915-OPEN-105"
-AUTHORIZATION = "R18_20260915_3_AI_105_MARKET_IN_APP_38MIN"
-RUN_ID = "r18-20260915-a"
+PROPOSAL_ID = "R18-20260915-RESTART-105"
+AUTHORIZATION = "R18_20260915_RESTART_3_AI_105_MARKET_IN_APP_38MIN"
+RUN_ID = "r18-20260915-b"
 MARKET_CAPS = {
     **bounded._MARKET_CAPS,
     "rt_min_daily": 2,
@@ -23,7 +23,7 @@ WALL_SECONDS = 2280
 
 
 def _eligible(now: datetime) -> bool:
-    return now.date() == date(2026, 9, 15) and time(9, 30) <= now.time() <= time(9, 31)
+    return now.date() == date(2026, 9, 15) and time(9, 40) <= now.time() <= time(9, 45)
 
 
 def _preflight() -> dict[str, object]:
