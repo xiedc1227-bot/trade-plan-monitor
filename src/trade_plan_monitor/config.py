@@ -154,8 +154,15 @@ class AIConfiguration(_ConfigurationModel):
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     max_retries: int = Field(default=2, ge=0, le=2)
     max_input_chars: int = Field(default=50_000, ge=1, le=200_000)
-    max_output_tokens: int = Field(default=4_096, ge=1, le=16_384)
+    max_output_tokens: int = Field(default=8_192, ge=1, le=16_384)
     temperature: float = Field(default=0, ge=0, le=0.3)
+    prompt_version: Literal[
+        "plan-extract-v1",
+        "plan-extract-v2",
+        "plan-extract-v3",
+        "plan-extract-v4",
+        "plan-extract-v5",
+    ] = "plan-extract-v5"
     additional_models: tuple[AIModelConfiguration, ...] = Field(
         default=(),
         max_length=9,
@@ -232,6 +239,7 @@ class AIConfiguration(_ConfigurationModel):
                 max_input_chars=self.max_input_chars,
                 max_output_tokens=self.max_output_tokens,
                 temperature=self.temperature,
+                prompt_version=self.prompt_version,
             )
             for provider_id, display_name, model in models
         )

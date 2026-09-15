@@ -28,7 +28,8 @@ ai:
   timeout_seconds: 30
   max_retries: 2
   max_input_chars: 50000
-  max_output_tokens: 4096
+  max_output_tokens: 8192
+  prompt_version: plan-extract-v5
   temperature: 0.0
 
 # Database, backup, and webhook settings are runtime-composition inputs and are not

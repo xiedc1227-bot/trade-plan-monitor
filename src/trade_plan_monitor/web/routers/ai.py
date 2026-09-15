@@ -87,7 +87,7 @@ class AIProviderConfiguration(ApiValue):
     timeout_seconds: Annotated[int, Field(strict=True, ge=1, le=120)] = 30
     max_retries: Annotated[int, Field(strict=True, ge=0, le=2)] = 2
     max_input_chars: Annotated[int, Field(strict=True, ge=1, le=200_000)] = 50_000
-    max_output_tokens: Annotated[int, Field(strict=True, ge=1, le=16_384)] = 4_096
+    max_output_tokens: Annotated[int, Field(strict=True, ge=1, le=16_384)] = 8_192
     temperature: Annotated[float, Field(strict=True, ge=0, le=0.3)] = 0
     prompt_version: Annotated[
         str,

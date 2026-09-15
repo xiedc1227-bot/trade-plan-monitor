@@ -21,6 +21,7 @@ from trade_plan_monitor.ai.prompts import (
     PLAN_EXTRACTION_PROMPT_V2,
     PLAN_EXTRACTION_PROMPT_V3,
     PLAN_EXTRACTION_PROMPT_V4,
+    PLAN_EXTRACTION_PROMPT_V5,
     build_plan_extraction_prompt,
 )
 from trade_plan_monitor.ai.provider import PlanExtractionRequest, RawAIResponse
@@ -49,13 +50,13 @@ def _config() -> AIProviderConfig:
     )
 
 
-def test_provider_default_selects_v4_without_changing_the_configured_model() -> None:
+def test_provider_default_selects_v5_without_changing_the_configured_model() -> None:
     values = _config().model_dump(mode="python")
     values.pop("prompt_version")
 
     config = AIProviderConfig.model_validate(values)
 
-    assert config.prompt_version == PLAN_EXTRACTION_PROMPT_V4
+    assert config.prompt_version == PLAN_EXTRACTION_PROMPT_V5
     assert config.model == "offline-v4"
 
 

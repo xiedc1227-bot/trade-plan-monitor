@@ -578,9 +578,9 @@ class PlanExtractionView(ApiValue):
             )
             if canonical != plan_json:
                 raise ValueError("draft_plan_json must be canonical")
-            if self.prompt_version == "plan-extract-v4":
+            if self.prompt_version in {"plan-extract-v4", "plan-extract-v5"}:
                 if self.mapping is None or self.evidence or self.unmapped_text:
-                    raise ValueError("v4 extraction requires only its bidirectional mapping")
+                    raise ValueError("mapping extraction requires only its bidirectional mapping")
             else:
                 if not self.evidence or self.mapping is not None:
                     raise ValueError("legacy extraction requires field evidence")
@@ -593,7 +593,10 @@ class PlanExtractionView(ApiValue):
                 and issue.severity.value == "WARNING"
                 and issue.activation_blocking
             )
-            if self.prompt_version != "plan-extract-v4" and len(evidence_review) != 1:
+            if (
+                self.prompt_version not in {"plan-extract-v4", "plan-extract-v5"}
+                and len(evidence_review) != 1
+            ):
                 raise ValueError("successful extraction requires its evidence review blocker")
             if any(not item.material for item in self.unmapped_text):
                 raise ValueError("unreviewed unmapped text must remain material")

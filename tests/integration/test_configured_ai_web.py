@@ -325,7 +325,7 @@ ai:
             "displayName": "DeepSeek",
             "enabled": True,
             "maxInputChars": 50000,
-            "maxOutputTokens": 4096,
+            "maxOutputTokens": 8192,
             "model": "deepseek-v4-flash",
             "providerId": "00000000-0000-4000-8000-0000000000d5",
             "revision": 0,

@@ -61,7 +61,7 @@ class AIProvider(Protocol):
 - 温度默认固定为 0，允许范围 0～0.3；
 - 提示词版本和启用状态。
 
-首版稳定范围为：Base URL 最长 2,048 个字符；直接 API Key 最长 8,192 个字符；超时 1～120 秒（默认 30）；重试 0～2 次（默认 2）；输入 1～200,000 个字符（默认 50,000）；输出 1～16,384 Token（默认 4,096）；温度 0～0.3（默认 0）。重定向不可配置且始终禁用。只有字面值 `localhost`、IPv4 回环地址或 IPv6 回环地址可使用 HTTP，其他地址必须使用 HTTPS。包含账号密码、查询字符串或片段的 Base URL 无效。
+首版稳定范围为：Base URL 最长 2,048 个字符；直接 API Key 最长 8,192 个字符；超时 1～120 秒（默认 30）；重试 0～2 次（默认 2）；输入 1～200,000 个字符（默认 50,000）；输出 1～16,384 Token（默认 8,192）；温度 0～0.3（默认 0）。重定向不可配置且始终禁用。只有字面值 `localhost`、IPv4 回环地址或 IPv6 回环地址可使用 HTTP，其他地址必须使用 HTTPS。包含账号密码、查询字符串或片段的 Base URL 无效。项目文件中的显式值仍优先；本次默认值调整不会改写 `config/app.yaml`。
 
 ### 服务适配器契约
 
@@ -111,7 +111,7 @@ class PlanExtractionResult(BaseModel):
 
 无法支持的说明进入 `unmapped_text`，不能转换成任意公式。无论模型提供什么值，每个模型生成的 `unmapped_text` 项都规范化为 `material=true`，直到可信用户完成审核。
 
-原始模型输出上限为 1,048,576 个 UTF-8 字节、10,000 个 JSON 节点和 64 层深度。重复 JSON Key 和非有限数值都会被拒绝。调用供应商前，包含生成 Schema 的完整渲染提示词必须满足已配置的输入字符上限。供应商取消会从提取函数向上传播；`CANCELLED` 保留给后续编排/API 作业回执，本函数不会合成该状态。
+原始模型输出上限为 1,048,576 个 UTF-8 字节、10,000 个 JSON 节点和 64 层深度。重复 JSON Key 和非有限数值都会被拒绝。调用供应商前，包含生成 Schema 的完整渲染提示词必须满足已配置的输入字符上限。供应商返回 `finish_reason=length` 时，以 `INVALID_OUTPUT` 和固定用户可见问题 `AI_OUTPUT_TRUNCATED` 安全失败；不返回草稿或映射，也不能改变活动计划。供应商取消会从提取函数向上传播；`CANCELLED` 保留给后续编排/API 作业回执，本函数不会合成该状态。
 
 ### 提示词契约
 
@@ -123,7 +123,7 @@ class PlanExtractionResult(BaseModel):
 - 把用户计划明确包裹为不可信数据；
 - 不包含密钥、实时持仓或无关报告。
 
-提示词使用不可变版本标识和生成 Schema 的 SHA-256 契约。兼容的 `plan-extract-v1`、`plan-extract-v2`、`plan-extract-v3` 契约保持逐字节不变，其黄金提示词摘要分别为 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`、`6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`、`df606ede45e58263b669f092cfaeb575becf1ea314076823b23f275a1768ae5d`。R11 新增独立的 `plan-extract-v4` 部分 Schema 3/映射契约，生成 Schema 摘要为 `9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1`，黄金提示词摘要为 `e91f6b32a69a60b1f35da3e5deee5acd17d326cecd0efcadd2aa99bdb36b4eb7`。显式历史配置保持可回放；省略版本现选择 v4。之后任何模板或 Schema 变更都必须使用另一个版本和黄金值。
+提示词使用不可变版本标识和生成 Schema 的 SHA-256 契约。兼容的 `plan-extract-v1`、`plan-extract-v2`、`plan-extract-v3` 契约保持逐字节不变，其黄金提示词摘要分别为 `420e06c0a8ab136a1b95c8218474fccd7f134d1bc5c9e1365e0c6a4a099e3d8d`、`6d9ba53055700e508251fc62ce3a10c2c719b68874ac78aee9f27cbd40127daf`、`df606ede45e58263b669f092cfaeb575becf1ea314076823b23f275a1768ae5d`。R11 新增独立的 `plan-extract-v4` 部分 Schema 3/映射契约，生成 Schema 摘要为 `9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1`，黄金提示词摘要为 `e91f6b32a69a60b1f35da3e5deee5acd17d326cecd0efcadd2aa99bdb36b4eb7`。R19 保持 v4 逐字节冻结，并在相同输出 Schema 上新增 `plan-extract-v5`：要求压缩 JSON，只允许省略顶层空 `assumptions` 与 `warnings`，其余字段与判别字段必须显式保留。生成 Schema 摘要仍为 `9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1`，黄金提示词摘要为 `8ec7e564eb9348ca6c00acee92405222b6ad13423da95dcc1b4fb167252cf4d6`。显式历史配置保持可回放；省略版本现选择 v5。之后任何模板或 Schema 变更都必须使用另一个版本和黄金值。
 
 ### 审核与激活边界
 
@@ -215,6 +215,6 @@ async def extract_plan(
 
 上述既有提取模型和 prompt v1/v2/v3 继续属于旧契约。[SPEC-executable-plan-extension](SPEC-executable-plan-extension.zh-CN.md) E07 中的 R08 设计为 R11 增加独立类型化 Schema 3 部分草稿和 `plan-mapping-v1` 双向证据，来源为 `SOURCE`、`USER_SUPPLEMENT`、`CONTRACT`。原文条款、字段、逻辑父子关系、单位、包含边界、确认时机、动作数量、重复、冲突选择和未映射语义都必须可审核。子串命中不能证明语义正确。
 
-R11 已实现单独的 `plan-extract-v4` 输出/解析器和当前内容复核确认。v4 Schema/提示词摘要分别为 `9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1` 和 `e91f6b32a69a60b1f35da3e5deee5acd17d326cecd0efcadd2aa99bdb36b4eb7`；v1/v2/v3 保持冻结。省略版本的供应商设置选择 v4，但不修改任何真实供应商、凭据或模型配置。
+R11 已实现单独的 `plan-extract-v4` 输出/解析器和当前内容复核确认。R19 新增兼容的 `plan-extract-v5` 压缩输出要求，不改变类型化 Schema 或复核/激活规则；v1/v2/v3/v4 保持冻结。省略版本的供应商设置选择 v5，但不修改任何真实供应商、凭据、模型或项目文件中的显式输出上限配置。
 
 缺失 repeat/rearm、激活或冲突选择保留为类型化 null，并产生服务端派生的 `UNRESOLVED_EXECUTION_POLICY` 问题及 `canActivate=false`。不支持的先后关系和未限定周期的收盘语义保留原文绑定阻断，不能靠通用已读解决。`POST /api/v1/plan-review-confirmations` 把解决记录绑定到精确不可变计划版本、语义 `contentHash`、`sourceHash`、`reviewEvidenceHash` 及乐观复核 revision；编辑会生成新快照并使旧确认失效。期初持仓仍是单独确认事实。公开启用在 R12 普通表单交付前继续不可用，R11 不声称真实模型准确性或真实供应商证据。

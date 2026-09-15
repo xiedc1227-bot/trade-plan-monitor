@@ -6,9 +6,12 @@ from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import pytest
 from fastapi.testclient import TestClient
 
+from trade_plan_monitor.ai.extraction import extract_plan
 from trade_plan_monitor.ai.models import (
+    AIProviderConfig,
     BindingKind,
     BindingOrigin,
     BindingUnit,
@@ -18,8 +21,10 @@ from trade_plan_monitor.ai.models import (
     PlanExtractionResult,
     PlanExtractionStatus,
     PlanMapping,
+    SecretReference,
     UserSupplement,
 )
+from trade_plan_monitor.ai.provider import PlanExtractionRequest, RawAIResponse
 from trade_plan_monitor.ai.review import (
     dump_explicit_plan_draft_json,
     server_source_clauses,
@@ -31,6 +36,7 @@ _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _NOW = datetime(2026, 9, 12, 16, 0, tzinfo=_SHANGHAI)
 _PROVIDER_ID = UUID("04f3e4f5-7b55-4d61-a9ea-119d0db5c9a7")
 _EXTRACTION_ID = UUID("06e3613f-2aa9-481a-8b7e-b6d66230f09d")
+_TRUNCATED_EXTRACTION_ID = UUID("95aa2e52-c4a2-4477-b1a6-3591687d3311")
 _SOURCE = (
     "003043.SZ 已有可卖100股 最高300股 五分钟完成收盘9.80到10.00元含端点"
     "并且成交量不少于前5根已完成五分钟K线算术平均值1.5倍买入100股 "
@@ -61,6 +67,22 @@ class _Runtime:
 
     async def stop(self) -> None:
         return None
+
+
+class _TruncatingProvider:
+    async def test_connection(self, config: object) -> None:
+        raise AssertionError("not used")
+
+    async def extract_plan(self, request: PlanExtractionRequest) -> RawAIResponse:
+        return RawAIResponse(
+            request_id=request.request_id,
+            provider_id=request.config.provider_id,
+            model=request.config.model,
+            content="{",
+            finish_reason="length",
+            usage=None,
+            attempts=1,
+        )
 
 
 def _draft_payload(*, complete: bool = True) -> dict[str, object]:
@@ -374,13 +396,14 @@ def _record_extraction(
     *,
     source_text: str = _SOURCE,
     mapping: PlanMapping | None = None,
+    prompt_version: str = "plan-extract-v4",
 ) -> None:
     mapping = mapping or _mapping(draft)
     result = PlanExtractionResult(
         request_id=_EXTRACTION_ID,
         provider_id=_PROVIDER_ID,
         model="offline-v4",
-        prompt_version="plan-extract-v4",
+        prompt_version=prompt_version,
         source_text_sha256=__import__("hashlib").sha256(source_text.encode()).hexdigest(),
         draft=draft,
         mapping=mapping,
@@ -413,14 +436,16 @@ def _confirmation_resolutions(detail: dict[str, object]) -> list[dict[str, objec
     return resolutions
 
 
-def test_v4_extraction_save_review_and_public_activation_are_server_bound(
+@pytest.mark.parametrize("prompt_version", ("plan-extract-v4", "plan-extract-v5"))
+def test_mapping_extraction_save_review_and_public_activation_are_server_bound(
     tmp_path: Path,
+    prompt_version: str,
 ) -> None:
     app, lifecycle = _app(tmp_path / "review.sqlite3")
     draft = ExplicitPlanDraft.model_validate_json(json.dumps(_draft_payload()))
 
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
-        _record_extraction(lifecycle, draft)
+        _record_extraction(lifecycle, draft, prompt_version=prompt_version)
         saved = client.post(
             "/api/v1/plan-drafts",
             headers={"Idempotency-Key": "save-explicit-review"},
@@ -543,6 +568,32 @@ def test_v4_extraction_save_review_and_public_activation_are_server_bound(
         assert activation.status_code == 200, activation.text
         assert activation.json()["planVersionId"] == detail["id"]
         assert activation.json()["active"] is True
+        active_before_failure = client.get("/api/v1/plan-activation-states/003043.SZ").json()
+        if prompt_version == "plan-extract-v5":
+            import asyncio
+
+            truncated = asyncio.run(
+                extract_plan(
+                    request_id=_TRUNCATED_EXTRACTION_ID,
+                    source_text=_SOURCE,
+                    config=AIProviderConfig(
+                        provider_id=_PROVIDER_ID,
+                        display_name="offline-v5",
+                        base_url="https://api.deepseek.com",
+                        model="deepseek-v4-pro",
+                        secret_ref=SecretReference(key="ai/provider/offline-v5"),
+                        max_retries=0,
+                    ),
+                    provider=_TruncatingProvider(),
+                )
+            )
+            assert truncated.status is PlanExtractionStatus.INVALID_OUTPUT
+            assert truncated.draft is None
+            assert truncated.mapping is None
+            assert (
+                client.get("/api/v1/plan-activation-states/003043.SZ").json()
+                == active_before_failure
+            )
         capability = client.get("/api/v1/plan-capabilities").json()
         assert capability["publicActivationAvailable"] is True
         assert capability["isolatedTrustedReviewOnly"] is False

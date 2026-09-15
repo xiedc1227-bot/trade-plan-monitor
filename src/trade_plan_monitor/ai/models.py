@@ -126,9 +126,9 @@ class AIProviderConfig(_AIValue):
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     max_retries: int = Field(default=2, ge=0, le=2)
     max_input_chars: int = Field(default=50_000, ge=1, le=200_000)
-    max_output_tokens: int = Field(default=4_096, ge=1, le=16_384)
+    max_output_tokens: int = Field(default=8_192, ge=1, le=16_384)
     temperature: float = Field(default=0, ge=0, le=0.3)
-    prompt_version: PromptVersion = "plan-extract-v4"
+    prompt_version: PromptVersion = "plan-extract-v5"
     allow_redirects: Literal[False] = False
     enabled: bool = True
 
@@ -785,10 +785,11 @@ class PlanExtractionResult(_AIValue):
             if self.draft is None or not self.evidence:
                 if not isinstance(self.draft, ExplicitPlanDraft) or self.mapping is None:
                     raise ValueError("a succeeded extraction requires a draft and evidence")
-            if self.prompt_version == "plan-extract-v4" and self.mapping is None:
-                raise ValueError("a v4 extraction requires a plan mapping")
-            if self.prompt_version != "plan-extract-v4" and self.mapping is not None:
-                raise ValueError("legacy extraction versions cannot contain a v4 mapping")
+            mapping_versions = {"plan-extract-v4", "plan-extract-v5"}
+            if self.prompt_version in mapping_versions and self.mapping is None:
+                raise ValueError("a mapping extraction requires a plan mapping")
+            if self.prompt_version not in mapping_versions and self.mapping is not None:
+                raise ValueError("legacy extraction versions cannot contain a plan mapping")
             return self
         if (
             self.draft is not None

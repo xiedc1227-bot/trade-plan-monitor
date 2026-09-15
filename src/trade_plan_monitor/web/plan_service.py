@@ -805,7 +805,7 @@ def _resolve_server_review(
         )
         if (
             extraction is None
-            or extraction.prompt_version != "plan-extract-v4"
+            or extraction.prompt_version not in {"plan-extract-v4", "plan-extract-v5"}
             or extraction.mapping is None
             or extraction.source_hash != source_hash
         ):

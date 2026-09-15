@@ -26,7 +26,11 @@ from trade_plan_monitor.ai.models import (
     PlanExtractionStatus,
     UnmappedText,
 )
-from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V4, build_plan_extraction_prompt
+from trade_plan_monitor.ai.prompts import (
+    PLAN_EXTRACTION_PROMPT_V4,
+    PLAN_EXTRACTION_PROMPT_V5,
+    build_plan_extraction_prompt,
+)
 from trade_plan_monitor.ai.provider import (
     AIProvider,
     AIProviderError,
@@ -114,11 +118,7 @@ async def extract_plan(
             attempts=error.attempts,
         )
 
-    if (
-        raw.request_id != request_id
-        or raw.provider_id != config.provider_id
-        or raw.finish_reason != "stop"
-    ):
+    if raw.request_id != request_id or raw.provider_id != config.provider_id:
         return _failure_result(
             request_id=request_id,
             config=config,
@@ -129,11 +129,26 @@ async def extract_plan(
             issue_message="AI output did not satisfy the extraction contract.",
             raw=raw,
             stage="response",
-            reason=(
-                "ENVELOPE_MISMATCH"
-                if raw.request_id != request_id or raw.provider_id != config.provider_id
-                else "FINISH_REASON"
+            reason="ENVELOPE_MISMATCH",
+        )
+
+    if raw.finish_reason != "stop":
+        truncated = raw.finish_reason == "length"
+        return _failure_result(
+            request_id=request_id,
+            config=config,
+            source_text_sha256=source_text_sha256,
+            status=PlanExtractionStatus.INVALID_OUTPUT,
+            issue_code="AI_OUTPUT_TRUNCATED" if truncated else "AI_OUTPUT_INVALID",
+            issue_path="draft",
+            issue_message=(
+                "AI output was truncated before completion; no draft was created."
+                if truncated
+                else "AI output did not satisfy the extraction contract."
             ),
+            raw=raw,
+            stage="response",
+            reason="FINISH_REASON",
         )
 
     try:
@@ -390,7 +405,7 @@ def _parse_untrusted_output(
     )
     model = (
         PlanExtractionOutputV4
-        if prompt_version == PLAN_EXTRACTION_PROMPT_V4
+        if prompt_version in {PLAN_EXTRACTION_PROMPT_V4, PLAN_EXTRACTION_PROMPT_V5}
         else PlanExtractionOutput
     )
     return model.model_validate_json(normalized)
