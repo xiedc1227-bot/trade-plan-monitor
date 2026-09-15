@@ -1,6 +1,6 @@
 # R25 extraction-only acceptance preparation
 
-Canonical English; `R25-extraction-acceptance-preparation-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal `R25-20260916-AM-EXTRACT-3`; run `r25-20260916-a`. Status **OFFLINE_PASS / SPECIFIC_EGRESS_APPROVAL_PENDING / LIVE_NOT_RUN / ZERO_EXTERNAL_CALLS**.
+Canonical English; `R25-extraction-acceptance-preparation-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal `R25-20260916-AM-EXTRACT-3`; run `r25-20260916-a`. Status **OFFLINE_PASS / SPECIFIC_EGRESS_APPROVED / LIVE_NOT_RUN / ZERO_EXTERNAL_CALLS**.
 
 ## Source and privacy inventory
 
@@ -19,7 +19,7 @@ The fixtures contain synthetic trading-rule and holding language. Offline patter
 
 ## Offline verification
 
-At `2026-09-15T15:00:34+08:00`, dry preflight read the local configuration and certificate metadata without printing credentials or a direct address. It reported the AI alias/key and market token/connect-address as present, stock certification ready, port 18770 available, and `ready=false` solely because the proposed 2026-09-16 gate was not current. It made no AI or market request and did not probe balance or model-list endpoints.
+At `2026-09-15T15:17:11+08:00`, a fresh dry preflight read the local configuration and certificate metadata without printing credentials or a direct address. It reported the AI alias/key and market token/connect-address as present, stock certification ready, manifest matching the candidate, port 18770 available, and `ready=false` solely because the proposed 2026-09-16 gate was not current. It made no AI or market request and did not probe balance or model-list endpoints.
 
 Focused R25 tests: **7 passed**, with one pre-existing Starlette/httpx deprecation warning. They cover candidate identity/caps, exact request material, bilingual review-package generation, ordered early stop, frozen literal/semantic oracles, uncertain query without resubmission, and the exact execute gate. The R25/R23/R24 plus v4/semantic extraction regression group passed **46/46**. Ruff passed for the candidate and focused test.
 
@@ -37,4 +37,6 @@ Using the transport's 19,000 UTF-8-byte prompt ceiling as a conservative 19,000-
 
 R25 offline preparation proves the candidate's local bounds and failure behavior; it does not prove a real provider result. No AI POST, `trade_cal`, other market request, webhook, broker action, holding change, plan activation or consumed R25 claim occurred.
 
-The parent task's attempted live dispatch was rejected by automatic system approval because the exact potentially sensitive payload and external destination were not specifically approved. The remaining approval is therefore narrow: the user must inspect the generated exact review package and specifically authorize those three displayed source/prompt payloads to be sent to DeepSeek at the stated endpoint for the stated extraction tests. General continuation authority is not being requested again.
+The parent task's attempted live dispatch was rejected by automatic system approval because the exact potentially sensitive payload and external destination had not been specifically approved. After the exact local review package was displayed, the user replied “批准” on 2026-09-15. That response specifically authorizes the three displayed source/prompt payloads to be sent to DeepSeek at `POST https://api.deepseek.com/chat/completions` for the three stated extraction tests and satisfies the prior automatic-approval gap.
+
+The authorization is immutable-content approval bound to package SHA-256 `6b0d300b0404a24b690281f9336a013f430b72ec9371be069b82c66aab92833d` / `4d689c24721901e3de8ee38d1accdfdc6f3f54433c36c446a5dff11ce04a32d0`, the three source SHA-256 values recorded above, and prompt SHA-256 `660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89`, `f4e5a48d49dbbf582dae883af8dfe724b133df465dd92ff7363dadb6c4e5e2a7`, `fea166298e40b143a5ae261bc7efdf17b3ce8f95869df6ee9c2bdf7cef451455`. If any package, source or prompt hash changes, this approval does not apply. No general permission needs to be requested again. This approval does not override the candidate's date/window, official route/price recheck, certificate, configuration, hash or port gates; nor is it human review of results that do not yet exist. This turn performed no live call and consumed no claim.

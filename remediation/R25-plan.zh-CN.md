@@ -1,6 +1,6 @@
 # R25 计划：提取专用真实验收候选
 
-英文原版为 `R25-plan.md`，本文是等价中文审阅副本。状态 **OFFLINE_IMPLEMENTED / SPECIFIC_EGRESS_APPROVAL_PENDING / LIVE_NOT_RUN**。
+英文原版为 `R25-plan.md`，本文是等价中文审阅副本。状态 **OFFLINE_IMPLEMENTED / SPECIFIC_EGRESS_APPROVED / LIVE_NOT_RUN**。
 
 ## 目标与边界
 
@@ -30,6 +30,8 @@
 
 ## 批准与完成条件
 
-精确本地审阅包生成于 `data/r25-extraction-review/egress-review.md`，并有等价的 `egress-review.zh-CN.md`。其中包含每次请求的完整原文、完整唯一 user 提示词、来源、原文/提示词 SHA-256、目的地址及固定请求体字段；凭据被排除。只有用户针对该文件展示的准确内容，明确批准为所列三项用途外发至 `https://api.deepseek.com/chat/completions` 后，才允许真实执行。
+精确本地审阅包生成于 `data/r25-extraction-review/egress-review.md`，并有等价的 `egress-review.zh-CN.md`。其中包含每次请求的完整原文、完整唯一 user 提示词、来源、原文/提示词 SHA-256、目的地址及固定请求体字段；凭据被排除。该审阅包展示后，用户于 2026-09-15 回复“批准”，明确批准将其准确内容外发至 DeepSeek 的 `POST https://api.deepseek.com/chat/completions`，用于所列三项提取测试。这补足了此前缺失的具体内容外发批准；不得再次索取通用权限。
 
-只有候选、聚焦测试、中英文计划/报告/交接、本地审阅包和干净本地提交均存在时，R25 离线准备才完成。真实业务验收仍未证明；必须另行启动候选并由人工明确复核本次最新已验证结果后，才可能继续。
+该批准绑定审阅包 SHA-256 `6b0d300b0404a24b690281f9336a013f430b72ec9371be069b82c66aab92833d` / `4d689c24721901e3de8ee38d1accdfdc6f3f54433c36c446a5dff11ce04a32d0`、原文 SHA-256 `0b8b389b9b083adff268186c2d6ac8a2589b4ad02e0b4d3b5b8ca37ce1452191`、`26760155a5c87044b514ab2cff3a162dcef45d739dc863961ee629573e9e991e`、`23401380e6f188abe6da02c2e77db8e4f67bb8e7133efa191329cf505baa11b0`，以及提示词 SHA-256 `660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89`、`f4e5a48d49dbbf582dae883af8dfe724b133df465dd92ff7363dadb6c4e5e2a7`、`fea166298e40b143a5ae261bc7efdf17b3ce8f95869df6ee9c2bdf7cef451455`；任一内容变化都会使本批准失效。批准不覆盖日期/时段、路由、价格、证书、配置、哈希或端口门禁，也不代表对未来供应商结果完成人工复核。
+
+只有候选、聚焦测试、中英文计划/报告/交接、本地审阅包和干净本地提交均存在时，R25 离线准备才完成。记录批准的本轮未执行候选，也未消耗占位。真实业务验收仍未证明；必须另行启动候选并由人工明确复核本次最新已验证结果后，才可能继续。
