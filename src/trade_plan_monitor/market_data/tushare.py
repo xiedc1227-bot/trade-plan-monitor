@@ -71,16 +71,56 @@ class TushareErrorCode(StrEnum):
     BLOCKED_PERMISSION = "BLOCKED_PERMISSION"
     RATE_LIMITED = "RATE_LIMITED"
     TRANSIENT = "TRANSIENT"
+    TIMEOUT = "TIMEOUT"
     INVALID_RESPONSE = "INVALID_RESPONSE"
     ERROR = "ERROR"
+
+
+class TushareFailureKind(StrEnum):
+    """Content-free failure locations safe to retain in bounded audit evidence."""
+
+    TRANSPORT_TIMEOUT = "TRANSPORT_TIMEOUT"
+    TRANSPORT_TLS = "TRANSPORT_TLS"
+    TRANSPORT_CONNECTION = "TRANSPORT_CONNECTION"
+    HTTP_STATUS = "HTTP_STATUS"
+    PROVIDER_STATUS = "PROVIDER_STATUS"
+    RESPONSE_DECODE = "RESPONSE_DECODE"
+    RESPONSE_SCHEMA = "RESPONSE_SCHEMA"
+    DOMAIN_VALIDATION = "DOMAIN_VALIDATION"
+    UNCLASSIFIED = "UNCLASSIFIED"
+
+
+class TushareHTTPStatusClass(StrEnum):
+    """Bounded HTTP status families without retaining a response or request."""
+
+    REDIRECTION = "HTTP_3XX"
+    CLIENT_ERROR = "HTTP_4XX"
+    SERVER_ERROR = "HTTP_5XX"
 
 
 class TushareProviderError(RuntimeError):
     """One sanitized provider or response failure."""
 
-    def __init__(self, code: TushareErrorCode, operation: str) -> None:
+    def __init__(
+        self,
+        code: TushareErrorCode,
+        operation: str,
+        *,
+        failure_kind: TushareFailureKind = TushareFailureKind.DOMAIN_VALIDATION,
+        http_status_class: TushareHTTPStatusClass | None = None,
+    ) -> None:
+        if not isinstance(code, TushareErrorCode):
+            raise TypeError("code must be a TushareErrorCode")
+        if not isinstance(failure_kind, TushareFailureKind):
+            raise TypeError("failure_kind must be a TushareFailureKind")
+        if http_status_class is not None and not isinstance(
+            http_status_class, TushareHTTPStatusClass
+        ):
+            raise TypeError("http_status_class must be a TushareHTTPStatusClass")
         self.code = code
         self.operation = operation
+        self.failure_kind = failure_kind
+        self.http_status_class = http_status_class
         super().__init__(f"Tushare {operation} failed ({code.value})")
 
 
@@ -547,40 +587,110 @@ class TushareMarketDataProvider:
 
     @staticmethod
     def _safe_provider_error(operation: str, error: Exception) -> TushareProviderError:
+        if isinstance(error, TushareProviderError):
+            return error
         structured_code = TushareMarketDataProvider._structured_http_error_code(error)
         if structured_code is not None:
             code = structured_code
-        elif isinstance(
-            error,
-            (requests_exceptions.Timeout, requests_exceptions.ConnectionError),
+            return TushareProviderError(
+                code,
+                operation,
+                failure_kind=TushareFailureKind.HTTP_STATUS,
+                http_status_class=TushareMarketDataProvider._http_status_class(error),
+            )
+        if isinstance(error, requests_exceptions.Timeout):
+            return TushareProviderError(
+                TushareErrorCode.TIMEOUT,
+                operation,
+                failure_kind=TushareMarketDataProvider._transport_failure_kind(
+                    error, TushareFailureKind.TRANSPORT_TIMEOUT
+                ),
+            )
+        if isinstance(error, requests_exceptions.SSLError):
+            return TushareProviderError(
+                TushareErrorCode.TRANSIENT,
+                operation,
+                failure_kind=TushareFailureKind.TRANSPORT_TLS,
+            )
+        if isinstance(error, requests_exceptions.ConnectionError):
+            return TushareProviderError(
+                TushareErrorCode.TRANSIENT,
+                operation,
+                failure_kind=TushareMarketDataProvider._transport_failure_kind(
+                    error, TushareFailureKind.TRANSPORT_CONNECTION
+                ),
+            )
+        message = str(error).casefold()
+        if any(
+            marker in message
+            for marker in (
+                "permission",
+                "forbidden",
+                "unauthorized",
+                "无权限",
+                "权限",
+            )
+        ) or _PERMISSION_STATUS_PATTERN.search(message):
+            code = TushareErrorCode.BLOCKED_PERMISSION
+        elif any(
+            marker in message
+            for marker in ("rate limit", "too many requests", "频率", "每分钟")
+        ) or _RATE_LIMIT_STATUS_PATTERN.search(message):
+            code = TushareErrorCode.RATE_LIMITED
+        elif any(
+            marker in message
+            for marker in ("timeout", "timed out", "connection", "temporarily unavailable")
         ):
             code = TushareErrorCode.TRANSIENT
         else:
-            message = str(error).casefold()
-            if any(
-                marker in message
-                for marker in (
-                    "permission",
-                    "forbidden",
-                    "unauthorized",
-                    "无权限",
-                    "权限",
-                )
-            ) or _PERMISSION_STATUS_PATTERN.search(message):
-                code = TushareErrorCode.BLOCKED_PERMISSION
-            elif any(
-                marker in message
-                for marker in ("rate limit", "too many requests", "频率", "每分钟")
-            ) or _RATE_LIMIT_STATUS_PATTERN.search(message):
-                code = TushareErrorCode.RATE_LIMITED
-            elif any(
-                marker in message
-                for marker in ("timeout", "timed out", "connection", "temporarily unavailable")
-            ):
-                code = TushareErrorCode.TRANSIENT
-            else:
-                code = TushareErrorCode.ERROR
-        return TushareProviderError(code, operation)
+            code = TushareErrorCode.ERROR
+        return TushareProviderError(
+            code,
+            operation,
+            failure_kind=(
+                TushareFailureKind.PROVIDER_STATUS
+                if code is not TushareErrorCode.ERROR
+                else TushareFailureKind.UNCLASSIFIED
+            ),
+        )
+
+    @staticmethod
+    def safe_failure_metadata(operation: str, error: Exception) -> dict[str, str | None]:
+        """Return only fixed-enum diagnostic fields suitable for audit persistence."""
+
+        classified = TushareMarketDataProvider._safe_provider_error(operation, error)
+        return {
+            "code": classified.code.value,
+            "failureKind": classified.failure_kind.value,
+            "httpStatusClass": (
+                None
+                if classified.http_status_class is None
+                else classified.http_status_class.value
+            ),
+        }
+
+    @staticmethod
+    def _transport_failure_kind(
+        error: Exception,
+        default: TushareFailureKind,
+    ) -> TushareFailureKind:
+        kind = getattr(error, "_tushare_failure_kind", None)
+        return kind if isinstance(kind, TushareFailureKind) else default
+
+    @staticmethod
+    def _http_status_class(error: Exception) -> TushareHTTPStatusClass | None:
+        if not isinstance(error, requests_exceptions.HTTPError) or error.response is None:
+            return None
+        status_code = getattr(error.response, "status_code", None)
+        if type(status_code) is not int:
+            return None
+        if 300 <= status_code <= 399:
+            return TushareHTTPStatusClass.REDIRECTION
+        if 400 <= status_code <= 499:
+            return TushareHTTPStatusClass.CLIENT_ERROR
+        if 500 <= status_code <= 599:
+            return TushareHTTPStatusClass.SERVER_ERROR
+        return None
 
     @staticmethod
     def _structured_http_error_code(error: Exception) -> TushareErrorCode | None:
@@ -838,6 +948,8 @@ class TushareMarketDataProvider:
 
 __all__ = [
     "TushareErrorCode",
+    "TushareFailureKind",
+    "TushareHTTPStatusClass",
     "TushareMarketDataProvider",
     "TushareProviderError",
 ]

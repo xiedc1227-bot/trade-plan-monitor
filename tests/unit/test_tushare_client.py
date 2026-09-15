@@ -7,6 +7,12 @@ import urllib3
 from pydantic import ValidationError
 
 from trade_plan_monitor.config import TushareConfiguration
+from trade_plan_monitor.market_data.tushare import (
+    TushareErrorCode,
+    TushareFailureKind,
+    TushareHTTPStatusClass,
+    TushareMarketDataProvider,
+)
 from trade_plan_monitor.market_data.tushare_client import (
     TushareClientConfigurationError,
     create_tushare_client,
@@ -226,6 +232,15 @@ def test_direct_connection_keeps_http_failures_structured_without_retry_or_secre
     assert captured.value.response.content is None
     assert captured.value.__context__ is None
     assert TOKEN_SENTINEL not in str(captured.value)
+    classified = TushareMarketDataProvider._safe_provider_error("trade_cal", captured.value)
+    assert classified.failure_kind is TushareFailureKind.HTTP_STATUS
+    assert classified.http_status_class is {
+        302: TushareHTTPStatusClass.REDIRECTION,
+        401: TushareHTTPStatusClass.CLIENT_ERROR,
+        403: TushareHTTPStatusClass.CLIENT_ERROR,
+        429: TushareHTTPStatusClass.CLIENT_ERROR,
+        500: TushareHTTPStatusClass.SERVER_ERROR,
+    }[status]
 
 
 @pytest.mark.parametrize(
@@ -267,8 +282,47 @@ def test_direct_connection_preserves_safe_provider_failure_classification(
 
     classified = TushareMarketDataProvider._safe_provider_error("trade_cal", captured.value)
     assert classified.code.value == expected_code
+    assert classified.failure_kind is TushareFailureKind.PROVIDER_STATUS
     assert captured.value.__context__ is None
     assert TOKEN_SENTINEL not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_kind"),
+    [
+        (b"not-json SECRET", TushareFailureKind.RESPONSE_DECODE),
+        (json.dumps({"code": 0, "data": {}}).encode(), TushareFailureKind.RESPONSE_SCHEMA),
+    ],
+)
+def test_direct_connection_classifies_invalid_responses_without_retaining_body(
+    monkeypatch: pytest.MonkeyPatch,
+    body: bytes,
+    expected_kind: TushareFailureKind,
+) -> None:
+    class Pool:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> Pool:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def request(self, *_args: object, **_kwargs: object) -> urllib3.HTTPResponse:
+            return urllib3.HTTPResponse(body=body, status=200)
+
+    monkeypatch.setattr(urllib3, "HTTPSConnectionPool", Pool)
+    client = create_tushare_client(_configuration(connect_ip="192.0.2.1"))
+
+    with pytest.raises(Exception) as captured:
+        client.trade_cal()
+
+    classified = TushareMarketDataProvider._safe_provider_error("trade_cal", captured.value)
+    assert classified.code is TushareErrorCode.INVALID_RESPONSE
+    assert classified.failure_kind is expected_kind
+    assert "SECRET" not in str(captured.value)
+    assert captured.value.__context__ is None
 
 
 @pytest.mark.parametrize(
@@ -308,4 +362,50 @@ def test_direct_connection_sanitizes_tls_and_timeout_failures_without_retry(
 
     assert sent == [True]
     assert captured.value.__context__ is None
+    assert TOKEN_SENTINEL not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_code", "expected_kind"),
+    [
+        (
+            urllib3.exceptions.ReadTimeoutError(None, None, TOKEN_SENTINEL),
+            TushareErrorCode.TIMEOUT,
+            TushareFailureKind.TRANSPORT_TIMEOUT,
+        ),
+        (
+            urllib3.exceptions.SSLError(TOKEN_SENTINEL),
+            TushareErrorCode.TRANSIENT,
+            TushareFailureKind.TRANSPORT_TLS,
+        ),
+    ],
+)
+def test_direct_connection_retains_bounded_transport_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    expected_code: TushareErrorCode,
+    expected_kind: TushareFailureKind,
+) -> None:
+    class Pool:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> Pool:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def request(self, *_args: object, **_kwargs: object) -> urllib3.HTTPResponse:
+            raise failure
+
+    monkeypatch.setattr(urllib3, "HTTPSConnectionPool", Pool)
+    client = create_tushare_client(_configuration(connect_ip="192.0.2.1"))
+
+    with pytest.raises(Exception) as captured:
+        client.trade_cal()
+
+    classified = TushareMarketDataProvider._safe_provider_error("trade_cal", captured.value)
+    assert classified.code is expected_code
+    assert classified.failure_kind is expected_kind
     assert TOKEN_SENTINEL not in str(captured.value)

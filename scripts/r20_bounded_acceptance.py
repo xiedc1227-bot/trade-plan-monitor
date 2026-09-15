@@ -26,6 +26,8 @@ MARKET_CAPS = {
 }
 MARKET_TOTAL = 105
 WALL_SECONDS = 2280
+STOP_ON_MARKET_FAILURE_KEYS = frozenset({"trade_cal"})
+STOP_ON_REFERENCE_FAILURE = True
 
 
 def _eligible(now: datetime) -> bool:
@@ -114,6 +116,8 @@ def main(argv: list[str] | None = None) -> int:
                 bind_port=BIND_PORT,
                 prompt_version=PROMPT_VERSION,
                 ai_output_tokens=AI_OUTPUT_TOKENS,
+                stop_on_market_failure_keys=STOP_ON_MARKET_FAILURE_KEYS,
+                stop_on_reference_failure=STOP_ON_REFERENCE_FAILURE,
             )
         )
     except FileExistsError:

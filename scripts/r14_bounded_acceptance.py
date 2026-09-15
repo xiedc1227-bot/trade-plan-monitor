@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import socket
 import threading
 from collections.abc import Callable, Mapping
@@ -50,6 +51,85 @@ class BudgetDenied(RuntimeError):
         super().__init__("R14 physical-call budget denied")
 
 
+def _write_json_atomic(path: Path, payload: Mapping[str, object]) -> None:
+    temporary = path.with_name(f".{path.name}.tmp")
+    with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(payload, indent=2) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+
+
+class PhysicalAttemptJournal:
+    """Durably retain bounded counters and fixed-enum failure metadata."""
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        proposal_id: str,
+        run_id: str,
+        started_at: str,
+    ) -> None:
+        self._path = path
+        self._lock = threading.Lock()
+        self._state: dict[str, object] = {
+            "proposalId": proposal_id,
+            "runId": run_id,
+            "startedAt": started_at,
+            "status": "ACTIVE",
+            "normalAuditPresent": False,
+            "ai": {},
+            "market": {},
+            "firstMarketFailure": None,
+            "referenceFailureCode": None,
+        }
+        _write_json_atomic(self._path, self._state)
+
+    def record_budget(self, kind: str, snapshot: dict[str, object]) -> None:
+        if kind not in {"ai", "market"}:
+            raise ValueError("budget kind must be ai or market")
+        with self._lock:
+            self._state[kind] = snapshot
+            _write_json_atomic(self._path, self._state)
+
+    def record_market_failure(self, operation: str, failure: dict[str, object]) -> None:
+        allowed = {"code", "failureKind", "httpStatusClass"}
+        if set(failure) != allowed:
+            raise ValueError("market failure metadata must use the fixed safe schema")
+        with self._lock:
+            if self._state["firstMarketFailure"] is None:
+                self._state["firstMarketFailure"] = {"operation": operation, **failure}
+            self._state["status"] = "FAILURE_STOP_REQUESTED"
+            _write_json_atomic(self._path, self._state)
+
+    def record_reference_failure(self, code: str) -> None:
+        if code not in {
+            "REFERENCE_BLOCKED_PERMISSION",
+            "REFERENCE_RATE_LIMITED",
+            "REFERENCE_TRANSIENT",
+            "REFERENCE_TIMEOUT",
+            "REFERENCE_INVALID_RESPONSE",
+            "REFERENCE_ERROR",
+            "REFERENCE_QUEUE_FULL",
+            "REFERENCE_CLOSED",
+            "REFERENCE_DATA_UNAVAILABLE",
+            "REFERENCE_STORAGE_ERROR",
+            "REFERENCE_REFRESH_FAILED",
+        }:
+            raise ValueError("reference failure code is not in the fixed safe set")
+        with self._lock:
+            self._state["referenceFailureCode"] = code
+            self._state["status"] = "FAILURE_STOP_REQUESTED"
+            _write_json_atomic(self._path, self._state)
+
+    def complete(self, *, status: str) -> None:
+        with self._lock:
+            self._state["status"] = status
+            self._state["normalAuditPresent"] = True
+            _write_json_atomic(self._path, self._state)
+
+
 class Budget:
     """Thread-safe, pre-call accounting. Failed requests consume one attempt."""
 
@@ -60,6 +140,7 @@ class Budget:
         per_key: Mapping[str, int],
         seconds: int,
         on_denied: Callable[[], None] | None = None,
+        on_snapshot: Callable[[dict[str, object]], None] | None = None,
         gate_lock: threading.Lock | None = None,
         stopped: threading.Event | None = None,
     ) -> None:
@@ -71,8 +152,10 @@ class Budget:
         self._lock = gate_lock if gate_lock is not None else threading.Lock()
         self._stopped = stopped if stopped is not None else threading.Event()
         self._on_denied = on_denied
+        self._on_snapshot = on_snapshot
 
     def admit(self, key: str) -> None:
+        journal_failed = False
         with self._lock:
             count = self._attempts.get(key, 0)
             allowed = (
@@ -84,9 +167,27 @@ class Budget:
             )
             if allowed:
                 self._attempts[key] = count + 1
-                return
-            self._denied += 1
-            self._stopped.set()
+                if self._on_snapshot is not None:
+                    try:
+                        self._on_snapshot(self._snapshot_unlocked())
+                    except Exception:
+                        if count == 0:
+                            self._attempts.pop(key, None)
+                        else:
+                            self._attempts[key] = count
+                        self._denied += 1
+                        self._stopped.set()
+                        journal_failed = True
+                if not journal_failed:
+                    return
+            else:
+                self._denied += 1
+                self._stopped.set()
+                if self._on_snapshot is not None:
+                    try:
+                        self._on_snapshot(self._snapshot_unlocked())
+                    except Exception:
+                        pass
         if self._on_denied is not None:
             self._on_denied()
         raise BudgetDenied
@@ -97,20 +198,42 @@ class Budget:
         with self._lock:
             self._denied += 1
             self._stopped.set()
+            if self._on_snapshot is not None:
+                try:
+                    self._on_snapshot(self._snapshot_unlocked())
+                except Exception:
+                    pass
         if self._on_denied is not None:
             self._on_denied()
         raise BudgetDenied
 
+    def stop(self) -> None:
+        """Stop both shared budgets without counting a pre-network denial."""
+
+        with self._lock:
+            already_stopped = self._stopped.is_set()
+            self._stopped.set()
+            if self._on_snapshot is not None:
+                try:
+                    self._on_snapshot(self._snapshot_unlocked())
+                except Exception:
+                    pass
+        if not already_stopped and self._on_denied is not None:
+            self._on_denied()
+
     def snapshot(self) -> dict[str, object]:
         with self._lock:
-            return {
-                "totalCap": self._total,
-                "perKeyCaps": self._caps.copy(),
-                "totalAttempts": sum(self._attempts.values()),
-                "attempts": self._attempts.copy(),
-                "deniedBeforeNetwork": self._denied,
-                "stopped": self._stopped.is_set(),
-            }
+            return self._snapshot_unlocked()
+
+    def _snapshot_unlocked(self) -> dict[str, object]:
+        return {
+            "totalCap": self._total,
+            "perKeyCaps": self._caps.copy(),
+            "totalAttempts": sum(self._attempts.values()),
+            "attempts": self._attempts.copy(),
+            "deniedBeforeNetwork": self._denied,
+            "stopped": self._stopped.is_set(),
+        }
 
 
 def approved_sources(
@@ -162,6 +285,8 @@ def _session_budgets(
     market_caps: Mapping[str, int] = _MARKET_CAPS,
     market_total: int = 60,
     wall_seconds: int = 900,
+    on_ai_snapshot: Callable[[dict[str, object]], None] | None = None,
+    on_market_snapshot: Callable[[dict[str, object]], None] | None = None,
 ) -> tuple[Budget, Budget]:
     """Use one shared server-stop signal for either physical-call boundary."""
 
@@ -173,6 +298,7 @@ def _session_budgets(
             per_key={key: 1 for key in approved_sources()},
             seconds=wall_seconds,
             on_denied=on_denied,
+            on_snapshot=on_ai_snapshot,
             gate_lock=gate_lock,
             stopped=stopped,
         ),
@@ -181,6 +307,7 @@ def _session_budgets(
             per_key=market_caps,
             seconds=wall_seconds,
             on_denied=on_denied,
+            on_snapshot=on_market_snapshot,
             gate_lock=gate_lock,
             stopped=stopped,
         ),
@@ -252,8 +379,16 @@ class AIBudgetTransport(httpx.AsyncBaseTransport):
 class MarketBudget:
     """Account for every SDK query before its one-shot HTTPS POST."""
 
-    def __init__(self, budget: Budget) -> None:
+    def __init__(
+        self,
+        budget: Budget,
+        *,
+        stop_on_failure_keys: frozenset[str] = frozenset(),
+        on_failure: Callable[[str, dict[str, object]], None] | None = None,
+    ) -> None:
         self._budget = budget
+        self._stop_on_failure_keys = stop_on_failure_keys
+        self._on_failure = on_failure
 
     def call(self, query: Callable[..., Any], name: str, fields: str = "", **kwargs: object) -> Any:
         symbol = kwargs.get("ts_code")
@@ -271,7 +406,19 @@ class MarketBudget:
         else:
             self._budget.reject()
         self._budget.admit(name)
-        return query(name, fields=fields, **kwargs)
+        try:
+            return query(name, fields=fields, **kwargs)
+        except Exception as error:
+            from trade_plan_monitor.market_data.tushare import TushareMarketDataProvider
+
+            failure = TushareMarketDataProvider.safe_failure_metadata(name, error)
+            try:
+                if self._on_failure is not None:
+                    self._on_failure(name, failure)
+            finally:
+                if name in self._stop_on_failure_keys:
+                    self._budget.stop()
+            raise
 
 
 def _preflight(
@@ -451,13 +598,16 @@ def _create_guarded_app(
     bind_port: int = 18765,
     prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
     ai_output_tokens: int = 4096,
+    on_reference_failure: Callable[[str], None] | None = None,
 ):
     from trade_plan_monitor.web.app import create_app
     from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory
 
     return create_app(
         runtime_factory=create_monitor_composition_factory(
-            config_path=config_path, database_path=database
+            config_path=config_path,
+            database_path=database,
+            on_reference_failure=on_reference_failure,
         ),
         plan_lifecycle_factory=lambda: plan_lifecycle,
         ai_lifecycle_factory=lambda: _bounded_ai_factory(
@@ -530,6 +680,8 @@ async def _serve(
     bind_port: int = 18765,
     prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
     ai_output_tokens: int = 4096,
+    stop_on_market_failure_keys: frozenset[str] = frozenset(),
+    stop_on_reference_failure: bool = False,
 ) -> int:
     import uvicorn
 
@@ -563,25 +715,72 @@ async def _serve(
         raise
     server: uvicorn.Server | None = None
     task: asyncio.Task[None] | None = None
+    started_at = datetime.now(_SHANGHAI).isoformat()
+    try:
+        journal = PhysicalAttemptJournal(
+            folder / "physical-attempts.json",
+            proposal_id=proposal_id,
+            run_id=run_id,
+            started_at=started_at,
+        )
+    except OSError:
+        listener.close()
+        raise BudgetDenied from None
+    first_market_failure: dict[str, object] | None = None
+    reference_failure_code: str | None = None
+    failure_lock = threading.Lock()
 
     def stop_server() -> None:
         if server is not None:
             server.should_exit = True
+
+    def record_market_failure(operation: str, failure: dict[str, object]) -> None:
+        nonlocal first_market_failure
+        safe_failure = {"operation": operation, **failure}
+        with failure_lock:
+            if first_market_failure is None:
+                first_market_failure = safe_failure
+        journal.record_market_failure(operation, failure)
 
     ai_budget, market_budget = _session_budgets(
         stop_server,
         market_caps=market_caps,
         market_total=market_total,
         wall_seconds=wall_seconds,
+        on_ai_snapshot=lambda snapshot: journal.record_budget("ai", snapshot),
+        on_market_snapshot=lambda snapshot: journal.record_budget("market", snapshot),
     )
-    market_guard = MarketBudget(market_budget)
+    try:
+        journal.record_budget("ai", ai_budget.snapshot())
+        journal.record_budget("market", market_budget.snapshot())
+    except OSError:
+        listener.close()
+        raise BudgetDenied from None
+
+    def record_reference_failure(code: str) -> None:
+        nonlocal reference_failure_code
+        if not stop_on_reference_failure:
+            return
+        with failure_lock:
+            if reference_failure_code is None:
+                reference_failure_code = code
+        try:
+            journal.record_reference_failure(code)
+        finally:
+            market_budget.stop()
+
+    market_guard = MarketBudget(
+        market_budget,
+        stop_on_failure_keys=stop_on_market_failure_keys,
+        on_failure=record_market_failure,
+    )
     original_factory = production.create_tushare_client
 
     production.create_tushare_client = _guarded_market_factory(original_factory, market_guard)
     audit: dict[str, object] = {
         "proposalId": proposal_id,
         "runId": run_id,
-        "startedAt": datetime.now(_SHANGHAI).isoformat(),
+        "startedAt": started_at,
         "database": "monitor.sqlite3",
         "channel": "IN_APP_ONLY",
         "aiModel": APPROVED_MODEL,
@@ -602,6 +801,7 @@ async def _serve(
                 bind_port=bind_port,
                 prompt_version=prompt_version,
                 ai_output_tokens=ai_output_tokens,
+                on_reference_failure=record_reference_failure,
             )
             server = uvicorn.Server(
                 uvicorn.Config(
@@ -639,7 +839,21 @@ async def _serve(
                 audit["status"] = "WALL_LIMIT_REACHED"
                 server.should_exit = True
             else:
-                audit["status"] = "STOPPED" if server.started else "STARTUP_FAILED"
+                with failure_lock:
+                    observed_failure = (
+                        None if first_market_failure is None else dict(first_market_failure)
+                    )
+                    observed_reference_code = reference_failure_code
+                if observed_reference_code is not None:
+                    audit["status"] = "REFERENCE_FAILED"
+                    audit["referenceFailureCode"] = observed_reference_code
+                    if observed_failure is not None:
+                        audit["firstMarketFailure"] = observed_failure
+                elif observed_failure is not None:
+                    audit["status"] = "MARKET_FAILED"
+                    audit["firstMarketFailure"] = observed_failure
+                else:
+                    audit["status"] = "STOPPED" if server.started else "STARTUP_FAILED"
             finally:
                 recovery_task.cancel()
                 await asyncio.gather(recovery_task, return_exceptions=True)
@@ -648,7 +862,11 @@ async def _serve(
         audit["errorType"] = type(error).__name__
         return_code = 1
     else:
-        return_code = 0 if audit["status"] != "STARTUP_FAILED" else 1
+        return_code = (
+            1
+            if audit["status"] in {"STARTUP_FAILED", "REFERENCE_FAILED", "MARKET_FAILED"}
+            else 0
+        )
     finally:
         cleanup_deadline = monotonic() + 20
         if server is not None:
@@ -680,7 +898,8 @@ async def _serve(
         if audit["ai"]["deniedBeforeNetwork"] > 0 or audit["market"]["deniedBeforeNetwork"] > 0:
             audit["status"] = "BUDGET_DENIED"
             return_code = 1
-        (folder / "audit.json").write_text(json.dumps(audit, indent=2) + "\n", encoding="utf-8")
+        _write_json_atomic(folder / "audit.json", audit)
+        journal.complete(status=str(audit["status"]))
         print(json.dumps(audit, sort_keys=True), flush=True)
     return return_code
 

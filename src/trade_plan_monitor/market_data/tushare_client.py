@@ -14,6 +14,12 @@ import requests
 import urllib3
 
 from trade_plan_monitor.config import TushareConfiguration
+from trade_plan_monitor.market_data.tushare import (
+    TushareErrorCode,
+    TushareFailureKind,
+    TushareMarketDataProvider,
+    TushareProviderError,
+)
 
 _MAX_TOKEN_LENGTH = 8_192
 _ENDPOINT_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
@@ -77,18 +83,51 @@ class _DirectTushareQuery:
                 safe_response.status_code = response.status
                 failure = requests.HTTPError("Tushare HTTP request failed", response=safe_response)
             else:
-                result = json.loads(response.data)
-                if result["code"] != 0:
-                    failure = _safe_application_failure(api_name, result.get("msg", ""))
+                try:
+                    result = json.loads(response.data)
+                except (TypeError, UnicodeError, ValueError):
+                    failure = TushareProviderError(
+                        TushareErrorCode.INVALID_RESPONSE,
+                        api_name,
+                        failure_kind=TushareFailureKind.RESPONSE_DECODE,
+                    )
                 else:
-                    data = result["data"]
-                    frame = pd.DataFrame(data["items"], columns=data["fields"])
+                    try:
+                        provider_code = result["code"]
+                    except (KeyError, TypeError):
+                        failure = TushareProviderError(
+                            TushareErrorCode.INVALID_RESPONSE,
+                            api_name,
+                            failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
+                        )
+                    else:
+                        if provider_code != 0:
+                            failure = _safe_application_failure(api_name, result.get("msg", ""))
+                        else:
+                            try:
+                                data = result["data"]
+                                frame = pd.DataFrame(data["items"], columns=data["fields"])
+                            except (KeyError, TypeError, ValueError):
+                                failure = TushareProviderError(
+                                    TushareErrorCode.INVALID_RESPONSE,
+                                    api_name,
+                                    failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
+                                )
         except urllib3.exceptions.TimeoutError:
             failure = requests.Timeout("Tushare request timed out")
+            failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_TIMEOUT
+        except urllib3.exceptions.SSLError:
+            failure = requests.ConnectionError("Tushare TLS connection failed")
+            failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_TLS
         except urllib3.exceptions.HTTPError:
             failure = requests.ConnectionError("Tushare connection failed")
+            failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_CONNECTION
         except Exception:
-            failure = RuntimeError("Tushare response is invalid")
+            failure = TushareProviderError(
+                TushareErrorCode.INVALID_RESPONSE,
+                api_name,
+                failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
+            )
         if failure is not None:
             # Raise outside the handler: raw provider errors/bodies cannot become __context__.
             raise failure
@@ -98,21 +137,14 @@ class _DirectTushareQuery:
 
 
 def _safe_application_failure(operation: str, message: object) -> Exception:
-    from trade_plan_monitor.market_data.tushare import (
-        TushareErrorCode,
-        TushareMarketDataProvider,
-    )
-
     classified = TushareMarketDataProvider._safe_provider_error(
         operation, RuntimeError(message if isinstance(message, str) else "")
     )
-    if classified.code is TushareErrorCode.BLOCKED_PERMISSION:
-        return RuntimeError("Tushare permission denied")
-    if classified.code is TushareErrorCode.RATE_LIMITED:
-        return RuntimeError("Tushare rate limit reached")
-    if classified.code is TushareErrorCode.TRANSIENT:
-        return requests.ConnectionError("Tushare connection failed")
-    return RuntimeError("Tushare provider request failed")
+    return TushareProviderError(
+        classified.code,
+        operation,
+        failure_kind=TushareFailureKind.PROVIDER_STATUS,
+    )
 
 
 def create_tushare_client[ClientT](

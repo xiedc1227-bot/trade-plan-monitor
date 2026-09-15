@@ -355,6 +355,7 @@ _TUSHARE_ERROR_CODES: Final = {
     TushareErrorCode.BLOCKED_PERMISSION: RequestControlErrorCode.BLOCKED_PERMISSION,
     TushareErrorCode.RATE_LIMITED: RequestControlErrorCode.RATE_LIMITED,
     TushareErrorCode.TRANSIENT: RequestControlErrorCode.TRANSIENT,
+    TushareErrorCode.TIMEOUT: RequestControlErrorCode.TIMEOUT,
     TushareErrorCode.INVALID_RESPONSE: RequestControlErrorCode.INVALID_RESPONSE,
     TushareErrorCode.ERROR: RequestControlErrorCode.ERROR,
 }

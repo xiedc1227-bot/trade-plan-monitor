@@ -434,6 +434,7 @@ class _ProductionRuntimeState:
         runtime_generation: Callable[[], UUID] | None = None,
         publisher: Callable[..., object] | None = None,
         dispatcher: NotificationDispatcher | None = None,
+        on_reference_failure: Callable[[str], None] | None = None,
     ) -> None:
         self._config_path = config_path
         self._database_path = database_path.expanduser().resolve()
@@ -452,6 +453,7 @@ class _ProductionRuntimeState:
         self._stage_errors: dict[str, str] = {}
         self._stage_retry_at: dict[str, datetime] = {}
         self._dispatcher = dispatcher
+        self._on_reference_failure = on_reference_failure
 
     def next_index_recovery_at(self) -> datetime | None:
         return (
@@ -546,6 +548,8 @@ class _ProductionRuntimeState:
                     self._stage_retry_at[stage] = error.next_retry_at
                 # Only closed categories; never log exception text, traceback or provider data.
                 _LOGGER.warning("Reference refresh failed: stage=%s code=%s", stage, code)
+                if self._on_reference_failure is not None:
+                    self._on_reference_failure(code)
                 raise
             else:
                 for stage in ("trading_calendar", "daily_limits", "daily_bars"):
@@ -684,6 +688,7 @@ def create_monitor_composition_factory(
     *,
     config_path: Path,
     database_path: Path,
+    on_reference_failure: Callable[[str], None] | None = None,
 ) -> Callable[[], MonitorWebComposition]:
     """Capture paths without configuration, database, provider, or task work."""
 
@@ -691,11 +696,14 @@ def create_monitor_composition_factory(
         raise TypeError("config_path must be a Path")
     if not isinstance(database_path, Path):
         raise TypeError("database_path must be a Path")
+    if on_reference_failure is not None and not callable(on_reference_failure):
+        raise TypeError("on_reference_failure must be callable")
 
     def factory() -> MonitorWebComposition:
         return create_monitor_composition(
             config_path=config_path,
             database_path=database_path,
+            on_reference_failure=on_reference_failure,
         )
 
     return factory
@@ -705,6 +713,7 @@ def create_monitor_composition(
     *,
     config_path: Path,
     database_path: Path,
+    on_reference_failure: Callable[[str], None] | None = None,
 ) -> MonitorWebComposition:
     """Compose certified providers and the recoverable local monitoring runtime."""
 
@@ -712,6 +721,8 @@ def create_monitor_composition(
         raise TypeError("config_path must be a Path")
     if not isinstance(database_path, Path):
         raise TypeError("database_path must be a Path")
+    if on_reference_failure is not None and not callable(on_reference_failure):
+        raise TypeError("on_reference_failure must be callable")
     clock = SystemClock()
     engine = create_sqlite_engine(database_path)
     session_factory = create_session_factory(engine)
@@ -744,6 +755,7 @@ def create_monitor_composition(
             runtime_generation=lambda: lifecycle.runtime_generation,
             publisher=stream.publish_committed,
             dispatcher=dispatcher,
+            on_reference_failure=on_reference_failure,
         )
         scheduler = MarketSessionScheduler(
             clock=clock,

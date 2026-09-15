@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+import requests
 from sqlalchemy.exc import SQLAlchemyError
 from tests.integration.test_ai_provider_contract import _config, _secret_store
 from tests.integration.test_certified_production_runtime import NOW, Clock
@@ -14,6 +15,7 @@ from tests.unit.test_ai_plan_extraction_v4 import _extract, _valid_output
 from trade_plan_monitor.ai.extraction import extract_plan
 from trade_plan_monitor.ai.openai_compatible import OpenAICompatibleProvider
 from trade_plan_monitor.market_data.models import ProviderCapabilities, ProviderCapabilityStatus
+from trade_plan_monitor.market_data.tushare import TushareMarketDataProvider
 from trade_plan_monitor.runtime.production import (
     ProductionMonitorPipeline,
     ReferenceDataUnavailableError,
@@ -198,6 +200,7 @@ def test_literal_timeout_stays_one_attempt_without_exposing_provider_details():
     ],
 )
 def test_reference_diagnostic_never_logs_untrusted_exception(tmp_path, caplog, failure, expected):
+    observed_failures: list[str] = []
     class Pipeline:
         reference_stage = TushareOperation.TRADING_CALENDAR
 
@@ -213,6 +216,7 @@ def test_reference_diagnostic_never_logs_untrusted_exception(tmp_path, caplog, f
         session_factory=create_session_factory(engine),
         clock=Clock(),
         request_controller=controller,
+        on_reference_failure=observed_failures.append,
     )
     state._pipeline = Pipeline()
     try:
@@ -224,6 +228,38 @@ def test_reference_diagnostic_never_logs_untrusted_exception(tmp_path, caplog, f
         assert health.error_code == expected
         assert expected in caplog.text
         assert "SECRET" not in caplog.text
+        assert observed_failures == [expected]
     finally:
         controller.close()
         engine.dispose()
+
+
+def test_calendar_transport_timeout_reaches_reference_timeout_category() -> None:
+    class Client:
+        def trade_cal(self, **_kwargs):
+            raise requests.Timeout("SECRET transport detail")
+
+    provider = TushareMarketDataProvider(
+        Client(),
+        now=Clock().now,
+        is_open_on=lambda _date: True,
+    )
+    controller = create_live_tushare_request_controller(clock=Clock())
+
+    async def scenario() -> RequestControlError:
+        with pytest.raises(RequestControlError) as caught:
+            await controller.execute(
+                TushareOperation.TRADING_CALENDAR,
+                lambda: provider.trading_calendar(NOW.date(), NOW.date()),
+                work_key="calendar:SSE:r21-offline",
+            )
+        return caught.value
+
+    try:
+        result = asyncio.run(scenario())
+    finally:
+        controller.close()
+
+    assert result.code is RequestControlErrorCode.TIMEOUT
+    assert result.attempts == 1
+    assert "SECRET" not in str(result)
