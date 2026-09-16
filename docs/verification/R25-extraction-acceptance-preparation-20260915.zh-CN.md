@@ -1,6 +1,10 @@
 # R25 提取专用验收准备记录
 
-英文原版为 `R25-extraction-acceptance-preparation-20260915.md`，本文是等价中文审阅副本。提案 `R25-20260916-AM-EXTRACT-3`；运行 `r25-20260916-a`。状态 **OFFLINE_PASS / SPECIFIC_EGRESS_APPROVED / LIVE_NOT_RUN / ZERO_EXTERNAL_CALLS**。
+英文原版为 `R25-extraction-acceptance-preparation-20260915.md`，本文是等价中文审阅副本。提案 `R25-20260916-AM-EXTRACT-3`；运行 `r25-20260916-a`。状态 **PREPARATION_PASS / SUBSEQUENT_EXTRACTION_ACCEPTANCE_FAILED / ALLOWANCE_CONSUMED**。
+
+## 后续处置
+
+本准备记录在写入时准确。取得用户精确批准后，固定候选于 2026-09-16 仅运行一次。日历前置调用成功，但首个 `LITERAL` AI 启动以无内容的供应商超时结束；候选零重试停止，两个语义用例均未发送。占位与额度均已消耗。详见[执行记录](R25-extraction-acceptance-execution-20260916.zh-CN.md)。
 
 ## 原文与隐私清单
 
@@ -35,8 +39,8 @@ R25 聚焦测试：**7 项通过**，另有一个既存 Starlette/httpx 弃用�
 
 ## 结论与剩余门槛
 
-R25 离线准备证明候选的本地边界和失败行为；不证明真实供应商结果。本轮没有 AI POST、`trade_cal`、其他行情请求、Webhook、券商动作、持仓变化、计划激活或已消耗的 R25 占位。
+R25 离线准备证明了候选的本地边界和失败行为；当时不证明真实供应商结果。在该准备轮次中，没有 AI POST、`trade_cal`、其他行情请求、Webhook、券商动作、持仓变化、计划激活或已消耗的 R25 占位。后续执行已按上文另行记录。
 
 父任务尝试发起真实执行时，被系统自动审批拒绝，原因是准确的潜在敏感载荷及外部目的地当时尚未得到具体批准。精确本地审阅包展示后，用户于 2026-09-15 回复“批准”。该回复明确授权把其中展示的三份原文/提示词载荷发送至 DeepSeek 的 `POST https://api.deepseek.com/chat/completions`，用于所列三项提取测试，并补足了此前的自动审批缺口。
 
-该授权是不可变内容批准，绑定审阅包 SHA-256 `6b0d300b0404a24b690281f9336a013f430b72ec9371be069b82c66aab92833d` / `4d689c24721901e3de8ee38d1accdfdc6f3f54433c36c446a5dff11ce04a32d0`、上文记录的三份原文 SHA-256，以及提示词 SHA-256 `660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89`、`f4e5a48d49dbbf582dae883af8dfe724b133df465dd92ff7363dadb6c4e5e2a7`、`fea166298e40b143a5ae261bc7efdf17b3ce8f95869df6ee9c2bdf7cef451455`。审阅包、原文或提示词任一哈希变化，本批准均不适用。无需再次索取通用权限。该批准不覆盖候选的日期/时段、官方路由/价格复查、证书、配置、哈希或端口门禁，也不等于对尚不存在的结果完成人工复核。本轮没有真实调用，也未消耗占位。
+该授权是不可变内容批准，绑定审阅包 SHA-256 `6b0d300b0404a24b690281f9336a013f430b72ec9371be069b82c66aab92833d` / `4d689c24721901e3de8ee38d1accdfdc6f3f54433c36c446a5dff11ce04a32d0`、上文记录的三份原文 SHA-256，以及提示词 SHA-256 `660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89`、`f4e5a48d49dbbf582dae883af8dfe724b133df465dd92ff7363dadb6c4e5e2a7`、`fea166298e40b143a5ae261bc7efdf17b3ce8f95869df6ee9c2bdf7cef451455`。审阅包、原文或提示词任一哈希变化，本批准均不适用。无需再次索取通用权限。该批准未覆盖候选的日期/时段、官方路由/价格复查、证书、配置、哈希或端口门禁，也不等于对供应商结果完成人工复核。记录批准的轮次没有真实调用，也未消耗占位。

@@ -1,6 +1,10 @@
 # R25 extraction-only acceptance preparation
 
-Canonical English; `R25-extraction-acceptance-preparation-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal `R25-20260916-AM-EXTRACT-3`; run `r25-20260916-a`. Status **OFFLINE_PASS / SPECIFIC_EGRESS_APPROVED / LIVE_NOT_RUN / ZERO_EXTERNAL_CALLS**.
+Canonical English; `R25-extraction-acceptance-preparation-20260915.zh-CN.md` is the equivalent Chinese review copy. Proposal `R25-20260916-AM-EXTRACT-3`; run `r25-20260916-a`. Status **PREPARATION_PASS / SUBSEQUENT_EXTRACTION_ACCEPTANCE_FAILED / ALLOWANCE_CONSUMED**.
+
+## Subsequent disposition
+
+This preparation record was accurate when written. After exact user approval, the fixed candidate ran once on 2026-09-16. Its calendar prerequisite succeeded, but the first `LITERAL` AI start ended in a content-free provider timeout; the candidate stopped without retry and did not send either semantic case. The claim and allowance are consumed. See [execution record](R25-extraction-acceptance-execution-20260916.md).
 
 ## Source and privacy inventory
 
@@ -35,8 +39,8 @@ Using the transport's 19,000 UTF-8-byte prompt ceiling as a conservative 19,000-
 
 ## Conclusion and remaining gate
 
-R25 offline preparation proves the candidate's local bounds and failure behavior; it does not prove a real provider result. No AI POST, `trade_cal`, other market request, webhook, broker action, holding change, plan activation or consumed R25 claim occurred.
+R25 offline preparation proved the candidate's local bounds and failure behavior; it did not prove a real provider result. During that preparation turn, no AI POST, `trade_cal`, other market request, webhook, broker action, holding change, plan activation or consumed R25 claim occurred. The subsequent execution is recorded separately above.
 
 The parent task's attempted live dispatch was rejected by automatic system approval because the exact potentially sensitive payload and external destination had not been specifically approved. After the exact local review package was displayed, the user replied “批准” on 2026-09-15. That response specifically authorizes the three displayed source/prompt payloads to be sent to DeepSeek at `POST https://api.deepseek.com/chat/completions` for the three stated extraction tests and satisfies the prior automatic-approval gap.
 
-The authorization is immutable-content approval bound to package SHA-256 `6b0d300b0404a24b690281f9336a013f430b72ec9371be069b82c66aab92833d` / `4d689c24721901e3de8ee38d1accdfdc6f3f54433c36c446a5dff11ce04a32d0`, the three source SHA-256 values recorded above, and prompt SHA-256 `660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89`, `f4e5a48d49dbbf582dae883af8dfe724b133df465dd92ff7363dadb6c4e5e2a7`, `fea166298e40b143a5ae261bc7efdf17b3ce8f95869df6ee9c2bdf7cef451455`. If any package, source or prompt hash changes, this approval does not apply. No general permission needs to be requested again. This approval does not override the candidate's date/window, official route/price recheck, certificate, configuration, hash or port gates; nor is it human review of results that do not yet exist. This turn performed no live call and consumed no claim.
+The authorization is immutable-content approval bound to package SHA-256 `6b0d300b0404a24b690281f9336a013f430b72ec9371be069b82c66aab92833d` / `4d689c24721901e3de8ee38d1accdfdc6f3f54433c36c446a5dff11ce04a32d0`, the three source SHA-256 values recorded above, and prompt SHA-256 `660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89`, `f4e5a48d49dbbf582dae883af8dfe724b133df465dd92ff7363dadb6c4e5e2a7`, `fea166298e40b143a5ae261bc7efdf17b3ce8f95869df6ee9c2bdf7cef451455`. If any package, source or prompt hash changes, this approval does not apply. No general permission needs to be requested again. This approval did not override the candidate's date/window, official route/price recheck, certificate, configuration, hash or port gates; nor did it constitute human review of provider results. The approval-recording turn performed no live call and consumed no claim.
