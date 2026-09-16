@@ -46,9 +46,11 @@ If extraction succeeds, R27 still requires human review and proves only this one
 
 ## Cost and pre-execution source check
 
-The latest inherited 2026-09-16 official snapshot mapped `deepseek-v4-pro` to `DeepSeek-V4-Pro-0813` and listed peak USD `1.32`/M cache-miss input and USD `3.96`/M output. Under the conservative 19,000-input-token arithmetic bound and full 8,192 output tokens, one request is estimated at peak USD `0.05752032` or off-peak USD `0.02876016`, before taxes and account adjustments. Actual tokenization, caching, output length, billing and taxes are unknown. Market fee is zero because no market call is permitted.
+At `2026-09-16 10:25` Asia/Shanghai, the official Chat Completions reference still documented `POST /chat/completions`, the `deepseek-v4-pro` request alias, non-thinking mode, JSON output and the 8,192-token request value used by this candidate. The official pricing page also stated that from `2026-09-14 12:00` Beijing time, requests using the unchanged `deepseek-v4-pro` alias are routed server-side to `DeepSeek-V4.1-Flash` and billed at the Flash rate until V4.1 Pro is available. This route change requires no request-field or destination change, so the exact approved payload remains intact. Sources: https://api-docs.deepseek.com/api/create-chat-completion/ and https://api-docs.deepseek.com/quick_start/pricing/.
 
-Immediately before execution, the operator must re-read the official route and pricing pages, without calling a balance or model-list API. A route, request-contract or price change is recorded and blocks execution if it would require altering the approved payload.
+The current Flash prices are peak USD `0.30`/M cache-miss input and USD `1.20`/M output, with off-peak rates USD `0.15`/M and USD `0.60`/M. Under the conservative 19,000-input-token arithmetic bound and full 8,192 output tokens, one request is estimated at peak USD `0.0155304` or off-peak USD `0.0077652`, before taxes and account adjustments. The planned 10:00–12:00 Asia/Shanghai window falls within the documented weekday peak interval of 01:00–04:00 UTC. Actual tokenization, caching, output length, billing and taxes are unknown. Market fee is zero because no market call is permitted. No balance or model-list API was called.
+
+The operator must re-read those official pages at the final execution gate. Any further route, request-contract or price change is recorded and blocks execution if it would require altering the approved payload.
 
 ## Offline verification and execution gate
 
