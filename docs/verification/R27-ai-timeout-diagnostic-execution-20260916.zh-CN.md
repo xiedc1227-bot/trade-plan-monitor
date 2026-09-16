@@ -1,36 +1,48 @@
 # R27 单 POST AI 超时诊断执行记录
 
-英文原版为 `R27-ai-timeout-diagnostic-execution-20260916.md`，本文是等价中文审阅副本。提案 `R27-20260916-AI-TIMEOUT-DIAGNOSTIC-1`；运行 `r27-20260916-a`。状态 **LIVE_DISPATCH_REJECTED_BEFORE_PROCESS_START / CLAIM_UNCONSUMED / ZERO_CALLS / FULL_WORKFLOW_NOT_PROVEN**。
+英文原版为 `R27-ai-timeout-diagnostic-execution-20260916.md`，本文是等价中文审阅副本。提案 `R27-20260916-AI-TIMEOUT-DIAGNOSTIC-1`；运行 `r27-20260916-a`。状态 **LIVE_ATTEMPT_COMPLETE / INVALID_OUTPUT_SCHEMA / CLAIM_CONSUMED / ONE_AI_ZERO_MARKET / FULL_WORKFLOW_NOT_PROVEN**。
 
 ## 结果
 
-完整离线候选已提交在干净 HEAD `67eec1b4e24676f23dacf708fba2c69b2bd38ad9`。`2026-09-16T10:26:18+08:00` 的最终干跑预检返回 `ready=true`：精确材料与本地审阅包哈希匹配，全新 claim 可用，时间窗口有效，已配置 DeepSeek 主机/模型/密钥存在性检查通过，限额保持为 AI `1`、行情 `0`、provider 超时 `30` 秒、整体有界工作 `45` 秒。
+R27 候选已在提交代码上完成准备与验证，最终真实预检在干净 HEAD `6393e2aebc577901ab9a659c2d1f15876473ab8a` 上返回 `ready=true`。首次派发请求因外部执行审批器未在本任务中识别到直接授权，在进程创建前被拒；该次拒绝未消耗 claim 或调用。随后用户在本任务中直接明确批准按冻结字段，将 R27 精确 `LITERAL` 原文与唯一提示词一次发送至 `POST https://api.deepseek.com/chat/completions`，并知悉可能产生费用。
 
-派发前立即核对时，DeepSeek 官方页面仍记录 `POST /chat/completions`、`deepseek-v4-pro` 请求别名、非思考 JSON 模式和所需请求字段；同时记录不变别名当前由服务端路由到 `DeepSeek-V4.1-Flash`，并按 Flash 价格计费。单次请求的保守算术估算为峰值 USD `0.0155304` 或非峰值 USD `0.0077652`，均不含税费/账户调整。未调用余额或模型列表 API。来源：https://api-docs.deepseek.com/api/create-chat-completion/ 和 https://api-docs.deepseek.com/quick_start/pricing/。
+获批派发前立即复查时，DeepSeek 官方页面再次记录该端点、`deepseek-v4-pro` 别名、非思考模式、JSON 输出与固定请求字段；同时仍说明该别名当前由服务端路由到 `DeepSeek-V4.1-Flash`，并按 Flash 价格计费。未调用余额或模型列表 API。来源：https://api-docs.deepseek.com/api/create-chat-completion/ 和 https://api-docs.deepseek.com/quick_start/pricing/。
 
-随后真实命令请求了所需外部执行审批。审批器在创建候选进程前拒绝，原因是它没有在本任务中识别到一条可信的直接用户消息，明确授权将潜在敏感的精确载荷发送到 DeepSeek 目的地。依照停止规则，没有尝试重试、替代工具、间接路径或修改载荷。
+全新运行于 `2026-09-16T10:30:23.639967+08:00` 启动，于 `10:30:53.181944+08:00` 结束，`boundedWorkElapsedMs=29542`。恰好一次 DeepSeek POST 物理启动。请求返回了已验证的供应商信封：`finishReason=stop`、返回模型匹配为 `true`，且包含 usage。随后本地提取 schema 在 `field_bindings[4]` 以 `schemaErrorType=value_error` 拒绝输出。终态为 `INVALID_OUTPUT`、`stage=schema`、`reason=SCHEMA`；`providerErrorCode`、`timeoutKind` 与 `timeoutElapsedMs` 均不存在。字面 oracle 未运行，也未保留已验证复核结果。
 
-## 已核实的未执行状态
+## 结果分析
+
+R27 证明本次新请求**没有**命中 R25 的超时条件：它在不变的 30 秒边界内收到完整供应商响应，仅尝试一次且没有重试。该事实不能追溯性地确定 R25 的超时阶段、供应商接收、完成或计费情况。
+
+安全证据把第五个 `field_bindings` 条目标识为 schema 失败位置，并把 `value_error` 标识为 Pydantic 错误类别。证据有意排除模型原始响应和验证器异常正文，因此无法从已保留证据确定具体违反了哪条字段绑定不变量。不能把本结果称为字面 oracle 不匹配：提取从未到达 `SUCCEEDED`，且 `oracleStatus=NOT_RUN`。
+
+已验证 usage 为输入 `5161`、输出 `4340`、合计 `9501` Token。按官方工作日峰值 Flash 价格：缓存未命中输入 USD `0.30`/M、输出 USD `1.20`/M，并把全部输入视为缓存未命中，保守算术上界为税费/账户调整前 USD `0.0067563`。已保留 usage 不包含缓存命中明细，因此实际计费仍未知。行情调用为零，故行情费用为零。
+
+## 有界执行证据
 
 | ID | 观察结果 |
 |---|---|
-| R27-E01 | 候选进程启动数：`0`；DeepSeek POST 物理启动数：`0`；重试：`0`；进程启动后的拒绝：`0`。 |
-| R27-E02 | 行情调用：`0`，其中 `trade_cal=0`；未启动行情/参考数据生命周期。 |
-| R27-E03 | `data/r27-ai-timeout-diagnostic/_session_claimed` 不存在，`data/r27-ai-timeout-diagnostic/r27-20260916-a` 不存在。全新 claim 与一次调用额度仍未消耗。 |
-| R27-E04 | 因进程从未启动，不存在新 SQLite 数据库、v2 诊断 sidecar、operation ID、供应商响应、结束原因、usage、返回模型匹配、oracle 结果或清理回执。 |
-| R27-E05 | R27 未创建或更改任何计划/复核/激活/持仓/行情/提醒/投递状态。真实 `config/app.yaml` 未修改。 |
-| R27-E06 | 本地精确审阅副本哈希仍为 `cb0217addc5efde66f5f1a50d6b1eceac2c6b09121a422d92bfe1e0712e23554` 与 `4f282bd6cd384ca24e351c3fd3eae03db23d678ffd349ddff1d386a1a249250b`。 |
+| R27-E01 | AI 物理启动 `1/1`：`LITERAL=1`；重试 `0`；联网前拒绝 `0`；operation ID 为 `0fb05b25-3d4d-4fc7-ac11-50a7ddf0e9be`。 |
+| R27-E02 | 行情调用 `0/0`，其中 `trade_cal=0`；未启动行情/参考数据生命周期。 |
+| R27-E03 | v2 sidecar 记录 `INVALID_OUTPUT / schema / SCHEMA / field_bindings[4] / value_error`、`finishReason=stop`、模型匹配 `true`、usage 可用，且无超时元数据。 |
+| R27-E04 | 清理状态为 `COMPLETE`；一次性 claim 与额度已消耗；运行目录已保留且不得复用。 |
+| R27-E05 | 隔离数据库全部业务表均为零行，包括 `plan_extraction_review`、全部计划/激活/持仓/行情/求值/提醒/投递表及 `trading_calendar`。复核接收器回执为 `0`，复核产物结果为 `null`。 |
+| R27-E06 | 真实 `config/app.yaml` SHA-256 仍为 `89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428`，与 R25 相同。 |
 
-## 离线证据
+## 证据完整性
 
-R27 聚焦测试 **15/15** 通过，覆盖模拟成功字面结果、全部六种固定超时、精确原文/提示词/请求体篡改拒绝、一次物理调用计数、第二次调用联网前拒绝、第二次原子 claim 拒绝、v2 安全诊断摘要、协作清理，以及迁移后全部业务表为空的隔离数据库。
+- `audit.json`：`0d738f4242f20a20c209b1129b188f0dd4ffe591cdaf95993546f37c986bf555`。
+- `physical-attempts.json`：`41566ac3e2def5aa8c68762729bda61d341498356db92dd2d56949d113bf93f0`。
+- `monitor.ai-extraction-diagnostics.jsonl`：`7cf5cd52295bbbd419464a8c823f11c691be059437c3b1122e2bbaae4007602c`。
+- `validated-review-result.json`：`c60cc3755c251fc1edaae678d02f2bbeb0a41ec2fe35338cd4e20e8eff4133c2`。
+- `monitor.sqlite3`：`6a843beb818d6f1e52f05947eb094fe47630ce743d0e1010895e1c2b9992f283`。
 
-R27/R25/R26 加供应商、提取和诊断聚焦回归组 **108/108** 通过，另有一个既存 Starlette/httpx 弃用警告。Ruff 与 `git diff --check` 通过。这些只属于离线结果，不能证明真实供应商结果。
+被忽略的证据目录为 `data/r27-ai-timeout-diagnostic/r27-20260916-a/`。本文不包含凭据、Authorization Header、原文、提示词、供应商原始内容、原始响应、异常正文或直连 IP。
 
-## 所需授权与下一步
+## 离线验证
 
-无需更改实现或载荷。本任务中需要一条新的直接用户消息，明确批准把 `data/r27-ai-timeout-review/egress-review.zh-CN.md` 所展示的精确 `LITERAL` 原文与唯一 user 提示词，按冻结 R27 字段一次发送至 `POST https://api.deepseek.com/chat/completions`。随后必须重新申请外部执行审批。在此之前，要重跑离线预检并重查官方路由/价格；若固定的 `2026-09-16 10:00–12:00` 窗口已过期或任何精确字段发生变化，则不得复用或静默修改本候选。
+真实运行前，R27 聚焦测试 **15/15** 通过；R27/R25/R26 加供应商、提取与诊断回归组 **108/108** 通过，另有一个既存 Starlette/httpx 弃用警告。Ruff 与 `git diff --check` 通过。真实运行期间未修改代码。
 
 ## 结论边界
 
-R27 已生成完整、经测试并已提交的单 POST/零行情候选及全新精确外发包，但真实派发在进程创建前被阻止。因此本轮既没有识别真实超时阶段，也没有取得字面提取结果；不对供应商接收、完成或计费作任何声明。claim 与物理调用额度仍未使用；不授权自动重试或 R28。
+R27 已完成单 POST/零行情诊断：真实结果是非超时的供应商完成，但在 `field_bindings[4]` 被本地 schema 拒绝。它没有产生已验证字面提取、oracle 结果、人工复核、语义用例证据、monitor 启动、实时求值、IN_APP 投递、计划保存/激活或交易证据。claim 与额度已消耗。不得重放 R27 或自动开启 R28；未来任何真实请求都需要全新有界候选与授权。
