@@ -336,6 +336,7 @@ class AIBudgetTransport(httpx.AsyncBaseTransport):
         inner: httpx.AsyncBaseTransport | None = None,
         prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
         max_output_tokens: int = 4096,
+        max_prompt_utf8_bytes: int = 19_000,
     ) -> None:
         self._budget = budget
         self._inner = inner or httpx.AsyncHTTPTransport(retries=0, trust_env=False)
@@ -349,6 +350,7 @@ class AIBudgetTransport(httpx.AsyncBaseTransport):
             for case_id, (_, prompt) in sources.items()
         }
         self._max_output_tokens = max_output_tokens
+        self._max_prompt_utf8_bytes = max_prompt_utf8_bytes
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -375,7 +377,7 @@ class AIBudgetTransport(httpx.AsyncBaseTransport):
                 and body.get("thinking") == {"type": "disabled"}
                 and body.get("response_format") == {"type": "json_object"}
                 and body.get("stream") is False
-                and len(prompt.encode("utf-8")) <= 19_000
+                and len(prompt.encode("utf-8")) <= self._max_prompt_utf8_bytes
             )
         except KeyError, IndexError, TypeError, UnicodeError, ValueError:
             self._budget.reject()
@@ -538,6 +540,7 @@ def _bounded_ai_factory(
     inner_transport: httpx.AsyncBaseTransport | None = None,
     prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
     max_output_tokens: int = 4096,
+    max_prompt_utf8_bytes: int = 19_000,
 ):
     from trade_plan_monitor.web.ai_diagnostics import diagnostic_path_for_database
     from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
@@ -582,6 +585,7 @@ def _bounded_ai_factory(
                 inner=inner_transport,
                 prompt_version=prompt_version,
                 max_output_tokens=max_output_tokens,
+                max_prompt_utf8_bytes=max_prompt_utf8_bytes,
             ),
             timeout=httpx.Timeout(30),
             follow_redirects=False,
