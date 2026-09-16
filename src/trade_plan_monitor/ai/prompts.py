@@ -18,6 +18,7 @@ PLAN_EXTRACTION_PROMPT_V2: Final = "plan-extract-v2"
 PLAN_EXTRACTION_PROMPT_V3: Final = "plan-extract-v3"
 PLAN_EXTRACTION_PROMPT_V4: Final = "plan-extract-v4"
 PLAN_EXTRACTION_PROMPT_V5: Final = "plan-extract-v5"
+PLAN_EXTRACTION_PROMPT_V6: Final = "plan-extract-v6"
 PLAN_EXTRACTION_PROMPT_VERSION: Final = PLAN_EXTRACTION_PROMPT_V5
 MAX_SOURCE_TEXT_CHARS: Final = 150_000
 
@@ -34,6 +35,7 @@ _SCHEMA_CONTRACT_SHA256: Final = {
     PLAN_EXTRACTION_PROMPT_V3: "0de88a7a9bdec1a84ad0d458d2963fcdc2b68bfee591dea270b0f35bc5fa0f95",
     PLAN_EXTRACTION_PROMPT_V4: "9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1",
     PLAN_EXTRACTION_PROMPT_V5: "9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1",
+    PLAN_EXTRACTION_PROMPT_V6: "9461d3099a923e5f9fe172eeba010e0dbe44cbe9d8f93c9465be9626d08965a1",
 }
 
 
@@ -143,6 +145,10 @@ _OUTPUT_SCHEMAS = {
         PLAN_EXTRACTION_PROMPT_V5,
         PlanExtractionOutputV4.model_json_schema(),
     ),
+    PLAN_EXTRACTION_PROMPT_V6: _render_frozen_schema(
+        PLAN_EXTRACTION_PROMPT_V6,
+        PlanExtractionOutputV4.model_json_schema(),
+    ),
 }
 
 
@@ -176,17 +182,42 @@ def build_plan_extraction_prompt(
         "\\u0055NTRUSTED_PLAN_DATA_END",
     )
 
-    if prompt_version in {PLAN_EXTRACTION_PROMPT_V4, PLAN_EXTRACTION_PROMPT_V5}:
-        compact_rules = (
-            "10. Return minified JSON without indentation or insignificant whitespace.\n"
-            "11. You may omit top-level assumptions or warnings only when that list is empty; "
-            "do not omit any other field. Keep every discriminator field such as type, mode, "
-            "origin, binding_kind, and disposition explicit. Do not omit any source clause, "
-            "binding, trading value, boundary, logical relationship, timeframe, quantity, or "
-            "review issue.\n"
-            if prompt_version == PLAN_EXTRACTION_PROMPT_V5
-            else ""
-        )
+    if prompt_version in {
+        PLAN_EXTRACTION_PROMPT_V4,
+        PLAN_EXTRACTION_PROMPT_V5,
+        PLAN_EXTRACTION_PROMPT_V6,
+    }:
+        compact_rules = ""
+        if prompt_version in {PLAN_EXTRACTION_PROMPT_V5, PLAN_EXTRACTION_PROMPT_V6}:
+            compact_rules = (
+                "10. Return minified JSON without indentation or insignificant whitespace.\n"
+                "11. You may omit top-level assumptions or warnings only when that list is empty; "
+                "do not omit any other field. Keep every discriminator field such as type, mode, "
+                "origin, binding_kind, and disposition explicit. Do not omit any source clause, "
+                "binding, trading value, boundary, logical relationship, timeframe, quantity, or "
+                "review issue.\n"
+            )
+        if prompt_version == PLAN_EXTRACTION_PROMPT_V6:
+            compact_rules += (
+                "12. In every field binding, clause_ids must be unique. SOURCE requires non-empty "
+                "clause_ids and null supplement_id and contract_id. Do not emit USER_SUPPLEMENT "
+                "bindings because this extraction payload contains no durable user_supplements. "
+                "CONTRACT requires empty clause_ids, null supplement_id, and a non-null "
+                "contract_id. CONTRACT paths are limited to schema_version, execution_mode, "
+                "execution_version, plan_id, version, name, market, position.inventory_scope, "
+                "position.lot_size, monitoring.indicator_formula_version, or a path ending in "
+                ".rule_id.\n"
+                "13. Each (binding_kind, path) identity must be unique. VALUE must address a "
+                "scalar current draft field with the exact JSON type and value and the correct "
+                "unit. STRUCTURE value must be exactly ALL or ANY, must address the current "
+                "ALL/ANY condition object, and must use unit NONE. For VALUE, *_fen uses FEN; "
+                "quantity, max_qty, and lot_size use SHARES; window_bars uses BARS; "
+                "timeframe_minutes uses MINUTES; minimum_ratio uses RATIO; all other paths use "
+                "NONE.\n"
+                "14. Every SOURCE clause_id must name a MAPPED source clause whose paths include "
+                "the binding path; every MAPPED clause path must have a reciprocal SOURCE "
+                "binding.\n"
+            )
         return (
             f"Prompt version: {prompt_version}\n"
             "You extract a review-only partial Schema-v3 A-share trade-plan draft. "
@@ -252,6 +283,7 @@ __all__ = [
     "PLAN_EXTRACTION_PROMPT_V3",
     "PLAN_EXTRACTION_PROMPT_V4",
     "PLAN_EXTRACTION_PROMPT_V5",
+    "PLAN_EXTRACTION_PROMPT_V6",
     "PLAN_EXTRACTION_PROMPT_VERSION",
     "build_plan_extraction_prompt",
 ]

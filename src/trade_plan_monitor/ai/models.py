@@ -28,6 +28,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import (
@@ -402,25 +403,40 @@ class FieldBinding(_AIValue):
     @model_validator(mode="after")
     def validate_origin_reference(self) -> Self:
         if len(set(self.clause_ids)) != len(self.clause_ids):
-            raise ValueError("field binding clause references must be unique")
+            raise PydanticCustomError(
+                "field_binding_clause_ids_not_unique",
+                "field binding clause references must be unique",
+            )
         if self.origin is BindingOrigin.SOURCE:
             valid = (
                 bool(self.clause_ids) and self.supplement_id is None and self.contract_id is None
             )
+            invalid_reference_code = "field_binding_source_reference_invalid"
         elif self.origin is BindingOrigin.USER_SUPPLEMENT:
             valid = (
                 not self.clause_ids and self.supplement_id is not None and self.contract_id is None
             )
+            invalid_reference_code = "field_binding_user_supplement_reference_invalid"
         else:
             valid = (
                 not self.clause_ids and self.supplement_id is None and self.contract_id is not None
             )
+            invalid_reference_code = "field_binding_contract_reference_invalid"
             if valid and not _contract_binding_path(self.path):
-                raise ValueError("CONTRACT cannot supply a trading parameter")
+                raise PydanticCustomError(
+                    "field_binding_contract_path_forbidden",
+                    "CONTRACT cannot supply a trading parameter",
+                )
         if not valid:
-            raise ValueError("field binding origin reference is inconsistent")
+            raise PydanticCustomError(
+                invalid_reference_code,
+                "field binding origin reference is inconsistent",
+            )
         if self.binding_kind is BindingKind.STRUCTURE and self.value not in {"ALL", "ANY"}:
-            raise ValueError("structural bindings are limited to ALL or ANY")
+            raise PydanticCustomError(
+                "field_binding_structure_value_invalid",
+                "structural bindings are limited to ALL or ANY",
+            )
         return self
 
 
@@ -433,7 +449,6 @@ def _contract_binding_path(path: str) -> bool:
         "version",
         "name",
         "market",
-        "metadata",
         "position.inventory_scope",
         "position.lot_size",
         "monitoring.indicator_formula_version",
@@ -713,6 +728,12 @@ class ExtractionDiagnostic(_AIValue):
             "value_error",
             "assertion_error",
             "json_invalid",
+            "field_binding_clause_ids_not_unique",
+            "field_binding_source_reference_invalid",
+            "field_binding_user_supplement_reference_invalid",
+            "field_binding_contract_reference_invalid",
+            "field_binding_contract_path_forbidden",
+            "field_binding_structure_value_invalid",
             "other",
         ]
         | None
@@ -807,7 +828,7 @@ class PlanExtractionResult(_AIValue):
             if self.draft is None or not self.evidence:
                 if not isinstance(self.draft, ExplicitPlanDraft) or self.mapping is None:
                     raise ValueError("a succeeded extraction requires a draft and evidence")
-            mapping_versions = {"plan-extract-v4", "plan-extract-v5"}
+            mapping_versions = {"plan-extract-v4", "plan-extract-v5", "plan-extract-v6"}
             if self.prompt_version in mapping_versions and self.mapping is None:
                 raise ValueError("a mapping extraction requires a plan mapping")
             if self.prompt_version not in mapping_versions and self.mapping is not None:

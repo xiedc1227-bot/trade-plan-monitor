@@ -29,6 +29,7 @@ from trade_plan_monitor.ai.models import (
 from trade_plan_monitor.ai.prompts import (
     PLAN_EXTRACTION_PROMPT_V4,
     PLAN_EXTRACTION_PROMPT_V5,
+    PLAN_EXTRACTION_PROMPT_V6,
     build_plan_extraction_prompt,
 )
 from trade_plan_monitor.ai.provider import (
@@ -407,7 +408,12 @@ def _parse_untrusted_output(
     )
     model = (
         PlanExtractionOutputV4
-        if prompt_version in {PLAN_EXTRACTION_PROMPT_V4, PLAN_EXTRACTION_PROMPT_V5}
+        if prompt_version
+        in {
+            PLAN_EXTRACTION_PROMPT_V4,
+            PLAN_EXTRACTION_PROMPT_V5,
+            PLAN_EXTRACTION_PROMPT_V6,
+        }
         else PlanExtractionOutput
     )
     return model.model_validate_json(normalized)
@@ -614,6 +620,12 @@ _SAFE_SCHEMA_ERROR_TYPES: Final = frozenset(
         "value_error",
         "assertion_error",
         "json_invalid",
+        "field_binding_clause_ids_not_unique",
+        "field_binding_source_reference_invalid",
+        "field_binding_user_supplement_reference_invalid",
+        "field_binding_contract_reference_invalid",
+        "field_binding_contract_path_forbidden",
+        "field_binding_structure_value_invalid",
     }
 )
 

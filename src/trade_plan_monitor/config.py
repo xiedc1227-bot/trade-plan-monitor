@@ -162,6 +162,7 @@ class AIConfiguration(_ConfigurationModel):
         "plan-extract-v3",
         "plan-extract-v4",
         "plan-extract-v5",
+        "plan-extract-v6",
     ] = "plan-extract-v5"
     additional_models: tuple[AIModelConfiguration, ...] = Field(
         default=(),

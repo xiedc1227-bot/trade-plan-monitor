@@ -436,7 +436,10 @@ def _confirmation_resolutions(detail: dict[str, object]) -> list[dict[str, objec
     return resolutions
 
 
-@pytest.mark.parametrize("prompt_version", ("plan-extract-v4", "plan-extract-v5"))
+@pytest.mark.parametrize(
+    "prompt_version",
+    ("plan-extract-v4", "plan-extract-v5", "plan-extract-v6"),
+)
 def test_mapping_extraction_save_review_and_public_activation_are_server_bound(
     tmp_path: Path,
     prompt_version: str,
