@@ -79,9 +79,9 @@ def _view_and_sidecar(tmp_path: Path, result: PlanExtractionResult):
 
 
 def test_r29_contract_is_v6_one_ai_zero_market_and_globally_bounded() -> None:
-    assert r29._eligible(datetime(2026, 9, 17, 9, 0, tzinfo=_SHANGHAI))
-    assert r29._eligible(datetime(2026, 9, 17, 18, 0, tzinfo=_SHANGHAI))
-    assert not r29._eligible(datetime(2026, 9, 17, 18, 0, 1, tzinfo=_SHANGHAI))
+    assert r29._eligible(datetime(2026, 9, 16, 13, 30, tzinfo=_SHANGHAI))
+    assert r29._eligible(datetime(2026, 9, 16, 15, 0, tzinfo=_SHANGHAI))
+    assert not r29._eligible(datetime(2026, 9, 16, 15, 0, 1, tzinfo=_SHANGHAI))
     assert r29.PROMPT_VERSION == "plan-extract-v6"
     assert r29.AI_CAPS == {"LITERAL": 1}
     assert r29.AI_TOTAL == 1

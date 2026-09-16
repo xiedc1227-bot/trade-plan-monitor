@@ -86,7 +86,7 @@ _SAFE_DIAGNOSTIC_FIELDS = r27._SAFE_DIAGNOSTIC_FIELDS
 
 
 def _eligible(now: datetime) -> bool:
-    return now.date() == date(2026, 9, 17) and time(9, 0) <= now.time() <= time(18, 0)
+    return now.date() == date(2026, 9, 16) and time(13, 30) <= now.time() <= time(15, 0)
 
 
 def _request_body(prompt: str) -> dict[str, object]:

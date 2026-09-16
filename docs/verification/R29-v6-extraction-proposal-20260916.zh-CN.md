@@ -13,7 +13,7 @@ R29 只回答一个狭窄问题：不变的合成 `LITERAL` 原文配合新审�
 | ID | 固定值 |
 |---|---|
 | R29-C01 | 在 `data/r29-v6-extraction-acceptance/` 下使用全新原子 claim；准备或干跑不会创建它。 |
-| R29-C02 | 启动窗口为 Asia/Shanghai `2026-09-17 09:00:00` 至 `18:00:00`。提取不依赖交易时段；错过窗口即停止，不创建后台等待或定时任务。 |
+| R29-C02 | 在精确载荷获批且用户要求现在运行后，启动窗口调整为 Asia/Shanghai `2026-09-16 13:30:00` 至 `15:00:00`。提取不依赖交易时段；错过窗口即停止，不创建后台等待或定时任务。该本地门禁变化不改变已批准外发材料或其包哈希。 |
 | R29-C03 | 仅 `LITERAL`；AI 物理 POST 上限 `1`；重试/重提 `0`；全部行情上限为 `0`，包括 `trade_cal=0`。 |
 | R29-C04 | 既有 provider/HTTPX 超时 `30` 秒；终态观察额度 `31` 秒；总硬边界 `45` 秒，其中协作清理最多 `15` 秒。 |
 | R29-C05 | 模型别名 `deepseek-v4-pro`；`plan-extract-v6`；`max_tokens=8192`；`temperature=0`；`thinking={"type":"disabled"}`；`response_format={"type":"json_object"}`；`stream=false`；恰好一条 user 消息。 |

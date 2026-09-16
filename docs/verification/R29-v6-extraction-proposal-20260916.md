@@ -13,7 +13,7 @@ This is not full workflow acceptance. It does not cover the two semantic cases, 
 | ID | Fixed value |
 |---|---|
 | R29-C01 | One fresh atomic claim under `data/r29-v6-extraction-acceptance/`; it is not created during preparation or dry run. |
-| R29-C02 | Start window `2026-09-17 09:00:00` through `18:00:00` Asia/Shanghai. Extraction does not depend on an exchange session. Missing this window stops the candidate; no background wait or schedule is created. |
+| R29-C02 | After exact-payload approval and the user's request to run now, the start window is `2026-09-16 13:30:00` through `15:00:00` Asia/Shanghai. Extraction does not depend on an exchange session. Missing this window stops the candidate; no background wait or schedule is created. This local gate change does not alter the approved egress material or its package hash. |
 | R29-C03 | `LITERAL` only; physical AI POST cap `1`; retry/resubmission `0`; every market cap `0`, including `trade_cal=0`. |
 | R29-C04 | Existing provider/HTTPX timeout `30` seconds; terminal observation allowance `31` seconds; hard total `45` seconds including at most `15` seconds of cooperative cleanup. |
 | R29-C05 | Model alias `deepseek-v4-pro`; `plan-extract-v6`; `max_tokens=8192`; `temperature=0`; `thinking={"type":"disabled"}`; `response_format={"type":"json_object"}`; `stream=false`; exactly one user message. |
