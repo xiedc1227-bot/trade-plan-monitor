@@ -53,7 +53,7 @@ def append_extraction_diagnostic(
             "totalTokens": usage.total_tokens,
         }
     record = {
-        "version": 1,
+        "version": 2,
         "operationId": str(result.request_id),
         "sourceTextSha256": result.source_text_sha256,
         "providerId": str(result.provider_id),
@@ -66,6 +66,8 @@ def append_extraction_diagnostic(
         "path": diagnostic.path,
         "schemaErrorType": diagnostic.schema_error_type,
         "providerErrorCode": diagnostic.provider_error_code,
+        "timeoutKind": diagnostic.timeout_kind,
+        "timeoutElapsedMs": diagnostic.timeout_elapsed_ms,
         "finishReason": diagnostic.finish_reason,
         "modelMatchesConfigured": diagnostic.model_matches_configured,
         "attempts": diagnostic.attempts,

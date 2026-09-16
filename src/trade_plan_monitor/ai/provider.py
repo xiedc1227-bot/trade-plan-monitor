@@ -48,6 +48,17 @@ class AIProviderErrorCode(StrEnum):
     REJECTED = "REJECTED"
 
 
+class AIProviderTimeoutKind(StrEnum):
+    """Closed timeout phases safe to expose without provider exception text."""
+
+    CONNECT = "CONNECT"
+    READ = "READ"
+    WRITE = "WRITE"
+    POOL = "POOL"
+    OVERALL_DEADLINE = "OVERALL_DEADLINE"
+    UNKNOWN = "UNKNOWN"
+
+
 class AIProviderError(RuntimeError):
     """Sanitized provider failure suitable for ordinary application boundaries."""
 
@@ -57,12 +68,30 @@ class AIProviderError(RuntimeError):
         operation: AIProviderOperation,
         *,
         attempts: int,
+        timeout_kind: AIProviderTimeoutKind | None = None,
+        timeout_elapsed_ms: int | None = None,
     ) -> None:
         if not 0 <= attempts <= 3:
             raise ValueError("attempts must be between 0 and 3")
+        if timeout_kind is not None and not isinstance(timeout_kind, AIProviderTimeoutKind):
+            raise TypeError("timeout_kind must be an AIProviderTimeoutKind")
+        if timeout_elapsed_ms is not None and (
+            isinstance(timeout_elapsed_ms, bool)
+            or not isinstance(timeout_elapsed_ms, int)
+            or timeout_elapsed_ms < 0
+        ):
+            raise ValueError("timeout_elapsed_ms must be a non-negative integer")
+        if code is not AIProviderErrorCode.TIMEOUT and (
+            timeout_kind is not None or timeout_elapsed_ms is not None
+        ):
+            raise ValueError("timeout metadata requires a TIMEOUT error")
+        if (timeout_kind is None) != (timeout_elapsed_ms is None):
+            raise ValueError("timeout metadata must include both kind and elapsed milliseconds")
         self.code = code
         self.operation = operation
         self.attempts = attempts
+        self.timeout_kind = timeout_kind
+        self.timeout_elapsed_ms = timeout_elapsed_ms
         super().__init__(f"AI provider {operation.value} failed ({code.value})")
 
 
@@ -130,6 +159,7 @@ __all__ = [
     "AIProviderError",
     "AIProviderErrorCode",
     "AIProviderOperation",
+    "AIProviderTimeoutKind",
     "AIUsage",
     "PlanExtractionRequest",
     "ProviderTestResult",

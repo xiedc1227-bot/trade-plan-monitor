@@ -6,6 +6,7 @@ https://api-docs.deepseek.com/api/create-chat-completion/
 https://api-docs.deepseek.com/guides/json_mode/
 https://www.python-httpx.org/async/#streaming-responses
 https://www.python-httpx.org/advanced/timeouts/
+https://docs.python.org/3/library/asyncio-task.html#timeouts
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from math import isfinite
+from time import monotonic_ns
 from typing import Annotated, Any, Literal, Protocol
 
 import httpx
@@ -27,6 +29,7 @@ from trade_plan_monitor.ai.provider import (
     AIProviderError,
     AIProviderErrorCode,
     AIProviderOperation,
+    AIProviderTimeoutKind,
     AIUsage,
     PlanExtractionRequest,
     ProviderTestResult,
@@ -58,10 +61,14 @@ class _AttemptFailure(Exception):
         *,
         retryable: bool,
         retry_after: float | None = None,
+        timeout_kind: AIProviderTimeoutKind | None = None,
+        timeout_elapsed_ms: int | None = None,
     ) -> None:
         self.code = code
         self.retryable = retryable
         self.retry_after = retry_after
+        self.timeout_kind = timeout_kind
+        self.timeout_elapsed_ms = timeout_elapsed_ms
         super().__init__(code.value)
 
 
@@ -174,6 +181,7 @@ class OpenAICompatibleProvider:
         max_attempts = config.max_retries + 1
         for attempt in range(1, max_attempts + 1):
             failure: _AttemptFailure | None = None
+            attempt_started_ns = monotonic_ns()
             try:
                 content = await self._request_once(
                     config=config,
@@ -185,9 +193,24 @@ class OpenAICompatibleProvider:
                     caught.code,
                     retryable=caught.retryable,
                     retry_after=caught.retry_after,
+                    timeout_kind=caught.timeout_kind,
+                    timeout_elapsed_ms=caught.timeout_elapsed_ms,
                 )
-            except TimeoutError, httpx.TimeoutException:
-                failure = _AttemptFailure(AIProviderErrorCode.TIMEOUT, retryable=True)
+            except httpx.ConnectTimeout:
+                failure = _timeout_failure(AIProviderTimeoutKind.CONNECT, attempt_started_ns)
+            except httpx.ReadTimeout:
+                failure = _timeout_failure(AIProviderTimeoutKind.READ, attempt_started_ns)
+            except httpx.WriteTimeout:
+                failure = _timeout_failure(AIProviderTimeoutKind.WRITE, attempt_started_ns)
+            except httpx.PoolTimeout:
+                failure = _timeout_failure(AIProviderTimeoutKind.POOL, attempt_started_ns)
+            except TimeoutError:
+                failure = _timeout_failure(
+                    AIProviderTimeoutKind.OVERALL_DEADLINE,
+                    attempt_started_ns,
+                )
+            except httpx.TimeoutException:
+                failure = _timeout_failure(AIProviderTimeoutKind.UNKNOWN, attempt_started_ns)
             except httpx.RequestError:
                 failure = _AttemptFailure(AIProviderErrorCode.TRANSIENT, retryable=True)
 
@@ -197,6 +220,8 @@ class OpenAICompatibleProvider:
                         failure.code,
                         operation,
                         attempts=attempt,
+                        timeout_kind=failure.timeout_kind,
+                        timeout_elapsed_ms=failure.timeout_elapsed_ms,
                     ) from None
                 await self._sleep(_retry_delay(attempt, failure.retry_after))
                 continue
@@ -368,6 +393,19 @@ def _retry_delay(attempt: int, retry_after: float | None) -> float:
     if retry_after is None:
         return exponential
     return min(max(exponential, retry_after), _MAX_RETRY_DELAY_SECONDS)
+
+
+def _timeout_failure(
+    kind: AIProviderTimeoutKind,
+    attempt_started_ns: int,
+) -> _AttemptFailure:
+    elapsed_ms = max(0, (monotonic_ns() - attempt_started_ns) // 1_000_000)
+    return _AttemptFailure(
+        AIProviderErrorCode.TIMEOUT,
+        retryable=True,
+        timeout_kind=kind,
+        timeout_elapsed_ms=elapsed_ms,
+    )
 
 
 __all__ = ["OpenAICompatibleProvider"]

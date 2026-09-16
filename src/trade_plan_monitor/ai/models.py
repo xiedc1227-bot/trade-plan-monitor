@@ -731,6 +731,18 @@ class ExtractionDiagnostic(_AIValue):
         ]
         | None
     ) = None
+    timeout_kind: (
+        Literal[
+            "CONNECT",
+            "READ",
+            "WRITE",
+            "POOL",
+            "OVERALL_DEADLINE",
+            "UNKNOWN",
+        ]
+        | None
+    ) = None
+    timeout_elapsed_ms: int | None = Field(default=None, ge=0)
     finish_reason: Literal[
         "unknown",
         "stop",
@@ -741,6 +753,16 @@ class ExtractionDiagnostic(_AIValue):
     ] = "unknown"
     model_matches_configured: bool | None = None
     attempts: int | None = Field(default=None, ge=0, le=3)
+
+    @model_validator(mode="after")
+    def require_consistent_timeout_metadata(self) -> ExtractionDiagnostic:
+        has_kind = self.timeout_kind is not None
+        has_elapsed = self.timeout_elapsed_ms is not None
+        if has_kind != has_elapsed:
+            raise ValueError("timeout metadata must include both kind and elapsed milliseconds")
+        if has_kind and self.provider_error_code != "TIMEOUT":
+            raise ValueError("timeout metadata requires a TIMEOUT provider error")
+        return self
 
     @field_validator("path")
     @classmethod

@@ -116,6 +116,8 @@ async def extract_plan(
             reason="PROVIDER_ERROR",
             provider_error_code=error.code.value,
             attempts=error.attempts,
+            timeout_kind=(error.timeout_kind.value if error.timeout_kind is not None else None),
+            timeout_elapsed_ms=error.timeout_elapsed_ms,
         )
 
     if raw.request_id != request_id or raw.provider_id != config.provider_id:
@@ -546,6 +548,8 @@ def _failure_result(
     reason: str,
     provider_error_code: str | None = None,
     attempts: int | None = None,
+    timeout_kind: str | None = None,
+    timeout_elapsed_ms: int | None = None,
     diagnostic_path: str = "unknown",
     schema_error_type: str | None = None,
 ) -> PlanExtractionResult:
@@ -565,6 +569,8 @@ def _failure_result(
             provider_error_code=provider_error_code,
             schema_error_type=schema_error_type,
             attempts=attempts,
+            timeout_kind=timeout_kind,
+            timeout_elapsed_ms=timeout_elapsed_ms,
             raw=raw,
             configured_model=config.model,
         ),
@@ -669,6 +675,8 @@ def _diagnostic(
     provider_error_code: str | None = None,
     schema_error_type: str | None = None,
     attempts: int | None = None,
+    timeout_kind: str | None = None,
+    timeout_elapsed_ms: int | None = None,
     raw: RawAIResponse | None = None,
     configured_model: str,
 ) -> ExtractionDiagnostic:
@@ -685,6 +693,8 @@ def _diagnostic(
         path=path,
         provider_error_code=provider_error_code,
         schema_error_type=schema_error_type,
+        timeout_kind=timeout_kind,
+        timeout_elapsed_ms=timeout_elapsed_ms,
         finish_reason=finish_reason,
         model_matches_configured=(raw.model == configured_model if raw is not None else None),
         attempts=raw.attempts if raw is not None else attempts,
