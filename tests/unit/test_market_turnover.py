@@ -26,13 +26,14 @@ TRADE_DATE = datetime(2026, 9, 10, tzinfo=SHANGHAI).date()
 OBSERVED_AT = datetime(2026, 9, 10, 10, 0, 2, tzinfo=SHANGHAI)
 
 
-def _bucket_ends(count: int) -> tuple[datetime, ...]:
+def _bucket_ends(count: int, *, days_ago: int = 0) -> tuple[datetime, ...]:
+    trade_day = datetime(2026, 9, 10, tzinfo=SHANGHAI) - timedelta(days=days_ago)
     morning = tuple(
-        datetime(2026, 9, 10, 9, 35, tzinfo=SHANGHAI) + timedelta(minutes=5 * index)
+        trade_day.replace(hour=9, minute=35) + timedelta(minutes=5 * index)
         for index in range(24)
     )
     afternoon = tuple(
-        datetime(2026, 9, 10, 13, 5, tzinfo=SHANGHAI) + timedelta(minutes=5 * index)
+        trade_day.replace(hour=13, minute=5) + timedelta(minutes=5 * index)
         for index in range(24)
     )
     return (morning + afternoon)[:count]
@@ -45,9 +46,19 @@ def _snapshot(
     bucket_count: int = 6,
     prior_amount: str,
     prior_days_ago: int = 1,
+    previous_amount_per_bucket: str | None = None,
 ) -> MarketIndexSnapshot:
     bucket_ends = _bucket_ends(bucket_count)
     observed_at = bucket_ends[-1] + timedelta(seconds=2)
+    previous_bucket_amount = (
+        Decimal(prior_amount) / Decimal(48)
+        if previous_amount_per_bucket is None
+        else Decimal(previous_amount_per_bucket)
+    )
+    minute_values = tuple(
+        (bar_at, previous_bucket_amount)
+        for bar_at in _bucket_ends(48, days_ago=prior_days_ago)
+    ) + tuple((bar_at, Decimal(amount_per_bucket)) for bar_at in bucket_ends)
     five_minute_bars = tuple(
         MarketIndexBar(
             index_code=index_code,
@@ -58,12 +69,12 @@ def _snapshot(
             low_points=Decimal("99"),
             close_points=Decimal("100"),
             volume=Decimal("10"),
-            amount=Decimal(amount_per_bucket),
+            amount=amount,
             observed_at=observed_at,
             source_kind=MarketIndexSourceKind.PROVISIONAL,
             provider_revision=3,
         )
-        for bar_at in bucket_ends
+        for bar_at, amount in minute_values
     )
     previous_close = datetime(2026, 9, 10, 15, 0, tzinfo=SHANGHAI) - timedelta(
         days=prior_days_ago
@@ -94,26 +105,28 @@ def _snapshot(
     )
 
 
-def test_builds_market_wide_summary_from_sse_and_shenzhen_a_share_benchmarks() -> None:
+def test_compares_current_turnover_with_the_previous_trading_day_at_the_same_cutoff() -> None:
     summary = build_market_turnover_summary(
         (
             _snapshot(
                 MarketIndexCode.SSE_COMPOSITE,
                 amount_per_bucket="100",
                 prior_amount="1000",
+                previous_amount_per_bucket="80",
             ),
             _snapshot(
                 MarketIndexCode.SHENZHEN_A_SHARE,
                 amount_per_bucket="200",
                 prior_amount="2000",
+                previous_amount_per_bucket="160",
             ),
         )
     )
 
     assert summary is not None
     assert summary.current_amount == Decimal("1800")
-    assert summary.previous_amount == Decimal("3000")
-    assert summary.change_amount == Decimal("-1200")
+    assert summary.previous_amount == Decimal("1440")
+    assert summary.change_amount == Decimal("360")
     assert summary.estimated_full_day_amount == Decimal("14400")
     assert summary.completed_bucket_at == datetime(2026, 9, 10, 10, 0, tzinfo=SHANGHAI)
     assert summary.estimate_method == "LINEAR_COMPLETED_FIVE_MINUTE_BUCKETS"

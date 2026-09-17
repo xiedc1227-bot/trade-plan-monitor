@@ -201,9 +201,9 @@ const selectedIdentity = computed(() =>
 
 - 四个可见切换项保持不变。运行时在后台固定采集 `399107.SZ`（深证 A 指）并与 `000001.SH` 组成成交额基准；它绝不显示为第五个切换项。
 - 全市场成交额定义为上证指数成交额加深证 A 指成交额。不能使用 `399001.SZ`，因为其成交额只覆盖深证成指成份股，而非深圳全市场。
-- `currentAmount` 是两个基准当日所有已完成五分钟 K 线成交额的准确合计；`previousAmount` 是两者在今日之前最近一个共同正式交易日的成交额合计；`changeAmount = currentAmount - previousAmount`。
+- `currentAmount` 是两个基准当日所有已完成五分钟 K 线成交额的准确合计；`previousAmount` 是两者在今日之前最近一个共同正式交易日从开盘起相同数量五分钟桶的成交额合计，因此 `changeAmount = currentAmount - previousAmount` 是相同截止时点的同口径比较。公开卡片文案仍保持“较上一日”。
 - `estimatedFullDayAmount = currentAmount * 48 / completedBucketCount`，并四舍五入到整元。“预测全天成交额”字段名已表达预估含义，因此紧凑卡片不再额外显示公式或截止时间页脚；正式收盘时预估值等于实时值。
-- 计算接受两个截止一致的 `LIVE` 快照，或两个仅因 `STALE_DATA` 恰好延迟一个五分钟发布桶且截止一致的快照；两种情况都必须具备截至共同 `completedBucketAt` 的全部预期 K 线、非空成交额及上一正式交易日成交额。更长延迟、缺口、供应商故障、截止不一致或金额不完整仍封闭失败为 `DashboardResponse.marketTurnover=null`，四张原有指数图继续可用。
+- 计算接受两个截止一致的 `LIVE` 快照，或两个仅因 `STALE_DATA` 恰好延迟一个五分钟发布桶且截止一致的快照；两种情况都必须具备截至共同 `completedBucketAt` 的全部当日预期 K 线、最近一个共同正式交易日的完整 48 个五分钟桶及其非空成交额。更长延迟、缺口、供应商故障、截止不一致、上一交易日时段缺口或金额不完整仍封闭失败为 `DashboardResponse.marketTurnover=null`，四张原有指数图继续可用。
 - 既有四指数认证 profile 仍可加载。新增基准在另行授权重新认证 `399107.SZ` 前默认 `UNVERIFIED`；它只影响成交额卡片，不影响原有四张走势图。
 - 宽屏时卡片位于选中走势图右侧，窄屏时移到走势图下方。卡片将当前值标为今日累计成交额，并显示较上一交易日变化和预测全天成交额，不再单独显示说明页脚；数据不可用时保留占位，不隐藏卡片。
 - 实现复用 `rt_idx_min_daily(freq="5MIN")` 和 `index_daily`，不新增供应商端点或前端图表依赖，并扩展单元、集成、契约、store、组件、响应式与无障碍覆盖。

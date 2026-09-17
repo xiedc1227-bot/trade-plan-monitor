@@ -389,6 +389,18 @@ def _batch() -> MarketIndexProviderBatch:
     )
 
 
+def _session_bucket_ends(trade_day: date) -> tuple[datetime, ...]:
+    morning = tuple(
+        datetime.combine(trade_day, time(9, 35), SHANGHAI) + timedelta(minutes=5 * index)
+        for index in range(24)
+    )
+    afternoon = tuple(
+        datetime.combine(trade_day, time(13, 5), SHANGHAI) + timedelta(minutes=5 * index)
+        for index in range(24)
+    )
+    return morning + afternoon
+
+
 class _Provider:
     def __init__(self, result: MarketIndexProviderBatch | Exception) -> None:
         self.result = result
@@ -453,15 +465,26 @@ class _DashboardProvider:
             )
         )
         original = _batch()
+        current = tuple(
+            bar_at
+            for bar_at in _session_bucket_ends(decision_cutoff.date())
+            if bar_at <= decision_cutoff
+        )
+        previous_count = max(0, five_minute_bar_count - len(current))
+        retained_bucket_ends = (
+            _session_bucket_ends(decision_cutoff.date() - timedelta(days=1))[-previous_count:]
+            if previous_count
+            else ()
+        ) + current[-(five_minute_bar_count - previous_count) :]
         return MarketIndexProviderBatch(
             index_code=index_code,
             five_minute_bars=tuple(
                 _bar(
                     interval=MarketIndexInterval.FIVE_MINUTE,
-                    bar_at=CUTOFF - timedelta(minutes=5 * offset),
+                    bar_at=bar_at,
                     close=str(100 - offset),
                 ).model_copy(update={"index_code": index_code})
-                for offset in reversed(range(five_minute_bar_count))
+                for offset, bar_at in enumerate(retained_bucket_ends)
             ),
             official_daily_bars=tuple(
                 bar.model_copy(update={"index_code": index_code})
@@ -528,7 +551,7 @@ def test_ten_plans_union_requirements_and_share_one_snapshot_instance() -> None:
         index_code: (
             (3, 5)
             if index_code is MarketIndexCode.SHENZHEN_COMPONENT
-            else (13, 2)
+            else (61, 2)
             if index_code in MARKET_TURNOVER_INDEX_CODES
             else (1, 2)
         )
@@ -559,7 +582,7 @@ def test_dashboard_indexes_are_acquired_without_active_plans() -> None:
     assert all(
         decision_cutoff == CUTOFF
         and (five_minute_count, official_daily_count)
-        == ((13, 2) if _index_code in MARKET_TURNOVER_INDEX_CODES else (1, 2))
+        == ((61, 2) if _index_code in MARKET_TURNOVER_INDEX_CODES else (1, 2))
         for (
             _index_code,
             decision_cutoff,

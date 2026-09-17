@@ -21,6 +21,7 @@ from trade_plan_monitor.market_index.requirements import (
 )
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
 from trade_plan_monitor.market_index.turnover import (
+    MARKET_TURNOVER_BUCKET_COUNT,
     MARKET_TURNOVER_INDEX_CODES,
     completed_market_turnover_bucket_count,
 )
@@ -42,6 +43,13 @@ _PUBLICATION_LAG_ISSUES = frozenset(
 )
 _RECOVERY_DELAYS = (timedelta(seconds=30), timedelta(seconds=60), timedelta(seconds=120))
 _RECOVERY_WINDOW = timedelta(minutes=5)
+
+
+def _turnover_minute_bar_count(cutoff: datetime) -> int:
+    return MARKET_TURNOVER_BUCKET_COUNT + max(
+        1,
+        completed_market_turnover_bucket_count(cutoff),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,13 +191,13 @@ class RuntimeMarketIndexService:
             for code, state in due.items()
             if state.decision_cutoff == cutoff
         }
-        turnover_bucket_count = max(1, completed_market_turnover_bucket_count(cutoff))
+        turnover_minute_count = _turnover_minute_bar_count(cutoff)
         snapshots = await self._coordinator.get_snapshots(
             requirements={code: snapshot.fact_requests for code, snapshot in targets.items()},
             decision_cutoff=cutoff,
             observed_no_later_than=observed_no_later_than,
             minimum_bar_counts={
-                code: (turnover_bucket_count if code in MARKET_TURNOVER_INDEX_CODES else 1, 2)
+                code: (turnover_minute_count if code in MARKET_TURNOVER_INDEX_CODES else 1, 2)
                 for code in targets
             },
         )
@@ -251,7 +259,7 @@ class RuntimeMarketIndexService:
         if not self.claim_publication_lag_retry(decision_cutoff):
             return None
         targets = self._publication_lag_targets(decision_cutoff)
-        turnover_bucket_count = max(1, completed_market_turnover_bucket_count(decision_cutoff))
+        turnover_minute_count = _turnover_minute_bar_count(decision_cutoff)
         snapshots = await self._coordinator.get_snapshots(
             requirements={
                 index_code: snapshot.fact_requests for index_code, snapshot in targets.items()
@@ -260,7 +268,7 @@ class RuntimeMarketIndexService:
             observed_no_later_than=observed_no_later_than,
             minimum_bar_counts={
                 index_code: (
-                    turnover_bucket_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1, 2
+                    turnover_minute_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1, 2
                 )
                 for index_code in targets
             },
@@ -301,17 +309,14 @@ class RuntimeMarketIndexService:
         requirements = {
             index_code: union_fact_requests(*groups) for index_code, groups in grouped.items()
         }
-        turnover_bucket_count = max(
-            1,
-            completed_market_turnover_bucket_count(decision_cutoff),
-        )
+        turnover_minute_count = _turnover_minute_bar_count(decision_cutoff)
         snapshots = await self._coordinator.get_snapshots(
             requirements=requirements,
             decision_cutoff=decision_cutoff,
             observed_no_later_than=observed_no_later_than,
             minimum_bar_counts={
                 index_code: (
-                    turnover_bucket_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1, 2
+                    turnover_minute_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1, 2
                 )
                 for index_code in requirements
             },

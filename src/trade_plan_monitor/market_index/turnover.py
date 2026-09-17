@@ -80,7 +80,7 @@ def build_market_turnover_summary(
         return None
 
     current_amount = Decimal(0)
-    previous_bars = []
+    previous_daily_bars = []
     for snapshot in selected:
         current_bars = tuple(
             bar
@@ -96,19 +96,36 @@ def build_market_turnover_summary(
             for bar in snapshot.official_daily_bars
             if bar.bar_at.date() < completed_bucket_at.date()
         )
-        if not previous or previous[-1].amount is None:
+        if not previous:
             return None
-        previous_bars.append(previous[-1])
+        previous_daily_bars.append(previous[-1])
         current_amount += sum(
             (bar.amount for bar in current_bars if bar.amount is not None),
             Decimal(0),
         )
-    if len({bar.bar_at for bar in previous_bars}) != 1:
+    if len({bar.bar_at for bar in previous_daily_bars}) != 1:
         return None
-    previous_amount = sum(
-        (bar.amount for bar in previous_bars if bar.amount is not None),
-        Decimal(0),
-    )
+    previous_close = previous_daily_bars[0].bar_at
+    previous_expected = _expected_bucket_ends(previous_close)
+    if len(previous_expected) != MARKET_TURNOVER_BUCKET_COUNT:
+        return None
+    previous_amount = Decimal(0)
+    for snapshot in selected:
+        previous_intraday = tuple(
+            bar for bar in snapshot.five_minute_bars if bar.bar_at.date() == previous_close.date()
+        )
+        if tuple(bar.bar_at for bar in previous_intraday) != previous_expected or any(
+            bar.amount is None for bar in previous_intraday
+        ):
+            return None
+        previous_amount += sum(
+            (
+                bar.amount
+                for bar in previous_intraday[: len(expected)]
+                if bar.amount is not None
+            ),
+            Decimal(0),
+        )
 
     estimated = (
         current_amount * Decimal(MARKET_TURNOVER_BUCKET_COUNT) / Decimal(len(expected))

@@ -312,11 +312,33 @@ def _seed_market_turnover_snapshots(unit_of_work_factory) -> None:
         datetime(2026, 9, 5, 9, 35, tzinfo=_ZONE) + timedelta(minutes=5 * index)
         for index in range(6)
     )
+    previous_bucket_ends = tuple(
+        datetime(2026, 9, 4, 9, 35, tzinfo=_ZONE) + timedelta(minutes=5 * index)
+        for index in range(24)
+    ) + tuple(
+        datetime(2026, 9, 4, 13, 5, tzinfo=_ZONE) + timedelta(minutes=5 * index)
+        for index in range(24)
+    )
     with unit_of_work_factory() as work:
-        for revision, (index_code, amount, previous_amount) in enumerate(
+        for revision, (
+            index_code,
+            amount,
+            previous_bucket_amount,
+            previous_daily_amount,
+        ) in enumerate(
             (
-                (MarketIndexCode.SSE_COMPOSITE, Decimal("100"), Decimal("1000")),
-                (MarketIndexCode.SHENZHEN_A_SHARE, Decimal("200"), Decimal("2000")),
+                (
+                    MarketIndexCode.SSE_COMPOSITE,
+                    Decimal("100"),
+                    Decimal("80"),
+                    Decimal("1000"),
+                ),
+                (
+                    MarketIndexCode.SHENZHEN_A_SHARE,
+                    Decimal("200"),
+                    Decimal("160"),
+                    Decimal("2000"),
+                ),
             ),
             start=1,
         ):
@@ -330,12 +352,15 @@ def _seed_market_turnover_snapshots(unit_of_work_factory) -> None:
                     low_points=Decimal("99"),
                     close_points=Decimal("100"),
                     volume=Decimal("10"),
-                    amount=amount,
+                    amount=bar_amount,
                     observed_at=_NOW,
                     source_kind=MarketIndexSourceKind.PROVISIONAL,
                     provider_revision=revision,
                 )
-                for bar_at in bucket_ends
+                for bar_at, bar_amount in (
+                    tuple((value, previous_bucket_amount) for value in previous_bucket_ends)
+                    + tuple((value, amount) for value in bucket_ends)
+                )
             )
             daily = MarketIndexBar(
                 index_code=index_code,
@@ -346,7 +371,7 @@ def _seed_market_turnover_snapshots(unit_of_work_factory) -> None:
                 low_points=Decimal("99"),
                 close_points=Decimal("100"),
                 volume=Decimal("100"),
-                amount=previous_amount,
+                amount=previous_daily_amount,
                 observed_at=_NOW,
                 source_kind=MarketIndexSourceKind.OFFICIAL,
                 provider_revision=revision,
@@ -486,8 +511,8 @@ def test_dashboard_includes_market_wide_turnover_without_active_plans(tmp_path: 
         assert isinstance(dashboard, DashboardResponse)
         assert dashboard.market_turnover is not None
         assert dashboard.market_turnover.current_amount == Decimal("1800")
-        assert dashboard.market_turnover.previous_amount == Decimal("3000")
-        assert dashboard.market_turnover.change_amount == Decimal("-1200")
+        assert dashboard.market_turnover.previous_amount == Decimal("1440")
+        assert dashboard.market_turnover.change_amount == Decimal("360")
         assert dashboard.market_turnover.estimated_full_day_amount == Decimal("14400")
         assert tuple(item.index_code for item in dashboard.market_indexes) == (
             MarketIndexCode.SSE_COMPOSITE,

@@ -132,18 +132,7 @@ class OfflineSDK:
             if name in {"rt_min", "rt_min_daily"}:
                 return self._stock_minutes(name, kwargs)
             if name == "idx_mins":
-                return pd.DataFrame(
-                    columns=(
-                        "ts_code",
-                        "trade_time",
-                        "open",
-                        "close",
-                        "high",
-                        "low",
-                        "vol",
-                        "amount",
-                    )
-                )
+                return self._historical_index_minutes(kwargs)
             if name == "rt_idx_min_daily":
                 return self._index_minutes(kwargs)
             if name == "index_daily":
@@ -259,6 +248,40 @@ class OfflineSDK:
             )
             current += timedelta(minutes=5)
         return pd.DataFrame(rows)
+
+    def _historical_index_minutes(self, kwargs: dict[str, object]) -> pd.DataFrame:
+        cutoff_date = datetime.fromisoformat(str(kwargs["end_date"])).date()
+        trade_day = cutoff_date - timedelta(days=1)
+        while trade_day.weekday() > 4:
+            trade_day -= timedelta(days=1)
+        bucket_ends = tuple(
+            datetime.combine(trade_day, datetime.min.time(), SHANGHAI).replace(
+                hour=9, minute=35
+            )
+            + timedelta(minutes=5 * index)
+            for index in range(24)
+        ) + tuple(
+            datetime.combine(trade_day, datetime.min.time(), SHANGHAI).replace(
+                hour=13, minute=5
+            )
+            + timedelta(minutes=5 * index)
+            for index in range(24)
+        )
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": kwargs["ts_code"],
+                    "trade_time": bar_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    "open": "100",
+                    "high": "100",
+                    "low": "100",
+                    "close": "100",
+                    "vol": "1000",
+                    "amount": "10000",
+                }
+                for bar_at in bucket_ends
+            ]
+        )
 
     def _index_daily(self, kwargs: dict[str, object]) -> pd.DataFrame:
         cutoff = self.clock.now().date()
