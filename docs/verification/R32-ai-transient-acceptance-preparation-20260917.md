@@ -24,6 +24,8 @@ The approved source, prompt, destination, request fields, package files, compone
 
 The final `gpt-6-astra` / `xhigh` read-only review reproduced the repaired watchdog and timeout-evidence paths and reported no remaining reproducible P1/P2 blocker. The hardened focused suite passed **24/24** and the adjacent diagnostic/acceptance regression group passed **70/70**, with only the existing Starlette/httpx deprecation warning.
 
+The first authorized launcher invocation stopped before claim creation or network I/O because the elevated execution identity could not read Git state under Git's safe-directory policy. The read-only Git checks now apply a command-scoped safe-directory value for this exact worktree; no global Git configuration is changed. This local preflight stop consumed no physical POST and is not a retry or resubmission.
+
 ## Recomputed frozen request
 
 The real R30 `egress-material.json` in `D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor-r30\data\r30-ai-timeout-budget-review\` and the generated R32 material were parsed and compared without displaying their source or prompt text. The results were:

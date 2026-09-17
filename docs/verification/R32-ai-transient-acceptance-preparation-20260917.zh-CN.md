@@ -24,6 +24,8 @@ R32 在隔离工作树 `D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor-
 
 最终 `gpt-6-astra` / `xhigh` 只读复核复现了已修复的 watchdog 与超时证据路径，并确认不存在剩余可复现 P1/P2 阻断项。加固后的聚焦测试 **24/24** 通过，相邻诊断/验收回归组 **70/70** 通过，仅有既有 Starlette/httpx 弃用警告。
 
+第一次已授权启动在创建 claim 或网络 I/O 前停止，原因是提权执行身份受 Git safe-directory 策略限制而无法读取 Git 状态。只读 Git 检查现在仅对本准确工作树使用命令级 safe-directory 参数；不修改全局 Git 配置。该本地预检停止没有消费物理 POST，也不属于重试或重提。
+
 ## 重新计算的冻结请求
 
 在不显示原文或提示词文本的情况下，已解析并比较 `D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor-r30\data\r30-ai-timeout-budget-review\` 下真实 R30 `egress-material.json` 与生成的 R32 材料。结果为：

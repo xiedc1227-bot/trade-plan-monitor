@@ -410,23 +410,24 @@ def _review_package_matches(root: Path = REVIEW_ROOT) -> bool:
 
 
 def _git_state() -> tuple[bool, str | None, str | None]:
+    git = ["git", "-c", f"safe.directory={bounded._ROOT}"]
     try:
         status = subprocess.run(
-            ["git", "status", "--porcelain"],
+            [*git, "status", "--porcelain"],
             cwd=bounded._ROOT,
             check=True,
             capture_output=True,
             text=True,
         )
         head = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            [*git, "rev-parse", "HEAD"],
             cwd=bounded._ROOT,
             check=True,
             capture_output=True,
             text=True,
         )
         branch = subprocess.run(
-            ["git", "branch", "--show-current"],
+            [*git, "branch", "--show-current"],
             cwd=bounded._ROOT,
             check=True,
             capture_output=True,
