@@ -260,7 +260,7 @@ class OpenAICompatibleProvider:
                 _completion_url(config),
                 headers=headers,
                 json=payload,
-                timeout=httpx.Timeout(config.timeout_seconds),
+                timeout=_transport_timeout(config),
                 follow_redirects=False,
             ) as response:
                 failure = _classify_http_failure(response)
@@ -352,6 +352,17 @@ def _public_usage(usage: _ProviderUsage | None) -> AIUsage | None:
 
 def _completion_url(config: AIProviderConfig) -> str:
     return f"{str(config.base_url).rstrip('/')}/chat/completions"
+
+
+def _transport_timeout(config: AIProviderConfig) -> httpx.Timeout:
+    phase_timeout = config.transport_timeout_seconds or config.timeout_seconds
+    read_timeout = config.read_timeout_seconds or phase_timeout
+    return httpx.Timeout(
+        connect=phase_timeout,
+        read=read_timeout,
+        write=phase_timeout,
+        pool=phase_timeout,
+    )
 
 
 def _classify_http_failure(response: httpx.Response) -> _AttemptFailure | None:

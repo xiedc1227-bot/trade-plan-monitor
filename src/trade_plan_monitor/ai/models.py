@@ -125,6 +125,8 @@ class AIProviderConfig(_AIValue):
     model: ModelName
     secret_ref: SecretReference
     timeout_seconds: int = Field(default=30, ge=1, le=120)
+    transport_timeout_seconds: int | None = Field(default=None, ge=1, le=120)
+    read_timeout_seconds: int | None = Field(default=None, ge=1, le=120)
     max_retries: int = Field(default=2, ge=0, le=2)
     max_input_chars: int = Field(default=50_000, ge=1, le=200_000)
     max_output_tokens: int = Field(default=8_192, ge=1, le=16_384)
@@ -162,6 +164,14 @@ class AIProviderConfig(_AIValue):
         if safe_error is not None:
             raise safe_error
         raise AssertionError("validation boundary completed without a result")
+
+    @model_validator(mode="after")
+    def require_transport_timeouts_within_overall_deadline(self) -> Self:
+        transport_timeout = self.transport_timeout_seconds or self.timeout_seconds
+        read_timeout = self.read_timeout_seconds or transport_timeout
+        if transport_timeout > self.timeout_seconds or read_timeout > self.timeout_seconds:
+            raise ValueError("transport timeouts must not exceed the overall deadline")
+        return self
 
     @field_validator("base_url")
     @classmethod
