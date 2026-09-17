@@ -1,6 +1,6 @@
 # R32 AI transient-classification acceptance preparation record
 
-Canonical English; `R32-ai-transient-acceptance-preparation-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **OFFLINE_COMPLETE / EXACT_REVIEW_PACKAGE_APPROVED / SAFETY_REMEDIATION_VERIFIED / LIVE_EXECUTION_PENDING / ZERO_EXTERNAL_CALLS / ZERO_REAL_CLAIMS**.
+Canonical English; `R32-ai-transient-acceptance-preparation-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **AI_ACCEPTANCE_FAILED / TERMINAL / ONE_AI_POST / ZERO_RETRY / ZERO_MARKET_ACCOUNT / CLAIM_CONSUMED**.
 
 ## Scope completed
 
@@ -83,6 +83,6 @@ Offline fakes verified default zero execution, one admission and second denial b
 - R30 replay: `0`;
 - live acceptance: **not run**.
 
-## Remaining execution gates
+## Terminal execution disposition
 
-User approval is present but does not bypass technical gates. Before the one allowed POST, the worktree must be committed and clean, independent post-remediation review must pass, the current official route and price review must be recorded in the local approval attestation, and the final dry preflight must return `ready=true` for that exact commit and attestation hash. No R33 action is included.
+All gates passed and the one allowed POST was consumed. The result was terminal `AI_ACCEPTANCE_FAILED` because the response failed strict schema validation at `draft.plan_id`. Cleanup completed, audit and journal agree, market/account calls remained zero, and all 38 business tables remained empty. See `R32-ai-transient-acceptance-execution-20260917.md`. No retry, resubmission, R30 replay, or R33 action is permitted.

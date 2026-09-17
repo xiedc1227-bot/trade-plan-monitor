@@ -1,6 +1,6 @@
 # R32 AI 瞬态分类验收准备记录
 
-英文原版为 `R32-ai-transient-acceptance-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / EXACT_REVIEW_PACKAGE_APPROVED / SAFETY_REMEDIATION_VERIFIED / LIVE_EXECUTION_PENDING / ZERO_EXTERNAL_CALLS / ZERO_REAL_CLAIMS**。
+英文原版为 `R32-ai-transient-acceptance-preparation-20260917.md`，本文是等价中文审阅副本。状态 **AI_ACCEPTANCE_FAILED / TERMINAL / ONE_AI_POST / ZERO_RETRY / ZERO_MARKET_ACCOUNT / CLAIM_CONSUMED**。
 
 ## 已完成范围
 
@@ -83,6 +83,6 @@ R32 准备不需要真实配置，因此没有打开真实配置。既有只读�
 - R30 重放：`0`；
 - 真实验收：**未运行**。
 
-## 剩余执行门禁
+## 终态执行结论
 
-用户批准已经具备，但不会绕过技术门禁。唯一允许的 POST 前，工作树必须提交且干净，补救后的独立复核必须通过，当前官方路由与价格复核必须记录到本地批准证明，最终离线预检必须针对该准确提交和证明哈希返回 `ready=true`。本轮不包含任何 R33 动作。
+全部门禁通过后，唯一允许的 POST 已被消费。响应在 `draft.plan_id` 处未通过严格 schema 校验，结果为终态 `AI_ACCEPTANCE_FAILED`。清理完成，audit 与 journal 一致，行情/账户调用保持为零，38 张业务表全部为空。详见 `R32-ai-transient-acceptance-execution-20260917.zh-CN.md`。不允许重试、重提、重放 R30 或执行 R33。

@@ -1,6 +1,6 @@
 # R32 isolated AI transient-classification acceptance proposal
 
-Canonical English; `R32-ai-transient-acceptance-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R32-20260917-V6-LITERAL-TRANSIENT-ACCEPTANCE-1`; candidate run `r32-20260917-a`. Status **LIVE_APPROVAL_RECEIVED / SAFETY_REMEDIATION_VERIFIED / EXECUTION_PENDING / ZERO_EXTERNAL_CALLS**.
+Canonical English; `R32-ai-transient-acceptance-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R32-20260917-V6-LITERAL-TRANSIENT-ACCEPTANCE-1`; candidate run `r32-20260917-a`. Status **AI_ACCEPTANCE_FAILED / TERMINAL / ONE_AI_POST / ZERO_RETRY / ZERO_MARKET_ACCOUNT**.
 
 ## Scope
 
