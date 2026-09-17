@@ -461,7 +461,7 @@ def _assess_terminal(
     }
     if (
         record is None
-        or record.get("version") != 2
+        or not r27._supported_diagnostic_record(record)
         or record.get("operationId") != str(view.id)
         or view.diagnostic_status != "RECORDED"
     ):

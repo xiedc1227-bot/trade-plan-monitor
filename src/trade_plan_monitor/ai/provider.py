@@ -59,6 +59,24 @@ class AIProviderTimeoutKind(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class AIProviderTransientKind(StrEnum):
+    """Closed transient categories that never retain exception or response text."""
+
+    HTTP_408 = "HTTP_408"
+    HTTP_5XX = "HTTP_5XX"
+    DNS = "DNS"
+    TLS = "TLS"
+    CONNECT = "CONNECT"
+    PROXY = "PROXY"
+    PROTOCOL = "PROTOCOL"
+    READ = "READ"
+    WRITE = "WRITE"
+    CLOSE = "CLOSE"
+    DECODING = "DECODING"
+    NETWORK = "NETWORK"
+    UNKNOWN = "UNKNOWN"
+
+
 class AIProviderError(RuntimeError):
     """Sanitized provider failure suitable for ordinary application boundaries."""
 
@@ -68,6 +86,7 @@ class AIProviderError(RuntimeError):
         operation: AIProviderOperation,
         *,
         attempts: int,
+        transient_kind: AIProviderTransientKind | None = None,
         timeout_kind: AIProviderTimeoutKind | None = None,
         timeout_elapsed_ms: int | None = None,
     ) -> None:
@@ -75,6 +94,10 @@ class AIProviderError(RuntimeError):
             raise ValueError("attempts must be between 0 and 3")
         if timeout_kind is not None and not isinstance(timeout_kind, AIProviderTimeoutKind):
             raise TypeError("timeout_kind must be an AIProviderTimeoutKind")
+        if transient_kind is not None and not isinstance(
+            transient_kind, AIProviderTransientKind
+        ):
+            raise TypeError("transient_kind must be an AIProviderTransientKind")
         if timeout_elapsed_ms is not None and (
             isinstance(timeout_elapsed_ms, bool)
             or not isinstance(timeout_elapsed_ms, int)
@@ -87,9 +110,14 @@ class AIProviderError(RuntimeError):
             raise ValueError("timeout metadata requires a TIMEOUT error")
         if (timeout_kind is None) != (timeout_elapsed_ms is None):
             raise ValueError("timeout metadata must include both kind and elapsed milliseconds")
+        if code is AIProviderErrorCode.TRANSIENT and transient_kind is None:
+            transient_kind = AIProviderTransientKind.UNKNOWN
+        if code is not AIProviderErrorCode.TRANSIENT and transient_kind is not None:
+            raise ValueError("transient_kind requires a TRANSIENT error")
         self.code = code
         self.operation = operation
         self.attempts = attempts
+        self.transient_kind = transient_kind
         self.timeout_kind = timeout_kind
         self.timeout_elapsed_ms = timeout_elapsed_ms
         super().__init__(f"AI provider {operation.value} failed ({code.value})")
@@ -159,6 +187,7 @@ __all__ = [
     "AIProviderError",
     "AIProviderErrorCode",
     "AIProviderOperation",
+    "AIProviderTransientKind",
     "AIProviderTimeoutKind",
     "AIUsage",
     "PlanExtractionRequest",

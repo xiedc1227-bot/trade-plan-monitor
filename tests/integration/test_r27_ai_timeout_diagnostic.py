@@ -176,11 +176,73 @@ def test_r27_success_runs_literal_oracle_and_retains_review_only(tmp_path: Path)
 
     assert outcome["accepted"] is True
     assert outcome["oracleStatus"] == "ACCEPTED"
-    assert outcome["diagnostic"]["version"] == 2
+    assert outcome["diagnostic"]["version"] == 3
     assert outcome["diagnostic"]["usageAvailable"] is True
     assert outcome["diagnostic"]["modelMatchesConfigured"] is True
     assert review is not None
     assert LITERAL_SOURCE not in json.dumps(review)
+
+
+def test_r27_reader_remains_compatible_with_legacy_v2_sidecars(tmp_path: Path) -> None:
+    draft = ExplicitPlanDraft.model_validate_json(json.dumps(_draft_payload(complete=False)))
+    result = PlanExtractionResult(
+        request_id=_OPERATION_ID,
+        provider_id=_PROVIDER_ID,
+        model=bounded.APPROVED_MODEL,
+        prompt_version=r27.PROMPT_VERSION,
+        source_text_sha256=sha256(LITERAL_SOURCE.encode("utf-8")).hexdigest(),
+        draft=draft,
+        mapping=_literal_mapping(draft, supplemented=False),
+        usage=AIUsageSnapshot(prompt_tokens=10, completion_tokens=20, total_tokens=30),
+        diagnostic=ExtractionDiagnostic(
+            stage="completed",
+            reason="NONE",
+            finish_reason="stop",
+            model_matches_configured=True,
+            attempts=1,
+        ),
+        status=PlanExtractionStatus.SUCCEEDED,
+    )
+    sidecar = _write_result_diagnostic(tmp_path, result)
+    legacy = json.loads(sidecar.read_text("utf-8"))
+    legacy["version"] = 2
+    legacy.pop("transientKind")
+    sidecar.write_text(json.dumps(legacy), encoding="utf-8")
+    view = _completed_extraction_view(
+        result=result,
+        submitted_at=_NOW,
+        started_at=_NOW,
+        completed_at=_NOW,
+        diagnostic_status="RECORDED",
+    )
+
+    outcome, review = r27._assess_terminal(
+        source_text=LITERAL_SOURCE,
+        view=view,
+        diagnostic_path=sidecar,
+    )
+
+    assert outcome["accepted"] is True
+    assert outcome["diagnostic"]["version"] == 2
+    assert outcome["diagnostic"]["transientKind"] is None
+    assert review is not None
+
+
+def test_r27_reader_rejects_untrusted_v3_transient_kind_without_copying_it() -> None:
+    secret = "SECRET-untrusted-transient-kind"
+    record = {
+        "version": 3,
+        "providerErrorCode": "TRANSIENT",
+        "transientKind": secret,
+        "usage": None,
+    }
+
+    safe = r27._safe_diagnostic(record)
+
+    assert r27._supported_diagnostic_record(record) is False
+    assert safe is not None
+    assert safe["transientKind"] == "UNKNOWN"
+    assert secret not in json.dumps(safe)
 
 
 @pytest.mark.parametrize(

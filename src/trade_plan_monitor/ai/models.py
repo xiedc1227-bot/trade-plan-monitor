@@ -762,6 +762,24 @@ class ExtractionDiagnostic(_AIValue):
         ]
         | None
     ) = None
+    transient_kind: (
+        Literal[
+            "HTTP_408",
+            "HTTP_5XX",
+            "DNS",
+            "TLS",
+            "CONNECT",
+            "PROXY",
+            "PROTOCOL",
+            "READ",
+            "WRITE",
+            "CLOSE",
+            "DECODING",
+            "NETWORK",
+            "UNKNOWN",
+        ]
+        | None
+    ) = None
     timeout_kind: (
         Literal[
             "CONNECT",
@@ -793,6 +811,10 @@ class ExtractionDiagnostic(_AIValue):
             raise ValueError("timeout metadata must include both kind and elapsed milliseconds")
         if has_kind and self.provider_error_code != "TIMEOUT":
             raise ValueError("timeout metadata requires a TIMEOUT provider error")
+        if self.provider_error_code == "TRANSIENT" and self.transient_kind is None:
+            object.__setattr__(self, "transient_kind", "UNKNOWN")
+        if self.provider_error_code != "TRANSIENT" and self.transient_kind is not None:
+            raise ValueError("transient_kind requires a TRANSIENT provider error")
         return self
 
     @field_validator("path")

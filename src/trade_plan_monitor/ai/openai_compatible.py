@@ -12,6 +12,8 @@ https://docs.python.org/3/library/asyncio-task.html#timeouts
 from __future__ import annotations
 
 import asyncio
+import socket
+import ssl
 from collections.abc import Awaitable, Callable
 from math import isfinite
 from time import monotonic_ns
@@ -30,6 +32,7 @@ from trade_plan_monitor.ai.provider import (
     AIProviderErrorCode,
     AIProviderOperation,
     AIProviderTimeoutKind,
+    AIProviderTransientKind,
     AIUsage,
     PlanExtractionRequest,
     ProviderTestResult,
@@ -61,12 +64,14 @@ class _AttemptFailure(Exception):
         *,
         retryable: bool,
         retry_after: float | None = None,
+        transient_kind: AIProviderTransientKind | None = None,
         timeout_kind: AIProviderTimeoutKind | None = None,
         timeout_elapsed_ms: int | None = None,
     ) -> None:
         self.code = code
         self.retryable = retryable
         self.retry_after = retry_after
+        self.transient_kind = transient_kind
         self.timeout_kind = timeout_kind
         self.timeout_elapsed_ms = timeout_elapsed_ms
         super().__init__(code.value)
@@ -193,6 +198,7 @@ class OpenAICompatibleProvider:
                     caught.code,
                     retryable=caught.retryable,
                     retry_after=caught.retry_after,
+                    transient_kind=caught.transient_kind,
                     timeout_kind=caught.timeout_kind,
                     timeout_elapsed_ms=caught.timeout_elapsed_ms,
                 )
@@ -211,8 +217,12 @@ class OpenAICompatibleProvider:
                 )
             except httpx.TimeoutException:
                 failure = _timeout_failure(AIProviderTimeoutKind.UNKNOWN, attempt_started_ns)
-            except httpx.RequestError:
-                failure = _AttemptFailure(AIProviderErrorCode.TRANSIENT, retryable=True)
+            except httpx.RequestError as error:
+                failure = _AttemptFailure(
+                    AIProviderErrorCode.TRANSIENT,
+                    retryable=True,
+                    transient_kind=_classify_request_error(error),
+                )
 
             if failure is not None:
                 if not failure.retryable or attempt == max_attempts:
@@ -220,6 +230,7 @@ class OpenAICompatibleProvider:
                         failure.code,
                         operation,
                         attempts=attempt,
+                        transient_kind=failure.transient_kind,
                         timeout_kind=failure.timeout_kind,
                         timeout_elapsed_ms=failure.timeout_elapsed_ms,
                     ) from None
@@ -379,9 +390,56 @@ def _classify_http_failure(response: httpx.Response) -> _AttemptFailure | None:
             retryable=True,
             retry_after=_parse_retry_after(response.headers.get("Retry-After")),
         )
-    if status_code == 408 or 500 <= status_code < 600:
-        return _AttemptFailure(AIProviderErrorCode.TRANSIENT, retryable=True)
+    if status_code == 408:
+        return _AttemptFailure(
+            AIProviderErrorCode.TRANSIENT,
+            retryable=True,
+            transient_kind=AIProviderTransientKind.HTTP_408,
+        )
+    if 500 <= status_code < 600:
+        return _AttemptFailure(
+            AIProviderErrorCode.TRANSIENT,
+            retryable=True,
+            transient_kind=AIProviderTransientKind.HTTP_5XX,
+        )
     return _AttemptFailure(AIProviderErrorCode.REJECTED, retryable=False)
+
+
+def _classify_request_error(error: httpx.RequestError) -> AIProviderTransientKind:
+    if isinstance(error, httpx.ProxyError):
+        return AIProviderTransientKind.PROXY
+    if isinstance(error, httpx.ConnectError):
+        if _cause_chain_contains(error, ssl.SSLError):
+            return AIProviderTransientKind.TLS
+        if _cause_chain_contains(error, socket.gaierror):
+            return AIProviderTransientKind.DNS
+        return AIProviderTransientKind.CONNECT
+    if isinstance(error, httpx.ProtocolError | httpx.UnsupportedProtocol):
+        return AIProviderTransientKind.PROTOCOL
+    if isinstance(error, httpx.ReadError):
+        return AIProviderTransientKind.READ
+    if isinstance(error, httpx.WriteError):
+        return AIProviderTransientKind.WRITE
+    if isinstance(error, httpx.CloseError):
+        return AIProviderTransientKind.CLOSE
+    if isinstance(error, httpx.DecodingError):
+        return AIProviderTransientKind.DECODING
+    if isinstance(error, httpx.NetworkError):
+        return AIProviderTransientKind.NETWORK
+    return AIProviderTransientKind.UNKNOWN
+
+
+def _cause_chain_contains(error: BaseException, kind: type[BaseException]) -> bool:
+    current = error.__cause__
+    seen: set[int] = set()
+    for _ in range(8):
+        if current is None or id(current) in seen:
+            return False
+        if isinstance(current, kind):
+            return True
+        seen.add(id(current))
+        current = current.__cause__
+    return False
 
 
 def _parse_retry_after(value: str | None) -> float | None:

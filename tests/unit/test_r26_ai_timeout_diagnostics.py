@@ -146,9 +146,10 @@ def test_timeout_diagnostic_persists_only_closed_kind_and_elapsed_ms(tmp_path: P
     )
     record = json.loads(sidecar.read_text("utf-8"))
 
-    assert record["version"] == 2
+    assert record["version"] == 3
     assert record["timeoutKind"] == "READ"
     assert record["timeoutElapsedMs"] == result.diagnostic.timeout_elapsed_ms
+    assert record["transientKind"] is None
     assert "SECRET" not in sidecar.read_text("utf-8")
 
 
@@ -167,3 +168,23 @@ def test_timeout_diagnostic_metadata_is_consistent(changes: dict[str, object]) -
             reason="PROVIDER_ERROR",
             **changes,
         )
+
+
+def test_transient_diagnostic_metadata_is_consistent() -> None:
+    with pytest.raises(ValidationError, match="transient_kind"):
+        ExtractionDiagnostic(
+            stage="provider",
+            reason="PROVIDER_ERROR",
+            provider_error_code="AUTHENTICATION",
+            transient_kind="UNKNOWN",
+        )
+
+
+def test_legacy_transient_diagnostic_defaults_to_unknown_category() -> None:
+    diagnostic = ExtractionDiagnostic(
+        stage="provider",
+        reason="PROVIDER_ERROR",
+        provider_error_code="TRANSIENT",
+    )
+
+    assert diagnostic.transient_kind == "UNKNOWN"

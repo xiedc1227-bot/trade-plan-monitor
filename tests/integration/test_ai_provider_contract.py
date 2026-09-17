@@ -1,7 +1,10 @@
 import asyncio
 import gzip
 import json
+import socket
+import ssl
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -21,6 +24,7 @@ from trade_plan_monitor.ai.provider import (
     AIProvider,
     AIProviderError,
     AIProviderErrorCode,
+    AIProviderOperation,
     AIUsage,
     PlanExtractionRequest,
     ProviderTestResult,
@@ -32,6 +36,7 @@ from trade_plan_monitor.runtime.request_control import (
     AIQueueFullError,
     AIRequestController,
 )
+from trade_plan_monitor.web.ai_diagnostics import append_extraction_diagnostic
 
 PROVIDER_ID = UUID("00000000-0000-4000-8000-000000000016")
 REQUEST_ID = UUID("00000000-0000-4000-8000-000000000116")
@@ -205,6 +210,16 @@ def test_ai_provider_protocol_is_structural_and_async() -> None:
             )
 
     assert isinstance(FakeProvider(), AIProvider)
+
+
+def test_legacy_transient_provider_error_defaults_to_unknown_category() -> None:
+    error = AIProviderError(
+        AIProviderErrorCode.TRANSIENT,
+        operation=AIProviderOperation.TEST_CONNECTION,
+        attempts=1,
+    )
+
+    assert error.transient_kind.value == "UNKNOWN"
 
 
 def test_connection_uses_the_bounded_chat_completions_contract() -> None:
@@ -529,6 +544,7 @@ def test_5xx_retries_stop_at_the_configured_bound() -> None:
     error = asyncio.run(scenario())
 
     assert error.code is AIProviderErrorCode.TRANSIENT
+    assert error.transient_kind.value == "HTTP_5XX"
     assert error.attempts == 3
     assert calls == 3
     assert delays == [0.25, 0.5]
@@ -668,10 +684,127 @@ def test_transport_error_never_exposes_the_authorization_header() -> None:
     serialized_error = f"{error!r} {error} {vars(error)!r}"
 
     assert error.code is AIProviderErrorCode.TRANSIENT
+    assert error.transient_kind.value == "CONNECT"
     assert error.attempts == 1
     assert error.__context__ is None
     assert error.__cause__ is None
     assert SECRET_VALUE not in serialized_error
+
+
+@pytest.mark.parametrize(
+    ("failure_name", "expected_kind"),
+    [
+        ("http_408", "HTTP_408"),
+        ("http_503", "HTTP_5XX"),
+        ("dns", "DNS"),
+        ("tls", "TLS"),
+        ("connect", "CONNECT"),
+        ("proxy", "PROXY"),
+        ("protocol", "PROTOCOL"),
+        ("read", "READ"),
+        ("write", "WRITE"),
+        ("close", "CLOSE"),
+        ("decoding", "DECODING"),
+        ("network", "NETWORK"),
+        ("unknown", "UNKNOWN"),
+    ],
+)
+def test_transient_failures_preserve_only_closed_safe_categories(
+    failure_name: str,
+    expected_kind: str,
+) -> None:
+    config = _config(max_retries=0)
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if failure_name == "http_408":
+            return httpx.Response(408, text=f"provider echoed {SECRET_VALUE}")
+        if failure_name == "http_503":
+            return httpx.Response(503, text=f"provider echoed {SECRET_VALUE}")
+        if failure_name == "dns":
+            try:
+                raise socket.gaierror(-2, SECRET_VALUE)
+            except socket.gaierror as cause:
+                raise httpx.ConnectError(SECRET_VALUE, request=request) from cause
+        if failure_name == "tls":
+            try:
+                raise ssl.SSLError(1, SECRET_VALUE)
+            except ssl.SSLError as cause:
+                raise httpx.ConnectError(SECRET_VALUE, request=request) from cause
+        error_types = {
+            "connect": httpx.ConnectError,
+            "proxy": httpx.ProxyError,
+            "protocol": httpx.RemoteProtocolError,
+            "read": httpx.ReadError,
+            "write": httpx.WriteError,
+            "close": httpx.CloseError,
+            "decoding": httpx.DecodingError,
+            "network": httpx.NetworkError,
+            "unknown": httpx.RequestError,
+        }
+        raise error_types[failure_name](SECRET_VALUE, request=request)
+
+    async def scenario() -> AIProviderError:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = OpenAICompatibleProvider(
+                client=client,
+                secret_store=_secret_store(config),
+            )
+            with pytest.raises(AIProviderError) as captured:
+                await provider.test_connection(config)
+            return captured.value
+
+    error = asyncio.run(scenario())
+    serialized_error = f"{error!r} {error} {vars(error)!r}"
+
+    assert error.code is AIProviderErrorCode.TRANSIENT
+    assert error.transient_kind.value == expected_kind
+    assert error.attempts == 1
+    assert calls == 1
+    assert error.__context__ is None
+    assert error.__cause__ is None
+    assert SECRET_VALUE not in serialized_error
+
+
+def test_transient_category_reaches_the_content_free_extraction_sidecar(tmp_path: Path) -> None:
+    config = _config(max_retries=0, max_input_chars=50_000)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ProxyError(SECRET_VALUE, request=request)
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = OpenAICompatibleProvider(
+                client=client,
+                secret_store=_secret_store(config),
+            )
+            return await extract_plan(
+                request_id=REQUEST_ID,
+                source_text="华亚智能",
+                config=config,
+                provider=provider,
+            )
+
+    result = asyncio.run(scenario())
+    path = tmp_path / "monitor.ai-extraction-diagnostics.jsonl"
+    append_extraction_diagnostic(
+        path,
+        result=result,
+        configured_model=config.model,
+        completed_at=datetime(2026, 9, 17, tzinfo=UTC),
+    )
+    record = json.loads(path.read_text(encoding="utf-8"))
+
+    assert result.status is PlanExtractionStatus.PROVIDER_ERROR
+    assert result.diagnostic is not None
+    assert result.diagnostic.provider_error_code == "TRANSIENT"
+    assert result.diagnostic.transient_kind == "PROXY"
+    assert record["version"] == 3
+    assert record["providerErrorCode"] == "TRANSIENT"
+    assert record["transientKind"] == "PROXY"
+    assert SECRET_VALUE not in path.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("secret_value", [None, "line-one\nline-two", "密钥"])

@@ -224,6 +224,49 @@ def test_r30_scaled_late_response_reaches_production_schema_mapping_and_oracle(
     assert "offline-r30-key" not in json.dumps(audit)
 
 
+def test_r30_transient_transport_failure_records_safe_category_and_stops_once(
+    tmp_path: Path,
+) -> None:
+    config_path = _config(tmp_path / "app.yaml")
+    session_root = tmp_path / "session"
+    starts = 0
+    secret = "SECRET-r30-transport-detail"
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal starts
+        starts += 1
+        raise httpx.ConnectError(secret, request=request)
+
+    result = asyncio.run(
+        r30._run_candidate(
+            config_path=config_path,
+            session_root=session_root,
+            ai_inner_transport=httpx.MockTransport(handler),
+        )
+    )
+
+    folder = session_root / r30.RUN_ID
+    audit_text = (folder / "audit.json").read_text("utf-8")
+    diagnostic_text = (folder / "monitor.ai-extraction-diagnostics.jsonl").read_text("utf-8")
+    audit = json.loads(audit_text)
+    diagnostic = json.loads(diagnostic_text)
+
+    assert result == 1
+    assert starts == 1
+    assert audit["status"] == "AI_ACCEPTANCE_FAILED"
+    assert audit["case"]["diagnostic"]["providerErrorCode"] == "TRANSIENT"
+    assert audit["case"]["diagnostic"]["transientKind"] == "CONNECT"
+    assert diagnostic["version"] == 3
+    assert diagnostic["transientKind"] == "CONNECT"
+    assert audit["ai"]["totalAttempts"] == 1
+    assert audit["ai"]["deniedBeforeNetwork"] == 0
+    assert audit["market"]["totalAttempts"] == 0
+    assert audit["cleanupStatus"] == "COMPLETE"
+    assert all(count == 0 for count in audit["databaseCounts"].values())
+    assert secret not in audit_text
+    assert secret not in diagnostic_text
+
+
 def test_r30_unknown_receipt_stops_without_resubmission(tmp_path: Path) -> None:
     class FailingService:
         calls = 0

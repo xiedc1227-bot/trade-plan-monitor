@@ -157,7 +157,7 @@ def test_field_binding_validator_failures_have_fixed_content_free_codes(
         completed_at=datetime(2026, 9, 16, 11, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
     )
     record = json.loads(sidecar.read_text("utf-8"))
-    assert record["version"] == 2
+    assert record["version"] == 3
     assert record["schemaErrorType"] == expected_code
     assert "SECRET" not in sidecar.read_text("utf-8")
 

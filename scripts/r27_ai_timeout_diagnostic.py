@@ -21,6 +21,7 @@ from scripts import r25_extraction_acceptance as r25
 
 from trade_plan_monitor.ai.models import PlanExtractionResult
 from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V5
+from trade_plan_monitor.ai.provider import AIProviderTransientKind
 from trade_plan_monitor.web.routers.plans import (
     PlanExtractionCommand,
     PlanExtractionOperationStatus,
@@ -79,12 +80,14 @@ _SAFE_DIAGNOSTIC_FIELDS = (
     "path",
     "schemaErrorType",
     "providerErrorCode",
+    "transientKind",
     "timeoutKind",
     "timeoutElapsedMs",
     "finishReason",
     "modelMatchesConfigured",
     "attempts",
 )
+_SAFE_TRANSIENT_KINDS = frozenset(kind.value for kind in AIProviderTransientKind)
 
 
 def _eligible(now: datetime) -> bool:
@@ -378,8 +381,27 @@ def _safe_diagnostic(record: dict[str, object] | None) -> dict[str, object] | No
     if record is None:
         return None
     summary = {field: record.get(field) for field in _SAFE_DIAGNOSTIC_FIELDS}
+    transient_kind = record.get("transientKind")
+    safe_transient_kind = None
+    if record.get("version") == 3 and record.get("providerErrorCode") == "TRANSIENT":
+        safe_transient_kind = (
+            transient_kind if transient_kind in _SAFE_TRANSIENT_KINDS else "UNKNOWN"
+        )
+    summary["transientKind"] = safe_transient_kind
     summary["usageAvailable"] = record.get("usage") is not None
     return summary
+
+
+def _supported_diagnostic_record(record: dict[str, object]) -> bool:
+    version = record.get("version")
+    if version == 2:
+        return True
+    if version != 3:
+        return False
+    transient_kind = record.get("transientKind")
+    if record.get("providerErrorCode") == "TRANSIENT":
+        return transient_kind in _SAFE_TRANSIENT_KINDS
+    return transient_kind is None
 
 
 def _assess_terminal(
@@ -401,7 +423,7 @@ def _assess_terminal(
     }
     if (
         record is None
-        or record.get("version") != 2
+        or not _supported_diagnostic_record(record)
         or record.get("operationId") != str(view.id)
         or view.diagnostic_status != "RECORDED"
     ):
