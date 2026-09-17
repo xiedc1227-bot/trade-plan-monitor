@@ -1,0 +1,143 @@
+# Task List: Anytime Runtime Recovery
+
+> Status: DRAFT / NOT STARTED. Canonical English; paired copy: `runtime-recovery-todo.zh-CN.md`.
+> Governing proposal: `runtime-recovery-plan.md`. IDs A01–A12 and decisions D1–D7 refer to that proposal.
+> All tasks use `gpt-6-astra`. Design/review uses `xhigh`; bounded coding uses `high`. Each checkpoint is an `xhigh` review, not a claim that a review has passed.
+
+## Execution rules
+
+- No implementation is authorized by this checklist. Approve the proposal/map first, then the paired detailed specifications before coding.
+- Every code task starts with a meaningful failing test; preserve unrelated changes and old canonical identity goldens. Do not skip tests merely because they encode the old behavior: replace only the specifically superseded assertions with approved new-contract tests.
+- Paths below are repository-relative and prospective where marked NEW. Keep each slice at approximately 3–5 source/test files; split before work if the actual scope expands. Generated files and paired specification updates receive their own tasks.
+- Reuse the current default production behavior until the replacement path is complete enough to pass its checkpoint. Use dependency injection for offline slices, not a second permanent production framework. Enable the new default only at RR020 after all prerequisite contracts and guards exist.
+- Every task records changed paths, exact commands, observed results and outstanding failures. Do not claim the requested model/effort ran unless the task execution can confirm it.
+
+## Specification gate
+
+- [ ] RR001 — Freeze semantic and recovery specifications. Effort: `xhigh`. Dependencies: proposal/map approval.
+  - Acceptance: D1–D6 and A01–A10 are precise; module interfaces, actual activation boundaries, all signal delivery classes and additive migration are approved, not inferred.
+  - Files: NEW paired provider-contract specification and paired runtime-recovery specification under `docs/specifications/monitoring/` (4 files).
+  - Verify: trace every decision/acceptance ID, check bilingual parity, obtain specification approval.
+- [ ] RR002 — Freeze status/protocol and rollout contract. Effort: `xhigh`. Dependencies: RR001.
+  - Acceptance: D7 defines discriminated status, exact protocol/version negotiation, old-client safe reload, both plan families and per-scope unavailable behavior; no ambiguity remains about the old global `readOnly` field.
+  - Files: NEW paired runtime-status specification and `docs/specifications/monitoring/SPEC-local-web.md` / `SPEC-local-web.zh-CN.md` (4 files).
+  - Verify: review valid/invalid status and old/new client message examples, A11–A12 traceability and bilingual parity.
+
+### Checkpoint C0 — Approved contract
+
+- [ ] Human approves RR001–RR002; changes to source semantics, alert eligibility, schema and compatibility are explicit. No code before this gate.
+
+## Provider and recovery foundations
+
+- [ ] RR003 — Introduce compatible semantic-record import. Effort: `high`. Dependencies: C0.
+  - Acceptance: A01–A02; migration idempotent, verified scope only, original evidence untouched; semantic revision ignores metadata but checks adapter compatibility.
+  - Files: NEW `src/trade_plan_monitor/runtime/provider_contract.py`, `src/trade_plan_monitor/live_profiles.py`, `tests/unit/test_live_certification_profiles.py`, NEW `tests/unit/test_provider_contract.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_live_certification_profiles.py tests/unit/test_provider_contract.py -q`.
+- [ ] RR004 — Replace whole-evidence runtime gates. Effort: `high`. Dependencies: RR003.
+  - Acceptance: stock/index gates independent; old READY does not confer current health; metadata refresh harmless and incompatible change rejected before physical request.
+  - Files: `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/web/monitor_composition.py`, `tests/integration/test_production_certification_gate.py`, `tests/integration/test_certified_production_runtime.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_certification_gate.py tests/integration/test_certified_production_runtime.py -q` using injected composition until RR020.
+- [ ] RR005 — Persist bounded provider recovery checkpoint. Effort: `high`. Dependencies: RR003, migration approval.
+  - Acceptance: cooldown/retry state survives restart, contains no credentials, migration is additive/idempotent and refuses destructive loss of pending state.
+  - Files: NEW migration under `src/trade_plan_monitor/state/migrations/versions/`, `src/trade_plan_monitor/state/models.py`, NEW `src/trade_plan_monitor/state/runtime_recovery.py`, NEW `tests/integration/test_runtime_recovery_storage.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py -q` with temporary database upgrade/restart cases.
+- [ ] RR006 — Add controlled reconciliation/retry admission. Effort: `high`. Dependencies: RR004–RR005.
+  - Acceptance: A04–A05; stable failure keys, one permission reprobe, preserved shared cooldown, bounded/coalesced work; no permanent permission latch loop.
+  - Files: NEW `src/trade_plan_monitor/runtime/reconciliation.py`, `src/trade_plan_monitor/runtime/request_control.py`, `tests/unit/test_monitor_runtime.py`, NEW `tests/unit/test_runtime_reconciliation.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py -q` with fake clock and physical-call counters.
+
+### Checkpoint C1 — Provider recovery
+
+- [ ] A01, A02, A04, A05 pass offline; serial request/cooldown bounds preserved; inspect migration and new-record integrity at `xhigh`.
+
+## Session and business-state recovery
+
+- [ ] RR007 — Calculate session-aware recovery targets. Effort: `high`. Dependencies: C1.
+  - Acceptance: A03/A10; unknown calendar has a retry wake, standby is not live actionable data, rollover and clock reversal do not consume future data.
+  - Files: `src/trade_plan_monitor/runtime/scheduler.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, `tests/unit/test_monitor_runtime.py`, `tests/unit/test_runtime_reconciliation.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py -q` across the full session matrix.
+- [ ] RR008 — Restore exact scoped coverage in bounded steps. Effort: `high`. Dependencies: RR007.
+  - Acceptance: empty/partial rows do not prove readiness; cutoff is frozen; fair per-scope progress, no all-symbol startup monopoly, existing index retry caps respected.
+  - Files: `src/trade_plan_monitor/runtime/recovery.py`, `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, NEW `tests/integration/test_runtime_recovery_coverage.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_coverage.py -q`; include partial and cross-day acquisition plus constrained-capacity cases.
+- [ ] RR009 — Discover completely missed close obligations. Effort: `high`. Dependencies: RR008.
+  - Acceptance: stop before 15:20/restart after 17:00 and multi-day outages restore eligible missing closes in causal order; unknown historical state blocks only the dependent plan.
+  - Files: `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, NEW `tests/integration/test_missed_close_recovery.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_recovery.py -q`; do not dispatch historical alerts before RR012–RR013.
+- [ ] RR010 — Fence dependency changes and plan-family recovery. Effort: `high`. Dependencies: RR008–RR009.
+  - Acceptance: A06/A09; reference keys cover requirements and activation; same-symbol explicit-to-legacy replacement fetches missing references; old generations cannot commit current decisions.
+  - Files: `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/runtime/production_context.py`, `tests/integration/test_explicit_runtime_production.py`, NEW `tests/integration/test_recovery_activation_fences.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_explicit_runtime_production.py tests/integration/test_recovery_activation_fences.py -q`.
+
+### Checkpoint C2 — Correct recovery targets
+
+- [ ] A03, A06, A07, A09, A10 pass offline; independently review close discovery, state reconstruction and activation semantics at `xhigh`.
+
+## Notification safety and lifecycle
+
+- [ ] RR011 — Add durable delivery eligibility without hash changes. Effort: `high`. Dependencies: C0, C2, migration approval.
+  - Acceptance: historical eligibility/expiry/suppression is durable, event payloads/hashes unchanged; old pending rows get fail-closed classification without deletion.
+  - Files: NEW additive migration, `src/trade_plan_monitor/state/models.py`, `src/trade_plan_monitor/notifications/outbox.py`, `tests/unit/test_notification_outbox.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_notification_outbox.py -q` with migration interruption/golden payload cases.
+- [ ] RR012 — Apply intent eligibility in both evaluator transactions. Effort: `high`. Dependencies: RR010–RR011.
+  - Acceptance: A08; state/claims and delivery eligibility commit atomically; preserve historical result hashes, true risk notices and explicit activation identity; no unrestricted stale intent is committed.
+  - Files: `src/trade_plan_monitor/runtime/service.py`, `src/trade_plan_monitor/runtime/explicit_service.py`, `tests/integration/test_explicit_runtime_production.py`, NEW `tests/integration/test_recovery_alert_eligibility.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_recovery_alert_eligibility.py tests/integration/test_explicit_runtime_production.py -q`.
+- [ ] RR013 — Gate pending dispatch after downtime. Effort: `high`. Dependencies: RR012.
+  - Acceptance: obsolete unsent actionable messages suppressed with audit reason; risk messages wait for the per-plan current-state recovery barrier and latest-state recheck (D1 breach/D2 resolution); both plan loaders and existing uncertain-send behavior work.
+  - Files: `src/trade_plan_monitor/notifications/dispatcher.py`, `src/trade_plan_monitor/notifications/outbox.py`, `tests/integration/test_notification_delivery.py`, `tests/integration/test_recovery_alert_eligibility.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_notification_delivery.py tests/integration/test_recovery_alert_eligibility.py -q` using fake channels only.
+- [ ] RR014 — Keep a coordinator alive through degraded startup. Effort: `high`. Dependencies: RR006–RR013.
+  - Acceptance: A04/A11; local bootstrap is independent of provider IO; one owner, interruptible waits, progress deadline and safe shutdown; expected errors do not exhaust crash supervision.
+  - Files: `src/trade_plan_monitor/runtime/service.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, `src/trade_plan_monitor/web/monitor_composition.py`, `tests/integration/test_runtime_lifecycle.py`, `tests/integration/test_monitor_production_composition.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_lifecycle.py tests/integration/test_monitor_production_composition.py -q` against injected new lifecycle; keep public default switch for RR020.
+
+### Checkpoint C3 — Safe autonomous runtime
+
+- [ ] A04 and A08–A11 pass offline; `xhigh` audit of commit/crash/send windows, generation changes and physical-worker cleanup.
+
+## Status and user-visible recovery
+
+- [ ] RR015 — Project lifecycle and scoped status honestly. Effort: `high`. Dependencies: C3, RR002.
+  - Acceptance: alive/recovering/standby/blocked distinctions valid; no global boolean authorizes work; live socket cannot hide overdue coordinator progress.
+  - Files: `src/trade_plan_monitor/runtime/health.py`, `src/trade_plan_monitor/web/routers/health.py`, `tests/integration/test_runtime_lifecycle.py`, NEW `tests/integration/test_runtime_status_contract.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_status_contract.py tests/integration/test_runtime_lifecycle.py -q`.
+- [ ] RR016 — Return partial dashboard projections for both plan families. Effort: `high`. Dependencies: RR015.
+  - Acceptance: A06/A12; waiting/new symbols cannot hide healthy siblings, explicit rule results use correct storage, cached decisions are not upgraded to actionable.
+  - Files: `src/trade_plan_monitor/web/persistent_monitor_read_service.py`, `src/trade_plan_monitor/web/routers/dashboard.py`, `src/trade_plan_monitor/web/routers/symbols.py`, `tests/integration/test_persistent_monitor_read_service.py`, `tests/integration/test_runtime_status_contract.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_persistent_monitor_read_service.py tests/integration/test_runtime_status_contract.py -q`; preserve existing dirty index-read tests.
+- [ ] RR017 — Version transport and regenerate contracts. Effort: `high`. Dependencies: RR016.
+  - Acceptance: exact RR002 version handshake, safe incompatible-client rejection, sequence/generation refresh semantics; OpenAPI and generated types agree.
+  - Files: `src/trade_plan_monitor/web/websocket.py`, `tests/integration/test_websocket.py`, `tests/integration/test_openapi_snapshot.py`, `openapi.json`, `web/src/api/generated.ts`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_websocket.py tests/integration/test_openapi_snapshot.py -q`; `.\.venv\Scripts\python.exe scripts/generate_frontend_types.py --check` after approved generation.
+- [ ] RR018 — Separate frontend transport and business recovery state. Effort: `high`. Dependencies: RR017.
+  - Acceptance: generation refresh, reconnect and snapshot sequence guards retained; active backend degradation does not cause an endless ambiguous STALE/reconnect loop.
+  - Files: `web/src/composables/useMonitorStream.ts`, `web/src/stores/monitor.ts`, `web/tests/unit/useMonitorStream.spec.ts`, `web/src/api/health.ts`.
+  - Verify: `npm --prefix web run test -- --run tests/unit/useMonitorStream.spec.ts`; `npm --prefix web run type-check`.
+- [ ] RR019 — Show standby, retry and per-scope progress. Effort: `high`. Dependencies: RR018.
+  - Acceptance: clear cause/next retry or required action; no recovery banner without work; cached cutoff visible and healthy siblings stay usable.
+  - Files: `web/src/views/SystemRouteView.vue`, `web/src/components/health/MarketStatusStrip.vue`, `web/tests/unit/SystemHealthRoute.spec.ts`, NEW `web/tests/unit/RuntimeRecoveryStatus.spec.ts` (split additional index-card work if needed).
+  - Verify: `npm --prefix web run test -- --run tests/unit/SystemHealthRoute.spec.ts tests/unit/RuntimeRecoveryStatus.spec.ts`; `npm --prefix web run type-check`.
+
+### Checkpoint C4 — End-to-end status contract
+
+- [ ] A06, A11, A12 and type/contract gates pass; `xhigh` review checks old cached clients, explicit-family reads and real progress versus socket activity.
+
+## Integration and handoff
+
+- [ ] RR020 — Enable the complete path and prove real process restart offline. Effort: `high`; fault interpretation/review: `xhigh`. Dependencies: C4.
+  - Acceptance: A01–A12 across all target times; stop/kill/restart at commit and dispatch windows; migrations interrupted safely; no provider calls or real notifications.
+  - Files: `src/trade_plan_monitor/web/monitor_composition.py`, NEW `tests/integration/test_anytime_runtime_recovery.py`, `web/tests/e2e/production-restart.spec.ts`, `web/tests/e2e/r13-active-process-restart.spec.ts`, NEW `web/tests/e2e/runtime-recovery.spec.ts`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`; `npm --prefix web run test:e2e -- production-restart.spec.ts r13-active-process-restart.spec.ts runtime-recovery.spec.ts` with isolated test state.
+- [ ] RR021 — Synchronize operations and verification evidence. Effort: `high`. Dependencies: RR020.
+  - Acceptance: restart/first-time source validation/reconfiguration/rollback instructions are accurate; record only actually executed tests; English/Chinese match.
+  - Files: `docs/operations/live-certification.md`, `docs/operations/live-certification.zh-CN.md`, NEW paired `docs/verification/runtime-recovery-acceptance.md` / `runtime-recovery-acceptance.zh-CN.md`.
+  - Verify: compare IDs/commands/thresholds/fields in both languages; trace every A01–A12 result to evidence.
+- [ ] RR022 — Run full offline gates and final adversarial review. Effort: `xhigh`. Dependencies: RR021.
+  - Acceptance: all proposal section 7 gates pass, current unrelated changes preserved, no unresolved material finding, no secret or relaxed test in diff; list any live-only limits honestly.
+  - Files: paired acceptance report and this paired task list (4 files); do not hide fixes in this review task, return them to a bounded implementation task.
+  - Verify: run every full command in proposal section 7; review the diff and crash matrix; record actual model/effort where available and user review outcome.
+
+### Checkpoint C5 — Ready for deployment review, not deployed
+
+- [ ] User reviews completed offline evidence. Production backup, real-provider acceptance and rollout are separately authorized. Mark this initiative complete only when its explicitly approved scope is actually achieved.

@@ -1,0 +1,143 @@
+# 任务表：任意时段重启与自动恢复
+
+> 状态：DRAFT / NOT STARTED。英文规范输入：`runtime-recovery-todo.md`；本文件为中文副本。
+> 上位提案：`runtime-recovery-plan.zh-CN.md`。A01–A12 和 D1–D7 均引用该提案。
+> 全部任务使用 `gpt-6-astra`。设计/评审使用 `xhigh`；有界编码使用 `high`。每个检查点均为 `xhigh` 评审，不表示评审已经通过。
+
+## 执行规则
+
+- 此清单不授权实现。先批准提案/职责图，再批准成对详细规格，然后编码。
+- 每个编码任务先编写有意义的失败测试；保留无关修改及旧规范身份的黄金测试。不能因测试描述旧行为而跳过：只用已批准新契约测试替换明确被取代的断言。
+- 下列路径相对仓库；NEW 表示拟新增。每个切片控制在约 3–5 个源码/测试文件，实际范围扩大时先拆分。生成文件和成对规格更新有各自任务。
+- 新路径通过相应检查点前，复用当前默认生产行为。离线切片用依赖注入验证，不永久维护第二套生产框架。只有 RR020 且所有前置契约和保护就绪后，才启用新默认路径。
+- 每个任务记录修改路径、精确命令、实际结果及剩余失败。执行无法确认时，不得声称使用了指定模型/强度。
+
+## 规格门禁
+
+- [ ] RR001 — 确定语义和恢复规格。强度：`xhigh`。依赖：提案/职责图批准。
+  - 验收：D1–D6、A01–A10 精确；模块接口、实际激活边界、全部信号投递分类和增量迁移明确批准，不靠推测。
+  - 文件：在 `docs/specifications/monitoring/` 下 NEW 成对 provider-contract 规格和成对 runtime-recovery 规格（4 个文件）。
+  - 验证：逐项追踪决策/验收 ID，检查双语一致，取得规格批准。
+- [ ] RR002 — 确定状态/协议及发布契约。强度：`xhigh`。依赖：RR001。
+  - 验收：D7 定义可区分状态、精确协议/版本协商、旧客户端安全刷新、两类计划及局部不可用行为；旧全局 `readOnly` 字段无歧义。
+  - 文件：NEW 成对 runtime-status 规格及 `docs/specifications/monitoring/SPEC-local-web.md` / `SPEC-local-web.zh-CN.md`（4 个文件）。
+  - 验证：评审有效/无效状态及新旧客户端消息示例、A11–A12 可追踪性和双语一致。
+
+### 检查点 C0 — 契约已批准
+
+- [ ] 用户批准 RR001–RR002；数据源语义、提醒资格、数据库结构及兼容性变化明确。在此门禁前不编码。
+
+## 行情源与恢复基础
+
+- [ ] RR003 — 引入兼容语义记录导入。强度：`high`。依赖：C0。
+  - 验收：A01–A02；迁移幂等、仅导入已验证范围、原证据不变；语义版本忽略元数据但检查适配器兼容性。
+  - 文件：NEW `src/trade_plan_monitor/runtime/provider_contract.py`、`src/trade_plan_monitor/live_profiles.py`、`tests/unit/test_live_certification_profiles.py`、NEW `tests/unit/test_provider_contract.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_live_certification_profiles.py tests/unit/test_provider_contract.py -q`。
+- [ ] RR004 — 替换整份证据运行门禁。强度：`high`。依赖：RR003。
+  - 验收：股票/指数门禁独立；旧 READY 不授予当前健康；元数据刷新无害，不兼容变化在物理请求前被拒绝。
+  - 文件：`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/web/monitor_composition.py`、`tests/integration/test_production_certification_gate.py`、`tests/integration/test_certified_production_runtime.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_certification_gate.py tests/integration/test_certified_production_runtime.py -q`；RR020 前使用注入的组装。
+- [ ] RR005 — 持久化有界行情恢复检查点。强度：`high`。依赖：RR003、迁移批准。
+  - 验收：重启保留冷却/重试状态，不保存凭证；迁移增量、幂等，拒绝破坏性丢失待完成状态。
+  - 文件：`src/trade_plan_monitor/state/migrations/versions/` 下 NEW 迁移、`src/trade_plan_monitor/state/models.py`、NEW `src/trade_plan_monitor/state/runtime_recovery.py`、NEW `tests/integration/test_runtime_recovery_storage.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py -q`，使用临时数据库升级/重启用例。
+- [ ] RR006 — 增加受控协调/重试准入。强度：`high`。依赖：RR004–RR005。
+  - 验收：A04–A05；故障键稳定、单次权限复检、保留共享冷却、工作有界且合并；不陷入永久权限封锁循环。
+  - 文件：NEW `src/trade_plan_monitor/runtime/reconciliation.py`、`src/trade_plan_monitor/runtime/request_control.py`、`tests/unit/test_monitor_runtime.py`、NEW `tests/unit/test_runtime_reconciliation.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py -q`，使用假时钟和物理请求计数。
+
+### 检查点 C1 — 行情源恢复
+
+- [ ] A01、A02、A04、A05 离线通过；串行请求/冷却上限不变；使用 `xhigh` 检查迁移和新记录完整性。
+
+## 交易时段与业务状态恢复
+
+- [ ] RR007 — 计算交易时段感知恢复目标。强度：`high`。依赖：C1。
+  - 验收：A03/A10；日历未知仍有重试唤醒，待机不意味着可操作实时数据，跨日和回拨不使用未来数据。
+  - 文件：`src/trade_plan_monitor/runtime/scheduler.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、`tests/unit/test_monitor_runtime.py`、`tests/unit/test_runtime_reconciliation.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py -q`，覆盖完整时段矩阵。
+- [ ] RR008 — 用有界步骤恢复精确局部覆盖。强度：`high`。依赖：RR007。
+  - 验收：空/部分记录不能证明就绪；截止点冻结；各范围公平推进，不由启动全股票批次独占，保留指数现有重试上限。
+  - 文件：`src/trade_plan_monitor/runtime/recovery.py`、`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、NEW `tests/integration/test_runtime_recovery_coverage.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_coverage.py -q`；包含部分/跨日获取及容量受限用例。
+- [ ] RR009 — 发现完整错过的收盘义务。强度：`high`。依赖：RR008。
+  - 验收：15:20 前停止/17:00 后重启及多日停机，按因果顺序恢复符合条件的缺失收盘；未知历史状态仅阻止依赖计划。
+  - 文件：`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、NEW `tests/integration/test_missed_close_recovery.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_recovery.py -q`；RR012–RR013 前不投递历史提醒。
+- [ ] RR010 — 隔离依赖变化及两类计划恢复。强度：`high`。依赖：RR008–RR009。
+  - 验收：A06/A09；参考键覆盖需求和激活；同股票显式转旧计划补取缺失资料；旧代次不能提交当前决策。
+  - 文件：`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/runtime/production_context.py`、`tests/integration/test_explicit_runtime_production.py`、NEW `tests/integration/test_recovery_activation_fences.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_explicit_runtime_production.py tests/integration/test_recovery_activation_fences.py -q`。
+
+### 检查点 C2 — 恢复目标正确
+
+- [ ] A03、A06、A07、A09、A10 离线通过；使用 `xhigh` 独立检查收盘发现、状态重建及激活语义。
+
+## 通知安全与生命周期
+
+- [ ] RR011 — 增加持久投递资格，不改变哈希。强度：`high`。依赖：C0、C2、迁移批准。
+  - 验收：历史资格/过期/抑制持久化，事件载荷/哈希不变；旧待发送记录按安全关闭方式分类，不删除。
+  - 文件：NEW 增量迁移、`src/trade_plan_monitor/state/models.py`、`src/trade_plan_monitor/notifications/outbox.py`、`tests/unit/test_notification_outbox.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_notification_outbox.py -q`，包含迁移中断/黄金载荷用例。
+- [ ] RR012 — 两类评估事务都应用提醒资格。强度：`high`。依赖：RR010–RR011。
+  - 验收：A08；状态/声明和投递资格原子提交；保留历史结果哈希、真实风险通知及显式激活身份；不提交无条件可投递的陈旧意图。
+  - 文件：`src/trade_plan_monitor/runtime/service.py`、`src/trade_plan_monitor/runtime/explicit_service.py`、`tests/integration/test_explicit_runtime_production.py`、NEW `tests/integration/test_recovery_alert_eligibility.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_recovery_alert_eligibility.py tests/integration/test_explicit_runtime_production.py -q`。
+- [ ] RR013 — 停机后待发送提醒增加投递门禁。强度：`high`。依赖：RR012。
+  - 验收：过时未发送操作消息被抑制且有审计原因；风险消息等待每计划当前状态恢复门禁及最新状态复核（D1 突破/D2 解除）；两类计划加载器及现有不确定发送处理正常。
+  - 文件：`src/trade_plan_monitor/notifications/dispatcher.py`、`src/trade_plan_monitor/notifications/outbox.py`、`tests/integration/test_notification_delivery.py`、`tests/integration/test_recovery_alert_eligibility.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_notification_delivery.py tests/integration/test_recovery_alert_eligibility.py -q`，仅使用假渠道。
+- [ ] RR014 — 降级启动期间保持协调器运行。强度：`high`。依赖：RR006–RR013。
+  - 验收：A04/A11；本地启动独立于行情 IO；唯一所有者、可中断等待、进展截止时间及安全停止；预期错误不耗尽崩溃监督预算。
+  - 文件：`src/trade_plan_monitor/runtime/service.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、`src/trade_plan_monitor/web/monitor_composition.py`、`tests/integration/test_runtime_lifecycle.py`、`tests/integration/test_monitor_production_composition.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_lifecycle.py tests/integration/test_monitor_production_composition.py -q`，针对注入的新生命周期；公开默认切换保留到 RR020。
+
+### 检查点 C3 — 安全自主运行
+
+- [ ] A04、A08–A11 离线通过；使用 `xhigh` 审查提交/崩溃/发送窗口、代次变化和物理工作线程清理。
+
+## 状态与用户可见恢复
+
+- [ ] RR015 — 如实投影生命周期和局部状态。强度：`high`。依赖：C3、RR002。
+  - 验收：存活/恢复/待机/阻止区分有效；全局布尔值不授权工作；正常连接不能掩盖协调器进展逾期。
+  - 文件：`src/trade_plan_monitor/runtime/health.py`、`src/trade_plan_monitor/web/routers/health.py`、`tests/integration/test_runtime_lifecycle.py`、NEW `tests/integration/test_runtime_status_contract.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_status_contract.py tests/integration/test_runtime_lifecycle.py -q`。
+- [ ] RR016 — 返回兼容两类计划的局部总览投影。强度：`high`。依赖：RR015。
+  - 验收：A06/A12；等待/新股票不隐藏健康条目，显式规则结果读取正确存储，缓存决策不升级为可操作。
+  - 文件：`src/trade_plan_monitor/web/persistent_monitor_read_service.py`、`src/trade_plan_monitor/web/routers/dashboard.py`、`src/trade_plan_monitor/web/routers/symbols.py`、`tests/integration/test_persistent_monitor_read_service.py`、`tests/integration/test_runtime_status_contract.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_persistent_monitor_read_service.py tests/integration/test_runtime_status_contract.py -q`；保留现有未提交指数读取测试。
+- [ ] RR017 — 版本化传输并重新生成契约。强度：`high`。依赖：RR016。
+  - 验收：精确实现 RR002 版本握手、安全拒绝不兼容客户端、序号/代次刷新语义；OpenAPI 和生成类型一致。
+  - 文件：`src/trade_plan_monitor/web/websocket.py`、`tests/integration/test_websocket.py`、`tests/integration/test_openapi_snapshot.py`、`openapi.json`、`web/src/api/generated.ts`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_websocket.py tests/integration/test_openapi_snapshot.py -q`；批准生成后运行 `.\.venv\Scripts\python.exe scripts/generate_frontend_types.py --check`。
+- [ ] RR018 — 前端分离传输与业务恢复状态。强度：`high`。依赖：RR017。
+  - 验收：保留代次刷新、重连和快照序号保护；后台降级不会形成含糊不清的无限 STALE/重连循环。
+  - 文件：`web/src/composables/useMonitorStream.ts`、`web/src/stores/monitor.ts`、`web/tests/unit/useMonitorStream.spec.ts`、`web/src/api/health.ts`。
+  - 验证：`npm --prefix web run test -- --run tests/unit/useMonitorStream.spec.ts`；`npm --prefix web run type-check`。
+- [ ] RR019 — 展示待机、重试和局部进展。强度：`high`。依赖：RR018。
+  - 验收：原因/下次重试或必要操作明确；没有工作时不展示恢复横幅；缓存截止时间可见，健康条目仍可用。
+  - 文件：`web/src/views/SystemRouteView.vue`、`web/src/components/health/MarketStatusStrip.vue`、`web/tests/unit/SystemHealthRoute.spec.ts`、NEW `web/tests/unit/RuntimeRecoveryStatus.spec.ts`（若需额外指数卡片工作，另拆任务）。
+  - 验证：`npm --prefix web run test -- --run tests/unit/SystemHealthRoute.spec.ts tests/unit/RuntimeRecoveryStatus.spec.ts`；`npm --prefix web run type-check`。
+
+### 检查点 C4 — 端到端状态契约
+
+- [ ] A06、A11、A12 及类型/契约门禁通过；`xhigh` 评审检查旧缓存客户端、显式计划读取及真实进展与连接活动的区别。
+
+## 集成与交付
+
+- [ ] RR020 — 启用完整路径并离线证明真实进程重启。强度：`high`；故障分析/评审：`xhigh`。依赖：C4。
+  - 验收：所有目标时段覆盖 A01–A12；在提交和投递窗口停止/终止/重启；迁移中断安全；不访问行情源，不发送真实通知。
+  - 文件：`src/trade_plan_monitor/web/monitor_composition.py`、NEW `tests/integration/test_anytime_runtime_recovery.py`、`web/tests/e2e/production-restart.spec.ts`、`web/tests/e2e/r13-active-process-restart.spec.ts`、NEW `web/tests/e2e/runtime-recovery.spec.ts`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`；`npm --prefix web run test:e2e -- production-restart.spec.ts r13-active-process-restart.spec.ts runtime-recovery.spec.ts`，使用隔离测试状态。
+- [ ] RR021 — 同步运维与验证证据。强度：`high`。依赖：RR020。
+  - 验收：重启/首次数据源验证/重新配置/回滚说明准确；仅记录实际执行的测试；中英文一致。
+  - 文件：`docs/operations/live-certification.md`、`docs/operations/live-certification.zh-CN.md`、NEW 成对 `docs/verification/runtime-recovery-acceptance.md` / `runtime-recovery-acceptance.zh-CN.md`。
+  - 验证：对照两种语言的 ID/命令/阈值/字段；逐项追踪 A01–A12 结果证据。
+- [ ] RR022 — 运行全量离线门禁和最终质疑评审。强度：`xhigh`。依赖：RR021。
+  - 验收：提案第 7 节全部门禁通过，保留现有无关修改，无未解决实质问题，差异不包含密钥或放宽的测试；真实环境限制如实列出。
+  - 文件：成对验收报告及本成对任务表（4 个文件）；不在评审任务中夹带修复，修复返回有界实现任务。
+  - 验证：执行提案第 7 节全部完整命令，检查差异和崩溃矩阵；可核验时记录实际模型/强度及用户评审结果。
+
+### 检查点 C5 — 可进入部署评审，尚未部署
+
+- [ ] 用户评审已完成的离线证据。生产备份、真实行情验收和上线另行授权。仅当明确批准的范围实际达成时，才将专项标为完成。
