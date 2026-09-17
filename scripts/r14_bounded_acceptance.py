@@ -541,6 +541,9 @@ def _bounded_ai_factory(
     prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
     max_output_tokens: int = 4096,
     max_prompt_utf8_bytes: int = 19_000,
+    provider_timeout_seconds: int = 30,
+    transport_timeout_seconds: int | None = None,
+    read_timeout_seconds: int | None = None,
 ):
     from trade_plan_monitor.web.ai_diagnostics import diagnostic_path_for_database
     from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
@@ -568,7 +571,9 @@ def _bounded_ai_factory(
                     update={
                         "max_retries": 0,
                         "max_output_tokens": max_output_tokens,
-                        "timeout_seconds": 30,
+                        "timeout_seconds": provider_timeout_seconds,
+                        "transport_timeout_seconds": transport_timeout_seconds,
+                        "read_timeout_seconds": read_timeout_seconds,
                         "prompt_version": prompt_version,
                     }
                 ),
@@ -587,7 +592,12 @@ def _bounded_ai_factory(
                 max_output_tokens=max_output_tokens,
                 max_prompt_utf8_bytes=max_prompt_utf8_bytes,
             ),
-            timeout=httpx.Timeout(30),
+            timeout=httpx.Timeout(
+                transport_timeout_seconds or provider_timeout_seconds,
+                read=read_timeout_seconds
+                or transport_timeout_seconds
+                or provider_timeout_seconds,
+            ),
             follow_redirects=False,
             trust_env=False,
         ),
