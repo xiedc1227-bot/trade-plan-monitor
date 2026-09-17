@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
+from time import monotonic
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -205,6 +207,360 @@ def test_r32_transport_allows_one_exact_post_and_rejects_second() -> None:
     assert starts == 1
     assert budget.snapshot()["totalAttempts"] == 1
     assert budget.snapshot()["deniedBeforeNetwork"] == 1
+
+
+def test_r32_exact_transport_rejects_unapproved_extra_fields_before_network() -> None:
+    starts = 0
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal starts
+        starts += 1
+        return httpx.Response(200, json={"ok": True})
+
+    budget = bounded.Budget(total=1, per_key=r32.AI_CAPS, seconds=r32.TOTAL_SECONDS)
+    transport = r32.ExactAIBudgetTransport(
+        budget,
+        inner=httpx.MockTransport(handler),
+        expected_body_hash=r32.EXPECTED_REQUEST_BODY_HASH,
+    )
+    body = json.loads(
+        json.dumps(r32._egress_review_material()["requests"]["LITERAL"]["body"])
+    )
+    body["messages"][0]["prefix"] = True
+    request = httpx.Request("POST", r32.EXTERNAL_DESTINATION, json=body)
+
+    async def scenario() -> None:
+        with pytest.raises(bounded.BudgetDenied):
+            await transport.handle_async_request(request)
+        await transport.aclose()
+
+    asyncio.run(scenario())
+    assert starts == 0
+    assert budget.snapshot()["totalAttempts"] == 0
+    assert budget.snapshot()["deniedBeforeNetwork"] == 1
+
+
+def test_r32_exact_transport_rebuilds_upstream_float_as_reviewed_integer() -> None:
+    observed_hashes: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        observed_hashes.append(r32._canonical_json_hash(json.loads(request.content)))
+        return httpx.Response(200, json={"ok": True})
+
+    budget = bounded.Budget(total=1, per_key=r32.AI_CAPS, seconds=r32.TOTAL_SECONDS)
+    transport = r32.ExactAIBudgetTransport(
+        budget,
+        inner=httpx.MockTransport(handler),
+        expected_body_hash=r32.EXPECTED_REQUEST_BODY_HASH,
+    )
+    body = json.loads(
+        json.dumps(r32._egress_review_material()["requests"]["LITERAL"]["body"])
+    )
+    body["temperature"] = 0.0
+    request = httpx.Request("POST", r32.EXTERNAL_DESTINATION, json=body)
+
+    async def scenario() -> None:
+        assert (await transport.handle_async_request(request)).status_code == 200
+        await transport.aclose()
+
+    asyncio.run(scenario())
+    assert observed_hashes == [r32.EXPECTED_REQUEST_BODY_HASH]
+
+
+def test_r32_exact_transport_rejects_boolean_temperature_before_network() -> None:
+    starts = 0
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal starts
+        starts += 1
+        return httpx.Response(200, json={"ok": True})
+
+    budget = bounded.Budget(total=1, per_key=r32.AI_CAPS, seconds=r32.TOTAL_SECONDS)
+    transport = r32.ExactAIBudgetTransport(
+        budget,
+        inner=httpx.MockTransport(handler),
+        expected_body_hash=r32.EXPECTED_REQUEST_BODY_HASH,
+    )
+    body = json.loads(
+        json.dumps(r32._egress_review_material()["requests"]["LITERAL"]["body"])
+    )
+    body["temperature"] = False
+    request = httpx.Request("POST", r32.EXTERNAL_DESTINATION, json=body)
+
+    async def scenario() -> None:
+        with pytest.raises(bounded.BudgetDenied):
+            await transport.handle_async_request(request)
+        await transport.aclose()
+
+    asyncio.run(scenario())
+    assert starts == 0
+
+
+def test_r32_preflight_requires_the_reviewed_branch_and_exact_head(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = _config(tmp_path / "app.yaml")
+    monkeypatch.setattr(r32, "EXPECTED_CONFIG_HASH", r32._file_sha256(config_path))
+    monkeypatch.setattr(r32, "_review_package_matches", lambda: True)
+    monkeypatch.setattr(
+        r32,
+        "_git_state",
+        lambda: (True, "different-clean-head", r32.EXPECTED_BRANCH),
+    )
+
+    preflight = r32._preflight(
+        config_path=config_path,
+        expected_head="reviewed-head",
+        approval_attestation_path=tmp_path / "approval.json",
+        expected_approval_attestation_hash="unused",
+    )
+
+    assert preflight["ready"] is False
+    assert preflight["gitBranchMatches"] is True
+    assert preflight["gitHeadMatches"] is False
+
+
+def test_r32_approval_attestation_is_package_bound_and_tamper_evident(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "approval.json"
+    attestation = {
+        "proposalId": r32.PROPOSAL_ID,
+        "runId": r32.RUN_ID,
+        "packageSha256": r32.EXPECTED_PACKAGE_HASH,
+        "status": "APPROVED",
+        "destination": r32.EXTERNAL_DESTINATION,
+        "method": "POST",
+        "physicalPosts": 1,
+        "retries": 0,
+        "marketCalls": 0,
+        "accountCalls": 0,
+        "possibleFeeAccepted": True,
+        "officialReviewStatus": "PASS",
+    }
+    path.write_text(json.dumps(attestation, sort_keys=True), encoding="utf-8")
+    expected_hash = sha256(path.read_bytes()).hexdigest()
+
+    assert r32._approval_attestation_matches(path, expected_hash)
+    attestation["retries"] = 1
+    path.write_text(json.dumps(attestation, sort_keys=True), encoding="utf-8")
+    assert not r32._approval_attestation_matches(path, expected_hash)
+
+
+def test_r32_existing_run_directory_is_rejected_without_consuming_another_claim(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "session"
+    (root / r32.RUN_ID).mkdir(parents=True)
+
+    with pytest.raises(FileExistsError):
+        r32._claim_session(root)
+
+    assert not (root / "_session_claimed").exists()
+
+
+def test_r32_invalid_config_never_reports_a_rejected_direct_ip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """\
+ai:
+  profile: DEEPSEEK
+  display_name: Rejected
+  base_url: https://192.0.2.10
+  model: deepseek-v4-pro
+  api_key: offline-rejected-key
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(r32, "EXPECTED_CONFIG_HASH", r32._file_sha256(config_path))
+
+    preflight = r32._preflight(config_path=config_path)
+
+    assert preflight["ready"] is False
+    assert preflight["ai"]["host"] is None
+    assert "192.0.2.10" not in json.dumps(preflight)
+
+
+def test_r32_cleanup_uses_one_shared_deadline_for_all_lifecycles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(r32, "CLEANUP_SECONDS", 0.03)
+
+    class SlowLifecycle:
+        async def stop(self) -> None:
+            await asyncio.sleep(0.025)
+
+    started = monotonic()
+    result = asyncio.run(
+        r32._cleanup_with_hard_deadline(
+            started + 1,
+            SlowLifecycle(),
+            SlowLifecycle(),
+        )
+    )
+    elapsed = monotonic() - started
+
+    assert result is False
+    assert elapsed < 0.06
+
+
+def test_r32_parent_watchdog_redacts_child_timeout_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session_root = tmp_path / "session"
+    folder = session_root / r32.RUN_ID
+    folder.mkdir(parents=True)
+    journal_path = folder / "physical-attempts.json"
+    journal_path.write_text(
+        json.dumps(
+            {
+                "proposalId": r32.PROPOSAL_ID,
+                "runId": r32.RUN_ID,
+                "status": "ACTIVE",
+                "normalAuditPresent": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    audit_path = folder / "audit.json"
+    audit_path.write_text(
+        json.dumps(
+            {
+                "proposalId": r32.PROPOSAL_ID,
+                "runId": r32.RUN_ID,
+                "status": "SHUTDOWN_FAILED",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(r32, "SESSION_ROOT", session_root)
+
+    def timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=["python", "secret-config-path"],
+            timeout=r32.TOTAL_SECONDS,
+            output=b"provider-secret-output",
+            stderr=b"provider-secret-error",
+        )
+
+    monkeypatch.setattr(r32.subprocess, "run", timeout)
+
+    result = r32._run_under_parent_watchdog({})
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert json.loads(output)["status"] == "HARD_DEADLINE_EXCEEDED"
+    assert "secret" not in output
+    assert json.loads((folder / "watchdog-terminal.json").read_text("utf-8"))["status"] == (
+        "HARD_DEADLINE_EXCEEDED"
+    )
+    journal = json.loads(journal_path.read_text("utf-8"))
+    assert journal["status"] == "HARD_DEADLINE_EXCEEDED"
+    assert journal["watchdogTerminalPresent"] is True
+    audit = json.loads(audit_path.read_text("utf-8"))
+    assert audit["status"] == journal["status"]
+    assert audit["candidateStatusBeforeWatchdog"] == "SHUTDOWN_FAILED"
+
+
+def test_r32_parent_only_emits_whitelisted_child_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    child = subprocess.CompletedProcess(
+        args=["python"],
+        returncode=1,
+        stdout=json.dumps(
+            {
+                "status": "FAILED",
+                "proposalId": r32.PROPOSAL_ID,
+                "runId": r32.RUN_ID,
+                "detail": "synthetic-provider-secret",
+                "ai": {"totalAttempts": 1, "raw": "synthetic-provider-secret"},
+            }
+        ),
+        stderr="synthetic-provider-secret",
+    )
+    monkeypatch.setattr(r32.subprocess, "run", lambda *_args, **_kwargs: child)
+
+    assert r32._run_under_parent_watchdog({}) == 1
+    output = capsys.readouterr().out
+
+    assert "secret" not in output
+    assert json.loads(output) == {
+        "aiPhysicalAttempts": 1,
+        "proposalId": r32.PROPOSAL_ID,
+        "runId": r32.RUN_ID,
+        "status": "FAILED",
+    }
+
+
+def test_r32_parent_rejects_non_scalar_child_status_without_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    child = subprocess.CompletedProcess(
+        args=["python"],
+        returncode=1,
+        stdout=json.dumps({"status": [], "detail": "synthetic-provider-secret"}),
+        stderr="synthetic-provider-secret",
+    )
+    monkeypatch.setattr(r32.subprocess, "run", lambda *_args, **_kwargs: child)
+
+    assert r32._run_under_parent_watchdog({}) == 1
+    output = capsys.readouterr().out
+
+    assert json.loads(output) == {"status": "CHILD_RESULT_UNAVAILABLE"}
+    assert "secret" not in output
+
+
+def test_r32_internal_execution_cannot_bypass_parent_watchdog(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(r32, "_preflight", lambda **_kwargs: pytest.fail("no preflight"))
+    monkeypatch.setattr(r32, "_run_candidate", lambda **_kwargs: pytest.fail("no execute"))
+
+    with pytest.raises(SystemExit) as caught:
+        r32.main(["--internal-execute"])
+
+    assert caught.value.code == 2
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
+def test_r32_execution_snapshot_detects_config_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = _config(tmp_path / "app.yaml")
+    expected_hash = r32._file_sha256(config_path)
+    monkeypatch.setattr(r32, "EXPECTED_CONFIG_HASH", expected_hash)
+    monkeypatch.setattr(r32, "_review_package_matches", lambda: True)
+    monkeypatch.setattr(
+        r32,
+        "_git_state",
+        lambda: (True, "reviewed-head", r32.EXPECTED_BRANCH),
+    )
+    monkeypatch.setattr(r32, "_approval_attestation_matches", lambda *_args: True)
+
+    assert r32._execution_snapshot_matches(
+        config_path=config_path,
+        expected_head="reviewed-head",
+        approval_attestation_path=tmp_path / "approval.json",
+        expected_approval_attestation_hash="a" * 64,
+    )
+    config_path.write_text(config_path.read_text("utf-8") + "\n# changed\n", encoding="utf-8")
+    assert not r32._execution_snapshot_matches(
+        config_path=config_path,
+        expected_head="reviewed-head",
+        approval_attestation_path=tmp_path / "approval.json",
+        expected_approval_attestation_hash="a" * 64,
+    )
 
 
 def test_r32_success_reaches_production_schema_mapping_oracle_and_cleanup(

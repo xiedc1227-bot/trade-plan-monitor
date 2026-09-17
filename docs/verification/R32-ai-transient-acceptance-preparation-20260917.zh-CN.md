@@ -1,6 +1,6 @@
 # R32 AI 瞬态分类验收准备记录
 
-英文原版为 `R32-ai-transient-acceptance-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / EXACT_REVIEW_PACKAGE_READY / LIVE_EXECUTION_NOT_AUTHORIZED / ZERO_EXTERNAL_CALLS / ZERO_REAL_CLAIMS**。
+英文原版为 `R32-ai-transient-acceptance-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / EXACT_REVIEW_PACKAGE_APPROVED / SAFETY_REMEDIATION_VERIFIED / LIVE_EXECUTION_PENDING / ZERO_EXTERNAL_CALLS / ZERO_REAL_CLAIMS**。
 
 ## 已完成范围
 
@@ -8,7 +8,21 @@ R32 在隔离工作树 `D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor-
 
 离线候选使用提案 `R32-20260917-V6-LITERAL-TRANSIENT-ACCEPTANCE-1` 与运行 `r32-20260917-a`。它具有全新的 R32 claim 根目录、运行目录、operation 与幂等身份、audit、物理尝试 journal、sidecar、隔离数据库和复核产物，不复用已消费的 R30 claim 或 `r30-20260917-a` 身份。
 
-默认命令为 `DRY_RUN_NO_NETWORK`。精确审阅包生成也只在本地进行。真实执行还要求 `--execute`、显式配置路径、准确授权令牌 `R32_20260917_LITERAL_ONE_AI_ZERO_MARKET_TRANSIENT_ACCEPTANCE`、准确运行 ID、全部正向门禁、未消费的 R32 claim，以及用户全新的明确批准。当前没有提供或推断出该批准。
+默认命令为 `DRY_RUN_NO_NETWORK`。精确审阅包生成也只在本地进行。用户已于 2026-09-17 对本精确包及可能费用给出全新明确批准。真实执行还要求 `--execute`、显式配置路径、准确授权令牌 `R32_20260917_LITERAL_ONE_AI_ZERO_MARKET_TRANSIENT_ACCEPTANCE`、准确运行 ID、全部正向不可变门禁、哈希绑定的批准证明、当前官方路由与价格复核，以及未消费的 R32 claim。
+
+## 批准后的对抗复核与补救
+
+包括以 `xhigh` 推理运行的 `gpt-6-astra` 在内的独立复核，在任何网络或 claim 动作发生前阻断了初版候选。复核发现完整请求体准入、共享清理计时、进程总计时、准确分支/提交绑定、原子 claim 行为及非法主机披露缺口。补救后的候选现在：
+
+- 在最终传输边界重建并校验完整规范出站请求体，任何新增字段都在网络 I/O 前被拒绝；
+- 预检要求准确且干净的分支与提交以及哈希绑定的批准证明，并在生命周期启动后、提交前重新校验配置、审阅包、批准、分支、提交、材料及日期；
+- 原子创建运行目录作为一次性 claim，已有目录会被拒绝且不会消费第二个标记；
+- 两个生命周期共用一个 `15s` 清理截止，并以外部父进程 watchdog 保证完整 `81s` 执行边界；
+- 不报告被拒绝的直连主机，watchdog 触发时不输出捕获的子进程内容或异常正文。
+
+已批准的原文、提示词、目的地、请求字段、审阅包文件、组件哈希、有序整包哈希、尝试限制及可能费用范围均未改变。
+
+最终 `gpt-6-astra` / `xhigh` 只读复核复现了已修复的 watchdog 与超时证据路径，并确认不存在剩余可复现 P1/P2 阻断项。加固后的聚焦测试 **24/24** 通过，相邻诊断/验收回归组 **70/70** 通过，仅有既有 Starlette/httpx 弃用警告。
 
 ## 重新计算的冻结请求
 
@@ -67,6 +81,6 @@ R32 准备不需要真实配置，因此没有打开真实配置。既有只读�
 - R30 重放：`0`；
 - 真实验收：**未运行**。
 
-## 剩余授权门禁
+## 剩余执行门禁
 
-R32 目前只准备好供人工审阅精确本地包。R25/R30 批准、历史“默认授权”及“继续”指令均不授权本次新 POST。若用户批准该精确包，后续轮次仍须在创建 claim 或开始网络 I/O 前执行本地不可变门禁及任何必要的当前官方路由/价格复核。本轮不包含任何 R33 动作。
+用户批准已经具备，但不会绕过技术门禁。唯一允许的 POST 前，工作树必须提交且干净，补救后的独立复核必须通过，当前官方路由与价格复核必须记录到本地批准证明，最终离线预检必须针对该准确提交和证明哈希返回 `ready=true`。本轮不包含任何 R33 动作。

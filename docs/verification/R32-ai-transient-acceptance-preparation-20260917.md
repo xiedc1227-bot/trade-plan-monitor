@@ -1,6 +1,6 @@
 # R32 AI transient-classification acceptance preparation record
 
-Canonical English; `R32-ai-transient-acceptance-preparation-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **OFFLINE_COMPLETE / EXACT_REVIEW_PACKAGE_READY / LIVE_EXECUTION_NOT_AUTHORIZED / ZERO_EXTERNAL_CALLS / ZERO_REAL_CLAIMS**.
+Canonical English; `R32-ai-transient-acceptance-preparation-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **OFFLINE_COMPLETE / EXACT_REVIEW_PACKAGE_APPROVED / SAFETY_REMEDIATION_VERIFIED / LIVE_EXECUTION_PENDING / ZERO_EXTERNAL_CALLS / ZERO_REAL_CLAIMS**.
 
 ## Scope completed
 
@@ -8,7 +8,21 @@ R32 was prepared in the isolated worktree `D:\Workspace\Projects\ai-quant-pilot\
 
 The offline candidate uses proposal `R32-20260917-V6-LITERAL-TRANSIENT-ACCEPTANCE-1` and run `r32-20260917-a`. It has a new R32 claim root, run directory, operation and idempotency identities, audit, physical-attempt journal, sidecar, isolated database, and review artifact. It does not reuse the consumed R30 claim or `r30-20260917-a` identity.
 
-The default command is `DRY_RUN_NO_NETWORK`. Exact review-package generation is also local only. Live execution additionally requires `--execute`, an explicit configuration path, exact authorization token `R32_20260917_LITERAL_ONE_AI_ZERO_MARKET_TRANSIENT_ACCEPTANCE`, exact run ID, all positive gates, an unconsumed R32 claim, and fresh explicit user approval. No such approval has been supplied or inferred.
+The default command is `DRY_RUN_NO_NETWORK`. Exact review-package generation is also local only. The user supplied fresh explicit approval for this exact package and possible fee on 2026-09-17. Live execution additionally requires `--execute`, an explicit configuration path, exact authorization token `R32_20260917_LITERAL_ONE_AI_ZERO_MARKET_TRANSIENT_ACCEPTANCE`, exact run ID, all positive immutable gates, the hash-bound approval attestation, current official route and price review, and an unconsumed R32 claim.
+
+## Post-approval adversarial review and remediation
+
+Independent reviews, including `gpt-6-astra` at `xhigh` reasoning, blocked the initial candidate before any network or claim action. They identified complete-body admission, shared cleanup timing, total-process timing, exact branch/commit binding, atomic claim behavior, and invalid-host disclosure gaps. The remediated candidate now:
+
+- reconstructs and verifies the complete outbound canonical body at the final transport boundary and rejects any added field before network I/O;
+- requires an exact clean branch and commit plus a hash-bound approval attestation at preflight, then rechecks the configuration, package, approval, branch, commit, material, and date after lifecycle startup and before submission;
+- atomically creates the run directory as the one-shot claim and rejects an existing directory without consuming another marker;
+- shares one `15s` cleanup deadline and uses an external parent watchdog for the complete `81s` execution bound;
+- reports no rejected direct host and emits no captured child output or exception text when the watchdog fires.
+
+The approved source, prompt, destination, request fields, package files, component hashes, ordered package hash, attempt limits, and possible-fee scope did not change.
+
+The final `gpt-6-astra` / `xhigh` read-only review reproduced the repaired watchdog and timeout-evidence paths and reported no remaining reproducible P1/P2 blocker. The hardened focused suite passed **24/24** and the adjacent diagnostic/acceptance regression group passed **70/70**, with only the existing Starlette/httpx deprecation warning.
 
 ## Recomputed frozen request
 
@@ -67,6 +81,6 @@ Offline fakes verified default zero execution, one admission and second denial b
 - R30 replay: `0`;
 - live acceptance: **not run**.
 
-## Remaining authorization gate
+## Remaining execution gates
 
-R32 is ready only for human review of the exact local package. R25 and R30 approvals, historical default authorization, and an instruction to continue do not authorize this new POST. If the user approves this exact package, a later turn must still perform the local immutable gates and any required current official route/price review before creating the claim or starting network I/O. No R33 action is included.
+User approval is present but does not bypass technical gates. Before the one allowed POST, the worktree must be committed and clean, independent post-remediation review must pass, the current official route and price review must be recorded in the local approval attestation, and the final dry preflight must return `ready=true` for that exact commit and attestation hash. No R33 action is included.

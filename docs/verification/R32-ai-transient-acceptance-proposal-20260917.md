@@ -1,6 +1,6 @@
 # R32 isolated AI transient-classification acceptance proposal
 
-Canonical English; `R32-ai-transient-acceptance-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R32-20260917-V6-LITERAL-TRANSIENT-ACCEPTANCE-1`; candidate run `r32-20260917-a`. Status **OFFLINE_PREPARATION_ONLY / LIVE_EXECUTION_NOT_AUTHORIZED / ZERO_EXTERNAL_CALLS**.
+Canonical English; `R32-ai-transient-acceptance-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R32-20260917-V6-LITERAL-TRANSIENT-ACCEPTANCE-1`; candidate run `r32-20260917-a`. Status **LIVE_APPROVAL_RECEIVED / SAFETY_REMEDIATION_VERIFIED / EXECUTION_PENDING / ZERO_EXTERNAL_CALLS**.
 
 ## Scope
 
@@ -24,7 +24,15 @@ These values must be recomputed from the real local source, prompt, and request 
 
 `python -m scripts.r32_ai_transient_acceptance` is an offline dry run and cannot create or consume a claim. Exact review-package generation is local only. Live execution requires all positive gates, an explicit config path, the exact new R32 authorization token, the exact run ID, an unconsumed R32 claim, and fresh explicit user approval bound to the generated package hashes and stated destination.
 
-R25, R30, historical default authorization, and the instruction to continue are not R32 live approval. Until a new approval is received, no AI, market, account, route, pricing, DNS, TCP, TLS, proxy, certificate, or other network request is allowed.
+R25, R30, historical default authorization, and the instruction to continue are not R32 live approval. The user approved this exact package, destination, one-POST limit, zero-retry/market/account limits, and possible fee on 2026-09-17. Execution remains blocked until that approval is represented by a hash-bound local attestation, current official route and price facts are recorded, all immutable gates pass at an exact clean branch and commit, and an independent post-remediation review finds no substantive blocker.
+
+## Post-approval safety gates
+
+- The complete canonical outbound body must match `c2a60f45fc41784ada733d6f6e7267435597d59897f1333b31ff1f242048c10c`; extra top-level or message fields are denied before network I/O. The transport rebuilds the configured numeric zero as the reviewed JSON integer `0` before final hash verification.
+- Preflight binds the clean branch `codex/r32-ai-transient-acceptance`, an explicitly supplied exact commit, the frozen package, the unchanged real configuration hash, the fresh run identity, and the approval-attestation hash.
+- The same immutable snapshot is checked again after local lifecycle startup and before submission. Any change consumes no additional request and terminates locally.
+- The claim is the atomic creation of `data/r32-ai-transient-acceptance/r32-20260917-a/`; an existing run directory is rejected without creating another marker.
+- Both lifecycles share one cleanup deadline of at most `15s`. A parent-process watchdog bounds the entire child execution to `81s` and emits only a content-free status on timeout or unavailable child output.
 
 ## Acceptance criteria
 
@@ -39,7 +47,7 @@ R25, R30, historical default authorization, and the instruction to continue are 
 | R32-A07 | Cancellation respects the hard deadline; cleanup, audit, physical-attempt journal, and diagnostic evidence agree; every independently queried business table remains empty. |
 | R32-A08 | Focused regressions and Ruff pass. Known installed-Web-asset baseline exclusions are named rather than disabled or weakened. |
 | R32-A09 | English and Chinese proposal, preparation report, exact review copies, manifest metadata, and handoff preserve the same IDs, hashes, limits, boundaries, and acceptance result. |
-| R32-A10 | Offline preparation ends with actual external calls `0`, retries `0`, market/account calls `0`, and real R32 claims created or consumed `0`; live execution remains pending explicit approval. |
+| R32-A10 | Before live execution, actual external calls remain `0`, retries `0`, market/account calls `0`, and real R32 claims created or consumed `0`; execution requires the hash-bound approval attestation and current official review record. |
 
 ## Stop conditions
 

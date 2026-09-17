@@ -5,8 +5,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sqlite3
+import subprocess
+import sys
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import date, datetime, time
 from hashlib import sha256
 from pathlib import Path
@@ -57,6 +61,7 @@ R30_PRICE_SNAPSHOT_AT = "2026-09-17T10:22:27.399234+08:00"
 R30_PEAK_ESTIMATE_USD = "0.05884032"
 R30_OFF_PEAK_ESTIMATE_USD = "0.02942016"
 EXPECTED_PACKAGE_HASH = "7832b7e80f791c6a9f58fb30e1bd1f18f1958c60e6d845557d9b4f5e0916bfda"
+EXPECTED_BRANCH = "codex/r32-ai-transient-acceptance"
 EXPECTED_REVIEW_HASHES = {
     "egress-material.json": "0d21ba5216c8ff5b70aea3bc50fdbb4f0a9ca43e55bf8890065f873c7bd0941f",
     "egress-review.md": "401cc23111147d3389b474e5e2211fd2cac9110ebee852d5ff7563602930f2c0",
@@ -84,6 +89,65 @@ def _canonical_json_hash(value: object) -> str:
 
 def _request_body(prompt: str) -> dict[str, object]:
     return r30._request_body(prompt)
+
+
+class ExactAIBudgetTransport(bounded.AIBudgetTransport):
+    """Reject any request whose complete canonical body differs from the reviewed body."""
+
+    def __init__(
+        self,
+        budget: bounded.Budget,
+        *,
+        expected_body_hash: str,
+        inner: httpx.AsyncBaseTransport | None = None,
+        prompt_version: str = PROMPT_VERSION,
+        max_output_tokens: int = AI_OUTPUT_TOKENS,
+        max_prompt_utf8_bytes: int = EXPECTED_PROMPT_UTF8_BYTES,
+    ) -> None:
+        super().__init__(
+            budget,
+            inner=inner,
+            prompt_version=prompt_version,
+            max_output_tokens=max_output_tokens,
+            max_prompt_utf8_bytes=max_prompt_utf8_bytes,
+        )
+        self._expected_body_hash = expected_body_hash
+        _, prompt = bounded.approved_sources(prompt_version=prompt_version)[CASE_ID]
+        self._expected_body = _request_body(prompt)
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        try:
+            body = json.loads(request.content)
+        except (TypeError, UnicodeError, ValueError):
+            self._budget.reject()
+        if not isinstance(body, dict):
+            self._budget.reject()
+        # Pydantic represents the configured zero temperature as 0.0.  The
+        # reviewed request fixes that JSON number as 0, so admit only that one
+        # known representation difference and rebuild the actual outbound
+        # request from the frozen body before it can reach the network.
+        temperature = body.get("temperature")
+        if type(temperature) is float and repr(temperature) == "0.0":
+            body["temperature"] = 0
+        if (
+            body != self._expected_body
+            or _canonical_json_hash(body) != self._expected_body_hash
+        ):
+            self._budget.reject()
+        outbound = httpx.Request(
+            request.method,
+            request.url,
+            headers={
+                key: value
+                for key, value in request.headers.items()
+                if key.lower() not in {"content-length", "transfer-encoding"}
+            },
+            json=self._expected_body,
+            extensions=request.extensions,
+        )
+        if _canonical_json_hash(json.loads(outbound.content)) != self._expected_body_hash:
+            self._budget.reject()
+        return await super().handle_async_request(outbound)
 
 
 def _egress_review_material() -> dict[str, object]:
@@ -345,11 +409,75 @@ def _review_package_matches(root: Path = REVIEW_ROOT) -> bool:
     )
 
 
-def _git_state() -> tuple[bool, str | None]:
-    return r30._git_state()
+def _git_state() -> tuple[bool, str | None, str | None]:
+    try:
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=bounded._ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=bounded._ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        branch = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=bounded._ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False, None, None
+    return (
+        not status.stdout.strip(),
+        head.stdout.strip() or None,
+        branch.stdout.strip() or None,
+    )
 
 
-def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
+def _approval_attestation_matches(
+    path: Path | None,
+    expected_hash: str | None,
+) -> bool:
+    if path is None or expected_hash is None or not path.is_file():
+        return False
+    try:
+        attestation_bytes = path.read_bytes()
+        material = json.loads(attestation_bytes.decode("utf-8"))
+        actual_hash = sha256(attestation_bytes).hexdigest()
+    except (OSError, UnicodeError, ValueError):
+        return False
+    return bool(
+        len(expected_hash) == 64
+        and actual_hash == expected_hash
+        and material.get("proposalId") == PROPOSAL_ID
+        and material.get("runId") == RUN_ID
+        and material.get("packageSha256") == EXPECTED_PACKAGE_HASH
+        and material.get("status") == "APPROVED"
+        and material.get("destination") == EXTERNAL_DESTINATION
+        and material.get("method") == "POST"
+        and material.get("physicalPosts") == 1
+        and material.get("retries") == 0
+        and material.get("marketCalls") == 0
+        and material.get("accountCalls") == 0
+        and material.get("possibleFeeAccepted") is True
+        and material.get("officialReviewStatus") == "PASS"
+    )
+
+
+def _preflight(
+    *,
+    config_path: Path | None = None,
+    expected_head: str | None = None,
+    approval_attestation_path: Path | None = None,
+    expected_approval_attestation_hash: str | None = None,
+) -> dict[str, object]:
     from trade_plan_monitor.config import load_application_config
 
     path = config_path or (bounded._ROOT / "config/app.yaml")
@@ -388,13 +516,29 @@ def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
         except Exception:
             config_status = "INVALID"
     now = datetime.now(bounded._SHANGHAI)
-    clean, head = _git_state()
+    clean, head, branch = _git_state()
+    branch_matches = branch == EXPECTED_BRANCH
+    head_matches = expected_head is not None and head == expected_head
     material_matches = _validate_material(_egress_review_material())
     package_matches = _review_package_matches()
-    unclaimed = not (SESSION_ROOT / "_session_claimed").exists()
+    unclaimed = not (SESSION_ROOT / "_session_claimed").exists() and not (
+        SESSION_ROOT / RUN_ID
+    ).exists()
+    approval_matches = _approval_attestation_matches(
+        approval_attestation_path,
+        expected_approval_attestation_hash,
+    )
     eligible = _eligible(now)
     ready = bool(
-        ai_ready and material_matches and package_matches and unclaimed and eligible and clean
+        ai_ready
+        and material_matches
+        and package_matches
+        and unclaimed
+        and eligible
+        and clean
+        and branch_matches
+        and head_matches
+        and approval_matches
     )
     return {
         "ready": ready,
@@ -405,7 +549,11 @@ def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
         "windowEligible": eligible,
         "gitClean": clean,
         "gitHead": head,
+        "gitBranch": branch,
+        "gitBranchMatches": branch_matches,
+        "gitHeadMatches": head_matches,
         "freshClaimAvailable": unclaimed,
+        "approvalAttestationMatches": approval_matches,
         "configSourceStatus": config_status,
         "configSha256Matches": config_hash_matches,
         "configCopiedIntoWorktree": False,
@@ -416,7 +564,7 @@ def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
         "promptSha256": EXPECTED_PROMPT_HASH,
         "requestBodyCanonicalSha256": EXPECTED_REQUEST_BODY_HASH,
         "ai": {
-            "host": None if endpoint is None else endpoint.hostname,
+            "host": endpoint.hostname if ai_ready else None,
             "selectedModelConfigured": selected,
             "model": bounded.APPROVED_MODEL,
             "keyPresent": key_present,
@@ -444,6 +592,33 @@ def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
         "activationAllowed": False,
         "humanReviewRequired": True,
     }
+
+
+def _execution_snapshot_matches(
+    *,
+    config_path: Path,
+    expected_head: str,
+    approval_attestation_path: Path,
+    expected_approval_attestation_hash: str,
+) -> bool:
+    clean, head, branch = _git_state()
+    try:
+        config_matches = _file_sha256(config_path) == EXPECTED_CONFIG_HASH
+    except OSError:
+        config_matches = False
+    return bool(
+        clean
+        and head == expected_head
+        and branch == EXPECTED_BRANCH
+        and config_matches
+        and _validate_material(_egress_review_material())
+        and _review_package_matches()
+        and _approval_attestation_matches(
+            approval_attestation_path,
+            expected_approval_attestation_hash,
+        )
+        and _eligible(datetime.now(bounded._SHANGHAI))
+    )
 
 
 def _assess_terminal(*args: object, **kwargs: object):
@@ -509,7 +684,87 @@ class _IsolatedReviewStore:
 
 
 def _claim_session(root: Path = SESSION_ROOT) -> Path:
-    return bounded._claim_session(root, RUN_ID)
+    root.mkdir(parents=True, exist_ok=True)
+    if (root / "_session_claimed").exists():
+        raise FileExistsError("legacy R32 claim already exists")
+    folder = root / RUN_ID
+    folder.mkdir(exist_ok=False)
+    bounded._write_json_atomic(
+        folder / "claim.json",
+        {
+            "proposalId": PROPOSAL_ID,
+            "runId": RUN_ID,
+            "status": "CONSUMED",
+            "packageSha256": EXPECTED_PACKAGE_HASH,
+            "claimedAt": datetime.now(bounded._SHANGHAI).isoformat(),
+        },
+    )
+    return folder
+
+
+def _bounded_ai_factory(
+    config_path: Path,
+    plan_lifecycle: object,
+    budget: bounded.Budget,
+    *,
+    database: Path,
+    inner_transport: httpx.AsyncBaseTransport | None,
+):
+    from trade_plan_monitor.web.ai_diagnostics import diagnostic_path_for_database
+    from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
+
+    class BoundedAIWebLifecycle(ConfiguredAIWebLifecycle):
+        async def start(self) -> dict[str, object]:
+            outcome = await super().start()
+            if self._diagnostic_sink_available is False:
+                raise bounded.BudgetDenied
+            selected = self._bindings.get(
+                next(
+                    (
+                        identity
+                        for identity, binding in self._bindings.items()
+                        if binding.config.model == bounded.APPROVED_MODEL
+                    ),
+                    None,
+                )
+            )
+            if selected is None:
+                raise bounded.BudgetDenied
+            selected = replace(
+                selected,
+                config=selected.config.model_copy(
+                    update={
+                        "max_retries": 0,
+                        "max_output_tokens": AI_OUTPUT_TOKENS,
+                        "timeout_seconds": PROVIDER_TIMEOUT_SECONDS,
+                        "transport_timeout_seconds": TRANSPORT_TIMEOUT_SECONDS,
+                        "read_timeout_seconds": READ_TIMEOUT_SECONDS,
+                        "prompt_version": PROMPT_VERSION,
+                    }
+                ),
+            )
+            self._binding = selected
+            self._bindings = {selected.config.provider_id: selected}
+            return outcome
+
+    return BoundedAIWebLifecycle(
+        config_path=config_path,
+        client_factory=lambda: httpx.AsyncClient(
+            transport=ExactAIBudgetTransport(
+                budget,
+                expected_body_hash=EXPECTED_REQUEST_BODY_HASH,
+                inner=inner_transport,
+            ),
+            timeout=httpx.Timeout(
+                TRANSPORT_TIMEOUT_SECONDS,
+                read=READ_TIMEOUT_SECONDS,
+            ),
+            follow_redirects=False,
+            trust_env=False,
+        ),
+        review_store=plan_lifecycle,
+        diagnostic_path=diagnostic_path_for_database(database),
+    )
 
 
 def _database_counts(database: Path) -> dict[str, int]:
@@ -521,11 +776,30 @@ async def _cleanup_with_hard_deadline(
     *lifecycles: object | None,
     monotonic: Callable[[], float] = monotonic,
 ) -> bool:
-    return await r30._cleanup_with_hard_deadline(
-        hard_deadline,
-        *lifecycles,
-        monotonic=monotonic,
-    )
+    success = True
+    cleanup_deadline = min(hard_deadline, monotonic() + float(CLEANUP_SECONDS))
+    for lifecycle in lifecycles:
+        if lifecycle is None:
+            continue
+        stop = getattr(lifecycle, "stop", None)
+        if not callable(stop):
+            success = False
+            continue
+        remaining = cleanup_deadline - monotonic()
+        if remaining <= 0:
+            success = False
+            continue
+        task = asyncio.create_task(stop())
+        done, pending = await asyncio.wait({task}, timeout=remaining)
+        if pending:
+            task.cancel()
+            success = False
+            continue
+        try:
+            task.result()
+        except BaseException:
+            success = False
+    return success
 
 
 async def _run_candidate(
@@ -533,6 +807,9 @@ async def _run_candidate(
     config_path: Path,
     session_root: Path = SESSION_ROOT,
     ai_inner_transport: httpx.AsyncBaseTransport | None = None,
+    expected_head: str | None = None,
+    approval_attestation_path: Path | None = None,
+    expected_approval_attestation_hash: str | None = None,
 ) -> int:
     from trade_plan_monitor.web.ai_diagnostics import diagnostic_path_for_database
     from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
@@ -594,24 +871,32 @@ async def _run_candidate(
             clock=lambda: datetime.now(bounded._SHANGHAI),
         )
         await plans.start()
-        ai = bounded._bounded_ai_factory(
+        ai = _bounded_ai_factory(
             config_path,
             review_store,
             ai_budget,
             database=database,
             inner_transport=ai_inner_transport,
-            prompt_version=PROMPT_VERSION,
-            max_output_tokens=AI_OUTPUT_TOKENS,
-            max_prompt_utf8_bytes=EXPECTED_PROMPT_UTF8_BYTES,
-            provider_timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
-            transport_timeout_seconds=TRANSPORT_TIMEOUT_SECONDS,
-            read_timeout_seconds=READ_TIMEOUT_SECONDS,
         )
         startup = await ai.start()
+        if expected_head is not None:
+            if (
+                approval_attestation_path is None
+                or expected_approval_attestation_hash is None
+                or not _execution_snapshot_matches(
+                    config_path=config_path,
+                    expected_head=expected_head,
+                    approval_attestation_path=approval_attestation_path,
+                    expected_approval_attestation_hash=expected_approval_attestation_hash,
+                )
+            ):
+                raise bounded.BudgetDenied
         if startup.get("configured") is not True or startup.get("diagnosticAvailable") is not True:
             raise bounded.BudgetDenied
         provider_id = (await ai.get_configured_ai()).provider_id
         source = bounded.approved_sources(prompt_version=PROMPT_VERSION)[CASE_ID][0]
+        if sha256(source.encode("utf-8")).hexdigest() != EXPECTED_SOURCE_HASH:
+            raise bounded.BudgetDenied
         outcome, review = await _submit_and_wait(
             service=ai,
             provider_id=provider_id,
@@ -679,6 +964,191 @@ async def _run_candidate(
     return return_code
 
 
+_WATCHDOG_BOOTSTRAP = (
+    "import json,sys; "
+    "from scripts.r32_ai_transient_acceptance import _watchdog_child_main; "
+    "raise SystemExit(_watchdog_child_main(json.loads(sys.stdin.read())))"
+)
+
+
+def _run_under_parent_watchdog(child_payload: dict[str, str]) -> int:
+    child_environment = os.environ.copy()
+    existing_python_path = child_environment.get("PYTHONPATH", "")
+    child_environment["PYTHONPATH"] = os.pathsep.join(
+        part
+        for part in (str(bounded._ROOT / "src"), str(bounded._ROOT), existing_python_path)
+        if part
+    )
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                _WATCHDOG_BOOTSTRAP,
+            ],
+            cwd=bounded._ROOT,
+            check=False,
+            capture_output=True,
+            env=child_environment,
+            input=json.dumps(child_payload, ensure_ascii=True, sort_keys=True),
+            text=True,
+            timeout=TOTAL_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        _record_watchdog_terminal("HARD_DEADLINE_EXCEEDED")
+        print(json.dumps({"status": "HARD_DEADLINE_EXCEEDED"}, sort_keys=True))
+        return 1
+    except (OSError, subprocess.SubprocessError):
+        print(json.dumps({"status": "CHILD_PROCESS_UNAVAILABLE"}, sort_keys=True))
+        return 1
+
+    payload: dict[str, object] | None = None
+    for line in reversed(completed.stdout.splitlines()):
+        try:
+            candidate = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(candidate, dict):
+            payload = candidate
+            break
+    if payload is None:
+        payload = {"status": "CHILD_RESULT_UNAVAILABLE"}
+    print(json.dumps(_safe_child_payload(payload), ensure_ascii=True, sort_keys=True), flush=True)
+    return completed.returncode
+
+
+_SAFE_CHILD_STATUSES = frozenset(
+    {
+        "LITERAL_V6_EXTRACTION_SUCCEEDED_REVIEW_REQUIRED",
+        "AI_ACCEPTANCE_FAILED",
+        "FAILED",
+        "LOCAL_STATE_VERIFICATION_FAILED",
+        "ISOLATION_VIOLATION",
+        "PHYSICAL_ATTEMPT_BOUNDARY_VIOLATION",
+        "SHUTDOWN_FAILED",
+        "NOT_RUN_AUTHORIZATION_OR_PREFLIGHT",
+        "NOT_RUN_INVALID_ID_OR_WINDOW",
+        "NOT_RUN_SESSION_ALREADY_CLAIMED",
+    }
+)
+
+
+def _safe_child_payload(payload: dict[str, object]) -> dict[str, object]:
+    status = payload.get("status")
+    if not isinstance(status, str) or status not in _SAFE_CHILD_STATUSES:
+        return {"status": "CHILD_RESULT_UNAVAILABLE"}
+    safe: dict[str, object] = {"status": status}
+    if payload.get("proposalId") == PROPOSAL_ID:
+        safe["proposalId"] = PROPOSAL_ID
+    if payload.get("runId") == RUN_ID:
+        safe["runId"] = RUN_ID
+    for source_key, target_key in (
+        ("ai", "aiPhysicalAttempts"),
+        ("market", "marketPhysicalAttempts"),
+    ):
+        snapshot = payload.get(source_key)
+        if isinstance(snapshot, dict):
+            attempts = snapshot.get("totalAttempts")
+            if type(attempts) is int and attempts >= 0:
+                safe[target_key] = attempts
+    elapsed = payload.get("boundedWorkElapsedMs")
+    if type(elapsed) is int and elapsed >= 0:
+        safe["boundedWorkElapsedMs"] = elapsed
+    return safe
+
+
+def _record_watchdog_terminal(status: str) -> None:
+    folder = SESSION_ROOT / RUN_ID
+    if not folder.is_dir():
+        return
+    finished_at = datetime.now(bounded._SHANGHAI).isoformat()
+    evidence = {
+        "proposalId": PROPOSAL_ID,
+        "runId": RUN_ID,
+        "status": status,
+        "packageSha256": EXPECTED_PACKAGE_HASH,
+        "finishedAt": finished_at,
+        "hardTotalSeconds": TOTAL_SECONDS,
+    }
+    try:
+        bounded._write_json_atomic(folder / "watchdog-terminal.json", evidence)
+        audit_path = folder / "audit.json"
+        if audit_path.is_file():
+            audit = json.loads(audit_path.read_text("utf-8"))
+            if (
+                isinstance(audit, dict)
+                and audit.get("proposalId") == PROPOSAL_ID
+                and audit.get("runId") == RUN_ID
+            ):
+                audit["candidateStatusBeforeWatchdog"] = audit.get("status")
+                audit["status"] = status
+                audit["watchdogTerminalPresent"] = True
+                audit["finishedAt"] = finished_at
+                bounded._write_json_atomic(audit_path, audit)
+        journal_path = folder / "physical-attempts.json"
+        if journal_path.is_file():
+            journal = json.loads(journal_path.read_text("utf-8"))
+            if (
+                isinstance(journal, dict)
+                and journal.get("proposalId") == PROPOSAL_ID
+                and journal.get("runId") == RUN_ID
+            ):
+                journal["status"] = status
+                journal["normalAuditPresent"] = audit_path.is_file()
+                journal["watchdogTerminalPresent"] = True
+                journal["finishedAt"] = finished_at
+                bounded._write_json_atomic(journal_path, journal)
+    except (OSError, UnicodeError, ValueError, TypeError):
+        pass
+
+
+def _watchdog_child_main(payload: object) -> int:
+    required = {
+        "authorization",
+        "runId",
+        "configPath",
+        "expectedHead",
+        "approvalAttestation",
+        "approvalAttestationSha256",
+    }
+    if not isinstance(payload, dict) or set(payload) != required or not all(
+        isinstance(payload[key], str) and payload[key] for key in required
+    ):
+        print(json.dumps({"status": "NOT_RUN_INVALID_CHILD_PAYLOAD"}))
+        return 2
+    config_path = Path(payload["configPath"])
+    approval_path = Path(payload["approvalAttestation"])
+    preflight = _preflight(
+        config_path=config_path,
+        expected_head=payload["expectedHead"],
+        approval_attestation_path=approval_path,
+        expected_approval_attestation_hash=payload["approvalAttestationSha256"],
+    )
+    if payload["authorization"] != AUTHORIZATION or not preflight.get("ready"):
+        print(json.dumps({"status": "NOT_RUN_AUTHORIZATION_OR_PREFLIGHT"}))
+        return 2
+    if payload["runId"] != RUN_ID or not _eligible(datetime.now(bounded._SHANGHAI)):
+        print(json.dumps({"status": "NOT_RUN_INVALID_ID_OR_WINDOW"}))
+        return 2
+    try:
+        return asyncio.run(
+            _run_candidate(
+                config_path=config_path,
+                expected_head=payload["expectedHead"],
+                approval_attestation_path=approval_path,
+                expected_approval_attestation_hash=payload[
+                    "approvalAttestationSha256"
+                ],
+            )
+        )
+    except FileExistsError:
+        print(json.dumps({"status": "NOT_RUN_SESSION_ALREADY_CLAIMED"}))
+        return 2
+    except BaseException:
+        print(json.dumps({"status": "FAILED"}))
+        return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prepare-egress-review", action="store_true")
@@ -686,10 +1156,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--authorize", default="")
     parser.add_argument("--run-id", default="")
     parser.add_argument("--config-path", type=Path)
+    parser.add_argument("--expected-head", default="")
+    parser.add_argument("--approval-attestation", type=Path)
+    parser.add_argument("--approval-attestation-sha256", default="")
     args = parser.parse_args(argv)
     if args.prepare_egress_review:
         _write_egress_review_package()
-    preflight = _preflight(config_path=args.config_path)
+    preflight = _preflight(
+        config_path=args.config_path,
+        expected_head=args.expected_head or None,
+        approval_attestation_path=args.approval_attestation,
+        expected_approval_attestation_hash=args.approval_attestation_sha256 or None,
+    )
     if not args.execute:
         print(json.dumps(preflight, ensure_ascii=True, sort_keys=True))
         return 0
@@ -702,11 +1180,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.run_id != RUN_ID or not _eligible(datetime.now(bounded._SHANGHAI)):
         print(json.dumps({"status": "NOT_RUN_INVALID_ID_OR_WINDOW"}))
         return 2
-    try:
-        return asyncio.run(_run_candidate(config_path=args.config_path))
-    except FileExistsError:
-        print(json.dumps({"status": "NOT_RUN_SESSION_ALREADY_CLAIMED"}))
-        return 2
+    if args.execute:
+        child_payload = {
+            "authorization": args.authorize,
+            "runId": args.run_id,
+            "configPath": str(args.config_path),
+            "expectedHead": args.expected_head,
+            "approvalAttestation": str(args.approval_attestation),
+            "approvalAttestationSha256": args.approval_attestation_sha256,
+        }
+        return _run_under_parent_watchdog(child_payload)
+    raise AssertionError("unreachable execution mode")
 
 
 if __name__ == "__main__":
