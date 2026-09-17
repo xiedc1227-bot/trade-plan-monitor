@@ -1,6 +1,8 @@
 # R30 AI 超时预算准备记录
 
-英文原版为 `R30-ai-timeout-budget-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / LIVE_NOT_RUN / CLAIM_UNCONSUMED / EXACT_REVIEW_READY**。
+英文原版为 `R30-ai-timeout-budget-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / EXECUTION_BLOCKED_OFFICIAL_PRICE_MISMATCH / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**。
+
+批准后更新：全部本地门禁均通过，但直接打开的官方价格页面显示了高于已批准审阅包的价格。派发在创建 claim 或网络执行前停止。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
 
 ## 已完成的离线工作
 

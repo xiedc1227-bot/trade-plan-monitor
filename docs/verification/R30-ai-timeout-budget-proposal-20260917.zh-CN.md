@@ -1,6 +1,8 @@
 # R30 隔离 AI 超时预算验收方案
 
-英文原版为 `R30-ai-timeout-budget-proposal-20260917.md`，本文是等价中文审阅副本。提案 `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`；运行 `r30-20260917-a`。状态 **OFFLINE_CANDIDATE / EXACT_EGRESS_REVIEW_READY / LIVE_NOT_AUTHORIZED / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**。
+英文原版为 `R30-ai-timeout-budget-proposal-20260917.md`，本文是等价中文审阅副本。提案 `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`；运行 `r30-20260917-a`。状态 **EXECUTION_BLOCKED_OFFICIAL_PRICE_MISMATCH / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**。
+
+批准后更新：执行前立即复核的官方价格页面显示更高的 `DeepSeek-V4-Pro-0813` 峰值/非峰值价格，使 USD `0.05884032` 的峰值估算与 USD `0.02942016` 的非峰值估算均超过审阅包已批准的 USD `0.01582704`。未发送请求。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
 
 ## 目标与证据边界
 

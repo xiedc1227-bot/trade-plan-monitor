@@ -1,6 +1,8 @@
 # R30 AI timeout-budget preparation record
 
-Canonical English; `R30-ai-timeout-budget-preparation-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **OFFLINE_COMPLETE / LIVE_NOT_RUN / CLAIM_UNCONSUMED / EXACT_REVIEW_READY**.
+Canonical English; `R30-ai-timeout-budget-preparation-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **OFFLINE_COMPLETE / EXECUTION_BLOCKED_OFFICIAL_PRICE_MISMATCH / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**.
+
+Post-approval update: all local gates passed, but the direct official price page displayed a higher schedule than the approved review package. The dispatch stopped before claim creation or network execution. See `R30-ai-timeout-budget-execution-20260917.md`.
 
 ## Completed offline work
 

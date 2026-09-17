@@ -1,6 +1,8 @@
 # R30 isolated AI timeout-budget acceptance proposal
 
-Canonical English; `R30-ai-timeout-budget-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`; run `r30-20260917-a`. Status **OFFLINE_CANDIDATE / EXACT_EGRESS_REVIEW_READY / LIVE_NOT_AUTHORIZED / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**.
+Canonical English; `R30-ai-timeout-budget-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`; run `r30-20260917-a`. Status **EXECUTION_BLOCKED_OFFICIAL_PRICE_MISMATCH / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**.
+
+Post-approval update: the immediate official price recheck displayed the higher `DeepSeek-V4-Pro-0813` peak/off-peak schedule, making both the USD `0.05884032` peak estimate and USD `0.02942016` off-peak estimate exceed the approved USD `0.01582704` package estimate. No request was sent. See `R30-ai-timeout-budget-execution-20260917.md`.
 
 ## Objective and evidence boundary
 
