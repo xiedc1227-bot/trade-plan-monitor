@@ -1,8 +1,8 @@
 # R30 AI timeout-budget preparation record
 
-Canonical English; `R30-ai-timeout-budget-preparation-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **OFFLINE_COMPLETE / AUTHORIZATION_SCOPE_CORRECTED / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS_TO_DATE**.
+Canonical English; `R30-ai-timeout-budget-preparation-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **OFFLINE_COMPLETE / EXECUTED_ONCE / AI_ACCEPTANCE_FAILED / CLAIM_CONSUMED**.
 
-Post-approval update: all local gates passed, but the direct official price page displayed a higher schedule than the frozen review-package snapshot. The first dispatch attempt stopped before claim creation or network execution. That zero-call fact remains valid; the conclusion that USD `0.01582704` was a user-set hard ceiling was incorrect. The approval question explicitly described approximately USD `0.01583` as an estimate rather than a billing guarantee, and the user approved one request plus its possible charge. See `R30-ai-timeout-budget-execution-20260917.md`.
+Post-approval update: all local gates passed, but the direct official price page displayed a higher schedule than the frozen review-package snapshot. The first dispatch attempt stopped before claim creation or network execution. That zero-call fact remains valid; the conclusion that USD `0.01582704` was a user-set hard ceiling was incorrect. After that interpretation was corrected and committed, every gate passed again and the authorized launcher started exactly one physical AI attempt. It ended with `PROVIDER_ERROR / TRANSIENT`; no retry, market call, response, usage or business row was produced, and cleanup completed. See `R30-ai-timeout-budget-execution-20260917.md`.
 
 ## Completed offline work
 
@@ -38,7 +38,11 @@ During R30 preparation:
 - real isolated run databases created: `0`;
 - plan save/activation, holdings, orders, fills, webhooks: `0`.
 
-The ignored review package is the only R30 local data artifact. No real configuration, credential, provider response or account data was copied into the worktree.
+During preparation, the ignored review package was the only R30 local data artifact. No real configuration, credential, provider response or account data was copied into the worktree.
+
+## Authorized execution outcome
+
+The one-shot run started and ended at `2026-09-17T10:23:06+08:00`. It consumed the real claim and recorded one AI physical attempt, zero retry and zero market calls. The safe diagnostic classified the outcome as provider-stage `PROVIDER_ERROR` with `providerErrorCode=TRANSIENT`; no provider response, finish reason, returned-model decision or usage was available. Schema/mapping/oracle checks did not run. Cleanup completed, audit and journal agreed, and all independently checked business tables remained empty. The claim and isolated evidence are retained; another R30 attempt is prohibited.
 
 ## Exact approval item
 

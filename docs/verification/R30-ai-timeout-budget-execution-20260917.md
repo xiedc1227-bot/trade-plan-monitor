@@ -1,6 +1,6 @@
-# R30 execution record: authorization interpretation corrected after prior zero-call stop
+# R30 execution record: one-shot attempt ended in a transient provider error
 
-Canonical English; `R30-ai-timeout-budget-execution-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **PRIOR_ATTEMPT_NOT_RUN / AUTHORIZATION_SCOPE_CORRECTED / ZERO_EXTERNAL_CALLS_TO_DATE / CLAIM_UNCONSUMED / PACKAGE_UNCHANGED**.
+Canonical English; `R30-ai-timeout-budget-execution-20260917.zh-CN.md` is the equivalent Chinese review copy. Status **EXECUTED_ONCE / AI_ACCEPTANCE_FAILED / PROVIDER_ERROR_TRANSIENT / CLAIM_CONSUMED / NO_RETRY / CLEANUP_COMPLETE**.
 
 ## Authorized scope
 
@@ -52,3 +52,44 @@ Prior dispatch decision: `NOT_RUN_AGENT_AUTHORIZATION_INTERPRETATION`; this reco
 - package, R29 evidence, real configuration, holdings and main worktree: unchanged.
 
 The existing approval remains applicable to the exact one-request package after disclosure of the higher estimate because the disclosed USD `0.01582704` figure was explicitly an estimate rather than a hard limit. Any execution must still pass the unchanged positive program gates immediately before launch and must permanently consume the one-shot claim before network I/O. R31 is not opened automatically.
+
+## Authorized one-shot execution
+
+After the authorization correction was committed as `71bd09cd757b4cf78788ec3d086f5a2462e5650d`, the official pages were opened directly again. They still showed `POST https://api.deepseek.com/chat/completions`, alias `deepseek-v4-pro`, model version `DeepSeek-V4-Pro-0813`, and the higher peak/off-peak pricing. At `2026-09-17T10:22:27.399234+08:00`, the candidate preflight returned `ready=true` with:
+
+- clean committed R30 branch and eligible local date;
+- original read-only configuration SHA-256 match and configured key/model/host readiness;
+- package SHA-256 `282fcb7198c54e861bb41c9822907a7841e17fdaa16cd46190c9b5a0f96acc10`;
+- source, prompt and canonical request-body hashes unchanged, including request SHA-256 `c2a60f45fc41784ada733d6f6e7267435597d59897f1333b31ff1f242048c10c`;
+- fresh claim and absent prior run directory;
+- one AI physical-attempt cap, zero retry, zero market cap, 65-second provider deadline and 81-second hard total.
+
+The authorized launcher started at `2026-09-17T10:23:06.465672+08:00`, atomically consumed the claim before the provider path, and started the sole physical AI attempt. It finished at `2026-09-17T10:23:06.726004+08:00` after `261` bounded-work milliseconds with `AI_ACCEPTANCE_FAILED`.
+
+The safe diagnostic reported `PROVIDER_ERROR` at the provider stage with `providerErrorCode=TRANSIENT`, `attempts=1`, no timeout classification, unknown finish reason, unavailable usage and no returned-model match determination. No provider response was available. Strict schema validation, mapping validation and the literal oracle therefore did not run; `oracleStatus=NOT_RUN`, review result was null, and review-sink receipts were zero. The evidence does not establish whether DeepSeek received or billed the attempt. No retry or resubmission is permitted.
+
+## Final accounting and safety verification
+
+- AI physical attempts: `1`; retries/resubmissions: `0`; denied-before-network attempts: `0`;
+- market calls, including `trade_cal`: `0`; market lifecycle started: `false`;
+- balance/model-list/account probes: `0`;
+- real claim: consumed and retained; run directory: retained;
+- cleanup: `COMPLETE`; no candidate process remained after launcher exit;
+- activation allowed: `false`; human review status: `REQUIRED_NOT_PERFORMED`;
+- all `38` independently queried business tables were empty; only local schema metadata rows existed;
+- audit and physical-attempt journal agreed on status and counts; the journal recorded `normalAuditPresent=true`;
+- real configuration was read only and not copied; package, request bytes, holdings and original main worktree remained unchanged.
+
+## Evidence integrity
+
+- `audit.json`: `9e5fb96e316fbef9b8b11c811f2a11b78e16941080718e5a459948a871a2e048`;
+- `physical-attempts.json`: `9d4cef6722a70d690c06a1240b2ff30631719f244dc35e512361ac5094d2fa7d`;
+- `monitor.ai-extraction-diagnostics.jsonl`: `b96aa8f4607315f57fbf00496bf03521c024bb3822d37b33ce98735b508fab40`;
+- `validated-review-result.json`: `d64c4b1b55899621b50240fc3c961366e3393931705b80fa859f5a20b989338e`;
+- `monitor.sqlite3`: `237a0911e2f6b6adfafcf6d1b4a5430af1d224936ce0b52b053407843310c255`;
+- `monitor.sqlite3-shm`: `fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb`;
+- `monitor.sqlite3-wal`: empty-file SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+The retained ignored evidence directory is `data/r30-ai-timeout-budget-acceptance/r30-20260917-a/`. The report excludes credentials, authorization headers, source/prompt text, raw provider content, exception text and direct IP addresses.
+
+R30 did not validate the timeout-budget hypothesis because no terminal model response was obtained. The consumed claim forbids another R30 attempt. R31 was not opened.

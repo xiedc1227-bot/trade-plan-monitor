@@ -1,8 +1,8 @@
 # R30 isolated AI timeout-budget acceptance proposal
 
-Canonical English; `R30-ai-timeout-budget-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`; run `r30-20260917-a`. Status **AUTHORIZED / PRIOR_ZERO_CALL_STOP_RECORDED / CLAIM_UNCONSUMED / EXACT_EXECUTION_PENDING**.
+Canonical English; `R30-ai-timeout-budget-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`; run `r30-20260917-a`. Status **EXECUTED_ONCE / AI_ACCEPTANCE_FAILED / CLAIM_CONSUMED / NO_RETRY**.
 
-Post-approval correction: the immediate official price recheck displayed the higher `DeepSeek-V4-Pro-0813` peak/off-peak schedule, producing a USD `0.05884032` peak estimate and USD `0.02942016` off-peak estimate instead of the frozen USD `0.01582704` estimate. The first attempt stopped before claim creation and sent no request. That accounting remains valid, but USD `0.01582704` was disclosed as an estimate—not a billing guarantee or user-set ceiling. The user approved one request and accepted its possible charge; route, source, prompt, request body and physical-call limit remain unchanged. See `R30-ai-timeout-budget-execution-20260917.md`.
+Post-approval correction and result: the immediate official price recheck displayed the higher `DeepSeek-V4-Pro-0813` peak/off-peak schedule, producing a USD `0.05884032` peak estimate and USD `0.02942016` off-peak estimate instead of the frozen USD `0.01582704` estimate. The first attempt stopped before claim creation and sent no request. That accounting remains valid, but USD `0.01582704` was disclosed as an estimate—not a billing guarantee or user-set ceiling. After correcting that interpretation and passing every unchanged gate, the authorized launcher consumed the claim and started exactly one AI physical attempt. It ended with `PROVIDER_ERROR / TRANSIENT`, no response or usage, zero retry, zero market call, complete cleanup and zero business rows. See `R30-ai-timeout-budget-execution-20260917.md`.
 
 ## Objective and evidence boundary
 

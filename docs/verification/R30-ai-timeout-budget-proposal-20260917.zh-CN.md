@@ -1,8 +1,8 @@
 # R30 隔离 AI 超时预算验收方案
 
-英文原版为 `R30-ai-timeout-budget-proposal-20260917.md`，本文是等价中文审阅副本。提案 `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`；运行 `r30-20260917-a`。状态 **AUTHORIZED / PRIOR_ZERO_CALL_STOP_RECORDED / CLAIM_UNCONSUMED / EXACT_EXECUTION_PENDING**。
+英文原版为 `R30-ai-timeout-budget-proposal-20260917.md`，本文是等价中文审阅副本。提案 `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`；运行 `r30-20260917-a`。状态 **EXECUTED_ONCE / AI_ACCEPTANCE_FAILED / CLAIM_CONSUMED / NO_RETRY**。
 
-批准后更正：执行前立即复核的官方价格页面显示更高的 `DeepSeek-V4-Pro-0813` 峰值/非峰值价格，对应 USD `0.05884032` 的峰值估算与 USD `0.02942016` 的非峰值估算，而冻结估算为 USD `0.01582704`。首次尝试在创建 claim 前停止，未发送请求；该记账仍有效，但 USD `0.01582704` 是披露的估算，不是账单保证或用户设定的金额上限。用户批准了一次请求并接受其可能费用；路由、原文、提示词、请求体和物理调用上限均未改变。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
+批准后更正与结果：执行前立即复核的官方价格页面显示更高的 `DeepSeek-V4-Pro-0813` 峰值/非峰值价格，对应 USD `0.05884032` 的峰值估算与 USD `0.02942016` 的非峰值估算，而冻结估算为 USD `0.01582704`。首次尝试在创建 claim 前停止，未发送请求；该记账仍有效，但 USD `0.01582704` 是披露的估算，不是账单保证或用户设定的金额上限。更正该解释并通过全部不变门禁后，已授权 launcher 消耗 claim 并启动恰好一次 AI 物理尝试。结果为 `PROVIDER_ERROR / TRANSIENT`，无响应或 usage、零重试、零行情、清理完成且业务行全零。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
 
 ## 目标与证据边界
 

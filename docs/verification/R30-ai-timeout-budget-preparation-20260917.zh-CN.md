@@ -1,8 +1,8 @@
 # R30 AI 超时预算准备记录
 
-英文原版为 `R30-ai-timeout-budget-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / AUTHORIZATION_SCOPE_CORRECTED / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS_TO_DATE**。
+英文原版为 `R30-ai-timeout-budget-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / EXECUTED_ONCE / AI_ACCEPTANCE_FAILED / CLAIM_CONSUMED**。
 
-批准后更新：全部本地门禁均通过，但直接打开的官方价格页面显示了高于冻结审阅包快照的价格。首次派发尝试在创建 claim 或网络执行前停止。该零调用事实仍然有效；把 USD `0.01582704` 解释为用户设定的金额硬上限是错误的。批准问题明确将约 USD `0.01583` 表述为估算而非账单保证，用户批准了一次请求及其可能费用。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
+批准后更新：全部本地门禁均通过，但直接打开的官方价格页面显示了高于冻结审阅包快照的价格。首次派发尝试在创建 claim 或网络执行前停止。该零调用事实仍然有效；把 USD `0.01582704` 解释为用户设定的金额硬上限是错误的。更正并提交该解释后，全部门禁再次通过，已授权 launcher 启动恰好一次 AI 物理尝试。结果为 `PROVIDER_ERROR / TRANSIENT`；没有产生重试、行情调用、响应、usage 或业务行，清理完成。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
 
 ## 已完成的离线工作
 
@@ -38,7 +38,11 @@ R30 准备期间：
 - 创建真实隔离运行数据库：`0`；
 - 计划保存/激活、持仓、委托、成交、Webhook：`0`。
 
-被忽略的审阅包是唯一 R30 本地数据产物。真实配置、凭据、供应商响应或账户数据均未复制到工作树。
+准备阶段，被忽略的审阅包是唯一 R30 本地数据产物。真实配置、凭据、供应商响应或账户数据均未复制到工作树。
+
+## 已授权执行结果
+
+单次运行于 `2026-09-17T10:23:06+08:00` 启动并结束。它消耗真实 claim，记录一次 AI 物理尝试、零重试、零行情。安全诊断将结果归类为供应商阶段 `PROVIDER_ERROR`，`providerErrorCode=TRANSIENT`；没有可用的供应商响应、finish reason、返回模型判定或 usage。schema/映射/oracle 均未运行。清理完成，audit 与 journal 一致，独立检查的全部业务表保持为空。claim 与隔离证据均保留；禁止再次尝试 R30。
 
 ## 精确批准事项
 
