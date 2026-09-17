@@ -1,8 +1,8 @@
 # R30 isolated AI timeout-budget acceptance proposal
 
-Canonical English; `R30-ai-timeout-budget-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`; run `r30-20260917-a`. Status **EXECUTION_BLOCKED_OFFICIAL_PRICE_MISMATCH / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**.
+Canonical English; `R30-ai-timeout-budget-proposal-20260917.zh-CN.md` is the equivalent Chinese review copy. Proposal `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`; run `r30-20260917-a`. Status **AUTHORIZED / PRIOR_ZERO_CALL_STOP_RECORDED / CLAIM_UNCONSUMED / EXACT_EXECUTION_PENDING**.
 
-Post-approval update: the immediate official price recheck displayed the higher `DeepSeek-V4-Pro-0813` peak/off-peak schedule, making both the USD `0.05884032` peak estimate and USD `0.02942016` off-peak estimate exceed the approved USD `0.01582704` package estimate. No request was sent. See `R30-ai-timeout-budget-execution-20260917.md`.
+Post-approval correction: the immediate official price recheck displayed the higher `DeepSeek-V4-Pro-0813` peak/off-peak schedule, producing a USD `0.05884032` peak estimate and USD `0.02942016` off-peak estimate instead of the frozen USD `0.01582704` estimate. The first attempt stopped before claim creation and sent no request. That accounting remains valid, but USD `0.01582704` was disclosed as an estimate—not a billing guarantee or user-set ceiling. The user approved one request and accepted its possible charge; route, source, prompt, request body and physical-call limit remain unchanged. See `R30-ai-timeout-budget-execution-20260917.md`.
 
 ## Objective and evidence boundary
 
@@ -46,6 +46,8 @@ The exact package is under `data/r30-ai-timeout-budget-review/`. Its package SHA
 At `2026-09-17T09:43:04+08:00`, the official Chat Completions page documented `POST /chat/completions`, model alias `deepseek-v4-pro`, non-thinking mode, JSON object output and `max_tokens`. The official pricing page identified `DeepSeek-V4-Pro` at USD `0.435`/M cache-miss input, USD `0.003625`/M cache-hit input and USD `0.87`/M output. This differs from R29's earlier `DeepSeek-V4-Pro-0813` and USD `1.32`/M plus USD `3.96`/M snapshot. Sources: https://api-docs.deepseek.com/api/create-chat-completion/ and https://api-docs.deepseek.com/quick_start/pricing/.
 
 Using a rounded-up `20,000` cache-miss input-token bound and the unchanged full `8,192` output-token cap, one request is conservatively estimated at USD `0.01582704` (`20000*0.435/1e6 + 8192*0.87/1e6`). Actual tokenization, cache allocation, output length, billing, taxes and account adjustments are unknown. Extending the local wait does not increase `max_tokens`. Recheck both official pages immediately before any approved dispatch; do not recharge or probe the account.
+
+The later direct official-page recheck retained the route and alias but displayed peak input/output rates of USD `1.32`/M and USD `3.96`/M, plus off-peak rates of USD `0.66`/M and USD `1.98`/M. At the same fixed arithmetic bounds these produce USD `0.05884032` peak and USD `0.02942016` off-peak estimates. This pricing conflict is retained as evidence; it does not alter the frozen review-package bytes or the user's approval of one request plus its possible charge.
 
 ## Execution and stop rules
 

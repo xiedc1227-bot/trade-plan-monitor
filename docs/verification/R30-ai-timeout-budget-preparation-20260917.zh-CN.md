@@ -1,8 +1,8 @@
 # R30 AI 超时预算准备记录
 
-英文原版为 `R30-ai-timeout-budget-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / EXECUTION_BLOCKED_OFFICIAL_PRICE_MISMATCH / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**。
+英文原版为 `R30-ai-timeout-budget-preparation-20260917.md`，本文是等价中文审阅副本。状态 **OFFLINE_COMPLETE / AUTHORIZATION_SCOPE_CORRECTED / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS_TO_DATE**。
 
-批准后更新：全部本地门禁均通过，但直接打开的官方价格页面显示了高于已批准审阅包的价格。派发在创建 claim 或网络执行前停止。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
+批准后更新：全部本地门禁均通过，但直接打开的官方价格页面显示了高于冻结审阅包快照的价格。首次派发尝试在创建 claim 或网络执行前停止。该零调用事实仍然有效；把 USD `0.01582704` 解释为用户设定的金额硬上限是错误的。批准问题明确将约 USD `0.01583` 表述为估算而非账单保证，用户批准了一次请求及其可能费用。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
 
 ## 已完成的离线工作
 
@@ -12,7 +12,7 @@
 - 准备一个 R30 候选：连接/写入/连接池 `30` 秒、读取 `60` 秒、provider 整体 `65` 秒、终态观察 `66` 秒、清理最多 `15` 秒、总硬边界 `81` 秒。
 - 模型、原文、提示词、`max_tokens=8192`、temperature、思考模式、JSON 响应格式、streaming 标志、端点与单消息请求体均与 R29 不变。直接比较本地真实 R29/R30 材料文件得到 `sourceBytesEqual=true`、`promptBytesEqual=true`、`bodyEqual=true`，且规范请求体 SHA-256 均为 `c2a60f45fc41784ada733d6f6e7267435597d59897f1333b31ff1f242048c10c`。
 - 在 `data/r30-ai-timeout-budget-review/` 下生成被忽略的精确审阅包；包 SHA-256 为 `282fcb7198c54e861bb41c9822907a7841e17fdaa16cd46190c9b5a0f96acc10`。
-- 在未上传计划数据的前提下重新核对 DeepSeek 官方路由/模型/价格页面及 HTTPX/Python 超时语义。当前路由仍为 `POST https://api.deepseek.com/chat/completions`；按固定请求边界，当前价格快照的一次请求保守估算为 USD `0.01582704`。
+- 在未上传计划数据的前提下重新核对 DeepSeek 官方路由/模型/价格页面及 HTTPX/Python 超时语义。冻结审阅快照按固定请求边界得到一次请求 USD `0.01582704` 的保守估算。随后直接打开官方页面时，`POST https://api.deepseek.com/chat/completions` 保持不变，但页面显示了更高的峰值/非峰值价格，对应估算为 USD `0.05884032` 与 USD `0.02942016`；真实账单仍未知。
 
 ## 离线证据
 
@@ -48,6 +48,6 @@ R30 准备期间：
 - `data/r30-ai-timeout-budget-review/egress-material.json`；
 - `data/r30-ai-timeout-budget-review/manifest.json`。
 
-批准的准确含义是：按包 SHA-256 `282fcb7198c54e861bb41c9822907a7841e17fdaa16cd46190c9b5a0f96acc10`，向 `https://api.deepseek.com/chat/completions` 发送恰好一次非流式 `LITERAL` POST，零重试、零行情，并接受税费/账户调整未知前最高 USD `0.01582704` 的保守潜在费用。它不授权第二次 POST、账户探测、行情调用、计划保存/激活或交易动作。
+批准的准确含义是：按包 SHA-256 `282fcb7198c54e861bb41c9822907a7841e17fdaa16cd46190c9b5a0f96acc10`，向 `https://api.deepseek.com/chat/completions` 发送恰好一次非流式 `LITERAL` POST，零重试、零行情，并接受其可能费用。USD `0.01582704` 是冻结快照披露的保守估算，已明确不是账单保证，也不是用户设定的金额硬上限；真实分词、缓存分配、输出长度、计费、税费及账户调整均声明为未知。后来披露的较高估算没有改变已批准的路由、内容或物理调用上限。它不授权第二次 POST、账户探测、行情调用、计划保存/激活或交易动作。
 
 执行时预检必须使用显式只读原配置路径，校验配置 SHA-256 `89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428`，确认分支干净已提交且 claim 未使用，并重新核对官方路由与价格。当前本地日期门禁为 Asia/Shanghai `2026-09-17`；错过后必须披露并更新本地门禁、重新干跑，不能静默发送。

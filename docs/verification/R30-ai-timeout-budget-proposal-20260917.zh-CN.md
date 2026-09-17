@@ -1,8 +1,8 @@
 # R30 隔离 AI 超时预算验收方案
 
-英文原版为 `R30-ai-timeout-budget-proposal-20260917.md`，本文是等价中文审阅副本。提案 `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`；运行 `r30-20260917-a`。状态 **EXECUTION_BLOCKED_OFFICIAL_PRICE_MISMATCH / CLAIM_UNCONSUMED / ZERO_EXTERNAL_CALLS**。
+英文原版为 `R30-ai-timeout-budget-proposal-20260917.md`，本文是等价中文审阅副本。提案 `R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1`；运行 `r30-20260917-a`。状态 **AUTHORIZED / PRIOR_ZERO_CALL_STOP_RECORDED / CLAIM_UNCONSUMED / EXACT_EXECUTION_PENDING**。
 
-批准后更新：执行前立即复核的官方价格页面显示更高的 `DeepSeek-V4-Pro-0813` 峰值/非峰值价格，使 USD `0.05884032` 的峰值估算与 USD `0.02942016` 的非峰值估算均超过审阅包已批准的 USD `0.01582704`。未发送请求。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
+批准后更正：执行前立即复核的官方价格页面显示更高的 `DeepSeek-V4-Pro-0813` 峰值/非峰值价格，对应 USD `0.05884032` 的峰值估算与 USD `0.02942016` 的非峰值估算，而冻结估算为 USD `0.01582704`。首次尝试在创建 claim 前停止，未发送请求；该记账仍有效，但 USD `0.01582704` 是披露的估算，不是账单保证或用户设定的金额上限。用户批准了一次请求并接受其可能费用；路由、原文、提示词、请求体和物理调用上限均未改变。详见 `R30-ai-timeout-budget-execution-20260917.zh-CN.md`。
 
 ## 目标与证据边界
 
@@ -46,6 +46,8 @@ HTTPX 0.28.1 文档区分连接、读取、写入和连接池超时。Python 3.1
 在 `2026-09-17T09:43:04+08:00`，官方 Chat Completions 页面记录了 `POST /chat/completions`、模型别名 `deepseek-v4-pro`、非思考模式、JSON object 输出与 `max_tokens`。官方价格页将其标为 `DeepSeek-V4-Pro`，缓存未命中输入价为 USD `0.435`/M、缓存命中输入价为 USD `0.003625`/M、输出价为 USD `0.87`/M。这与 R29 较早的 `DeepSeek-V4-Pro-0813` 以及 USD `1.32`/M、USD `3.96`/M 快照不同。来源：https://api-docs.deepseek.com/api/create-chat-completion/ 和 https://api-docs.deepseek.com/quick_start/pricing/。
 
 按向上取整的 `20,000` 缓存未命中输入 Token 与不变的完整 `8,192` 输出 Token 上限计算，一次请求保守估算为 USD `0.01582704`（`20000*0.435/1e6 + 8192*0.87/1e6`）。真实分词、缓存划分、输出长度、计费、税费及账户调整未知。延长本地等待不会增大 `max_tokens`。任何获批派发前立即重查两份官方页面；不充值、不探测账户。
+
+随后直接打开官方页面复核时，路由与别名保持不变，但页面显示峰值输入/输出价格为 USD `1.32`/M 与 USD `3.96`/M，非峰值价格为 USD `0.66`/M 与 USD `1.98`/M。按同一固定算术边界，对应峰值 USD `0.05884032`、非峰值 USD `0.02942016`。该价格冲突作为证据保留；它不改变冻结审阅包字节，也不改变用户对一次请求及其可能费用的批准。
 
 ## 执行与停止规则
 
