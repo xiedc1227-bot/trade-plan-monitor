@@ -266,6 +266,25 @@ class AlertOutbox:
             acknowledged_at=None,
         )
 
+    def enqueue_recoverable(
+        self, payload: AlertPayload | ExplicitAlertPayload,
+    ) -> AlertEvent | ExplicitAlertEvent:
+        """Opt in to atomic initial HOLD metadata in the caller's transaction.
+
+        Existing callers keep their current behavior. A dedup hit initializes only
+        missing metadata; it cannot replace classification or assign new provenance.
+        """
+        from trade_plan_monitor.notifications.delivery_eligibility import (
+            DeliveryEligibilityRepository,
+        )
+
+        event = (
+            self.enqueue_explicit(payload)
+            if type(payload) is ExplicitAlertPayload else self.enqueue(payload)
+        )
+        DeliveryEligibilityRepository(self._session, clock=self._clock).initialize(event.event_id)
+        return event
+
     def has_dedup_key(self, dedup_key: str) -> bool:
         """Return whether one validated durable alert identity already exists."""
 

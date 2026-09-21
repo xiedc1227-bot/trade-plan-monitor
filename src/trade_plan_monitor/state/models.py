@@ -223,6 +223,43 @@ class AlertEvent(Base):
     acknowledged_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class AlertDeliveryEligibility(Base):
+    """Recovery classification receipts, never standing channel-send permits."""
+
+    __tablename__ = "alert_delivery_eligibility"
+    __table_args__ = (
+        CheckConstraint("schema_version = 1", name="ck_delivery_eligibility_schema"),
+        CheckConstraint("revision >= 0", name="ck_delivery_eligibility_revision"),
+        CheckConstraint(
+            "status IN ('HOLD', 'ELIGIBLE', 'SUPPRESS')", name="ck_delivery_eligibility_status",
+        ),
+        CheckConstraint(
+            "delivery_class IN ('INTRADAY_ACTIONABLE', 'STATE_RISK')",
+            name="ck_delivery_eligibility_class",
+        ),
+        CheckConstraint(
+            "status != 'ELIGIBLE' OR (barrier_json IS NOT NULL AND result_hash IS NOT NULL)",
+            name="ck_delivery_eligibility_evidence",
+        ),
+        CheckConstraint(
+            "delivery_class != 'STATE_RISK' OR expires_at IS NULL",
+            name="ck_delivery_eligibility_risk_expiry",
+        ),
+    )
+
+    event_id: Mapped[str] = mapped_column(ForeignKey("alert_event.id"), primary_key=True)
+    schema_version: Mapped[int] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(Integer)
+    delivery_class: Mapped[str] = mapped_column(String(32))
+    source_cutoff: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
+    expires_at: Mapped[str | None] = mapped_column(String(TIMESTAMP_LENGTH))
+    status: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str] = mapped_column(String(64))
+    barrier_json: Mapped[str | None] = mapped_column(Text)
+    result_hash: Mapped[str | None] = mapped_column(String(HASH_LENGTH))
+    updated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
 class MonitorEvent(Base):
     """Append-only business event used for durable monitor invalidation."""
 
