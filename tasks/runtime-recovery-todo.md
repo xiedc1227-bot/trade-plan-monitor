@@ -21,7 +21,7 @@ See paired evidence in `docs/verification/2026-09-21-runtime-recovery-foundation
 | RR010 | Reference keys now bind plan family/content, actual activation and stock semantics; post-await cache/admission fences reviewed; broader generation/reconfiguration obligations remain open |
 | RR002 | Paired detailed status/protocol draft added for review; no protocol source/default change or C0/C4 closure |
 | RR011–RR013 policy/storage slices | Explicit-risk classifier and legacy origin proof independently reviewed; isolated legacy applicability classifier, delivery migration/repository and opt-in atomic HOLD enqueue added; RR012 initial-HOLD evaluator transaction wiring implemented and independently reviewed, not enabled in production composition; durable current-evidence reconstruction and dispatcher integration remain open |
-| RR009 | Bounded injected missing-close discovery added; durable completion attribution, historical-state reconstruction and ordered execution remain open |
+| RR009 | Bounded discovery plus a read-only SQLite occurrence/activation evidence reader added; direct provenance beyond proof budgets, historical-state reconstruction and ordered execution remain open |
 | RR011–RR022 | Not completed; use dependencies below, not this incremental checkpoint as rollout approval |
 
 - The user's 2026-09-21 instruction authorizes the approved proposal/map's implementation. Derived provider/recovery contracts accompany isolated, injected foundation slices; unreviewed protocol/business changes and the production default switch remain gated. This authorization does not approve live migration or deployment.
@@ -52,7 +52,13 @@ The rollout position remains core recovery/notification safety, before complete 
 
 The isolated RR009 scanner discovers due legacy close candidates without relying on a pending marker. Actual activation, historical policy, authoritative calendar and exact completion evidence remain distinct inputs. Each call covers at most 32 calendar days; a window boundary never certifies overall recovery. Unknown attribution and possible out-of-order history are explicit. It does not invoke the current evaluator with today's state for historical dates, change the production startup path or send notifications. Evidence is recorded in paired `docs/verification/2026-09-21-missed-close-discovery.md`.
 
-RR009 stays unchecked: next implement durable attribution and authoritative historical-state reconstruction, then chronological execution with activation/generation fences. Existing hash-only claims, later results after holes, current-inventory context and risk write-time semantics must be resolved without rewriting canonical identities or changing trading rules. The scanner is not a recovery barrier or a release gate.
+RR009 stays unchecked: bounded durable attribution is covered by the following checkpoint; authoritative historical-state reconstruction and chronological execution with activation/generation fences remain open. Existing hash-only claims, later results after holes, current-inventory context and risk write-time semantics must be resolved without rewriting canonical identities or changing trading rules. The scanner is not a recovery barrier or a release gate.
+
+### Durable close evidence checkpoint — 2026-09-21
+
+The next RR009 slice shares the already-tested activation-chain proof and reads active scope, calendar, claims, complete results and publications in one owned SQLite snapshot. Occurrence proof does not depend on alert creation or risk signal type. Missing/corrupt/oversized/wrong-activation evidence remains unknown, and absence additionally requires a bounded orphan-publication check. The publication-history budget can conservatively exhaust in normal long-running use; this is a documented pending direct-provenance requirement before rollout, not a claim that arbitrary history is recoverable.
+
+See paired `docs/verification/2026-09-21-close-recovery-evidence.md`. RR009 is still open for authoritative historical-state reconstruction and safe chronological execution; no replay, real notification, schema migration or production default was enabled. Current-snapshot facts are not a lasting mutation/send permit.
 
 ## Specification gate
 
