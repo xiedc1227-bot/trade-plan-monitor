@@ -533,10 +533,20 @@ def test_r32_internal_execution_cannot_bypass_parent_watchdog(
     assert "unrecognized arguments" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("approved_day", [True, False])
 def test_r32_execution_snapshot_detects_config_change(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    approved_day: bool,
 ) -> None:
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            observed = datetime(2026, 9, 17 if approved_day else 18, 12, tzinfo=_SHANGHAI)
+            return observed.astimezone(tz) if tz is not None else observed.replace(tzinfo=None)
+
+    # Exercise the real date guard without depending on the machine's current date.
+    monkeypatch.setattr(r32, "datetime", FrozenDateTime)
     config_path = _config(tmp_path / "app.yaml")
     expected_hash = r32._file_sha256(config_path)
     monkeypatch.setattr(r32, "EXPECTED_CONFIG_HASH", expected_hash)
@@ -553,7 +563,7 @@ def test_r32_execution_snapshot_detects_config_change(
         expected_head="reviewed-head",
         approval_attestation_path=tmp_path / "approval.json",
         expected_approval_attestation_hash="a" * 64,
-    )
+    ) is approved_day
     config_path.write_text(config_path.read_text("utf-8") + "\n# changed\n", encoding="utf-8")
     assert not r32._execution_snapshot_matches(
         config_path=config_path,
