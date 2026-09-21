@@ -21,7 +21,8 @@ See paired evidence in `docs/verification/2026-09-21-runtime-recovery-foundation
 | RR010 | Reference keys now bind plan family/content, actual activation and stock semantics; post-await cache/admission fences reviewed; broader generation/reconfiguration obligations remain open |
 | RR002 | Paired detailed status/protocol draft added for review; no protocol source/default change or C0/C4 closure |
 | RR011–RR013 policy/storage slices | Explicit-risk classifier and legacy origin proof independently reviewed; isolated legacy applicability classifier, delivery migration/repository and opt-in atomic HOLD enqueue added; RR012 initial-HOLD evaluator transaction wiring implemented and independently reviewed, not enabled in production composition; durable current-evidence reconstruction and dispatcher integration remain open |
-| RR009, RR011–RR022 | Not completed; use dependencies below, not this incremental checkpoint as rollout approval |
+| RR009 | Bounded injected missing-close discovery added; durable completion attribution, historical-state reconstruction and ordered execution remain open |
+| RR011–RR022 | Not completed; use dependencies below, not this incremental checkpoint as rollout approval |
 
 - The user's 2026-09-21 instruction authorizes the approved proposal/map's implementation. Derived provider/recovery contracts accompany isolated, injected foundation slices; unreviewed protocol/business changes and the production default switch remain gated. This authorization does not approve live migration or deployment.
 - Every code task starts with a meaningful failing test; preserve unrelated changes and old canonical identity goldens. Do not skip tests merely because they encode the old behavior: replace only the specifically superseded assertions with approved new-contract tests.
@@ -46,6 +47,12 @@ See `docs/verification/2026-09-21-recovery-delivery-metadata.md` and ADR 0007 wi
 The requested push synchronized `964fde2` and `6dff7ae` to the existing GitHub branch before this continuation. RR012 now proceeds as an isolated transaction slice: strict constructor opt-in routes both legacy evaluation paths and explicit alert writes through the existing HOLD helper. The helper normalizes the outbox's aware clock before metadata initialization. Decision rollback must include claims/results/transitions/alerts/metadata/audit and exclude previously committed market facts. Details and final verification are tracked in paired `docs/verification/2026-09-21-recovery-evaluation-transactions.md`.
 
 The rollout position remains core recovery/notification safety, before complete production integration: C0–C5 are not closed by these slices. No existing factory enables the flag; it does not cause the dispatcher to enforce HOLD. Current-authority reconstruction, final send admission, lifecycle/status/UI wiring and process-restart acceptance remain prerequisites to RR020. Local commits made after the requested push are not implicitly pushed or deployed.
+
+### Missing-close discovery checkpoint — 2026-09-21
+
+The isolated RR009 scanner discovers due legacy close candidates without relying on a pending marker. Actual activation, historical policy, authoritative calendar and exact completion evidence remain distinct inputs. Each call covers at most 32 calendar days; a window boundary never certifies overall recovery. Unknown attribution and possible out-of-order history are explicit. It does not invoke the current evaluator with today's state for historical dates, change the production startup path or send notifications. Evidence is recorded in paired `docs/verification/2026-09-21-missed-close-discovery.md`.
+
+RR009 stays unchecked: next implement durable attribution and authoritative historical-state reconstruction, then chronological execution with activation/generation fences. Existing hash-only claims, later results after holes, current-inventory context and risk write-time semantics must be resolved without rewriting canonical identities or changing trading rules. The scanner is not a recovery barrier or a release gate.
 
 ## Specification gate
 
