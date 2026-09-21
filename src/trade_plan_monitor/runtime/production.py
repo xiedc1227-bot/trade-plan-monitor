@@ -1,6 +1,7 @@
 """Certified live providers bound to the persistent monitoring services."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from uuid import UUID
@@ -22,14 +23,16 @@ from trade_plan_monitor.live_profiles import (
 )
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar, five_minute_bucket_end
 from trade_plan_monitor.market_data.models import MinuteBar
-from trade_plan_monitor.market_data.sessions import expected_minute_ends
+from trade_plan_monitor.market_data.sessions import SourceTimeLabel, expected_minute_ends
 from trade_plan_monitor.market_data.tushare import TushareMarketDataProvider
 from trade_plan_monitor.market_data.tushare_client import create_tushare_client
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
 from trade_plan_monitor.market_index.tushare import (
+    TushareMarketIndexCapabilityStatus,
     TushareMarketIndexProvider,
     TushareMarketIndexProviderError,
+    TushareMarketIndexSourceTimeLabel,
     certified_tushare_market_index_profile,
     unverified_tushare_market_index_profile,
 )
@@ -41,6 +44,10 @@ from trade_plan_monitor.runtime.market_indexes import (
     RuntimeMarketIndexService,
 )
 from trade_plan_monitor.runtime.production_context import ProductionContextBuilder
+from trade_plan_monitor.runtime.provider_contract import (
+    ProviderSemanticContract,
+    load_semantic_contract,
+)
 from trade_plan_monitor.runtime.recovery import RecoveryBatchResult, RecoveryService
 from trade_plan_monitor.runtime.request_control import (
     LIVE_TUSHARE_MIN_INTERVAL,
@@ -65,6 +72,23 @@ from trade_plan_monitor.runtime.symbol_service import SymbolService
 from trade_plan_monitor.state.models import EvaluationKind, PlanVersionStatus
 
 _REFERENCE_DAYS = 366
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticContractBinding:
+    """The durable path and interpretation revision captured for one runtime scope."""
+
+    path: Path
+    expected_revision: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProductionSemanticBindings:
+    """Explicit opt-in; an absent scope blocks only that scope, with no legacy fallback."""
+
+    stock: SemanticContractBinding | None
+    index: SemanticContractBinding | None
+    installed_sdk_version: Callable[[], str | None] | None = None
 
 
 class ReferenceDataUnavailableError(RuntimeError):
@@ -161,12 +185,13 @@ class ProductionMonitorPipeline:
         *,
         configuration: TushareConfiguration,
         certification_directory: Path,
-        stock_certification: StockLiveCertification,
+        stock_certification: StockLiveCertification | None,
         clock: Clock,
         request_controller: TushareRequestController,
         unit_of_work_factory: UnitOfWorkFactory,
         runtime_generation: UUID,
         publisher: CommittedEventPublisher,
+        semantic_bindings: ProductionSemanticBindings | None = None,
     ) -> None:
         self._clock = clock
         self._controller = request_controller
@@ -174,6 +199,17 @@ class ProductionMonitorPipeline:
         self._certifications = certification_directory
         self._endpoint = str(configuration.api_url).rstrip("/")
         self._stock_evidence = stock_certification
+        self._semantic_bindings = semantic_bindings
+        self._stock_semantics = self._load_semantic_binding("STOCK")
+        self._index_semantics = self._load_semantic_binding("BOARD_INDEX")
+        if semantic_bindings is None:
+            if stock_certification is None:
+                raise ValueError("legacy pipeline requires stock certification")
+            stock_label = stock_certification.source_time_label
+        elif self._stock_semantics is None:
+            stock_label = SourceTimeLabel.UNVERIFIED
+        else:
+            stock_label = SourceTimeLabel(self._stock_semantics.source_time_label)
         self._calendar: dict[date, bool] = {}
         self._reference_key: tuple[date, tuple[str, ...]] | None = None
         self._deadline_plans: tuple[ExecutableTradePlan, ...] | None = None
@@ -187,12 +223,16 @@ class ProductionMonitorPipeline:
             ),
             now=clock.now,
             is_open_on=self.is_open_on,
-            source_time_label=stock_certification.source_time_label,
+            source_time_label=stock_label,
         )
-        index_evidence = load_index_certification(
-            certification_directory / "tushare-board-index-live.json",
-            now=clock.now(),
-            endpoint_url=self._endpoint,
+        index_evidence = (
+            None
+            if semantic_bindings is not None
+            else load_index_certification(
+                certification_directory / "tushare-board-index-live.json",
+                now=clock.now(),
+                endpoint_url=self._endpoint,
+            )
         )
         index_profile = (
             certified_tushare_market_index_profile(
@@ -202,6 +242,25 @@ class ProductionMonitorPipeline:
             if index_evidence is not None and index_evidence.ready_indexes
             else unverified_tushare_market_index_profile()
         )
+        if semantic_bindings is not None:
+            index_profile = unverified_tushare_market_index_profile()
+            if self._index_semantics is not None:
+                # The adapter's READY enum authorizes routing within verified scope.
+                # It is not current permission or runtime health; snapshots still need
+                # validated current responses and no health state is copied here.
+                index_profile = certified_tushare_market_index_profile(
+                    capabilities={
+                        code: (
+                            TushareMarketIndexCapabilityStatus.READY
+                            if code.value in self._index_semantics.capability_scope
+                            else TushareMarketIndexCapabilityStatus.DEFERRED
+                        )
+                        for code in MarketIndexCode
+                    },
+                    source_time_label=TushareMarketIndexSourceTimeLabel(
+                        self._index_semantics.source_time_label
+                    ),
+                )
         self._index_evidence = index_evidence
         self.index_provider = TushareMarketIndexProvider(
             profile=index_profile,
@@ -262,7 +321,35 @@ class ProductionMonitorPipeline:
             realtime_pending=self._realtime_pending,
         )
 
+    def _load_semantic_binding(self, surface: str) -> ProviderSemanticContract | None:
+        bindings = self._semantic_bindings
+        if bindings is None:
+            return None
+        binding = bindings.stock if surface == "STOCK" else bindings.index
+        if binding is None:
+            return None
+        version_options = (
+            {}
+            if bindings.installed_sdk_version is None
+            else {"installed_sdk_version": bindings.installed_sdk_version}
+        )
+        record = load_semantic_contract(
+            binding.path, now=self._clock.now(), endpoint_url=self._endpoint, **version_options
+        )
+        if (
+            record is None
+            or record.surface != surface
+            or record.semantic_revision != binding.expected_revision
+        ):
+            return None
+        return record
+
     def _stock_certification_current(self) -> bool:
+        if self._semantic_bindings is not None:
+            return (
+                self._stock_semantics is not None
+                and self._load_semantic_binding("STOCK") is not None
+            )
         evidence = load_stock_certification(
             self._certifications / "tushare-stock-live.json",
             now=self._clock.now(),
@@ -271,6 +358,11 @@ class ProductionMonitorPipeline:
         return evidence is not None and evidence.ready and evidence == self._stock_evidence
 
     def _index_certification_current(self) -> bool:
+        if self._semantic_bindings is not None:
+            return (
+                self._index_semantics is not None
+                and self._load_semantic_binding("BOARD_INDEX") is not None
+            )
         evidence = load_index_certification(
             self._certifications / "tushare-board-index-live.json",
             now=self._clock.now(),
@@ -534,7 +626,7 @@ class ProductionMonitorPipeline:
             return await self.evaluations.recover_transient_market_indexes(
                 evaluated_at=max(self._clock.now(), deadline.due_at)
             )
-        if not self._stock_certification_current():
+        if self._semantic_bindings is None and not self._stock_certification_current():
             raise RuntimeError("stock certification must be refreshed before execution")
         plans = self.active_plans(deadline.trade_date)
         reference_key = deadline.trade_date, tuple(plan.symbol for plan in plans)
@@ -557,12 +649,16 @@ class ProductionMonitorPipeline:
                 )
                 if evaluation_due:
                     if isinstance(plan, ExplicitTradePlan):
-                        if deadline.bar_end is not None and work.explicit_rules.get(
-                            plan_hash=plan_sha256(plan),
-                            symbol=plan.symbol,
-                            target_bucket_end=deadline.bar_end,
-                            activation_revision=active.revision,
-                        ) is not None:
+                        if (
+                            deadline.bar_end is not None
+                            and work.explicit_rules.get(
+                                plan_hash=plan_sha256(plan),
+                                symbol=plan.symbol,
+                                target_bucket_end=deadline.bar_end,
+                                activation_revision=active.revision,
+                            )
+                            is not None
+                        ):
                             continue
                     elif work.evaluations.has_claim(
                         plan_hash=plan_sha256(plan),
@@ -573,9 +669,7 @@ class ProductionMonitorPipeline:
                             else EvaluationKind.OFFICIAL_CLOSE
                         ),
                         bucket_end=deadline.bar_end,
-                        official_trade_date=(
-                            None if deadline.bar_end else deadline.trade_date
-                        ),
+                        official_trade_date=(None if deadline.bar_end else deadline.trade_date),
                         formula_version=plan.monitoring.indicator_formula_version,
                     ):
                         continue
@@ -583,6 +677,8 @@ class ProductionMonitorPipeline:
         if not selected:
             await self._refresh_dashboard_indexes(deadline)
             return ()
+        if not self._stock_certification_current():
+            raise RuntimeError("stock certification must be refreshed before execution")
         if self._reference_key != reference_key:
             await self.refresh_references(deadline.trade_date)
         self._deadline_plans = tuple(selected)
