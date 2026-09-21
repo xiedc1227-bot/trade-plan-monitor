@@ -1,7 +1,7 @@
 """Delivery metadata never mutates canonical alerts or grants standing send authority."""
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
+from datetime import UTC, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from threading import Barrier
@@ -578,6 +578,22 @@ def test_reused_session_refreshes_canonical_alert_when_reading_receipt(database)
         with pytest.raises(DeliveryMetadataError):
             _repository(session).get(event.event_id)
         assert cached.message_text == "corrupt"
+
+
+@pytest.mark.parametrize("clock_timezone", [UTC, timezone(timedelta(hours=-4))])
+def test_recoverable_enqueue_normalizes_the_outbox_aware_clock(database, clock_timezone):
+    _, factory, _ = database
+    with factory.begin() as session:
+        outbox = AlertOutbox(
+            session,
+            clock=lambda: NOW.astimezone(clock_timezone),
+            id_factory=lambda: str(uuid4()),
+        )
+        event = outbox.enqueue_recoverable(_pressure_payload())
+        record = _repository(session).get(event.event_id)
+        assert record.status.value == "HOLD"
+        assert record.updated_at == event.created_at == NOW
+        assert record.updated_at.utcoffset() == timedelta(hours=8)
 
 
 def test_recoverable_outbox_enqueue_commits_hold_with_event_and_never_resets_it(database):

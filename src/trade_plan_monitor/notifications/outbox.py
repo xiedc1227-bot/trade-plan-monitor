@@ -282,7 +282,7 @@ class AlertOutbox:
             self.enqueue_explicit(payload)
             if type(payload) is ExplicitAlertPayload else self.enqueue(payload)
         )
-        DeliveryEligibilityRepository(self._session, clock=self._clock).initialize(event.event_id)
+        DeliveryEligibilityRepository(self._session, clock=self._now).initialize(event.event_id)
         return event
 
     def has_dedup_key(self, dedup_key: str) -> bool:
