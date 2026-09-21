@@ -7,11 +7,13 @@ results; the caller must additionally check activation inside its commit transac
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from trade_plan_monitor.runtime.clock import _canonical_shanghai
+from trade_plan_monitor.runtime.clock import Clock, _canonical_shanghai
 
 MAX_RECOVERY_SCOPES = 32
 MAINTENANCE_INTERVAL = timedelta(seconds=30)
@@ -198,3 +200,100 @@ class RecoverySchedule:
             )
             for entry in self._entries.values()
         )
+
+
+class RecoveryCoordinator:
+    """Own an injected recovery loop without changing production composition.
+
+    Requirements are local reads, not provider probes. Their revisions include
+    configuration/activation changes as well as semantic and target identity.
+    Execute owns one bounded step through existing request control and returns a
+    RETRY, READY or BLOCKED; storage/programming faults must propagate.
+    Readiness here describes only that step, never permission to evaluate/send.
+
+    A stop drains the active callback before returning. Cancellation propagates
+    through that callback; its physical worker remains owned by request control
+    until the controller is drained by lifecycle cleanup. This object is single
+    use, so neither cancellation nor a fault can recycle an outstanding ticket.
+    """
+
+    def __init__(
+        self,
+        *,
+        clock: Clock,
+        requirements: Callable[[datetime], tuple[RecoveryRequirement, ...]],
+        execute: Callable[[RecoveryTicket], Awaitable[RecoveryStepResult]],
+    ) -> None:
+        self._clock = clock
+        self._requirements = requirements
+        self._execute = execute
+        self._schedule = RecoverySchedule()
+        self._wake = asyncio.Event()
+        self._started = False
+        self._running = False
+
+    @property
+    def running(self) -> bool:
+        return self._running
+
+    def wake(self) -> None:
+        """Signal a local change on the owning event loop, coalescing notifications."""
+
+        self._wake.set()
+
+    def snapshot(self) -> tuple[RecoveryScopeSnapshot, ...]:
+        return self._schedule.snapshot()
+
+    async def run(self, *, stop: asyncio.Event) -> None:
+        if self._started:
+            raise RuntimeError("recovery coordinator already has an owner")
+        self._started = True
+        self._running = True
+        try:
+            while not stop.is_set():
+                # Clear before the local snapshot, never after an awaited step:
+                # changes signalled during work must survive until reconciliation.
+                self._wake.clear()
+                now = _canonical_shanghai(self._clock.now())
+                self._schedule.synchronize(self._requirements(now))
+                ticket = self._schedule.claim(now=now)
+                if ticket is None:
+                    await self._wait(self._schedule.next_wake_at(now=now), stop)
+                    continue
+                result = await self._execute(ticket)
+                completed_at = _canonical_shanghai(self._clock.now())
+                if not isinstance(result, RecoveryStepResult):
+                    raise TypeError("recovery step must return RecoveryStepResult")
+                if result.disposition is RecoveryDisposition.PENDING:
+                    raise ValueError("a completed step must report READY, RETRY or BLOCKED")
+                if result.next_retry_at is not None and result.next_retry_at <= completed_at:
+                    # Clock jumps or a delayed callback can consume the reported
+                    # retry window. Reconcile at maintenance instead of crashing
+                    # or repeatedly admitting an immediately failing callback.
+                    result = RecoveryStepResult.retry(completed_at + MAINTENANCE_INTERVAL)
+                self._schedule.synchronize(self._requirements(completed_at))
+                self._schedule.complete(ticket, result)
+                # An async callback may complete without suspending. Let stop and
+                # configuration-change tasks run even when many scopes are ready.
+                await asyncio.sleep(0)
+        finally:
+            self._running = False
+
+    async def _wait(self, deadline: datetime, stop: asyncio.Event) -> None:
+        waiters = (
+            asyncio.create_task(self._clock.sleep_until(deadline)),
+            asyncio.create_task(stop.wait()),
+            asyncio.create_task(self._wake.wait()),
+        )
+        try:
+            done, _ = await asyncio.wait(
+                waiters,
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=MAINTENANCE_INTERVAL.total_seconds(),
+            )
+            for task in done:
+                task.result()
+        finally:
+            for task in waiters:
+                task.cancel()
+            await asyncio.gather(*waiters, return_exceptions=True)
