@@ -215,12 +215,37 @@ def load_index_certification(
     return _load_profile(path, IndexLiveCertification, now=now, endpoint_url=endpoint_url)
 
 
+def read_stock_certification_history(
+    path: Path,
+    *,
+    now: datetime,
+    endpoint_url: str,
+) -> StockLiveCertification | None:
+    """Read integrity-checked historical evidence, never current operational health."""
+    return _load_profile(
+        path, StockLiveCertification, now=now, endpoint_url=endpoint_url, require_fresh=False
+    )
+
+
+def read_index_certification_history(
+    path: Path,
+    *,
+    now: datetime,
+    endpoint_url: str,
+) -> IndexLiveCertification | None:
+    """Read integrity-checked historical evidence, never current operational health."""
+    return _load_profile(
+        path, IndexLiveCertification, now=now, endpoint_url=endpoint_url, require_fresh=False
+    )
+
+
 def _load_profile[CertificationT: _LiveCertification](
     path: Path,
     profile_type: type[CertificationT],
     *,
     now: datetime,
     endpoint_url: str,
+    require_fresh: bool = True,
 ) -> CertificationT | None:
     if not isinstance(path, Path):
         raise TypeError("path must be a Path")
@@ -239,7 +264,7 @@ def _load_profile[CertificationT: _LiveCertification](
         profile.evidence_hash != profile.calculated_hash()
         or profile.endpoint_url != endpoint_url.rstrip("/")
         or now < profile.observed_at
-        or now > profile.valid_until
+        or (require_fresh and now > profile.valid_until)
     ):
         return None
     return profile
@@ -253,5 +278,7 @@ __all__ = [
     "create_stock_certification",
     "load_index_certification",
     "load_stock_certification",
+    "read_index_certification_history",
+    "read_stock_certification_history",
     "write_live_certification",
 ]

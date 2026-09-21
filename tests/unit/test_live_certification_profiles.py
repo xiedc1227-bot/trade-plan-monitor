@@ -17,6 +17,7 @@ from trade_plan_monitor.live_profiles import (
     create_stock_certification,
     load_index_certification,
     load_stock_certification,
+    read_stock_certification_history,
     write_live_certification,
 )
 from trade_plan_monitor.market_data.models import (
@@ -102,6 +103,29 @@ def test_modified_profile_fails_closed(tmp_path: Path) -> None:
     assert load_stock_certification(path, now=OBSERVED_AT, endpoint_url=ENDPOINT) is None
 
 
+def test_historical_reader_retains_integrity_without_current_health(tmp_path: Path) -> None:
+    path = tmp_path / "stock.json"
+    profile = _stock_profile()
+    write_live_certification(path, profile)
+    later = OBSERVED_AT + timedelta(days=30)
+    assert read_stock_certification_history(path, now=later, endpoint_url=ENDPOINT) == profile
+    assert load_stock_certification(path, now=later, endpoint_url=ENDPOINT) is None
+    assert (
+        read_stock_certification_history(
+            path, now=OBSERVED_AT - timedelta(seconds=1), endpoint_url=ENDPOINT
+        )
+        is None
+    )
+    assert (
+        read_stock_certification_history(path, now=later, endpoint_url="https://other.example")
+        is None
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["sourceTimeLabel"] = "START"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert read_stock_certification_history(path, now=later, endpoint_url=ENDPOINT) is None
+
+
 def test_index_profile_is_independent_and_can_defer_bse_50(
     tmp_path: Path,
 ) -> None:
@@ -153,9 +177,7 @@ def test_legacy_index_profile_remains_valid_without_turnover_benchmark(
     )
     payload = profile.model_dump(mode="json", by_alias=True)
     del payload["capabilities"][MarketIndexCode.SHENZHEN_A_SHARE.value]
-    payload_without_hash = {
-        key: value for key, value in payload.items() if key != "evidenceHash"
-    }
+    payload_without_hash = {key: value for key, value in payload.items() if key != "evidenceHash"}
     encoded = json.dumps(
         payload_without_hash,
         ensure_ascii=True,
