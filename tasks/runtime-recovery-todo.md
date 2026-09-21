@@ -16,15 +16,24 @@ See paired evidence in `docs/verification/2026-09-21-runtime-recovery-foundation
 | RR003 | Implemented and independently reviewed; integrity, compatibility and concurrent no-clobber import tests pass |
 | RR004 | Injected pipeline gates implemented and reviewed; composition and independent scheduling after a selected-stock failure remain open |
 | RR005 | Checkpoint model/repository/migration and SQLite latest-head assertions implemented and reviewed |
-| RR006 | Durable admission and pure `RecoverySchedule` implemented/reviewed; continuous runtime integration remains open |
-| RR007–RR008 | Pure `recovery_targets.py` and exact coverage tests implemented/reviewed; acquisition/replay integration remains open |
-| RR002, RR009–RR022 | Not completed; use dependencies below, not this foundation checkpoint as rollout approval |
+| RR006 | Durable admission, `RecoverySchedule` and injected single-owner `RecoveryCoordinator` implemented/reviewed; production lifecycle integration remains open |
+| RR007–RR008 | Pure targets plus injected single-symbol acquisition verify exact committed coverage; composed coordinator/controller/SQLite recovery tested; historical acquisition/replay and production integration remain open |
+| RR010 | Reference keys now bind plan family/content, actual activation and stock semantics; post-await cache/admission fences reviewed; broader generation/reconfiguration obligations remain open |
+| RR002 | Paired detailed status/protocol draft added for review; no protocol source/default change or C0/C4 closure |
+| RR011–RR013 policy slice | User-approved latest-state explicit-risk classifier has 50 cases; read-only legacy origin proof has 45 cases, both independently reviewed; legacy latest-applicable policy recorded with evidence constraints; no delivery migration, evaluator-transaction or dispatcher integration yet |
+| RR009, RR011–RR022 | Not completed; use dependencies below, not this incremental checkpoint as rollout approval |
 
 - The user's 2026-09-21 instruction authorizes the approved proposal/map's implementation. Derived provider/recovery contracts accompany isolated, injected foundation slices; unreviewed protocol/business changes and the production default switch remain gated. This authorization does not approve live migration or deployment.
 - Every code task starts with a meaningful failing test; preserve unrelated changes and old canonical identity goldens. Do not skip tests merely because they encode the old behavior: replace only the specifically superseded assertions with approved new-contract tests.
 - Paths below are repository-relative and prospective where marked NEW. Keep each slice at approximately 3–5 source/test files; split before work if the actual scope expands. Generated files and paired specification updates receive their own tasks.
 - Reuse the current default production behavior until the replacement path is complete enough to pass its checkpoint. Use dependency injection for offline slices, not a second permanent production framework. Enable the new default only at RR020 after all prerequisite contracts and guards exist.
 - Every task records changed paths, exact commands, observed results and outstanding failures. Do not claim the requested model/effort ran unless the task execution can confirm it.
+
+### Continuation checkpoint — 2026-09-21
+
+The continuation adds isolated RR006/RR008/RR010 slices; it does not mark these full tasks complete. Details and observed verification are in `docs/verification/2026-09-21-runtime-recovery-increments.md` and its Chinese copy. The new coordinator stays alive for typed dependency retries with a 30-second local maintenance ceiling, while storage/programming faults remain visible. Scoped acquisition never upgrades partial, future or wrong-date data to ready. Queue-time local abort preserves existing provider backoff. Reference cache reuse cannot cross a plan-family or actual activation change.
+
+Latest-state explicit-risk and read-only legacy-origin slices are independently reviewed; the user-approved latest-only repeated exit rule is recorded but not dispatch-wired. Final functional verification reports 3095 passed and 4 pre-existing failures; the unchanged heavy backtest file passed in the earlier full run. The R32 real-date-dependent test was corrected without changing its execution guard. No default switch, live action, merge or deployment is authorized by this checkpoint.
 
 ## Specification gate
 
