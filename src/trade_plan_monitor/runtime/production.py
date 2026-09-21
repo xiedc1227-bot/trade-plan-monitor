@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
+from typing import Literal
 from uuid import UUID
 
 from trade_plan_monitor.ai.review import load_explicit_plan_draft_json
@@ -93,6 +94,34 @@ class ProductionSemanticBindings:
 
 class ReferenceDataUnavailableError(RuntimeError):
     """A completed reference request yielded no usable data required for monitoring."""
+
+
+class ReferenceDependenciesChangedError(ReferenceDataUnavailableError):
+    """Reference acquisition no longer belongs to its captured plan activation."""
+
+    def __init__(self) -> None:
+        super().__init__("reference dependencies changed during acquisition")
+
+
+@dataclass(frozen=True, slots=True)
+class PlanReferenceDependency:
+    """The complete plan hash binds its requirements to its actual active revision."""
+
+    symbol: str
+    family: Literal["LEGACY", "EXPLICIT_RULES"]
+    plan_hash: str
+    plan_version_id: str
+    activation_revision: int
+    activated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceDependencyKey:
+    """Reference reuse excludes evidence metadata and unrelated display indexes."""
+
+    trade_date: date
+    plans: tuple[PlanReferenceDependency, ...]
+    stock_semantic_revision: str | None
 
 
 def _load_active_plan(document: str) -> ExecutableTradePlan:
@@ -211,7 +240,7 @@ class ProductionMonitorPipeline:
         else:
             stock_label = SourceTimeLabel(self._stock_semantics.source_time_label)
         self._calendar: dict[date, bool] = {}
-        self._reference_key: tuple[date, tuple[str, ...]] | None = None
+        self._reference_key: ReferenceDependencyKey | None = None
         self._deadline_plans: tuple[ExecutableTradePlan, ...] | None = None
         self._running_deadline = False
         self._gap_repair_due_at: datetime | None = None
@@ -489,6 +518,8 @@ class ProductionMonitorPipeline:
 
     async def refresh_references(self, trade_date: date) -> None:
         plans = self.active_plans(trade_date)
+        captured_key = self._reference_dependency_key(trade_date, plans)
+        self._reference_key = None
         legacy_plans = tuple(plan for plan in plans if isinstance(plan, TradePlan))
         start = trade_date - timedelta(days=_REFERENCE_DAYS)
         end = trade_date + timedelta(days=32)
@@ -532,7 +563,49 @@ class ProductionMonitorPipeline:
             with self._work() as work:
                 work.history.upsert_daily_bars(bars)
                 work.commit()
-        self._reference_key = trade_date, tuple(plan.symbol for plan in plans)
+        current_key = self._reference_dependency_key(trade_date, self.active_plans(trade_date))
+        if captured_key != current_key:
+            raise ReferenceDependenciesChangedError
+        self._reference_key = captured_key
+
+    def _reference_dependency_key(
+        self, trade_date: date, plans: tuple[ExecutableTradePlan, ...],
+    ) -> ReferenceDependencyKey:
+        """Read activation and immutable version together; never trust symbol alone.
+
+        Plan content captures the required dependency set, including family and
+        conditions. Only stock semantics govern these calendar/limits/history
+        references. Operational observation metadata is deliberately excluded.
+        """
+        dependencies = []
+        if plans:
+            with self._work() as work:
+                for plan in plans:
+                    active = work.plans.get_active(plan.symbol)
+                    version = work.plans.get_version(plan.plan_id, plan.version)
+                    plan_hash = plan_sha256(plan)
+                    if (
+                        active is None or version is None
+                        or active.plan_version_id != version.id
+                        or version.plan_hash != plan_hash
+                    ):
+                        raise ReferenceDependenciesChangedError
+                    dependencies.append(PlanReferenceDependency(
+                        symbol=plan.symbol,
+                        family=(
+                            "EXPLICIT_RULES" if isinstance(plan, ExplicitTradePlan) else "LEGACY"
+                        ),
+                        plan_hash=plan_hash, plan_version_id=active.plan_version_id,
+                        activation_revision=active.revision, activated_at=active.activated_at,
+                    ))
+        semantics = (
+            self._load_semantic_binding("STOCK")
+            if getattr(self, "_stock_semantics", None) is not None else None
+        )
+        return ReferenceDependencyKey(
+            trade_date, tuple(sorted(dependencies, key=lambda item: item.symbol)),
+            semantics.semantic_revision if semantics is not None else None,
+        )
 
     async def recover_startup(self, trade_date: date) -> None:
         # Hydrate the calendar even if the independent refresh stage failed.
@@ -629,7 +702,7 @@ class ProductionMonitorPipeline:
         if self._semantic_bindings is None and not self._stock_certification_current():
             raise RuntimeError("stock certification must be refreshed before execution")
         plans = self.active_plans(deadline.trade_date)
-        reference_key = deadline.trade_date, tuple(plan.symbol for plan in plans)
+        reference_key = self._reference_dependency_key(deadline.trade_date, plans)
         cutoff = deadline.bar_end or datetime.combine(
             deadline.trade_date, time(15), deadline.due_at.tzinfo
         )
@@ -681,6 +754,13 @@ class ProductionMonitorPipeline:
             raise RuntimeError("stock certification must be refreshed before execution")
         if self._reference_key != reference_key:
             await self.refresh_references(deadline.trade_date)
+        if (
+            self._reference_key != reference_key
+            or reference_key != self._reference_dependency_key(
+                deadline.trade_date, self.active_plans(deadline.trade_date),
+            )
+        ):
+            raise ReferenceDependenciesChangedError
         self._deadline_plans = tuple(selected)
         self._running_deadline = True
         try:
