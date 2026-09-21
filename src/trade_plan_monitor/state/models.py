@@ -1127,3 +1127,24 @@ __all__ = [
     "TradingCalendar",
     "ZoneEpisode",
 ]
+
+
+class ProviderRecoveryCheckpoint(Base):
+    """Only bounded timing facts; no credentials, payloads, or provider messages."""
+
+    __tablename__ = "provider_recovery_checkpoint"
+    __table_args__ = (
+        CheckConstraint("schema_version = 1", name="ck_provider_recovery_version"),
+        CheckConstraint("failures BETWEEN 0 AND 16", name="ck_provider_recovery_failures"),
+        CheckConstraint(
+            "kind IN ('cooldown', 'permission', 'backoff')", name="ck_provider_recovery_kind"
+        ),
+    )
+
+    provider_identity: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    scope_key: Mapped[str] = mapped_column(String(HASH_LENGTH), primary_key=True)
+    schema_version: Mapped[int] = mapped_column(Integer)
+    retry_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    failures: Mapped[int] = mapped_column(Integer)
+    reason_code: Mapped[str] = mapped_column(String(32))
