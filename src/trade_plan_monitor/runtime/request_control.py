@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import IntEnum, StrEnum
+from hashlib import sha256
 from itertools import count
 from typing import Final, TypeVar
 
@@ -19,6 +20,11 @@ import requests
 
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.clock import Clock, _canonical_shanghai
+from trade_plan_monitor.state.runtime_recovery import (
+    ProviderRecoveryRepository,
+    RecoveryCheckpoint,
+    RecoveryCheckpointError,
+)
 
 T = TypeVar("T")
 
@@ -35,6 +41,7 @@ DEFAULT_SYMBOL_BACKOFF: Final = (
     timedelta(seconds=300),
 )
 DEFAULT_SHARED_RATE_LIMIT_COOLDOWN: Final = timedelta(seconds=300)
+PERMISSION_RECHECK_INTERVAL: Final = timedelta(seconds=300)
 DEFAULT_TUSHARE_QUEUE_LIMIT: Final = 32
 DEFAULT_TUSHARE_BACKOFF_KEY_LIMIT: Final = 64
 LIVE_TUSHARE_EXECUTOR_WORKERS: Final = 1
@@ -382,6 +389,11 @@ class TushareRequestController:
         "_pace_sleep",
         "_rate_limit_cooldown",
         "_timeout_seconds",
+        "_permission_retry_at",
+        "_permission_rechecks",
+        "_recovery_repository",
+        "_recovery_fault",
+        "_persisted_recovery",
     )
 
     def __init__(
@@ -399,6 +411,7 @@ class TushareRequestController:
         rate_limit_cooldown: timedelta = DEFAULT_SHARED_RATE_LIMIT_COOLDOWN,
         monotonic: Callable[[], float] = time.monotonic,
         pace_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        recovery_repository: ProviderRecoveryRepository | None = None,
     ) -> None:
         self._validate_configuration(
             clock=clock,
@@ -442,6 +455,35 @@ class TushareRequestController:
         self._cooldown_until: datetime | None = None
         self._closed = False
         self._inflight_futures: set[asyncio.Future[object]] = set()
+        self._permission_retry_at: dict[TushareOperation, datetime] = {}
+        self._permission_rechecks: dict[TushareOperation, asyncio.Task[object]] = {}
+        self._recovery_repository = recovery_repository
+        self._recovery_fault = False
+        self._persisted_recovery: tuple[RecoveryCheckpoint, ...] = ()
+        if recovery_repository is not None:
+            acquired = False
+            try:
+                recovery_repository.acquire_owner(self)
+                acquired = True
+                restored = recovery_repository.load()
+            except RecoveryCheckpointError:
+                if acquired:
+                    recovery_repository.release_owner(self)
+                self._executor.shutdown(wait=False, cancel_futures=True)
+                raise
+            self._persisted_recovery = tuple(
+                sorted(restored, key=lambda item: (item.kind, item.scope_key))
+            )
+            for item in restored:
+                if item.kind == "cooldown":
+                    self._cooldown_until = item.retry_at
+                elif item.kind == "permission":
+                    operation = TushareOperation(item.scope_key)
+                    self._blocked_operations.add(operation)
+                    self._permission_retry_at[operation] = item.retry_at
+                else:
+                    self._backoff_failures[item.scope_key] = item.failures
+                    self._backoff_until[item.scope_key] = item.retry_at
 
     @staticmethod
     def _validate_configuration(
@@ -523,7 +565,7 @@ class TushareRequestController:
         return self._cooldown_until
 
     def backoff_until(self, work_key: str) -> datetime | None:
-        return self._backoff_until.get(self._validate_work_key(work_key))
+        return self._backoff_until.get(self._storage_key(work_key))
 
     def is_permission_blocked(self, operation: TushareOperation) -> bool:
         if not isinstance(operation, TushareOperation):
@@ -534,6 +576,68 @@ class TushareRequestController:
         if not isinstance(operation, TushareOperation):
             raise TypeError("operation must be a TushareOperation")
         self._blocked_operations.discard(operation)
+        self._permission_retry_at.pop(operation, None)
+        self._persist_recovery()
+
+    def permission_retry_at(self, operation: TushareOperation) -> datetime | None:
+        """Earliest controlled permission recheck, including shared cooldown."""
+        if not isinstance(operation, TushareOperation):
+            raise TypeError("operation must be a TushareOperation")
+        deadline = self._permission_retry_at.get(operation)
+        if deadline is not None and self._cooldown_until is not None:
+            return max(deadline, self._cooldown_until)
+        return deadline
+
+    async def recheck_permission(
+        self,
+        operation: TushareOperation,
+        call: Callable[[], T],
+        *,
+        work_key: str,
+        priority: RequestPriority = RequestPriority.RECOVERY,
+    ) -> T:
+        """Coalesce one operation probe while keeping ordinary work blocked.
+
+        Reservation is durable before queue admission. Cancellation of a waiter
+        cannot cancel a shared probe or release its reservation early.
+        """
+        self._validate_request(operation, call, priority)
+        self._validate_work_key(work_key)
+        running = self._permission_rechecks.get(operation)
+        if running is None:
+            due = self.permission_retry_at(operation)
+            if due is None or self._now() < due:
+                raise RequestControlError(
+                    RequestControlErrorCode.BLOCKED_PERMISSION,
+                    operation,
+                    attempts=0,
+                    next_retry_at=due,
+                )
+            self._permission_retry_at[operation] = _saturating_add(
+                self._now(),
+                PERMISSION_RECHECK_INTERVAL,
+            )
+            self._persist_recovery()
+
+            async def probe() -> T:
+                try:
+                    result = await self._execute(
+                        operation,
+                        call,
+                        work_key=work_key,
+                        priority=priority,
+                        permission_recheck=True,
+                    )
+                    self.reset_permission_block(operation)
+                    return result
+                finally:
+                    self._permission_rechecks.pop(operation, None)
+
+            running = asyncio.create_task(probe())
+            # Consume an eventual error even if every waiting caller is cancelled.
+            running.add_done_callback(lambda task: None if task.cancelled() else task.exception())
+            self._permission_rechecks[operation] = running
+        return await asyncio.shield(running)
 
     async def execute(
         self,
@@ -545,9 +649,20 @@ class TushareRequestController:
     ) -> T:
         """Run one repeatable synchronous call under bounded runtime policy."""
 
+        return await self._execute(operation, call, work_key=work_key, priority=priority)
+
+    async def _execute(
+        self,
+        operation: TushareOperation,
+        call: Callable[[], T],
+        *,
+        work_key: str,
+        priority: RequestPriority,
+        permission_recheck: bool = False,
+    ) -> T:
         self._validate_request(operation, call, priority)
-        normalized_key = self._validate_work_key(work_key)
-        blocked = self._preflight_error(operation, normalized_key)
+        normalized_key = self._storage_key(work_key)
+        blocked = self._preflight_error(operation, normalized_key, permission_recheck)
         if blocked is not None:
             raise blocked from None
 
@@ -563,6 +678,7 @@ class TushareRequestController:
                     priority,
                     operation,
                     normalized_key,
+                    permission_recheck,
                 )
             except RequestControlError as caught:
                 deferred_error = caught
@@ -572,16 +688,10 @@ class TushareRequestController:
                     operation,
                     attempts=0,
                 )
-            except TimeoutError:
-                failure_code = RequestControlErrorCode.TIMEOUT
-            except requests.Timeout:
-                failure_code = RequestControlErrorCode.TIMEOUT
-            except requests.ConnectionError:
-                failure_code = RequestControlErrorCode.TRANSIENT
-            except TushareProviderError as caught:
-                failure_code = _TUSHARE_ERROR_CODES[caught.code]
-            except Exception:
-                failure_code = RequestControlErrorCode.ERROR
+            except RecoveryCheckpointError:
+                raise
+            except Exception as caught:
+                failure_code = _provider_failure_code(caught)
 
             if deferred_error is not None:
                 raise deferred_error from None
@@ -589,16 +699,14 @@ class TushareRequestController:
             if failure_code is None:
                 self._backoff_failures.pop(normalized_key, None)
                 self._backoff_until.pop(normalized_key, None)
+                self._persist_recovery()
                 return result  # type: ignore[return-value]
 
-            if failure_code is RequestControlErrorCode.BLOCKED_PERMISSION:
-                self._blocked_operations.add(operation)
-                error = RequestControlError(failure_code, operation, attempts=attempts)
-                raise error from None
-
-            if failure_code is RequestControlErrorCode.RATE_LIMITED:
-                next_retry_at = _saturating_add(self._now(), self._rate_limit_cooldown)
-                self._cooldown_until = next_retry_at
+            if failure_code in (
+                RequestControlErrorCode.BLOCKED_PERMISSION,
+                RequestControlErrorCode.RATE_LIMITED,
+            ):
+                next_retry_at = self._record_provider_block(failure_code, operation)
                 error = RequestControlError(
                     failure_code,
                     operation,
@@ -611,7 +719,7 @@ class TushareRequestController:
                 RequestControlErrorCode.TRANSIENT,
                 RequestControlErrorCode.TIMEOUT,
             )
-            if retryable and attempts <= self._in_cycle_retries:
+            if retryable and attempts <= self._in_cycle_retries and not permission_recheck:
                 continue
             next_retry_at = self._record_backoff(normalized_key) if retryable else None
             if retryable and next_retry_at is None:
@@ -642,6 +750,8 @@ class TushareRequestController:
                 operation,
                 attempts=0,
             ) from None
+        if self._recovery_fault:
+            raise RecoveryCheckpointError("provider recovery persistence is faulted")
         if not isinstance(operation, TushareOperation):
             raise TypeError("operation must be a TushareOperation")
         if not callable(call):
@@ -657,18 +767,27 @@ class TushareRequestController:
             raise ValueError("work_key must contain between 1 and 128 visible characters")
         return work_key
 
+    def _storage_key(self, work_key: str) -> str:
+        key = self._validate_work_key(work_key)
+        if self._recovery_repository is None:
+            return key
+        return sha256(key.encode("utf-8")).hexdigest()
+
     def _preflight_error(
         self,
         operation: TushareOperation,
         work_key: str,
+        permission_recheck: bool = False,
     ) -> RequestControlError | None:
+        if self._recovery_fault:
+            raise RecoveryCheckpointError("provider recovery persistence is faulted")
         if self._closed:
             return RequestControlError(
                 RequestControlErrorCode.CLOSED,
                 operation,
                 attempts=0,
             )
-        if operation in self._blocked_operations:
+        if operation in self._blocked_operations and not permission_recheck:
             return RequestControlError(
                 RequestControlErrorCode.BLOCKED_PERMISSION,
                 operation,
@@ -707,15 +826,18 @@ class TushareRequestController:
         priority: RequestPriority,
         operation: TushareOperation,
         work_key: str,
+        permission_recheck: bool = False,
     ) -> T:
         loop = asyncio.get_running_loop()
         async with asyncio.timeout(self._timeout_seconds):
             await self._admission.acquire(
                 int(priority),
-                lambda: self._preflight_error(operation, work_key),
+                lambda: self._preflight_error(operation, work_key, permission_recheck),
             )
         future: asyncio.Future[T] | None = None
         slot_held = True
+        outcome_observed = False
+        timeout_recorded = False
 
         def release_once() -> None:
             nonlocal slot_held
@@ -726,17 +848,33 @@ class TushareRequestController:
         def consume_and_release(completed: asyncio.Future[T]) -> None:
             try:
                 if not completed.cancelled():
-                    completed.exception()
+                    error = completed.exception()
+                    if error is not None and not outcome_observed:
+                        self._record_late_failure(
+                            error, operation, work_key, timeout_recorded=timeout_recorded,
+                        )
+            except Exception:
+                # No awaiting caller remains to receive this storage fault. Keep
+                # admission closed and surface it when the runtime joins us.
+                self._recovery_fault = True
             finally:
                 release_once()
+                self._inflight_futures.discard(completed)
 
         try:
+            if permission_recheck:
+                self._permission_retry_at[operation] = max(
+                    self._permission_retry_at[operation],
+                    _saturating_add(self._now(), PERMISSION_RECHECK_INTERVAL),
+                )
+                self._persist_recovery()
             future = loop.run_in_executor(self._executor, call)
             self._inflight_futures.add(future)
-            future.add_done_callback(self._inflight_futures.discard)
             done, _ = await asyncio.wait((future,), timeout=self._timeout_seconds)
             if future not in done:
+                timeout_recorded = True
                 raise TimeoutError
+            outcome_observed = True
             return future.result()
         finally:
             if future is None:
@@ -745,6 +883,39 @@ class TushareRequestController:
                 consume_and_release(future)
             else:
                 future.add_done_callback(consume_and_release)
+
+    def _record_provider_block(
+        self, code: RequestControlErrorCode, operation: TushareOperation,
+    ) -> datetime | None:
+        if code is RequestControlErrorCode.BLOCKED_PERMISSION:
+            self._blocked_operations.add(operation)
+            deadline = _saturating_add(self._now(), PERMISSION_RECHECK_INTERVAL)
+            self._permission_retry_at[operation] = max(
+                deadline, self._permission_retry_at.get(operation, deadline),
+            )
+            self._persist_recovery()
+            return None
+        deadline = _saturating_add(self._now(), self._rate_limit_cooldown)
+        self._cooldown_until = max(deadline, self._cooldown_until or deadline)
+        self._persist_recovery()
+        return self._cooldown_until
+
+    def _record_late_failure(
+        self, error: BaseException, operation: TushareOperation, work_key: str,
+        *, timeout_recorded: bool,
+    ) -> None:
+        """Retain a physical failure after its caller cancelled or timed out."""
+        code = _provider_failure_code(error)
+        if code in (
+            RequestControlErrorCode.BLOCKED_PERMISSION,
+            RequestControlErrorCode.RATE_LIMITED,
+        ):
+            self._record_provider_block(code, operation)
+        elif not timeout_recorded and code in (
+            RequestControlErrorCode.TRANSIENT, RequestControlErrorCode.TIMEOUT,
+        ):
+            if self._record_backoff(work_key) is None:
+                raise RecoveryCheckpointError("late provider backoff capacity exhausted")
 
     def _record_backoff(self, work_key: str) -> datetime | None:
         now = self._now()
@@ -755,7 +926,32 @@ class TushareRequestController:
         self._backoff_failures[work_key] = min(failure_count + 1, len(self._backoff))
         next_retry_at = _saturating_add(now, delay)
         self._backoff_until[work_key] = next_retry_at
+        self._persist_recovery()
         return next_retry_at
+
+    def _persist_recovery(self) -> None:
+        if self._recovery_repository is None:
+            return
+        rows = [
+            RecoveryCheckpoint("backoff", key, self._backoff_until[key], failures)
+            for key, failures in self._backoff_failures.items()
+        ]
+        rows.extend(
+            RecoveryCheckpoint("permission", operation.value, deadline, 0)
+            for operation, deadline in self._permission_retry_at.items()
+        )
+        if self._cooldown_until is not None:
+            rows.append(RecoveryCheckpoint("cooldown", "shared", self._cooldown_until, 0))
+        snapshot = tuple(sorted(rows, key=lambda item: (item.kind, item.scope_key)))
+        if snapshot == self._persisted_recovery:
+            return
+        try:
+            self._recovery_repository.assert_owner(self)
+            self._recovery_repository.save(snapshot)
+            self._persisted_recovery = snapshot
+        except RecoveryCheckpointError:
+            self._recovery_fault = True
+            raise
 
     def _reserve_backoff_key(self, now: datetime) -> bool:
         if len(self._backoff_failures) < DEFAULT_TUSHARE_BACKOFF_KEY_LIMIT:
@@ -790,15 +986,19 @@ class TushareRequestController:
         self.close()
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self._timeout_seconds
-        while self._inflight_futures and loop.time() < deadline:
+        while (self._inflight_futures or self._permission_rechecks) and loop.time() < deadline:
             await asyncio.sleep(min(0.01, max(0.0, deadline - loop.time())))
-        if self._inflight_futures:
+        if self._inflight_futures or self._permission_rechecks:
             raise RuntimeError("Tushare executor did not stop within its transport timeout")
         await asyncio.to_thread(
             self._executor.shutdown,
             wait=True,
             cancel_futures=True,
         )
+        if self._recovery_fault:
+            raise RecoveryCheckpointError("provider outcome could not be checkpointed")
+        if self._recovery_repository is not None:
+            self._recovery_repository.release_owner(self)
 
 
 def create_live_tushare_request_controller(
@@ -806,6 +1006,7 @@ def create_live_tushare_request_controller(
     clock: Clock,
     monotonic: Callable[[], float] = time.monotonic,
     pace_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    recovery_repository: ProviderRecoveryRepository | None = None,
 ) -> TushareRequestController:
     """Build the production live profile without inheriting retry-oriented defaults."""
 
@@ -820,10 +1021,21 @@ def create_live_tushare_request_controller(
         in_cycle_retries=LIVE_TUSHARE_IN_CYCLE_RETRIES,
         monotonic=monotonic,
         pace_sleep=pace_sleep,
+        recovery_repository=recovery_repository,
     )
 
 
 _NO_RESULT: Final = object()
+
+
+def _provider_failure_code(error: BaseException) -> RequestControlErrorCode:
+    if isinstance(error, (TimeoutError, requests.Timeout)):
+        return RequestControlErrorCode.TIMEOUT
+    if isinstance(error, requests.ConnectionError):
+        return RequestControlErrorCode.TRANSIENT
+    if isinstance(error, TushareProviderError):
+        return _TUSHARE_ERROR_CODES[error.code]
+    return RequestControlErrorCode.ERROR
 
 
 def _saturating_add(value: datetime, delay: timedelta) -> datetime:
