@@ -71,7 +71,10 @@ class ExplicitRuntimeEvaluationService:
         *,
         after_evaluate: Callable[[ExplicitEvaluationResult], None] | None = None,
         committed_event_publisher: Callable[[MonitorEvent], object] | None = None,
+        recovery_delivery: bool = False,
     ) -> None:
+        if type(recovery_delivery) is not bool:
+            raise TypeError("recovery_delivery must be a bool")
         if not callable(unit_of_work_factory):
             raise TypeError("unit_of_work_factory must be callable")
         if after_evaluate is not None and not callable(after_evaluate):
@@ -81,6 +84,8 @@ class ExplicitRuntimeEvaluationService:
         self._work = unit_of_work_factory
         self._after_evaluate = after_evaluate
         self._publisher = committed_event_publisher
+        # Storage-only opt-in; the existing dispatcher does not enforce this HOLD.
+        self._recovery_delivery = recovery_delivery
 
     async def run_intraday_and_publish(
         self,
@@ -190,7 +195,11 @@ class ExplicitRuntimeEvaluationService:
                         result=result,
                         signal=signal,
                     )
-                    committed.append(work.alerts.enqueue_explicit(payload))
+                    committed.append(
+                        work.alerts.enqueue_recoverable(payload)
+                        if self._recovery_delivery
+                        else work.alerts.enqueue_explicit(payload)
+                    )
             work.commit()
         return ExplicitRuntimeCycleResult(
             status=(

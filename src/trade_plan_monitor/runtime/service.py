@@ -477,7 +477,10 @@ class RuntimeEvaluationService:
         market_index_service: RuntimeMarketIndexService | None = None,
         runtime_generation: UUID = LEGACY_RUNTIME_GENERATION,
         clock: Clock | None = None,
+        recovery_delivery: bool = False,
     ) -> None:
+        if type(recovery_delivery) is not bool:
+            raise TypeError("recovery_delivery must be a bool")
         dependencies = (
             fetch_minutes,
             unit_of_work_factory,
@@ -518,6 +521,8 @@ class RuntimeEvaluationService:
         self._market_index_service = market_index_service
         self._runtime_generation = runtime_generation
         self._clock = clock
+        # Storage-only opt-in; the existing dispatcher does not enforce this HOLD.
+        self._recovery_delivery = recovery_delivery
         self._official_serial = asyncio.Lock()
 
     async def _post_fetch_official_observed_at(
@@ -1003,7 +1008,11 @@ class RuntimeEvaluationService:
                             plan=plan,
                             result=result,
                         )
-                        committed_event = unit_of_work.alerts.enqueue(payload)
+                        committed_event = (
+                            unit_of_work.alerts.enqueue_recoverable(payload)
+                            if self._recovery_delivery
+                            else unit_of_work.alerts.enqueue(payload)
+                        )
                         publication_event = unit_of_work.events.get(payload.event_id)
             unit_of_work.commit()
 
@@ -1331,7 +1340,11 @@ class RuntimeEvaluationService:
                             plan=plan,
                             result=result,
                         )
-                        committed_event = unit_of_work.alerts.enqueue(payload)
+                        committed_event = (
+                            unit_of_work.alerts.enqueue_recoverable(payload)
+                            if self._recovery_delivery
+                            else unit_of_work.alerts.enqueue(payload)
+                        )
                         publication_event = unit_of_work.events.get(payload.event_id)
             health_event = self._clear_close_pending(
                 unit_of_work,
