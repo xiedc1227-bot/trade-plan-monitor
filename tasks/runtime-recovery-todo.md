@@ -20,7 +20,7 @@ See paired evidence in `docs/verification/2026-09-21-runtime-recovery-foundation
 | RR007–RR008 | Pure targets plus injected single-symbol acquisition verify exact committed coverage; composed coordinator/controller/SQLite recovery tested; historical acquisition/replay and production integration remain open |
 | RR010 | Reference keys now bind plan family/content, actual activation and stock semantics; post-await cache/admission fences reviewed; broader generation/reconfiguration obligations remain open |
 | RR002 | Paired detailed status/protocol draft added for review; no protocol source/default change or C0/C4 closure |
-| RR011–RR013 policy/storage slices | Explicit-risk classifier and legacy origin proof independently reviewed; added isolated legacy applicability classifier, delivery migration/repository and opt-in atomic HOLD enqueue; evaluator-transaction wiring, durable current-evidence reconstruction and dispatcher integration remain open |
+| RR011–RR013 policy/storage slices | Explicit-risk classifier and legacy origin proof independently reviewed; isolated legacy applicability classifier, delivery migration/repository and opt-in atomic HOLD enqueue added; RR012 initial-HOLD evaluator transaction wiring implemented and independently reviewed, not enabled in production composition; durable current-evidence reconstruction and dispatcher integration remain open |
 | RR009, RR011–RR022 | Not completed; use dependencies below, not this incremental checkpoint as rollout approval |
 
 - The user's 2026-09-21 instruction authorizes the approved proposal/map's implementation. Derived provider/recovery contracts accompany isolated, injected foundation slices; unreviewed protocol/business changes and the production default switch remain gated. This authorization does not approve live migration or deployment.
@@ -40,6 +40,12 @@ Latest-state explicit-risk and read-only legacy-origin slices are independently 
 The next isolated increment adds migration `0019_alert_delivery_eligibility`, revision-fenced classification/audit, bounded missing-row initialization and opt-in `enqueue_recoverable`. Canonical alert/result identities and existing production defaults are unchanged. Actionable source expiry and state-risk applicability are separate; stored ELIGIBLE is not a lasting send permit. The legacy pure policy checks original evidence, latest official risk stage, current inventory/T+1 and approved latest-only repeated exits. Its calendar and current-state inputs remain injected, not a completed durable reader.
 
 See `docs/verification/2026-09-21-recovery-delivery-metadata.md` and ADR 0007 with paired Chinese copies. RR011–RR013 and C0/C2/C3 remain incomplete until evaluator transactions, current authority, final per-channel admission and end-to-end crash/restart evidence are integrated. This increment does not authorize live migration, notification, production switch or deployment.
+
+### Evaluator transaction checkpoint — 2026-09-21
+
+The requested push synchronized `964fde2` and `6dff7ae` to the existing GitHub branch before this continuation. RR012 now proceeds as an isolated transaction slice: strict constructor opt-in routes both legacy evaluation paths and explicit alert writes through the existing HOLD helper. The helper normalizes the outbox's aware clock before metadata initialization. Decision rollback must include claims/results/transitions/alerts/metadata/audit and exclude previously committed market facts. Details and final verification are tracked in paired `docs/verification/2026-09-21-recovery-evaluation-transactions.md`.
+
+The rollout position remains core recovery/notification safety, before complete production integration: C0–C5 are not closed by these slices. No existing factory enables the flag; it does not cause the dispatcher to enforce HOLD. Current-authority reconstruction, final send admission, lifecycle/status/UI wiring and process-restart acceptance remain prerequisites to RR020. Local commits made after the requested push are not implicitly pushed or deployed.
 
 ## Specification gate
 
