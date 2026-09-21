@@ -116,6 +116,14 @@ class RequestControlError(RuntimeError):
         super().__init__(f"runtime {operation.value} failed ({code.value})")
 
 
+class RequestNotStartedError(RuntimeError):
+    """A worker's local guard rejected work before provider I/O.
+
+    This is neither provider success nor failure: retain retry/permission state.
+    Callers may raise it only before contacting the provider.
+    """
+
+
 class AIQueueFullError(RuntimeError):
     """The bounded AI admission queue has no remaining waiting slot."""
 
@@ -688,7 +696,7 @@ class TushareRequestController:
                     operation,
                     attempts=0,
                 )
-            except RecoveryCheckpointError:
+            except (RecoveryCheckpointError, RequestNotStartedError):
                 raise
             except Exception as caught:
                 failure_code = _provider_failure_code(caught)

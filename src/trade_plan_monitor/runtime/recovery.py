@@ -6,6 +6,7 @@ import asyncio
 import re
 import threading
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Self
@@ -16,8 +17,16 @@ from trade_plan_monitor.market_data.models import AShareSymbol, MinuteBar, Shang
 from trade_plan_monitor.market_data.provider import MarketDataProvider
 from trade_plan_monitor.market_data.sessions import session_for_minute_end
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+from trade_plan_monitor.runtime.clock import _canonical_shanghai
+from trade_plan_monitor.runtime.recovery_targets import (
+    MinuteCoverage,
+    RecoveryTarget,
+    check_minute_coverage,
+    select_current_day_rows,
+)
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
+    RequestNotStartedError,
     RequestPriority,
     TushareOperation,
     TushareRequestController,
@@ -34,6 +43,7 @@ IsOpenOn = Callable[[date], bool | None]
 RealtimePending = Callable[[], bool]
 PendingCloseDate = Callable[[str], date | None]
 RecoverPendingClose = Callable[[str, date], Awaitable[bool]]
+ReadPersistedEnds = Callable[[str, tuple[datetime, ...]], tuple[datetime, ...]]
 
 
 class RecoveryMode(StrEnum):
@@ -55,6 +65,33 @@ class RecoveryErrorCode(StrEnum):
     QUEUE_FULL = "QUEUE_FULL"
     CLOSED = "CLOSED"
     PERSISTENCE_FAILED = "PERSISTENCE_FAILED"
+
+
+@dataclass(frozen=True)
+class ScopedRecoveryResult:
+    """Minute evidence only, never plan readiness or permission to evaluate.
+
+    Storage failures are visible faults; callers must not treat them as normal
+    provider retry. A complete slice says nothing about other plan prerequisites.
+    """
+
+    symbol: str
+    target: RecoveryTarget
+    coverage: MinuteCoverage
+    error_code: RecoveryErrorCode | None = None
+    next_retry_at: datetime | None = None
+    yielded_to_realtime: bool = False
+    retarget_required: bool = False
+
+    @property
+    def ready(self) -> bool:
+        return (
+            self.target.completed_minute_end is not None
+            and self.coverage.complete
+            and self.error_code is None
+            and not self.yielded_to_realtime
+            and not self.retarget_required
+        )
 
 
 class _RecoveryValue(BaseModel):
@@ -223,6 +260,91 @@ class RecoveryService:
         self._serial = asyncio.Lock()
         self._physical_condition = threading.Condition()
         self._physical_active = False
+
+    async def recover_scope(
+        self,
+        *,
+        symbol: str,
+        target: RecoveryTarget,
+        required_ends: tuple[datetime, ...],
+        read_persisted_ends: ReadPersistedEnds,
+        now: Callable[[], datetime],
+    ) -> ScopedRecoveryResult:
+        """Acquire at most one symbol and verify its bounded persisted requirement.
+
+        This opt-in seam does not run the legacy startup batch. The caller owns
+        requirements, target recomputation, plan identity fencing and scheduling;
+        ``read_persisted_ends`` must read committed facts for the supplied symbol.
+        Current-day data cannot repair missing history from earlier sessions.
+        """
+
+        self._validated_active_symbols((symbol,))
+        if not isinstance(target, RecoveryTarget):
+            raise TypeError("target must be a RecoveryTarget")
+        if not callable(read_persisted_ends) or not callable(now):
+            raise TypeError("scoped recovery requires persistence and clock callbacks")
+        cutoff = target.completed_minute_end or target.observed_at
+        empty = check_minute_coverage(
+            required_ends=required_ends, persisted_ends=(), cutoff=cutoff,
+        )
+        result = ScopedRecoveryResult(symbol, target, empty)
+
+        def clock_matches() -> bool:
+            current = _canonical_shanghai(now())
+            return current >= target.observed_at and current.date() == target.observed_at.date()
+
+        def read_coverage() -> MinuteCoverage:
+            return check_minute_coverage(
+                required_ends=required_ends,
+                persisted_ends=read_persisted_ends(symbol, required_ends), cutoff=cutoff,
+            )
+
+        async with self._serial:
+            if not clock_matches():
+                return replace(result, retarget_required=True)
+            try:
+                result = replace(result, coverage=read_coverage())
+            except Exception:
+                return replace(result, error_code=RecoveryErrorCode.PERSISTENCE_FAILED)
+            if not clock_matches():
+                return replace(result, retarget_required=True)
+            if result.ready or target.completed_minute_end is None:
+                return result
+            current_missing = tuple(
+                value for value in result.coverage.missing_ends
+                if value.date() == target.observed_at.date()
+            )
+            if target.trade_date != target.observed_at.date() or not current_missing:
+                return result
+            if self._should_yield():
+                return replace(result, yielded_to_realtime=True)
+            try:
+                raw_rows = await self._execute_joined(symbol=symbol, before_start=clock_matches)
+            except RequestNotStartedError:
+                return replace(result, retarget_required=True)
+            except RequestControlError as error:
+                return replace(
+                    result, error_code=RecoveryErrorCode(error.code.value),
+                    next_retry_at=error.next_retry_at, retarget_required=not clock_matches(),
+                )
+            if not clock_matches():
+                return replace(result, retarget_required=True)
+            if type(raw_rows) is not list:
+                return replace(result, error_code=RecoveryErrorCode.INVALID_RESPONSE)
+            try:
+                rows = select_current_day_rows(
+                    rows=tuple(raw_rows), symbol=symbol, target=target, now=now(),
+                )
+            except (TypeError, ValueError):
+                return replace(result, error_code=RecoveryErrorCode.INVALID_RESPONSE)
+            selected = tuple(row for row in rows if row.bar_end in current_missing)
+            try:
+                if selected:
+                    self._persist_minutes(selected)
+                result = replace(result, coverage=read_coverage())
+            except Exception:
+                return replace(result, error_code=RecoveryErrorCode.PERSISTENCE_FAILED)
+            return replace(result, retarget_required=not clock_matches())
 
     async def recover_startup(self, *, trade_date: date) -> RecoveryBatchResult:
         """Recover every active symbol once on a known-open current trading day."""
@@ -415,11 +537,12 @@ class RecoveryService:
         self,
         *,
         symbol: str,
+        before_start: Callable[[], bool] | None = None,
     ) -> object:
         request = asyncio.create_task(
             self._request_controller.execute(
                 TushareOperation.CURRENT_DAY_MINUTES,
-                lambda: self._current_day_call(symbol),
+                lambda: self._current_day_call(symbol, before_start=before_start),
                 work_key=f"recovery:{symbol}",
                 priority=RequestPriority.RECOVERY,
             )
@@ -435,7 +558,11 @@ class RecoveryService:
         finally:
             await self._join_physical_idle()
 
-    def _current_day_call(self, symbol: str) -> list[MinuteBar]:
+    def _current_day_call(
+        self, symbol: str, *, before_start: Callable[[], bool] | None = None,
+    ) -> object:
+        if before_start is not None and not before_start():
+            raise RequestNotStartedError("recovery target changed before provider start")
         with self._physical_condition:
             if self._physical_active:
                 raise TushareProviderError(
@@ -561,4 +688,5 @@ __all__ = [
     "RecoveryMode",
     "RecoveryService",
     "RecoverySymbolResult",
+    "ScopedRecoveryResult",
 ]
