@@ -1,12 +1,26 @@
 # Task List: Anytime Runtime Recovery
 
-> Status: DRAFT / NOT STARTED. Canonical English; paired copy: `runtime-recovery-todo.zh-CN.md`.
+> Status: IN PROGRESS since implementation authorization on 2026-09-21. Canonical English; paired copy: `runtime-recovery-todo.zh-CN.md`.
 > Governing proposal: `runtime-recovery-plan.md`. IDs A01–A12 and decisions D1–D7 refer to that proposal.
 > All tasks use `gpt-6-astra`. Design/review uses `xhigh`; bounded coding uses `high`. Each checkpoint is an `xhigh` review, not a claim that a review has passed.
 
 ## Execution rules
 
-- No implementation is authorized by this checklist. Approve the proposal/map first, then the paired detailed specifications before coding.
+### Implementation checkpoint — 2026-09-21
+
+See paired evidence in `docs/verification/2026-09-21-runtime-recovery-foundations.md`. Completed foundation slices do not close C0–C5 or enable production recovery.
+
+| Task | Current state |
+|---|---|
+| RR001 | Paired provider/recovery specifications written; full contract review remains open |
+| RR003 | Implemented and independently reviewed; integrity, compatibility and concurrent no-clobber import tests pass |
+| RR004 | Injected pipeline gates implemented and reviewed; composition and independent scheduling after a selected-stock failure remain open |
+| RR005 | Checkpoint model/repository/migration and SQLite latest-head assertions implemented and reviewed |
+| RR006 | Durable admission and pure `RecoverySchedule` implemented/reviewed; continuous runtime integration remains open |
+| RR007–RR008 | Pure `recovery_targets.py` and exact coverage tests implemented/reviewed; acquisition/replay integration remains open |
+| RR002, RR009–RR022 | Not completed; use dependencies below, not this foundation checkpoint as rollout approval |
+
+- The user's 2026-09-21 instruction authorizes the approved proposal/map's implementation. Derived provider/recovery contracts accompany isolated, injected foundation slices; unreviewed protocol/business changes and the production default switch remain gated. This authorization does not approve live migration or deployment.
 - Every code task starts with a meaningful failing test; preserve unrelated changes and old canonical identity goldens. Do not skip tests merely because they encode the old behavior: replace only the specifically superseded assertions with approved new-contract tests.
 - Paths below are repository-relative and prospective where marked NEW. Keep each slice at approximately 3–5 source/test files; split before work if the actual scope expands. Generated files and paired specification updates receive their own tasks.
 - Reuse the current default production behavior until the replacement path is complete enough to pass its checkpoint. Use dependency injection for offline slices, not a second permanent production framework. Enable the new default only at RR020 after all prerequisite contracts and guards exist.
@@ -25,11 +39,11 @@
 
 ### Checkpoint C0 — Approved contract
 
-- [ ] Human approves RR001–RR002; changes to source semantics, alert eligibility, schema and compatibility are explicit. No code before this gate.
+- [ ] Complete review of RR001–RR002 against the user-approved proposal; changes to source semantics, alert eligibility, schema and compatibility are explicit. Isolated foundations may proceed under the 2026-09-21 implementation instruction; no production default switch or unapproved semantic expansion before this gate.
 
 ## Provider and recovery foundations
 
-- [ ] RR003 — Introduce compatible semantic-record import. Effort: `high`. Dependencies: C0.
+- [x] RR003 — Introduce compatible semantic-record import. Effort: `high`. Dependencies: C0 (isolated foundation authorized by the 2026-09-21 instruction).
   - Acceptance: A01–A02; migration idempotent, verified scope only, original evidence untouched; semantic revision ignores metadata but checks adapter compatibility.
   - Files: NEW `src/trade_plan_monitor/runtime/provider_contract.py`, `src/trade_plan_monitor/live_profiles.py`, `tests/unit/test_live_certification_profiles.py`, NEW `tests/unit/test_provider_contract.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_live_certification_profiles.py tests/unit/test_provider_contract.py -q`.
@@ -37,7 +51,7 @@
   - Acceptance: stock/index gates independent; old READY does not confer current health; metadata refresh harmless and incompatible change rejected before physical request.
   - Files: `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/web/monitor_composition.py`, `tests/integration/test_production_certification_gate.py`, `tests/integration/test_certified_production_runtime.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_certification_gate.py tests/integration/test_certified_production_runtime.py -q` using injected composition until RR020.
-- [ ] RR005 — Persist bounded provider recovery checkpoint. Effort: `high`. Dependencies: RR003, migration approval.
+- [x] RR005 — Persist bounded provider recovery checkpoint. Effort: `high`. Dependencies: RR003, temporary-database migration approval.
   - Acceptance: cooldown/retry state survives restart, contains no credentials, migration is additive/idempotent and refuses destructive loss of pending state.
   - Files: NEW migration under `src/trade_plan_monitor/state/migrations/versions/`, `src/trade_plan_monitor/state/models.py`, NEW `src/trade_plan_monitor/state/runtime_recovery.py`, NEW `tests/integration/test_runtime_recovery_storage.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py -q` with temporary database upgrade/restart cases.

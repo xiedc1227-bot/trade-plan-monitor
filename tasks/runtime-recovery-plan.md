@@ -1,9 +1,9 @@
 # Implementation Proposal: Anytime Runtime Recovery
 
-> Status: DRAFT — user review required before implementation. Date: 2026-09-17.
+> Status: IMPLEMENTATION IN PROGRESS — proposal approved for implementation on 2026-09-21; not approved for deployment. Original proposal date: 2026-09-17.
 > Canonical English proposal; review copy: `runtime-recovery-plan.zh-CN.md`.
 > Initiative: `runtime-recovery`. Task index: `runtime-recovery-todo.md`.
-> This proposal does not supersede approved specifications until the user approves its boundaries. Existing completed plans and unrelated working-tree changes remain untouched.
+> The user's 2026-09-21 instruction authorizes implementation and task-specific subagent allocation. Existing completed plans and unrelated working-tree changes remain untouched. Detailed contracts and checkpoint evidence are recorded below and in the paired task index; no complete-runtime acceptance is claimed.
 
 ## 1. Objective and boundaries
 
@@ -13,7 +13,7 @@ Assumptions: one production owner per database, valid local configuration and us
 
 - Always preserve plan/result canonical bytes, hashes, activation identity, evaluator rules, committed-event ordering, and business-alert intent deduplication.
 - Always keep actual provider responses untrusted and validate them before persistence/evaluation.
-- Ask for approval before code implementation, additive database migration, a new dependency, or real-provider acceptance. This proposal requests review of the migration design; it does not execute it.
+- Code implementation and temporary-database additive migration tests are authorized. Ask separately before live database migration, a new dependency, real-provider acceptance or deployment.
 - Never edit credentials/evidence to fake success, relax trading-data checks, remove failing tests, overwrite unrelated changes, or deploy/restart the user's process during design.
 - Out of scope: a new login system, an automatic weekly full-certification service, a general workflow engine, additional broker/order functionality, and an overhaul of trading formulas or notification channels.
 
@@ -194,15 +194,15 @@ The offline browser suite must use temporary state/fake providers, never the run
 
 ## 8. Review decisions and remaining approval
 
-Approve or revise: the responsibility map; removal of age-based runtime gating; compatible historical-evidence import; 30-second local maintenance wake; controlled 300-second permission recheck; scoped recovery; suppression of obsolete pending actionable alerts; additive checkpoint migration; coordinated monitor-contract upgrade; model allocation.
+The 2026-09-21 implementation instruction approved these proposal boundaries: the responsibility map; removal of age-based runtime gating; compatible historical-evidence import; 30-second local maintenance wake; controlled 300-second permission recheck; scoped recovery; suppression of obsolete pending actionable alerts; additive checkpoint migration tests; coordinated monitor-contract upgrade; model allocation. Live migration and deployment remain separately gated.
 
-Detailed module specifications follow approval of these boundaries. The existing index/turnover working-tree changes overlap future runtime/read-service tests: preserve them and review the overlap before any implementation. No production file, runtime configuration, live evidence or database is changed by this proposal.
+Detailed module specifications and implementation evidence now follow in the paired task index and `docs/verification/2026-09-21-runtime-recovery-foundations.md`. The index/turnover changes identified during design were already committed before implementation began; preserve those behaviors. Existing failed regressions remain explicitly recorded. Source changes do not authorize changing live configuration, evidence or databases.
 
 ### Independent design review reconciliation
 
 Review configuration: `gpt-6-astra` / `xhigh`, isolated context, read-only. Findings were checked against source, not accepted as an implementation verdict. Additional cross-model review was offered and has not been executed.
 
-Three bounded review cycles were completed: initial fresh-context review, a targeted revised-contract review, and a final review of the risk-recovery barrier. The final cycle found no further substantive issue within that rule's stated constraints. This is design review evidence, not proof of implemented behavior. Paired IDs, heading counts, technical literals/commands and whitespace were checked; all 22 implementation tasks remain unstarted.
+Three bounded design review cycles were completed: initial fresh-context review, a targeted revised-contract review, and a final review of the risk-recovery barrier. The final cycle found no further substantive issue within that rule's stated constraints. This is design review evidence, not proof of implemented behavior. Paired IDs, heading counts, technical literals/commands and whitespace were checked; all 22 tasks were unstarted at the 2026-09-17 design checkpoint. Current progress is recorded in the task index.
 
 | Finding | Classification | Disposition |
 |---|---|---|

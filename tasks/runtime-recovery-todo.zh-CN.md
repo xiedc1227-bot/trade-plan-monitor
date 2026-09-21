@@ -1,12 +1,26 @@
 # 任务表：任意时段重启与自动恢复
 
-> 状态：DRAFT / NOT STARTED。英文规范输入：`runtime-recovery-todo.md`；本文件为中文副本。
+> 状态：自 2026-09-21 获得实现授权起 IN PROGRESS。英文规范输入：`runtime-recovery-todo.md`；本文件为中文副本。
 > 上位提案：`runtime-recovery-plan.zh-CN.md`。A01–A12 和 D1–D7 均引用该提案。
 > 全部任务使用 `gpt-6-astra`。设计/评审使用 `xhigh`；有界编码使用 `high`。每个检查点均为 `xhigh` 评审，不表示评审已经通过。
 
 ## 执行规则
 
-- 此清单不授权实现。先批准提案/职责图，再批准成对详细规格，然后编码。
+### 实现检查点 — 2026-09-21
+
+成对证据见 `docs/verification/2026-09-21-runtime-recovery-foundations.md`。完成基础切片不代表 C0–C5 通过，也不代表启用生产恢复路径。
+
+| 任务 | 当前状态 |
+|---|---|
+| RR001 | 已编写成对行情源/恢复规格；完整契约评审尚未完成 |
+| RR003 | 已实现并独立评审；完整性、兼容性及并发不覆盖导入测试通过 |
+| RR004 | 已实现并评审注入式运行门禁；装配及所选股票失败后的独立调度尚未完成 |
+| RR005 | 已实现并评审检查点模型/仓储/迁移及 SQLite 最新 head 断言 |
+| RR006 | 已实现/评审持久化准入与纯 `RecoverySchedule`；持续运行集成尚未完成 |
+| RR007–RR008 | 已实现/评审纯 `recovery_targets.py` 及精确覆盖测试；获取/重放集成尚未完成 |
+| RR002、RR009–RR022 | 尚未完成；继续遵守下方依赖，不以此基础检查点作为发布批准 |
+
+- 用户于 2026-09-21 授权实现已批准提案/职责图。由其细化的行情源/恢复契约与隔离、注入式基础切片同步落地；未评审的协议/业务变化及生产默认切换仍受门禁约束。此授权不包括真实迁移或部署。
 - 每个编码任务先编写有意义的失败测试；保留无关修改及旧规范身份的黄金测试。不能因测试描述旧行为而跳过：只用已批准新契约测试替换明确被取代的断言。
 - 下列路径相对仓库；NEW 表示拟新增。每个切片控制在约 3–5 个源码/测试文件，实际范围扩大时先拆分。生成文件和成对规格更新有各自任务。
 - 新路径通过相应检查点前，复用当前默认生产行为。离线切片用依赖注入验证，不永久维护第二套生产框架。只有 RR020 且所有前置契约和保护就绪后，才启用新默认路径。
@@ -25,11 +39,11 @@
 
 ### 检查点 C0 — 契约已批准
 
-- [ ] 用户批准 RR001–RR002；数据源语义、提醒资格、数据库结构及兼容性变化明确。在此门禁前不编码。
+- [ ] 对照用户已批准提案完成 RR001–RR002 评审；数据源语义、提醒资格、数据库结构及兼容性变化明确。2026-09-21 的实现指令允许推进隔离基础切片；本门禁通过前不切换生产默认路径、不扩大未批准语义。
 
 ## 行情源与恢复基础
 
-- [ ] RR003 — 引入兼容语义记录导入。强度：`high`。依赖：C0。
+- [x] RR003 — 引入兼容语义记录导入。强度：`high`。依赖：C0（2026-09-21 指令授权隔离基础切片）。
   - 验收：A01–A02；迁移幂等、仅导入已验证范围、原证据不变；语义版本忽略元数据但检查适配器兼容性。
   - 文件：NEW `src/trade_plan_monitor/runtime/provider_contract.py`、`src/trade_plan_monitor/live_profiles.py`、`tests/unit/test_live_certification_profiles.py`、NEW `tests/unit/test_provider_contract.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_live_certification_profiles.py tests/unit/test_provider_contract.py -q`。
@@ -37,7 +51,7 @@
   - 验收：股票/指数门禁独立；旧 READY 不授予当前健康；元数据刷新无害，不兼容变化在物理请求前被拒绝。
   - 文件：`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/web/monitor_composition.py`、`tests/integration/test_production_certification_gate.py`、`tests/integration/test_certified_production_runtime.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_certification_gate.py tests/integration/test_certified_production_runtime.py -q`；RR020 前使用注入的组装。
-- [ ] RR005 — 持久化有界行情恢复检查点。强度：`high`。依赖：RR003、迁移批准。
+- [x] RR005 — 持久化有界行情恢复检查点。强度：`high`。依赖：RR003、临时数据库迁移批准。
   - 验收：重启保留冷却/重试状态，不保存凭证；迁移增量、幂等，拒绝破坏性丢失待完成状态。
   - 文件：`src/trade_plan_monitor/state/migrations/versions/` 下 NEW 迁移、`src/trade_plan_monitor/state/models.py`、NEW `src/trade_plan_monitor/state/runtime_recovery.py`、NEW `tests/integration/test_runtime_recovery_storage.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py -q`，使用临时数据库升级/重启用例。
