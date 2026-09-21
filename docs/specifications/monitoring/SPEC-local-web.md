@@ -1,6 +1,7 @@
 # Spec: local-web (Local Web Application)
 
 > Canonical agent-facing English version. The human-review Chinese version is `SPEC-local-web.zh-CN.md`; both documents must remain semantically equivalent.
+> RR002 amendment: the proposed monitor-contract v2 boundary below is a detailed review draft for the approved anytime-recovery initiative. It is not implemented or enabled by this documentation change; the earlier T035–WEBF14 boundaries remain implementation history until their stated replacement gate passes.
 
 ## Objective
 
@@ -88,6 +89,17 @@ Base path: `/api/v1`. JSON fields use camelCase; enum values use `UPPER_SNAKE`. 
   }
 }
 ```
+
+### RR002 Runtime Status and Monitor-Contract Upgrade
+
+[SPEC-runtime-status](SPEC-runtime-status.md) RS01–RS09 defines the proposed `monitorContractVersion=2` replacement for the old global health/read-only, all-symbol projection and heartbeat-liveness assumptions in T035/T036/T043/T044, WEBF05/WEBF06/WEBF11 and the monitoring-availability paragraph under Approved Backtest Extension Boundary. The replacement takes effect only when RR015–RR020 and C0–C4 pass; this amendment does not change the running default or retroactively claim those tasks completed.
+
+- Version agreement uses exactly one `X-Monitor-Contract-Version: 2` header on the enumerated changed monitoring reads and monitoring-affecting commands in RS02; it is not a blanket `/api/v1` mutation rule. Missing/incompatible versions return the existing `409 CONFLICT` envelope with `MONITOR_CONTRACT_MISMATCH` before projection/command execution. Responses advertise the version and are not cached. A compatible health read remains available without a current decision. Independent research/draft/AI contracts keep their existing scope.
+- Before every guarded POST, including direct command-page entry and an uncertain retry, the shared adapter validates a read-only v2 health/dashboard preflight. A failed/mismatched preflight sends no POST; response-only version checking cannot prevent an old backend from executing an unnegotiated command. Explicit projections expose backend-owned `ruleEligibility` and `actionableRuleIds` outside immutable outcomes; the row boolean means at least one eligible rule and cannot make an expired BUY actionable because a risk rule remains valid.
+- The v2 dashboard always returns authoritative `runtimeStatus`, generation and committed sequence, including empty/no-first-decision states. Each active plan has a typed current/cached/unavailable entry; `WAITING`, `RECOVERING` or `BLOCKED` in one entry cannot hide a healthy sibling. `LEGACY_LOW_BUY` reads `TradePlan` decisions; `EXPLICIT_RULES` reads `ExplicitTradePlan` persisted rule outcomes from their own repository. Never synthesize a legacy decision for an explicit plan.
+- Remove the old global `readOnly` and aggregate `connectionStatus` permission shortcuts. Resource lifecycle, coordinator progress, aggregate operational mode, scoped evaluation readiness and current signal validity are separate facts. Only PLAN scopes expose the precisely defined diagnostic `readOnly`; it is neither command authorization nor reminder eligibility. Existing 90-second intraday freshness, official-close/risk-state exceptions, activation/generation fences and D5 recovery barriers remain authoritative.
+- Connect to `/ws/v1/monitor?after=<sequence>&monitorContractVersion=2` only after a validated v2 snapshot. Reject missing/incompatible socket versions with `1008`/`MONITOR_CONTRACT_MISMATCH` before replay. Committed events keep `schemaVersion=1` and existing sequence/payload/hash rules; control frames use the exact v2 shapes from RS07. The heartbeat may prove transport activity while the coordinator is blocked or stalled. It cannot refresh `lastProgressAt`, authorize a decision or replace a snapshot. Normal mode changes do not reconnect; generation/cursor changes retain authoritative snapshot recovery.
+- `/` and `/system` display standby, genuine recovery work and scoped retry/action reasons independently of transport. Keep cached cutoff and risk dates visible. A compatible client enters `RELOAD_REQUIRED` on protocol mismatch, clears actionable display and stops the incompatible reconnect loop; old clients are denied guarded commands even if their cached UI cannot render the new reload copy. Ship backend, generated contracts and hashed frontend assets together. No live migration or deployment is authorized by this amendment.
 
 ### T035 Application and Error Boundary
 

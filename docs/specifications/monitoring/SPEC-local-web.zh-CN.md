@@ -1,6 +1,7 @@
 # 规格：local-web（本地 Web 应用）
 
 > 中文审阅版。英文权威版为 `SPEC-local-web.md`；两份文档必须保持语义一致。
+> RR002 修订：下述监控契约 v2 边界是已批准任意时间恢复工作的详细审核稿。本次文档变更不代表已经实现或启用；在所述替换门禁通过之前，原 T035–WEBF14 边界继续作为实施历史保留。
 
 ## 目标
 
@@ -88,6 +89,17 @@ web/src/
   }
 }
 ```
+
+### RR002 运行状态与监控契约升级
+
+[SPEC-runtime-status](SPEC-runtime-status.zh-CN.md) RS01–RS09 定义拟议的 `monitorContractVersion=2`，替换 T035/T036/T043/T044、WEBF05/WEBF06/WEBF11 和已批准的回测扩展边界中监控可用性段落的旧全局健康/只读、全股票投影及心跳存活假设。替换仅在 RR015–RR020 和 C0–C4 通过后生效；本修订不改变运行中的默认路径，也不追溯声称这些任务已完成。
+
+- 版本一致要求 RS02 枚举的变更监控读取及影响监控的命令恰好携带一个 `X-Monitor-Contract-Version: 2` 请求头，不对所有 `/api/v1` 变更实施统一规则。缺失/不兼容版本在投影/命令执行前返回既有 `409 CONFLICT` 信封及 `MONITOR_CONTRACT_MISMATCH`。响应声明版本且不缓存。兼容健康读取不依赖已有当前判断。独立研究/草稿/AI 契约保留既有范围。
+- 每个受保护 POST 之前，共用适配器验证一次只读 v2 健康/总览预检，包括直接进入命令页面和结果不确定后的重试。预检失败/不匹配不发送 POST；仅检查响应版本无法阻止旧后端执行未协商命令。显式投影在不可变结果之外公开后端负责的 `ruleEligibility` 和 `actionableRuleIds`；行级布尔值表示至少一条规则有效，不能因风险规则仍有效而使过期 BUY 可操作。
+- v2 总览始终返回权威 `runtimeStatus`、generation 和已提交序号，包括空状态/尚无首个判断。每个活动计划都有类型化当前/缓存/不可用条目；单个条目的 `WAITING`、`RECOVERING` 或 `BLOCKED` 不能隐藏健康兄弟。`LEGACY_LOW_BUY` 读取 `TradePlan` 判断；`EXPLICIT_RULES` 从独立仓库读取 `ExplicitTradePlan` 已持久化规则结果。不得为显式计划合成旧判断。
+- 移除旧全局 `readOnly` 和聚合 `connectionStatus` 权限捷径。资源生命周期、协调器进展、聚合运行模式、范围求值就绪及当前信号有效性是独立事实。仅 PLAN 范围公开精确定义的诊断 `readOnly`，它既不是命令授权，也不是提醒资格。既有 90 秒盘中新鲜度、官方收盘/风险状态例外、启用/generation 保护和 D5 恢复屏障继续具有权威性。
+- 仅在验证 v2 快照后连接 `/ws/v1/monitor?after=<sequence>&monitorContractVersion=2`。缺失/不兼容 socket 版本在回放前以 `1008`/`MONITOR_CONTRACT_MISMATCH` 拒绝。已提交事件保留 `schemaVersion=1` 及既有序号/payload/哈希规则；控制帧使用 RS07 精确 v2 结构。协调器阻断或停滞时心跳仍可证明传输活动，但不能更新 `lastProgressAt`、授权判断或代替快照。普通模式变化不重连；generation/游标变化保留权威快照恢复。
+- `/` 和 `/system` 独立于传输展示待机、真实恢复工作及范围重试/操作原因，保留缓存截止及风险日期。兼容客户端在协议不匹配时进入 `RELOAD_REQUIRED`，清除可操作展示并停止不兼容重连循环；即使旧缓存 UI 无法渲染新刷新文案，旧客户端的受保护命令也会被拒绝。后端、生成契约及带哈希前端资源一起发布。本修订不授权真实迁移或部署。
 
 ### T035 应用与错误边界
 
