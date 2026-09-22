@@ -14,7 +14,7 @@ from trade_plan_monitor.state.database import create_sqlite_engine, upgrade_data
 from trade_plan_monitor.state.models import AuditLog, Base, MonitorEvent
 
 PREVIOUS_REVISION = "0019_alert_delivery_eligibility"
-HISTORY_REVISION = "0020_lot_history_indexes"
+LATEST_REVISION = "0021_inventory_history_index"
 EXPECTED_INDEXES = {
     "audit_log": ("ix_audit_log_entity", ["entity_type", "entity_id"]),
     "monitor_event": ("ix_monitor_event_aggregate_sequence", ["aggregate_id", "sequence"]),
@@ -104,7 +104,7 @@ def test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row(popula
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == HISTORY_REVISION
+                == LATEST_REVISION
             )
 
     _migrate(engine, PREVIOUS_REVISION, downgrade=True)

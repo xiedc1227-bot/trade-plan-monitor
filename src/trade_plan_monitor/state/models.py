@@ -334,6 +334,7 @@ class DeliveryAttempt(Base):
 class PositionLot(Base):
     __tablename__ = "position_lot"
     __table_args__ = (
+        Index("ix_position_lot_symbol", "symbol"),
         CheckConstraint("bucket IN ('CORE', 'TACTICAL')", name="ck_position_lot_bucket"),
         CheckConstraint("quantity > 0", name="ck_position_lot_quantity_positive"),
         CheckConstraint(
