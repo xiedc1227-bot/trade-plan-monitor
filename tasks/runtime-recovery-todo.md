@@ -92,6 +92,12 @@ Future confirmations preserve complete raw previous/next rows and any newly crea
 
 See paired `docs/verification/2026-09-22-inventory-recovery-evidence.md`. This increment completes writer storage, not historical inventory reconstruction. RR009/C2 stay unchecked: bounded decoding, source/chain verification, completeness cutoffs, late/non-monotonic registration, risk source-effective semantics and chronological execution remain open. Final delivery admission, lifecycle/status integration and actual process-restart acceptance are later gates; no live provider, real notification, production default or deployment is enabled.
 
+### Opening-balance reduction decoder checkpoint — 2026-09-22
+
+`decode_opening_balance_mutation` now validates one bounded opening-reduction audit and returns immutable consistent evidence or typed unknown. It preserves raw timestamps while checking the existing DTO-based hashes, exact scope and mutation arithmetic. Same-day sellability, variable board lots, odd balances and independent write/closure/effective dates remain supported. It reuses strict parsing primitives without changing existing writers or the lot decoder.
+
+See paired `docs/verification/2026-09-22-opening-balance-decoding.md`. This is the first of three inventory-related decoder slices, not a durable history reader. Confirmation and inventory-change receipt decoding, source/chain proof, explicit completeness policy and chronological execution remain open; RR009/C2 stay unchecked. No branch creation/switch, migration, production recovery, real notification, push or deployment is included.
+
 ## Specification gate
 
 - [ ] RR001 — Freeze semantic and recovery specifications. Effort: `xhigh`. Dependencies: proposal/map approval.
