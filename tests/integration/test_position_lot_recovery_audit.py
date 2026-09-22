@@ -111,7 +111,11 @@ def test_delayed_mutations_keep_exact_source_date_snapshots_and_hashes(
 
     with create_session_factory(engine)() as session:
         events = session.scalars(select(MonitorEvent).order_by(MonitorEvent.sequence)).all()
-        audits_by_hash = {row.after_hash: row for row in session.scalars(select(AuditLog)).all()}
+        all_audits = session.scalars(select(AuditLog)).all()
+        audits_by_hash = {
+            row.after_hash: row for row in all_audits if row.entity_type == "POSITION_LOT"
+        }
+        inventory_audits = [row for row in all_audits if row.entity_type == "POSITION_INVENTORY"]
     expected = [(None, _snapshot(lot.id, 400), 400, "2026-09-11")]
     remaining = 400
     for quantity in reductions:
@@ -120,6 +124,10 @@ def test_delayed_mutations_keep_exact_source_date_snapshots_and_hashes(
         after = _snapshot(lot.id, remaining, closed=remaining == 0)
         expected.append((before, after, quantity, "2026-09-14"))
     assert len(audits_by_hash) == len(expected)
+    assert len(inventory_audits) == len(expected)
+    assert len(all_audits) == 2 * len(expected)
+    assert {json.loads(row.details_json)["recoveryEvidence"]["sourceAudit"]["id"]
+            for row in inventory_audits} == {row.id for row in audits_by_hash.values()}
     assert [event.id for event in events] == [
         str(
             monitor_event_id(MonitorEventType.POSITION_UPDATED, lot.id, str(after["remaining_qty"]))

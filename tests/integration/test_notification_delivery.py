@@ -254,7 +254,14 @@ def test_state_audit_and_outbox_commit_or_rollback_in_one_transaction(
         )
         work.commit()
 
-    assert _row_counts(database_engine) == (1, 1, 1)
+    assert _row_counts(database_engine) == (1, 1, 2)
+    with create_session_factory(database_engine)() as session:
+        committed_audits = session.execute(
+            select(AuditLog.__table__).order_by(AuditLog.id)
+        ).all()
+        assert {row.action for row in committed_audits} == {
+            "POSITION_BUY_RECORDED", "POSITION_INVENTORY_CHANGED",
+        }
 
     with _unit_of_work(database_engine) as work:
         event = work.alerts.enqueue(_payload(2))
@@ -270,7 +277,11 @@ def test_state_audit_and_outbox_commit_or_rollback_in_one_transaction(
         )
         # Leaving the unit of work without commit simulates an interrupted transaction.
 
-    assert _row_counts(database_engine) == (1, 1, 1)
+    assert _row_counts(database_engine) == (1, 1, 2)
+    with create_session_factory(database_engine)() as session:
+        assert session.execute(
+            select(AuditLog.__table__).order_by(AuditLog.id)
+        ).all() == committed_audits
 
 
 def test_concurrent_dedup_enqueue_has_one_unique_claim(database_engine: Engine) -> None:

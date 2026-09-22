@@ -212,7 +212,8 @@ def test_missing_root_gaps_duplicate_and_publication_order_cannot_prove(engine, 
 def test_extraneous_aggregate_publication_and_audit_scope(engine):
     lot_id = seed(engine)
     mutate(engine, "INSERT INTO audit_log SELECT 'unrelated',action,'OTHER',entity_id,"
-           "before_hash,after_hash,details_json,created_at FROM audit_log")
+           "before_hash,after_hash,details_json,created_at FROM audit_log "
+           "WHERE entity_type='POSITION_LOT'")
     assert isinstance(read(engine, lot_id), ProvenLotHistory)
     mutate(engine, "INSERT INTO monitor_event SELECT 'extra',2,'system.health.updated',"
            "1,aggregate_id,payload_json,occurred_at FROM monitor_event")

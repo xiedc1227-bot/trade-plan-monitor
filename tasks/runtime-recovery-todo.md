@@ -86,6 +86,12 @@ Additive migration `0020_lot_history_indexes` supports exact audit scope and ord
 
 See paired `docs/verification/2026-09-22-recovery-reader-transactions.md`. The next RR009 slice must preserve opening-balance and inventory-confirmation history before complete historical inventory can be reconstructed. Risk source-effective semantics, history budgets, causal execution and the broader integration gates remain open. No production default, provider/channel operation, schema migration or deployment is enabled.
 
+### Inventory writer evidence checkpoint — 2026-09-22
+
+Future confirmations preserve complete raw previous/next rows and any newly created opening balance. Opening reductions preserve accepted trade date, board lot and raw before/after rows. Every lot buy/reduction and opening reduction also records a separate source-linked inventory transition, including missing/stale confirmations. Existing admission, responses, hashes, publication identities, ID/clock consumption and transaction ownership remain unchanged; no migration or backfill is included.
+
+See paired `docs/verification/2026-09-22-inventory-recovery-evidence.md`. This increment completes writer storage, not historical inventory reconstruction. RR009/C2 stay unchecked: bounded decoding, source/chain verification, completeness cutoffs, late/non-monotonic registration, risk source-effective semantics and chronological execution remain open. Final delivery admission, lifecycle/status integration and actual process-restart acceptance are later gates; no live provider, real notification, production default or deployment is enabled.
+
 ## Specification gate
 
 - [ ] RR001 — Freeze semantic and recovery specifications. Effort: `xhigh`. Dependencies: proposal/map approval.

@@ -81,6 +81,22 @@
 
 两项历史查询各最多获取上限加一条溢出哨兵。详情上限为 16384 个 UTF-8 字节，事件载荷上限为 4096；解码前通过 SQL 截断及存储类型/长度检查，防止超长值或内嵌 NUL 隐藏尾部数据。同时限制元数据/当前行文本长度，避免 ORM 日期/类型强制转换。通过 `0020_lot_history_indexes` 增加非唯一索引：审计 `(entity_type, entity_id)` 与监控 `(aggregate_id, sequence)`。索引支持范围查询而非整表扫描；迁移不改写记录，降级只移除这两个索引。仅在临时数据库验证升级、重复升级、降级保留数据、元数据一致性及查询计划。不包含真实数据库迁移、新写入器、生产消费者或默认切换。
 
+### 持仓写入证据增量
+
+本 RR009 仅写入增量保存未来人工持仓确认、期初持仓创建/减仓及自动确认同步中已接受的事实。不重建历史、不认证有效日期、不证明更早截止点的完整性，也不授权回放/交付。旧记录保持不变。准入、响应形状、既有哈希、监控事件、ID 工厂调用次数和时钟调用不变；不包含迁移或生产恢复切换。
+
+确认快照准确使用这些存储列名：`symbol`、`confirmation_id`、`as_of_trade_date`、`confirmed_at`、`inventory_revision`、`total_qty`、`sellable_qty`、`included_lot_ids_json`、`opening_balance_ids_json`、`complete_registration`。日期使用 ISO 日期字符串；存储时间戳和成员 JSON 字符串原样复制，不通过 `InventorySnapshot` 解析或重新计算。Null 表示没有确认，不表示零持仓。期初持仓快照准确使用 `id`、`symbol`、`original_qty`、`remaining_qty`、`sellable_from`、`confirmation_id`、`revision`、`closed_at`；不虚构取得日期或成本。
+
+仅为未来 `POSITION_INVENTORY_CONFIRMED` 详情增加 `recoveryEvidence`：`schemaVersion` 为 1、`previousInventoryRevision`、`nextInventoryRevision`、完整确认 `before`/`after`，以及 `createdOpeningBalance`（完整快照或 null）。保留既有详情字段及原 null 前哈希/部分字段后哈希。在覆盖前捕获旧确认，包括过期确认。重复接受的确认形成新 revision，而应用幂等重放不新增证据。不虚构新的期初持仓创建事件。
+
+仅为未来 `POSITION_OPENING_BALANCE_REDUCTION_RECORDED` 详情增加 `recoveryEvidence`：`schemaVersion` 为 1、已接受的 `effectiveTradeDate`、已接受的 `boardLot`，以及完整期初持仓 `before`/`after`。保留既有数量/证券和前后哈希。新期初持仓快照原样复制 ORM 字符串，旧期初持仓哈希则保持既有 DTO 序列化（例如存储值 `+00:00` 与 DTO 值 `Z`）。保持既有当日可卖规则及每次操作 `quantity // boardLot` 的 revision 增量：不同操作可以使用不同交易单位，剩余余额也无需被该交易单位整除。已接受的来源日期可以不同于写入/清仓时间，也可以在多次登记间倒序。
+
+每次批次买入、批次减仓、期初持仓减仓，在 `POSITION_INVENTORY` 下按证券范围追加一条独立的 `POSITION_INVENTORY_CHANGED` 审计。详情只包含 `recoveryEvidence`，其中包括 `schemaVersion` 为 1、`sourceAudit`（`id`、`action`、`entityType`、`entityId`）、已接受的 `effectiveTradeDate`、带正负号的 `totalDelta`、`syncOutcome`（`SYNCED`、`MISSING` 或 `STALE`），以及 `before`/`after` 对象；两者各含 `inventoryRevision` 和完整 `confirmation` 快照或 null。即使没有同步确认，也记录实际 revision 推进。`SYNCED` 保留当前数量更新/上限截取行为，不刷新确认时间、日期或成员引用；`MISSING` 和 `STALE` 保持既有不修改确认行为。
+
+新增持仓审计的哈希为对应规范前后对象的 SHA-256（UTF-8、键排序、紧凑分隔符、保留非 ASCII）。其 ID 为 `uuid5(NAMESPACE_URL, "trade-plan-monitor:inventory-recovery:v1:" + source_audit_id)`，因此不额外消耗应用 ID；冲突必须显式失败，不得替换或忽略既有行。写入时间复制来源审计时间。严格版本 1 批次证据格式不变；额外持仓事实不进入其实体范围或封装。
+
+全部新增证据与批次、期初持仓、确认、持仓 revision、既有发布及应用幂等收据共享现有调用方事务。不允许独立提交或额外读取时钟。失败通过既有工作单元边界回滚该命令。快照字段显式列举，不从未来 ORM/DTO 字段推导。不得将单批次读取器的 16384 字节预算变成新的写入大小限制：现有可接受成员列表仍可接受。有界读取器、来源验证和完整持仓历史证明属于独立后续工作；仅存储这些证据不授予任何权限。
+
 ## 显式风险交付规则 — 2026-09-21 已批准
 
 用户明确批准按最新状态处理未发送的 `RISK_ALERT`：恢复追平后，仍有效的风险可以发送；已解除的风险保留记录但抑制发送；信息不足保持非终态 HOLD。这不改变评估器，也不创建新的提醒意图。

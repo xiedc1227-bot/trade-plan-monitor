@@ -109,6 +109,12 @@ from trade_plan_monitor.state.models import (
 from trade_plan_monitor.state.models import (
     MinuteBar as MinuteBarRow,
 )
+from trade_plan_monitor.state.position_inventory_audit import (
+    InventoryAuditSource,
+    confirmation_snapshot,
+    inventory_change_audit,
+    opening_snapshot,
+)
 
 IdFactory = Callable[[], str]
 Clock = Callable[[], datetime]
@@ -1538,20 +1544,25 @@ class PositionRepository:
         except IntegrityError:
             raise RepositoryError("Position lot could not be persisted") from None
         record = _position_lot_record(model)
-        occurred_at = self._append_audit(
+        source_audit = self._append_audit(
             action="POSITION_BUY_RECORDED",
             before=None,
             after=record,
             quantity=normalized_quantity,
             effective_trade_date=normalized_date,
         )
-        self._append_position_event(record, occurred_at=occurred_at)
+        self._append_position_event(
+            record,
+            occurred_at=source_audit.occurred_at,
+        )
         next_inventory_revision = self._advance_inventory_revision(normalized_symbol)
         self._sync_inventory_confirmation(
             normalized_symbol,
             previous_revision=previous_inventory_revision,
             next_revision=next_inventory_revision,
             total_delta=normalized_quantity,
+            source_audit=source_audit,
+            effective_trade_date=normalized_date,
         )
         return record
 
@@ -1751,6 +1762,7 @@ class PositionRepository:
         if remainder < 0 or sellable != represented_sellable + remainder:
             raise RepositoryError("Inventory assertion does not match represented settled holdings")
         confirmation_id = self._id_factory()
+        created_opening = None
         if remainder:
             opening = PositionOpeningBalance(
                 id=self._id_factory(),
@@ -1764,10 +1776,12 @@ class PositionRepository:
             )
             self._session.add(opening)
             self._session.flush()
+            created_opening = opening_snapshot(opening)
             balances = (*balances, _opening_balance_record(opening))
         new_revision = self._advance_inventory_revision(normalized_symbol)
         now = _aware_now(self._clock)
         confirmation = self._session.get(PositionInventoryConfirmation, normalized_symbol)
+        before_confirmation = confirmation_snapshot(confirmation)
         values = {
             "confirmation_id": confirmation_id,
             "as_of_trade_date": normalized_date,
@@ -1807,6 +1821,14 @@ class PositionRepository:
                     {
                         "asOfTradeDate": normalized_date.isoformat(),
                         "completeRegistration": True,
+                        "recoveryEvidence": {
+                            "schemaVersion": 1,
+                            "previousInventoryRevision": current_revision,
+                            "nextInventoryRevision": new_revision,
+                            "before": before_confirmation,
+                            "after": confirmation_snapshot(confirmation),
+                            "createdOpeningBalance": created_opening,
+                        },
                     }
                 ),
                 created_at=now.isoformat(),
@@ -1886,20 +1908,25 @@ class PositionRepository:
             model.closed_at = _aware_now(self._clock).isoformat()
         self._session.flush()
         after = _position_lot_record(model)
-        occurred_at = self._append_audit(
+        source_audit = self._append_audit(
             action="POSITION_REDUCTION_RECORDED",
             before=before,
             after=after,
             quantity=normalized_quantity,
             effective_trade_date=normalized_date,
         )
-        self._append_position_event(after, occurred_at=occurred_at)
+        self._append_position_event(
+            after,
+            occurred_at=source_audit.occurred_at,
+        )
         next_inventory_revision = self._advance_inventory_revision(before.symbol)
         self._sync_inventory_confirmation(
             before.symbol,
             previous_revision=previous_inventory_revision,
             next_revision=next_inventory_revision,
             total_delta=-normalized_quantity,
+            source_audit=source_audit,
+            effective_trade_date=normalized_date,
         )
         return after
 
@@ -1950,6 +1977,7 @@ class PositionRepository:
             raise PositionOpeningBalanceNotFoundError("Opening balance was not found")
         previous_inventory_revision = self._inventory_revision(model.symbol, lock=True)
         before = _opening_balance_record(model)
+        before_snapshot = opening_snapshot(model)
         if normalized_revision is not None and normalized_revision != model.revision:
             raise RevisionConflictError(model.revision)
         if model.sellable_from > normalized_date:
@@ -1965,18 +1993,27 @@ class PositionRepository:
             model.closed_at = _aware_now(self._clock).isoformat()
         self._session.flush()
         after = _opening_balance_record(model)
-        occurred_at = self._append_opening_balance_audit(
+        source_audit = self._append_opening_balance_audit(
             before=before,
             after=after,
             quantity=normalized_quantity,
+            effective_trade_date=normalized_date,
+            board_lot=normalized_board_lot,
+            before_snapshot=before_snapshot,
+            after_snapshot=opening_snapshot(model),
         )
-        self._append_opening_balance_event(after, occurred_at=occurred_at)
+        self._append_opening_balance_event(
+            after,
+            occurred_at=source_audit.occurred_at,
+        )
         next_inventory_revision = self._advance_inventory_revision(before.symbol)
         self._sync_inventory_confirmation(
             before.symbol,
             previous_revision=previous_inventory_revision,
             next_revision=next_inventory_revision,
             total_delta=-normalized_quantity,
+            source_audit=source_audit,
+            effective_trade_date=normalized_date,
         )
         return after
 
@@ -2018,16 +2055,40 @@ class PositionRepository:
         previous_revision: int,
         next_revision: int,
         total_delta: int,
+        source_audit: InventoryAuditSource,
+        effective_trade_date: date,
     ) -> None:
         confirmation = self._session.get(PositionInventoryConfirmation, symbol)
-        if confirmation is None or confirmation.inventory_revision != previous_revision:
-            return
-        next_total = confirmation.total_qty + total_delta
-        if next_total < 0:
-            raise RepositoryError("Position mutation conflicts with confirmed inventory")
-        confirmation.total_qty = next_total
-        confirmation.sellable_qty = min(confirmation.sellable_qty, next_total)
-        confirmation.inventory_revision = next_revision
+        before = {
+            "inventoryRevision": previous_revision,
+            "confirmation": confirmation_snapshot(confirmation),
+        }
+        if confirmation is None:
+            outcome = "MISSING"
+        elif confirmation.inventory_revision != previous_revision:
+            outcome = "STALE"
+        else:
+            outcome = "SYNCED"
+            next_total = confirmation.total_qty + total_delta
+            if next_total < 0:
+                raise RepositoryError("Position mutation conflicts with confirmed inventory")
+            confirmation.total_qty = next_total
+            confirmation.sellable_qty = min(confirmation.sellable_qty, next_total)
+            confirmation.inventory_revision = next_revision
+        self._session.add(
+            inventory_change_audit(
+                symbol=symbol,
+                source=source_audit,
+                effective_trade_date=effective_trade_date,
+                total_delta=total_delta,
+                sync_outcome=outcome,
+                before=before,
+                after={
+                    "inventoryRevision": next_revision,
+                    "confirmation": confirmation_snapshot(confirmation),
+                },
+            )
+        )
         self._session.flush()
 
     def _list_opening_balances(self, symbol: str) -> tuple[OpeningBalanceRecord, ...]:
@@ -2049,34 +2110,33 @@ class PositionRepository:
         after: PositionLotRecord,
         quantity: int,
         effective_trade_date: date,
-    ) -> datetime:
+    ) -> InventoryAuditSource:
         occurred_at = _aware_now(self._clock)
-        self._session.add(
-            AuditLog(
-                id=self._id_factory(),
-                action=action,
-                entity_type="POSITION_LOT",
-                entity_id=after.id,
-                before_hash=None if before is None else _position_lot_hash(before),
-                after_hash=_position_lot_hash(after),
-                details_json=_canonical_json(
-                    {
-                        "bucket": after.bucket,
-                        "quantity": quantity,
-                        "symbol": after.symbol,
-                        "recoveryEvidence": {
-                            "schemaVersion": 1,
-                            "effectiveTradeDate": effective_trade_date.isoformat(),
-                            "before": None if before is None else before.model_dump(mode="json"),
-                            "after": after.model_dump(mode="json"),
-                        },
-                    }
-                ),
-                created_at=occurred_at.isoformat(),
-            )
+        audit = AuditLog(
+            id=self._id_factory(),
+            action=action,
+            entity_type="POSITION_LOT",
+            entity_id=after.id,
+            before_hash=None if before is None else _position_lot_hash(before),
+            after_hash=_position_lot_hash(after),
+            details_json=_canonical_json(
+                {
+                    "bucket": after.bucket,
+                    "quantity": quantity,
+                    "symbol": after.symbol,
+                    "recoveryEvidence": {
+                        "schemaVersion": 1,
+                        "effectiveTradeDate": effective_trade_date.isoformat(),
+                        "before": None if before is None else before.model_dump(mode="json"),
+                        "after": after.model_dump(mode="json"),
+                    },
+                }
+            ),
+            created_at=occurred_at.isoformat(),
         )
+        self._session.add(audit)
         self._session.flush()
-        return occurred_at
+        return InventoryAuditSource.capture(audit, occurred_at)
 
     def _append_position_event(
         self,
@@ -2109,26 +2169,41 @@ class PositionRepository:
         before: OpeningBalanceRecord,
         after: OpeningBalanceRecord,
         quantity: int,
-    ) -> datetime:
+        effective_trade_date: date,
+        board_lot: int,
+        before_snapshot: dict[str, object],
+        after_snapshot: dict[str, object],
+    ) -> InventoryAuditSource:
         occurred_at = _aware_now(self._clock)
-        self._session.add(
-            AuditLog(
-                id=self._id_factory(),
-                action="POSITION_OPENING_BALANCE_REDUCTION_RECORDED",
-                entity_type="POSITION_OPENING_BALANCE",
-                entity_id=after.id,
-                before_hash=sha256(
-                    _canonical_json(before.model_dump(mode="json")).encode("utf-8")
-                ).hexdigest(),
-                after_hash=sha256(
-                    _canonical_json(after.model_dump(mode="json")).encode("utf-8")
-                ).hexdigest(),
-                details_json=_canonical_json({"quantity": quantity, "symbol": after.symbol}),
-                created_at=occurred_at.isoformat(),
-            )
+        audit = AuditLog(
+            id=self._id_factory(),
+            action="POSITION_OPENING_BALANCE_REDUCTION_RECORDED",
+            entity_type="POSITION_OPENING_BALANCE",
+            entity_id=after.id,
+            before_hash=sha256(
+                _canonical_json(before.model_dump(mode="json")).encode("utf-8")
+            ).hexdigest(),
+            after_hash=sha256(
+                _canonical_json(after.model_dump(mode="json")).encode("utf-8")
+            ).hexdigest(),
+            details_json=_canonical_json(
+                {
+                    "quantity": quantity,
+                    "symbol": after.symbol,
+                    "recoveryEvidence": {
+                        "schemaVersion": 1,
+                        "effectiveTradeDate": effective_trade_date.isoformat(),
+                        "boardLot": board_lot,
+                        "before": before_snapshot,
+                        "after": after_snapshot,
+                    },
+                }
+            ),
+            created_at=occurred_at.isoformat(),
         )
+        self._session.add(audit)
         self._session.flush()
-        return occurred_at
+        return InventoryAuditSource.capture(audit, occurred_at)
 
     def _append_opening_balance_event(
         self,
