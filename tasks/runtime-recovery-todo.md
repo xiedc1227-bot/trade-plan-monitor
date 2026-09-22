@@ -66,6 +66,12 @@ RR009's next prerequisite records versioned command-date and complete before/aft
 
 The next historical-state work must validate those records and establish complete per-lot/inventory history, opening-balance and confirmation semantics, plus a distinct risk source-effective date. Existing evidence budgets and causal gaps still block unknown scopes. RR009 and C2 remain unchecked; no production recovery, live service, migration or real delivery is enabled.
 
+### Position-lot decoding checkpoint — 2026-09-22
+
+The isolated pure decoder validates one versioned lot-mutation audit: bounded strict JSON, metadata bindings, exact legacy hashes and buy/reduction invariants. Missing old evidence, unsupported versions and invalid data return typed unknown; no write-time inference is used. It supports the existing non-UUID/custom-board-lot conventions without changing mutation admission. See paired `docs/verification/2026-09-22-position-lot-evidence-decoder.md` for test-first and independent-review evidence.
+
+This closes single-record decoding only. A durable per-lot reader still must establish a bounded unique chain, committed publications and agreement with the current lot in one snapshot. An audit query row limit alone does not bound database scan work; the existing audit table has no entity-type/entity-ID index. Inventory completeness, opening balances/confirmations, risk source-effective dates and safe chronological execution remain open. RR009/C2 and production integration are not complete.
+
 ## Specification gate
 
 - [ ] RR001 — Freeze semantic and recovery specifications. Effort: `xhigh`. Dependencies: proposal/map approval.
