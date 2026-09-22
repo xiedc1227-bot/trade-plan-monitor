@@ -72,6 +72,14 @@ The isolated pure decoder validates one versioned lot-mutation audit: bounded st
 
 This closes single-record decoding only. A durable per-lot reader still must establish a bounded unique chain, committed publications and agreement with the current lot in one snapshot. An audit query row limit alone does not bound database scan work; the existing audit table has no entity-type/entity-ID index. Inventory completeness, opening balances/confirmations, risk source-effective dates and safe chronological execution remain open. RR009/C2 and production integration are not complete.
 
+### Single-lot history checkpoint — 2026-09-22
+
+The next RR009 slice reads one lot's complete stored audit/publication chain in one owned SQLite snapshot. A unique buy root, every exact reduction, current-row agreement and ordered deterministic publications are required. Missing, conflicting, malformed or over-budget evidence remains unknown. The evidence is not a complete inventory or a replay/send permit. The seven-day client replay filter is not used to discard older persisted publications.
+
+Additive migration `0020_lot_history_indexes` supports exact audit scope and ordered aggregate-event queries; it changes indexes only and is tested on temporary databases. Reader, migration and review evidence is recorded in paired `docs/verification/2026-09-22-position-lot-history.md`. Complete inventory, opening balances/confirmations, risk source-effective semantics and chronological execution still block RR009/C2 closure and production integration.
+
+- Follow-up before composition: `LegacyCloseRecoveryReader` still checks only fresh Session state, unlike the new lot reader's engine-binding guard. Audit and align owned-transaction binding across recovery readers, with external-connection and cross-database regressions. This adjacent reader is unchanged by the single-lot increment.
+
 ## Specification gate
 
 - [ ] RR001 — Freeze semantic and recovery specifications. Effort: `xhigh`. Dependencies: proposal/map approval.
