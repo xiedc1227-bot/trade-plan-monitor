@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -276,7 +277,7 @@ def test_position_calendar_distinguishes_known_closed_from_missing_authority(
 def test_position_create_replays_atomically_and_uses_active_plan_maximum(
     tmp_path: Path,
 ) -> None:
-    app, _composition, _database_path = _production_position_app(tmp_path)
+    app, _composition, database_path = _production_position_app(tmp_path)
 
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         created = client.post(
@@ -314,6 +315,21 @@ def test_position_create_replays_atomically_and_uses_active_plan_maximum(
     assert page.status_code == 200
     assert page.json()["total"] == 1
     assert page.json()["items"][0]["lotId"] == created.json()["lotId"]
+
+    engine = create_sqlite_engine(database_path)
+    try:
+        with create_session_factory(engine)() as session:
+            audit = session.scalars(
+                select(AuditLog).where(AuditLog.entity_type == "POSITION_LOT")
+            ).one()
+        evidence = json.loads(audit.details_json)["recoveryEvidence"]
+        assert evidence["schemaVersion"] == 1
+        assert evidence["effectiveTradeDate"] == "2026-09-03"
+        assert evidence["before"] is None
+        assert evidence["after"]["id"] == created.json()["lotId"]
+        assert evidence["after"]["remaining_qty"] == 200
+    finally:
+        engine.dispose()
 
 
 def test_position_closure_replays_and_rejects_t1_remaining_and_stale_revision(
@@ -395,5 +411,12 @@ def test_position_closure_replays_and_rejects_t1_remaining_and_stale_revision(
             "POSITION_BUY_RECORDED",
             "POSITION_REDUCTION_RECORDED",
         ]
+        bought, reduced = [
+            json.loads(entry.details_json)["recoveryEvidence"] for entry in position_audits
+        ]
+        assert reduced["schemaVersion"] == 1
+        assert reduced["effectiveTradeDate"] == "2026-09-04"
+        assert reduced["before"] == bought["after"]
+        assert reduced["after"] == {**bought["after"], "remaining_qty": 100}
     finally:
         engine.dispose()

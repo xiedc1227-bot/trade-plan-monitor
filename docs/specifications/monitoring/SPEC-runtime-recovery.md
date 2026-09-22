@@ -47,6 +47,16 @@ To certify `ABSENT`, both claim and result must be absent and an orphan-publicat
 
 All evidence belongs to that database snapshot and observation only. Re-read after activation, calendar, target or generation changes and before later mutation/admission. Historical-state reconstruction, cross-window continuity, chronological execution and production integration remain separate work. The existing alert-origin reader continues to prove original attribution even after later deactivation or reactivation; sharing its validation does not turn origin proof into current delivery permission.
 
+### Position-lot mutation evidence increment
+
+The version 1 snapshot fields are fixed: `id`, `symbol`, `bucket`, `quantity`, `remaining_qty`, `acquired_trade_date`, `cost_fen`, `related_alert_id`, `closed_at`. A future DTO shape change must not silently redefine this stored version.
+
+Future `POSITION_BUY_RECORDED` and `POSITION_REDUCTION_RECORDED` audits retain an additive `recoveryEvidence` object in their existing details. Its `schemaVersion` is 1; `effectiveTradeDate` is the normalized accepted acquisition/reduction date, not the audit write date. `before` is null for a buy and the complete previous `PositionLotRecord` JSON snapshot for a reduction; `after` is the complete resulting snapshot. Snapshot fields use the existing record's snake_case names and JSON encodings. Existing top-level `bucket`, `quantity`, `symbol`, action/entity metadata, lot hash algorithm, monitor-event identities and mutation rules remain unchanged.
+
+This records accepted business facts, not an independently certified exchange session or a complete historical inventory. `created_at` remains the audit write time; `closed_at` remains the existing full-closure write time. A delayed or out-of-order registration does not make these times equivalent to `effectiveTradeDate`. Audit evidence, lot mutation, monitor event and inventory revision remain in the same transaction. Rollback leaves none of that mutation committed, and an application idempotency replay does not append another audit. No additional API field, migration, provider request or notification is introduced.
+
+Old audit rows are neither rewritten nor guessed. Their missing source date/full state remains unknown to future historical reconstruction. Before consuming new evidence, a later reader must validate its version, action/entity bindings, exact before/after hashes and mutation invariants, then independently establish per-lot ordering and complete inventory coverage. The old hashes cover lot snapshots, not the new date/envelope: they are consistency checks, not authentication of the effective date. The writer alone grants no historical-state, replay or delivery permission. Opening balances, inventory-confirmation history, risk source-effective dates, legacy evidence decoding and chronological reconstruction remain separate work.
+
 ## Explicit risk delivery rule — approved 2026-09-21
 
 The user explicitly approved latest-state delivery for an unsent `RISK_ALERT`: after recovery catches up, still-valid risk may be delivered; resolved risk is retained but suppressed; insufficient facts remain on nonterminal HOLD. This does not change the evaluator or create a new alert intent.

@@ -1543,6 +1543,7 @@ class PositionRepository:
             before=None,
             after=record,
             quantity=normalized_quantity,
+            effective_trade_date=normalized_date,
         )
         self._append_position_event(record, occurred_at=occurred_at)
         next_inventory_revision = self._advance_inventory_revision(normalized_symbol)
@@ -1890,6 +1891,7 @@ class PositionRepository:
             before=before,
             after=after,
             quantity=normalized_quantity,
+            effective_trade_date=normalized_date,
         )
         self._append_position_event(after, occurred_at=occurred_at)
         next_inventory_revision = self._advance_inventory_revision(before.symbol)
@@ -2046,6 +2048,7 @@ class PositionRepository:
         before: PositionLotRecord | None,
         after: PositionLotRecord,
         quantity: int,
+        effective_trade_date: date,
     ) -> datetime:
         occurred_at = _aware_now(self._clock)
         self._session.add(
@@ -2061,6 +2064,12 @@ class PositionRepository:
                         "bucket": after.bucket,
                         "quantity": quantity,
                         "symbol": after.symbol,
+                        "recoveryEvidence": {
+                            "schemaVersion": 1,
+                            "effectiveTradeDate": effective_trade_date.isoformat(),
+                            "before": None if before is None else before.model_dump(mode="json"),
+                            "after": after.model_dump(mode="json"),
+                        },
                     }
                 ),
                 created_at=occurred_at.isoformat(),

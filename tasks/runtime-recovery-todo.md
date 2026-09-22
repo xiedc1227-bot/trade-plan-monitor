@@ -60,6 +60,12 @@ The next RR009 slice shares the already-tested activation-chain proof and reads 
 
 See paired `docs/verification/2026-09-21-close-recovery-evidence.md`. RR009 is still open for authoritative historical-state reconstruction and safe chronological execution; no replay, real notification, schema migration or production default was enabled. Current-snapshot facts are not a lasting mutation/send permit.
 
+### Position-lot evidence checkpoint — 2026-09-22
+
+RR009's next prerequisite records versioned command-date and complete before/after snapshots for future manual lot buys and reductions in the existing audit transaction. It preserves lot hashes, event identities, inventory rules and idempotent behavior; it does not reconstruct a historical portfolio or enable replay. Old rows remain unchanged and cannot acquire a missing reduction date from their write timestamp. The contract is in the paired runtime-recovery specification; verification is recorded in paired `docs/verification/2026-09-22-position-lot-recovery-evidence.md`.
+
+The next historical-state work must validate those records and establish complete per-lot/inventory history, opening-balance and confirmation semantics, plus a distinct risk source-effective date. Existing evidence budgets and causal gaps still block unknown scopes. RR009 and C2 remain unchecked; no production recovery, live service, migration or real delivery is enabled.
+
 ## Specification gate
 
 - [ ] RR001 — Freeze semantic and recovery specifications. Effort: `xhigh`. Dependencies: proposal/map approval.
