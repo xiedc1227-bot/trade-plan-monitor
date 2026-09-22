@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Engine, LargeBinary, String, case, cast, func, select
+from sqlalchemy import LargeBinary, String, case, cast, func, select
 from sqlalchemy.orm import Session
 
 from trade_plan_monitor.state.events import (
@@ -27,6 +27,7 @@ from trade_plan_monitor.state.position_lot_evidence import (
     _timestamp,
     decode_position_lot_mutation,
 )
+from trade_plan_monitor.state.recovery_read_session import require_owned_recovery_session
 from trade_plan_monitor.state.repositories import PositionLotRecord, _position_lot_hash
 
 
@@ -192,16 +193,9 @@ class PositionLotHistoryReader:
         if type(max_mutations) is not int or not 1 <= max_mutations <= 1000:
             raise ValueError("max_mutations must be an integer between 1 and 1000")
         session = self._session_factory()
-        if (session.in_transaction() or session.identity_map or session.new
-                or session.dirty or session.deleted):
-            raise ValueError("Position lot history reader requires a fresh session")
-        engine = session.bind
-        if not isinstance(engine, Engine) or engine.dialect.name != "sqlite":
-            raise ValueError("Position lot history reader requires an application SQLite engine")
-        for model in (MonitorSequence, MonitorRow, AuditLog, PositionLot):
-            if (session.get_bind(mapper=model) is not engine
-                    or session.get_bind(clause=model.__table__) is not engine):
-                raise ValueError("Position lot history reader requires one engine for all evidence")
+        require_owned_recovery_session(
+            session, (MonitorSequence, MonitorRow, AuditLog, PositionLot),
+        )
         with session, session.no_autoflush:
             try:
                 return self._read(session, lot_id, max_mutations)

@@ -35,14 +35,19 @@ from trade_plan_monitor.state.events import (
     MonitorEventType,
     monitor_event_id,
 )
-from trade_plan_monitor.state.models import AlertEvent as AlertRow
 from trade_plan_monitor.state.models import (
+    ActivePlan,
+    AuditLog,
     EvaluationLedger,
+    MonitorSequence,
+    PlanActivationState,
     PlanVersion,
 )
+from trade_plan_monitor.state.models import AlertEvent as AlertRow
 from trade_plan_monitor.state.models import EvaluationResult as ResultRow
 from trade_plan_monitor.state.models import MonitorEvent as MonitorRow
 from trade_plan_monitor.state.projections import ProjectionError, _result_from_row
+from trade_plan_monitor.state.recovery_read_session import require_owned_recovery_session
 
 _RISK_SIGNALS = frozenset(
     (
@@ -87,9 +92,10 @@ def _require(agreement: bool) -> None:
 class LegacyAlertOriginReader:
     """Own one fresh app-configured Session/read snapshot, with no commit or flush.
 
-    The factory must use state.database's explicit-BEGIN engine. A pre-used or dirty
-    session is rejected. SQL faults propagate; only content-validation failures become
-    UNKNOWN. History is capped by row count, never the seven-day replay horizon.
+    The factory must use one state.database explicit-BEGIN engine, never a borrowed
+    Connection. A pre-used or dirty session is rejected. SQL faults propagate;
+    only content-validation failures become UNKNOWN. History is capped by row count,
+    never the seven-day replay horizon.
     """
 
     def __init__(self, session_factory: Callable[[], Session]) -> None:
@@ -99,14 +105,10 @@ class LegacyAlertOriginReader:
         if type(event_id) is not UUID:
             raise TypeError("event_id must be a UUID")
         session = self._session_factory()
-        if (
-            session.in_transaction()
-            or session.identity_map
-            or session.new
-            or session.dirty
-            or session.deleted
-        ):
-            raise ValueError("Origin reader requires a fresh session")
+        require_owned_recovery_session(session, (
+            MonitorSequence, MonitorRow, AuditLog, PlanActivationState, ActivePlan,
+            PlanVersion, AlertRow, EvaluationLedger, ResultRow,
+        ))
         with session, session.no_autoflush:
             try:
                 return self._read(session, event_id)

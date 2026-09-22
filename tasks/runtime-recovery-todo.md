@@ -78,7 +78,13 @@ The next RR009 slice reads one lot's complete stored audit/publication chain in 
 
 Additive migration `0020_lot_history_indexes` supports exact audit scope and ordered aggregate-event queries; it changes indexes only and is tested on temporary databases. Reader, migration and review evidence is recorded in paired `docs/verification/2026-09-22-position-lot-history.md`. Complete inventory, opening balances/confirmations, risk source-effective semantics and chronological execution still block RR009/C2 closure and production integration.
 
-- Follow-up before composition: `LegacyCloseRecoveryReader` still checks only fresh Session state, unlike the new lot reader's engine-binding guard. Audit and align owned-transaction binding across recovery readers, with external-connection and cross-database regressions. This adjacent reader is unchanged by the single-lot increment.
+- The transaction-ownership follow-up identified here is addressed by the checkpoint below; the single-lot increment itself did not certify the adjacent readers.
+
+### Recovery reader transaction-ownership checkpoint — 2026-09-22
+
+`LegacyCloseRecoveryReader`, `LegacyAlertOriginReader` and `PositionLotHistoryReader` share a small preflight requiring a fresh session and one application SQLite Engine for every mapper/table binding. External Connections and split engines are rejected before context entry or SQL, without changing the caller's transaction. Real tests reproduce both legacy readers falsely proving uncommitted evidence before the fix. This closes the identified binding gap, not historical-state reconstruction or the entire recovery-reader trust boundary.
+
+See paired `docs/verification/2026-09-22-recovery-reader-transactions.md`. The next RR009 slice must preserve opening-balance and inventory-confirmation history before complete historical inventory can be reconstructed. Risk source-effective semantics, history budgets, causal execution and the broader integration gates remain open. No production default, provider/channel operation, schema migration or deployment is enabled.
 
 ## Specification gate
 

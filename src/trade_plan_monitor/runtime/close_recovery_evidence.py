@@ -36,10 +36,19 @@ from trade_plan_monitor.state.events import (
     MonitorEventType,
     monitor_event_id,
 )
-from trade_plan_monitor.state.models import EvaluationLedger, PlanVersion, TradingCalendar
+from trade_plan_monitor.state.models import (
+    ActivePlan,
+    AuditLog,
+    EvaluationLedger,
+    MonitorSequence,
+    PlanActivationState,
+    PlanVersion,
+    TradingCalendar,
+)
 from trade_plan_monitor.state.models import EvaluationResult as ResultRow
 from trade_plan_monitor.state.models import MonitorEvent as MonitorRow
 from trade_plan_monitor.state.projections import ProjectionError, _result_from_row
+from trade_plan_monitor.state.recovery_read_session import require_owned_recovery_session
 
 _MAX_PLAN = 1024 * 1024
 _MAX_RESULT = 8 * 1024 * 1024
@@ -70,8 +79,8 @@ class LegacyCloseRecoveryReader:
     """Own a fresh app explicit-BEGIN session and one coherent read snapshot.
 
     SQL failures propagate. Invalid stored evidence stays UNKNOWN. Callers must use
-    state.database's configured session factory; no provider, flush, commit, state
-    reconstruction, replay scheduling or notification operation is performed.
+    state.database's single-engine factory, never a borrowed Connection. No provider,
+    flush, commit, state reconstruction, replay scheduling or notification is performed.
     """
 
     def __init__(self, session_factory: Callable[[], Session]) -> None:
@@ -88,9 +97,10 @@ class LegacyCloseRecoveryReader:
         if window_start is not None and type(window_start) is not date:
             raise TypeError("window_start must be a date")
         session = self._session_factory()
-        if (session.in_transaction() or session.identity_map or session.new
-                or session.dirty or session.deleted):
-            raise ValueError("Close recovery reader requires a fresh session")
+        require_owned_recovery_session(session, (
+            MonitorSequence, MonitorRow, AuditLog, PlanActivationState, ActivePlan,
+            PlanVersion, TradingCalendar, EvaluationLedger, ResultRow,
+        ))
         with session, session.no_autoflush:
             try:
                 read_monitor_highwater(session)
