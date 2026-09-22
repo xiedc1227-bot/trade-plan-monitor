@@ -265,6 +265,7 @@ class MonitorEvent(Base):
 
     __tablename__ = "monitor_event"
     __table_args__ = (
+        Index("ix_monitor_event_aggregate_sequence", "aggregate_id", "sequence"),
         UniqueConstraint("sequence", name="uq_monitor_event_sequence"),
         CheckConstraint("sequence >= 1", name="ck_monitor_event_sequence_positive"),
         CheckConstraint(
@@ -978,6 +979,7 @@ class SymbolHealth(Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
+    __table_args__ = (Index("ix_audit_log_entity", "entity_type", "entity_id"),)
 
     id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
     action: Mapped[str] = mapped_column(String(64))
