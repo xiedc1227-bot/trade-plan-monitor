@@ -1,6 +1,13 @@
 # Runtime recovery: connected acceptance evidence
 
-> IN PROGRESS — business step 1 is not accepted. This report accumulates evidence for connected outcomes, not a separate completion milestone per helper. No production recovery or deployment approval.
+> STAGE 1 ACCEPTED for the user's approved offline process-restart criterion on 2026-09-23. Stage 2 delivery safety, live-provider validation, production migration and deployment are not approved. Earlier sections retain their time-bounded historical status; this decision supersedes their former stage-1-open statements.
+
+## Stage 1 process-restart acceptance — 2026-09-23
+
+`test_stopped_monitor_recovers_missed_close_once_after_process_restart` uses three independently spawned Python processes, one temporary SQLite database and the production `create_monitor_composition` lifecycle; only the external Tushare SDK is replaced with deterministic offline data. An active legacy plan starts before the official close, then the first process exits abruptly at 14:00. No official bar or close result exists at that point. A fresh process starts at 16:00, fetches and stores that day's official 55.00 close, commits exactly one close result and one risk alert in persistent `HOLD` with no channel attempt, keeps the original plan active, reports `RUNNING` without a recovery issue, and schedules its next wake. A third process starts at 16:01 without adding a duplicate claim, result or alert. The interruption is below the approved 120-hour expiry boundary. This scenario has no earlier committed close; separate checkpoint tests cover continuation without re-evaluating earlier decisions.
+
+- The focused acceptance passed (1 test). Five directly related recovery/lifecycle modules passed 97 tests with one existing Starlette/httpx deprecation warning; Ruff and `git diff --check` passed. A broader six-module run gave 114 passed and two independently reproducible market-index test failures; it is not described as green. The separately recorded plan-reactivation admission failure also remains open outside this stage-1 criterion.
+- This accepts the agreed test scope—restart after a service interruption and resume the interrupted task—not unrestricted recovery from every historical database. Finite inventory proof budgets and unresolved legacy/cross-activation evidence still cause safe blocking when encountered. No real provider, external sender, user database, browser-server process or deployment was used. Stage 2 must still recheck current risk and holdings before any held alert is released.
 
 ## Restart continuation cleanup and health visibility — 2026-09-23
 
