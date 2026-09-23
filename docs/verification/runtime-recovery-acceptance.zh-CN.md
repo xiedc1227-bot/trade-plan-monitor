@@ -2,7 +2,19 @@
 
 > IN PROGRESS — 业务第 1 步尚未验收。本报告按完整成果累积证据，不为每个辅助组件另立完成里程碑。不代表生产恢复或部署批准。
 
-## 当前范围 — 2026-09-22
+## 有界流程接通 — 2026-09-23
+
+基线版本：`ac9da66705829d5da769af616363533f2f6caf7a`，分支为 `codex/consolidate-r19-r32`；检查覆盖尚未提交的接通修改。可选的 `LegacyHistoricalCloseReader` 和 `HistoricalOfficialContextBuilder` 从一次有界自有快照向既有收盘评估器提供输入。历史风险使用可归因的来源收盘时间；提交结果保存准确的已证明历史批次。D2 登记的人工卖出减少 D2 数量，但即使其生效交易日为 D1，也不减少 D1 数量。补算产生的两条风险提醒均从 `HOLD` 开始。
+
+真实临时 SQLite 场景用 200 股提交 D1，重开后用 100 股提交 D2，再次重开仅得到重复结果。结果保存前和提醒插入后模拟退出，会一起回滚占用、结果、风险及投递资格。提交后发布失败保留唯一持久结果。并发持仓/风险变化、全局发布、旧激活，以及保护核对后占用前插入的写入，均拒绝过期输入。乱序 D2 不留下待收盘标记。持仓/日历资料不足及先前受阻结果不能被占用。旧版批次模型无法表达的期初持仓保持不可用，不会从评估数量中消失。
+
+- 修复审计前驱问题前：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py tests/integration/test_historical_close_evidence.py tests/integration/test_recovery_activation_fences.py tests/integration/test_close_recovery_evidence.py tests/integration/test_close_recovery_session_ownership.py tests/unit/test_missed_close_recovery.py tests/integration/test_position_inventory_history.py tests/integration/test_inventory_history_boundaries.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_ten_symbol_runtime.py tests/integration/test_sqlite_repositories.py tests/integration/test_certified_production_runtime.py -q --tb=short` — 469 通过、1 项既有 Starlette/httpx 警告，80.93 秒。
+- 新的只读 `gpt-6-astra` / `xhigh` 评审确认了期初持仓和缺失日历问题，随后复现物理版本大于 1 时本激活首条风险变更缺少前驱审计连接。每一项均先有专项失败测试，再补保护/连接。先前 `BLOCKED_DATA` 记录也由失败测试证实后改为未知。
+- 评审修复后：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py tests/integration/test_historical_close_evidence.py tests/integration/test_recovery_activation_fences.py -q --tb=short` — 64 通过、1 项既有 Starlette/httpx 警告，17.03 秒。既有 OpenAPI/前端类型快照检查通过。未使用真实行情源、发送器、生产配置、用户数据库迁移或部署。
+
+V1a、V1b 基础已完成。V1c、RR009 和业务第 1 步仍未完成：当前使用方仅覆盖激活起最多 32 个自然日，且无法评估历史期初持仓。仍需生产协调器接入、更完整的进程重启/故障覆盖，以及解决先前记录的 4 项全量测试失败。共享指数准备也发生在历史股票预检前；生产集成前须为其增加单独的时间顺序准入保护。本报告不表示任意时段重启或投递安全已经完成。
+
+## 此前范围 — 2026-09-22
 
 基线版本：`1f50439`，分支为 `codex/consolidate-r19-r32`；下述命令测试了包含 `state/inventory_evidence.py`、`state/position_inventory_history.py`、四个新测试文件、模型索引及仅新增索引的迁移 `0021_inventory_history_index` 的工作区修改。更新了既有最新迁移版本断言，未改变历史迁移目标。此前仅调整流程的计划/任务表修改仍在范围内，作为独立文档修改。未改变依赖、规范哈希、通知行为或生产默认值；未迁移用户数据库。
 
