@@ -211,14 +211,9 @@ class LegacyHistoricalCloseReader:
         if isinstance(scope, UnknownCloseRecovery):
             return UnknownHistoricalClose(HistoricalCloseUnknownReason(scope.reason))
         reader = _CompletionReader(session, scope, boundary.sequence)
-        # A recent bounded prefix is checked for risk-chain consistency. Older
-        # plans use the last committed close as a task checkpoint; neither path
-        # recomputes an already committed trading decision.
-        anchor = (
-            _latest_completed_close(session, scope, reader, trade_date)
-            if (observed_at.date() - scope.activated_at.date()).days >= 32
-            else None
-        )
+        # A proven committed close is the task checkpoint at any plan age;
+        # completed trading decisions are never recalculated.
+        anchor = _latest_completed_close(session, scope, reader, trade_date)
         window_start = (
             scope.activated_at.date() if anchor is None
             else anchor.evaluation_identity.official_trade_date + timedelta(days=1)
@@ -256,7 +251,8 @@ class LegacyHistoricalCloseReader:
         results = tuple(proven_results)
         _require(all(result.snapshot.signal_type is not SignalType.BLOCKED_DATA
                      for result in results))
-        current, risk = _risk_inputs(session, scope, results, cutoff, anchor=anchor)
+        current, risk = _risk_inputs(session, scope, results, cutoff,
+                                     anchor=anchor, reader=reader)
         calendar = _calendar(session, scope.plan.market, trade_date)
         return ProvenHistoricalClose(scope, inventory, current, risk, calendar, highwater)
 
@@ -307,6 +303,27 @@ def _latest_completed_close(session, scope, reader, target_date):
     return result
 
 
+def _checkpoint_transition(session, scope, reader, anchor):
+    """Read only stored checkpoints needed to establish the current risk source."""
+
+    checkpoint = anchor
+    while not checkpoint.transitions:
+        previous = _latest_completed_close(
+            session, scope, reader, checkpoint.evaluation_identity.official_trade_date,
+        )
+        if previous is None:
+            raise _MissingEvidence()
+        _require(previous.snapshot.signal_type is not SignalType.BLOCKED_DATA
+                 and _business(previous.snapshot.risk) == _business(checkpoint.snapshot.risk))
+        checkpoint = previous
+    _require(len(checkpoint.transitions) == 1)
+    previous = _latest_completed_close(
+        session, scope, reader, checkpoint.evaluation_identity.official_trade_date,
+    )
+    _require(previous is None or previous.snapshot.signal_type is not SignalType.BLOCKED_DATA)
+    return checkpoint, previous
+
+
 def _calendar(session, exchange, trade_date):
     start = trade_date - timedelta(days=366)
     fields = {"exchange": 8, "cal_date": 10, "is_open": None, "previous_trade_date": 10}
@@ -326,7 +343,7 @@ def _calendar(session, exchange, trade_date):
     return MarketReferenceRepository(session).list_trading_days(exchange, start, trade_date)
 
 
-def _risk_inputs(session, scope, results, cutoff, *, anchor=None):
+def _risk_inputs(session, scope, results, cutoff, *, anchor=None, reader=None):
     budget = _ReadBudget()
     fields = {
         "symbol": 9, "plan_hash": 64, "status": 32, "breach_trade_date": 10,
@@ -376,29 +393,44 @@ def _risk_inputs(session, scope, results, cutoff, *, anchor=None):
         risk = anchor.snapshot.risk
         _require(not results)
         _require(len(anchor.transitions) <= 1)
-        if anchor.transitions:
-            transition = anchor.transitions[0]
-            _require(transition.risk == risk
-                     and transition.expected_revision == risk.revision - 1
-                     and risk.updated_at == anchor.snapshot.evaluated_at)
-            audit = by_revision.get(risk.revision)
-            if audit is None:
-                raise _MissingEvidence()
-            if risk.revision == 1:
-                _require(audit["before_hash"] is None)
-            else:
-                predecessor = by_revision.get(transition.expected_revision)
-                if predecessor is None:
-                    raise _MissingEvidence()
-                _require(audit["before_hash"] == predecessor["after_hash"])
         if current is None or current.plan_hash != digest:
             _require(not anchor.transitions and risk.status is RiskStatus.CLEAR
+                     and risk.breach_trade_date is None
+                     and (current is not None or not audits)
                      and risk.revision == (0 if current is None else current.revision))
+            return current, None
+        _require(_business(risk) == _business(current) and reader is not None)
+        checkpoint, previous = _checkpoint_transition(session, scope, reader, anchor)
+        risk = checkpoint.snapshot.risk
+        transition = checkpoint.transitions[0]
+        source = checkpoint.snapshot.market_data_at
+        _require(source == datetime.combine(
+            checkpoint.evaluation_identity.official_trade_date, time(15), SHANGHAI,
+        ) and source < cutoff and transition.risk == risk
+                 and transition.expected_revision == risk.revision - 1
+                 and risk.updated_at == checkpoint.snapshot.evaluated_at)
+        prior_risk = None if previous is None else previous.snapshot.risk
+        if prior_risk is None or prior_risk.status is RiskStatus.CLEAR:
+            _require(risk.status is RiskStatus.BREACHED_PENDING_CONFIRMATION
+                     and risk.breach_trade_date == source.date())
         else:
-            _require(_business(risk) == _business(current))
-        source = (anchor.snapshot.market_data_at if anchor.transitions
-                  else risk.updated_at)
-        _require(source is not None and source < cutoff)
+            _require(risk.status in (RiskStatus.CLEAR, RiskStatus.EXIT_PENDING_SETTLEMENT))
+            if risk.status is RiskStatus.EXIT_PENDING_SETTLEMENT:
+                _require(prior_risk.status is RiskStatus.BREACHED_PENDING_CONFIRMATION
+                         and risk.breach_trade_date == prior_risk.breach_trade_date
+                         and risk.prior_close_fen == prior_risk.prior_close_fen)
+        if prior_risk is not None:
+            _require(transition.expected_revision == prior_risk.revision)
+        audit = by_revision.get(risk.revision)
+        if audit is None:
+            raise _MissingEvidence()
+        if risk.revision == 1:
+            _require(audit["before_hash"] is None)
+        else:
+            predecessor = by_revision.get(transition.expected_revision)
+            if predecessor is None:
+                raise _MissingEvidence()
+            _require(audit["before_hash"] == predecessor["after_hash"])
         return current, risk.model_copy(update={"updated_at": source})
     if current is None or current.plan_hash != digest:
         _require(not transitions and (current is not None or not audits))

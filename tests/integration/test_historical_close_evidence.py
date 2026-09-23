@@ -243,6 +243,14 @@ def test_missing_risk_with_orphan_audit_cannot_seed_initial(historical):
     assert prepare(historical, NOW.date()).status == "UNKNOWN"
 
 
+def test_checkpoint_without_risk_row_rejects_orphan_risk_audit(historical):
+    publish(historical)
+    mutate(historical, "DELETE FROM risk_state")
+    publish(historical, day=TARGET, risk=initial_risk(historical), transition=False)
+    assert prepare(historical, TARGET + timedelta(days=1),
+                   OBSERVED + timedelta(days=1)).status == "UNKNOWN"
+
+
 def test_missing_risk_with_noninitial_snapshot_cannot_seed_initial(historical):
     publish(historical, transition=False)
     assert prepare(historical).status == "UNKNOWN"
@@ -285,6 +293,47 @@ def test_old_plan_scans_only_missing_suffix_across_bounded_read_windows(historic
         NOW.date() + timedelta(days=offset) for offset in range(3, 7)
     )
     assert reader.prepare(historical.plan.symbol, TARGET, observed).status == "PROVEN"
+
+
+@pytest.mark.parametrize("elapsed_days", [4, 31, 32, 33])
+def test_prepare_always_resumes_from_latest_committed_close(historical, elapsed_days):
+    from trade_plan_monitor.runtime.historical_close_evidence import LegacyHistoricalCloseReader
+
+    target_day = NOW.date() + timedelta(days=elapsed_days)
+    observed = NOW + timedelta(days=elapsed_days, minutes=25)
+    with historical.factory() as session:
+        session.add_all(TradingCalendar(
+            exchange=exchange, cal_date=NOW.date() + timedelta(days=offset),
+            is_open=offset in (elapsed_days - 1, elapsed_days),
+            previous_trade_date=NOW.date() + timedelta(days=offset - 1),
+        ) for exchange in {"SSE", historical.plan.market}
+            for offset in range(7, elapsed_days + 1))
+        session.commit()
+
+    older = publish(historical, risk=initial_risk(historical), transition=False)
+    publish(historical, day=target_day - timedelta(days=1),
+            risk=initial_risk(historical), transition=False)
+    mutate(historical, "DELETE FROM evaluation_result WHERE result_hash='"
+           + older.result_hash + "'")
+
+    reader = LegacyHistoricalCloseReader(historical.factory)
+    assert reader.missing_targets(historical.plan.symbol, observed) == (target_day,)
+    assert reader.prepare(historical.plan.symbol, target_day, observed).status == "PROVEN"
+
+
+def test_risk_checkpoint_does_not_rescan_old_calendar(historical):
+    publish(historical)
+    cleared = initial_risk(historical, revision=2).model_copy(update={
+        "updated_at": OBSERVED.replace(minute=5),
+    })
+    publish(historical, day=TARGET, risk=cleared)
+    mutate(historical, "DELETE FROM trading_calendar WHERE cal_date='" + NOW.date().isoformat()
+           + "'")
+
+    proof = prepare(historical, TARGET + timedelta(days=1), OBSERVED + timedelta(days=1))
+    assert proof.status == "PROVEN"
+    assert proof.risk_state.status is RiskStatus.CLEAR
+    assert proof.risk_state.updated_at == OBSERVED.replace(minute=0)
 
 
 @pytest.mark.parametrize("corrupt_anchor", [False, True])
