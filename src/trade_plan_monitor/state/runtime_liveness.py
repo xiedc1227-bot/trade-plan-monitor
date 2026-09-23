@@ -56,7 +56,7 @@ class RuntimeLivenessRepository:
     def load(self) -> LivenessSnapshot | None:
         try:
             with self._session_factory() as session:
-                return _snapshot(session.get(RuntimeLiveness, 1))
+                return liveness_snapshot(session.get(RuntimeLiveness, 1))
         except Exception:
             raise RuntimeLivenessError("invalid runtime liveness") from None
 
@@ -93,7 +93,7 @@ class RuntimeLivenessRepository:
         try:
             with self._session_factory.begin() as session:
                 row = session.get(RuntimeLiveness, 1)
-                current = _snapshot(row)
+                current = liveness_snapshot(row)
                 if current is None or current.revision != expected_revision:
                     raise RuntimeLivenessError("runtime liveness changed")
                 if observed_at < current.last_alive_at:
@@ -110,7 +110,7 @@ class RuntimeLivenessRepository:
             raise RuntimeLivenessError("invalid runtime liveness") from None
 
 
-def _snapshot(row: RuntimeLiveness | None) -> LivenessSnapshot | None:
+def liveness_snapshot(row: RuntimeLiveness | None) -> LivenessSnapshot | None:
     if row is None:
         return None
     if row.schema_version != 1 or type(row.revision) is not int or row.revision < 0:

@@ -15,6 +15,7 @@ from trade_plan_monitor.notifications.outbox import (
 )
 from trade_plan_monitor.state.events import MonitorEventLog
 from trade_plan_monitor.state.explicit_rules import ExplicitDecisionRepository
+from trade_plan_monitor.state.plan_expiry import expire_active_plans_after_interruption
 from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.repositories import (
     EpisodeRepository,
@@ -74,6 +75,8 @@ class UnitOfWork(Protocol):
 
     @property
     def references(self) -> MarketReferenceRepository: ...
+
+    def expire_active_plans_after_interruption(self) -> tuple[str, ...]: ...
 
     def __enter__(self) -> UnitOfWork: ...
 
@@ -205,6 +208,16 @@ class SqlAlchemyUnitOfWork:
         if self._references is None:
             raise RuntimeError("Unit of work is not active")
         return self._references
+
+    def expire_active_plans_after_interruption(self) -> tuple[str, ...]:
+        """Resolve the five-day gate in the same transaction as plan expiry."""
+
+        return expire_active_plans_after_interruption(
+            self._require_session(),
+            self.plans,
+            now=self._clock(),
+            id_factory=self._id_factory,
+        )
 
     def __enter__(self) -> SqlAlchemyUnitOfWork:
         if self._session is not None:

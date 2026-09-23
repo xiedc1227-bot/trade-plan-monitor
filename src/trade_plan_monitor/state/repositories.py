@@ -1242,9 +1242,12 @@ class PlanRepository:
         symbol: str,
         *,
         expected_revision: int,
+        cause: str | None = None,
     ) -> PlanActivationStateRecord:
         normalized_symbol = _symbol(symbol)
         normalized_revision = _nonnegative_integer(expected_revision, "expected_revision")
+        if cause not in (None, "OUTAGE_OVER_120_HOURS"):
+            raise ValueError("unsupported plan deactivation cause")
         try:
             with self._session.begin_nested():
                 self._lock_plan_activation_writer(normalized_symbol)
@@ -1320,7 +1323,7 @@ class PlanRepository:
                     or after.revision != normalized_revision + 1
                 ):
                     raise RepositoryError("Deactivated plan state could not be reloaded")
-                self._append_deactivation_audit(before=before, after=after)
+                self._append_deactivation_audit(before=before, after=after, cause=cause)
                 self._events.append(
                     MonitorEventDraft(
                         event_id=monitor_event_id(
@@ -1411,12 +1414,15 @@ class PlanRepository:
         *,
         before: ActivePlanRecord,
         after: PlanActivationStateRecord,
+        cause: str | None = None,
     ) -> None:
         details = {
             "planVersionId": before.plan_version_id,
             "revision": after.revision,
             "symbol": after.symbol,
         }
+        if cause is not None:
+            details["cause"] = cause
         self._session.add(
             AuditLog(
                 id=self._id_factory(),
