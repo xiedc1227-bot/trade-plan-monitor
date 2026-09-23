@@ -2,7 +2,7 @@
 
 > Status: IN PROGRESS since implementation authorization on 2026-09-21. Canonical English; paired copy: `runtime-recovery-todo.zh-CN.md`.
 > Governing proposal: `runtime-recovery-plan.md`. IDs A01–A12 and decisions D1–D7 refer to that proposal.
-> All tasks use `gpt-6-astra`. Design/review uses `xhigh`; bounded coding uses `high`. Each checkpoint is an `xhigh` review, not a claim that a review has passed.
+> Future assignments follow proposal section 2: `gpt-6-astra` / `xhigh` for architecture, adversarial review and difficult failures; `gpt-6-sol` / `high` for bounded implementation and `gpt-6-sol` / `medium` for settled documentation. Historical execution records retain their actual model/effort. Each checkpoint review is evidence only when performed.
 
 ## Execution rules
 

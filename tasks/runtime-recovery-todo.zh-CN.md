@@ -2,7 +2,7 @@
 
 > 状态：自 2026-09-21 获得实现授权起 IN PROGRESS。英文规范输入：`runtime-recovery-todo.md`；本文件为中文副本。
 > 上位提案：`runtime-recovery-plan.zh-CN.md`。A01–A12 和 D1–D7 均引用该提案。
-> 全部任务使用 `gpt-6-astra`。设计/评审使用 `xhigh`；有界编码使用 `high`。每个检查点均为 `xhigh` 评审，不表示评审已经通过。
+> 后续分配遵循提案第 2 节：架构、质疑式评审及疑难故障使用 `gpt-6-astra` / `xhigh`；有界实现使用 `gpt-6-sol` / `high`，已确定内容的文档同步使用 `gpt-6-sol` / `medium`。历史执行记录保留当时实际模型/强度。检查点评审仅在实际执行后才构成证据。
 
 ## 执行规则
 

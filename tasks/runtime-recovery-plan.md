@@ -23,11 +23,13 @@ Assumptions: one production owner per database, valid local configuration and us
 |---|---|---|---|
 | Design, dependencies, interface and migration decisions | `gpt-6-astra` | `xhigh` | Reviewable proposal and explicit invariants |
 | Fresh-context adversarial design review | `gpt-6-astra` | `xhigh` | Findings reconciled, remaining risks disclosed |
-| Approved, bounded code/test implementation | `gpt-6-astra` | `high` | Focused failing test, implementation, focused passing test |
+| Approved, bounded code/test implementation | `gpt-6-sol` | `high` | Focused failing test, implementation, focused passing test; escalate novel safety decisions to Astra review |
 | Difficult recovery/identity failures and final integration review | `gpt-6-astra` | `xhigh` | Fault matrix and regression gates |
-| Documentation synchronized from settled decisions | `gpt-6-astra` | `high` | English/Chinese semantic parity |
+| Documentation synchronized from settled decisions | `gpt-6-sol` | `medium` | English/Chinese semantic parity and unchanged technical identifiers |
 
-Effort changes happen at task boundaries, not arbitrarily in the middle of an invariant. No automatic model downgrade or default `max`. If a task reveals a new architectural decision, return to `xhigh` review before coding. The current parent task cannot change or attest its active model/effort through the available task tools; the independently launched reviewer is explicitly configured as `gpt-6-astra` / `xhigh`. The table is an execution allocation, not a claim that every future stage has run.
+As of 2026-09-23, the model IDs and `high`/`xhigh` efforts remain supported. This prospective allocation uses Sol for bounded implementation and settled documentation while retaining Astra for architectural decisions, adversarial review and difficult failures. Luna is available for focused repetitive work but is not assigned a safety or acceptance gate. This is a workload choice, not evidence that a lower-cost model passes the same checks; compare representative outcomes and latency before further lowering effort. Sources: [official model guidance](https://developers.openai.com/api/docs/guides/latest-model), [model selection](https://developers.openai.com/api/docs/guides/model-selection), and [reasoning effort](https://developers.openai.com/api/docs/guides/reasoning).
+
+Choose the model and effort at task boundaries, not arbitrarily in the middle of an invariant. Do not use `max` by default. If implementation reveals a new architectural or safety decision, return to Astra / `xhigh` review before coding further. Historical reports retain the models actually used; this table applies to future assignments and does not attest the current parent task's runtime model or effort.
 
 ## 3. Code findings and reuse
 
