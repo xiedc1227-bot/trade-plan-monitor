@@ -1,9 +1,16 @@
 # Spec: runtime-recovery
 
-> Derived from approved proposal D2–D6 / A03–A10, authorized 2026-09-21. English canonical; paired Chinese copy. Depends on provider-contract.
+> Derived from approved proposal D2–D6 / A03–A10, authorized 2026-09-21. D8/A13 was approved on 2026-09-23 and is being implemented; D9/A14 business intent is confirmed but its API is not yet approved. English canonical; paired Chinese copy. Depends on provider-contract.
 ## Objective
 
-One runtime owner remains able to reconcile local and provider facts after arbitrary restart; no trading decision may bypass exact dependency, activation or freshness guards.
+One runtime owner can start at any time. After an interruption no longer than 120 hours it may reconcile eligible plans; after a longer interruption all active trading plans must expire before any recovery or alert dispatch. No trading decision may bypass exact dependency, activation or freshness guards.
+## Five-day admission and proposed manual-sale amendment
+
+- D8/A13: Record durable local owner liveness at bounded cadence, including standby/degraded operation; never use last startup or provider success as last-alive evidence. At startup, after storage opens but before active work, provider I/O or send admission, compare the last committed liveness with now. Exactly 120 hours remains recoverable; more than 120 hours expires all active plans of both families in one idempotent, audited transaction. Terminate their pending closes and suppress unsent alerts without deleting plans, holdings, confirmed trades, canonical results or audit. Missing/corrupt liveness or clock reversal blocks automatic admission pending operator review. Do not apply to a live database without approved migration and backup.
+- Within 120 hours, chronological missed-close reconstruction remains mandatory where state depends on it. A long-lived plan needs verified recent provenance/checkpoint and a contiguous completion prefix; a short outage alone does not prove historical state. Unknown evidence blocks only the dependent plan.
+- D9/A14: A sell reminder gains a distinct human action on the alert page: confirm not sold, or confirm sold with actual quantity. Neither a risk warning nor read acknowledgment is a sale. No sale leaves inventory unchanged; a confirmed sale uses the existing inventory-closure transaction with revision/idempotency, checked available quantity and source-alert audit linkage. Do not infer execution, backdate a confirmation, auto-order, or alter risk-warning/sell-signal rules. API and stale-alert details require separate review before implementation.
+
+The following existing contract applies to eligible plans and remains unchanged by D8; D9's API still requires review.
 ## Contract
 
 - Local configuration/storage bootstrap precedes provider work. A coordinator persists through expected dependency errors, including degraded startup and unknown calendar; those errors never consume the three-crash supervisor budget.

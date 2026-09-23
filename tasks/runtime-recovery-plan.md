@@ -1,13 +1,13 @@
 # Implementation Proposal: Anytime Runtime Recovery
 
-> Status: IMPLEMENTATION IN PROGRESS — proposal approved for implementation on 2026-09-21; not approved for deployment. Original proposal date: 2026-09-17.
+> Status: IMPLEMENTATION IN PROGRESS — original proposal approved on 2026-09-21; D8 five-day admission approved on 2026-09-23. D9 business intent is confirmed, but its API contract awaits review. None is approved for deployment. Original proposal date: 2026-09-17.
 > Canonical English proposal; review copy: `runtime-recovery-plan.zh-CN.md`.
 > Initiative: `runtime-recovery`. Task index: `runtime-recovery-todo.md`.
 > The user's 2026-09-21 instruction authorizes implementation and task-specific subagent allocation. Existing completed plans and unrelated working-tree changes remain untouched. Detailed contracts and checkpoint evidence are recorded below and in the paired task index; no complete-runtime acceptance is claimed.
 
 ## 1. Objective and boundaries
 
-An already configured, supported installation must start at any wall-clock time, reconstruct authoritative local state, and autonomously resume eligible monitoring when its dependencies become usable. Closed sessions are normal standby, not failed startup. Unavailable dependencies must produce truthful, scoped status and a scheduled retry where recovery is possible.
+An already configured, supported installation must start at any wall-clock time. Plans are eligible for state reconstruction and autonomous monitoring only when the monitoring interruption is no longer than five days; after a longer interruption, all active trading plans become invalid and require new plans. Closed sessions are normal standby, not failed startup. Unavailable dependencies must produce truthful, scoped status and a scheduled retry where recovery is possible.
 
 Assumptions: one production owner per database, valid local configuration and usable SQLite storage, existing supported provider semantics, and eventual availability of required provider data and permissions. Cold installation against an unknown provider, unavailable historical data, broken storage, and irrevocably revoked permission cannot be guaranteed to recover without intervention. No application can guarantee progress during an operating-system failure.
 
@@ -92,7 +92,8 @@ Stop closes admission, drains/joins physical work, then releases resources. Ordi
 | After close | Reconcile official-close obligations and available completed data; publication lag remains retryable |
 | Weekend/holiday | Last known completed session for display and pending close; future open session for scheduling |
 | Calendar unknown/outside coverage | Schedule calendar refresh; do not assume a weekday is open or silently exit |
-| Restart after a long outage | Restore only justified state and recoverable requirements; disclose unavailable history per affected plan |
+| Restart after an interruption of at most 120 hours | Restore only justified state and recoverable requirements; disclose unavailable history per affected plan |
+| Restart after an interruption longer than 120 hours | Invalidate all active trading plans before provider work or alert dispatch; retain positions and audit/history; require new plans |
 
 Preserve the existing 90-second intraday actionable freshness rule unless separately approved. Session-aware display health must not redefine old data as fresh. Official-close evaluation remains its own target type and is not a fresh intraday buy/sell signal.
 
@@ -154,6 +155,20 @@ This is an explicit monitor-contract revision, not an allegedly harmless optiona
 
 Use existing dashboard and `/system` surfaces for status/progress. Display STANDBY without a stale-data recovery banner; RECOVERING only with active/pending work; failures with a concrete retry time or required action. Existing configuration files remain the configuration entry point, with validated maintenance reload; no new login, token-renewal screen or mandatory recovery button. A retry-now control is not required for automatic recovery and is outside this initial scope.
 
+### D8. Five-day interruption limit — approved 2026-09-23 amendment
+
+The user's business rule is that all trading plans lose validity when the monitor has not operated for more than five days; old symbols/plans are not reconstructed. Approved exact boundary: five consecutive days = 120 hours in absolute time; equality remains eligible for recovery. The reference is the last durably committed local runtime-alive observation, **not** the last startup time or provider success. A continuously running process must not lose plans because its original startup was old. Persist a bounded-cadence heartbeat while the local owner is alive, including standby/degraded modes; graceful shutdown may record a more precise stop. After power loss, the last durable heartbeat is the conservative interruption boundary. Detect clock reversal or missing/corrupt legacy heartbeat as unknown: block automatic recovery and request operator review; never guess a short outage or silently discard plans.
+
+On startup, decide admission immediately after opening storage and **before** loading active work, provider calls or notification dispatch. If the measured interruption exceeds 120 hours, one idempotent, audited transaction expires every active plan of both families, closes/suppresses their outstanding recovery and unsent alert work, and leaves plan definitions, positions, confirmed trade history, canonical results and audit records intact. Expiry is not a sale, cannot change holdings, and cannot be undone by a second restart; a user must create/activate new plans. The existing per-symbol `deactivate` operation rejects pending closes and is not a sufficient bulk-expiry implementation. Do not deploy this amendment against a user database without separately approved migration and backup.
+
+For an interruption of at most 120 hours, preserve D3–D5 chronological recovery and alert safety. This shorter outage window does **not** prove a long-lived plan's current state from activation by itself: verified recent checkpoint/provenance and contiguous missed-close evidence are still required; otherwise only the affected plan remains blocked. Prove exact 120-hour and 120-hour-plus-one-instant boundaries, repeated/crashed expiry, both plan families, stale queued sends, missing heartbeat, clock reversal and continuously running long-lived plans in temporary databases.
+
+### D9. Human sale registration from a sell reminder — proposed 2026-09-23 amendment
+
+Keep `RISK_BREACH` risk warning and sell-ready/sell recommendation as separate evaluator outcomes with their existing thresholds and timing. A reminder is not a broker execution. The alert page must offer a distinct business action for sell reminders: record **not sold** or record **sold with the actual quantity**, with explicit confirmation. The existing **acknowledge/read** action must remain visibly separate and must not mutate holdings. A no-sale response leaves inventory unchanged; a sale deducts only the confirmed quantity through the existing inventory closure boundary, with revision/idempotency and an auditable link to the source alert. Reject quantities exceeding the verified sellable holding; an uncertain or unconfirmed outcome leaves inventory unchanged. Later risk calculations use the confirmed inventory at its registration time, never a retroactive inferred trade. This action supplies a convenient route from the alert page, not an automatic order or a change to risk/sell rules.
+
+Treat the alert decision/position-registration interface as a separate capability slice after the five-day admission contract is approved. Specify its API, permission and stale-alert behavior before coding; do not overload the existing read-acknowledgment endpoint or alter canonical evaluator outputs.
+
 ## 6. Acceptance matrix
 
 | ID | Scenario | Required evidence |
@@ -170,6 +185,8 @@ Use existing dashboard and `/system` surfaces for status/progress. Display STAND
 | A10 | Sleep/wake, cross-day, clock reversal, calendar cache exhaustion | Reconciliation recomputes targets, schedules refresh and rejects future data |
 | A11 | Healthy socket but stuck coordinator; standby with old display facts | UI reports actual fault/standby; socket heartbeats do not certify business progress |
 | A12 | Protocol mismatch, missing projections, migration interrupted | Safe reload/unavailable display, intact historical rows, idempotent migration and usable rollback evidence |
+| A13 | 120-hour boundary, longer interruption, unknown heartbeat, restart during expiry | Eligible short interruption recovers; longer interruption invalidates all active plans exactly once before work/send; uncertain history blocks; positions and audit remain intact |
+| A14 | Risk warning versus sell reminder; read, not-sold and partial/complete sold actions | Existing signals remain distinct; read/not-sold leaves holdings unchanged; only confirmed actual sale quantity changes inventory once and is auditable |
 
 Use injected clocks, fake providers, temporary databases and deterministic process restart tests first. Measure physical starts, queue/backoff bounds, retry timing, completed obligations and alert intents; do not equate green startup with recovered monitoring. No fixed wall-clock full-recovery SLA is claimed before workload measurements. Proposed numerical policies above require approval with the proposal.
 
