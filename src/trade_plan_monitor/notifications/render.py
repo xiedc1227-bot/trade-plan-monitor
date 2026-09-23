@@ -303,6 +303,10 @@ def _suggestion(payload: AlertPayload) -> str:
         return f"低吸机动仓{quantity}股"
     if signal_type is ActionableSignalType.PRESSURE_REDUCE_READY:
         return f"减仓机动仓{quantity}股"
+    if payload.bucket is None:
+        if signal_type is ActionableSignalType.RISK_EXIT_PENDING_SETTLEMENT:
+            return f"目标持仓{quantity}股尚不可卖"
+        return f"提示卖出已确认持仓{quantity}股（未指定批次）"
     bucket = "机动仓" if payload.bucket == "TACTICAL" else "底仓"
     if signal_type is ActionableSignalType.RISK_EXIT_PENDING_SETTLEMENT:
         return f"目标{bucket}{quantity}股尚不可卖"

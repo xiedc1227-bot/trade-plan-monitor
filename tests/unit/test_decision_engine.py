@@ -6501,6 +6501,22 @@ def test_risk_exit_with_no_position_retains_deterioration_evidence_only() -> Non
     assert decision.signal_intent is None
 
 
+def test_confirmed_opening_holding_can_trigger_sell_alert_without_fabricated_lot() -> None:
+    context = _official_risk_context(positions=()).model_copy(update={
+        "opening_quantity": 300,
+        "opening_sellable_quantity": 300,
+    })
+
+    decision = evaluate_official_close_risk(context)
+
+    assert decision.signal_type is SignalType.RISK_EXIT_READY
+    assert decision.signal_intent is not None
+    assert decision.signal_intent.quantity == 100
+    assert decision.signal_intent.bucket is None
+    assert decision.signal_intent.target_lot_id is None
+    assert decision.signal_intent.next_step.code is NextStepCode.RECORD_CONFIRMED_FILL
+
+
 def test_risk_t1_locked_tactical_target_waits_without_substituting_sellable_core() -> None:
     locked_tactical = _pressure_lot(
         "lot-tactical-locked",

@@ -1064,7 +1064,9 @@ def _evaluate_position_bucket_available(
     current = sum(
         lot.remaining_quantity for lot in context.positions if lot.bucket == condition.bucket
     )
-    total = sum(lot.remaining_quantity for lot in context.positions)
+    total = context.opening_quantity + sum(
+        lot.remaining_quantity for lot in context.positions
+    )
     target = (
         context.plan.position.core_target_qty
         if condition.bucket == "CORE"

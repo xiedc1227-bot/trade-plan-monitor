@@ -239,6 +239,10 @@ def _position_prefill(
     }
     if event.signal_type not in buys | closures:
         return None
+    if event.signal_type is ActionableSignalType.RISK_EXIT_READY and event.bucket is None:
+        # An opening balance is a confirmed holding, not a fabricated lot.
+        # The operator chooses the actual inventory source when recording a sale.
+        return None
     if event.quantity is None or event.bucket is None:
         raise RuntimeError("canonical alert is missing position prefill data")
     return PositionPrefillView(

@@ -105,9 +105,11 @@ def _position_summary(context: EvaluationContext) -> PositionSummary:
     return PositionSummary(
         core_quantity=core,
         tactical_quantity=tactical,
-        total_quantity=core + tactical,
+        total_quantity=core + tactical + context.opening_quantity,
         sellable_core_quantity=sellable_core,
         sellable_tactical_quantity=sellable_tactical,
+        opening_quantity=context.opening_quantity,
+        sellable_opening_quantity=context.opening_sellable_quantity,
     )
 
 

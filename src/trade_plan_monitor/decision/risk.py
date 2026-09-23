@@ -741,6 +741,7 @@ def _risk_signal(
     breach_trade_date: date,
     matched_condition: ConditionEvidence,
     target_lot: PositionLotSnapshot | None = None,
+    opening_quantity: int = 0,
 ) -> SignalIntent:
     if signal_type is ActionableSignalType.RISK_BREACH:
         quantity = None
@@ -748,11 +749,11 @@ def _risk_signal(
         target_lot_id = None
         next_step = NextStep(code=NextStepCode.WAIT_FOR_NEXT_TRADING_DAY)
     else:
-        if target_lot is None:
-            raise ValueError("risk exit signal requires a target lot")
+        if target_lot is None and opening_quantity < context.plan.position.lot_size:
+            raise ValueError("risk exit signal requires a sellable position")
         quantity = context.plan.position.lot_size
-        bucket = target_lot.bucket
-        target_lot_id = target_lot.lot_id
+        bucket = None if target_lot is None else target_lot.bucket
+        target_lot_id = None if target_lot is None else target_lot.lot_id
         next_step = NextStep(
             code=(
                 NextStepCode.WAIT_FOR_SETTLEMENT
@@ -886,7 +887,8 @@ def evaluate_official_close_risk(
 
     target_lot = _risk_exit_target(context)
     breach_trade_date = current_risk.breach_trade_date
-    if target_lot is None or breach_trade_date is None:
+    if (target_lot is None and context.opening_quantity < context.plan.position.lot_size
+            or breach_trade_date is None):
         return _unchanged_official_risk(
             context,
             risk_evidence,
@@ -894,7 +896,11 @@ def evaluate_official_close_risk(
             deterioration_evidence=deterioration_evidence,
         )
 
-    sellable = target_lot.acquired_trade_date < context.trade_date
+    sellable = (
+        target_lot.acquired_trade_date < context.trade_date
+        if target_lot is not None
+        else context.opening_sellable_quantity >= context.plan.position.lot_size
+    )
     if sellable:
         signal = _risk_signal(
             context,
@@ -902,6 +908,7 @@ def evaluate_official_close_risk(
             breach_trade_date=breach_trade_date,
             matched_condition=risk_evidence,
             target_lot=target_lot,
+            opening_quantity=context.opening_quantity,
         )
         return OfficialCloseRiskEvaluation(
             risk=current_risk,
@@ -933,6 +940,7 @@ def evaluate_official_close_risk(
         breach_trade_date=breach_trade_date,
         matched_condition=risk_evidence,
         target_lot=target_lot,
+        opening_quantity=context.opening_quantity,
     )
     return OfficialCloseRiskEvaluation(
         risk=risk,

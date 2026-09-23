@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
+from sqlalchemy.orm import Session
+
 from trade_plan_monitor.ai.review import load_explicit_plan_draft_json
 from trade_plan_monitor.config import TushareConfiguration
 from trade_plan_monitor.domain.plan_codec import load_plan_json
@@ -40,6 +42,15 @@ from trade_plan_monitor.market_index.tushare import (
 from trade_plan_monitor.runtime.clock import Clock
 from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
 from trade_plan_monitor.runtime.health import SymbolHealthTracker
+from trade_plan_monitor.runtime.historical_close_context import (
+    HistoricalCloseUnavailableError,
+    HistoricalOfficialContextBuilder,
+    StaleHistoricalCloseError,
+)
+from trade_plan_monitor.runtime.historical_close_evidence import (
+    LegacyHistoricalCloseReader,
+    UnknownHistoricalClose,
+)
 from trade_plan_monitor.runtime.market_indexes import (
     ALWAYS_ON_INDEX_CODES,
     RuntimeMarketIndexService,
@@ -221,6 +232,7 @@ class ProductionMonitorPipeline:
         runtime_generation: UUID,
         publisher: CommittedEventPublisher,
         semantic_bindings: ProductionSemanticBindings | None = None,
+        recovery_session_factory: Callable[[], Session] | None = None,
     ) -> None:
         self._clock = clock
         self._controller = request_controller
@@ -244,6 +256,13 @@ class ProductionMonitorPipeline:
         self._deadline_plans: tuple[ExecutableTradePlan, ...] | None = None
         self._running_deadline = False
         self._gap_repair_due_at: datetime | None = None
+        self._historical_reader = (
+            None if recovery_session_factory is None
+            else LegacyHistoricalCloseReader(recovery_session_factory)
+        )
+        self._historical_blocked: dict[str, str] = {}
+        self._historical_retry_at: dict[str, datetime] = {}
+        self._historical_identity: dict[str, tuple[str, int, datetime]] = {}
         self.reference_stage = TushareOperation.TRADING_CALENDAR
         transport = configuration.model_copy(update={"timeout_seconds": 15})
         self.provider = TushareMarketDataProvider(
@@ -329,6 +348,23 @@ class ProductionMonitorPipeline:
             market_index_service=self.index_service,
             runtime_generation=runtime_generation,
             clock=clock,
+        )
+        self.historical_evaluations = (
+            None if self._historical_reader is None else RuntimeEvaluationService(
+                fetch_minutes=self._reject_refetch,
+                fetch_official_daily=self.fetch_official_daily,
+                official_observed_at=lambda requested: max(requested, clock.now()),
+                unit_of_work_factory=unit_of_work_factory,
+                context_builder=context_builder,
+                official_context_builder=HistoricalOfficialContextBuilder(
+                    self._historical_reader,
+                ),
+                committed_event_publisher=publisher,
+                market_index_service=self.index_service,
+                runtime_generation=runtime_generation,
+                clock=clock,
+                recovery_delivery=True,
+            )
         )
         self.explicit_evaluations = create_explicit_runtime_evaluation_service(
             unit_of_work_factory,
@@ -620,9 +656,6 @@ class ProductionMonitorPipeline:
         self.symbols.restore_health(
             symbols=symbols, states=self.evaluations.load_persisted_symbol_health(symbols)
         )
-        await self._recover_pending_close_batches(trade_date)
-        result = await self.recovery.recover_startup(trade_date=trade_date)
-        _ensure_recovery_complete(result)
         with self._work() as work:
             latest = work.projections.list_latest_market_index_snapshots(
                 mapping_version="board-index-map-v1",
@@ -634,6 +667,92 @@ class ProductionMonitorPipeline:
             records=records,
             now=self._clock.now(),
         )
+        if self._historical_reader is None:
+            await self._recover_pending_close_batches(trade_date)
+        else:
+            await self._recover_historical_closes(
+                before_date=(
+                    trade_date
+                    if self._clock.now().time() < DEFAULT_OFFICIAL_CLOSE_ATTEMPTS[0]
+                    else None
+                ),
+            )
+        result = await self.recovery.recover_startup(trade_date=trade_date)
+        _ensure_recovery_complete(result)
+
+    async def _recover_historical_closes(self, *, before_date: date | None) -> None:
+        """Resume each legacy plan independently after its last committed close."""
+
+        reader = self._historical_reader
+        evaluator = self.historical_evaluations
+        if reader is None or evaluator is None:
+            return
+        observed_at = self._clock.now()
+        active_plans = self._persisted_active_plans()
+        current_symbols = {plan.symbol for plan in active_plans}
+        for stale_symbol in set(self._historical_identity) - current_symbols:
+            self._historical_identity.pop(stale_symbol, None)
+            self._historical_blocked.pop(stale_symbol, None)
+            self._historical_retry_at.pop(stale_symbol, None)
+        for plan in active_plans:
+            if not isinstance(plan, TradePlan):
+                self._historical_identity.pop(plan.symbol, None)
+                self._historical_blocked.pop(plan.symbol, None)
+                self._historical_retry_at.pop(plan.symbol, None)
+                continue
+            with self._work() as work:
+                active = work.plans.get_active(plan.symbol)
+            if active is None:
+                raise ReferenceDependenciesChangedError
+            identity = (plan_sha256(plan), active.revision, active.activated_at)
+            if self._historical_identity.get(plan.symbol) != identity:
+                self._historical_identity[plan.symbol] = identity
+                self._historical_blocked.pop(plan.symbol, None)
+                self._historical_retry_at.pop(plan.symbol, None)
+            retry_at = self._historical_retry_at.get(plan.symbol)
+            if retry_at is not None and observed_at < retry_at:
+                continue
+            try:
+                missing = reader.missing_targets(plan.symbol, observed_at)
+                if isinstance(missing, UnknownHistoricalClose):
+                    self._historical_blocked[plan.symbol] = missing.reason.value
+                    self._historical_retry_at[plan.symbol] = observed_at + timedelta(minutes=5)
+                    continue
+                due = tuple(day for day in missing if before_date is None or day < before_date)
+                for day in due:
+                    with self._work() as work:
+                        current = work.plans.get_active(plan.symbol)
+                    current_identity = (
+                        None if current is None
+                        else (plan_sha256(plan), current.revision, current.activated_at)
+                    )
+                    if current_identity != identity:
+                        raise ReferenceDependenciesChangedError
+                    outcome = await evaluator.run_official_close(
+                        plan=plan, trade_date=day,
+                        evaluated_at=max(self._clock.now(), datetime.combine(
+                            day, DEFAULT_OFFICIAL_CLOSE_ATTEMPTS[0], observed_at.tzinfo,
+                        )),
+                        close_attempt=1,
+                    )
+                    if outcome.status not in {
+                        OfficialCloseCycleStatus.COMMITTED,
+                        OfficialCloseCycleStatus.DUPLICATE,
+                    }:
+                        raise HistoricalCloseUnavailableError("Historical close remains incomplete")
+            except ReferenceDependenciesChangedError:
+                self._historical_identity.pop(plan.symbol, None)
+                self._historical_blocked.pop(plan.symbol, None)
+                self._historical_retry_at.pop(plan.symbol, None)
+            except (HistoricalCloseUnavailableError, StaleHistoricalCloseError):
+                self._historical_blocked[plan.symbol] = "HISTORICAL_EVIDENCE_UNAVAILABLE"
+                self._historical_retry_at[plan.symbol] = observed_at + timedelta(minutes=5)
+            except Exception:
+                self._historical_blocked[plan.symbol] = "HISTORICAL_RECOVERY_FAILED"
+                self._historical_retry_at[plan.symbol] = observed_at + timedelta(seconds=30)
+            else:
+                self._historical_blocked.pop(plan.symbol, None)
+                self._historical_retry_at.pop(plan.symbol, None)
 
     async def _recover_pending_close_batches(self, startup_date: date) -> None:
         grouped: dict[date, list[TradePlan]] = {}
@@ -703,12 +822,19 @@ class ProductionMonitorPipeline:
             raise RuntimeError("stock certification must be refreshed before execution")
         plans = self.active_plans(deadline.trade_date)
         reference_key = self._reference_dependency_key(deadline.trade_date, plans)
+        if self._reference_key != reference_key:
+            await self.refresh_references(deadline.trade_date)
+        await self._recover_historical_closes(before_date=deadline.trade_date)
+        plans = self.active_plans(deadline.trade_date)
+        reference_key = self._reference_dependency_key(deadline.trade_date, plans)
         cutoff = deadline.bar_end or datetime.combine(
             deadline.trade_date, time(15), deadline.due_at.tzinfo
         )
         selected = []
         with self._work() as work:
             for plan in plans:
+                if plan.symbol in self._historical_blocked:
+                    continue
                 active = work.plans.get_active(plan.symbol)
                 if active is None or active.activated_at > cutoff:
                     continue

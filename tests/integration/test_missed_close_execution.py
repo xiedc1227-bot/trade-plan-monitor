@@ -6,6 +6,7 @@ import multiprocessing
 import os
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -32,6 +33,7 @@ from trade_plan_monitor.state.database import (
 from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.repositories import EvaluationRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+from trade_plan_monitor.web.alert_service import _position_prefill
 
 D1 = date(2026, 8, 24)
 D2 = date(2026, 8, 25)
@@ -281,6 +283,15 @@ def test_historical_path_requires_hold_delivery(recovery):
     assert _counts(recovery) == (0, 0, 0, 0)
 
 
+def test_recovered_alert_is_not_deliverable_while_eligibility_is_held(recovery):
+    assert recovery.run(D1).status == "COMMITTED"
+    with recovery.engine.connect() as connection:
+        event_id = connection.scalar(text("SELECT id FROM alert_event"))
+    with recovery.work() as unit:
+        event = unit.alerts.get(UUID(event_id))
+        assert not unit.alerts.is_delivery_allowed(event, market_date=D2)
+
+
 def test_missing_inventory_evidence_does_not_commit_a_blocked_result(recovery):
     with recovery.engine.begin() as connection:
         connection.execute(text("DELETE FROM audit_log WHERE action='POSITION_INVENTORY_CHANGED'"))
@@ -359,7 +370,7 @@ def test_reading_missing_inventory_revision_does_not_create_inventory(recovery):
         )) == 0
 
 
-def test_opening_balance_is_not_silently_omitted_from_historical_evaluation(recovery):
+def test_opening_balance_is_counted_in_historical_evaluation(recovery):
     recovery.clock[0] = datetime(2026, 8, 25, 10, tzinfo=ZONE)
     with recovery.work() as unit:
         unit.positions.confirm_inventory(
@@ -370,9 +381,40 @@ def test_opening_balance_is_not_silently_omitted_from_historical_evaluation(reco
         unit.commit()
     recovery.clock[0] = OBSERVED
     assert recovery.run(D1).status == "COMMITTED"
-    with pytest.raises(HistoricalCloseUnavailableError, match="opening balances"):
-        recovery.run(D2)
-    assert _counts(recovery) == (1, 1, 1, 1)
+    result = recovery.run(D2)
+    assert result.status == "COMMITTED"
+    assert result.evaluation_result.snapshot.position.total_quantity == 200
+    assert result.evaluation_result.snapshot.position.opening_quantity == 100
+    assert _counts(recovery) == (2, 2, 1, 2)
+
+
+def test_opening_only_sell_alert_has_no_invented_lot_prefill(recovery):
+    recovery.clock[0] = datetime(2026, 8, 25, 10, tzinfo=ZONE)
+    with recovery.work() as unit:
+        unit.positions.confirm_inventory(
+            symbol=recovery.plan.symbol, as_of_trade_date=D2, total_quantity=200,
+            sellable_quantity=200, included_lot_ids=(recovery.lot.id,),
+            complete_registration=True, expected_revision=2,
+        )
+        unit.commit()
+    recovery.clock[0] = OBSERVED
+    assert recovery.run(D1).status == "COMMITTED"
+    recovery.clock[0] = datetime(2026, 8, 25, 11, tzinfo=ZONE)
+    with recovery.work() as unit:
+        unit.positions.reduce_lot(recovery.lot.id, quantity=100, trade_date=D2)
+        unit.commit()
+    recovery.clock[0] = OBSERVED + timedelta(seconds=5)
+    result = recovery.run(D2)
+    assert result.status == "COMMITTED"
+    assert result.evaluation_result.snapshot.position.total_quantity == 100
+    assert result.evaluation_result.signal_intent.bucket is None
+    assert result.evaluation_result.signal_intent.target_lot_id is None
+    with recovery.engine.connect() as connection:
+        event_id = connection.execute(text(
+            "SELECT id FROM alert_event ORDER BY created_at DESC LIMIT 1"
+        )).scalar_one()
+    with recovery.work() as unit:
+        assert _position_prefill(unit.alerts.get(UUID(event_id))) is None
 
 
 def test_concurrent_other_symbol_publication_invalidates_prepared_snapshot(recovery):

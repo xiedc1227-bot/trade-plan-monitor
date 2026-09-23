@@ -795,6 +795,12 @@ class EvaluationContext(_DecisionValue):
         default=(),
         max_length=_MAX_POSITION_LOTS,
     )
+    opening_quantity: NonNegativeBoardLot = Field(
+        default=0, exclude_if=lambda value: value == 0,
+    )
+    opening_sellable_quantity: NonNegativeBoardLot = Field(
+        default=0, exclude_if=lambda value: value == 0,
+    )
     low_zone_episode: LowZoneEpisodeSnapshot | None
     risk_state: RiskStateSnapshot
     manual_event_risk: StrictBoolean | None
@@ -1069,7 +1075,6 @@ class EvaluationContext(_DecisionValue):
             raise ValueError("complete intraday health requires gapless current-day minutes")
 
         lot_ids: set[str] = set()
-        total_remaining = 0
         for lot in self.positions:
             if lot.lot_id in lot_ids:
                 raise ValueError("position lot IDs must be unique")
@@ -1078,9 +1083,10 @@ class EvaluationContext(_DecisionValue):
                 raise ValueError("position symbol must match plan symbol")
             if lot.acquired_trade_date > self.trade_date:
                 raise ValueError("position lot cannot be acquired after target trade date")
-            total_remaining += lot.remaining_quantity
-        if total_remaining > self.plan.position.max_qty:
-            raise ValueError("remaining position cannot exceed plan maximum")
+        if self.opening_sellable_quantity > self.opening_quantity:
+            raise ValueError("sellable opening quantity cannot exceed opening quantity")
+        # The cap limits new buys; a confirmed existing holding remains a fact
+        # even when it exceeds the plan's intended maximum.
 
         if self.low_zone_episode is not None:
             if self.low_zone_episode.symbol != self.plan.symbol:
@@ -1157,15 +1163,25 @@ class PositionSummary(_DecisionValue):
     total_quantity: NonNegativeBoardLot
     sellable_core_quantity: NonNegativeBoardLot
     sellable_tactical_quantity: NonNegativeBoardLot
+    opening_quantity: NonNegativeBoardLot = Field(
+        default=0, exclude_if=lambda value: value == 0,
+    )
+    sellable_opening_quantity: NonNegativeBoardLot = Field(
+        default=0, exclude_if=lambda value: value == 0,
+    )
 
     @model_validator(mode="after")
     def validate_summary(self) -> Self:
-        if self.total_quantity != self.core_quantity + self.tactical_quantity:
-            raise ValueError("total quantity must equal core plus tactical quantity")
+        if self.total_quantity != (
+            self.core_quantity + self.tactical_quantity + self.opening_quantity
+        ):
+            raise ValueError("total quantity must equal known lots plus opening quantity")
         if self.sellable_core_quantity > self.core_quantity:
             raise ValueError("sellable core quantity cannot exceed core quantity")
         if self.sellable_tactical_quantity > self.tactical_quantity:
             raise ValueError("sellable tactical quantity cannot exceed tactical quantity")
+        if self.sellable_opening_quantity > self.opening_quantity:
+            raise ValueError("sellable opening quantity cannot exceed opening quantity")
         return self
 
 
@@ -1354,8 +1370,15 @@ class SignalIntent(_DecisionValue):
                 raise ValueError("risk-breach signal cannot imply a trade or fill")
             return self
 
-        if self.quantity is None or self.bucket is None:
-            raise ValueError("trade-ready signal requires quantity and position bucket")
+        if self.quantity is None:
+            raise ValueError("trade-ready signal requires quantity")
+        if self.signal_type in {
+            ActionableSignalType.RISK_EXIT_READY,
+            ActionableSignalType.RISK_EXIT_PENDING_SETTLEMENT,
+        } and self.bucket is None and self.target_lot_id is None:
+            return self
+        if self.bucket is None:
+            raise ValueError("known-lot signal requires position bucket")
         if (
             self.signal_type
             in {

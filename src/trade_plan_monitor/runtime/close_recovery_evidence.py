@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Literal
 from uuid import UUID
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import AShareSymbol, TradePlan
-from trade_plan_monitor.runtime.clock import _canonical_shanghai
+from trade_plan_monitor.runtime.clock import SHANGHAI, _canonical_shanghai
 from trade_plan_monitor.runtime.missed_close_recovery import (
     CompletionStatus,
     MissedCloseScope,
@@ -170,6 +170,7 @@ class _CompletionReader:
         self.scope = scope
         self.activation_sequence = activation_sequence
         self.publications = None
+        self.publications_since = None
         self.publications_unknown = False
 
     def read(self, identity):
@@ -232,20 +233,26 @@ class _CompletionReader:
         return self._evidence(identity, CompletionStatus.PROVEN, result)
 
     def _orphan_possible(self, identity):
-        if self.publications is None and not self.publications_unknown:
+        cutoff = datetime.combine(identity.official_trade_date, time(15), SHANGHAI)
+        if (self.publications is None or self.publications_since > cutoff
+                ) and not self.publications_unknown:
             rows = self.session.execute(monitor_query().where(
                 MonitorRow.aggregate_id == identity.symbol,
                 MonitorRow.event_type == MonitorEventType.SYMBOL_SNAPSHOT_UPDATED.value,
+                # An official close cannot be published before its source cutoff.
+                # Bound the scan to the interrupted interval, not the plan's age.
+                MonitorRow.occurred_at >= cutoff.isoformat(),
+                MonitorRow.occurred_at <= self.scope.observed_at.isoformat(),
             ).order_by(MonitorRow.sequence).limit(MAX_EVENT_REPLAY_LIMIT + 1)).all()
             try:
                 _require(len(rows) <= MAX_EVENT_REPLAY_LIMIT)
                 self.publications = tuple(monitor_from_row(row) for row in rows)
+                self.publications_since = cutoff
             except _CONTENT_ERRORS:
                 self.publications_unknown = True
         if self.publications_unknown:
             return True
-        # Publications omit source dates. Do not filter by write time: recovered
-        # closes can be published later, and a orphan hash still claims identity.
+        # Recovered closes may be published later, but never before their source cutoff.
         return any(publication.event_id == monitor_event_id(
             MonitorEventType.SYMBOL_SNAPSHOT_UPDATED, identity.symbol,
             identity.model_dump_json(), publication.payload.result_hash,

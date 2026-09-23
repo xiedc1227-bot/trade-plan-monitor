@@ -529,7 +529,8 @@ class RuntimeEvaluationService:
         self._market_index_service = market_index_service
         self._runtime_generation = runtime_generation
         self._clock = clock
-        # Storage-only opt-in; the existing dispatcher does not enforce this HOLD.
+        # Historical alerts enter HOLD atomically. The production dispatcher
+        # checks the durable eligibility row before any delivery attempt.
         self._recovery_delivery = recovery_delivery
         self._official_serial = asyncio.Lock()
 

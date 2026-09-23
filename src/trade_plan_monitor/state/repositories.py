@@ -1731,6 +1731,11 @@ class PositionRepository:
             missing_reasons=missing_reasons,
         )
 
+    def list_opening_balances(self, symbol: str) -> tuple[OpeningBalanceRecord, ...]:
+        """Return settled opening holdings without inventing lot attributes."""
+
+        return self._list_opening_balances(_symbol(symbol))
+
     def confirm_inventory(
         self,
         *,

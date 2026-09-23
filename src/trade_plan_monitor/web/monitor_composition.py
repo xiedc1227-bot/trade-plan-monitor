@@ -644,6 +644,7 @@ class _ProductionRuntimeState:
                 unit_of_work_factory=self.unit_of_work_factory,
                 runtime_generation=self._runtime_generation(),
                 publisher=self._publisher,
+                recovery_session_factory=self._session_factory,
             )
         return self._capabilities
 

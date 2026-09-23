@@ -1,6 +1,6 @@
 """Offline connected historical input proof, never delivery permission."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -271,6 +271,35 @@ def test_unknown_calendar_or_claim_in_later_suffix_blocks_preparation(historical
 def test_whole_activation_span_cannot_be_truncated_to_recent_days(historical):
     result = prepare(historical, NOW.date(), NOW + timedelta(days=32))
     assert result.status == "UNKNOWN" and result.reason == "HISTORY_LIMIT"
+
+
+@pytest.mark.parametrize("corrupt_anchor", [False, True])
+def test_long_lived_plan_resumes_after_latest_committed_close(historical, corrupt_anchor):
+    from trade_plan_monitor.runtime.historical_close_evidence import LegacyHistoricalCloseReader
+
+    anchor_day = NOW.date() + timedelta(days=35)
+    target_day = anchor_day + timedelta(days=1)
+    observed = datetime.combine(target_day, NOW.timetz()).replace(hour=17)
+    with historical.factory() as session:
+        session.add_all(TradingCalendar(
+            exchange=exchange, cal_date=day, is_open=True,
+            previous_trade_date=day - timedelta(days=1),
+        ) for exchange in {"SSE", historical.plan.market}
+            for day in (anchor_day, target_day))
+        session.commit()
+    anchor_time = datetime.combine(anchor_day, NOW.timetz())
+    publish(historical, day=anchor_day, risk=historical.result.snapshot.risk.model_copy(
+        update={"updated_at": anchor_time, "breach_trade_date": anchor_day},
+    ))
+    if corrupt_anchor:
+        mutate(historical, "UPDATE audit_log SET before_hash='" + "f" * 64
+               + "' WHERE entity_type='RISK_STATE'")
+
+    reader = LegacyHistoricalCloseReader(historical.factory)
+    assert reader.missing_targets(historical.plan.symbol, observed) == (target_day,)
+    assert reader.prepare(historical.plan.symbol, target_day, observed).status == (
+        "UNKNOWN" if corrupt_anchor else "PROVEN"
+    )
 
 
 def test_inventory_classification_is_preserved(historical):

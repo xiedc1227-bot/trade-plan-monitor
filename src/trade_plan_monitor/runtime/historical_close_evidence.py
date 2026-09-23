@@ -11,6 +11,7 @@ from sqlalchemy import Integer, cast, func, select
 from sqlalchemy.orm import Session
 
 from trade_plan_monitor.decision.models import (
+    OfficialCloseEvaluationIdentity,
     RiskStateSnapshot,
     RiskStatus,
     RiskTransitionIntent,
@@ -119,6 +120,65 @@ class LegacyHistoricalCloseReader:
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
 
+    def missing_targets(
+        self, symbol: str, observed_at: datetime,
+    ) -> tuple[date, ...] | UnknownHistoricalClose:
+        """Find only unfinished closes after the last committed task node."""
+
+        symbol = _SYMBOL.validate_python(symbol, strict=True)
+        observed_at = _canonical_shanghai(observed_at)
+        session = self._session_factory()
+        require_owned_recovery_session(session, (
+            ActivePlan, AuditLog, EvaluationLedger, EvaluationResult, MonitorEvent,
+            MonitorSequence, PlanActivationState, PlanVersion, TradingCalendar,
+        ))
+        with session, session.no_autoflush:
+            try:
+                read_monitor_highwater(session)
+                history = read_activation_history(session, symbol)
+                _require(all(item.occurred_at <= observed_at for item in history))
+                boundary = history[-1]
+                if boundary.plan_version_id is None:
+                    return UnknownHistoricalClose(HistoricalCloseUnknownReason.INACTIVE_PLAN)
+                scope = LegacyCloseRecoveryReader._scope(session, symbol, observed_at, boundary)
+                if isinstance(scope, UnknownCloseRecovery):
+                    return UnknownHistoricalClose(HistoricalCloseUnknownReason(scope.reason))
+                reader = _CompletionReader(session, scope, boundary.sequence)
+                anchor = _latest_completed_close(
+                    session, scope, reader, observed_at.date() + timedelta(days=1),
+                )
+                start = (scope.activated_at.date() if anchor is None else
+                         anchor.evaluation_identity.official_trade_date + timedelta(days=1))
+                if start > observed_at.date():
+                    return ()
+                if (observed_at.date() - start).days >= 32:
+                    raise _HistoryLimit()
+
+                def is_open_on(day):
+                    row = session.execute(select(
+                        cast(TradingCalendar.is_open, Integer),
+                        func.typeof(TradingCalendar.is_open),
+                    ).where(TradingCalendar.exchange == "SSE", TradingCalendar.cal_date == day)
+                    ).one_or_none()
+                    return (bool(row[0]) if row is not None and row[1] == "integer"
+                            and row[0] in (0, 1) else None)
+
+                window = discover_missed_closes(
+                    scope=scope, is_open_on=is_open_on, completion_on=reader.read,
+                    window_start=start,
+                )
+                _require(window.next_window_start is None)
+                _require(all(item.status is CompletionStatus.ABSENT
+                             and not item.causal_history_gap for item in window.candidates))
+                return tuple(item.identity.official_trade_date for item in window.candidates)
+            except ActivationHistoryLimit, _HistoryLimit:
+                reason = HistoricalCloseUnknownReason.HISTORY_LIMIT
+            except MissingActivationEvidence, _MissingEvidence:
+                reason = HistoricalCloseUnknownReason.MISSING_EVIDENCE
+            except (*_CONTENT_ERRORS, OverflowError):
+                reason = HistoricalCloseUnknownReason.INVALID_EVIDENCE
+            return UnknownHistoricalClose(reason)
+
     def prepare(self, symbol: str, trade_date: date, observed_at: datetime
                 ) -> ProvenHistoricalClose | UnknownHistoricalClose:
         symbol = _SYMBOL.validate_python(symbol, strict=True)
@@ -155,9 +215,21 @@ class LegacyHistoricalCloseReader:
         scope = LegacyCloseRecoveryReader._scope(session, symbol, observed_at, boundary)
         if isinstance(scope, UnknownCloseRecovery):
             return UnknownHistoricalClose(HistoricalCloseUnknownReason(scope.reason))
-        if (observed_at.date() - scope.activated_at.date()).days >= 32:
-            raise _HistoryLimit()
         reader = _CompletionReader(session, scope, boundary.sequence)
+        # Preserve the original full-prefix audit check for its bounded window.
+        # Only old plans need the checkpoint fast path; their interrupted suffix
+        # remains bounded independently of total activation age.
+        anchor = (
+            _latest_completed_close(session, scope, reader, trade_date)
+            if (observed_at.date() - scope.activated_at.date()).days >= 32
+            else None
+        )
+        window_start = (
+            scope.activated_at.date() if anchor is None
+            else anchor.evaluation_identity.official_trade_date + timedelta(days=1)
+        )
+        if (observed_at.date() - window_start).days >= 32:
+            raise _HistoryLimit()
         completions = {}
 
         def completion_on(identity):
@@ -175,6 +247,7 @@ class LegacyHistoricalCloseReader:
 
         window = discover_missed_closes(
             scope=scope, is_open_on=is_open_on, completion_on=completion_on,
+            window_start=window_start,
         )
         _require(window.next_window_start is None)
         _require(all(item.status is not CompletionStatus.UNKNOWN and not item.causal_history_gap
@@ -188,9 +261,40 @@ class LegacyHistoricalCloseReader:
                         for item in window.candidates if item.status is CompletionStatus.PROVEN)
         _require(all(result.snapshot.signal_type is not SignalType.BLOCKED_DATA
                      for result in results))
-        current, risk = _risk_inputs(session, scope, results, cutoff)
+        current, risk = _risk_inputs(session, scope, results, cutoff, anchor=anchor)
         calendar = _calendar(session, scope.plan.market, trade_date)
         return ProvenHistoricalClose(scope, inventory, current, risk, calendar, highwater)
+
+
+def _latest_completed_close(session, scope, reader, target_date):
+    """Use the latest committed task node, not the plan's original activation age."""
+
+    anchor_date = session.scalar(select(EvaluationLedger.target_value).where(
+        EvaluationLedger.plan_hash == plan_sha256(scope.plan),
+        EvaluationLedger.symbol == scope.plan.symbol,
+        EvaluationLedger.evaluation_kind == "OFFICIAL_CLOSE",
+        EvaluationLedger.formula_version == scope.plan.monitoring.indicator_formula_version,
+        EvaluationLedger.target_value < target_date.isoformat(),
+        EvaluationLedger.target_value >= scope.activated_at.date().isoformat(),
+    ).order_by(EvaluationLedger.target_value.desc()).limit(1))
+    if anchor_date is None:
+        return None
+    day = _date(anchor_date)
+    _require(datetime.combine(day, time(15), SHANGHAI) >= scope.activated_at)
+    identity = OfficialCloseEvaluationIdentity(
+        plan_hash=plan_sha256(scope.plan), symbol=scope.plan.symbol,
+        official_trade_date=day,
+        formula_version=scope.plan.monitoring.indicator_formula_version,
+    )
+    completion = reader.read(identity)
+    if completion.status is not CompletionStatus.PROVEN or completion.result is None:
+        raise _MissingEvidence()
+    result = completion.result
+    _require(result.snapshot.signal_type is not SignalType.BLOCKED_DATA
+             and result.snapshot.market_data_at == datetime.combine(day, time(15), SHANGHAI)
+             and result.snapshot.evaluated_at >= result.snapshot.market_data_at
+             and result.snapshot.evaluated_at <= scope.observed_at)
+    return result
 
 
 def _calendar(session, exchange, trade_date):
@@ -212,7 +316,7 @@ def _calendar(session, exchange, trade_date):
     return MarketReferenceRepository(session).list_trading_days(exchange, start, trade_date)
 
 
-def _risk_inputs(session, scope, results, cutoff):
+def _risk_inputs(session, scope, results, cutoff, *, anchor=None):
     budget = _ReadBudget()
     fields = {
         "symbol": 9, "plan_hash": 64, "status": 32, "breach_trade_date": 10,
@@ -255,6 +359,37 @@ def _risk_inputs(session, scope, results, cutoff):
     if current is not None:
         _match_risk_audit(current, by_revision)
         _require(all(revision <= current.revision for revision in by_revision))
+    if anchor is not None:
+        # A proven completed close is the state checkpoint. The physical risk
+        # row may have been written during a later recovery, so a transition's
+        # source-effective time is the official close, not that write time.
+        risk = anchor.snapshot.risk
+        _require(not results)
+        _require(len(anchor.transitions) <= 1)
+        if anchor.transitions:
+            transition = anchor.transitions[0]
+            _require(transition.risk == risk
+                     and transition.expected_revision == risk.revision - 1
+                     and risk.updated_at == anchor.snapshot.evaluated_at)
+            audit = by_revision.get(risk.revision)
+            if audit is None:
+                raise _MissingEvidence()
+            if risk.revision == 1:
+                _require(audit["before_hash"] is None)
+            else:
+                predecessor = by_revision.get(transition.expected_revision)
+                if predecessor is None:
+                    raise _MissingEvidence()
+                _require(audit["before_hash"] == predecessor["after_hash"])
+        if current is None or current.plan_hash != digest:
+            _require(not anchor.transitions and risk.status is RiskStatus.CLEAR
+                     and risk.revision == (0 if current is None else current.revision))
+        else:
+            _require(_business(risk) == _business(current))
+        source = (anchor.snapshot.market_data_at if anchor.transitions
+                  else risk.updated_at)
+        _require(source is not None and source < cutoff)
+        return current, risk.model_copy(update={"updated_at": source})
     if current is None or current.plan_hash != digest:
         _require(not transitions and (current is not None or not audits))
         revision = 0 if current is None else current.revision

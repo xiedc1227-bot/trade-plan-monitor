@@ -22,6 +22,7 @@ from trade_plan_monitor.runtime.historical_close_evidence import (
     ProvenHistoricalClose,
     UnknownHistoricalClose,
 )
+from trade_plan_monitor.state.opening_balance_evidence import OpeningBalanceEvidenceSnapshot
 from trade_plan_monitor.state.repositories import PositionLotRecord, RiskStateRecord
 from trade_plan_monitor.state.unit_of_work import UnitOfWork
 
@@ -51,6 +52,7 @@ class HistoricalOfficialContext:
 
     context: EvaluationContext
     position_lots: tuple[PositionLotRecord, ...]
+    opening_balances: tuple[OpeningBalanceEvidenceSnapshot, ...]
     inventory_revision: int
     current_risk: RiskStateRecord | None
     activation_revision: int
@@ -70,6 +72,14 @@ class HistoricalOfficialContext:
                 or len({lot.id for lot in self.position_lots}) != len(self.position_lots)
                 or _position_inputs(self.position_lots) != self.context.positions):
             raise ValueError("Historical context must retain exactly its evaluated lots")
+        opening_quantity = sum(item.remaining_qty for item in self.opening_balances)
+        sellable_opening = sum(
+            item.remaining_qty for item in self.opening_balances
+            if item.sellable_from <= self.context.trade_date
+        )
+        if (opening_quantity != self.context.opening_quantity
+                or sellable_opening != self.context.opening_sellable_quantity):
+            raise ValueError("Historical context must retain exactly its opening holdings")
         revision = 0 if self.current_risk is None else self.current_risk.revision
         if self.context.risk_state.revision != revision:
             raise ValueError("Historical context must preserve physical risk revision")
@@ -135,10 +145,16 @@ class HistoricalOfficialContextBuilder:
                 data_age_seconds=None, required_data_complete=True, fresh=False,
             ),
             positions=_position_inputs(lots), low_zone_episode=None,
+            opening_quantity=sum(item.remaining_qty for item in proof.inventory.opening_balances),
+            opening_sellable_quantity=sum(
+                item.remaining_qty for item in proof.inventory.opening_balances
+                if item.sellable_from <= facts.trade_date
+            ),
             risk_state=risk, manual_event_risk=None,
         )
         return HistoricalOfficialContext(
-            context, lots, proof.inventory.current_revision, proof.current_risk,
+            context, lots, proof.inventory.opening_balances,
+            proof.inventory.current_revision, proof.current_risk,
             proof.scope.activation_revision, proof.high_water_sequence,
         )
 
@@ -156,9 +172,5 @@ class HistoricalOfficialContextBuilder:
         if proof.scope.plan != plan:
             raise StaleHistoricalCloseError(
                 "Historical close inputs changed; reconstruct and retry",
-            )
-        if proof.inventory.opening_balances:
-            raise HistoricalCloseUnavailableError(
-                "Historical legacy close cannot represent opening balances as position lots",
             )
         return proof

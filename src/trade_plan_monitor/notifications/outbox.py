@@ -38,7 +38,13 @@ from trade_plan_monitor.state.events import (
     MonitorEventType,
     monitor_event_id,
 )
-from trade_plan_monitor.state.models import ActivePlan, AuditLog, PlanVersion, PlanVersionStatus
+from trade_plan_monitor.state.models import (
+    ActivePlan,
+    AlertDeliveryEligibility,
+    AuditLog,
+    PlanVersion,
+    PlanVersionStatus,
+)
 from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
 
 Clock = Callable[[], datetime]
@@ -333,6 +339,9 @@ class AlertOutbox:
             raise TypeError("event must be a supported alert event")
         if isinstance(market_date, datetime) or not isinstance(market_date, date):
             raise TypeError("market_date must be a date")
+        eligibility = self._session.get(AlertDeliveryEligibility, str(event.event_id))
+        if eligibility is not None and eligibility.status != "ELIGIBLE":
+            return False
         plan = self._active_plan_for_event(event)
         if plan is None:
             return False

@@ -25,6 +25,7 @@ from trade_plan_monitor.runtime.service import (
     UnitOfWorkFactory,
 )
 from trade_plan_monitor.state.repositories import (
+    InventorySnapshotStatus,
     ManualEventRiskRecord,
     ManualEventRiskStatus,
     RiskStateRecord,
@@ -110,6 +111,11 @@ class ProductionContextBuilder:
             )
             limits = work.references.list_daily_limits(trade_date)
             positions = work.positions.list_open_lots(plan.symbol)
+            openings = work.positions.list_opening_balances(plan.symbol)
+            if openings and work.positions.inventory_snapshot(
+                plan.symbol, as_of_trade_date=trade_date, cutoff=facts.evaluated_at,
+            ).status is not InventorySnapshotStatus.KNOWN:
+                raise RuntimeError("Opening holdings require confirmed inventory")
             risk = work.risk.get(plan.symbol)
             manual_event_risk = work.manual_event_risk.get(plan.symbol)
             head = work.projections.get_decision_head(plan.symbol)
@@ -189,6 +195,11 @@ class ProductionContextBuilder:
                     cost_fen=lot.cost_fen,
                 )
                 for lot in positions
+            ),
+            opening_quantity=sum(item.remaining_qty for item in openings),
+            opening_sellable_quantity=sum(
+                item.remaining_qty for item in openings
+                if item.sellable_from <= trade_date
             ),
             low_zone_episode=episode,
             risk_state=risk_snapshot,
