@@ -2,13 +2,16 @@
 import { computed } from "vue";
 
 import type { RuntimeHealthResponse } from "../api/generated";
+import type { LegacyPlanApi } from "../api/legacyPlans";
 import HealthMatrix from "../components/health/HealthMatrix.vue";
+import LegacyPlanInvalidationPanel from "../components/health/LegacyPlanInvalidationPanel.vue";
 import MarketStatusStrip from "../components/health/MarketStatusStrip.vue";
 
 interface Props {
   error?: string | null;
   health?: RuntimeHealthResponse | null;
   loading?: boolean;
+  legacyApi?: LegacyPlanApi;
 }
 
 interface Emits {
@@ -67,6 +70,12 @@ const errorMessage = computed(() =>
     </p>
 
     <template v-if="availableHealth !== null">
+      <LegacyPlanInvalidationPanel
+        v-if="availableHealth.status === 'BLOCKED' &&
+          availableHealth.blockReason === 'LEGACY_PLANS_REQUIRE_REVIEW'"
+        :api="props.legacyApi"
+        @completed="emit('refresh')"
+      />
       <MarketStatusStrip :health="availableHealth" />
       <HealthMatrix
         :health="availableHealth"

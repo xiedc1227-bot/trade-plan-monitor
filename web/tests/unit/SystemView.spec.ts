@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { mount } from "@vue/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeHealthResponse } from "../../src/api/generated";
 import HealthMatrix from "../../src/components/health/HealthMatrix.vue";
@@ -83,6 +83,54 @@ afterEach(() => {
 });
 
 describe("SystemView", () => {
+  it("shows the blocked legacy preview and requires a second checked confirmation", async () => {
+    const fingerprint = "a".repeat(64);
+    const invalidate = vi.fn().mockResolvedValue({ symbols: ["600000.SH"], restartRequired: true });
+    const wrapper = mountSystem({
+      health: { ...health, status: "BLOCKED", blockReason: "LEGACY_PLANS_REQUIRE_REVIEW" },
+      legacyApi: {
+        getPreview: vi.fn().mockResolvedValue({
+          available: true,
+          fingerprint,
+          plans: [{ symbol: "600000.SH", planVersionId: "plan-v1", revision: 1 }],
+        }),
+        invalidate,
+      },
+    });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="legacy-plan-list"]').text()).toContain("600000.SH");
+    expect(wrapper.get('[data-testid="market-status-strip"]').text()).toContain("受阻");
+    await wrapper.get('[data-testid="open-legacy-confirmation"]').trigger("click");
+    const confirm = wrapper.get('[data-testid="confirm-legacy-invalidation"]');
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(true);
+    await wrapper.get('input[type="checkbox"]').setValue(true);
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(false);
+    await confirm.trigger("click");
+    await flushPromises();
+    expect(invalidate).toHaveBeenCalledWith(fingerprint);
+    expect(wrapper.text()).toContain("请重启监控工具");
+  });
+
+  it("does not claim failure when a lost response may have committed invalidation", async () => {
+    const getPreview = vi.fn()
+      .mockResolvedValueOnce({
+        available: true,
+        fingerprint: "b".repeat(64),
+        plans: [{ symbol: "600000.SH", planVersionId: "plan-v1", revision: 1 }],
+      })
+      .mockResolvedValueOnce({ available: false, fingerprint: null, plans: [] });
+    const wrapper = mountSystem({
+      health: { ...health, status: "BLOCKED", blockReason: "LEGACY_PLANS_REQUIRE_REVIEW" },
+      legacyApi: { getPreview, invalidate: vi.fn().mockRejectedValue(new Error("response lost")) },
+    });
+    await flushPromises();
+    await wrapper.get('[data-testid="open-legacy-confirmation"]').trigger("click");
+    await wrapper.get('input[type="checkbox"]').setValue(true);
+    await wrapper.get('[data-testid="confirm-legacy-invalidation"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("请求可能已完成");
+    expect(wrapper.text()).not.toContain("作废未完成");
+  });
   it("renders backend-authored lifecycle, polling, cooldown, and age facts", () => {
     const wrapper = mountSystem();
     const strip = wrapper.get('[data-testid="market-status-strip"]');
