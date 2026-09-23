@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from trade_plan_monitor.decision.models import (
     ConditionOutcome,
@@ -66,6 +66,14 @@ class LegacyInventoryEvidence(_Value):
     settlement_trade_date: date
     selected_target: PositionLotSnapshot | None
     sellable: bool | None
+    opening_quantity: int = Field(default=0, ge=0)
+    opening_sellable_quantity: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def validate_opening_quantity(self):
+        if self.opening_sellable_quantity > self.opening_quantity:
+            raise ValueError("opening sellability exceeds registered quantity")
+        return self
 
 
 class LegacyCurrentEvidence(_Value):
@@ -277,20 +285,33 @@ def classify_legacy_risk_delivery(
             return _decision("SUPPRESS", "STAGE_SUPERSEDED")
         return _decision("ELIGIBLE", "CURRENT_INSTRUCTION")
     lot = inventory.selected_target
-    if lot is not None and lot.acquired_trade_date > inventory.settlement_trade_date:
-        return _decision("HOLD", "FUTURE_EVIDENCE")
-    if lot is None or (
-        lot.symbol != event.symbol or lot.lot_id != event.target_lot_id
-        or lot.bucket != event.bucket or lot.remaining_quantity < event.quantity
-        or event.quantity != plan.position.lot_size
-    ):
-        return _decision("SUPPRESS", "TARGET_INAPPLICABLE")
-    if inventory.sellable is None:
-        return _decision("HOLD", "EVIDENCE_UNAVAILABLE")
-    if inventory.sellable != (lot.acquired_trade_date < inventory.settlement_trade_date):
-        return _decision("HOLD", "EVIDENCE_MISMATCH")
-    if inventory.sellable != (event.signal_type == "RISK_EXIT_READY"):
-        return _decision("SUPPRESS", "TARGET_INAPPLICABLE")
+    if event.target_lot_id is None:
+        if lot is not None or event.bucket is not None or (
+            inventory.opening_quantity < event.quantity
+        ):
+            return _decision("SUPPRESS", "TARGET_INAPPLICABLE")
+        opening_sellable = inventory.opening_sellable_quantity >= event.quantity
+        if inventory.sellable is None:
+            return _decision("HOLD", "EVIDENCE_UNAVAILABLE")
+        if inventory.sellable != opening_sellable:
+            return _decision("HOLD", "EVIDENCE_MISMATCH")
+        if opening_sellable != (event.signal_type == "RISK_EXIT_READY"):
+            return _decision("SUPPRESS", "TARGET_INAPPLICABLE")
+    else:
+        if lot is not None and lot.acquired_trade_date > inventory.settlement_trade_date:
+            return _decision("HOLD", "FUTURE_EVIDENCE")
+        if lot is None or (
+            lot.symbol != event.symbol or lot.lot_id != event.target_lot_id
+            or lot.bucket != event.bucket or lot.remaining_quantity < event.quantity
+            or event.quantity != plan.position.lot_size
+        ):
+            return _decision("SUPPRESS", "TARGET_INAPPLICABLE")
+        if inventory.sellable is None:
+            return _decision("HOLD", "EVIDENCE_UNAVAILABLE")
+        if inventory.sellable != (lot.acquired_trade_date < inventory.settlement_trade_date):
+            return _decision("HOLD", "EVIDENCE_MISMATCH")
+        if inventory.sellable != (event.signal_type == "RISK_EXIT_READY"):
+            return _decision("SUPPRESS", "TARGET_INAPPLICABLE")
     signal = latest.signal_intent
     if signal is None:
         return _decision("HOLD", "RISK_UNKNOWN")

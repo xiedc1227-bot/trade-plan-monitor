@@ -1,10 +1,19 @@
 # 运行恢复：完整流程验收证据
 
-> 第一阶段已按用户批准的离线进程重启标准于 2026-09-23 验收。第二阶段提醒安全、真实行情源验证、生产迁移及部署均未获批准。下文旧章节保留其当时的阶段状态；本结论取代其中“第一阶段未完成”的历史表述。
+> 第一阶段已按用户批准的离线进程重启标准于 2026-09-23 验收。第二阶段提醒安全已于 2026-09-24 完成离线接通实现及验证；更广的发布门禁仍未关闭。真实行情源验证、用户数据库迁移及部署均未获批准。下文旧章节保留其当时的阶段状态。
+
+## 第二阶段离线接通证据 — 2026-09-24
+
+生产的两类评估器现与规范提醒一起提交初始 `HOLD` 回执。生产发送器在逐渠道认领前，以及认领后紧邻渠道 I/O 前，均调用 `CurrentDeliveryAdmission` 读取最新状态。测试仅使用本地 `IN_APP` 和模拟渠道。使用临时 SQLite 的三进程重启验收现还确认：恢复后此前暂缓的风险提醒产生一次持久的本地投递尝试，重复重启不增加规范结果/提醒。SQLite 事务不跨渠道 I/O，既有不确定发送重试行为保持。
+
+接通测试覆盖 D1 突破后 D2 退出或解除、D2/D3 相同退出只释放最新项、人工卖出使当前持仓不再适用、只指定数量的期初余额退出、已证明的旧风险提醒在停用后抑制、显式风险和操作提醒、90 秒失效、当前权威证据缺失、认领后变化，以及较早 `HOLD` 行存在时的待发扫描。重复复核相同的显式或旧版分类不会增加审计数和修订号。每次检查从同一个已提交本地快照读取历史归属、当前官方收盘完成度、激活身份、持仓及运行代次证据。缺失或无效前提绝不构成发送许可。
+
+- 接通回归：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_notification_delivery.py tests/integration/test_delivery_admission.py tests/integration/test_delivery_eligibility_storage.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_missed_close_execution.py tests/integration/test_runtime_restart_gap_acceptance.py tests/integration/test_monitor_production_composition.py tests/integration/test_explicit_runtime_production.py tests/unit/test_legacy_recovery_delivery_eligibility.py -q --tb=short` — 264 项通过、1 项既有 Starlette/httpx 弃用警告，91.24 秒。
+- 本接通检查点不关闭 C0–C5，也不保证每个历史数据库都能自动恢复。完整 `not live` 测试、高交易量证明预算、尚未解决的行情指数失败、更广停机矩阵及独立发布评审仍待完成。此前记录的 `test_deadline_does_not_admit_captured_plan_reactivated_during_reference_await` 单独运行仍失败，原因是未抛出预期的 `RuntimeError`；最终发送准入会独立复核当前激活身份，但该评估器准入失败仍未解决。未使用真实行情源、外部发送器、用户数据库、迁移或部署。
 
 ## 第一阶段进程重启验收 — 2026-09-23
 
-`test_stopped_monitor_recovers_missed_close_once_after_process_restart` 使用三个独立启动的 Python 进程、同一份临时 SQLite 数据库和生产 `create_monitor_composition` 生命周期；只以确定性的离线数据替换外部 Tushare SDK。活动旧版计划在收盘前启动，第一个进程于 14:00 突然退出；此时没有当日正式日线或收盘结果。新进程于 16:00 启动，取得并存储当日 55.00 的正式收盘，恰好提交一条收盘结果与一条保持持久 `HOLD` 且没有渠道投递尝试的风险提醒，原计划仍活动，运行状态为 `RUNNING`、没有逐标的恢复问题，且已安排下一次唤醒。第三个进程于 16:01 启动，没有增加重复占用、结果或提醒。中断小于批准的 120 小时作废边界。本场景没有更早已提交的收盘；已有的单独检查点测试覆盖不重新评估旧决策的接续。
+`test_stopped_monitor_recovers_missed_close_once_after_process_restart` 使用三个独立启动的 Python 进程、同一份临时 SQLite 数据库和生产 `create_monitor_composition` 生命周期；只以确定性的离线数据替换外部 Tushare SDK。活动旧版计划在收盘前启动，第一个进程于 14:00 突然退出；此时没有当日正式日线或收盘结果。新进程于 16:00 启动，取得并存储当日 55.00 的正式收盘，恰好提交一条收盘结果与一条风险提醒，原计划仍活动，运行状态为 `RUNNING`、没有逐标的恢复问题，且已安排下一次唤醒。在第一阶段检查点，该提醒保持持久 `HOLD` 且没有渠道投递尝试；上文第二阶段运行将同一场景扩展至本地投递。第三个进程于 16:01 启动，没有增加重复占用、结果或提醒。中断小于批准的 120 小时作废边界。本场景没有更早已提交的收盘；已有的单独检查点测试覆盖不重新评估旧决策的接续。
 
 - 专项验收 1 项通过。5 个直接相关的恢复/生命周期模块共 97 项通过，有 1 项既有 Starlette/httpx 弃用警告；Ruff 与 `git diff --check` 通过。更广的 6 模块测试为 114 通过、2 项可单独复现的市场指数测试失败，不宣称全绿。之前记录的计划重激活准入失败也仍在第一阶段限定口径之外待处理。
 - 本结论只验收已约定的测试范围——服务中断后重启并恢复原任务——不表示任何历史数据库都能无限制恢复。有限的持仓证明预算及未解决的旧库/跨激活证据问题遇到时仍会安全阻止。未使用真实行情源、外部发送器、用户数据库、浏览器服务器进程或部署。第二阶段仍须在释放暂缓提醒前复核最新风险与持仓。

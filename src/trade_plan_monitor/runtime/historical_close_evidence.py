@@ -134,7 +134,18 @@ class LegacyHistoricalCloseReader:
             ActivePlan, AuditLog, EvaluationLedger, EvaluationResult, MonitorEvent,
             MonitorSequence, PlanActivationState, PlanVersion, TradingCalendar,
         ))
-        with session, session.no_autoflush:
+        with session:
+            return self.missing_targets_in_session(session, symbol, observed_at)
+
+    @staticmethod
+    def missing_targets_in_session(
+        session: Session, symbol: str, observed_at: datetime,
+    ) -> tuple[date, ...] | UnknownHistoricalClose:
+        """Check the latest committed close inside a caller-owned snapshot."""
+
+        symbol = _SYMBOL.validate_python(symbol, strict=True)
+        observed_at = _canonical_shanghai(observed_at)
+        with session.no_autoflush:
             try:
                 read_monitor_highwater(session)
                 history = read_activation_history(session, symbol)

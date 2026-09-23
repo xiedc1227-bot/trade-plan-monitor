@@ -328,10 +328,6 @@ class NotificationDispatcher:
         try:
             with self._session_factory() as session:
                 rows = session.scalars(statement).all()
-                if self._admission is not None:
-                    self._scan_after[channel.channel] = (
-                        rows[-1].sequence if rows else 0
-                    )
                 outbox = AlertOutbox(
                     session,
                     clock=self._clock,
@@ -344,6 +340,10 @@ class NotificationDispatcher:
                     if self._admission is not None or not self._enforce_current_plan
                     or outbox.is_delivery_allowed(event, market_date=now.date())
                 )[:limit]
+                if self._admission is not None:
+                    self._scan_after[channel.channel] = (
+                        rows[-1].sequence if rows else 0
+                    )
         except OutboxError, SQLAlchemyError, TypeError, ValueError:
             pass
         if loaded is None:

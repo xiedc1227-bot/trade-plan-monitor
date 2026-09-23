@@ -19,7 +19,7 @@ from trade_plan_monitor.notifications.legacy_recovery_eligibility import (
     UnknownLegacyActivePlan,
     classify_legacy_risk_delivery,
 )
-from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
+from trade_plan_monitor.notifications.models import AlertEvent, AlertPayload, build_alert_payload
 from trade_plan_monitor.notifications.recovery_eligibility import RecoveryBarrierEvidence
 from trade_plan_monitor.notifications.recovery_provenance import (
     LegacyOriginUnknownReason,
@@ -27,6 +27,47 @@ from trade_plan_monitor.notifications.recovery_provenance import (
     UnknownLegacyAlertOrigin,
 )
 from trade_plan_monitor.notifications.render import render_alert
+
+
+def test_legacy_risk_decision_receipt_is_durable(tmp_path):
+    from trade_plan_monitor.notifications.delivery_eligibility import DeliveryEligibilityRepository
+    from trade_plan_monitor.notifications.outbox import AlertOutbox
+    from trade_plan_monitor.state.database import (
+        create_session_factory,
+        create_sqlite_engine,
+        upgrade_database,
+    )
+
+    _, values = inputs()
+    engine = create_sqlite_engine(tmp_path / "legacy-delivery.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    try:
+        event = values["origin"].event
+        with factory.begin() as session:
+            persisted = AlertOutbox(
+                session, clock=lambda: event.created_at, id_factory=lambda: str(uuid4()),
+            ).enqueue(
+                AlertPayload.model_validate(event.model_dump(
+                    mode="python",
+                    exclude={"sequence", "message_text", "created_at", "acknowledged_at"},
+                ))
+            )
+        values["origin"] = replace(values["origin"], event=persisted)
+        with factory.begin() as session:
+            repository = DeliveryEligibilityRepository(session, clock=lambda: values["now"])
+            initial = repository.initialize(persisted.event_id)
+            classified = repository.classify_legacy_risk(
+                persisted.event_id, expected_revision=initial.revision, **values,
+            )
+            assert classified.status.value == "ELIGIBLE"
+            assert classified.reason == "CURRENT_INSTRUCTION"
+        with factory() as session:
+            assert DeliveryEligibilityRepository(session, clock=lambda: values["now"]).get(
+                persisted.event_id,
+            ) == classified
+    finally:
+        engine.dispose()
 
 
 def origin_for(context, result, *, created_at=None):
@@ -124,6 +165,26 @@ def observe_at(values, now):
 @pytest.mark.parametrize("kind", ["breach", "exit", "pending"])
 def test_same_original_instruction_can_be_eligible(kind):
     _, values = inputs(breach=kind == "breach", pending=kind == "pending")
+    assert classify_legacy_risk_delivery(**values).status == "ELIGIBLE"
+
+
+def test_confirmed_opening_only_exit_keeps_quantity_without_inventing_a_lot():
+    context, values = inputs()
+    opening_context = context.model_copy(update={
+        "positions": (), "opening_quantity": 300, "opening_sellable_quantity": 300,
+    })
+    result = evaluate(opening_context)
+    assert result.signal_intent.target_lot_id is None
+    values["origin"] = origin_for(opening_context, result)
+    inventory = values["current"].inventory.model_dump(mode="python")
+    inventory.update({
+        "selected_target": None, "opening_quantity": 300,
+        "opening_sellable_quantity": 300, "sellable": True,
+    })
+    values["current"] = values["current"].model_copy(update={
+        "origin_result": result, "latest": result, "latest_stage": result,
+        "inventory": LegacyInventoryEvidence.model_validate(inventory),
+    })
     assert classify_legacy_risk_delivery(**values).status == "ELIGIBLE"
 
 

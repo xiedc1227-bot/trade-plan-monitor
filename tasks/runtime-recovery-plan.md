@@ -3,6 +3,7 @@
 > Status: IMPLEMENTATION IN PROGRESS — original proposal approved on 2026-09-21; D8 five-day admission approved on 2026-09-23. D9 business intent is confirmed, but its API contract awaits review. None is approved for deployment. Original proposal date: 2026-09-17.
 > Canonical English proposal; review copy: `runtime-recovery-plan.zh-CN.md`.
 > Initiative: `runtime-recovery`. Task index: `runtime-recovery-todo.md`.
+> Stage 2 connected offline delivery admission was implemented on 2026-09-24; see the paired task index and acceptance report for evidence and remaining release gates. Earlier dated sections retain their historical status.
 > The user's 2026-09-21 instruction authorizes implementation and task-specific subagent allocation. Existing completed plans and unrelated working-tree changes remain untouched. Detailed contracts and checkpoint evidence are recorded below and in the paired task index; no complete-runtime acceptance is claimed.
 
 ## 1. Objective and boundaries

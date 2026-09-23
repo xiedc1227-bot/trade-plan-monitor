@@ -30,6 +30,7 @@ from test_ten_symbol_runtime import (
 from trade_plan_monitor.decision.engine import evaluate
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
+from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.notifications.delivery_eligibility import DeliveryEligibilityRepository
 from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
 from trade_plan_monitor.runtime.service import RuntimeEvaluationService
@@ -123,6 +124,49 @@ def _scenario(tmp_path, kind, *, no_signal=False):
         kind=kind, engine=engine, sessions=sessions, plan=plan, target=target, now=now,
         clock=clock, work=work, published=published, service=service, run=run,
     )
+
+
+def test_legacy_intraday_alert_uses_current_activation_and_inventory(tmp_path):
+    from uuid import uuid4
+
+    from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+    from trade_plan_monitor.market_data.models import TradingDay
+
+    scenario = _scenario(tmp_path, "intraday")
+    activated_at = _at(9, 0)
+    with SqlAlchemyUnitOfWork(scenario.sessions, clock=lambda: activated_at) as work:
+        work.plans.save_draft(scenario.plan, source_text="offline current-delivery fixture")
+        work.plans.activate(
+            scenario.plan, expected_revision=0,
+            validation=validate_trade_plan(
+                scenario.plan, available_market_evidence=ALL_MARKET_EVIDENCE,
+            ),
+        )
+        work.references.upsert_trading_days((TradingDay(
+            exchange=scenario.plan.market, cal_date=scenario.target.date(), is_open=True,
+            previous_trade_date=scenario.target.date() - timedelta(days=3),
+        ),))
+        work.positions.confirm_inventory(
+            symbol=scenario.plan.symbol, as_of_trade_date=scenario.target.date(),
+            total_quantity=0, sellable_quantity=0, included_lot_ids=(),
+            complete_registration=True, expected_revision=0,
+        )
+        work.commit()
+    result = scenario.run(scenario.service(recovery_delivery=True))
+    event = result.committed_event
+    admission = CurrentDeliveryAdmission(scenario.sessions, runtime_generation=uuid4)
+    assert admission(event, scenario.target + timedelta(seconds=60)) is True
+    with SqlAlchemyUnitOfWork(
+        scenario.sessions, clock=lambda: scenario.target + timedelta(seconds=61),
+    ) as work:
+        work.positions.record_buy(
+            symbol=scenario.plan.symbol, bucket="CORE", quantity=100,
+            acquired_trade_date=scenario.target.date(), cost_fen=6400,
+            board_lot=100, max_position_qty=1_000,
+        )
+        work.commit()
+    assert admission(event, scenario.target + timedelta(seconds=70)) is False
+    scenario.engine.dispose()
 
 
 @pytest.fixture(params=["intraday", "official", "explicit"])

@@ -109,7 +109,17 @@ class LegacyAlertOriginReader:
             MonitorSequence, MonitorRow, AuditLog, PlanActivationState, ActivePlan,
             PlanVersion, AlertRow, EvaluationLedger, ResultRow,
         ))
-        with session, session.no_autoflush:
+        with session:
+            return self.read_in_session(session, event_id)
+
+    def read_in_session(
+        self, session: Session, event_id: UUID,
+    ) -> ProvenLegacyAlertOrigin | UnknownLegacyAlertOrigin:
+        """Use a caller-owned read snapshot when delivery also checks current state."""
+
+        if type(event_id) is not UUID:
+            raise TypeError("event_id must be a UUID")
+        with session.no_autoflush:
             try:
                 return self._read(session, event_id)
             except _MissingEvidence:

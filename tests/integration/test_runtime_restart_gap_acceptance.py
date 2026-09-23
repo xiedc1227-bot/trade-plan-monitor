@@ -4,6 +4,7 @@ import asyncio
 from datetime import date, datetime, timedelta
 from multiprocessing import get_context
 from pathlib import Path
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -16,6 +17,8 @@ from test_live_pipeline_acceptance import (
     _write_configuration_and_evidence,
 )
 
+from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
+from trade_plan_monitor.notifications.outbox import AlertOutbox
 from trade_plan_monitor.runtime.clock import SHANGHAI
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.request_control import create_live_tushare_request_controller
@@ -161,11 +164,27 @@ def test_stopped_monitor_recovers_missed_close_once_after_process_restart(tmp_pa
                 DailyBar.is_official.is_(True),
             )) == 5500
             assert session.scalar(select(func.count()).select_from(AlertEvent)) == 1
-            assert session.scalars(select(AlertDeliveryEligibility.status)).all() == ["HOLD"]
+            assert session.scalars(select(AlertDeliveryEligibility.status)).all() == ["ELIGIBLE"]
             assert session.scalars(select(AlertDeliveryEligibility.delivery_class)).all() == [
                 "STATE_RISK"
             ]
-            assert session.scalar(select(func.count()).select_from(DeliveryAttempt)) == 0
+            assert session.scalar(select(func.count()).select_from(DeliveryAttempt)) == 1
+            assert session.scalars(select(DeliveryAttempt.status)).all() == ["DELIVERED"]
             assert session.scalar(select(func.count()).select_from(ActivePlan)) == 1
+    finally:
+        engine.dispose()
+
+    engine = create_sqlite_engine(database)
+    try:
+        sessions = create_session_factory(engine)
+        with sessions() as session:
+            event_id = UUID(session.scalar(select(AlertEvent.id)))
+            alert = AlertOutbox(
+                session, clock=lambda: after_close, id_factory=lambda: str(uuid4()),
+            ).get(event_id)
+        admission = CurrentDeliveryAdmission(
+            sessions, runtime_generation=lambda: uuid4(),
+        )
+        assert admission(alert, after_close + timedelta(minutes=1)) is True
     finally:
         engine.dispose()

@@ -151,12 +151,14 @@ def create_explicit_runtime_evaluation_service(
     unit_of_work_factory: UnitOfWorkFactory,
     *,
     committed_event_publisher: CommittedEventPublisher | None = None,
+    recovery_delivery: bool = False,
 ) -> ExplicitRuntimeEvaluationService:
     """Compose the R09 BUY runtime against the production SQLite/event boundary."""
 
     return ExplicitRuntimeEvaluationService(
         unit_of_work_factory,
         committed_event_publisher=committed_event_publisher,
+        recovery_delivery=recovery_delivery,
     )
 
 
@@ -348,6 +350,7 @@ class ProductionMonitorPipeline:
             market_index_service=self.index_service,
             runtime_generation=runtime_generation,
             clock=clock,
+            recovery_delivery=True,
         )
         self.historical_evaluations = (
             None if self._historical_reader is None else RuntimeEvaluationService(
@@ -369,6 +372,7 @@ class ProductionMonitorPipeline:
         self.explicit_evaluations = create_explicit_runtime_evaluation_service(
             unit_of_work_factory,
             committed_event_publisher=publisher,
+            recovery_delivery=True,
         )
         self.coordinator = RuntimeDeadlineCoordinator(
             clock=clock,
@@ -833,6 +837,26 @@ class ProductionMonitorPipeline:
         if self._semantic_bindings is None and not self._stock_certification_current():
             raise RuntimeError("stock certification must be refreshed before execution")
         plans = self.active_plans(deadline.trade_date)
+        if (
+            deadline.kind is DeadlineKind.REALTIME_MINUTE
+            and deadline.bar_end is not None
+            and plans
+            and all(isinstance(plan, ExplicitTradePlan) for plan in plans)
+        ):
+            with self._work() as work:
+                complete = all(
+                    (active := work.plans.get_active(plan.symbol)) is not None
+                    and active.activated_at <= deadline.bar_end
+                    and work.explicit_rules.get(
+                        plan_hash=plan_sha256(plan), symbol=plan.symbol,
+                        target_bucket_end=deadline.bar_end,
+                        activation_revision=active.revision,
+                    ) is not None
+                    for plan in plans
+                )
+            if complete:
+                await self._refresh_dashboard_indexes(deadline)
+                return ()
         reference_key = self._reference_dependency_key(deadline.trade_date, plans)
         if self._reference_key != reference_key:
             await self.refresh_references(deadline.trade_date)

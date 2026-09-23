@@ -25,6 +25,7 @@ from trade_plan_monitor.market_data.models import (
 )
 from trade_plan_monitor.market_data.sessions import SourceTimeLabel
 from trade_plan_monitor.notifications.channels import InAppChannel
+from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.notifications.delivery_eligibility import DeliveryMetadataError
 from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
 from trade_plan_monitor.runtime.clock import Clock, SystemClock
@@ -934,6 +935,10 @@ def create_monitor_composition(
             channels=(InAppChannel(),),
             clock=clock.now,
             enforce_current_plan=True,
+            admission=CurrentDeliveryAdmission(
+                session_factory,
+                runtime_generation=lambda: lifecycle.runtime_generation,
+            ),
         )
         state = _ProductionRuntimeState(
             config_path=config_path,

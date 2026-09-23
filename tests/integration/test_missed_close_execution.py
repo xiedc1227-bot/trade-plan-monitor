@@ -6,7 +6,7 @@ import multiprocessing
 import os
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -17,6 +17,7 @@ from test_ten_symbol_runtime import _daily_bar, _runtime_context, _runtime_plan
 from trade_plan_monitor.decision.engine import evaluate
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
 from trade_plan_monitor.market_data.models import TradingDay
+from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.notifications.outbox import AlertOutbox
 from trade_plan_monitor.runtime.historical_close_context import (
     HistoricalCloseUnavailableError,
@@ -235,6 +236,126 @@ def test_two_missed_closes_use_historical_holdings_and_source_risk_time_after_re
     recovery.engine.dispose()
     assert recovery.run(D1).status == recovery.run(D2).status == "DUPLICATE"
     assert _counts(recovery) == before == (2, 2, 1, 2)
+
+
+def test_current_delivery_suppresses_intermediate_breach_and_keeps_current_exit(recovery):
+    first = recovery.run(D1).committed_event
+    second = recovery.run(D2).committed_event
+    generation = uuid4()
+    admission = CurrentDeliveryAdmission(
+        recovery.sessions, runtime_generation=lambda: generation,
+    )
+    now = recovery.clock[0] + timedelta(seconds=1)
+    assert admission(first, now) is False
+    assert admission(second, now) is True
+    with recovery.engine.connect() as connection:
+        rows = connection.execute(text(
+            "SELECT event_id, status, reason FROM alert_delivery_eligibility ORDER BY event_id"
+        )).all()
+    by_id = {event_id: (status, reason) for event_id, status, reason in rows}
+    assert by_id[str(first.event_id)] == ("SUPPRESS", "STAGE_SUPERSEDED")
+    assert by_id[str(second.event_id)] == ("ELIGIBLE", "CURRENT_INSTRUCTION")
+    with recovery.engine.connect() as connection:
+        before = connection.scalar(text(
+            "SELECT count(*) FROM audit_log WHERE action='ALERT_DELIVERY_CLASSIFIED'"
+        ))
+    assert admission(second, now + timedelta(seconds=1)) is True
+    with recovery.engine.connect() as connection:
+        after = connection.scalar(text(
+            "SELECT count(*) FROM audit_log WHERE action='ALERT_DELIVERY_CLASSIFIED'"
+        ))
+    assert after == before
+
+
+def test_proven_old_risk_is_suppressed_after_plan_deactivation(recovery):
+    event = recovery.run(D1).committed_event
+    with recovery.work() as unit:
+        active = unit.plans.get_active(event.symbol)
+        unit.plans.deactivate(event.symbol, expected_revision=active.revision)
+        unit.commit()
+    admission = CurrentDeliveryAdmission(recovery.sessions, runtime_generation=uuid4)
+    assert admission(event, recovery.clock[0] + timedelta(seconds=1)) is False
+    with recovery.engine.connect() as connection:
+        status = connection.execute(text(
+            "SELECT status, reason FROM alert_delivery_eligibility WHERE event_id=:event_id"
+        ), {"event_id": str(event.event_id)}).one()
+    assert status == ("SUPPRESS", "ACTIVE_IDENTITY_INVALID")
+
+
+def test_repeated_legacy_exit_releases_only_latest_applicable_occurrence(recovery):
+    recovery.run(D1)
+    earlier = recovery.run(D2).committed_event
+    d3 = date(2026, 8, 26)
+    recovery.clock[0] = datetime(2026, 8, 26, 17, tzinfo=ZONE)
+    recovery.prices[d3] = 5900
+    with recovery.work() as work:
+        work.references.upsert_trading_days(tuple(TradingDay(
+            exchange=exchange, cal_date=d3, is_open=True, previous_trade_date=D2,
+        ) for exchange in ("SSE", "SZSE")))
+        work.commit()
+    latest = recovery.run(d3).committed_event
+    assert latest.signal_type == earlier.signal_type == "RISK_EXIT_READY"
+    generation = uuid4()
+    admission = CurrentDeliveryAdmission(
+        recovery.sessions, runtime_generation=lambda: generation,
+    )
+    now = recovery.clock[0] + timedelta(seconds=1)
+    assert admission(earlier, now) is False
+    assert admission(latest, now) is True
+    with recovery.engine.connect() as connection:
+        reasons = dict(connection.execute(text(
+            "SELECT event_id, reason FROM alert_delivery_eligibility"
+        )).all())
+    assert reasons[str(earlier.event_id)] == "NEWER_EXIT_OCCURRENCE"
+
+
+def test_confirmed_manual_sale_makes_old_exit_inapplicable(recovery):
+    recovery.run(D1)
+    exit_event = recovery.run(D2).committed_event
+    recovery.clock[0] += timedelta(seconds=1)
+    with recovery.work() as work:
+        work.positions.reduce_lot(recovery.lot.id, quantity=100, trade_date=D2)
+        work.commit()
+    admission = CurrentDeliveryAdmission(recovery.sessions, runtime_generation=uuid4)
+    assert admission(exit_event, recovery.clock[0] + timedelta(seconds=1)) is False
+    with recovery.engine.connect() as connection:
+        reason = connection.scalar(text(
+            "SELECT reason FROM alert_delivery_eligibility WHERE event_id=:event_id"
+        ), {"event_id": str(exit_event.event_id)})
+    assert reason == "TARGET_INAPPLICABLE"
+
+
+def test_recovery_barrier_holds_d1_breach_until_d2_resolution(recovery):
+    first = recovery.run(D1).committed_event
+    admission = CurrentDeliveryAdmission(recovery.sessions, runtime_generation=uuid4)
+    assert admission(first, recovery.clock[0] + timedelta(seconds=1)) is False
+    recovery.prices[D2] = 6200
+    second = recovery.run(D2)
+    assert second.evaluation_result.snapshot.risk.status == "CLEAR"
+    assert admission(first, recovery.clock[0] + timedelta(seconds=1)) is False
+    with recovery.engine.connect() as connection:
+        reason = connection.scalar(text(
+            "SELECT reason FROM alert_delivery_eligibility WHERE event_id=:event_id"
+        ), {"event_id": str(first.event_id)})
+    assert reason == "RISK_RESOLVED"
+
+
+def test_opening_only_legacy_exit_is_admitted_without_a_fabricated_lot(recovery):
+    recovery.clock[0] = datetime(2026, 8, 25, 9, 1, tzinfo=ZONE)
+    with recovery.work() as work:
+        work.positions.reduce_lot(recovery.lot.id, quantity=100, trade_date=D1)
+        work.positions.confirm_inventory(
+            symbol=recovery.plan.symbol, as_of_trade_date=D2,
+            total_quantity=100, sellable_quantity=100,
+            included_lot_ids=(), complete_registration=True, expected_revision=3,
+        )
+        work.commit()
+    recovery.clock[0] = OBSERVED + timedelta(seconds=1)
+    recovery.run(D1)
+    exit_event = recovery.run(D2).committed_event
+    assert exit_event.target_lot_id is None
+    admission = CurrentDeliveryAdmission(recovery.sessions, runtime_generation=uuid4)
+    assert admission(exit_event, recovery.clock[0] + timedelta(seconds=1)) is True
 
 
 def test_cannot_skip_an_earlier_missing_close(recovery):

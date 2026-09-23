@@ -1,6 +1,14 @@
 # Spec: runtime-recovery
 
 > Derived from approved proposal D2–D6 / A03–A10, authorized 2026-09-21. D8/A13 was approved on 2026-09-23 and is being implemented; D9/A14 business intent is confirmed but its API is not yet approved. English canonical; paired Chinese copy. Depends on provider-contract.
+
+## Connected Stage 2 delivery boundary — 2026-09-24
+
+Production composition now opts both evaluators into initial durable `HOLD` in the canonical decision transaction and injects `CurrentDeliveryAdmission` into pending and direct dispatch. The dispatcher checks fresh committed authority before claiming a per-channel attempt and again after claim immediately before channel I/O. No SQLite transaction spans external I/O; prior uncertain-send retry semantics remain. A stored `ELIGIBLE` receipt alone never authorizes a later call. A bounded per-channel scan cursor lets held older alerts yield to later pending alerts.
+
+Legacy official-risk admission verifies the original alert/result/activation provenance, exact current activation, calendar-certified completed official target, no missing or pending close, latest official risk stage, current risk row and proven complete inventory including opening balances. A resolved risk, later risk stage, proven deactivation/replacement or inapplicable exit is terminally suppressed with audit; an identical applicable repeated exit releases only its newest proven official-close occurrence. Unknown, corrupt, incomplete or over-budget evidence holds or surfaces a storage fault; it does not grant delivery. Explicit risk uses the latest matching rule result, current activation, completed five-minute target and generation-bound recovery barrier; actionable alerts additionally require a matching current payload and retain source cutoff + 90-second expiry. Unchanged rechecks leave the receipt revision/audit unchanged even when observation time advances. These facts are re-read for each channel, including after claim.
+
+This is a locally verified code path, not approval for a real provider, external sender, user database migration or deployment. The earlier opt-in/future-dispatch paragraphs below describe the state of their dated increments; this section supersedes their implementation-status claims. Full recovery release gates and known unrelated suite failures remain tracked in the paired task index and acceptance report.
 ## Objective
 
 One runtime owner can start at any time. After an interruption no longer than 120 hours it may reconcile eligible plans; after a longer interruption all active trading plans must expire before any recovery or alert dispatch. No trading decision may bypass exact dependency, activation or freshness guards.

@@ -422,6 +422,31 @@ def _explicit_fixture(factory, *, close=930):
     )
 
 
+def test_repeated_explicit_classification_does_not_append_identical_audit(database):
+    _, factory, _ = database
+    event, arguments, now = _explicit_fixture(factory)
+    with factory.begin() as session:
+        repository = _repository(session, now)
+        repository.initialize(event.event_id)
+        first = repository.classify_explicit_risk(
+            event.event_id, expected_revision=0, **arguments,
+        )
+    later = now + timedelta(seconds=1)
+    arguments["active"] = arguments["active"].model_copy(update={"observed_at": later})
+    arguments["barrier"] = arguments["barrier"].model_copy(update={"observed_at": later})
+    with factory.begin() as session:
+        repository = _repository(session, later)
+        second = repository.classify_explicit_risk(
+            event.event_id, expected_revision=first.revision, **arguments,
+        )
+    assert second == first
+    with factory() as session:
+        assert len(session.scalars(select(AuditLog).where(
+            AuditLog.action == "ALERT_DELIVERY_CLASSIFIED",
+            AuditLog.entity_id == str(event.event_id),
+        )).all()) == 2
+
+
 @pytest.mark.parametrize("close, expected", [(930, "ELIGIBLE"), (960, "SUPPRESS")])
 def test_explicit_policy_receipt_and_audit_survive_restart_without_changing_event(
     database,
@@ -698,14 +723,13 @@ def test_recoverable_explicit_enqueue_and_caller_rollback_are_atomic(database):
         assert session.get(AlertRow, str(existing.event_id)) is not None
 
 
-@pytest.mark.parametrize("reason", ["RISK_FALSE", "ACTIVATION_EXPIRED"])
-def test_legacy_metadata_cannot_acquire_explicit_terminal_reasons(database, reason):
+def test_legacy_metadata_cannot_acquire_explicit_risk_false_reason(database):
     _, factory, event = database
     with factory.begin() as session:
         _repository(session).initialize(event.event_id)
     with factory.begin() as session:
         row = session.get(AlertDeliveryEligibility, str(event.event_id))
-        row.status, row.reason = "SUPPRESS", reason
+        row.status, row.reason = "SUPPRESS", "RISK_FALSE"
     with factory() as session, pytest.raises(DeliveryMetadataError):
         _repository(session).get(event.event_id)
 

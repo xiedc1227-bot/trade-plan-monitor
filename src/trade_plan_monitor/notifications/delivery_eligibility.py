@@ -21,6 +21,13 @@ from trade_plan_monitor.decision.explicit_rules import ExplicitEvaluationResult
 from trade_plan_monitor.decision.models import Sha256Hex
 from trade_plan_monitor.market_data.aggregation import five_minute_bucket_end
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
+from trade_plan_monitor.notifications.legacy_recovery_eligibility import (
+    ActiveLegacyPlan,
+    LegacyCurrentEvidence,
+    LegacyRecoveryDeliveryReason,
+    UnknownLegacyActivePlan,
+    classify_legacy_risk_delivery,
+)
 from trade_plan_monitor.notifications.models import ExplicitAlertEvent
 from trade_plan_monitor.notifications.outbox import OutboxError, _event_from_row
 from trade_plan_monitor.notifications.recovery_eligibility import (
@@ -29,6 +36,10 @@ from trade_plan_monitor.notifications.recovery_eligibility import (
     RecoveryDeliveryReason,
     RecoveryDeliveryStatus,
     classify_explicit_risk_delivery,
+)
+from trade_plan_monitor.notifications.recovery_provenance import (
+    ProvenLegacyAlertOrigin,
+    UnknownLegacyAlertOrigin,
 )
 from trade_plan_monitor.runtime.clock import _canonical_shanghai
 from trade_plan_monitor.state.models import AlertDeliveryEligibility as MetadataRow
@@ -50,11 +61,16 @@ _SUPPRESS_REASONS = frozenset(
         "ACTIVE_IDENTITY_INVALID",
         "ACTIVATION_EXPIRED",
         "RISK_FALSE",
+        "RISK_RESOLVED",
+        "DIFFERENT_EPISODE",
+        "STAGE_SUPERSEDED",
+        "TARGET_INAPPLICABLE",
+        "NEWER_EXIT_OCCURRENCE",
     }
 )
 _STATUS_REASONS = {
     RecoveryDeliveryStatus.SUPPRESS: _SUPPRESS_REASONS,
-    RecoveryDeliveryStatus.ELIGIBLE: frozenset({"RISK_TRUE"}),
+    RecoveryDeliveryStatus.ELIGIBLE: frozenset({"RISK_TRUE", "CURRENT_INSTRUCTION"}),
     RecoveryDeliveryStatus.HOLD: frozenset(
         {
             "RECOVERY_REQUIRED",
@@ -63,6 +79,12 @@ _STATUS_REASONS = {
                 reason.value
                 for reason in RecoveryDeliveryReason
                 if reason.value not in _SUPPRESS_REASONS and reason.value != "RISK_TRUE"
+            ),
+            *(
+                reason.value
+                for reason in LegacyRecoveryDeliveryReason
+                if reason.value not in _SUPPRESS_REASONS
+                and reason.value != "CURRENT_INSTRUCTION"
             ),
         }
     ),
@@ -112,7 +134,7 @@ class DeliveryEligibilityRecord(BaseModel):
             self.expires_at is None or self.updated_at < self.expires_at
         ):
             raise ValueError("expired receipt requires a reached actionable deadline")
-        if self.reason in {"RISK_TRUE", "RISK_FALSE"} and (
+        if self.reason in {"RISK_TRUE", "RISK_FALSE", "CURRENT_INSTRUCTION"} and (
             self.delivery_class is not DeliveryClass.STATE_RISK
             or self.barrier is None
             or self.result_hash is None
@@ -125,6 +147,15 @@ class DeliveryEligibilityRecord(BaseModel):
         ):
             raise ValueError("eligible receipt requires complete captured evidence")
         return self
+
+
+def _same_barrier_facts(
+    previous: RecoveryBarrierEvidence | None,
+    observed: RecoveryBarrierEvidence | None,
+) -> bool:
+    if previous is None or observed is None:
+        return previous is observed
+    return previous.model_copy(update={"observed_at": observed.observed_at}) == observed
 
 
 class DeliveryEligibilityRepository:
@@ -172,12 +203,16 @@ class DeliveryEligibilityRepository:
             delivery_class, source = self._source(event)
             if record.delivery_class != delivery_class or record.source_cutoff != source:
                 raise ValueError("metadata source differs from canonical alert")
-            explicit_reason = (
-                record.reason in RecoveryDeliveryReason._value2member_map_
-                and record.reason != "ACTIVE_IDENTITY_INVALID"
-            )
+            explicit_reason = record.reason in {"RISK_TRUE", "RISK_FALSE", "RULE_BLOCKED"}
             if explicit_reason and (
                 type(event) is not ExplicitAlertEvent or event.signal_type != "RISK_ALERT"
+            ):
+                raise ValueError("classifier reason differs from canonical alert family")
+            if record.reason == "CURRENT_INSTRUCTION" and (
+                type(event) is ExplicitAlertEvent
+                or event.signal_type not in {
+                    "RISK_BREACH", "RISK_EXIT_READY", "RISK_EXIT_PENDING_SETTLEMENT"
+                }
             ):
                 raise ValueError("classifier reason differs from canonical alert family")
             if record.reason in {"RISK_TRUE", "RISK_FALSE"} and (
@@ -346,13 +381,66 @@ class DeliveryEligibilityRepository:
             runtime_generation=runtime_generation,
             now=now,
         )
+        result_hash = None if latest is None else latest.result_hash
+        if (
+            current.status is decision.status and current.reason == decision.reason.value
+            and current.result_hash == result_hash
+            and _same_barrier_facts(current.barrier, barrier)
+        ):
+            return current
         return self._replace(
             current,
             status=decision.status,
             reason=decision.reason.value,
             barrier=barrier,
-            result_hash=None if latest is None else latest.result_hash,
+            result_hash=result_hash,
             updated_at=now,
+        )
+
+    def classify_legacy_risk(
+        self,
+        event_id: UUID,
+        *,
+        expected_revision: int,
+        origin: ProvenLegacyAlertOrigin | UnknownLegacyAlertOrigin,
+        active: ActiveLegacyPlan | UnknownLegacyActivePlan | None,
+        current: LegacyCurrentEvidence | None,
+        barrier: RecoveryBarrierEvidence | None,
+        target_bucket_end: datetime,
+        runtime_generation: UUID,
+        now: datetime,
+    ) -> DeliveryEligibilityRecord:
+        """Classify one canonical legacy risk event in the caller's transaction."""
+
+        self._lock(event_id)
+        previous = self._expected(event_id, expected_revision)
+        if previous.status is RecoveryDeliveryStatus.SUPPRESS:
+            raise DeliveryMetadataConflict("Suppressed alert cannot be reclassified")
+        event = self._event(event_id)
+        if type(event) is ExplicitAlertEvent or event.signal_type not in {
+            "RISK_BREACH", "RISK_EXIT_READY", "RISK_EXIT_PENDING_SETTLEMENT"
+        }:
+            raise ValueError("classification requires a legacy risk alert")
+        if type(origin) is ProvenLegacyAlertOrigin and origin.event != event:
+            raise DeliveryMetadataConflict("Origin belongs to a different alert")
+        observed_at = self._now()
+        if _canonical_shanghai(now) != observed_at:
+            raise DeliveryMetadataConflict("Classification observation is stale")
+        decision = classify_legacy_risk_delivery(
+            origin, active=active, current=current, barrier=barrier,
+            target_bucket_end=target_bucket_end, runtime_generation=runtime_generation,
+            now=observed_at,
+        )
+        result_hash = None if current is None else current.latest.result_hash
+        if (
+            previous.status is decision.status and previous.reason == decision.reason.value
+            and previous.result_hash == result_hash
+            and _same_barrier_facts(previous.barrier, barrier)
+        ):
+            return previous
+        return self._replace(
+            previous, status=decision.status, reason=decision.reason.value,
+            barrier=barrier, result_hash=result_hash, updated_at=observed_at,
         )
 
     def _expected(self, event_id, expected_revision):

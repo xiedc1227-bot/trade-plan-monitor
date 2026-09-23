@@ -2,23 +2,36 @@
 
 import asyncio
 from datetime import timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
+from test_explicit_runtime_production import (
+    NOW as EXPLICIT_NOW,
+)
+from test_explicit_runtime_production import (
+    TARGET,
+    _database,
+    _seed_active,
+    _seed_facts,
+    _three_rule_plan,
+)
 from test_notification_delivery import NOW, _payload, _unit_of_work
 
 from trade_plan_monitor.notifications.channels import (
     ChannelDeliveryResult,
     DeliveryChannel,
 )
+from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
+from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
 from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
     upgrade_database,
 )
-from trade_plan_monitor.state.models import DeliveryAttempt
+from trade_plan_monitor.state.models import DeliveryAttempt, PositionInventoryConfirmation
+from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @pytest.fixture
@@ -94,3 +107,43 @@ def test_pending_scan_reaches_later_event_behind_held_events(database_engine):
         if asyncio.run(dispatcher.dispatch_pending(limit=1)):
             break
     assert channel.sent == [UUID(int=1012)]
+
+
+def test_explicit_risk_requires_current_result_and_holdings(tmp_path):
+    engine = create_sqlite_engine(tmp_path / "explicit-risk.db")
+    upgrade_database(engine)
+    plan = _three_rule_plan(overlapping_risk=True)
+    _seed_active(engine, plan)
+    _seed_facts(engine, plan)
+    sessions = create_session_factory(engine)
+    def work():
+        return SqlAlchemyUnitOfWork(sessions, clock=lambda: EXPLICIT_NOW)
+
+    outcome = asyncio.run(ExplicitRuntimeEvaluationService(
+        work, recovery_delivery=True,
+    ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=EXPLICIT_NOW))
+    risk = next(event for event in outcome.committed_events if event.signal_type == "RISK_ALERT")
+    generation = uuid4()
+    admission = CurrentDeliveryAdmission(sessions, runtime_generation=lambda: generation)
+    assert admission(risk, EXPLICIT_NOW + timedelta(seconds=1)) is True
+    with sessions.begin() as session:
+        session.delete(session.get(PositionInventoryConfirmation, plan.symbol))
+    assert admission(risk, EXPLICIT_NOW + timedelta(seconds=3)) is False
+    engine.dispose()
+
+
+def test_explicit_buy_releases_only_with_current_result_and_expires_at_90_seconds(tmp_path):
+    engine, plan = _database(tmp_path, "explicit-buy.db")
+    sessions = create_session_factory(engine)
+
+    def work():
+        return SqlAlchemyUnitOfWork(sessions, clock=lambda: EXPLICIT_NOW)
+
+    outcome = asyncio.run(ExplicitRuntimeEvaluationService(
+        work, recovery_delivery=True,
+    ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=EXPLICIT_NOW))
+    event = outcome.committed_events[0]
+    admission = CurrentDeliveryAdmission(sessions, runtime_generation=uuid4)
+    assert admission(event, TARGET + timedelta(seconds=89)) is True
+    assert admission(event, TARGET + timedelta(seconds=90)) is False
+    engine.dispose()

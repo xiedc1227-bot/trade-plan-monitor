@@ -208,9 +208,19 @@ class PositionInventoryHistoryReader:
             PositionInventoryState, PositionInventoryConfirmation, PositionLot,
             PositionOpeningBalance, AuditLog, MonitorEvent, MonitorSequence,
         ))
-        with session, session.no_autoflush:
+        with session:
+            return self.read_in_session(session, symbol, cutoff=cutoff, observed_at=observed_at)
+
+    @staticmethod
+    def read_in_session(
+        session: Session, symbol: str, *, cutoff: datetime, observed_at: datetime,
+    ) -> ProvenInventoryHistory | UnknownInventoryHistory:
+        """Validate current manual holdings inside a caller-owned snapshot."""
+
+        _symbol(symbol)
+        with session.no_autoflush:
             try:
-                return self._read(session, symbol, cutoff, observed_at)
+                return PositionInventoryHistoryReader._read(session, symbol, cutoff, observed_at)
             except _HistoryLimit:
                 return UnknownInventoryHistory(InventoryHistoryUnknownReason.HISTORY_LIMIT)
             except _MissingEvidence:

@@ -57,6 +57,7 @@ from trade_plan_monitor.state.models import (
     PlanSource,
     PlanVersion,
     PlanVersionReview,
+    RuntimeLiveness,
 )
 from trade_plan_monitor.state.repositories import ManualEventRiskStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
@@ -1080,9 +1081,13 @@ def test_real_monitor_composition_scheduler_dispatches_explicit_buy(
         plan = _plan()
         _seed_active(engine, plan)
         _seed_pipeline_facts(engine, plan)
-        engine.dispose()
-
         initial_now = TARGET - timedelta(minutes=1) + timedelta(seconds=15)
+        with create_session_factory(engine).begin() as session:
+            session.add(RuntimeLiveness(
+                id=1, schema_version=1, revision=0,
+                last_alive_at=initial_now.isoformat(),
+            ))
+        engine.dispose()
         clock = _SchedulerClock(initial_now)
         config = tmp_path / "config" / "app.yaml"
         config.parent.mkdir(parents=True)
