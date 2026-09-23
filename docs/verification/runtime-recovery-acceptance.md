@@ -11,7 +11,15 @@ On `codex/consolidate-r19-r32`, local-only migration `0022_runtime_liveness` and
 - After adding a rollback assertion for a held receipt, `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py -q` — 5 passed; the broader successful run above predates only this test assertion.
 - `.\.venv\Scripts\python.exe -m ruff check` on changed runtime/state/test files — passed. No real provider, sender, user database or deployment was used.
 
-This is not production startup protection: no running heartbeat cadence or startup-before-dispatch call exists yet. A short outage still needs verified recent provenance and historical-state reconstruction. V1d, C2 and business step 1 remain open; the complete non-live suite and four known baseline failures remain final gates.
+This foundation run preceded the production lifecycle wiring below. A short outage still needs verified recent provenance and historical-state reconstruction. V1d, C2 and business step 1 remain open; the complete non-live suite and four known baseline failures remain final gates.
+
+### Production admission and heartbeat slice — 2026-09-23
+
+The production lifecycle now calls the durable admission gate after opening the database and before active-plan loading, provider probing, recovery or dispatch. The gate atomically invalidates plans after a proven >120-hour gap, then advances the heartbeat with revision fencing. A 30-second heartbeat runs even in read-only/degraded standby and is drained before database close. A suspended process cannot write across a >120-hour silent gap: it stops and leaves the old evidence for the next admission. Missing/invalid legacy evidence still blocks automatic startup; no operator-review UI exists yet. The current dispatcher excludes stale legacy alerts by active-plan identity, but durable per-alert terminal receipts remain unimplemented.
+
+- RED/GREEN: lifecycle ordering and failed-admission tests first failed on the absent owner interface; a suspended-heartbeat test first failed before the gap check. The new production-state integration proves that >120 hours expires two active plans before they can be loaded, while retaining 1,000 held units and five audit rows.
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py tests/integration/test_runtime_liveness.py tests/integration/test_sqlite_repositories.py tests/integration/test_runtime_lifecycle.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_notification_delivery.py tests/integration/test_live_pipeline_acceptance.py::test_real_composition_starts_runs_a_timer_and_restores_its_projection tests/integration/test_monitor_production_composition.py tests/integration/test_certified_production_runtime.py -q --tb=short` — 261 passed, 1 existing Starlette/httpx warning, 47.15 seconds, including the degraded-standby heartbeat assertion.
+- The larger `test_live_pipeline_acceptance.py` run had 42 passes and three failures: the new legacy fixture required explicit prior heartbeat evidence and now passes in isolation; two unrelated market-index expectations also failed and remain unmodified. This slice did not migrate the user database or exercise a live provider or sender.
 
 ## Actual process-restart slice — 2026-09-23
 
