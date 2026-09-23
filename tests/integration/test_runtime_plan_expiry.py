@@ -10,6 +10,9 @@ from uuid import UUID
 import pytest
 from sqlalchemy import func, select
 
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json, load_plan_yaml
+from trade_plan_monitor.domain.plan_hash import plan_sha256
+from trade_plan_monitor.domain.plan_models import ExplicitTradePlan, TradePlan
 from trade_plan_monitor.notifications.channels import ConsoleChannel
 from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
 from trade_plan_monitor.runtime.clock import SHANGHAI
@@ -373,6 +376,67 @@ def test_more_than_120_hours_expires_all_plans_and_pending_closes_once(tmp_path)
         work.commit()
     with factory() as session:
         assert session.scalar(select(func.count()).select_from(AuditLog)) == 5
+    engine.dispose()
+
+
+def test_expiry_covers_legacy_and_explicit_families_without_changing_plan_definitions(tmp_path):
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW - timedelta(hours=121))
+
+    legacy = load_plan_yaml(
+        (Path(__file__).parents[2] / "config" / "plans" / "003043.SZ.sample.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    explicit = ExplicitTradePlan.model_validate(
+        {
+            "schema_version": 3,
+            "execution_mode": "EXPLICIT_RULES",
+            "execution_version": "explicit-rules-v1",
+            "plan_id": "expired-explicit-plan",
+            "version": 1,
+            "symbol": SYMBOLS[1],
+            "name": "Expired explicit plan",
+            "market": "SZSE",
+            "metadata": {},
+            "activation": {"mode": "MANUAL"},
+            "position": {"inventory_scope": "ALL_REGISTERED", "lot_size": 100, "max_qty": 300},
+            "monitoring": {"timeframe_minutes": 5, "indicator_formula_version": "ta-v1"},
+            "rules": [
+                {
+                    "rule_id": "risk-950",
+                    "condition": {"type": "COMPLETED_CLOSE_BELOW", "price_fen": 950},
+                    "action": {"type": "RISK_ALERT"},
+                    "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+                    "repeat_policy": {"mode": "ONCE_PER_ACTIVATION"},
+                    "safety_conditions": None,
+                }
+            ],
+            "conflict_policy": {"trade_conflict": "BLOCK_BOTH", "risk_conflict": "RISK_ONLY"},
+        }
+    )
+    assert isinstance(legacy, TradePlan)
+    documents = {legacy.symbol: dump_plan_json(legacy), explicit.symbol: dump_plan_json(explicit)}
+    with factory.begin() as session:
+        for plan in (legacy, explicit):
+            version = session.scalar(select(PlanVersion).where(PlanVersion.symbol == plan.symbol))
+            version.plan_id = plan.plan_id
+            version.plan_hash = plan_sha256(plan)
+            version.payload_json = documents[plan.symbol]
+
+    with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
+        assert work.expire_active_plans_after_interruption() == SYMBOLS
+        work.commit()
+    with factory() as session:
+        versions = {row.symbol: row for row in session.scalars(select(PlanVersion))}
+        assert set(versions) == set(SYMBOLS)
+        assert all(row.status == "SUPERSEDED" for row in versions.values())
+        assert {symbol: row.payload_json for symbol, row in versions.items()} == documents
+        assert isinstance(load_plan_json(versions[legacy.symbol].payload_json), TradePlan)
+        assert isinstance(load_plan_json(versions[explicit.symbol].payload_json), ExplicitTradePlan)
+        assert session.scalar(select(PositionLot.remaining_qty)) == 1000
     engine.dispose()
 
 
