@@ -11,8 +11,10 @@
 - 修复审计前驱问题前：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py tests/integration/test_historical_close_evidence.py tests/integration/test_recovery_activation_fences.py tests/integration/test_close_recovery_evidence.py tests/integration/test_close_recovery_session_ownership.py tests/unit/test_missed_close_recovery.py tests/integration/test_position_inventory_history.py tests/integration/test_inventory_history_boundaries.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_ten_symbol_runtime.py tests/integration/test_sqlite_repositories.py tests/integration/test_certified_production_runtime.py -q --tb=short` — 469 通过、1 项既有 Starlette/httpx 警告，80.93 秒。
 - 新的只读 `gpt-6-astra` / `xhigh` 评审确认了期初持仓和缺失日历问题，随后复现物理版本大于 1 时本激活首条风险变更缺少前驱审计连接。每一项均先有专项失败测试，再补保护/连接。先前 `BLOCKED_DATA` 记录也由失败测试证实后改为未知。
 - 评审修复后：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py tests/integration/test_historical_close_evidence.py tests/integration/test_recovery_activation_fences.py -q --tb=short` — 64 通过、1 项既有 Starlette/httpx 警告，17.03 秒。既有 OpenAPI/前端类型快照检查通过。未使用真实行情源、发送器、生产配置、用户数据库迁移或部署。
+- 单计划共享指数顺序修复：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py -q --tb=short` — 17 通过，4.86 秒；无效的较晚目标不会准备指数，已有占用的目标保留原有重复入口行为。
+- 修复后受影响回归：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py tests/integration/test_ten_symbol_runtime.py tests/integration/test_recovery_activation_fences.py -q --tb=short` — 75 通过、1 项既有 Starlette/httpx 警告，14.75 秒。源码修改后 Ruff 与 `git diff --check` 均通过。一次有界只读复查未发现该单计划预检存在必改问题。
 
-V1a、V1b 基础已完成。V1c、RR009 和业务第 1 步仍未完成：当前使用方仅覆盖激活起最多 32 个自然日，且无法评估历史期初持仓。仍需生产协调器接入、更完整的进程重启/故障覆盖，以及解决先前记录的 4 项全量测试失败。共享指数准备也发生在历史股票预检前；生产集成前须为其增加单独的时间顺序准入保护。本报告不表示任意时段重启或投递安全已经完成。
+V1a、V1b 基础已完成。V1c、RR009 和业务第 1 步仍未完成：当前使用方仅覆盖激活起最多 32 个自然日，且无法评估历史期初持仓。仍需生产协调器接入、更完整的进程重启/故障覆盖，以及解决先前记录的 4 项全量测试失败。单计划共享指数路径现已预检尚未占用的目标；多计划批处理在生产集成前仍需逐计划时间顺序准入规则。本报告不表示任意时段重启或投递安全已经完成。
 
 ## 此前范围 — 2026-09-22
 
