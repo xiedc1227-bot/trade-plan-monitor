@@ -1120,6 +1120,22 @@ class RequestIdempotency(Base):
     updated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class RuntimeLiveness(Base):
+    """One durable local-owner heartbeat, independent of provider availability."""
+
+    __tablename__ = "runtime_liveness"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_runtime_liveness_singleton"),
+        CheckConstraint("schema_version = 1", name="ck_runtime_liveness_schema"),
+        CheckConstraint("revision >= 0", name="ck_runtime_liveness_revision"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    schema_version: Mapped[int] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(Integer)
+    last_alive_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+
+
 __all__ = [
     "ActivePlan",
     "AIProviderConfiguration",
@@ -1160,6 +1176,7 @@ __all__ = [
     "RequestIdempotency",
     "IdempotencyStatus",
     "RiskState",
+    "RuntimeLiveness",
     "SymbolHealth",
     "SymbolDecisionHead",
     "SymbolHealthProjection",
