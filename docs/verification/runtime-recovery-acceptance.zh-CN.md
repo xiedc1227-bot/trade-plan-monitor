@@ -20,6 +20,9 @@
 - RED/GREEN：生命周期顺序及准入失败测试先因缺少所有者接口而失败；休眠心跳测试在补充空白期检查前先失败。新增生产状态集成验证：超过 120 小时的两个活动计划在可被加载前作废，同时保留 1,000 单位持仓及五条审计记录。
 - `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py tests/integration/test_runtime_liveness.py tests/integration/test_sqlite_repositories.py tests/integration/test_runtime_lifecycle.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_notification_delivery.py tests/integration/test_live_pipeline_acceptance.py::test_real_composition_starts_runs_a_timer_and_restores_its_projection tests/integration/test_monitor_production_composition.py tests/integration/test_certified_production_runtime.py -q --tb=short` — 261 通过，1 项既有 Starlette/httpx 警告，47.15 秒，已包含降级待机心跳断言。
 - 较大范围的 `test_live_pipeline_acceptance.py` 运行有 42 项通过、三项失败：新增的旧夹具需要显式提供先前心跳证据，修正后单独运行通过；另外两个行情指数预期失败尚未修改。本切片未迁移用户数据库，亦未使用真实行情源或发送器。
+- 另一个基于 `spawn` 的测试先启动 Python 进程提交作废，并以代码 17 退出，再由第二个进程从同一临时 SQLite 文件重启。活动计划未恢复，审计仍为五条，1,000 单位持仓保留。这证明提交后进程退出/重启，不代表已验证作废事务进行中退出。
+- 生产准入恰好 120 小时的用例最初失败，因为作废分类和心跳更新分别读取时钟。准入现冻结同一个观察时间供两步使用；临界测试通过，两个计划均未被作废。
+- 上述补充完成后重新执行前列受影响回归命令：263 通过，1 项既有警告，52.11 秒。
 
 ## 实际进程重启切片 — 2026-09-23
 
