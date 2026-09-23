@@ -82,6 +82,11 @@ from trade_plan_monitor.runtime.health import (
     SymbolHealthErrorCode,
     SymbolHealthSnapshot,
 )
+from trade_plan_monitor.runtime.historical_close_context import (
+    HistoricalCloseUnavailableError,
+    HistoricalOfficialContext,
+    HistoricalOfficialContextBuilder,
+)
 from trade_plan_monitor.runtime.market_indexes import (
     RuntimeMarketIndexBatch,
     RuntimeMarketIndexService,
@@ -128,7 +133,9 @@ FetchOfficialDaily = Callable[
 ]
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 ContextBuilder = Callable[[TradePlan, "IntradayMarketFacts"], EvaluationContext]
-OfficialContextBuilder = Callable[[TradePlan, "OfficialCloseMarketFacts"], EvaluationContext]
+OfficialContextBuilder = Callable[
+    [TradePlan, "OfficialCloseMarketFacts"], EvaluationContext | HistoricalOfficialContext,
+]
 OfficialObservedAt = Callable[[datetime], datetime]
 Evaluator = Callable[[EvaluationContext], EvaluationResult]
 CommittedEventPublisher = Callable[[MonitorEvent], object]
@@ -1203,6 +1210,11 @@ class RuntimeEvaluationService:
                 error_code=None,
             )
 
+        if isinstance(self._official_context_builder, HistoricalOfficialContextBuilder):
+            if not self._recovery_delivery:
+                raise ValueError("Historical official context requires recovery_delivery=True")
+            self._official_context_builder.prepare_target(plan, trade_date, canonical_evaluated_at)
+
         fetch_error: OfficialCloseErrorCode | None = None
         try:
             fetched = await self._fetch_official_daily(
@@ -1271,7 +1283,13 @@ class RuntimeEvaluationService:
             source_as_of=source_as_of,
             provenance=DailyIndicatorProvenance.OFFICIAL,
         )
-        context = self._official_context_builder(plan, facts)
+        prepared_context = self._official_context_builder(plan, facts)
+        historical = (
+            prepared_context if isinstance(prepared_context, HistoricalOfficialContext) else None
+        )
+        if historical is not None and not self._recovery_delivery:
+            raise ValueError("Historical official context requires recovery_delivery=True")
+        context = historical.context if historical is not None else prepared_context
         if not isinstance(context, EvaluationContext):
             raise TypeError("official_context_builder must return an EvaluationContext")
         context = context.model_copy(
@@ -1285,6 +1303,10 @@ class RuntimeEvaluationService:
         )
         result = self._evaluator(context)
         self._validate_official_result(plan=plan, facts=facts, result=result)
+        if historical is not None and result.snapshot.signal_type is SignalType.BLOCKED_DATA:
+            raise HistoricalCloseUnavailableError(
+                "Historical official close has missing required data; retry after recovery",
+            )
 
         committed_event: AlertEvent | None = None
         publication_event: MonitorEvent | None = None
@@ -1297,6 +1319,8 @@ class RuntimeEvaluationService:
                 market_date=trade_date,
             )
             identity = result.evaluation_identity
+            if historical is not None:
+                historical.require_current(unit_of_work, activation_revision)
             claim = unit_of_work.evaluations.claim(
                 plan_hash=identity.plan_hash,
                 symbol=identity.symbol,
@@ -1319,7 +1343,8 @@ class RuntimeEvaluationService:
                 )
                 unit_of_work.projections.add_evaluation_result(
                     result,
-                    position_lots=unit_of_work.positions.list_open_lots(identity.symbol),
+                    position_lots=(historical.position_lots if historical is not None
+                                   else unit_of_work.positions.list_open_lots(identity.symbol)),
                 )
                 snapshot_event = self._append_snapshot_event(unit_of_work, result)
                 unit_of_work.projections.advance_decision_head(

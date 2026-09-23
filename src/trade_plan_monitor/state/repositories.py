@@ -2017,6 +2017,11 @@ class PositionRepository:
         )
         return after
 
+    def get_inventory_revision(self, symbol: str) -> int | None:
+        """Read an existing ledger fence without creating an empty inventory row."""
+        row = self._session.get(PositionInventoryState, _symbol(symbol))
+        return None if row is None else row.revision
+
     def _inventory_revision(self, symbol: str, *, lock: bool = False) -> int:
         statement = sqlite_insert(PositionInventoryState).values(symbol=symbol, revision=0)
         self._session.execute(
