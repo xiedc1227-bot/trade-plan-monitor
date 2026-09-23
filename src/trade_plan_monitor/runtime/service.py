@@ -2777,11 +2777,13 @@ class RuntimeLifecycleService:
         waiting = self._schedule_wait_task
         starting = self._start_task
         stopping = self._stop_task
+        heartbeat = self._heartbeat_task
         return (
             len(self._work_tasks)
             + int(waiting is not None and not waiting.done())
             + int(starting is not None and not starting.done())
             + int(stopping is not None and not stopping.done())
+            + int(heartbeat is not None and not heartbeat.done())
         )
 
     @property

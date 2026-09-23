@@ -205,8 +205,10 @@ def test_liveness_admission_precedes_plan_loading_and_heartbeat_drains_before_da
             heartbeat_interval_seconds=0.01,
         )
         await service.start()
+        assert service.owned_task_count == 1
         await asyncio.wait_for(beat_seen.wait(), timeout=1)
         await service.stop()
+        assert service.owned_task_count == 0
 
     asyncio.run(scenario())
     assert events[:4] == ["config", "database", "admit", "plans"]

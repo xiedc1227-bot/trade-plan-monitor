@@ -475,18 +475,19 @@ class _ProductionRuntimeState:
         await to_thread.run_sync(self._admit_sync)
 
     def _admit_sync(self) -> None:
+        observed_at = self._clock.now()
         snapshot = self._liveness.load()
         if snapshot is None:
-            snapshot = self._liveness.initialize_empty(self._clock.now())
+            snapshot = self._liveness.initialize_empty(observed_at)
         else:
-            with self.unit_of_work_factory() as work:
+            with SqlAlchemyUnitOfWork(self._session_factory, clock=lambda: observed_at) as work:
                 work.expire_active_plans_after_interruption()
                 work.commit()
             snapshot = self._liveness.load()
             if snapshot is None:
                 raise RuntimeError("runtime liveness disappeared after admission")
         self._liveness_revision = self._liveness.touch(
-            self._clock.now(), expected_revision=snapshot.revision
+            observed_at, expected_revision=snapshot.revision
         ).revision
 
     async def heartbeat(self) -> None:

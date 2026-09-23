@@ -3,6 +3,8 @@
 import asyncio
 import json
 from datetime import date, datetime, timedelta
+from multiprocessing import get_context
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -38,6 +40,28 @@ from trade_plan_monitor.web.monitor_composition import _ProductionRuntimeState
 
 NOW = datetime(2026, 9, 23, 10, tzinfo=SHANGHAI)
 SYMBOLS = ("003043.SZ", "003044.SZ")
+
+
+def _admit_in_child(database: str, exit_after_commit: int) -> None:
+    import os
+
+    engine = create_sqlite_engine(Path(database))
+    factory = create_session_factory(engine)
+
+    class Clock:
+        def now(self):
+            return NOW
+
+    state = _ProductionRuntimeState(
+        config_path=Path(database).with_suffix(".yaml"),
+        database_path=Path(database),
+        engine=engine,
+        session_factory=factory,
+        clock=Clock(),
+        request_controller=object(),
+    )
+    state._admit_sync()
+    os._exit(exit_after_commit)
 
 
 def _seed(factory, *, last_alive_at, initialize=True):
@@ -138,6 +162,69 @@ def test_production_admission_expires_long_interruption_before_loading_active_pl
         with factory() as session:
             assert session.scalar(select(PositionLot.remaining_qty)) == 1000
             assert session.scalar(select(func.count()).select_from(AuditLog)) == 5
+        assert RuntimeLivenessRepository(factory).load().last_alive_at == NOW
+    finally:
+        engine.dispose()
+
+
+def test_expiry_survives_process_exit_and_restart_without_duplicate_audit(tmp_path):
+    database = tmp_path / "state.db"
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW - timedelta(hours=121))
+    engine.dispose()
+
+    context = get_context("spawn")
+    for expected_code in (17, 0):
+        child = context.Process(target=_admit_in_child, args=(str(database), expected_code))
+        child.start()
+        child.join(timeout=15)
+        if child.is_alive():
+            child.terminate()
+            child.join(timeout=5)
+            pytest.fail("runtime admission child did not finish")
+        assert child.exitcode == expected_code
+
+    reopened = create_sqlite_engine(database)
+    try:
+        sessions = create_session_factory(reopened)
+        with sessions() as session:
+            assert session.scalar(select(func.count()).select_from(ActivePlan)) == 0
+            assert session.scalar(select(func.count()).select_from(AuditLog)) == 5
+            assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+    finally:
+        reopened.dispose()
+
+
+def test_production_admission_uses_one_observation_at_exact_120_hour_boundary(tmp_path):
+    database = tmp_path / "state.db"
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW - timedelta(hours=120))
+
+    class Clock:
+        calls = 0
+
+        def now(self):
+            self.calls += 1
+            return NOW if self.calls == 1 else NOW + timedelta(microseconds=1)
+
+    clock = Clock()
+    state = _ProductionRuntimeState(
+        config_path=tmp_path / "config.yaml",
+        database_path=database,
+        engine=engine,
+        session_factory=factory,
+        clock=clock,
+        request_controller=object(),
+    )
+    try:
+        state._admit_sync()
+        with factory() as session:
+            active = session.scalars(select(ActivePlan.symbol).order_by(ActivePlan.symbol))
+            assert tuple(active) == SYMBOLS
         assert RuntimeLivenessRepository(factory).load().last_alive_at == NOW
     finally:
         engine.dispose()
