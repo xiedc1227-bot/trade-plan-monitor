@@ -1076,6 +1076,28 @@ export type InventorySourceTreatmentView = {
   treatmentId: string;
 };
 
+export type LegacyPlanInvalidateCommand = {
+  confirmation: "INVALIDATE_LEGACY_PLANS";
+  fingerprint: string;
+};
+
+export type LegacyPlanInvalidateResult = {
+  restartRequired?: true;
+  symbols: Array<string>;
+};
+
+export type LegacyPlanItemView = {
+  planVersionId: string;
+  revision: number;
+  symbol: string;
+};
+
+export type LegacyPlanPreviewResponse = {
+  available: boolean;
+  fingerprint?: (string) | (null);
+  plans?: Array<components["schemas"]["LegacyPlanItemView"]>;
+};
+
 export type ManualEventRiskConfirmationCommand = {
   expectedRevision: number;
   expiresOn: string;
@@ -1493,6 +1515,7 @@ export type RuntimeGapView = {
 };
 
 export type RuntimeHealthResponse = {
+  blockReason?: ("LEGACY_PLANS_REQUIRE_REVIEW") | (null);
   cooldownUntil: (string) | (null);
   database: components["schemas"]["DatabaseHealthView"];
   delivery: components["schemas"]["DeliveryHealthView"];
@@ -1514,7 +1537,7 @@ export type RuntimeHealthResponse = {
 
 export type RuntimeResourceStatus = "UNVERIFIED" | "READY" | "DEGRADED" | "ERROR" | "STOPPED";
 
-export type RuntimeServiceStatus = "STARTING" | "RUNNING" | "DEGRADED" | "STOPPING" | "STOPPED";
+export type RuntimeServiceStatus = "STARTING" | "RUNNING" | "DEGRADED" | "BLOCKED" | "STOPPING" | "STOPPED";
 
 export type SecretReferenceView = {
   key: string;
@@ -1850,6 +1873,10 @@ export interface components {
     IndexConditionProgressView: IndexConditionProgressView;
     IntradayDiagnosticIdentityView: IntradayDiagnosticIdentityView;
     InventorySourceTreatmentView: InventorySourceTreatmentView;
+    LegacyPlanInvalidateCommand: LegacyPlanInvalidateCommand;
+    LegacyPlanInvalidateResult: LegacyPlanInvalidateResult;
+    LegacyPlanItemView: LegacyPlanItemView;
+    LegacyPlanPreviewResponse: LegacyPlanPreviewResponse;
     ManualEventRiskConfirmationCommand: ManualEventRiskConfirmationCommand;
     ManualEventRiskStatus: ManualEventRiskStatus;
     ManualEventRiskUnknownReason: ManualEventRiskUnknownReason;
@@ -6083,6 +6110,154 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["SymbolEventPage"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/system/legacy-plan-invalidation": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["LegacyPlanPreviewResponse"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["LegacyPlanInvalidateCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["LegacyPlanInvalidateResult"];
           };
         };
         "400": {

@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>();
 
 const serviceStatuses: Readonly<Record<RuntimeServiceStatus, StatusPresentation>> = {
+  BLOCKED: { label: "受阻", marker: "■" },
   DEGRADED: { label: "降级", marker: "▲" },
   RUNNING: { label: "运行中", marker: "●" },
   STARTING: { label: "启动中", marker: "◇" },
@@ -131,6 +132,7 @@ function timeLabel(label: string, value: string | null) {
 }
 
 .market-status-strip[data-status="DEGRADED"],
+.market-status-strip[data-status="BLOCKED"],
 .market-status-strip[data-status="STARTING"],
 .market-status-strip[data-status="STOPPING"] {
   border-inline-start-color: var(--color-signal-watch-amber);

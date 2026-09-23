@@ -107,6 +107,7 @@ from trade_plan_monitor.state.repositories import (
     EpisodeNotFoundError,
     FiveMinuteBarRecord,
 )
+from trade_plan_monitor.state.runtime_liveness import LegacyPlansRequireReview
 from trade_plan_monitor.state.unit_of_work import UnitOfWork
 
 _MAX_FETCHED_MINUTES = 1_000
@@ -2653,8 +2654,10 @@ class RuntimeStartupResult(_RuntimeValue):
             raise ValueError("active symbols must be unique")
         if any(not symbol for symbol in self.active_symbols):
             raise ValueError("active symbols cannot be empty")
-        if self.read_only != (self.status is RuntimeServiceStatus.DEGRADED):
-            raise ValueError("read-only startup must be degraded")
+        if self.read_only != (
+            self.status in {RuntimeServiceStatus.DEGRADED, RuntimeServiceStatus.BLOCKED}
+        ):
+            raise ValueError("read-only startup must be degraded or blocked")
         return self
 
 
@@ -2745,6 +2748,7 @@ class RuntimeLifecycleService:
         self._shutdown_timeout_seconds = float(shutdown_timeout_seconds)
         self._status = RuntimeServiceStatus.STOPPED
         self._read_only = True
+        self._block_reason: str | None = None
         self._started_at: datetime | None = None
         self._stopped_at: datetime | None = None
         self._next_poll_at: datetime | None = None
@@ -2803,6 +2807,7 @@ class RuntimeLifecycleService:
             **details.model_dump(mode="python", round_trip=True),
             status=self._status,
             read_only=self._read_only,
+            block_reason=self._block_reason,
             runtime_generation=self._runtime_generation,
             observed_at=observed_at,
             started_at=self._started_at,
@@ -2856,7 +2861,19 @@ class RuntimeLifecycleService:
         await self._invoke(self._open_database)
         self._database_opened = True
         if self._liveness_owner is not None:
-            await self._invoke(self._liveness_owner.admit)
+            try:
+                await self._invoke(self._liveness_owner.admit)
+            except LegacyPlansRequireReview:
+                self._status = RuntimeServiceStatus.BLOCKED
+                self._read_only = True
+                self._block_reason = "LEGACY_PLANS_REQUIRE_REVIEW"
+                self._startup_result = RuntimeStartupResult(
+                    status=RuntimeServiceStatus.BLOCKED,
+                    read_only=True,
+                    active_symbols=(),
+                    capabilities=ProviderCapabilities(),
+                )
+                return self._startup_result
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
             self._heartbeat_task.add_done_callback(self._observe_heartbeat_result)
         raw_symbols = await self._invoke(self._load_active_symbols)

@@ -9,8 +9,9 @@ from importlib import resources
 from pathlib import Path
 from typing import Final
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 
+from trade_plan_monitor.web.blocked_mutations import enforce_blocked_read_only
 from trade_plan_monitor.web.errors import install_error_boundary
 from trade_plan_monitor.web.lifespan import (
     AIWebLifecycleFactory,
@@ -49,6 +50,7 @@ from trade_plan_monitor.web.routers.plans import router as plans_router
 from trade_plan_monitor.web.routers.positions import PositionOperationService
 from trade_plan_monitor.web.routers.positions import router as positions_router
 from trade_plan_monitor.web.routers.symbols import router as symbols_router
+from trade_plan_monitor.web.routers.system import router as system_router
 from trade_plan_monitor.web.schemas import ErrorResponse
 from trade_plan_monitor.web.websocket import MonitorWebSocketService
 from trade_plan_monitor.web.websocket import router as websocket_router
@@ -251,6 +253,7 @@ def create_app(
     app = FastAPI(
         title="Trade Plan Monitor API",
         version="0.1.0",
+        dependencies=[Depends(enforce_blocked_read_only)],
         responses=_PUBLIC_ERROR_RESPONSES,
         lifespan=create_runtime_lifespan(
             runtime_factory,
@@ -286,6 +289,7 @@ def create_app(
     app.include_router(dashboard_router)
     app.include_router(symbols_router)
     app.include_router(health_router)
+    app.include_router(system_router)
     app.include_router(plans_router)
     app.include_router(ai_router)
     app.include_router(positions_router)

@@ -1246,7 +1246,7 @@ class PlanRepository:
     ) -> PlanActivationStateRecord:
         normalized_symbol = _symbol(symbol)
         normalized_revision = _nonnegative_integer(expected_revision, "expected_revision")
-        if cause not in (None, "OUTAGE_OVER_120_HOURS"):
+        if cause not in (None, "OUTAGE_OVER_120_HOURS", "MANUAL_LEGACY_INVALIDATION"):
             raise ValueError("unsupported plan deactivation cause")
         try:
             with self._session.begin_nested():

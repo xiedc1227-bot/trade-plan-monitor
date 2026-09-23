@@ -9,7 +9,7 @@ export interface HealthApi {
   getHealth(options?: { signal?: AbortSignal }): Promise<RuntimeHealthResponse>;
 }
 
-const runtimeStatuses = new Set(["STARTING", "RUNNING", "DEGRADED", "STOPPING", "STOPPED"]);
+const runtimeStatuses = new Set(["STARTING", "RUNNING", "DEGRADED", "BLOCKED", "STOPPING", "STOPPED"]);
 const resourceStatuses = new Set(["UNVERIFIED", "READY", "DEGRADED", "ERROR", "STOPPED"]);
 const providerStatuses = new Set([
   "UNVERIFIED",
@@ -56,6 +56,7 @@ function isRuntimeHealthResponse(value: unknown): value is RuntimeHealthResponse
     !isRecord(value) ||
     !hasOnlyKeys(value, [
       "cooldownUntil",
+      "blockReason",
       "database",
       "delivery",
       "executor",
@@ -130,6 +131,11 @@ function isRuntimeHealthResponse(value: unknown): value is RuntimeHealthResponse
     isShanghaiDateTime(value.startedAt) &&
     typeof status === "string" &&
     runtimeStatuses.has(status) &&
+    (value.blockReason === undefined || value.blockReason === null ||
+      value.blockReason === "LEGACY_PLANS_REQUIRE_REVIEW") &&
+    (status === "BLOCKED"
+      ? value.blockReason === "LEGACY_PLANS_REQUIRE_REVIEW" && value.readOnly === true
+      : value.blockReason === undefined || value.blockReason === null) &&
     isNullableDateTime(stoppedAt) &&
     (status !== "RUNNING" || value.readOnly === false) &&
     (status !== "DEGRADED" || value.readOnly === true) &&

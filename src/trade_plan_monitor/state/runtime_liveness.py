@@ -19,6 +19,10 @@ class RuntimeLivenessError(RuntimeError):
     """Liveness evidence is invalid or changed; no automatic admission is safe."""
 
 
+class LegacyPlansRequireReview(RuntimeLivenessError):
+    """Only explicit manual invalidation may clear active plans without a heartbeat."""
+
+
 class InterruptionDecision(StrEnum):
     ELIGIBLE = "ELIGIBLE"
     EXPIRED = "EXPIRED"
@@ -69,7 +73,9 @@ class RuntimeLivenessRepository:
                 if session.get(RuntimeLiveness, 1) is not None:
                     raise RuntimeLivenessError("runtime liveness already initialized")
                 if session.scalar(select(ActivePlan.symbol).limit(1)) is not None:
-                    raise RuntimeLivenessError("active plans lack runtime liveness evidence")
+                    raise LegacyPlansRequireReview(
+                        "active plans lack runtime liveness evidence"
+                    )
                 session.add(
                     RuntimeLiveness(
                         id=1,

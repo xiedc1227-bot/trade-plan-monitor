@@ -234,6 +234,38 @@ def test_failed_liveness_admission_blocks_plan_loading_and_provider_probe():
     assert "database-close" in events
 
 
+def test_legacy_liveness_block_serves_read_only_health_without_provider_work():
+    from trade_plan_monitor.state.runtime_liveness import LegacyPlansRequireReview
+
+    events: list[str] = []
+
+    class Liveness:
+        async def admit(self):
+            events.append("admit")
+            raise LegacyPlansRequireReview("legacy plans require review")
+
+        async def heartbeat(self):
+            events.append("beat")
+
+    async def scenario():
+        service = _service(events=events, liveness_owner=Liveness())
+        startup = await service.start()
+        health = service.health()
+        assert startup.status is RuntimeServiceStatus.BLOCKED
+        assert startup.read_only is True
+        assert health.status is RuntimeServiceStatus.BLOCKED
+        assert health.block_reason == "LEGACY_PLANS_REQUIRE_REVIEW"
+        assert service.owned_task_count == 0
+        await service.stop()
+
+    asyncio.run(scenario())
+    assert events[:3] == ["config", "database", "admit"]
+    assert "plans" not in events
+    assert "probe" not in events
+    assert "recover" not in events
+    assert "beat" not in events
+
+
 def test_failed_heartbeat_stops_runtime_without_marking_cleanup_failed():
     events: list[str] = []
 

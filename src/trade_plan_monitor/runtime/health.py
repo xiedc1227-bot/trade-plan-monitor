@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -82,6 +82,7 @@ class RuntimeServiceStatus(StrEnum):
     STARTING = "STARTING"
     RUNNING = "RUNNING"
     DEGRADED = "DEGRADED"
+    BLOCKED = "BLOCKED"
     STOPPING = "STOPPING"
     STOPPED = "STOPPED"
 
@@ -232,6 +233,7 @@ class RuntimeHealthSnapshot(RuntimeHealthDetails):
 
     status: RuntimeServiceStatus
     read_only: bool = Field(strict=True)
+    block_reason: Literal["LEGACY_PLANS_REQUIRE_REVIEW"] | None = None
     runtime_generation: UUID4 = Field(default_factory=uuid4, exclude=True)
     observed_at: ShanghaiDatetime
     started_at: ShanghaiDatetime
@@ -262,6 +264,12 @@ class RuntimeHealthSnapshot(RuntimeHealthDetails):
             raise ValueError("RUNNING health requires read_only=false")
         if self.status is RuntimeServiceStatus.DEGRADED and not self.read_only:
             raise ValueError("DEGRADED health requires read_only=true")
+        if (self.status is RuntimeServiceStatus.BLOCKED) != (
+            self.block_reason is not None
+        ):
+            raise ValueError("BLOCKED health requires exactly one block reason")
+        if self.status is RuntimeServiceStatus.BLOCKED and not self.read_only:
+            raise ValueError("BLOCKED health requires read_only=true")
         if self.started_at > self.observed_at:
             raise ValueError("runtime observation cannot precede startup")
         if (self.status is RuntimeServiceStatus.STOPPED) != (self.stopped_at is not None):

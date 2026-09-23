@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json, load_plan_yaml
@@ -20,6 +21,10 @@ from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
     upgrade_database,
+)
+from trade_plan_monitor.state.legacy_plan_invalidation import (
+    LegacyPlanInvalidationConflict,
+    preview_legacy_invalidation,
 )
 from trade_plan_monitor.state.models import (
     ActivePlan,
@@ -40,7 +45,11 @@ from trade_plan_monitor.state.runtime_liveness import (
     RuntimeLivenessRepository,
 )
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
-from trade_plan_monitor.web.monitor_composition import _ProductionRuntimeState
+from trade_plan_monitor.web.app import create_app
+from trade_plan_monitor.web.monitor_composition import (
+    _ProductionRuntimeState,
+    create_monitor_composition,
+)
 
 NOW = datetime(2026, 9, 23, 10, tzinfo=SHANGHAI)
 SYMBOLS = ("003043.SZ", "003044.SZ")
@@ -74,9 +83,7 @@ def _pause_expiry_after_first_plan(database: str, reached) -> None:
     original_deactivate = PlanRepository.deactivate
 
     def pause_after_deactivate(self, symbol, *, expected_revision, cause=None):
-        result = original_deactivate(
-            self, symbol, expected_revision=expected_revision, cause=cause
-        )
+        result = original_deactivate(self, symbol, expected_revision=expected_revision, cause=cause)
         if symbol == SYMBOLS[0]:
             reached.set()
             time.sleep(30)
@@ -84,6 +91,30 @@ def _pause_expiry_after_first_plan(database: str, reached) -> None:
 
     PlanRepository.deactivate = pause_after_deactivate
     _admit_in_child(database, 0)
+
+
+def _manual_invalidate_in_child(database: str, fingerprint: str, reached=None) -> None:
+    if reached is not None:
+        import time
+
+        original_deactivate = PlanRepository.deactivate
+
+        def pause_after_first(self, symbol, *, expected_revision, cause=None):
+            result = original_deactivate(
+                self, symbol, expected_revision=expected_revision, cause=cause
+            )
+            if symbol == SYMBOLS[0]:
+                reached.set()
+                time.sleep(30)
+            return result
+
+        PlanRepository.deactivate = pause_after_first
+    engine = create_sqlite_engine(Path(database))
+    factory = create_session_factory(engine)
+    with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
+        work.invalidate_legacy_plans(expected_fingerprint=fingerprint)
+        work.commit()
+    engine.dispose()
 
 
 def _seed(factory, *, last_alive_at, initialize=True):
@@ -157,6 +188,328 @@ def _seed(factory, *, last_alive_at, initialize=True):
                 closed_at=None,
             )
         )
+
+
+def test_missing_heartbeat_manual_preview_and_invalidation_preserve_holdings(tmp_path):
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW, initialize=False)
+    event_id = str(UUID(int=402))
+    with factory.begin() as session:
+        session.add(
+            AlertEvent(
+                id=event_id,
+                sequence=1,
+                dedup_key="a" * 64,
+                payload_json="{}",
+                message_text="held alert",
+                created_at=NOW.isoformat(),
+                acknowledged_at=None,
+            )
+        )
+        session.flush()
+        session.add(
+            AlertDeliveryEligibility(
+                event_id=event_id,
+                schema_version=1,
+                revision=0,
+                delivery_class="STATE_RISK",
+                source_cutoff=None,
+                expires_at=None,
+                status="HOLD",
+                reason="RECOVERY_REQUIRED",
+                barrier_json=None,
+                result_hash=None,
+                updated_at=NOW.isoformat(),
+            )
+        )
+    with factory() as session:
+        preview = preview_legacy_invalidation(session)
+    assert tuple(item.symbol for item in preview.plans) == SYMBOLS
+    assert all(item.plan_version_id for item in preview.plans)
+
+    with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
+        invalidated = work.invalidate_legacy_plans(
+            expected_fingerprint=preview.fingerprint,
+        )
+        work.commit()
+    assert invalidated == SYMBOLS
+    with factory() as session:
+        assert session.scalars(select(ActivePlan)).all() == []
+        assert session.scalars(select(PendingOfficialClose)).all() == []
+        assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+        assert session.get(AlertDeliveryEligibility, event_id).status == "SUPPRESS"
+        assert set(session.scalars(select(PlanVersion.status)).all()) == {"SUPERSEDED"}
+        assert set(session.scalars(select(PlanVersion.payload_json)).all()) == {"{}"}
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(AuditLog)
+                .where(AuditLog.action == "LEGACY_PLANS_MANUALLY_INVALIDATED")
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(AuditLog)
+                .where(AuditLog.action == "OFFICIAL_CLOSE_MANUALLY_INVALIDATED")
+            )
+            == 2
+        )
+
+    with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
+        repeated = work.invalidate_legacy_plans(
+            expected_fingerprint=preview.fingerprint,
+        )
+        work.commit()
+    assert repeated == SYMBOLS
+    with factory() as session:
+        assert session.get(AlertDeliveryEligibility, event_id).status == "SUPPRESS"
+    engine.dispose()
+
+
+def test_missing_heartbeat_manual_invalidation_rejects_changed_preview(tmp_path):
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW, initialize=False)
+    with factory() as session:
+        preview = preview_legacy_invalidation(session)
+    with factory.begin() as session:
+        session.query(ActivePlan).filter_by(symbol=SYMBOLS[0]).update({"revision": 2})
+    with pytest.raises(LegacyPlanInvalidationConflict):
+        with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
+            work.invalidate_legacy_plans(
+                expected_fingerprint=preview.fingerprint,
+            )
+            work.commit()
+    with factory() as session:
+        assert len(session.scalars(select(ActivePlan)).all()) == 2
+        assert len(session.scalars(select(PendingOfficialClose)).all()) == 2
+    engine.dispose()
+
+
+def test_missing_heartbeat_manual_invalidation_rejects_new_heartbeat(tmp_path):
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW, initialize=False)
+    with factory() as session:
+        preview = preview_legacy_invalidation(session)
+    with factory.begin() as session:
+        from trade_plan_monitor.state.models import RuntimeLiveness
+
+        session.add(
+            RuntimeLiveness(
+                id=1,
+                schema_version=1,
+                revision=0,
+                last_alive_at=NOW.isoformat(),
+            )
+        )
+    with pytest.raises(LegacyPlanInvalidationConflict, match="liveness"):
+        with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
+            work.invalidate_legacy_plans(expected_fingerprint=preview.fingerprint)
+            work.commit()
+    with factory() as session:
+        assert len(session.scalars(select(ActivePlan)).all()) == 2
+    engine.dispose()
+
+
+def test_missing_heartbeat_manual_invalidation_rolls_back_partial_failure(
+    tmp_path, monkeypatch
+):
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW, initialize=False)
+    with factory() as session:
+        preview = preview_legacy_invalidation(session)
+    original = PlanRepository.deactivate
+    calls = 0
+
+    def fail_second(self, symbol, *, expected_revision, cause=None):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("injected second-plan failure")
+        return original(self, symbol, expected_revision=expected_revision, cause=cause)
+
+    monkeypatch.setattr(PlanRepository, "deactivate", fail_second)
+    with pytest.raises(RuntimeError, match="injected second-plan failure"):
+        with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
+            work.invalidate_legacy_plans(expected_fingerprint=preview.fingerprint)
+            work.commit()
+    with factory() as session:
+        assert len(session.scalars(select(ActivePlan)).all()) == 2
+        assert len(session.scalars(select(PendingOfficialClose)).all()) == 2
+        assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+        assert session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.action == "LEGACY_PLANS_MANUALLY_INVALIDATED")
+        ) == 0
+    engine.dispose()
+
+
+def test_process_kill_mid_manual_invalidation_leaves_full_review_set_for_retry(tmp_path):
+    database = tmp_path / "state.db"
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW, initialize=False)
+    with factory() as session:
+        fingerprint = preview_legacy_invalidation(session).fingerprint
+    engine.dispose()
+
+    context = get_context("spawn")
+    reached = context.Event()
+    child = context.Process(
+        target=_manual_invalidate_in_child,
+        args=(str(database), fingerprint, reached),
+    )
+    child.start()
+    try:
+        assert reached.wait(timeout=15), f"manual child exited early: {child.exitcode}"
+        child.terminate()
+        child.join(timeout=10)
+        assert not child.is_alive()
+    finally:
+        if child.is_alive():
+            child.terminate()
+            child.join(timeout=5)
+
+    reopened = create_sqlite_engine(database)
+    try:
+        sessions = create_session_factory(reopened)
+        with sessions() as session:
+            assert session.scalar(select(func.count()).select_from(ActivePlan)) == 2
+            assert session.scalar(select(func.count()).select_from(PendingOfficialClose)) == 2
+            assert session.scalar(select(func.count()).select_from(AuditLog)) == 0
+            assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+    finally:
+        reopened.dispose()
+
+    restarted = context.Process(
+        target=_manual_invalidate_in_child, args=(str(database), fingerprint)
+    )
+    restarted.start()
+    restarted.join(timeout=15)
+    if restarted.is_alive():
+        restarted.terminate()
+        restarted.join(timeout=5)
+        pytest.fail("manual invalidation retry did not finish")
+    assert restarted.exitcode == 0
+    verified = create_sqlite_engine(database)
+    try:
+        sessions = create_session_factory(verified)
+        with sessions() as session:
+            assert session.scalar(select(func.count()).select_from(ActivePlan)) == 0
+            assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+            assert session.scalar(
+                select(func.count())
+                .select_from(AuditLog)
+                .where(AuditLog.action == "LEGACY_PLANS_MANUALLY_INVALIDATED")
+            ) == 1
+    finally:
+        verified.dispose()
+
+
+def test_missing_heartbeat_keeps_system_health_available_without_monitor_work(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "state.db"
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW, initialize=False)
+    engine.dispose()
+    config = tmp_path / "config.yaml"
+    config.write_text("{}\n", encoding="utf-8")
+    requests: list[tuple[object, ...]] = []
+
+    from tushare.pro.client import DataApi
+
+    def reject_provider_request(_client, *args, **kwargs):
+        requests.append((args, kwargs))
+        raise AssertionError("blocked maintenance must not contact provider")
+
+    monkeypatch.setattr(DataApi, "query", reject_provider_request)
+    composition = create_monitor_composition(config_path=config, database_path=database)
+    app = create_app(runtime_factory=lambda: composition)
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.get("/api/v1/health")
+        ordinary_write = client.post(
+            "/api/v1/plan-deactivations",
+            headers={"Idempotency-Key": "blocked-ordinary-write"},
+            json={"symbol": SYMBOLS[0], "expectedRevision": 1},
+        )
+        assert ordinary_write.status_code == 409
+        preview_response = client.get("/api/v1/system/legacy-plan-invalidation")
+        assert preview_response.status_code == 200
+        assert preview_response.json()["available"] is True
+        assert [item["symbol"] for item in preview_response.json()["plans"]] == list(SYMBOLS)
+        incomplete = client.post(
+            "/api/v1/system/legacy-plan-invalidation",
+            json={"fingerprint": preview_response.json()["fingerprint"]},
+        )
+        assert incomplete.status_code == 422
+        confirmed = client.post(
+            "/api/v1/system/legacy-plan-invalidation",
+            json={
+                "fingerprint": preview_response.json()["fingerprint"],
+                "confirmation": "INVALIDATE_LEGACY_PLANS",
+            },
+        )
+        assert confirmed.status_code == 200
+        assert confirmed.json()["symbols"] == list(SYMBOLS)
+        assert confirmed.json()["restartRequired"] is True
+        repeat = client.post(
+            "/api/v1/system/legacy-plan-invalidation",
+            json={
+                "fingerprint": preview_response.json()["fingerprint"],
+                "confirmation": "INVALIDATE_LEGACY_PLANS",
+            },
+        )
+        assert repeat.status_code == 200
+        assert repeat.json() == confirmed.json()
+        assert composition._runtime.owned_task_count == 0
+    assert response.status_code == 200
+    assert response.json()["status"] == "BLOCKED"
+    assert response.json()["blockReason"] == "LEGACY_PLANS_REQUIRE_REVIEW"
+    assert response.json()["readOnly"] is True
+    assert requests == []
+    with create_session_factory(create_sqlite_engine(database))() as session:
+        assert session.scalars(select(ActivePlan)).all() == []
+        assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+        assert session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.action == "LEGACY_PLANS_MANUALLY_INVALIDATED")
+        ) == 1
+
+    restarted = create_monitor_composition(config_path=config, database_path=database)
+    restarted_app = create_app(runtime_factory=lambda: restarted)
+    with TestClient(restarted_app, base_url="http://127.0.0.1:8765") as client:
+        health_after_restart = client.get("/api/v1/health")
+        preview_after_restart = client.get("/api/v1/system/legacy-plan-invalidation")
+        stale_confirmation = client.post(
+            "/api/v1/system/legacy-plan-invalidation",
+            json={
+                "fingerprint": preview_response.json()["fingerprint"],
+                "confirmation": "INVALIDATE_LEGACY_PLANS",
+            },
+        )
+    assert health_after_restart.status_code == 200
+    assert health_after_restart.json()["status"] == "DEGRADED"
+    assert health_after_restart.json()["blockReason"] is None
+    assert preview_after_restart.json()["available"] is False
+    assert stale_confirmation.status_code == 409
+    with create_session_factory(create_sqlite_engine(database))() as session:
+        assert session.scalars(select(ActivePlan)).all() == []
+        assert session.scalar(select(PositionLot.remaining_qty)) == 1000
 
 
 def test_production_admission_expires_long_interruption_before_loading_active_plans(tmp_path):

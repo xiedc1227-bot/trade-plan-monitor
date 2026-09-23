@@ -15,6 +15,11 @@ from trade_plan_monitor.notifications.outbox import (
 )
 from trade_plan_monitor.state.events import MonitorEventLog
 from trade_plan_monitor.state.explicit_rules import ExplicitDecisionRepository
+from trade_plan_monitor.state.legacy_plan_invalidation import (
+    LegacyPlanPreview,
+    invalidate_legacy_plans,
+    preview_legacy_invalidation,
+)
 from trade_plan_monitor.state.plan_expiry import expire_active_plans_after_interruption
 from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.repositories import (
@@ -77,6 +82,10 @@ class UnitOfWork(Protocol):
     def references(self) -> MarketReferenceRepository: ...
 
     def expire_active_plans_after_interruption(self) -> tuple[str, ...]: ...
+
+    def invalidate_legacy_plans(self, *, expected_fingerprint: str) -> tuple[str, ...]: ...
+
+    def preview_legacy_invalidation(self) -> LegacyPlanPreview: ...
 
     def __enter__(self) -> UnitOfWork: ...
 
@@ -218,6 +227,22 @@ class SqlAlchemyUnitOfWork:
             now=self._clock(),
             id_factory=self._id_factory,
         )
+
+    def invalidate_legacy_plans(self, *, expected_fingerprint: str) -> tuple[str, ...]:
+        """Apply one reviewed legacy invalidation in this unit of work."""
+
+        return invalidate_legacy_plans(
+            self._require_session(),
+            self.plans,
+            expected_fingerprint=expected_fingerprint,
+            now=self._clock(),
+            id_factory=self._id_factory,
+        )
+
+    def preview_legacy_invalidation(self) -> LegacyPlanPreview:
+        """Read the exact active legacy identities without exposing a session."""
+
+        return preview_legacy_invalidation(self._require_session())
 
     def __enter__(self) -> SqlAlchemyUnitOfWork:
         if self._session is not None:

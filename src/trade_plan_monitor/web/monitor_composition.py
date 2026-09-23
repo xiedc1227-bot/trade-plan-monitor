@@ -53,6 +53,10 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
+from trade_plan_monitor.state.legacy_plan_invalidation import (
+    LegacyMaintenanceUnavailable,
+    LegacyPlanPreview,
+)
 from trade_plan_monitor.state.models import AlertEvent, DeliveryAttempt, PlanVersionStatus
 from trade_plan_monitor.state.runtime_liveness import RuntimeLivenessRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
@@ -111,6 +115,7 @@ class MonitorWebComposition:
         manual_event_risk_service: object | None = None,
         alert_service: object | None = None,
         market_index_read_service: object | None = None,
+        legacy_maintenance_factory: Callable[[], SqlAlchemyUnitOfWork] | None = None,
     ) -> None:
         self._validate_runtime(runtime)
         if runtime_factory is not None and not callable(runtime_factory):
@@ -128,6 +133,8 @@ class MonitorWebComposition:
         self._manual_event_risk_service = manual_event_risk_service
         self._alert_service = alert_service
         self._market_index_read_service = market_index_read_service
+        self._legacy_maintenance_factory = legacy_maintenance_factory
+        self._maintenance_lock = asyncio.Lock()
         self._runner_task: asyncio.Task[None] | None = None
         self._start_lock = asyncio.Lock()
         self._runtime_stop_lock = asyncio.Lock()
@@ -241,6 +248,47 @@ class MonitorWebComposition:
                 "stopped_at": None,
                 "next_poll_at": None,
             }
+        )
+
+    async def preview_legacy_invalidation(self) -> LegacyPlanPreview:
+        """Expose only the reviewable blocked-generation identities."""
+
+        if not self._legacy_maintenance_allowed():
+            raise LegacyMaintenanceUnavailable("legacy maintenance is not available")
+        return await to_thread.run_sync(self._preview_legacy_sync)
+
+    def _preview_legacy_sync(self) -> LegacyPlanPreview:
+        factory = self._legacy_maintenance_factory
+        if factory is None:
+            raise LegacyMaintenanceUnavailable("legacy maintenance is not configured")
+        with factory() as work:
+            return work.preview_legacy_invalidation()
+
+    async def invalidate_legacy_plans(self, *, expected_fingerprint: str) -> tuple[str, ...]:
+        """Confirm only while this generation remains blocked and unscheduled."""
+
+        async with self._maintenance_lock:
+            if not self._legacy_maintenance_allowed():
+                raise LegacyMaintenanceUnavailable("legacy maintenance is not available")
+            return await to_thread.run_sync(self._invalidate_legacy_sync, expected_fingerprint)
+
+    def _invalidate_legacy_sync(self, expected_fingerprint: str) -> tuple[str, ...]:
+        factory = self._legacy_maintenance_factory
+        if factory is None:
+            raise LegacyMaintenanceUnavailable("legacy maintenance is not configured")
+        with factory() as work:
+            symbols = work.invalidate_legacy_plans(expected_fingerprint=expected_fingerprint)
+            work.commit()
+            return symbols
+
+    def _legacy_maintenance_allowed(self) -> bool:
+        if not self._started or self._stopping or self._stopped or self._runner_task is not None:
+            return False
+        snapshot = self.health()
+        return (
+            snapshot.status is RuntimeServiceStatus.BLOCKED
+            and snapshot.read_only
+            and snapshot.block_reason == "LEGACY_PLANS_REQUIRE_REVIEW"
         )
 
     async def stop(self) -> None:
@@ -390,7 +438,9 @@ class MonitorWebComposition:
         read_only = getattr(startup, "read_only", None)
         if not isinstance(status, RuntimeServiceStatus) or type(read_only) is not bool:
             raise TypeError("runtime startup must expose typed status and read_only")
-        if read_only != (status is RuntimeServiceStatus.DEGRADED):
+        if read_only != (
+            status in {RuntimeServiceStatus.DEGRADED, RuntimeServiceStatus.BLOCKED}
+        ):
             raise ValueError("runtime startup readiness is inconsistent")
         return status
 
@@ -844,6 +894,7 @@ def create_monitor_composition(
             clock=clock.now,
         ),
         market_index_read_service=market_index_read_service,
+        legacy_maintenance_factory=unit_of_work_factory,
     )
     health_binding.bind(composition.health)
     return composition
