@@ -155,6 +155,14 @@ function isExplicitAlert(item: PublicAlertView): item is Extract<PublicAlertView
   return "payloadSchemaVersion" in item && item.payloadSchemaVersion === "explicit-rule-alert-v1";
 }
 
+function canRegisterTrade(item: PublicAlertView): boolean {
+  if (!item.currentActionable) return false;
+  if (isExplicitAlert(item)) return item.signalType === "BUY" || item.signalType === "SELL";
+  return [
+    "BUY_CORE_READY", "BUY_TACTICAL_READY", "PRESSURE_REDUCE_READY", "RISK_EXIT_READY",
+  ].includes(item.signalType);
+}
+
 function toShanghaiTimestamp(value: string): string | null {
   if (value === "") {
     return null;
@@ -269,6 +277,11 @@ function toLocalInput(value: string | null): string {
                     <template v-else>确认已查看（不代表成交）</template>
                   </span>
                 </button>
+                <a
+                  v-if="canRegisterTrade(item)"
+                  data-trade-registration
+                  :href="`/stocks/${encodeURIComponent(item.symbol)}#trade-registration`"
+                >登记实际成交（不自动买卖）</a>
               </td>
             </tr>
             <tr v-if="expandedIds.has(item.eventId)" :id="`alert-evidence-${item.eventId}`">

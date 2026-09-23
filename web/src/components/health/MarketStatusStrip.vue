@@ -37,6 +37,25 @@ const serviceStatuses: Readonly<Record<RuntimeServiceStatus, StatusPresentation>
 
 const presentation = computed(() => serviceStatuses[props.health.status]);
 
+const degradedReasons: Readonly<Record<string, string>> = {
+  ACTIVE_PLAN_LOAD_FAILED: "读取活动计划失败",
+  CONFIGURATION_INVALID: "运行配置无效",
+  HEARTBEAT_FAILED: "运行心跳失败",
+  PROVIDER_PROBE_FAILED: "行情能力检查失败",
+  PROVIDER_UNAVAILABLE: "行情能力或格式认证未就绪",
+  REFERENCE_REFRESH_FAILED: "交易日历或参考行情更新失败",
+  RUNTIME_RUNNER_FAILED: "监控任务意外退出，正在重启",
+  SCHEDULE_UNAVAILABLE: "暂无可执行的调度时间",
+  STARTUP_RECOVERY_FAILED: "中断任务恢复失败",
+};
+
+const degradedReason = computed(() => {
+  const code = props.health.degradedReason;
+  return code === null || code === undefined
+    ? null
+    : `${degradedReasons[code] ?? "运行条件尚未满足"}（${code}）`;
+});
+
 function ageLabel(label: string, value: number | null) {
   return value === null ? `${label} —` : `${label} ${value} 秒前`;
 }
@@ -67,6 +86,7 @@ function timeLabel(label: string, value: string | null) {
           {{ props.health.readOnly ? "只读" : "可监控" }}
         </span>
       </p>
+      <p v-if="degradedReason !== null">原因：{{ degradedReason }}</p>
     </div>
 
     <dl class="market-status-strip__facts">

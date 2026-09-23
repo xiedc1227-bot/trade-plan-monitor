@@ -41,7 +41,7 @@ from trade_plan_monitor.market_index.tushare import (
 )
 from trade_plan_monitor.runtime.clock import Clock
 from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
-from trade_plan_monitor.runtime.health import SymbolHealthTracker
+from trade_plan_monitor.runtime.health import RecoveryIssueSnapshot, SymbolHealthTracker
 from trade_plan_monitor.runtime.historical_close_context import (
     HistoricalCloseUnavailableError,
     HistoricalOfficialContextBuilder,
@@ -753,6 +753,18 @@ class ProductionMonitorPipeline:
             else:
                 self._historical_blocked.pop(plan.symbol, None)
                 self._historical_retry_at.pop(plan.symbol, None)
+
+    def recovery_issues(self) -> tuple[RecoveryIssueSnapshot, ...]:
+        """Expose only stable reasons; never leak provider or storage exception text."""
+
+        return tuple(
+            RecoveryIssueSnapshot(
+                symbol=symbol,
+                reason=reason,
+                next_retry_at=self._historical_retry_at[symbol],
+            )
+            for symbol, reason in sorted(self._historical_blocked.items())
+        )
 
     async def _recover_pending_close_batches(self, startup_date: date) -> None:
         grouped: dict[date, list[TradePlan]] = {}

@@ -104,6 +104,14 @@ class RuntimeGapSnapshot(_RuntimeHealthValue):
     bar_end: ShanghaiDatetime
 
 
+class RecoveryIssueSnapshot(_RuntimeHealthValue):
+    """Safe per-plan reason and retry for interrupted-close recovery."""
+
+    symbol: AShareSymbol
+    reason: HealthErrorCode
+    next_retry_at: ShanghaiDatetime
+
+
 class ProviderHealthSnapshot(_RuntimeHealthValue):
     """One independently probed provider capability observation."""
 
@@ -220,6 +228,7 @@ class RuntimeHealthDetails(_RuntimeHealthValue):
     last_completed_minute: ShanghaiDatetime | None = None
     latest_evaluation_at: ShanghaiDatetime | None = None
     gaps: tuple[RuntimeGapSnapshot, ...] = Field(default=(), max_length=2_400)
+    recovery_issues: tuple[RecoveryIssueSnapshot, ...] = Field(default=(), max_length=10)
     next_retry_at: ShanghaiDatetime | None = None
     cooldown_until: ShanghaiDatetime | None = None
     providers: tuple[ProviderHealthSnapshot, ...] = Field(default=(), max_length=5)
@@ -234,6 +243,7 @@ class RuntimeHealthSnapshot(RuntimeHealthDetails):
     status: RuntimeServiceStatus
     read_only: bool = Field(strict=True)
     block_reason: Literal["LEGACY_PLANS_REQUIRE_REVIEW"] | None = None
+    degraded_reason: HealthErrorCode | None = None
     runtime_generation: UUID4 = Field(default_factory=uuid4, exclude=True)
     observed_at: ShanghaiDatetime
     started_at: ShanghaiDatetime
@@ -264,6 +274,8 @@ class RuntimeHealthSnapshot(RuntimeHealthDetails):
             raise ValueError("RUNNING health requires read_only=false")
         if self.status is RuntimeServiceStatus.DEGRADED and not self.read_only:
             raise ValueError("DEGRADED health requires read_only=true")
+        if self.status is not RuntimeServiceStatus.DEGRADED and self.degraded_reason is not None:
+            raise ValueError("only DEGRADED health may carry a degraded reason")
         if (self.status is RuntimeServiceStatus.BLOCKED) != (
             self.block_reason is not None
         ):

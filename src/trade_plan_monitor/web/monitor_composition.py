@@ -40,7 +40,14 @@ from trade_plan_monitor.runtime.health import (
 )
 from trade_plan_monitor.runtime.production import (
     ProductionMonitorPipeline,
+    ProductionSemanticBindings,
     ReferenceDataUnavailableError,
+    SemanticContractBinding,
+)
+from trade_plan_monitor.runtime.provider_contract import (
+    import_index_semantic_contract,
+    import_stock_semantic_contract,
+    load_semantic_contract,
 )
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
@@ -206,7 +213,7 @@ class MonitorWebComposition:
                 self._stopped = True
                 raise
             self._last_runtime_health = runtime_health
-            if status is RuntimeServiceStatus.RUNNING:
+            if self._needs_runner(self._runtime, status):
                 runner = asyncio.create_task(
                     self._supervise_runtime(),
                     name="trade-plan-monitor-runtime",
@@ -251,6 +258,7 @@ class MonitorWebComposition:
             update={
                 "status": RuntimeServiceStatus.DEGRADED,
                 "read_only": True,
+                "degraded_reason": "RUNTIME_RUNNER_FAILED",
                 "stopped_at": None,
                 "next_poll_at": None,
             }
@@ -415,9 +423,16 @@ class MonitorWebComposition:
                     except Exception:
                         pass
                 return
-            if status is not RuntimeServiceStatus.RUNNING:
+            if not self._needs_runner(replacement, status):
                 return
             self._runner_failed = False
+
+    @staticmethod
+    def _needs_runner(runtime: MonitorRuntime, status: RuntimeServiceStatus) -> bool:
+        return status is RuntimeServiceStatus.RUNNING or (
+            status is RuntimeServiceStatus.DEGRADED
+            and isinstance(runtime, RuntimeLifecycleService)
+        )
 
     async def _stop_runtime(self, runtime: MonitorRuntime | None = None) -> None:
         target = self._runtime if runtime is None else runtime
@@ -617,36 +632,91 @@ class _ProductionRuntimeState:
         self._provider_checked_at = self._clock.now()
         configuration = load_application_config(self._config_path).tushare
         if configuration.api_url is None:
+            self._stage_errors.update({
+                capability: "TUSHARE_NOT_CONFIGURED"
+                for capability in _PROVIDER_CAPABILITIES
+            })
             return self._capabilities
         directory = self._config_path.resolve().parent.parent / "data" / "live-certification"
+        endpoint = str(configuration.api_url)
+        observed_at = self._clock.now()
         evidence = load_stock_certification(
             directory / "tushare-stock-live.json",
-            now=self._clock.now(),
-            endpoint_url=str(configuration.api_url),
+            now=observed_at,
+            endpoint_url=endpoint,
         )
-        if evidence is None:
-            return self._capabilities
-        self._capabilities = evidence.capabilities
-        if evidence.source_time_label is SourceTimeLabel.UNVERIFIED:
+        stock_path = directory / "stock-semantic.json"
+        stock_semantics = load_semantic_contract(
+            stock_path, now=observed_at, endpoint_url=endpoint,
+        )
+        if stock_semantics is None:
+            try:
+                stock_semantics = import_stock_semantic_contract(
+                    directory / "tushare-stock-live.json", stock_path,
+                    now=observed_at, endpoint_url=endpoint,
+                )
+            except OSError:
+                stock_semantics = None
+        index_path = directory / "index-semantic.json"
+        index_semantics = load_semantic_contract(
+            index_path, now=observed_at, endpoint_url=endpoint,
+        )
+        if index_semantics is None:
+            try:
+                index_semantics = import_index_semantic_contract(
+                    directory / "tushare-board-index-live.json", index_path,
+                    now=observed_at, endpoint_url=endpoint,
+                )
+            except OSError:
+                index_semantics = None
+        if evidence is not None:
+            self._capabilities = evidence.capabilities
+        if evidence is not None and evidence.source_time_label is SourceTimeLabel.UNVERIFIED:
             self._capabilities = self._capabilities.model_copy(
                 update={
                     "realtime_minutes": ProviderCapabilityStatus.UNVERIFIED,
                     "current_day_minutes": ProviderCapabilityStatus.UNVERIFIED,
                 }
             )
-        if evidence.ready and self._runtime_generation is not None and self._publisher is not None:
+        if stock_semantics is None or stock_semantics.surface != "STOCK":
+            self._stage_errors.update({
+                capability: "STOCK_SEMANTICS_UNAVAILABLE"
+                for capability in _PROVIDER_CAPABILITIES
+            })
+        if (
+            stock_semantics is not None
+            and stock_semantics.surface == "STOCK"
+            and self._runtime_generation is not None
+            and self._publisher is not None
+        ):
+            index_binding = (
+                SemanticContractBinding(index_path, index_semantics.semantic_revision)
+                if index_semantics is not None and index_semantics.surface == "BOARD_INDEX"
+                else None
+            )
             self._pipeline = ProductionMonitorPipeline(
                 configuration=configuration,
                 certification_directory=directory,
-                stock_certification=evidence,
+                stock_certification=None,
                 clock=self._clock,
                 request_controller=self._request_controller,
                 unit_of_work_factory=self.unit_of_work_factory,
                 runtime_generation=self._runtime_generation(),
                 publisher=self._publisher,
+                semantic_bindings=ProductionSemanticBindings(
+                    stock=SemanticContractBinding(
+                        stock_path, stock_semantics.semantic_revision,
+                    ),
+                    index=index_binding,
+                ),
                 recovery_session_factory=self._session_factory,
             )
         return self._capabilities
+
+    def can_schedule(self, _capabilities: ProviderCapabilities) -> bool:
+        """Semantic compatibility permits guarded requests; health stays observation-based."""
+
+        return self._pipeline is not None
 
     async def refresh_references(self, trade_date: date) -> None:
         if self._pipeline is not None:
@@ -737,6 +807,7 @@ class _ProductionRuntimeState:
             for capability in _PROVIDER_CAPABILITIES
         )
         return RuntimeHealthDetails(
+            recovery_issues=(() if self._pipeline is None else self._pipeline.recovery_issues()),
             providers=providers,
             executor=ExecutorHealthSnapshot(
                 max_workers=self._request_controller.executor_workers,
@@ -887,6 +958,7 @@ def create_monitor_composition(
             open_database=state.open_database,
             load_active_symbols=state.load_active_symbols,
             probe_capabilities=state.probe_capabilities,
+            can_schedule=state.can_schedule,
             refresh_references=state.refresh_references,
             recover_startup=state.recover_startup,
             scheduler=scheduler,

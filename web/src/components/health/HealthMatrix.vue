@@ -57,6 +57,13 @@ function safeErrorCode(value: string | null) {
   return /^[A-Z][A-Z0-9_]{0,63}$/.test(value) ? value : "已脱敏";
 }
 
+function providerIssue(value: string | null) {
+  const code = safeErrorCode(value);
+  if (code === "TUSHARE_NOT_CONFIGURED") return `尚未配置 Tushare 接口（${code}）`;
+  if (code === "STOCK_SEMANTICS_UNAVAILABLE") return `行情格式认证不可用（${code}）`;
+  return code;
+}
+
 function optionalTime(value: string | null) {
   return formatDisplayDateTime(value);
 }
@@ -118,7 +125,7 @@ function optionalTime(value: string | null) {
               </td>
               <td class="numeric-data">{{ provider.latencyMs }} 毫秒</td>
               <td class="numeric-data">{{ formatDisplayDateTime(provider.checkedAt) }}</td>
-              <td class="numeric-data">{{ safeErrorCode(provider.errorCode) }}</td>
+              <td class="numeric-data">{{ providerIssue(provider.errorCode) }}</td>
               <td class="numeric-data">{{ optionalTime(provider.nextRetryAt) }}</td>
             </tr>
           </tbody>

@@ -40,6 +40,12 @@ class RuntimeGapView(ReadModel):
     bar_end: ShanghaiDatetime
 
 
+class RecoveryIssueView(ReadModel):
+    symbol: AShareSymbol
+    reason: HealthErrorCode
+    next_retry_at: ShanghaiDatetime
+
+
 class ProviderHealthView(ReadModel):
     capability: HealthName
     status: ProviderCapabilityStatus
@@ -132,6 +138,7 @@ class RuntimeHealthResponse(ReadModel):
     status: RuntimeServiceStatus
     read_only: bool = Field(strict=True)
     block_reason: Literal["LEGACY_PLANS_REQUIRE_REVIEW"] | None = None
+    degraded_reason: HealthErrorCode | None = None
     runtime_generation: UUID4 = Field(default=LEGACY_RUNTIME_GENERATION, exclude=True)
     observed_at: ShanghaiDatetime
     started_at: ShanghaiDatetime
@@ -141,6 +148,7 @@ class RuntimeHealthResponse(ReadModel):
     latest_evaluation_at: ShanghaiDatetime | None
     latest_evaluation_age_seconds: NonNegativeInteger | None
     gaps: tuple[RuntimeGapView, ...] = Field(default=(), max_length=2_400)
+    recovery_issues: tuple[RecoveryIssueView, ...] = Field(default=(), max_length=10)
     next_retry_at: ShanghaiDatetime | None
     cooldown_until: ShanghaiDatetime | None
     providers: tuple[ProviderHealthView, ...] = Field(default=(), max_length=5)
@@ -155,6 +163,8 @@ class RuntimeHealthResponse(ReadModel):
             raise ValueError("RUNNING health requires readOnly=false")
         if self.status is RuntimeServiceStatus.DEGRADED and not self.read_only:
             raise ValueError("DEGRADED health requires readOnly=true")
+        if self.status is not RuntimeServiceStatus.DEGRADED and self.degraded_reason is not None:
+            raise ValueError("only DEGRADED health may carry a degraded reason")
         if (self.status is RuntimeServiceStatus.BLOCKED) != (
             self.block_reason is not None
         ):
@@ -182,6 +192,9 @@ class RuntimeHealthResponse(ReadModel):
         gaps = tuple((gap.symbol, gap.bar_end) for gap in self.gaps)
         if gaps != tuple(sorted(set(gaps))):
             raise ValueError("health gaps must be unique and ordered")
+        recovery_symbols = tuple(issue.symbol for issue in self.recovery_issues)
+        if recovery_symbols != tuple(sorted(set(recovery_symbols))):
+            raise ValueError("recovery issues must be unique and ordered")
         capabilities = tuple(provider.capability for provider in self.providers)
         if len(set(capabilities)) != len(capabilities):
             raise ValueError("provider capabilities must be unique")

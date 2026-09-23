@@ -351,7 +351,8 @@ onBeforeUnmount(() => {
   border-inline-start-color: var(--color-signal-live-sea-glass);
 }
 
-.app-shell__connection-banner[data-connection-state="STALE"] {
+.app-shell__connection-banner[data-connection-state="STALE"],
+.app-shell__connection-banner[data-connection-state="MONITOR_PAUSED"] {
   border-inline-start-color: var(--color-signal-watch-amber);
 }
 

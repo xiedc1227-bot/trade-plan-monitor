@@ -164,6 +164,24 @@ describe("SystemView", () => {
     expect(rows[1]?.text()).toContain("●");
   });
 
+  it("shows the affected plan and exact recovery reason instead of a generic stale banner", () => {
+    const wrapper = mountSystem({
+      health: {
+        ...health,
+        recoveryIssues: [{
+          symbol: "600000.SH",
+          reason: "MISSING_EVIDENCE",
+          nextRetryAt: "2026-08-24T10:05:00+08:00",
+        }],
+      },
+    });
+
+    const issue = wrapper.get('[data-testid="recovery-issue"]');
+    expect(issue.text()).toContain("600000.SH");
+    expect(issue.text()).toContain("缺少恢复所需记录");
+    expect(issue.text()).toContain("2026-08-24 10:05:00");
+  });
+
   it("renders executor, database, WAL, checkpoint, backup, and delivery diagnostics", () => {
     const wrapper = mountSystem();
 
@@ -338,6 +356,28 @@ describe("SystemView", () => {
 });
 
 describe("health presentation components", () => {
+  it("shows why a degraded runtime is waiting to retry", () => {
+    const strip = mount(MarketStatusStrip, {
+      props: { health: { ...health, degradedReason: "REFERENCE_REFRESH_FAILED" } },
+    });
+    expect(strip.text()).toContain("交易日历或参考行情更新失败");
+    expect(strip.text()).toContain("下次重试");
+  });
+
+  it("explains a missing provider setup without exposing storage details", () => {
+    const configured = {
+      ...health,
+      providers: [{
+        ...health.providers![0]!,
+        errorCode: "TUSHARE_NOT_CONFIGURED",
+        status: "ERROR" as const,
+      }],
+    };
+    const matrix = mount(HealthMatrix, { props: { health: configured } });
+    expect(matrix.text()).toContain("尚未配置 Tushare 接口");
+    expect(matrix.text()).toContain("TUSHARE_NOT_CONFIGURED");
+  });
+
   it("emits only explicit strip and matrix intents", async () => {
     const strip = mount(MarketStatusStrip, {
       props: { health, showDetailsAction: true },

@@ -22,6 +22,7 @@ const SOCKET_CLOSING_STATE = 2;
 export type MonitorStreamConnectionCode =
   | "CONNECTING"
   | "LIVE"
+  | "MONITOR_PAUSED"
   | "STALE"
   | "UNAVAILABLE"
   | "DISCONNECTED";
@@ -53,9 +54,14 @@ const connectionStates = Object.freeze<Record<MonitorStreamConnectionCode, Monit
     marker: "×",
   }),
   LIVE: Object.freeze({ code: "LIVE", label: "实时连接", marker: "●" }),
+  MONITOR_PAUSED: Object.freeze({
+    code: "MONITOR_PAUSED",
+    label: "连接正常，监控未就绪；请查看系统健康",
+    marker: "!",
+  }),
   STALE: Object.freeze({
     code: "STALE",
-    label: "数据可能已过期，正在恢复",
+    label: "实时数据未确认，正在重新同步",
     marker: "!",
   }),
   UNAVAILABLE: Object.freeze({
@@ -214,7 +220,7 @@ export function useMonitorStream(
       retryAttempt = 0;
       if (!frame.runtimeLive) {
         requiresAuthoritativeRefresh = true;
-        connectionCode.value = "STALE";
+        connectionCode.value = "MONITOR_PAUSED";
         return;
       }
       if (requiresAuthoritativeRefresh) {

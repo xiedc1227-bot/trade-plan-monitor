@@ -320,6 +320,15 @@ test("marks a mapped Schema v2 plan with zero index leaves as unused", async ({ 
   await expect.poll(() => indexRanges.length).toBe(1);
 });
 
+test("scrolls to manual trade registration after asynchronous detail loading", async ({ page }) => {
+  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
+  await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges));
+
+  await page.goto(`${baseUrl}/stocks/${symbol}#trade-registration`);
+  await expect(page.locator("#trade-registration")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+});
+
 test("keeps the separated detail sections responsive and accessible", async ({ page }) => {
   const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
   await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges));

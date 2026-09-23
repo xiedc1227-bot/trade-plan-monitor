@@ -9547,6 +9547,35 @@
         "title": "ProviderHealthView",
         "type": "object"
       },
+      "RecoveryIssueView": {
+        "additionalProperties": false,
+        "properties": {
+          "nextRetryAt": {
+            "format": "date-time",
+            "title": "Nextretryat",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "title": "Reason",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "reason",
+          "nextRetryAt"
+        ],
+        "title": "RecoveryIssueView",
+        "type": "object"
+      },
       "RequiredReviewIssueView": {
         "additionalProperties": false,
         "properties": {
@@ -9751,6 +9780,20 @@
           "database": {
             "$ref": "#/components/schemas/DatabaseHealthView"
           },
+          "degradedReason": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[A-Z][A-Z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Degradedreason"
+          },
           "delivery": {
             "$ref": "#/components/schemas/DeliveryHealthView"
           },
@@ -9855,6 +9898,15 @@
           "readOnly": {
             "title": "Readonly",
             "type": "boolean"
+          },
+          "recoveryIssues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RecoveryIssueView"
+            },
+            "maxItems": 10,
+            "title": "Recoveryissues",
+            "type": "array"
           },
           "startedAt": {
             "format": "date-time",

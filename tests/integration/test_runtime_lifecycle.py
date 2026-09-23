@@ -141,6 +141,9 @@ def _service(
     refresh_references: Callable[[date], object] | None = None,
     liveness_owner: object | None = None,
     heartbeat_interval_seconds: float = 30.0,
+    retry_interval_seconds: float = 30.0,
+    probe_capabilities: Callable[[], ProviderCapabilities] | None = None,
+    can_schedule: Callable[[ProviderCapabilities], bool] | None = None,
     health_details: Callable[[], RuntimeHealthDetails] = _healthy_runtime_details,
     shutdown_timeout_seconds: float = 0.05,
 ) -> RuntimeLifecycleService:
@@ -160,11 +163,13 @@ def _service(
         ),
         liveness_owner=liveness_owner,
         heartbeat_interval_seconds=heartbeat_interval_seconds,
+        retry_interval_seconds=retry_interval_seconds,
         load_active_symbols=lambda: (observed.append("plans"), symbols)[1],
-        probe_capabilities=lambda: (
+        probe_capabilities=probe_capabilities or (lambda: (
             observed.append("probe"),
             capabilities if capabilities is not None else _ready_capabilities(),
-        )[1],
+        )[1]),
+        can_schedule=can_schedule,
         refresh_references=(
             refresh_references
             if refresh_references is not None
@@ -672,6 +677,61 @@ def test_degraded_run_remains_alive_until_explicit_shutdown() -> None:
 
     assert remained_alive is True
     assert status is RuntimeServiceStatus.STOPPED
+
+
+def test_degraded_startup_retries_and_resumes_scheduling_without_process_restart() -> None:
+    async def scenario() -> list[str]:
+        events: list[str] = []
+        attempts = 0
+
+        def probe() -> ProviderCapabilities:
+            nonlocal attempts
+            attempts += 1
+            events.append("probe")
+            if attempts == 1:
+                return _ready_capabilities().model_copy(
+                    update={"daily_bars": ProviderCapabilityStatus.UNVERIFIED}
+                )
+            return _ready_capabilities()
+
+        service = _service(
+            events=events,
+            probe_capabilities=probe,
+            retry_interval_seconds=0.01,
+        )
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        assert service.health().degraded_reason == "PROVIDER_UNAVAILABLE"
+        running = asyncio.create_task(service.run())
+        try:
+            for _ in range(100):
+                if service.health().status is RuntimeServiceStatus.RUNNING:
+                    break
+                await asyncio.sleep(0.01)
+            assert service.health().status is RuntimeServiceStatus.RUNNING
+            assert service.health().degraded_reason is None
+            assert events.count("probe") >= 2
+            assert events.count("recover") >= 2
+        finally:
+            await service.stop()
+            await running
+        return events
+
+    assert "deadline" in asyncio.run(scenario())
+
+
+def test_compatible_semantics_can_schedule_without_claiming_provider_ready() -> None:
+    async def scenario() -> tuple[RuntimeServiceStatus, ProviderCapabilities]:
+        service = _service(
+            capabilities=ProviderCapabilities(),
+            can_schedule=lambda _capabilities: True,
+        )
+        startup = await service.start()
+        await service.stop()
+        return startup.status, startup.capabilities
+
+    status, capabilities = asyncio.run(scenario())
+    assert status is RuntimeServiceStatus.RUNNING
+    assert capabilities == ProviderCapabilities()
 
 
 def test_shutdown_reissues_cancel_before_checkpointing_delayed_cancellation() -> None:

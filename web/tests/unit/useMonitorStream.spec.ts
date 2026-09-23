@@ -211,7 +211,7 @@ describe("useMonitorStream", () => {
 
       expect(stream.connectionState.value).toEqual({
         code: "STALE",
-        label: "数据可能已过期，正在恢复",
+        label: "实时数据未确认，正在重新同步",
         marker: "!",
       });
       wrapper.unmount();
@@ -238,7 +238,11 @@ describe("useMonitorStream", () => {
       type: "heartbeat",
     });
 
-    expect(stream.connectionState.value.code).toBe("STALE");
+    expect(stream.connectionState.value).toEqual({
+      code: "MONITOR_PAUSED",
+      label: "连接正常，监控未就绪；请查看系统健康",
+      marker: "!",
+    });
     expect(apiClient.getDashboard).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
@@ -490,7 +494,7 @@ describe("useMonitorStream", () => {
     expect(socket.close).toHaveBeenCalled();
     expect(stream.connectionState.value).toMatchObject({
       code: "STALE",
-      label: expect.stringContaining("过期"),
+      label: expect.stringContaining("重新同步"),
     });
     wrapper.unmount();
   });
@@ -516,7 +520,7 @@ describe("useMonitorStream", () => {
     expect(socket.close).toHaveBeenCalled();
     expect(stream.connectionState.value).toMatchObject({
       code: "STALE",
-      label: expect.stringContaining("过期"),
+      label: expect.stringContaining("重新同步"),
     });
     wrapper.unmount();
   });

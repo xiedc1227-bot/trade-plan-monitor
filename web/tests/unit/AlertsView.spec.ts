@@ -10,6 +10,7 @@ enableAutoUnmount(afterEach);
 
 const firstId = "00000000-0000-4000-8000-000000000021";
 const secondId = "00000000-0000-4000-8000-000000000022";
+const thirdId = "00000000-0000-4000-8000-000000000023";
 const marketTime = "2026-08-24T10:05:00+08:00";
 
 function alert(
@@ -138,6 +139,27 @@ function streamEvent(
 }
 
 describe("AlertsView", () => {
+  it("links actionable buy and sell reminders to manual trade registration only", () => {
+    const buy = alert(firstId, 21);
+    const risk = alert(secondId, 22, {
+      signalType: "RISK_BREACH",
+      severity: "RISK",
+      positionPrefill: null,
+      quantity: null,
+    });
+    const sell = alert(thirdId, 23, { signalType: "RISK_EXIT_READY" });
+    const wrapper = mount(AlertsView, {
+      props: { initialPage: page([buy, risk, sell]), operations: operations() },
+    });
+
+    const links = wrapper.findAll('[data-trade-registration]');
+    expect(links).toHaveLength(2);
+    expect(links[0]?.attributes("href")).toBe("/stocks/003043.SZ#trade-registration");
+    expect(links[1]?.attributes("href")).toBe("/stocks/003043.SZ#trade-registration");
+    expect(links[0]?.text()).toContain("登记实际成交");
+    expect(wrapper.text()).toContain("确认已查看（不代表成交）");
+  });
+
   it("renders safe authoritative text, expandable evidence, event identity and chart-time links", async () => {
     const item = alert(firstId, 21, {
       satisfiedConditions: [

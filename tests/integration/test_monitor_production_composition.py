@@ -21,6 +21,7 @@ from trade_plan_monitor.runtime.health import (
     RuntimeResourceStatus,
     RuntimeServiceStatus,
 )
+from trade_plan_monitor.runtime.service import RuntimeLifecycleService
 from trade_plan_monitor.web.app import create_app, create_production_app
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 
@@ -136,6 +137,10 @@ class _RecordingRuntime:
     async def stop(self) -> None:
         self.stop_calls += 1
         self.allow_run_exit.set()
+
+
+class _DegradedOwnedRuntime(_RecordingRuntime, RuntimeLifecycleService):
+    """Exercise the lifecycle-specific degraded runner admission boundary."""
 
 
 class _ControlledRestartDelay:
@@ -423,6 +428,7 @@ def test_monitor_composition_projects_degraded_health_during_backoff_then_restar
 
         during_backoff = composition.health()
         assert during_backoff.status is RuntimeServiceStatus.DEGRADED
+        assert during_backoff.degraded_reason == "RUNTIME_RUNNER_FAILED"
         assert during_backoff.read_only is True
         assert during_backoff.next_poll_at is None
         assert failed.stop_calls == 1
@@ -443,6 +449,31 @@ def test_monitor_composition_projects_degraded_health_during_backoff_then_restar
 
         await composition.stop()
         assert recovered.stop_calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_degraded_lifecycle_replacement_retains_its_retry_runner() -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        failed = _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+        failed.allow_run_exit.set()
+        recovered = _DegradedOwnedRuntime(status=RuntimeServiceStatus.DEGRADED)
+        composition = MonitorWebComposition(
+            runtime=failed,
+            runtime_factory=lambda: recovered,
+            restart_sleep=lambda _delay: asyncio.sleep(0),
+            read_service=_DegradedReadService(),
+        )
+        await composition.start()
+        try:
+            await asyncio.wait_for(recovered.run_started.wait(), timeout=0.2)
+            assert recovered.start_calls == 1
+            assert recovered.run_calls == 1
+            assert composition.health().status is RuntimeServiceStatus.DEGRADED
+        finally:
+            await composition.stop()
 
     asyncio.run(scenario())
 
@@ -832,8 +863,12 @@ def test_default_monitor_composition_starts_offline_with_safe_health_and_websock
     assert health.json()["executor"]["maxWorkers"] == 1
     assert len(health.json()["providers"]) == 5
     assert {provider["status"] for provider in health.json()["providers"]} == {
-        "UNVERIFIED"
+        "ERROR"
     }
+    assert {provider["errorCode"] for provider in health.json()["providers"]} == {
+        "TUSHARE_NOT_CONFIGURED"
+    }
+    assert health.json()["nextRetryAt"] is not None
     assert dashboard.status_code == 200
     assert dashboard.json()["availability"] == "UNAVAILABLE"
     assert dashboard.json()["reason"] == "EMPTY_DATABASE"

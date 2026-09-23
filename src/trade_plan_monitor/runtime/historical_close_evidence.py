@@ -151,9 +151,6 @@ class LegacyHistoricalCloseReader:
                          anchor.evaluation_identity.official_trade_date + timedelta(days=1))
                 if start > observed_at.date():
                     return ()
-                if (observed_at.date() - start).days >= 32:
-                    raise _HistoryLimit()
-
                 def is_open_on(day):
                     row = session.execute(select(
                         cast(TradingCalendar.is_open, Integer),
@@ -163,14 +160,12 @@ class LegacyHistoricalCloseReader:
                     return (bool(row[0]) if row is not None and row[1] == "integer"
                             and row[0] in (0, 1) else None)
 
-                window = discover_missed_closes(
-                    scope=scope, is_open_on=is_open_on, completion_on=reader.read,
-                    window_start=start,
-                )
-                _require(window.next_window_start is None)
-                _require(all(item.status is CompletionStatus.ABSENT
-                             and not item.causal_history_gap for item in window.candidates))
-                return tuple(item.identity.official_trade_date for item in window.candidates)
+                missing = []
+                for item in _scan_close_suffix(scope, is_open_on, reader.read, start):
+                    _require(item.status is CompletionStatus.ABSENT
+                             and not item.causal_history_gap)
+                    missing.append(item.identity.official_trade_date)
+                return tuple(missing)
             except ActivationHistoryLimit, _HistoryLimit:
                 reason = HistoricalCloseUnknownReason.HISTORY_LIMIT
             except MissingActivationEvidence, _MissingEvidence:
@@ -216,9 +211,9 @@ class LegacyHistoricalCloseReader:
         if isinstance(scope, UnknownCloseRecovery):
             return UnknownHistoricalClose(HistoricalCloseUnknownReason(scope.reason))
         reader = _CompletionReader(session, scope, boundary.sequence)
-        # Preserve the original full-prefix audit check for its bounded window.
-        # Only old plans need the checkpoint fast path; their interrupted suffix
-        # remains bounded independently of total activation age.
+        # A recent bounded prefix is checked for risk-chain consistency. Older
+        # plans use the last committed close as a task checkpoint; neither path
+        # recomputes an already committed trading decision.
         anchor = (
             _latest_completed_close(session, scope, reader, trade_date)
             if (observed_at.date() - scope.activated_at.date()).days >= 32
@@ -228,8 +223,6 @@ class LegacyHistoricalCloseReader:
             scope.activated_at.date() if anchor is None
             else anchor.evaluation_identity.official_trade_date + timedelta(days=1)
         )
-        if (observed_at.date() - window_start).days >= 32:
-            raise _HistoryLimit()
         completions = {}
 
         def completion_on(identity):
@@ -245,25 +238,42 @@ class LegacyHistoricalCloseReader:
             return (bool(row[0]) if row is not None and row[1] == "integer"
                     and row[0] in (0, 1) else None)
 
-        window = discover_missed_closes(
-            scope=scope, is_open_on=is_open_on, completion_on=completion_on,
-            window_start=window_start,
-        )
-        _require(window.next_window_start is None)
-        _require(all(item.status is not CompletionStatus.UNKNOWN and not item.causal_history_gap
-                     for item in window.candidates))
-        absent = [item for item in window.candidates if item.status is CompletionStatus.ABSENT]
+        absent = []
+        proven_results = []
+        earlier_absent = False
+        for item in _scan_close_suffix(scope, is_open_on, completion_on, window_start):
+            _require(item.status is not CompletionStatus.UNKNOWN and not item.causal_history_gap)
+            _require(not (earlier_absent and item.status is CompletionStatus.PROVEN))
+            if item.status is CompletionStatus.ABSENT:
+                earlier_absent = True
+                absent.append(item)
+            else:
+                proven_results.append(completions[item.identity.official_trade_date].result)
         _require(bool(absent) and absent[0].identity.official_trade_date == trade_date)
         cutoff = datetime.combine(trade_date, time(15), SHANGHAI)
         inventory = PositionInventoryHistoryReader._read(session, symbol, cutoff, observed_at)
         _require(inventory.high_water_sequence == highwater)
-        results = tuple(completions[item.identity.official_trade_date].result
-                        for item in window.candidates if item.status is CompletionStatus.PROVEN)
+        results = tuple(proven_results)
         _require(all(result.snapshot.signal_type is not SignalType.BLOCKED_DATA
                      for result in results))
         current, risk = _risk_inputs(session, scope, results, cutoff, anchor=anchor)
         calendar = _calendar(session, scope.plan.market, trade_date)
         return ProvenHistoricalClose(scope, inventory, current, risk, calendar, highwater)
+
+
+def _scan_close_suffix(scope, is_open_on, completion_on, start):
+    """Page only the unfinished task suffix; 32 dates is a read batch, not plan expiry."""
+
+    window_start = start
+    while True:
+        window = discover_missed_closes(
+            scope=scope, is_open_on=is_open_on, completion_on=completion_on,
+            window_start=window_start,
+        )
+        yield from window.candidates
+        if window.next_window_start is None:
+            return
+        window_start = window.next_window_start
 
 
 def _latest_completed_close(session, scope, reader, target_date):

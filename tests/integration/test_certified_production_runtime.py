@@ -69,6 +69,76 @@ def test_production_capability_gate_consumes_fresh_local_stock_evidence(tmp_path
         engine.dispose()
 
 
+def test_expired_observation_retains_semantics_but_not_ready_provider_health(tmp_path: Path):
+    config = tmp_path / "config" / "app.yaml"
+    config.parent.mkdir()
+    config.write_text(
+        "tushare:\n  api_url: https://example.test\n  token: test-token\n", encoding="utf-8"
+    )
+    evidence_dir = tmp_path / "data" / "live-certification"
+    write_live_certification(
+        evidence_dir / "tushare-stock-live.json",
+        create_stock_certification(
+            observed_at=NOW - timedelta(days=30),
+            endpoint_url="https://example.test",
+            capabilities=ProviderCapabilities(**{
+                key: ProviderCapabilityStatus.READY
+                for key in ProviderCapabilities.model_fields
+            }),
+            source_time_label=SourceTimeLabel.START,
+        ),
+    )
+    engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
+    controller = create_live_tushare_request_controller(clock=Clock())
+    state = _ProductionRuntimeState(
+        config_path=config, database_path=tmp_path / "monitor.sqlite3",
+        engine=engine, session_factory=create_session_factory(engine),
+        clock=Clock(), request_controller=controller,
+        runtime_generation=uuid4, publisher=lambda _event: None,
+    )
+    try:
+        assert state.probe_capabilities() == ProviderCapabilities()
+        assert state._pipeline is not None
+        assert (evidence_dir / "stock-semantic.json").is_file()
+    finally:
+        controller.close()
+        engine.dispose()
+
+
+def test_semantic_import_storage_failure_is_visible_and_retryable(tmp_path: Path, monkeypatch):
+    import trade_plan_monitor.web.monitor_composition as composition
+
+    config = tmp_path / "config" / "app.yaml"
+    config.parent.mkdir()
+    config.write_text(
+        "tushare:\n  api_url: https://example.test\n  token: test-token\n", encoding="utf-8"
+    )
+    engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
+    controller = create_live_tushare_request_controller(clock=Clock())
+    state = _ProductionRuntimeState(
+        config_path=config, database_path=tmp_path / "monitor.sqlite3",
+        engine=engine, session_factory=create_session_factory(engine),
+        clock=Clock(), request_controller=controller,
+        runtime_generation=uuid4, publisher=lambda _event: None,
+    )
+
+    def fail_import(*_args, **_kwargs):
+        raise OSError("private filesystem detail")
+
+    monkeypatch.setattr(composition, "import_stock_semantic_contract", fail_import)
+    try:
+        assert state.probe_capabilities() == ProviderCapabilities()
+        assert state.can_schedule(ProviderCapabilities()) is False
+        assert all(
+            item.status is ProviderCapabilityStatus.ERROR
+            and item.error_code == "STOCK_SEMANTICS_UNAVAILABLE"
+            for item in state.health_details().providers
+        )
+    finally:
+        controller.close()
+        engine.dispose()
+
+
 class SDK:
     """Only the remote SDK boundary is replaced; normalization and services are real."""
 

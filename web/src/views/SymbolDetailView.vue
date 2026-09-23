@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, shallowRef } from "vue";
+import { computed, defineAsyncComponent, nextTick, shallowRef, watch } from "vue";
 
 import type {
   BarView,
@@ -69,6 +69,15 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>();
 const PriceChart = defineAsyncComponent(() => import("../components/symbol/PriceChart.vue"));
 const selectedAt = shallowRef<string | null>(null);
+watch(
+  () => props.detail?.summary.symbol,
+  async (symbol) => {
+    if (symbol === undefined || globalThis.location.hash !== "#trade-registration") return;
+    await nextTick();
+    document.getElementById("trade-registration")?.scrollIntoView({ block: "start" });
+  },
+  { immediate: true, flush: "post" },
+);
 const referenceMarket = computed(
   () => props.detail?.referenceMarket ?? props.detail?.summary.referenceMarket ?? null,
 );
@@ -362,21 +371,23 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
         </div>
       </section>
 
-      <PositionLots
-        :symbol="detail.summary.symbol"
-        :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
-        :initial-page="positionPage"
-        :operations="positionOperations"
-        :prefill="positionPrefill"
-        :summary-lots="detail.positionLots ?? []"
-      />
+      <div id="trade-registration" class="symbol-detail__trade-registration">
+        <PositionLots
+          :symbol="detail.summary.symbol"
+          :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
+          :initial-page="positionPage"
+          :operations="positionOperations"
+          :prefill="positionPrefill"
+          :summary-lots="detail.positionLots ?? []"
+        />
 
-      <PositionInventoryPanel
-        v-if="positionApi !== null"
-        :api="positionApi"
-        :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
-        :symbol="detail.summary.symbol"
-      />
+        <PositionInventoryPanel
+          v-if="positionApi !== null"
+          :api="positionApi"
+          :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
+          :symbol="detail.summary.symbol"
+        />
+      </div>
 
       <ManualEventRiskPanel
         :api="manualEventRiskApi"
@@ -406,6 +417,11 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
 .symbol-detail > * {
   min-width: 0;
   max-width: 100%;
+}
+
+.symbol-detail__trade-registration {
+  display: grid;
+  gap: var(--space-5);
 }
 
 .symbol-detail__header {

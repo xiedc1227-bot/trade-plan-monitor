@@ -6,6 +6,7 @@ import type { LegacyPlanApi } from "../api/legacyPlans";
 import HealthMatrix from "../components/health/HealthMatrix.vue";
 import LegacyPlanInvalidationPanel from "../components/health/LegacyPlanInvalidationPanel.vue";
 import MarketStatusStrip from "../components/health/MarketStatusStrip.vue";
+import RecoveryIssuesPanel from "../components/health/RecoveryIssuesPanel.vue";
 
 interface Props {
   error?: string | null;
@@ -75,6 +76,10 @@ const errorMessage = computed(() =>
           availableHealth.blockReason === 'LEGACY_PLANS_REQUIRE_REVIEW'"
         :api="props.legacyApi"
         @completed="emit('refresh')"
+      />
+      <RecoveryIssuesPanel
+        v-if="(availableHealth.recoveryIssues?.length ?? 0) > 0"
+        :issues="availableHealth.recoveryIssues ?? []"
       />
       <MarketStatusStrip :health="availableHealth" />
       <HealthMatrix

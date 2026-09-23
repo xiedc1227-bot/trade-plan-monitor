@@ -73,6 +73,7 @@ APPROVED_PATHS = {
     "/api/v1/symbols/{symbol}",
     "/api/v1/symbols/{symbol}/bars",
     "/api/v1/symbols/{symbol}/events",
+    "/api/v1/system/legacy-plan-invalidation",
 }
 PUBLIC_ERROR_STATUSES = {
     "400",

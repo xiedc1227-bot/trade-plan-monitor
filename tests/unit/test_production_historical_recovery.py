@@ -52,6 +52,10 @@ def test_recovery_retries_changed_activation_and_processes_missing_days_in_order
 
     asyncio.run(pipeline._recover_historical_closes(before_date=None))
     assert pipeline._historical_blocked[plan.symbol] == "MISSING_EVIDENCE"
+    issue, = pipeline.recovery_issues()
+    assert issue.symbol == plan.symbol
+    assert issue.reason == "MISSING_EVIDENCE"
+    assert issue.next_retry_at > observed
     assert calls == []
 
     # A new activation must not inherit the old task's retry delay or block.
@@ -59,3 +63,4 @@ def test_recovery_retries_changed_activation_and_processes_missing_days_in_order
     asyncio.run(pipeline._recover_historical_closes(before_date=None))
     assert calls == [first, second]
     assert plan.symbol not in pipeline._historical_blocked
+    assert pipeline.recovery_issues() == ()

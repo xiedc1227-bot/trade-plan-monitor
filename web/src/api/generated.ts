@@ -1481,6 +1481,12 @@ export type ProviderHealthView = {
   status: components["schemas"]["ProviderCapabilityStatus"];
 };
 
+export type RecoveryIssueView = {
+  nextRetryAt: string;
+  reason: string;
+  symbol: string;
+};
+
 export type RequiredReviewIssueView = {
   allowedResolutions: Array<components["schemas"]["ReviewResolutionKind"]>;
   bindingPath?: (string) | (null);
@@ -1518,6 +1524,7 @@ export type RuntimeHealthResponse = {
   blockReason?: ("LEGACY_PLANS_REQUIRE_REVIEW") | (null);
   cooldownUntil: (string) | (null);
   database: components["schemas"]["DatabaseHealthView"];
+  degradedReason?: (string) | (null);
   delivery: components["schemas"]["DeliveryHealthView"];
   executor: components["schemas"]["ExecutorHealthView"];
   gaps?: Array<components["schemas"]["RuntimeGapView"]>;
@@ -1530,6 +1537,7 @@ export type RuntimeHealthResponse = {
   observedAt: string;
   providers?: Array<components["schemas"]["ProviderHealthView"]>;
   readOnly: boolean;
+  recoveryIssues?: Array<components["schemas"]["RecoveryIssueView"]>;
   startedAt: string;
   status: components["schemas"]["RuntimeServiceStatus"];
   stoppedAt: (string) | (null);
@@ -1929,6 +1937,7 @@ export interface components {
     ProductSourceTreatmentView: ProductSourceTreatmentView;
     ProviderCapabilityStatus: ProviderCapabilityStatus;
     ProviderHealthView: ProviderHealthView;
+    RecoveryIssueView: RecoveryIssueView;
     RequiredReviewIssueView: RequiredReviewIssueView;
     ReturnIndicatorFactView: ReturnIndicatorFactView;
     ReturnWindow: ReturnWindow;

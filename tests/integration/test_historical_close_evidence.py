@@ -268,9 +268,23 @@ def test_unknown_calendar_or_claim_in_later_suffix_blocks_preparation(historical
     assert prepare(historical, NOW.date()).status == "UNKNOWN"
 
 
-def test_whole_activation_span_cannot_be_truncated_to_recent_days(historical):
-    result = prepare(historical, NOW.date(), NOW + timedelta(days=32))
-    assert result.status == "UNKNOWN" and result.reason == "HISTORY_LIMIT"
+def test_old_plan_scans_only_missing_suffix_across_bounded_read_windows(historical):
+    from trade_plan_monitor.runtime.historical_close_evidence import LegacyHistoricalCloseReader
+
+    publish(historical, risk=initial_risk(historical), transition=False)
+    observed = NOW + timedelta(days=35)
+    with historical.factory() as session:
+        session.add_all(TradingCalendar(
+            exchange=exchange, cal_date=NOW.date() + timedelta(days=offset),
+            is_open=False, previous_trade_date=TARGET,
+        ) for exchange in {"SSE", historical.plan.market} for offset in range(7, 36))
+        session.commit()
+
+    reader = LegacyHistoricalCloseReader(historical.factory)
+    assert reader.missing_targets(historical.plan.symbol, observed) == tuple(
+        NOW.date() + timedelta(days=offset) for offset in range(3, 7)
+    )
+    assert reader.prepare(historical.plan.symbol, TARGET, observed).status == "PROVEN"
 
 
 @pytest.mark.parametrize("corrupt_anchor", [False, True])

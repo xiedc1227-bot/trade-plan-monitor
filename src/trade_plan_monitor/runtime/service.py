@@ -2682,8 +2682,10 @@ class RuntimeLifecycleService:
         checkpoint_wal: Callable[[], object],
         close_database: Callable[[], object],
         health_details: Callable[[], RuntimeHealthDetails],
+        can_schedule: Callable[[ProviderCapabilities], bool] | None = None,
         liveness_owner: object | None = None,
         heartbeat_interval_seconds: float = 30.0,
+        retry_interval_seconds: float = 30.0,
         shutdown_timeout_seconds: float = 5.0,
     ) -> None:
         if not isinstance(clock, Clock):
@@ -2702,6 +2704,8 @@ class RuntimeLifecycleService:
         )
         if any(not callable(dependency) for dependency in dependencies):
             raise TypeError("runtime lifecycle dependencies must be callable")
+        if can_schedule is not None and not callable(can_schedule):
+            raise TypeError("can_schedule must be callable")
         if not callable(getattr(scheduler, "next_deadline", None)) or not callable(
             getattr(scheduler, "wait_for_next", None)
         ):
@@ -2721,6 +2725,12 @@ class RuntimeLifecycleService:
         ):
             raise ValueError("heartbeat_interval_seconds must be between 0 and 30")
         if (
+            isinstance(retry_interval_seconds, bool)
+            or not isinstance(retry_interval_seconds, int | float)
+            or not 0 < retry_interval_seconds <= 300
+        ):
+            raise ValueError("retry_interval_seconds must be between 0 and 300")
+        if (
             isinstance(shutdown_timeout_seconds, bool)
             or not isinstance(shutdown_timeout_seconds, int | float)
             or not 0 < shutdown_timeout_seconds <= 60
@@ -2732,6 +2742,7 @@ class RuntimeLifecycleService:
         self._open_database = open_database
         self._load_active_symbols = load_active_symbols
         self._probe_capabilities = probe_capabilities
+        self._can_schedule = can_schedule or self._all_capabilities_ready
         self._refresh_references = refresh_references
         self._recover_startup = recover_startup
         self._scheduler = scheduler
@@ -2743,6 +2754,7 @@ class RuntimeLifecycleService:
         self._health_details = health_details
         self._liveness_owner = liveness_owner
         self._heartbeat_interval_seconds = float(heartbeat_interval_seconds)
+        self._retry_interval_seconds = float(retry_interval_seconds)
         self._heartbeat_stop = asyncio.Event()
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._liveness_failed = False
@@ -2750,9 +2762,11 @@ class RuntimeLifecycleService:
         self._status = RuntimeServiceStatus.STOPPED
         self._read_only = True
         self._block_reason: str | None = None
+        self._degraded_reason: str | None = None
         self._started_at: datetime | None = None
         self._stopped_at: datetime | None = None
         self._next_poll_at: datetime | None = None
+        self._retry_at: datetime | None = None
         self._startup_result: RuntimeStartupResult | None = None
         self._start_task: asyncio.Task[RuntimeStartupResult] | None = None
         self._accepting_work = False
@@ -2803,12 +2817,15 @@ class RuntimeLifecycleService:
         details = self._health_details()
         if not isinstance(details, RuntimeHealthDetails):
             raise TypeError("health_details must return RuntimeHealthDetails")
+        if self._retry_at is not None:
+            details = details.model_copy(update={"next_retry_at": self._retry_at})
         observed_at = _canonical_shanghai(self._clock.now())
         return RuntimeHealthSnapshot(
             **details.model_dump(mode="python", round_trip=True),
             status=self._status,
             read_only=self._read_only,
             block_reason=self._block_reason,
+            degraded_reason=self._degraded_reason,
             runtime_generation=self._runtime_generation,
             observed_at=observed_at,
             started_at=self._started_at,
@@ -2883,11 +2900,13 @@ class RuntimeLifecycleService:
         if not isinstance(raw_capabilities, ProviderCapabilities):
             raise TypeError("provider probe must return ProviderCapabilities")
 
-        read_only = not self._all_capabilities_ready(raw_capabilities)
+        read_only = not self._can_schedule(raw_capabilities)
+        if read_only:
+            self._degraded_reason = "PROVIDER_UNAVAILABLE"
         trade_date = _canonical_shanghai(self._clock.now()).date()
-        for startup_operation in (
-            self._refresh_references,
-            self._recover_startup,
+        for startup_operation, reason in (
+            (self._refresh_references, "REFERENCE_REFRESH_FAILED"),
+            (self._recover_startup, "STARTUP_RECOVERY_FAILED"),
         ):
             try:
                 await self._invoke(startup_operation, trade_date)
@@ -2895,12 +2914,15 @@ class RuntimeLifecycleService:
                 raise
             except Exception:
                 read_only = True
+                self._degraded_reason = reason
 
         next_deadline = self._scheduler.next_deadline()
         if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):
             raise TypeError("scheduler must return MarketDeadline or None")
         if next_deadline is None:
             read_only = True
+            if self._degraded_reason is None:
+                self._degraded_reason = "SCHEDULE_UNAVAILABLE"
         status = RuntimeServiceStatus.DEGRADED if read_only else RuntimeServiceStatus.RUNNING
         self._status = status
         self._read_only = read_only
@@ -2913,6 +2935,10 @@ class RuntimeLifecycleService:
             capabilities=raw_capabilities,
             next_poll_at=self._next_poll_at,
         )
+        if read_only:
+            self._retry_at = _canonical_shanghai(self._clock.now()) + timedelta(
+                seconds=self._retry_interval_seconds
+            )
         return self._startup_result
 
     async def run_once(self) -> object | None:
@@ -2944,12 +2970,17 @@ class RuntimeLifecycleService:
         try:
             startup = await self.start()
             if startup.read_only:
-                shutdown_event = asyncio.Event()
-                self._shutdown_requested_event = shutdown_event
-                if self._stopping or self._cleanup_complete:
-                    shutdown_event.set()
-                await shutdown_event.wait()
-                return
+                if startup.status is RuntimeServiceStatus.BLOCKED:
+                    shutdown_event = asyncio.Event()
+                    self._shutdown_requested_event = shutdown_event
+                    if self._stopping or self._cleanup_complete:
+                        shutdown_event.set()
+                    await shutdown_event.wait()
+                    return
+                await self._retry_degraded_startup()
+                if not self._accepting_work:
+                    return
+                startup = self._startup_result
             while self._accepting_work:
                 try:
                     deadline = await self._wait_for_next(after=self._last_deadline_at)
@@ -2978,6 +3009,87 @@ class RuntimeLifecycleService:
                 await self.stop()
             finally:
                 self._release_schedule_owner(schedule_owner)
+
+    async def _retry_degraded_startup(self) -> None:
+        shutdown_event = asyncio.Event()
+        self._shutdown_requested_event = shutdown_event
+        if self._stopping or self._cleanup_complete:
+            return
+        attempt = 0
+        while not self._stopping and self._status is RuntimeServiceStatus.DEGRADED:
+            delay = min(
+                300.0,
+                self._retry_interval_seconds * (1, 2, 4, 10)[min(attempt, 3)],
+            )
+            self._retry_at = _canonical_shanghai(self._clock.now()) + timedelta(
+                seconds=delay
+            )
+            try:
+                await asyncio.wait_for(
+                    shutdown_event.wait(), timeout=delay
+                )
+                return
+            except TimeoutError:
+                pass
+            if self._stopping:
+                return
+            work_task = asyncio.create_task(self._recheck_degraded_startup())
+            self._work_tasks.add(work_task)
+            try:
+                await work_task
+            except asyncio.CancelledError:
+                if self._stopping:
+                    return
+                raise
+            finally:
+                self._work_tasks.discard(work_task)
+            attempt += 1
+
+    async def _recheck_degraded_startup(self) -> None:
+        stage = "CONFIGURATION_INVALID"
+        try:
+            await self._invoke(self._validate_configuration)
+            stage = "ACTIVE_PLAN_LOAD_FAILED"
+            active_symbols = self._active_symbols(await self._invoke(self._load_active_symbols))
+            stage = "PROVIDER_PROBE_FAILED"
+            capabilities = await self._invoke(self._probe_capabilities)
+            if not isinstance(capabilities, ProviderCapabilities):
+                raise TypeError("provider probe must return ProviderCapabilities")
+            trade_date = _canonical_shanghai(self._clock.now()).date()
+            stage = "REFERENCE_REFRESH_FAILED"
+            await self._invoke(self._refresh_references, trade_date)
+            stage = "STARTUP_RECOVERY_FAILED"
+            await self._invoke(self._recover_startup, trade_date)
+            stage = "SCHEDULE_UNAVAILABLE"
+            next_deadline = self._scheduler.next_deadline(after=self._last_deadline_at)
+            if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):
+                raise TypeError("scheduler must return MarketDeadline or None")
+            if not self._can_schedule(capabilities):
+                self._degraded_reason = "PROVIDER_UNAVAILABLE"
+                return
+            if next_deadline is None:
+                self._degraded_reason = "SCHEDULE_UNAVAILABLE"
+                return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self._degraded_reason = stage
+            return
+        if self._stopping:
+            return
+        self._status = RuntimeServiceStatus.RUNNING
+        self._degraded_reason = None
+        self._read_only = False
+        self._accepting_work = True
+        self._next_poll_at = next_deadline.due_at
+        self._retry_at = None
+        self._startup_result = RuntimeStartupResult(
+            status=RuntimeServiceStatus.RUNNING,
+            read_only=False,
+            active_symbols=active_symbols,
+            capabilities=capabilities,
+            next_poll_at=next_deadline.due_at,
+        )
 
     def _advance_progress_deadline(self, deadline: MarketDeadline) -> None:
         """Publish the following due time before current provider work can block."""
@@ -3027,6 +3139,8 @@ class RuntimeLifecycleService:
 
         self._stopping = True
         self._status = RuntimeServiceStatus.STOPPING
+        self._degraded_reason = None
+        self._retry_at = None
         self._accepting_work = False
         self._heartbeat_stop.set()
         if self._shutdown_requested_event is not None:
@@ -3214,6 +3328,7 @@ class RuntimeLifecycleService:
         self._accepting_work = False
         self._read_only = True
         self._status = RuntimeServiceStatus.DEGRADED
+        self._degraded_reason = "HEARTBEAT_FAILED"
         stop_waiter = asyncio.create_task(self.stop())
         stop_waiter.add_done_callback(
             lambda finished: None if finished.cancelled() else finished.exception()
