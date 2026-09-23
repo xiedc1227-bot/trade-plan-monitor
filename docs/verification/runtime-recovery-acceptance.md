@@ -2,6 +2,17 @@
 
 > IN PROGRESS — business step 1 is not accepted. This report accumulates evidence for connected outcomes, not a separate completion milestone per helper. No production recovery or deployment approval.
 
+## Five-day admission foundation — 2026-09-23
+
+On `codex/consolidate-r19-r32`, local-only migration `0022_runtime_liveness` and a durable singleton heartbeat/classifier establish the approved exact 120-hour boundary. Missing/corrupt/noncanonical evidence, clock reversal and legacy active plans without a heartbeat cannot be silently admitted. A separate opt-in unit-of-work transaction now expires at most the runtime-supported 10 active plans, their pending official closes and existing delivery-eligibility receipts; it retains holdings, old results and alerts. A single outage audit retains the last-alive and decision times. Repeating expiry adds no new plan/close audit; an injected failure during the second plan rolls back the first plan, pending-close deletions, event and audits. A pre-upgrade alert without an eligibility receipt remains excluded by the production dispatcher's current-plan join after deactivation, but a durable per-alert terminal receipt for such legacy rows is still future work.
+
+- RED: `test_runtime_liveness.py` initially failed collection before the new module; a parseable noncanonical timestamp case failed before strict decoding. `test_runtime_plan_expiry.py` initially failed without the unit-of-work method; aggregate audit and receipt-suppression cases failed before implementation.
+- GREEN/affected regression: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py tests/integration/test_runtime_liveness.py tests/integration/test_sqlite_repositories.py tests/integration/test_runtime_lifecycle.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_notification_delivery.py -q` — 229 passed, 1 existing Starlette/httpx warning, 25.55 seconds.
+- After adding a rollback assertion for a held receipt, `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py -q` — 5 passed; the broader successful run above predates only this test assertion.
+- `.\.venv\Scripts\python.exe -m ruff check` on changed runtime/state/test files — passed. No real provider, sender, user database or deployment was used.
+
+This is not production startup protection: no running heartbeat cadence or startup-before-dispatch call exists yet. A short outage still needs verified recent provenance and historical-state reconstruction. V1d, C2 and business step 1 remain open; the complete non-live suite and four known baseline failures remain final gates.
+
 ## Actual process-restart slice — 2026-09-23
 
 The opt-in offline legacy path was exercised through separate spawned Python processes sharing only a temporary SQLite file. D1 and D2 each committed in a fresh process; two further fresh processes observed duplicates only. A forced process exit at the evaluator boundary left no result, risk transition or alert intent; a new process committed D1 once, and another observed a duplicate. The HOLD eligibility records remained present. This tests interpreter/process restart, not merely engine disposal or SQLite reopen. The first trial's fixed observation clock and an incorrect test-only SQL column caused test-fixture failures; both were corrected without changing runtime code.

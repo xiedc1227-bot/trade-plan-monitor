@@ -2,6 +2,17 @@
 
 > IN PROGRESS — 业务第 1 步尚未验收。本报告按完整成果累积证据，不为每个辅助组件另立完成里程碑。不代表生产恢复或部署批准。
 
+## 五天准入基础 — 2026-09-23
+
+在 `codex/consolidate-r19-r32` 上，仅本地测试的迁移 `0022_runtime_liveness` 与持久单行心跳/判定器确定了获批的准确 120 小时边界。缺失/损坏/非规范证据、时钟回拨，以及旧库中有活动计划却没有心跳时，都不能静默准入。另一个可选工作单元事务目前可作废运行程序所支持的最多 10 个活动计划及其待收盘任务和已有投递资格记录；持仓、旧结果及提醒保留。单条超时审计保留最后存活及判定时间。重复作废不增加计划/收盘审计；第二个计划处理中注入失败会回滚第一个计划、待收盘删除、事件与审计。没有资格记录的升级前提醒，在停用后仍受生产发送器的活动计划关联门禁阻止；为此类旧行持久记录逐提醒的终态回执尚待后续实现。
+
+- RED：`test_runtime_liveness.py` 在新模块不存在时首先收集失败；可解析但非规范的时间戳测试在严格解码前失败。`test_runtime_plan_expiry.py` 在工作单元方法不存在时先失败；总审计与资格抑制用例也先失败再实现。
+- GREEN/受影响回归：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py tests/integration/test_runtime_liveness.py tests/integration/test_sqlite_repositories.py tests/integration/test_runtime_lifecycle.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_notification_delivery.py -q` — 229 通过，1 项既有 Starlette/httpx 警告，25.55 秒。
+- 补充暂缓资格回滚断言后，执行 `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py -q` — 5 通过；上方较大范围的成功运行只早于这项测试断言。
+- 对本轮修改的运行/状态/测试文件执行 `.\.venv\Scripts\python.exe -m ruff check` — 通过。未使用真实行情源、发送器、用户数据库或部署。
+
+这还不是生产启动保护：尚无运行期间定期心跳，也未在发送前的启动顺序中调用作废门禁。短时中断仍需经验证的近期来源和历史状态重建。V1d、C2 和业务第 1 步仍未关闭；完整非 live 测试及已知四项基线失败仍是最终门禁。
+
 ## 实际进程重启切片 — 2026-09-23
 
 可选的旧版离线路径在多个独立启动的 Python 进程中，共用一份临时 SQLite 文件。D1、D2 各自在新进程提交；后续两个新进程只得到重复结果。评估器边界强制退出后，没有留下结果、风险变更或提醒意图；新进程将 D1 提交一次，另一个新进程只得到重复结果。HOLD 投递资格记录仍在。这验证了解释器/进程重启，不只是释放引擎或重开 SQLite。首次运行中固定不变的观察时钟及测试专用 SQL 列名错误导致测试夹具失败；两者均已修正，未改运行源码。
