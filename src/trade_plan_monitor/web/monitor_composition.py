@@ -25,6 +25,7 @@ from trade_plan_monitor.market_data.models import (
 )
 from trade_plan_monitor.market_data.sessions import SourceTimeLabel
 from trade_plan_monitor.notifications.channels import InAppChannel
+from trade_plan_monitor.notifications.delivery_eligibility import DeliveryMetadataError
 from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
 from trade_plan_monitor.runtime.clock import Clock, SystemClock
 from trade_plan_monitor.runtime.health import (
@@ -48,6 +49,11 @@ from trade_plan_monitor.runtime.request_control import (
 )
 from trade_plan_monitor.runtime.scheduler import MarketDeadline, MarketSessionScheduler
 from trade_plan_monitor.runtime.service import RuntimeLifecycleService
+from trade_plan_monitor.state.alert_invalidation_sweep import (
+    MAX_SWEEP_BATCH,
+    latest_alert_sequence,
+    sweep_invalidated_alerts,
+)
 from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
@@ -507,6 +513,8 @@ class _ProductionRuntimeState:
         self._on_reference_failure = on_reference_failure
         self._liveness = RuntimeLivenessRepository(session_factory)
         self._liveness_revision: int | None = None
+        self._alert_sweep_cursor = 0
+        self._alert_sweep_target = 0
 
     def next_index_recovery_at(self) -> datetime | None:
         return (
@@ -539,6 +547,9 @@ class _ProductionRuntimeState:
         self._liveness_revision = self._liveness.touch(
             observed_at, expected_revision=snapshot.revision
         ).revision
+        with self._session_factory() as session:
+            self._alert_sweep_target = latest_alert_sequence(session)
+        self._alert_sweep_cursor = 0
 
     async def heartbeat(self) -> None:
         await to_thread.run_sync(self._heartbeat_sync)
@@ -547,9 +558,33 @@ class _ProductionRuntimeState:
         revision = self._liveness_revision
         if revision is None:
             raise RuntimeError("runtime heartbeat requires successful admission")
+        observed_at = self._clock.now()
         self._liveness_revision = self._liveness.touch(
-            self._clock.now(), expected_revision=revision
+            observed_at, expected_revision=revision
         ).revision
+        if self._alert_sweep_cursor >= self._alert_sweep_target:
+            return
+        try:
+            with self._session_factory.begin() as session:
+                batch = sweep_invalidated_alerts(
+                    session,
+                    after_sequence=self._alert_sweep_cursor,
+                    through_sequence=self._alert_sweep_target,
+                    expected_liveness_revision=self._liveness_revision,
+                    now=observed_at,
+                )
+        except (DeliveryMetadataError, SQLAlchemyError, TypeError, ValueError):
+            _LOGGER.warning("Alert invalidation sweep will retry: code=ALERT_SWEEP_FAILED")
+            return
+        self._alert_sweep_cursor = (
+            self._alert_sweep_target
+            if batch.scanned < MAX_SWEEP_BATCH else batch.next_sequence
+        )
+        if batch.unclassified:
+            _LOGGER.warning(
+                "Alert invalidation sweep retained unclassified events: count=%d",
+                batch.unclassified,
+            )
 
     def _open_database_sync(self) -> None:
         _reject_incompatible_database(self._database_path)

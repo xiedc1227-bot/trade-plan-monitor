@@ -16,6 +16,7 @@ from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import ExplicitTradePlan, TradePlan
 from trade_plan_monitor.notifications.channels import ConsoleChannel
 from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
+from trade_plan_monitor.notifications.render import render_alert
 from trade_plan_monitor.runtime.clock import SHANGHAI
 from trade_plan_monitor.state.database import (
     create_session_factory,
@@ -538,6 +539,360 @@ def test_production_admission_expires_long_interruption_before_loading_active_pl
             assert session.scalar(select(PositionLot.remaining_qty)) == 1000
             assert session.scalar(select(func.count()).select_from(AuditLog)) == 5
         assert RuntimeLivenessRepository(factory).load().last_alive_at == NOW
+    finally:
+        engine.dispose()
+
+
+def test_long_outage_sweeps_receiptless_old_alert_after_transient_failure(
+    tmp_path, monkeypatch
+):
+    from test_notification_delivery import _payload
+
+    from trade_plan_monitor.notifications.delivery_eligibility import DeliveryMetadataError
+    from trade_plan_monitor.web import monitor_composition
+
+    database = tmp_path / "state.db"
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW - timedelta(hours=121))
+    payload = _payload(901)
+    with factory.begin() as session:
+        version = session.get(PlanVersion, str(UUID(int=11)))
+        version.plan_id = payload.plan_id
+        version.version = payload.plan_version
+        version.plan_hash = payload.plan_hash
+        session.add(
+            AlertEvent(
+                id=str(payload.event_id),
+                sequence=1,
+                dedup_key=payload.dedup_key,
+                payload_json=json.dumps(payload.model_dump(mode="json", round_trip=True)),
+                message_text=render_alert(payload),
+                created_at=NOW.isoformat(),
+                acknowledged_at=None,
+            )
+        )
+
+    class Clock:
+        def now(self):
+            return NOW
+
+    state = _ProductionRuntimeState(
+        config_path=tmp_path / "config.yaml",
+        database_path=database,
+        engine=engine,
+        session_factory=factory,
+        clock=Clock(),
+        request_controller=object(),
+    )
+    try:
+        state._admit_sync()
+        with factory() as session:
+            assert session.get(AlertDeliveryEligibility, str(payload.event_id)) is None
+        original_sweep = monitor_composition.sweep_invalidated_alerts
+
+        def fail_once(*args, **kwargs):
+            raise DeliveryMetadataError("injected transient failure")
+
+        monkeypatch.setattr(monitor_composition, "sweep_invalidated_alerts", fail_once)
+        state._heartbeat_sync()
+        with factory() as session:
+            assert session.get(AlertDeliveryEligibility, str(payload.event_id)) is None
+        monkeypatch.setattr(monitor_composition, "sweep_invalidated_alerts", original_sweep)
+        state._heartbeat_sync()
+        with factory() as session:
+            receipt = session.get(AlertDeliveryEligibility, str(payload.event_id))
+            assert receipt.status == "SUPPRESS"
+            assert receipt.reason == "ACTIVE_IDENTITY_INVALID"
+            assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+    finally:
+        engine.dispose()
+
+
+def test_manual_legacy_invalidation_sweeps_receiptless_alert_after_restart(tmp_path):
+    from test_notification_delivery import _payload
+
+    database = tmp_path / "state.db"
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW, initialize=False)
+    payload = _payload(905)
+    with factory.begin() as session:
+        version = session.get(PlanVersion, str(UUID(int=11)))
+        version.plan_id = payload.plan_id
+        version.version = payload.plan_version
+        version.plan_hash = payload.plan_hash
+        session.add(
+            AlertEvent(
+                id=str(payload.event_id),
+                sequence=1,
+                dedup_key=payload.dedup_key,
+                payload_json=json.dumps(payload.model_dump(mode="json", round_trip=True)),
+                message_text=render_alert(payload),
+                created_at=NOW.isoformat(),
+                acknowledged_at=None,
+            )
+        )
+    with factory() as session:
+        fingerprint = preview_legacy_invalidation(session).fingerprint
+    with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
+        work.invalidate_legacy_plans(expected_fingerprint=fingerprint)
+        work.commit()
+
+    class Clock:
+        def now(self):
+            return NOW
+
+    restarted = _ProductionRuntimeState(
+        config_path=tmp_path / "config.yaml",
+        database_path=database,
+        engine=engine,
+        session_factory=factory,
+        clock=Clock(),
+        request_controller=object(),
+    )
+    try:
+        restarted._admit_sync()
+        restarted._heartbeat_sync()
+        with factory() as session:
+            receipt = session.get(AlertDeliveryEligibility, str(payload.event_id))
+            assert receipt.status == "SUPPRESS"
+            assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+    finally:
+        engine.dispose()
+
+
+def test_old_alert_sweep_is_bounded_and_retries_without_duplicate_receipts(
+    tmp_path, monkeypatch
+):
+    from test_notification_delivery import _payload
+
+    from trade_plan_monitor.notifications.delivery_eligibility import (
+        DeliveryEligibilityRepository,
+        DeliveryMetadataError,
+    )
+    from trade_plan_monitor.state.alert_invalidation_sweep import sweep_invalidated_alerts
+
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW - timedelta(hours=121))
+    with factory.begin() as session:
+        first = _payload(911)
+        version = session.get(PlanVersion, str(UUID(int=11)))
+        version.plan_id = first.plan_id
+        version.version = first.plan_version
+        version.plan_hash = first.plan_hash
+        version.status = "SUPERSEDED"
+        session.add(
+            AuditLog(
+                id=str(UUID(int=997)),
+                action="PLAN_DEACTIVATED",
+                entity_type="ACTIVE_PLAN",
+                entity_id=version.symbol,
+                before_hash=None,
+                after_hash=None,
+                details_json=json.dumps(
+                    {"planVersionId": version.id, "cause": "OUTAGE_OVER_120_HOURS"}
+                ),
+                created_at=NOW.isoformat(),
+            )
+        )
+        for sequence in range(1, 4):
+            payload = _payload(910 + sequence)
+            session.add(
+                AlertEvent(
+                    id=str(payload.event_id),
+                    sequence=sequence,
+                    dedup_key=payload.dedup_key,
+                    payload_json=json.dumps(payload.model_dump(mode="json", round_trip=True)),
+                    message_text=render_alert(payload),
+                    created_at=NOW.isoformat(),
+                    acknowledged_at=None,
+                )
+            )
+    liveness_revision = RuntimeLivenessRepository(factory).load().revision
+    try:
+        with factory.begin() as session, pytest.raises(DeliveryMetadataError, match="stale"):
+            sweep_invalidated_alerts(
+                session,
+                after_sequence=0,
+                through_sequence=3,
+                expected_liveness_revision=liveness_revision + 1,
+                now=NOW,
+                limit=2,
+            )
+        original_suppress = DeliveryEligibilityRepository.suppress_invalidated_identity
+        calls = 0
+
+        def fail_on_second(repository, event_id, **identity):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("injected sweep interruption")
+            return original_suppress(repository, event_id, **identity)
+
+        monkeypatch.setattr(
+            DeliveryEligibilityRepository, "suppress_invalidated_identity", fail_on_second
+        )
+        with pytest.raises(RuntimeError, match="injected sweep interruption"):
+            with factory.begin() as session:
+                sweep_invalidated_alerts(
+                    session, after_sequence=0, through_sequence=3,
+                    expected_liveness_revision=liveness_revision, now=NOW, limit=2
+                )
+        monkeypatch.setattr(
+            DeliveryEligibilityRepository, "suppress_invalidated_identity", original_suppress
+        )
+        with factory() as session:
+            assert session.scalar(select(func.count()).select_from(AlertDeliveryEligibility)) == 0
+        with factory.begin() as session:
+            first_batch = sweep_invalidated_alerts(
+                session, after_sequence=0, through_sequence=3,
+                expected_liveness_revision=liveness_revision, now=NOW, limit=2
+            )
+        assert first_batch.scanned == 2
+        assert first_batch.next_sequence == 2
+        assert first_batch.suppressed == 2
+        with factory.begin() as session:
+            second_batch = sweep_invalidated_alerts(
+                session,
+                after_sequence=first_batch.next_sequence,
+                through_sequence=3,
+                expected_liveness_revision=liveness_revision,
+                now=NOW,
+                limit=2,
+            )
+        assert second_batch.scanned == 1
+        assert second_batch.next_sequence == 3
+        assert second_batch.suppressed == 1
+        with factory.begin() as session:
+            retry = sweep_invalidated_alerts(
+                session, after_sequence=0, through_sequence=3,
+                expected_liveness_revision=liveness_revision, now=NOW, limit=2
+            )
+        assert retry.suppressed == 0
+        with factory() as session:
+            assert session.scalar(select(func.count()).select_from(AlertDeliveryEligibility)) == 3
+    finally:
+        engine.dispose()
+
+
+def test_old_alert_sweep_audits_corrupt_alert_without_losing_later_valid_one(tmp_path):
+    from test_notification_delivery import _payload
+
+    from trade_plan_monitor.state.alert_invalidation_sweep import sweep_invalidated_alerts
+
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW - timedelta(hours=121))
+    payload = _payload(921)
+    with factory.begin() as session:
+        version = session.get(PlanVersion, str(UUID(int=11)))
+        version.plan_id = payload.plan_id
+        version.version = payload.plan_version
+        version.plan_hash = payload.plan_hash
+        version.status = "SUPERSEDED"
+        session.add(
+            AuditLog(
+                id=str(UUID(int=998)),
+                action="PLAN_DEACTIVATED",
+                entity_type="ACTIVE_PLAN",
+                entity_id=version.symbol,
+                before_hash=None,
+                after_hash=None,
+                details_json=json.dumps(
+                    {"planVersionId": version.id, "cause": "MANUAL_LEGACY_INVALIDATION"}
+                ),
+                created_at=NOW.isoformat(),
+            )
+        )
+        session.add_all(
+            [
+                AlertEvent(
+                    id=str(UUID(int=920)),
+                    sequence=1,
+                    dedup_key="f" * 64,
+                    payload_json="{",
+                    message_text="unreadable",
+                    created_at=NOW.isoformat(),
+                    acknowledged_at=None,
+                ),
+                AlertEvent(
+                    id=str(payload.event_id),
+                    sequence=2,
+                    dedup_key=payload.dedup_key,
+                    payload_json=json.dumps(payload.model_dump(mode="json", round_trip=True)),
+                    message_text=render_alert(payload),
+                    created_at=NOW.isoformat(),
+                    acknowledged_at=None,
+                ),
+            ]
+        )
+    liveness_revision = RuntimeLivenessRepository(factory).load().revision
+    try:
+        with factory.begin() as session:
+            batch = sweep_invalidated_alerts(
+                session, after_sequence=0, through_sequence=2,
+                expected_liveness_revision=liveness_revision, now=NOW, limit=2
+            )
+        assert (batch.scanned, batch.suppressed, batch.unclassified) == (2, 1, 1)
+        with factory() as session:
+            assert session.get(AlertDeliveryEligibility, str(payload.event_id)).status == "SUPPRESS"
+            audit = session.scalar(
+                select(AuditLog).where(AuditLog.action == "ALERT_INVALIDATION_UNCLASSIFIED")
+            )
+            assert json.loads(audit.details_json) == {
+                "reason": "CANONICAL_ALERT_INVALID",
+                "sequence": 1,
+            }
+            assert "unreadable" not in audit.details_json
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("version_status", ["ACTIVE", "SUPERSEDED"])
+def test_old_alert_sweep_requires_invalidation_evidence(tmp_path, version_status):
+    from test_notification_delivery import _payload
+
+    from trade_plan_monitor.state.alert_invalidation_sweep import sweep_invalidated_alerts
+
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW)
+    payload = _payload(931)
+    with factory.begin() as session:
+        version = session.get(PlanVersion, str(UUID(int=11)))
+        version.plan_id = payload.plan_id
+        version.version = payload.plan_version
+        version.plan_hash = payload.plan_hash
+        version.status = version_status
+        session.add(
+            AlertEvent(
+                id=str(payload.event_id),
+                sequence=1,
+                dedup_key=payload.dedup_key,
+                payload_json=json.dumps(payload.model_dump(mode="json", round_trip=True)),
+                message_text=render_alert(payload),
+                created_at=NOW.isoformat(),
+                acknowledged_at=None,
+            )
+        )
+    liveness_revision = RuntimeLivenessRepository(factory).load().revision
+    try:
+        with factory.begin() as session:
+            batch = sweep_invalidated_alerts(
+                session, after_sequence=0, through_sequence=1,
+                expected_liveness_revision=liveness_revision, now=NOW
+            )
+        assert (batch.scanned, batch.suppressed, batch.unclassified) == (1, 0, 0)
+        with factory() as session:
+            assert session.get(AlertDeliveryEligibility, str(payload.event_id)) is None
+            assert session.scalar(select(func.count()).select_from(AuditLog)) == 0
     finally:
         engine.dispose()
 

@@ -1688,6 +1688,65 @@ def test_plan_rotation_and_deactivation_are_blocked_while_official_close_is_pend
         engine.dispose()
 
 
+@pytest.mark.parametrize("cause", ["OUTAGE_OVER_120_HOURS", "MANUAL_LEGACY_INVALIDATION"])
+def test_expired_plan_version_cannot_be_reactivated(tmp_path: Path, cause: str) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+    ready = validate_trade_plan(plan, available_market_evidence=ALL_MARKET_EVIDENCE)
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            work.plans.activate(plan, expected_revision=0, validation=ready)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            work.plans.deactivate(plan.symbol, expected_revision=1, cause=cause)
+            work.commit()
+        with pytest.raises(PlanActivationBlockedError, match="new plan version"):
+            with _unit_of_work(engine) as work:
+                work.plans.activate(plan, expected_revision=2, validation=ready)
+                work.commit()
+        with _unit_of_work(engine) as work:
+            assert work.plans.get_active(plan.symbol) is None
+            assert work.plans.get_activation_state(plan.symbol).revision == 2
+        with create_session_factory(engine).begin() as session:
+            deactivation = session.scalar(
+                select(AuditLog).where(AuditLog.action == "PLAN_DEACTIVATED")
+            )
+            deactivation.details_json = "{"
+        with pytest.raises(RepositoryError, match="deactivation audit"):
+            with _unit_of_work(engine) as work:
+                work.plans.activate(plan, expected_revision=2, validation=ready)
+                work.commit()
+    finally:
+        engine.dispose()
+
+
+def test_normally_deactivated_plan_version_may_be_reactivated(tmp_path: Path) -> None:
+    engine = create_sqlite_engine(tmp_path / "monitor.db")
+    plan, source_text = _sample_plan()
+    ready = validate_trade_plan(plan, available_market_evidence=ALL_MARKET_EVIDENCE)
+    try:
+        upgrade_database(engine)
+        with _unit_of_work(engine) as work:
+            work.plans.save_draft(plan, source_text=source_text)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            work.plans.activate(plan, expected_revision=0, validation=ready)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            work.plans.deactivate(plan.symbol, expected_revision=1)
+            work.commit()
+        with _unit_of_work(engine) as work:
+            restored = work.plans.activate(plan, expected_revision=2, validation=ready)
+            work.commit()
+        assert restored.revision == 3
+    finally:
+        engine.dispose()
+
+
 def test_plan_deactivation_revision_and_review_state_survive_restart(
     tmp_path: Path,
 ) -> None:

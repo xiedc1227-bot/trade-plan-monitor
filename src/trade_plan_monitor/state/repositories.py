@@ -109,6 +109,10 @@ from trade_plan_monitor.state.models import (
 from trade_plan_monitor.state.models import (
     MinuteBar as MinuteBarRow,
 )
+from trade_plan_monitor.state.plan_invalidation_evidence import (
+    PlanInvalidationEvidenceError,
+    was_terminally_invalidated,
+)
 from trade_plan_monitor.state.position_inventory_audit import (
     InventoryAuditSource,
     confirmation_snapshot,
@@ -1115,6 +1119,7 @@ class PlanRepository:
                 target = self.get_version(plan.plan_id, plan.version)
                 if target is None or target.plan_hash != plan_sha256(plan):
                     raise PlanVersionNotFoundError("Plan version was not found")
+                self._reject_invalidated_plan_version(target)
                 unresolved_close = self._session.scalar(
                     select(PendingOfficialClose).where(PendingOfficialClose.symbol == plan.symbol)
                 )
@@ -1352,6 +1357,18 @@ class PlanRepository:
             .values(revision=PlanActivationState.revision)
             .execution_options(synchronize_session=False)
         )
+
+    def _reject_invalidated_plan_version(self, target: PlanVersionRecord) -> None:
+        try:
+            invalidated = was_terminally_invalidated(
+                self._session, symbol=target.symbol, plan_version_id=target.id
+            )
+        except PlanInvalidationEvidenceError:
+            raise RepositoryError("Stored plan deactivation audit is invalid") from None
+        if invalidated:
+            raise PlanActivationBlockedError(
+                "Invalidated plan cannot be reactivated; create a new plan version"
+            )
 
     @staticmethod
     def _consistent_activation_revision(
