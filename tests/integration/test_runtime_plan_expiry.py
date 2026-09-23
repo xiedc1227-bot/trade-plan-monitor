@@ -31,6 +31,7 @@ from trade_plan_monitor.state.models import (
     PlanVersion,
     PositionLot,
 )
+from trade_plan_monitor.state.repositories import PlanRepository
 from trade_plan_monitor.state.runtime_liveness import (
     RuntimeLivenessError,
     RuntimeLivenessRepository,
@@ -62,6 +63,24 @@ def _admit_in_child(database: str, exit_after_commit: int) -> None:
     )
     state._admit_sync()
     os._exit(exit_after_commit)
+
+
+def _pause_expiry_after_first_plan(database: str, reached) -> None:
+    import time
+
+    original_deactivate = PlanRepository.deactivate
+
+    def pause_after_deactivate(self, symbol, *, expected_revision, cause=None):
+        result = original_deactivate(
+            self, symbol, expected_revision=expected_revision, cause=cause
+        )
+        if symbol == SYMBOLS[0]:
+            reached.set()
+            time.sleep(30)
+        return result
+
+    PlanRepository.deactivate = pause_after_deactivate
+    _admit_in_child(database, 0)
 
 
 def _seed(factory, *, last_alive_at, initialize=True):
@@ -195,6 +214,94 @@ def test_expiry_survives_process_exit_and_restart_without_duplicate_audit(tmp_pa
             assert session.scalar(select(PositionLot.remaining_qty)) == 1000
     finally:
         reopened.dispose()
+
+
+def test_process_kill_mid_expiry_rolls_back_every_record_then_restart_expires_once(tmp_path):
+    database = tmp_path / "state.db"
+    old_alive = NOW - timedelta(hours=121)
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=old_alive)
+    event_id = str(UUID(int=402))
+    with factory.begin() as session:
+        session.add(
+            AlertEvent(
+                id=event_id,
+                sequence=1,
+                dedup_key="a" * 64,
+                payload_json="{}",
+                message_text="held alert",
+                created_at=old_alive.isoformat(),
+                acknowledged_at=None,
+            )
+        )
+        session.flush()
+        session.add(
+            AlertDeliveryEligibility(
+                event_id=event_id,
+                schema_version=1,
+                revision=0,
+                delivery_class="STATE_RISK",
+                source_cutoff=None,
+                expires_at=None,
+                status="HOLD",
+                reason="RECOVERY_REQUIRED",
+                barrier_json=None,
+                result_hash=None,
+                updated_at=old_alive.isoformat(),
+            )
+        )
+    engine.dispose()
+
+    context = get_context("spawn")
+    reached = context.Event()
+    child = context.Process(
+        target=_pause_expiry_after_first_plan,
+        args=(str(database), reached),
+    )
+    child.start()
+    try:
+        assert reached.wait(timeout=15), f"child exited before expiry pause: {child.exitcode}"
+        child.terminate()
+        child.join(timeout=10)
+        assert not child.is_alive()
+    finally:
+        if child.is_alive():
+            child.terminate()
+            child.join(timeout=5)
+
+    reopened = create_sqlite_engine(database)
+    try:
+        sessions = create_session_factory(reopened)
+        with sessions() as session:
+            assert session.scalar(select(func.count()).select_from(ActivePlan)) == 2
+            assert session.scalar(select(func.count()).select_from(PendingOfficialClose)) == 2
+            assert session.scalar(select(func.count()).select_from(AuditLog)) == 0
+            assert session.get(AlertDeliveryEligibility, event_id).status == "HOLD"
+        assert RuntimeLivenessRepository(sessions).load().last_alive_at == old_alive
+    finally:
+        reopened.dispose()
+
+    restarted = context.Process(target=_admit_in_child, args=(str(database), 0))
+    restarted.start()
+    restarted.join(timeout=15)
+    if restarted.is_alive():
+        restarted.terminate()
+        restarted.join(timeout=5)
+        pytest.fail("runtime admission restart did not finish")
+    assert restarted.exitcode == 0
+
+    verified = create_sqlite_engine(database)
+    try:
+        sessions = create_session_factory(verified)
+        with sessions() as session:
+            assert session.scalar(select(func.count()).select_from(ActivePlan)) == 0
+            assert session.scalar(select(func.count()).select_from(AuditLog)) == 5
+            assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+            assert session.get(AlertDeliveryEligibility, event_id).status == "SUPPRESS"
+    finally:
+        verified.dispose()
 
 
 def test_production_admission_uses_one_observation_at_exact_120_hour_boundary(tmp_path):
