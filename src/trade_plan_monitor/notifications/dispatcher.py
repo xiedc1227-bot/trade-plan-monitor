@@ -32,6 +32,7 @@ from trade_plan_monitor.state.models import PlanVersionStatus
 SessionFactory = Callable[[], Session]
 Clock = Callable[[], datetime]
 IdFactory = Callable[[], str]
+Admission = Callable[[NotificationEvent, datetime], bool]
 
 DEFAULT_RETRY_BACKOFF = (
     timedelta(seconds=30),
@@ -114,6 +115,7 @@ class NotificationDispatcher:
         id_factory: IdFactory | None = None,
         retry_backoff: tuple[timedelta, ...] = DEFAULT_RETRY_BACKOFF,
         enforce_current_plan: bool = False,
+        admission: Admission | None = None,
     ) -> None:
         if not callable(session_factory):
             raise TypeError("session_factory must be callable")
@@ -124,6 +126,10 @@ class NotificationDispatcher:
         if type(enforce_current_plan) is not bool:
             raise TypeError("enforce_current_plan must be a boolean")
         self._enforce_current_plan = enforce_current_plan
+        if admission is not None and not callable(admission):
+            raise TypeError("admission must be callable")
+        self._admission = admission
+        self._scan_after: dict[DeliveryChannel, int] = {}
 
         configured = (
             (InAppChannel(), ConsoleChannel()) if channels is None else _bounded_channels(channels)
@@ -215,6 +221,13 @@ class NotificationDispatcher:
         if claim is None:
             return None
 
+        # The claim and the channel call are separate transactions. A plan, risk
+        # result or holding can change in between, so the final check is here.
+        if self._admission is not None and not self._event_is_delivery_allowed(
+            event, self._now()
+        ):
+            return None
+
         try:
             result = await channel.deliver(event)
         except Exception:
@@ -264,7 +277,7 @@ class NotificationDispatcher:
                 latest.attempt == latest_number,
             ),
         )
-        if self._enforce_current_plan:
+        if self._enforce_current_plan and self._admission is None:
             statement = statement.join(
                 ActivePlanRow,
                 ActivePlanRow.symbol
@@ -307,10 +320,18 @@ class NotificationDispatcher:
             .order_by(AlertEventRow.sequence)
             .limit(limit)
         )
+        if self._admission is not None:
+            statement = statement.where(
+                AlertEventRow.sequence > self._scan_after.get(channel.channel, 0)
+            )
         loaded: tuple[NotificationEvent, ...] | None = None
         try:
             with self._session_factory() as session:
                 rows = session.scalars(statement).all()
+                if self._admission is not None:
+                    self._scan_after[channel.channel] = (
+                        rows[-1].sequence if rows else 0
+                    )
                 outbox = AlertOutbox(
                     session,
                     clock=self._clock,
@@ -320,7 +341,7 @@ class NotificationDispatcher:
                 loaded = tuple(
                     event
                     for event in candidates
-                    if not self._enforce_current_plan
+                    if self._admission is not None or not self._enforce_current_plan
                     or outbox.is_delivery_allowed(event, market_date=now.date())
                 )[:limit]
         except OutboxError, SQLAlchemyError, TypeError, ValueError:
@@ -345,6 +366,16 @@ class NotificationDispatcher:
         return loaded
 
     def _event_is_delivery_allowed(self, event: NotificationEvent, now: datetime) -> bool:
+        if self._admission is not None:
+            try:
+                allowed = self._admission(event, now)
+            except DeliveryDispatchError:
+                raise
+            except Exception:
+                raise DeliveryStorageError("Alert delivery authority is unavailable") from None
+            if type(allowed) is not bool:
+                raise DeliveryStorageError("Alert delivery authority is invalid")
+            return allowed
         if not self._enforce_current_plan:
             return True
         allowed: bool | None = None
