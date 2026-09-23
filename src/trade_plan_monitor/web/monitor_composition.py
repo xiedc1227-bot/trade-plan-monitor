@@ -54,6 +54,7 @@ from trade_plan_monitor.state.database import (
     upgrade_database,
 )
 from trade_plan_monitor.state.models import AlertEvent, DeliveryAttempt, PlanVersionStatus
+from trade_plan_monitor.state.runtime_liveness import RuntimeLivenessRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
 from trade_plan_monitor.web.backtest_pagination import BacktestApiCursorSigner
@@ -454,6 +455,8 @@ class _ProductionRuntimeState:
         self._stage_retry_at: dict[str, datetime] = {}
         self._dispatcher = dispatcher
         self._on_reference_failure = on_reference_failure
+        self._liveness = RuntimeLivenessRepository(session_factory)
+        self._liveness_revision: int | None = None
 
     def next_index_recovery_at(self) -> datetime | None:
         return (
@@ -467,6 +470,35 @@ class _ProductionRuntimeState:
 
     async def open_database(self) -> None:
         await to_thread.run_sync(self._open_database_sync)
+
+    async def admit(self) -> None:
+        await to_thread.run_sync(self._admit_sync)
+
+    def _admit_sync(self) -> None:
+        snapshot = self._liveness.load()
+        if snapshot is None:
+            snapshot = self._liveness.initialize_empty(self._clock.now())
+        else:
+            with self.unit_of_work_factory() as work:
+                work.expire_active_plans_after_interruption()
+                work.commit()
+            snapshot = self._liveness.load()
+            if snapshot is None:
+                raise RuntimeError("runtime liveness disappeared after admission")
+        self._liveness_revision = self._liveness.touch(
+            self._clock.now(), expected_revision=snapshot.revision
+        ).revision
+
+    async def heartbeat(self) -> None:
+        await to_thread.run_sync(self._heartbeat_sync)
+
+    def _heartbeat_sync(self) -> None:
+        revision = self._liveness_revision
+        if revision is None:
+            raise RuntimeError("runtime heartbeat requires successful admission")
+        self._liveness_revision = self._liveness.touch(
+            self._clock.now(), expected_revision=revision
+        ).revision
 
     def _open_database_sync(self) -> None:
         _reject_incompatible_database(self._database_path)
@@ -777,6 +809,7 @@ def create_monitor_composition(
             checkpoint_wal=state.checkpoint_wal,
             close_database=state.close_database,
             health_details=state.health_details,
+            liveness_owner=state,
         )
         return lifecycle
 

@@ -63,6 +63,10 @@ def test_heartbeat_advances_monotonically_and_rejects_stale_writer(tmp_path):
     first = repository.initialize_empty(NOW)
     second = repository.touch(NOW + timedelta(seconds=30), expected_revision=first.revision)
     assert second.revision == 1
+
+    with pytest.raises(RuntimeLivenessError, match="interruption exceeds 120 hours"):
+        repository.touch(NOW + timedelta(hours=121), expected_revision=second.revision)
+    assert repository.load() == second
     with pytest.raises(RuntimeLivenessError):
         repository.touch(NOW + timedelta(seconds=31), expected_revision=first.revision)
     with pytest.raises(RuntimeLivenessError):

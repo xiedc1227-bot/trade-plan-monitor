@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from trade_plan_monitor.runtime.clock import _canonical_shanghai
@@ -98,12 +98,26 @@ class RuntimeLivenessRepository:
                     raise RuntimeLivenessError("runtime liveness changed")
                 if observed_at < current.last_alive_at:
                     raise RuntimeLivenessError("runtime clock moved backwards")
-                if observed_at == current.last_alive_at:
-                    return current
-                row.revision += 1
-                row.last_alive_at = observed_at.isoformat()
-                next_revision = row.revision
-            return LivenessSnapshot(next_revision, observed_at)
+                if (
+                    classify_interruption(current.last_alive_at, observed_at)
+                    is InterruptionDecision.EXPIRED
+                ):
+                    raise RuntimeLivenessError("runtime interruption exceeds 120 hours")
+                changed = session.execute(
+                    update(RuntimeLiveness)
+                    .where(
+                        RuntimeLiveness.id == 1,
+                        RuntimeLiveness.revision == expected_revision,
+                    )
+                    .values(
+                        revision=expected_revision + 1,
+                        last_alive_at=observed_at.isoformat(),
+                    )
+                    .execution_options(synchronize_session=False)
+                )
+                if changed.rowcount != 1:
+                    raise RuntimeLivenessError("runtime liveness changed")
+            return LivenessSnapshot(expected_revision + 1, observed_at)
         except RuntimeLivenessError:
             raise
         except Exception:

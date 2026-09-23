@@ -34,6 +34,7 @@ from trade_plan_monitor.state.runtime_liveness import (
     RuntimeLivenessRepository,
 )
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+from trade_plan_monitor.web.monitor_composition import _ProductionRuntimeState
 
 NOW = datetime(2026, 9, 23, 10, tzinfo=SHANGHAI)
 SYMBOLS = ("003043.SZ", "003044.SZ")
@@ -112,6 +113,36 @@ def _seed(factory, *, last_alive_at, initialize=True):
         )
 
 
+def test_production_admission_expires_long_interruption_before_loading_active_plans(tmp_path):
+    database = tmp_path / "state.db"
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    factory = create_session_factory(engine)
+    _seed(factory, last_alive_at=NOW - timedelta(hours=121))
+
+    class Clock:
+        def now(self):
+            return NOW
+
+    state = _ProductionRuntimeState(
+        config_path=tmp_path / "config.yaml",
+        database_path=database,
+        engine=engine,
+        session_factory=factory,
+        clock=Clock(),
+        request_controller=object(),
+    )
+    try:
+        state._admit_sync()
+        assert state._load_active_symbols_sync() == ()
+        with factory() as session:
+            assert session.scalar(select(PositionLot.remaining_qty)) == 1000
+            assert session.scalar(select(func.count()).select_from(AuditLog)) == 5
+        assert RuntimeLivenessRepository(factory).load().last_alive_at == NOW
+    finally:
+        engine.dispose()
+
+
 def test_more_than_120_hours_expires_all_plans_and_pending_closes_once(tmp_path):
     engine = create_sqlite_engine(tmp_path / "state.db")
     upgrade_database(engine)
@@ -121,6 +152,7 @@ def test_more_than_120_hours_expires_all_plans_and_pending_closes_once(tmp_path)
     with SqlAlchemyUnitOfWork(factory, clock=lambda: NOW) as work:
         assert work.expire_active_plans_after_interruption() == SYMBOLS
         work.commit()
+    assert RuntimeLivenessRepository(factory).load().last_alive_at == NOW
     with factory() as session:
         assert session.scalar(select(func.count()).select_from(ActivePlan)) == 0
         assert session.scalar(select(func.count()).select_from(PendingOfficialClose)) == 0

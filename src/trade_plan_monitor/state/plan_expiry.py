@@ -138,4 +138,9 @@ def expire_active_plans_after_interruption(
                 expected_revision=active.revision,
                 cause=_EXPIRY_CAUSE,
             )
+        heartbeat = session.get(RuntimeLiveness, 1)
+        if heartbeat is None:
+            raise RuntimeLivenessError("runtime liveness disappeared during expiry")
+        heartbeat.revision += 1
+        heartbeat.last_alive_at = observed_at.isoformat()
         return symbols

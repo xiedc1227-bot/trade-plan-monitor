@@ -139,6 +139,8 @@ def _service(
     open_database: Callable[[], object] | None = None,
     close_database: Callable[[], object] | None = None,
     refresh_references: Callable[[date], object] | None = None,
+    liveness_owner: object | None = None,
+    heartbeat_interval_seconds: float = 30.0,
     health_details: Callable[[], RuntimeHealthDetails] = _healthy_runtime_details,
     shutdown_timeout_seconds: float = 0.05,
 ) -> RuntimeLifecycleService:
@@ -156,6 +158,8 @@ def _service(
         open_database=(
             open_database if open_database is not None else lambda: observed.append("database")
         ),
+        liveness_owner=liveness_owner,
+        heartbeat_interval_seconds=heartbeat_interval_seconds,
         load_active_symbols=lambda: (observed.append("plans"), symbols)[1],
         probe_capabilities=lambda: (
             observed.append("probe"),
@@ -180,6 +184,104 @@ def _service(
         health_details=health_details,
         shutdown_timeout_seconds=shutdown_timeout_seconds,
     )
+
+
+def test_liveness_admission_precedes_plan_loading_and_heartbeat_drains_before_database_close():
+    events: list[str] = []
+    beat_seen = asyncio.Event()
+
+    class Liveness:
+        async def admit(self):
+            events.append("admit")
+
+        async def heartbeat(self):
+            events.append("beat")
+            beat_seen.set()
+
+    async def scenario():
+        service = _service(
+            events=events,
+            liveness_owner=Liveness(),
+            heartbeat_interval_seconds=0.01,
+        )
+        await service.start()
+        await asyncio.wait_for(beat_seen.wait(), timeout=1)
+        await service.stop()
+
+    asyncio.run(scenario())
+    assert events[:4] == ["config", "database", "admit", "plans"]
+    assert events.index("beat") < events.index("database-close")
+
+
+def test_failed_liveness_admission_blocks_plan_loading_and_provider_probe():
+    events: list[str] = []
+
+    class Liveness:
+        async def admit(self):
+            events.append("admit")
+            raise RuntimeError("liveness unknown")
+
+        async def heartbeat(self):
+            events.append("beat")
+
+    service = _service(events=events, liveness_owner=Liveness())
+    with pytest.raises(RuntimeError, match="liveness unknown"):
+        asyncio.run(service.start())
+    assert "plans" not in events
+    assert "probe" not in events
+    assert "database-close" in events
+
+
+def test_failed_heartbeat_stops_runtime_without_marking_cleanup_failed():
+    events: list[str] = []
+
+    class Liveness:
+        async def admit(self):
+            events.append("admit")
+
+        async def heartbeat(self):
+            events.append("beat")
+            raise RuntimeError("heartbeat storage failed")
+
+    async def scenario():
+        service = _service(
+            events=events,
+            liveness_owner=Liveness(),
+            heartbeat_interval_seconds=0.01,
+        )
+        await service.start()
+        for _ in range(100):
+            if service.status is RuntimeServiceStatus.STOPPED:
+                break
+            await asyncio.sleep(0.01)
+        assert service.status is RuntimeServiceStatus.STOPPED
+        assert service.cleanup_failed is False
+
+    asyncio.run(scenario())
+    assert events.index("beat") < events.index("database-close")
+
+
+def test_read_only_standby_keeps_local_heartbeat_alive():
+    beats = asyncio.Event()
+
+    class Liveness:
+        async def admit(self):
+            return None
+
+        async def heartbeat(self):
+            beats.set()
+
+    async def scenario():
+        service = _service(
+            scheduler=_Scheduler(deadline=None),
+            liveness_owner=Liveness(),
+            heartbeat_interval_seconds=0.01,
+        )
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        await asyncio.wait_for(beats.wait(), timeout=1)
+        await service.stop()
+
+    asyncio.run(scenario())
 
 
 def test_startup_owns_the_required_sequence_and_accepts_exactly_ten_symbols() -> None:

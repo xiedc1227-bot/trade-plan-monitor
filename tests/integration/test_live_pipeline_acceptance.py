@@ -61,6 +61,7 @@ from trade_plan_monitor.state.database import (
     upgrade_database,
 )
 from trade_plan_monitor.state.events import MonitorEvent, MonitorEventType
+from trade_plan_monitor.state.models import RuntimeLiveness
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.monitor_composition import create_monitor_composition
 from trade_plan_monitor.web.persistent_monitor_read_service import PersistentMonitorReadService
@@ -864,6 +865,20 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
         clock = ControlledClock(NOW.replace(hour=9, minute=0), released_sleeps=5)
         plan = _sample_plan()
         _activate_plans(database, clock, (plan,))
+        # This fixture represents a restart of an already-running monitor.
+        seeded_engine = create_sqlite_engine(database)
+        try:
+            with create_session_factory(seeded_engine).begin() as session:
+                session.add(
+                    RuntimeLiveness(
+                        id=1,
+                        schema_version=1,
+                        revision=0,
+                        last_alive_at=clock.now().isoformat(),
+                    )
+                )
+        finally:
+            seeded_engine.dispose()
         clock.current = NOW
         config = _write_configuration_and_evidence(
             tmp_path,

@@ -2678,6 +2678,8 @@ class RuntimeLifecycleService:
         checkpoint_wal: Callable[[], object],
         close_database: Callable[[], object],
         health_details: Callable[[], RuntimeHealthDetails],
+        liveness_owner: object | None = None,
+        heartbeat_interval_seconds: float = 30.0,
         shutdown_timeout_seconds: float = 5.0,
     ) -> None:
         if not isinstance(clock, Clock):
@@ -2704,6 +2706,16 @@ class RuntimeLifecycleService:
             raise TypeError("dispatcher must expose aclose")
         if not callable(getattr(request_controller, "close", None)):
             raise TypeError("request_controller must expose close")
+        if liveness_owner is not None and any(
+            not callable(getattr(liveness_owner, name, None)) for name in ("admit", "heartbeat")
+        ):
+            raise TypeError("liveness_owner must expose admit and heartbeat")
+        if (
+            isinstance(heartbeat_interval_seconds, bool)
+            or not isinstance(heartbeat_interval_seconds, int | float)
+            or not 0 < heartbeat_interval_seconds <= 30
+        ):
+            raise ValueError("heartbeat_interval_seconds must be between 0 and 30")
         if (
             isinstance(shutdown_timeout_seconds, bool)
             or not isinstance(shutdown_timeout_seconds, int | float)
@@ -2725,6 +2737,11 @@ class RuntimeLifecycleService:
         self._checkpoint_wal = checkpoint_wal
         self._close_database = close_database
         self._health_details = health_details
+        self._liveness_owner = liveness_owner
+        self._heartbeat_interval_seconds = float(heartbeat_interval_seconds)
+        self._heartbeat_stop = asyncio.Event()
+        self._heartbeat_task: asyncio.Task[None] | None = None
+        self._liveness_failed = False
         self._shutdown_timeout_seconds = float(shutdown_timeout_seconds)
         self._status = RuntimeServiceStatus.STOPPED
         self._read_only = True
@@ -2836,6 +2853,10 @@ class RuntimeLifecycleService:
         await self._invoke(self._validate_configuration)
         await self._invoke(self._open_database)
         self._database_opened = True
+        if self._liveness_owner is not None:
+            await self._invoke(self._liveness_owner.admit)
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+            self._heartbeat_task.add_done_callback(self._observe_heartbeat_result)
         raw_symbols = await self._invoke(self._load_active_symbols)
         active_symbols = self._active_symbols(raw_symbols)
         raw_capabilities = await self._invoke(self._probe_capabilities)
@@ -2931,7 +2952,7 @@ class RuntimeLifecycleService:
             self._unexpected_run_exit = (
                 startup is not None
                 and startup.status is RuntimeServiceStatus.RUNNING
-                and not self._stopping
+                and (not self._stopping or self._liveness_failed)
             )
             try:
                 await self.stop()
@@ -2987,6 +3008,7 @@ class RuntimeLifecycleService:
         self._stopping = True
         self._status = RuntimeServiceStatus.STOPPING
         self._accepting_work = False
+        self._heartbeat_stop.set()
         if self._shutdown_requested_event is not None:
             self._shutdown_requested_event.set()
         first_error: BaseException | None = None
@@ -3032,6 +3054,20 @@ class RuntimeLifecycleService:
                 else:
                     self._request_controller_closed = True
             raise first_error
+
+        heartbeat_task = self._heartbeat_task
+        if heartbeat_task is not None:
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(heartbeat_task),
+                    timeout=self._shutdown_timeout_seconds,
+                )
+            except TimeoutError as error:
+                # A DB write may still be running in a worker thread. Do not dispose it.
+                raise RuntimeError("runtime heartbeat did not drain") from error
+            except BaseException as error:
+                if not self._liveness_failed and first_error is None:
+                    first_error = error
 
         resources = (
             ("_dispatcher_closed", self._dispatcher.aclose),
@@ -3139,6 +3175,29 @@ class RuntimeLifecycleService:
         error = task.exception()
         if error is not None:
             self._record_cleanup_failure(error)
+
+    async def _heartbeat_loop(self) -> None:
+        while not self._heartbeat_stop.is_set():
+            try:
+                await asyncio.wait_for(
+                    self._heartbeat_stop.wait(), timeout=self._heartbeat_interval_seconds
+                )
+            except TimeoutError:
+                await self._invoke(self._liveness_owner.heartbeat)
+
+    def _observe_heartbeat_result(self, task: asyncio.Task[None]) -> None:
+        if self._stopping or self._cleanup_complete:
+            return
+        if not task.cancelled() and task.exception() is None:
+            return
+        self._liveness_failed = True
+        self._accepting_work = False
+        self._read_only = True
+        self._status = RuntimeServiceStatus.DEGRADED
+        stop_waiter = asyncio.create_task(self.stop())
+        stop_waiter.add_done_callback(
+            lambda finished: None if finished.cancelled() else finished.exception()
+        )
 
     def _record_cleanup_failure(self, error: BaseException) -> None:
         if self._cleanup_complete or self._cleanup_failed:
