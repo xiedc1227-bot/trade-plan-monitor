@@ -566,4 +566,8 @@ WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T0
 
 R12 完成普通用户的 v4 AI 提取、不可变 Schema-v3 保存、八项政策补充、当前问题复核、激活、独立按日期库存登记、提醒确认、实际库存减记及停用流程。补充保留耐久 `USER_SUPPLEMENT` 绑定并要求重新取得服务端审核；原文字段修改绝不会成为原文证据。只有已存在的技术性 `CONTRACT` 版本绑定随服务端分配的后继版本更新。库存可直接在 v3 工作台操作，仍独立于提醒和提醒确认。活动版本绑定的运行时读模型公开已持久化的逐规则条件证据，包括实际成交量、历史均量和阈值，不会捏造 legacy 判断投影。
 
-完整 Chromium 流程已在独立临时 SQLite 数据库、真实应用服务和调度器、受控时钟，以及 AI HTTP/行情 SDK 边界假提供方上通过。仅预置交易日历和历史行情；计划、复核、激活、库存、提醒确认、减记和停用均通过普通界面操作。已验证能力为 `publicActivationAvailable=true`、`isolatedTrustedReviewOnly=false`、`pendingRequirements=[]`；精确当前 `reviewId`、`contentHash` 和激活 `expectedRevision` 校验仍为强制要求。这是本地集成证据，不代表真实外部提供方验证。当前 OpenAPI 契约精确包含 50 条路径：35 条实时路径和 15 条回测路径。提交、推送、依赖安装和联网访问继续需要分别授权。
+完整 Chromium 流程已在独立临时 SQLite 数据库、真实应用服务和调度器、受控时钟，以及 AI HTTP/行情 SDK 边界假提供方上通过。仅预置交易日历和历史行情；计划、复核、激活、库存、提醒确认、减记和停用均通过普通界面操作。已验证能力为 `publicActivationAvailable=true`、`isolatedTrustedReviewOnly=false`、`pendingRequirements=[]`；精确当前 `reviewId`、`contentHash` 和激活 `expectedRevision` 校验仍为强制要求。这是本地集成证据，不代表真实外部提供方验证。该检查点的 OpenAPI 契约包含 50 条路径：35 条实时路径和 15 条回测路径。提交、推送、依赖安装和联网访问继续需要分别授权。
+
+## 准入受阻时的旧计划维护
+
+`GET /api/v1/health` 仅在活动计划缺少心跳时显示 `BLOCKED` 和 `blockReason=LEGACY_PLANS_REQUIRE_REVIEW`。系统页面使用 `GET /api/v1/system/legacy-plan-invalidation` 展示最多 10 个准确的 `{symbol, planVersionId, revision}` 身份及小写 SHA-256 `fingerprint`；其他情况下返回 `available=false`、`plans=[]`、`fingerprint=null`。经过独立的勾选和确认后，`POST /api/v1/system/legacy-plan-invalidation` 接收 `{fingerprint, confirmation:"INVALIDATE_LEGACY_PLANS"}`，返回 `{symbols, restartRequired:true}`。缺少确认返回 `422`，证据变化返回 `409`。POST 仅可在自有监控代际受阻且没有调度任务时执行；该状态下普通 HTTP 写入返回 `409`。既有本地同源 HTTP 防护继续生效。响应不包含凭证或原始存储错误。操作人须先重启工具再创建新计划；该操作绝不修改持仓或已确认成交。当前 OpenAPI 文档含 51 条路径，包括这条新增的实时路径。

@@ -15,7 +15,7 @@
 
 ### 生产准入与心跳切片 — 2026-09-23
 
-生产生命周期现已在打开数据库后、加载活动计划、探测行情源、恢复或发送前调用持久准入门禁。门禁对已证明超过 120 小时的空白期原子作废计划，再通过修订号保护推进心跳。30 秒心跳在只读/降级待机时仍运行，并在关闭数据库前结束。休眠进程不能跨越超过 120 小时的空白期补写心跳：它会停止并留下旧证据供下次准入处理。缺失/无效的旧版证据仍阻止自动启动；人工复核界面尚无。当前发送器用活动计划身份阻止旧版过时提醒，但逐条持久终态回执尚未实现。
+生产生命周期现已在打开数据库后、加载活动计划、探测行情源、恢复或发送前调用持久准入门禁。门禁对已证明超过 120 小时的空白期原子作废计划，再通过修订号保护推进心跳。30 秒心跳在只读/降级待机时仍运行，并在关闭数据库前结束。休眠进程不能跨越超过 120 小时的空白期补写心跳：它会停止并留下旧证据供下次准入处理。在该检查点，缺失/无效旧证据阻止自动启动，人工复核界面尚无；后续缺心跳路径记录于 `2026-09-23-legacy-maintenance.zh-CN.md`。当前发送器用活动计划身份阻止旧版过时提醒，但逐条持久终态回执尚未实现。
 
 - RED/GREEN：生命周期顺序及准入失败测试先因缺少所有者接口而失败；休眠心跳测试在补充空白期检查前先失败。新增生产状态集成验证：超过 120 小时的两个活动计划在可被加载前作废，同时保留 1,000 单位持仓及五条审计记录。
 - `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py tests/integration/test_runtime_liveness.py tests/integration/test_sqlite_repositories.py tests/integration/test_runtime_lifecycle.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_notification_delivery.py tests/integration/test_live_pipeline_acceptance.py::test_real_composition_starts_runs_a_timer_and_restores_its_projection tests/integration/test_monitor_production_composition.py tests/integration/test_certified_production_runtime.py -q --tb=short` — 261 通过，1 项既有 Starlette/httpx 警告，47.15 秒，已包含降级待机心跳断言。
