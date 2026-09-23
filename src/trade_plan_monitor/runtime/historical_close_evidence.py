@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Literal
 
-from sqlalchemy import Integer, cast, func, select
+from sqlalchemy import Integer, cast, select
 from sqlalchemy.orm import Session
 
 from trade_plan_monitor.decision.models import (
@@ -26,10 +26,12 @@ from trade_plan_monitor.runtime.close_recovery_evidence import (
     _SYMBOL,
     LegacyCloseRecoveryReader,
     UnknownCloseRecovery,
+    _calendar_open_on,
     _CompletionReader,
     _require,
 )
 from trade_plan_monitor.runtime.missed_close_recovery import (
+    MAX_CLOSE_DISCOVERY_DAYS,
     CompletionStatus,
     MissedCloseScope,
     discover_missed_closes,
@@ -151,17 +153,8 @@ class LegacyHistoricalCloseReader:
                          anchor.evaluation_identity.official_trade_date + timedelta(days=1))
                 if start > observed_at.date():
                     return ()
-                def is_open_on(day):
-                    row = session.execute(select(
-                        cast(TradingCalendar.is_open, Integer),
-                        func.typeof(TradingCalendar.is_open),
-                    ).where(TradingCalendar.exchange == "SSE", TradingCalendar.cal_date == day)
-                    ).one_or_none()
-                    return (bool(row[0]) if row is not None and row[1] == "integer"
-                            and row[0] in (0, 1) else None)
-
                 missing = []
-                for item in _scan_close_suffix(scope, is_open_on, reader.read, start):
+                for item in _scan_close_suffix(scope, session, reader.read, start):
                     _require(item.status is CompletionStatus.ABSENT
                              and not item.causal_history_gap)
                     missing.append(item.identity.official_trade_date)
@@ -225,18 +218,10 @@ class LegacyHistoricalCloseReader:
             completions[identity.official_trade_date] = value
             return value
 
-        def is_open_on(day):
-            row = session.execute(select(
-                cast(TradingCalendar.is_open, Integer), func.typeof(TradingCalendar.is_open),
-            ).where(TradingCalendar.exchange == "SSE", TradingCalendar.cal_date == day)
-            ).one_or_none()
-            return (bool(row[0]) if row is not None and row[1] == "integer"
-                    and row[0] in (0, 1) else None)
-
         absent = []
         proven_results = []
         earlier_absent = False
-        for item in _scan_close_suffix(scope, is_open_on, completion_on, window_start):
+        for item in _scan_close_suffix(scope, session, completion_on, window_start):
             _require(item.status is not CompletionStatus.UNKNOWN and not item.causal_history_gap)
             _require(not (earlier_absent and item.status is CompletionStatus.PROVEN))
             if item.status is CompletionStatus.ABSENT:
@@ -257,14 +242,21 @@ class LegacyHistoricalCloseReader:
         return ProvenHistoricalClose(scope, inventory, current, risk, calendar, highwater)
 
 
-def _scan_close_suffix(scope, is_open_on, completion_on, start):
+def _scan_close_suffix(scope, session, completion_on, start):
     """Page only the unfinished task suffix; 32 dates is a read batch, not plan expiry."""
 
     window_start = start
     while True:
+        remaining_days = (scope.observed_at.date() - window_start).days + 1
+        if remaining_days <= 0:
+            raise ValueError("window_start must lie within observed activation history")
+        window_end = window_start + timedelta(
+            days=min(MAX_CLOSE_DISCOVERY_DAYS, remaining_days) - 1,
+        )
+        is_open_on = _calendar_open_on(session, window_start, window_end)
         window = discover_missed_closes(
             scope=scope, is_open_on=is_open_on, completion_on=completion_on,
-            window_start=window_start,
+            window_start=window_start, max_calendar_days=MAX_CLOSE_DISCOVERY_DAYS,
         )
         yield from window.candidates
         if window.next_window_start is None:

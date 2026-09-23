@@ -72,6 +72,25 @@ def test_no_claim_no_result_no_publication_is_absent(closes):
     assert discover(closes).candidates[0].status == "ABSENT"
 
 
+def test_discovery_reads_calendar_once_per_bounded_window(closes):
+    calendar_reads = 0
+
+    def count_calendar_reads(connection, cursor, statement, parameters, context, many):
+        nonlocal calendar_reads
+        if "FROM trading_calendar" in statement:
+            calendar_reads += 1
+
+    sqlalchemy_event.listen(closes.engine, "before_cursor_execute", count_calendar_reads)
+    try:
+        window = discover(closes, observed_at=NOW + timedelta(days=31, minutes=25))
+    finally:
+        sqlalchemy_event.remove(closes.engine, "before_cursor_execute", count_calendar_reads)
+
+    assert len(window.candidates) == 32
+    assert window.candidates[-1].reason == "calendar_unknown"
+    assert calendar_reads == 1
+
+
 @pytest.mark.parametrize("mutation", [
     "DELETE FROM evaluation_result",
     "UPDATE evaluation_result SET result_json = '{}'",

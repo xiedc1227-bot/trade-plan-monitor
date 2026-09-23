@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Literal
 from uuid import UUID
@@ -16,6 +16,7 @@ from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import AShareSymbol, TradePlan
 from trade_plan_monitor.runtime.clock import SHANGHAI, _canonical_shanghai
 from trade_plan_monitor.runtime.missed_close_recovery import (
+    MAX_CLOSE_DISCOVERY_DAYS,
     CompletionStatus,
     MissedCloseScope,
     MissedCloseWindow,
@@ -75,6 +76,28 @@ def _require(agreement: bool) -> None:
         raise ValueError("Close recovery evidence does not agree")
 
 
+def _calendar_open_on(session, start, end):
+    """Read a bounded SSE calendar window; missing or malformed days stay unknown."""
+
+    rows = session.execute(select(
+        TradingCalendar.cal_date,
+        cast(TradingCalendar.is_open, Integer),
+        func.typeof(TradingCalendar.is_open),
+    ).where(
+        TradingCalendar.exchange == "SSE",
+        TradingCalendar.cal_date >= start,
+        TradingCalendar.cal_date <= end,
+    )).all()
+    by_date = {day: (is_open, storage_type) for day, is_open, storage_type in rows}
+
+    def is_open_on(day):
+        value = by_date.get(day)
+        return (bool(value[0]) if value is not None and value[1] == "integer"
+                and value[0] in (0, 1) else None)
+
+    return is_open_on
+
+
 class LegacyCloseRecoveryReader:
     """Own a fresh app explicit-BEGIN session and one coherent read snapshot.
 
@@ -88,11 +111,12 @@ class LegacyCloseRecoveryReader:
 
     def discover(
         self, symbol: str, observed_at: datetime, *, window_start: date | None = None,
-        max_calendar_days: int = 32,
+        max_calendar_days: int = MAX_CLOSE_DISCOVERY_DAYS,
     ) -> MissedCloseWindow | UnknownCloseRecovery:
         symbol = _SYMBOL.validate_python(symbol, strict=True)
         observed_at = _canonical_shanghai(observed_at)
-        if type(max_calendar_days) is not int or not 1 <= max_calendar_days <= 32:
+        if (type(max_calendar_days) is not int
+                or not 1 <= max_calendar_days <= MAX_CLOSE_DISCOVERY_DAYS):
             raise ValueError("max_calendar_days must be an integer between 1 and 32")
         if window_start is not None and type(window_start) is not date:
             raise TypeError("window_start must be a date")
@@ -120,15 +144,14 @@ class LegacyCloseRecoveryReader:
                 return scope
             evidence = _CompletionReader(session, scope, boundary.sequence)
 
-            def is_open_on(day):
-                row = session.execute(select(
-                    cast(TradingCalendar.is_open, Integer), func.typeof(TradingCalendar.is_open),
-                ).where(
-                    TradingCalendar.exchange == "SSE", TradingCalendar.cal_date == day,
-                )).one_or_none()
-                if row is None or row[1] != "integer" or row[0] not in (0, 1):
-                    return None
-                return bool(row[0])
+            start = scope.activated_at.date() if window_start is None else window_start
+            today = scope.observed_at.date()
+            if not scope.activated_at.date() <= start <= today:
+                raise ValueError("window_start must lie within observed activation history")
+            days = min(max_calendar_days, (today - start).days + 1)
+            is_open_on = _calendar_open_on(
+                session, start, start + timedelta(days=days - 1),
+            )
 
             return discover_missed_closes(
                 scope=scope, is_open_on=is_open_on, completion_on=evidence.read,

@@ -289,9 +289,20 @@ def test_old_plan_scans_only_missing_suffix_across_bounded_read_windows(historic
         session.commit()
 
     reader = LegacyHistoricalCloseReader(historical.factory)
-    assert reader.missing_targets(historical.plan.symbol, observed) == tuple(
-        NOW.date() + timedelta(days=offset) for offset in range(3, 7)
-    )
+    calendar_reads = 0
+
+    def count_calendar_reads(connection, cursor, statement, parameters, context, many):
+        nonlocal calendar_reads
+        if "FROM trading_calendar" in statement:
+            calendar_reads += 1
+
+    event.listen(historical.engine, "before_cursor_execute", count_calendar_reads)
+    try:
+        missing = reader.missing_targets(historical.plan.symbol, observed)
+    finally:
+        event.remove(historical.engine, "before_cursor_execute", count_calendar_reads)
+    assert missing == tuple(NOW.date() + timedelta(days=offset) for offset in range(3, 7))
+    assert calendar_reads == 2  # Two bounded windows, not one query per calendar day.
     assert reader.prepare(historical.plan.symbol, TARGET, observed).status == "PROVEN"
 
 

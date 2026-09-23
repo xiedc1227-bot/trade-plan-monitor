@@ -96,13 +96,16 @@ class MissedCloseWindow:
     next_window_start: date | None
 
 
+MAX_CLOSE_DISCOVERY_DAYS = 32
+
+
 def discover_missed_closes(
     *,
     scope: MissedCloseScope,
     is_open_on: Callable[[date], bool | None],
     completion_on: Callable[[OfficialCloseEvaluationIdentity], OfficialCloseCompletion | None],
     window_start: date | None = None,
-    max_calendar_days: int = 32,
+    max_calendar_days: int = MAX_CLOSE_DISCOVERY_DAYS,
 ) -> MissedCloseWindow:
     """Inspect at most 32 dates and 32 completion reads, preserving later rows.
 
@@ -114,7 +117,8 @@ def discover_missed_closes(
     if not isinstance(scope, MissedCloseScope):
         raise TypeError("scope must be a MissedCloseScope")
     scope = MissedCloseScope.model_validate(scope.model_dump(mode="python", round_trip=True))
-    if type(max_calendar_days) is not int or not 1 <= max_calendar_days <= 32:
+    if (type(max_calendar_days) is not int
+            or not 1 <= max_calendar_days <= MAX_CLOSE_DISCOVERY_DAYS):
         raise ValueError("max_calendar_days must be an integer between 1 and 32")
     if not callable(is_open_on) or not callable(completion_on):
         raise TypeError("discovery sources must be callable")
