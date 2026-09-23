@@ -114,6 +114,70 @@ def test_initialization_rolls_back_with_caller_state(database):
         assert session.scalars(select(AuditLog)).all() == []
 
 
+def test_invalidated_identity_creates_terminal_receipt_for_old_alert(database):
+    _, factory, event = database
+    with factory.begin() as session:
+        repository = _repository(session)
+        receipt = repository.suppress_invalidated_identity(
+            event.event_id,
+            plan_id=event.plan_id,
+            plan_version=event.plan_version,
+            plan_hash=event.plan_hash,
+            symbol=event.symbol,
+        )
+        assert receipt.status.value == "SUPPRESS"
+        assert receipt.reason == "ACTIVE_IDENTITY_INVALID"
+        assert receipt.revision == 1
+        assert repository.suppress_invalidated_identity(
+            event.event_id,
+            plan_id=event.plan_id,
+            plan_version=event.plan_version,
+            plan_hash=event.plan_hash,
+            symbol=event.symbol,
+        ) == receipt
+    with factory() as session:
+        assert _repository(session).get(event.event_id) == receipt
+        assert len(session.scalars(select(AuditLog)).all()) == 2
+
+
+def test_invalidated_identity_does_not_write_for_different_plan(database):
+    _, factory, event = database
+    with factory.begin() as session:
+        repository = _repository(session)
+        with pytest.raises(DeliveryMetadataConflict, match="identity"):
+            repository.suppress_invalidated_identity(
+                event.event_id,
+                plan_id="different-plan",
+                plan_version=event.plan_version,
+                plan_hash=event.plan_hash,
+                symbol=event.symbol,
+            )
+        assert repository.get(event.event_id) is None
+        assert session.scalars(select(AuditLog)).all() == []
+
+
+def test_invalidated_identity_suppresses_existing_hold_and_rolls_back(database):
+    _, factory, event = database
+    with factory.begin() as session:
+        _repository(session).initialize(event.event_id)
+    with pytest.raises(RuntimeError, match="cancel invalidation"):
+        with factory.begin() as session:
+            receipt = _repository(session).suppress_invalidated_identity(
+                event.event_id,
+                plan_id=event.plan_id,
+                plan_version=event.plan_version,
+                plan_hash=event.plan_hash,
+                symbol=event.symbol,
+            )
+            assert receipt.status.value == "SUPPRESS"
+            raise RuntimeError("cancel invalidation")
+    with factory() as session:
+        receipt = _repository(session).get(event.event_id)
+        assert receipt.status.value == "HOLD"
+        assert receipt.revision == 0
+        assert len(session.scalars(select(AuditLog)).all()) == 1
+
+
 def test_backfill_is_bounded_and_does_not_skip_old_records(database):
     _, factory, first = database
     with factory.begin() as session:
@@ -634,7 +698,7 @@ def test_recoverable_explicit_enqueue_and_caller_rollback_are_atomic(database):
         assert session.get(AlertRow, str(existing.event_id)) is not None
 
 
-@pytest.mark.parametrize("reason", ["RISK_FALSE", "ACTIVE_IDENTITY_INVALID", "ACTIVATION_EXPIRED"])
+@pytest.mark.parametrize("reason", ["RISK_FALSE", "ACTIVATION_EXPIRED"])
 def test_legacy_metadata_cannot_acquire_explicit_terminal_reasons(database, reason):
     _, factory, event = database
     with factory.begin() as session:

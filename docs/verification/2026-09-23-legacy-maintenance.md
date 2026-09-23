@@ -15,3 +15,9 @@ The approved D8/A13 missing-heartbeat resolution is connected through the produc
 ## Remaining gates
 
 V1d still needs durable terminal receipts for old unsent alerts without existing eligibility rows and a complete safety review. V1c/RR009 still has bounded historical proof and production recovery integration obligations. This slice does not close business step 1 or authorize production migration. Broader end-to-end process-restart and notification-failure acceptance remains open.
+
+## Terminal-receipt transaction primitive
+
+`DeliveryEligibilityRepository.suppress_invalidated_identity` now validates the canonical alert against an exact plan identity, initializes a missing HOLD receipt, and advances it to terminal `SUPPRESS/ACTIVE_IDENTITY_INVALID` with two revisioned audit records in the caller's transaction. A mismatched identity writes nothing; repeated suppression is idempotent; rollback restores an existing HOLD. The reader now accepts this generic invalidation reason for legacy alerts, fixing the prior contradiction with long-outage/manual bulk suppression while retaining rejection of explicit-only terminal reasons. Focused RED tests first failed on the absent method. `tests/integration/test_delivery_eligibility_storage.py`, `tests/unit/test_legacy_recovery_delivery_eligibility.py`, and `tests/integration/test_runtime_plan_expiry.py` then passed together: 116 passed, one existing warning. Ruff and diff whitespace checks passed.
+
+This primitive is not yet called by a bounded cleanup worker. Scanning all old alerts inside startup would make restart duration depend on historical volume and malformed rows; the existing current-plan send gate remains the immediate safety boundary. V1d and business step 1 remain open. No user database or external sender was touched.

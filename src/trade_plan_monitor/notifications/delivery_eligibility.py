@@ -172,7 +172,11 @@ class DeliveryEligibilityRepository:
             delivery_class, source = self._source(event)
             if record.delivery_class != delivery_class or record.source_cutoff != source:
                 raise ValueError("metadata source differs from canonical alert")
-            if record.reason in RecoveryDeliveryReason._value2member_map_ and (
+            explicit_reason = (
+                record.reason in RecoveryDeliveryReason._value2member_map_
+                and record.reason != "ACTIVE_IDENTITY_INVALID"
+            )
+            if explicit_reason and (
                 type(event) is not ExplicitAlertEvent or event.signal_type != "RISK_ALERT"
             ):
                 raise ValueError("classifier reason differs from canonical alert family")
@@ -230,6 +234,42 @@ class DeliveryEligibilityRepository:
             .limit(limit)
         ).all()
         return tuple(self.initialize(UUID(event_id)) for event_id in ids)
+
+    def suppress_invalidated_identity(
+        self,
+        event_id: UUID,
+        *,
+        plan_id: str,
+        plan_version: int,
+        plan_hash: str,
+        symbol: str,
+    ) -> DeliveryEligibilityRecord:
+        """Terminally exclude one proven old event in the caller's transaction.
+
+        This only records delivery state; it never deactivates a plan or rewrites
+        the alert. The caller must prove the supplied plan identity was invalidated.
+        """
+
+        self._lock(event_id)
+        event = self._event(event_id)
+        if (
+            event.plan_id != plan_id
+            or event.plan_version != plan_version
+            or event.plan_hash != plan_hash
+            or event.symbol != symbol
+        ):
+            raise DeliveryMetadataConflict("Alert belongs to a different plan identity")
+        current = self.get(event_id)
+        if current is None:
+            current = self.initialize(event_id)
+        if current.status is RecoveryDeliveryStatus.SUPPRESS:
+            return current
+        return self._replace(
+            current,
+            status=RecoveryDeliveryStatus.SUPPRESS,
+            reason="ACTIVE_IDENTITY_INVALID",
+            updated_at=self._now(),
+        )
 
     def expire_actionable(
         self,

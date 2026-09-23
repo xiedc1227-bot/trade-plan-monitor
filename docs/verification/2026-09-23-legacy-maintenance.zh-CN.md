@@ -15,3 +15,9 @@
 ## 剩余门禁
 
 V1d 仍需为没有现存投递资格记录的旧未发提醒留下持久终态，并完成全面安全复核。V1c/RR009 仍有有界历史证明和生产恢复集成义务。本切片不关闭业务第一步，也不批准生产迁移。更广的全链路进程重启与提醒发送故障验收仍待完成。
+
+## 终态回执事务基础能力
+
+`DeliveryEligibilityRepository.suppress_invalidated_identity` 现会将规范提醒与准确计划身份核对；缺失回执时先建立 HOLD，再在调用方事务内提升为终态 `SUPPRESS/ACTIVE_IDENTITY_INVALID`，留下两条按修订号记录的审计。身份不符不写入；重复抑制幂等；回滚会恢复已有 HOLD。读取器现在允许旧版提醒使用这一通用作废原因，修复了此前与长停机/人工批量抑制相矛盾的校验，同时仍拒绝显式规则专属的终态原因。新增 RED 测试先因缺少方法而失败。随后 `tests/integration/test_delivery_eligibility_storage.py`、`tests/unit/test_legacy_recovery_delivery_eligibility.py` 和 `tests/integration/test_runtime_plan_expiry.py` 合计 116 项通过，存在一个既有警告；Ruff 与差异空白检查通过。
+
+此基础能力尚未接入有界清理任务。若在启动事务内全量扫描旧提醒，重启耗时会依赖历史数据量及损坏记录；现有“当前活动计划身份”发送门禁仍是即时安全边界。V1d 与业务第一步仍未完成。未触及用户数据库或外部发送器。
