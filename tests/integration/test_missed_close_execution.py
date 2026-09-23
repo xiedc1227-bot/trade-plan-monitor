@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import multiprocessing
+import os
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -113,6 +115,95 @@ def _counts(recovery):
         return tuple(connection.scalar(text(f"SELECT count(*) FROM {table}")) for table in (
             "evaluation_ledger", "evaluation_result", "risk_state", "alert_event",
         ))
+
+
+def _run_close_in_fresh_process(database_path, trade_date, observed_at, expected_status,
+                                exit_before_evaluation=False):
+    """Recreate the offline recovery service after a real interpreter restart."""
+    engine = create_sqlite_engine(database_path)
+    sessions = create_session_factory(engine)
+    plan = _runtime_plan()
+
+    def work():
+        return SqlAlchemyUnitOfWork(sessions, clock=lambda: observed_at + timedelta(seconds=1))
+
+    async def daily(_symbol, day, _attempt):
+        return (_daily_bar(
+            trade_date=day, close_fen={D1: 6000, D2: 5950}[day], is_official=True,
+        ),)
+
+    async def forbidden_minutes(*_args):
+        raise AssertionError("historical close must not request minute data")
+
+    def evaluator(context):
+        if exit_before_evaluation:
+            os._exit(23)
+        return evaluate(context)
+
+    try:
+        service = RuntimeEvaluationService(
+            fetch_minutes=forbidden_minutes, fetch_official_daily=daily,
+            official_observed_at=lambda value: value, unit_of_work_factory=work,
+            context_builder=_runtime_context,
+            official_context_builder=HistoricalOfficialContextBuilder(
+                LegacyHistoricalCloseReader(sessions),
+            ),
+            evaluator=evaluator, recovery_delivery=True,
+            committed_event_publisher=lambda _event: None,
+        )
+        result = asyncio.run(service.run_official_close(
+            plan=plan, trade_date=trade_date, evaluated_at=observed_at,
+            close_attempt=1,
+        ))
+        assert result.status == expected_status
+    finally:
+        engine.dispose()
+
+
+def _spawn_close(database_path, trade_date, observed_at, expected_status,
+                 exit_before_evaluation=False):
+    process = multiprocessing.get_context("spawn").Process(
+        target=_run_close_in_fresh_process,
+        args=(database_path, trade_date, observed_at, expected_status,
+              exit_before_evaluation),
+    )
+    process.start()
+    process.join(timeout=30)
+    if process.is_alive():
+        process.terminate()
+        process.join()
+        pytest.fail("offline recovery child did not finish")
+    return process.exitcode
+
+
+def test_two_missed_closes_survive_actual_process_restarts(recovery):
+    database_path = recovery.engine.url.database
+    for day, seconds_after_recovery, expected_status in (
+        (D1, 0, "COMMITTED"), (D2, 2, "COMMITTED"),
+        (D1, 4, "DUPLICATE"), (D2, 6, "DUPLICATE"),
+    ):
+        assert _spawn_close(
+            database_path, day, OBSERVED + timedelta(seconds=seconds_after_recovery),
+            expected_status,
+        ) == 0
+    assert _counts(recovery) == (2, 2, 1, 2)
+    with recovery.engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT status FROM alert_delivery_eligibility"
+        )).scalars().all() == ["HOLD", "HOLD"]
+
+
+def test_abrupt_process_exit_before_evaluation_retries_without_duplicate(recovery):
+    database_path = recovery.engine.url.database
+    clock = OBSERVED
+    assert _spawn_close(database_path, D1, clock, "COMMITTED", True) == 23
+    assert _counts(recovery) == (0, 0, 0, 0)
+    for seconds_after_exit, expected_status in ((2, "COMMITTED"), (4, "DUPLICATE")):
+        assert _spawn_close(
+            database_path, D1, clock + timedelta(seconds=seconds_after_exit),
+            expected_status,
+        ) == 0
+    assert _counts(recovery) == (1, 1, 1, 1)
 
 
 def test_two_missed_closes_use_historical_holdings_and_source_risk_time_after_reopen(recovery):

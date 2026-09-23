@@ -2,6 +2,16 @@
 
 > IN PROGRESS — business step 1 is not accepted. This report accumulates evidence for connected outcomes, not a separate completion milestone per helper. No production recovery or deployment approval.
 
+## Actual process-restart slice — 2026-09-23
+
+The opt-in offline legacy path was exercised through separate spawned Python processes sharing only a temporary SQLite file. D1 and D2 each committed in a fresh process; two further fresh processes observed duplicates only. A forced process exit at the evaluator boundary left no result, risk transition or alert intent; a new process committed D1 once, and another observed a duplicate. The HOLD eligibility records remained present. This tests interpreter/process restart, not merely engine disposal or SQLite reopen. The first trial's fixed observation clock and an incorrect test-only SQL column caused test-fixture failures; both were corrected without changing runtime code.
+
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py tests/integration/test_historical_close_evidence.py tests/integration/test_recovery_activation_fences.py -q --tb=short` — 68 passed, 1 existing Starlette/httpx warning, 28.17 seconds (before the final duplicate-after-exit assertion was added).
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py -q` — 19 passed after the final assertion and child-timeout cleanup, 14.13 seconds.
+- `.\.venv\Scripts\python.exe -m ruff check tests/integration/test_missed_close_execution.py` and `git diff --check` — passed after the final assertion (ordinary Windows line-ending warnings only).
+
+No production coordinator, live provider, sender or user database was involved. The test-only process coverage does not close V1c/RR009/C2: unbounded history, opening-aware evaluation, chronological multi-plan admission and production integration remain; post-commit kill and full lifecycle restart acceptance are also still open.
+
 ## Connected bounded path — 2026-09-23
 
 Base revision: `ac9da66705829d5da769af616363533f2f6caf7a` on `codex/consolidate-r19-r32`; checks cover the uncommitted connected diff. The opt-in `LegacyHistoricalCloseReader` and `HistoricalOfficialContextBuilder` feed the existing official evaluator from one bounded owned snapshot. Historical risk uses the attributable source close time; the committed result saves the exact proven historical lots. A manual sale registered on D2 reduces D2 quantity but not D1 quantity, even when its effective trade date is D1. Both recovered risk alerts start in `HOLD`.

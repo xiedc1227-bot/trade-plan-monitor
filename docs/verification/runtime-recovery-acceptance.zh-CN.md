@@ -2,6 +2,16 @@
 
 > IN PROGRESS — 业务第 1 步尚未验收。本报告按完整成果累积证据，不为每个辅助组件另立完成里程碑。不代表生产恢复或部署批准。
 
+## 实际进程重启切片 — 2026-09-23
+
+可选的旧版离线路径在多个独立启动的 Python 进程中，共用一份临时 SQLite 文件。D1、D2 各自在新进程提交；后续两个新进程只得到重复结果。评估器边界强制退出后，没有留下结果、风险变更或提醒意图；新进程将 D1 提交一次，另一个新进程只得到重复结果。HOLD 投递资格记录仍在。这验证了解释器/进程重启，不只是释放引擎或重开 SQLite。首次运行中固定不变的观察时钟及测试专用 SQL 列名错误导致测试夹具失败；两者均已修正，未改运行源码。
+
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py tests/integration/test_historical_close_evidence.py tests/integration/test_recovery_activation_fences.py -q --tb=short` — 68 通过、1 项既有 Starlette/httpx 警告，28.17 秒（在增加突然退出后的最终重复断言之前）。
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py -q` — 增加最终断言及子进程超时清理后 19 通过，14.13 秒。
+- `.\.venv\Scripts\python.exe -m ruff check tests/integration/test_missed_close_execution.py` 与 `git diff --check` — 增加最终断言后通过（只有普通 Windows 行尾提示）。
+
+未涉及生产协调器、真实行情源、发送器或用户数据库。仅测试层的进程覆盖不关闭 V1c/RR009/C2：无限制历史、支持期初持仓的评估、多计划时间顺序准入和生产集成仍未完成；提交后进程终止及完整生命周期重启验收也仍待完成。
+
 ## 有界流程接通 — 2026-09-23
 
 基线版本：`ac9da66705829d5da769af616363533f2f6caf7a`，分支为 `codex/consolidate-r19-r32`；检查覆盖尚未提交的接通修改。可选的 `LegacyHistoricalCloseReader` 和 `HistoricalOfficialContextBuilder` 从一次有界自有快照向既有收盘评估器提供输入。历史风险使用可归因的来源收盘时间；提交结果保存准确的已证明历史批次。D2 登记的人工卖出减少 D2 数量，但即使其生效交易日为 D1，也不减少 D1 数量。补算产生的两条风险提醒均从 `HOLD` 开始。
