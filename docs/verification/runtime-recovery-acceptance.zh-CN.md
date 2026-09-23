@@ -2,6 +2,16 @@
 
 > IN PROGRESS — 业务第 1 步尚未验收。本报告按完整成果累积证据，不为每个辅助组件另立完成里程碑。不代表生产恢复或部署批准。
 
+## 最近节点接续与期初持仓 — 2026-09-23
+
+基线版本 `c16be1ee10c78825d093b9038dee71574bcd9337`；检查覆盖尚未提交的修改。对于长期活动的旧版计划，历史读取器验证最近已提交的正式收盘节点，只检查其后有界的遗漏日期；短历史恢复保留原有的完整前缀风险/审计校验。生产组合现于准入当期工作前执行按日期补算的旧版收盘恢复，并将逐证券重试状态绑定到准确激活身份；补算提醒初始进入持久 `HOLD`。已确认期初余额计入历史及实时持仓/可卖量，不虚构批次、成本或购入日期；只有期初持仓的旧版风险退出可生成仅指定数量的卖出提醒。普通提醒不虚构批次预填，也不登记成交。新版可执行计划的 `SELL` 规则仍依据已确认的总可卖量，而非批次优先级。
+
+- 首次集中回归暴露 9 项短历史审计回归（393 通过 / 9 失败）。已将检查点捷径限定于长期活动计划，并补充其变更/前驱审计校验；未移除失败断言。
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_historical_close_evidence.py tests/integration/test_missed_close_execution.py -q` — 修复后 64 通过。后来补充检查点审计损坏用例，历史读取器文件达到 44 通过。
+- 最终专项命令覆盖 `test_decision_engine.py`、`test_production_historical_recovery.py`、`test_historical_close_evidence.py`、`test_missed_close_execution.py`、`test_notification_delivery.py`、`test_certified_production_runtime.py`、`test_monitor_production_composition.py`、`test_explicit_decision_persistence.py` 和 `test_decision_replay.py`：430 通过、1 项既有 Starlette/httpx 弃用警告，59.15 秒。全部修改源码/测试文件的 Ruff 与 `git diff --check` 通过；Windows 行尾提示仅供参考。
+
+业务第 1 步仍未关闭：尚未以安装式生命周期执行完整的有缺口进程重启；历史持仓/风险证明仍有有限事件预算；完整停机/故障矩阵及独立评审仍待完成。历史 `HOLD` 防止提前发送，但依据最新状态释放资格及逐渠道发送前复核属于业务第 2 步。未使用真实行情源、发送器、用户数据库迁移或部署。
+
 ## 五天准入基础 — 2026-09-23
 
 在 `codex/consolidate-r19-r32` 上，仅本地测试的迁移 `0022_runtime_liveness` 与持久单行心跳/判定器确定了获批的准确 120 小时边界。缺失/损坏/非规范证据、时钟回拨，以及旧库中有活动计划却没有心跳时，都不能静默准入。另一个可选工作单元事务目前可作废运行程序所支持的最多 10 个活动计划及其待收盘任务和已有投递资格记录；持仓、旧结果及提醒保留。单条超时审计保留最后存活及判定时间。重复作废不增加计划/收盘审计；第二个计划处理中注入失败会回滚第一个计划、待收盘删除、事件与审计。没有资格记录的升级前提醒，在停用后仍受生产发送器的活动计划关联门禁阻止；为此类旧行持久记录逐提醒的终态回执尚待后续实现。
