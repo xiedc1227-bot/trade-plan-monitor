@@ -524,3 +524,59 @@ def test_transition_chain_rejects_incompatible_pending_state(historical, repeat_
         }))
         target, observed = target + timedelta(days=1), observed + timedelta(days=1)
     assert prepare(historical, target, observed).status == "UNKNOWN"
+
+
+def test_latest_clear_checkpoint_does_not_hide_older_invalid_exit(historical):
+    breached = publish(historical)
+    invalid_exit = breached.snapshot.risk.model_copy(update={
+        "status": RiskStatus.EXIT_PENDING_SETTLEMENT,
+        "revision": 2,
+        "prior_close_fen": 6100,
+        "updated_at": OBSERVED.replace(minute=5),
+    })
+    publish(historical, day=TARGET, risk=invalid_exit)
+    clear_at = OBSERVED + timedelta(days=1)
+    cleared = initial_risk(historical, revision=3).model_copy(update={
+        "updated_at": clear_at.replace(minute=5),
+    })
+    publish(historical, day=TARGET + timedelta(days=1), risk=cleared)
+
+    assert prepare(historical, TARGET + timedelta(days=2),
+                   OBSERVED + timedelta(days=2)).status == "UNKNOWN"
+
+
+def test_trailing_unchanged_closes_do_not_add_checkpoint_queries(historical):
+    breached = publish(historical)
+    statements = []
+
+    def count_checkpoint_reads(connection, cursor, statement, parameters, context, many):
+        if "FROM evaluation_ledger" in statement or "FROM evaluation_result" in statement:
+            statements.append(statement)
+
+    event.listen(historical.engine, "before_cursor_execute", count_checkpoint_reads)
+    try:
+        publish(historical, day=TARGET, risk=breached.snapshot.risk, transition=False)
+        statements.clear()
+        assert prepare(historical, TARGET + timedelta(days=1),
+                       OBSERVED + timedelta(days=1)).status == "PROVEN"
+        baseline = len(statements)
+        statements.clear()
+
+        with historical.factory() as session:
+            session.add_all(TradingCalendar(
+                exchange=exchange,
+                cal_date=NOW.date() + timedelta(days=offset),
+                is_open=True,
+                previous_trade_date=NOW.date() + timedelta(days=offset - 1),
+            ) for exchange in {"SSE", historical.plan.market} for offset in range(7, 16))
+            session.commit()
+        for offset in range(4, 15):
+            publish(historical, day=NOW.date() + timedelta(days=offset),
+                    risk=breached.snapshot.risk, transition=False)
+        statements.clear()
+        target = NOW.date() + timedelta(days=15)
+        observed = OBSERVED + timedelta(days=12)
+        assert prepare(historical, target, observed).status == "PROVEN"
+        assert len(statements) == baseline
+    finally:
+        event.remove(historical.engine, "before_cursor_execute", count_checkpoint_reads)

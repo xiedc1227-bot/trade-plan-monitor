@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Literal
 
-from sqlalchemy import Integer, cast, select
+from sqlalchemy import Integer, case, cast, func, select
 from sqlalchemy.orm import Session
 
 from trade_plan_monitor.decision.models import (
@@ -277,7 +277,10 @@ def _latest_completed_close(session, scope, reader, target_date):
     ).order_by(EvaluationLedger.target_value.desc()).limit(1))
     if anchor_date is None:
         return None
-    day = _date(anchor_date)
+    return _proven_completed_close(scope, reader, _date(anchor_date))
+
+
+def _proven_completed_close(scope, reader, day):
     _require(datetime.combine(day, time(15), SHANGHAI) >= scope.activated_at)
     identity = OfficialCloseEvaluationIdentity(
         plan_hash=plan_sha256(scope.plan), symbol=scope.plan.symbol,
@@ -295,25 +298,39 @@ def _latest_completed_close(session, scope, reader, target_date):
     return result
 
 
-def _checkpoint_transition(session, scope, reader, anchor):
-    """Read only stored checkpoints needed to establish the current risk source."""
+def _risk_transition_results(session, scope, reader, cutoff, audit_count):
+    """Validate stored transition checkpoints without visiting every unchanged close."""
 
-    checkpoint = anchor
-    while not checkpoint.transitions:
-        previous = _latest_completed_close(
-            session, scope, reader, checkpoint.evaluation_identity.official_trade_date,
-        )
-        if previous is None:
-            raise _MissingEvidence()
-        _require(previous.snapshot.signal_type is not SignalType.BLOCKED_DATA
-                 and _business(previous.snapshot.risk) == _business(checkpoint.snapshot.risk))
-        checkpoint = previous
-    _require(len(checkpoint.transitions) == 1)
-    previous = _latest_completed_close(
-        session, scope, reader, checkpoint.evaluation_identity.official_trade_date,
+    transition_count = case(
+        (func.json_valid(EvaluationResult.result_json) == 1,
+         func.json_array_length(EvaluationResult.result_json, "$.transitions")),
+        else_=0,
     )
-    _require(previous is None or previous.snapshot.signal_type is not SignalType.BLOCKED_DATA)
-    return checkpoint, previous
+    dates = session.scalars(select(EvaluationResult.target_value).where(
+        EvaluationResult.plan_hash == plan_sha256(scope.plan),
+        EvaluationResult.symbol == scope.plan.symbol,
+        EvaluationResult.evaluation_kind == "OFFICIAL_CLOSE",
+        EvaluationResult.formula_version == scope.plan.monitoring.indicator_formula_version,
+        EvaluationResult.target_value >= scope.activated_at.date().isoformat(),
+        EvaluationResult.target_value < cutoff.date().isoformat(),
+        transition_count > 0,
+    ).order_by(EvaluationResult.target_value).limit(audit_count + 1)).all()
+    if len(dates) > audit_count:
+        raise _HistoryLimit()
+    results = []
+    for raw_day in dates:
+        day = _date(raw_day)
+        result = _proven_completed_close(scope, reader, day)
+        _require(len(result.transitions) == 1)
+        previous = _latest_completed_close(session, scope, reader, day)
+        if previous is not None:
+            _require(previous.snapshot.risk.revision ==
+                     result.transitions[0].expected_revision)
+            if results:
+                _require(_business(previous.snapshot.risk) ==
+                         _business(results[-1].snapshot.risk))
+        results.append(result)
+    return tuple(results)
 
 
 def _calendar(session, exchange, trade_date):
@@ -373,8 +390,6 @@ def _risk_inputs(session, scope, results, cutoff, *, anchor=None, reader=None):
                  and _timestamp(audit["created_at"]) <= scope.observed_at)
         by_revision[revision] = audit
     digest = plan_sha256(scope.plan)
-    transitions = [transition for result in results for transition in result.transitions]
-    _require(all(type(item) is RiskTransitionIntent for item in transitions))
     if current is not None:
         _match_risk_audit(current, by_revision)
         _require(all(revision <= current.revision for revision in by_revision))
@@ -392,38 +407,10 @@ def _risk_inputs(session, scope, results, cutoff, *, anchor=None, reader=None):
                      and risk.revision == (0 if current is None else current.revision))
             return current, None
         _require(_business(risk) == _business(current) and reader is not None)
-        checkpoint, previous = _checkpoint_transition(session, scope, reader, anchor)
-        risk = checkpoint.snapshot.risk
-        transition = checkpoint.transitions[0]
-        source = checkpoint.snapshot.market_data_at
-        _require(source == datetime.combine(
-            checkpoint.evaluation_identity.official_trade_date, time(15), SHANGHAI,
-        ) and source < cutoff and transition.risk == risk
-                 and transition.expected_revision == risk.revision - 1
-                 and risk.updated_at == checkpoint.snapshot.evaluated_at)
-        prior_risk = None if previous is None else previous.snapshot.risk
-        if prior_risk is None or prior_risk.status is RiskStatus.CLEAR:
-            _require(risk.status is RiskStatus.BREACHED_PENDING_CONFIRMATION
-                     and risk.breach_trade_date == source.date())
-        else:
-            _require(risk.status in (RiskStatus.CLEAR, RiskStatus.EXIT_PENDING_SETTLEMENT))
-            if risk.status is RiskStatus.EXIT_PENDING_SETTLEMENT:
-                _require(prior_risk.status is RiskStatus.BREACHED_PENDING_CONFIRMATION
-                         and risk.breach_trade_date == prior_risk.breach_trade_date
-                         and risk.prior_close_fen == prior_risk.prior_close_fen)
-        if prior_risk is not None:
-            _require(transition.expected_revision == prior_risk.revision)
-        audit = by_revision.get(risk.revision)
-        if audit is None:
-            raise _MissingEvidence()
-        if risk.revision == 1:
-            _require(audit["before_hash"] is None)
-        else:
-            predecessor = by_revision.get(transition.expected_revision)
-            if predecessor is None:
-                raise _MissingEvidence()
-            _require(audit["before_hash"] == predecessor["after_hash"])
-        return current, risk.model_copy(update={"updated_at": source})
+        results = _risk_transition_results(session, scope, reader, cutoff, len(by_revision))
+        _require(bool(results) and _business(results[-1].snapshot.risk) == _business(risk))
+    transitions = [transition for result in results for transition in result.transitions]
+    _require(all(type(item) is RiskTransitionIntent for item in transitions))
     if current is None or current.plan_hash != digest:
         _require(not transitions and (current is not None or not audits))
         revision = 0 if current is None else current.revision

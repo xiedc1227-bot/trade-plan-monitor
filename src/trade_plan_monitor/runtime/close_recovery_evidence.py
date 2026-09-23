@@ -117,7 +117,9 @@ class LegacyCloseRecoveryReader:
         observed_at = _canonical_shanghai(observed_at)
         if (type(max_calendar_days) is not int
                 or not 1 <= max_calendar_days <= MAX_CLOSE_DISCOVERY_DAYS):
-            raise ValueError("max_calendar_days must be an integer between 1 and 32")
+            raise ValueError(
+                f"max_calendar_days must be an integer between 1 and {MAX_CLOSE_DISCOVERY_DAYS}"
+            )
         if window_start is not None and type(window_start) is not date:
             raise TypeError("window_start must be a date")
         session = self._session_factory()
