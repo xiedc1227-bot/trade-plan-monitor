@@ -23,6 +23,8 @@ The production lifecycle now calls the durable admission gate after opening the 
 - A separate `spawn`-based test started one Python interpreter that committed expiry and exited with code 17, then another that restarted from the same temporary SQLite file. No active plans returned, the audit stayed at five rows and 1,000 held units remained. This proves post-commit process loss/restart, not interruption halfway through the expiry transaction.
 - The exact 120-hour production-admission case initially failed because expiry classification and heartbeat renewal read the clock separately. Admission now freezes one observed timestamp across both operations; the boundary test passes without discarding either plan.
 - After these additions, the affected regression command listed above was rerun: 263 passed, 1 existing warning, 52.11 seconds.
+- A real spawned process was paused after the first plan's in-transaction deactivation and force-terminated. Reopening the temporary SQLite database showed both plans and pending closes intact, no expiry audit, the held alert eligibility unchanged, and the old last-alive time. A fresh process then expired both plans exactly once, suppressed the held eligibility and retained 1,000 held units. The first test harness deadlocked by setting a Windows multiprocessing event after terminating its waiter; replacing that wait with a bounded child sleep removed the harness fault. No runtime source change was needed.
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_plan_expiry.py tests/integration/test_runtime_liveness.py tests/integration/test_runtime_lifecycle.py -q --tb=short` — 45 passed, 8.53 seconds. Ruff on the changed test file passed.
 
 ## Actual process-restart slice — 2026-09-23
 
