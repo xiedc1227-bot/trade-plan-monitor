@@ -1123,6 +1123,25 @@ class RuntimeEvaluationService:
         evaluated_at = _ceil_to_whole_second(evaluated_at)
         reference_market_snapshot = None
         if self._market_index_service is not None:
+            if isinstance(self._official_context_builder, HistoricalOfficialContextBuilder):
+                if not self._recovery_delivery:
+                    raise ValueError(
+                        "Historical official context requires recovery_delivery=True",
+                    )
+                activation_revision = self._capture_plan_activation_revision(plan)
+                with self._unit_of_work_factory() as unit_of_work:
+                    self._require_evaluated_plan_active(
+                        unit_of_work, plan, expected_revision=activation_revision,
+                        market_date=trade_date,
+                    )
+                    completed = unit_of_work.evaluations.has_claim(
+                        plan_hash=plan_sha256(plan), symbol=plan.symbol,
+                        evaluation_kind=EvaluationKind.OFFICIAL_CLOSE, bucket_end=None,
+                        official_trade_date=trade_date,
+                        formula_version=plan.monitoring.indicator_formula_version,
+                    )
+                if not completed:
+                    self._official_context_builder.prepare_target(plan, trade_date, evaluated_at)
             cutoff = datetime.combine(trade_date, time(15, 0), evaluated_at.tzinfo)
             prepared = await self._market_index_service.prepare(
                 plans=(plan,),

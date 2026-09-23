@@ -20,6 +20,7 @@ from trade_plan_monitor.runtime.historical_close_context import (
     HistoricalOfficialContextBuilder,
 )
 from trade_plan_monitor.runtime.historical_close_evidence import LegacyHistoricalCloseReader
+from trade_plan_monitor.runtime.market_indexes import RuntimeMarketIndexService
 from trade_plan_monitor.runtime.service import RuntimeEvaluationService
 from trade_plan_monitor.state.database import (
     create_session_factory,
@@ -80,7 +81,8 @@ def recovery(tmp_path):
     async def forbidden_minutes(*_args):
         pytest.fail("historical close must not request minute data")
 
-    def service(*, evaluator=evaluate, delivery=True, publisher=published.append):
+    def service(*, evaluator=evaluate, delivery=True, publisher=published.append,
+                index_service=None):
         return RuntimeEvaluationService(
             fetch_minutes=forbidden_minutes, fetch_official_daily=daily,
             official_observed_at=lambda value: value, unit_of_work_factory=work,
@@ -90,6 +92,7 @@ def recovery(tmp_path):
             ),
             evaluator=evaluator, recovery_delivery=delivery,
             committed_event_publisher=publisher,
+            market_index_service=index_service,
         )
 
     def run(day, **options):
@@ -100,7 +103,8 @@ def recovery(tmp_path):
         ))
 
     yield SimpleNamespace(engine=engine, sessions=sessions, work=work, plan=plan, lot=lot,
-                          clock=clock, prices=prices, run=run, published=published)
+                          clock=clock, prices=prices, run=run, published=published,
+                          service=service)
     engine.dispose()
 
 
@@ -338,3 +342,42 @@ def test_missing_plan_calendar_does_not_permanently_claim_blocked_close(recovery
         ),))
         unit.commit()
     assert recovery.run(D1).status == "COMMITTED"
+
+
+def test_out_of_order_target_is_rejected_before_shared_index_preparation(
+    recovery, monkeypatch,
+):
+    calls = []
+
+    async def index_prepare(_service, **_kwargs):
+        calls.append(True)
+        raise AssertionError("index preparation must not run for an invalid target")
+
+    monkeypatch.setattr(RuntimeMarketIndexService, "prepare", index_prepare)
+    with pytest.raises(HistoricalCloseUnavailableError):
+        asyncio.run(recovery.service(index_service=object.__new__(RuntimeMarketIndexService))
+                    .run_official_close(
+                        plan=recovery.plan, trade_date=D2, evaluated_at=OBSERVED,
+                        close_attempt=1,
+                    ))
+    assert calls == []
+    assert _counts(recovery) == (0, 0, 0, 0)
+
+
+def test_duplicate_target_can_reach_existing_shared_index_path(recovery, monkeypatch):
+    assert recovery.run(D1).status == "COMMITTED"
+    calls = []
+
+    async def index_prepare(_service, **_kwargs):
+        calls.append(True)
+        raise RuntimeError("existing index path reached")
+
+    monkeypatch.setattr(RuntimeMarketIndexService, "prepare", index_prepare)
+    with pytest.raises(RuntimeError, match="existing index path reached"):
+        asyncio.run(recovery.service(index_service=object.__new__(RuntimeMarketIndexService))
+                    .run_official_close(
+                        plan=recovery.plan, trade_date=D1, evaluated_at=OBSERVED,
+                        close_attempt=1,
+                    ))
+    assert calls == [True]
+    assert _counts(recovery) == (1, 1, 1, 1)
