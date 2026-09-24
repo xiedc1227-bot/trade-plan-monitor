@@ -36,6 +36,12 @@ const serviceStatuses: Readonly<Record<RuntimeServiceStatus, StatusPresentation>
 };
 
 const presentation = computed(() => serviceStatuses[props.health.status]);
+const indexOnly = computed(() =>
+  props.health.status === "RUNNING" &&
+  (props.health.providers ?? []).some(
+    (provider) => provider.errorCode === "STOCK_SEMANTICS_UNAVAILABLE",
+  ),
+);
 
 const degradedReasons: Readonly<Record<string, string>> = {
   ACTIVE_PLAN_LOAD_FAILED: "读取活动计划失败",
@@ -83,8 +89,11 @@ function timeLabel(label: string, value: string | null) {
         </span>
         <span>{{ presentation.label }}</span>
         <span class="market-status-strip__mode">
-          {{ props.health.readOnly ? "只读" : "可监控" }}
+          {{ indexOnly ? "仅指数采集" : props.health.readOnly ? "只读" : "可监控" }}
         </span>
+      </p>
+      <p v-if="indexOnly" data-testid="index-only-notice">
+        股票计划已阻断：股票行情格式认证不可用。当前仅运行指数采集。
       </p>
       <p v-if="degradedReason !== null">原因：{{ degradedReason }}</p>
     </div>

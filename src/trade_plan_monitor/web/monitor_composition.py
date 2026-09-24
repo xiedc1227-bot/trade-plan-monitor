@@ -59,7 +59,11 @@ from trade_plan_monitor.runtime.request_control import (
     TushareRequestController,
     create_live_tushare_request_controller,
 )
-from trade_plan_monitor.runtime.scheduler import MarketDeadline, MarketSessionScheduler
+from trade_plan_monitor.runtime.scheduler import (
+    DeadlineKind,
+    MarketDeadline,
+    MarketSessionScheduler,
+)
 from trade_plan_monitor.runtime.service import RuntimeLifecycleService
 from trade_plan_monitor.state.alert_invalidation_sweep import (
     MAX_SWEEP_BATCH,
@@ -780,7 +784,16 @@ class _ProductionRuntimeState:
         if self._semantic_reload_blocked:
             return self._capabilities
         if self._pipeline is not None:
-            if self._pipeline._stock_certification_current():
+            if (
+                (
+                    self._pipeline._stock_semantics is None
+                    or self._pipeline._stock_certification_current()
+                )
+                and (
+                    self._pipeline._index_semantics is None
+                    or self._pipeline._index_certification_current()
+                )
+            ):
                 return self._capabilities
             self._pipeline = None
             self._revoke_semantics()
@@ -896,8 +909,7 @@ class _ProductionRuntimeState:
                 for capability in _PROVIDER_CAPABILITIES
             })
         if (
-            stock_semantics is not None
-            and stock_semantics.surface == "STOCK"
+            (stock_revision is not None or index_revision is not None)
             and self._runtime_generation is not None
             and self._publisher is not None
         ):
@@ -917,8 +929,9 @@ class _ProductionRuntimeState:
                 runtime_generation=generation,
                 publisher=self._publisher,
                 semantic_bindings=ProductionSemanticBindings(
-                    stock=SemanticContractBinding(
-                        stock_path, stock_semantics.semantic_revision,
+                    stock=(
+                        SemanticContractBinding(stock_path, stock_revision)
+                        if stock_revision is not None else None
                     ),
                     index=index_binding,
                 ),
@@ -940,7 +953,7 @@ class _ProductionRuntimeState:
         return self._pipeline is not None
 
     async def refresh_references(self, trade_date: date) -> None:
-        if self._pipeline is not None:
+        if self._pipeline is not None and self._pipeline._stock_semantics is not None:
             try:
                 await self._pipeline.refresh_references(trade_date)
             except Exception as error:
@@ -967,7 +980,7 @@ class _ProductionRuntimeState:
                     self._stage_retry_at.pop(stage, None)
 
     async def recover_startup(self, trade_date: date) -> None:
-        if self._pipeline is not None:
+        if self._pipeline is not None and self._pipeline._stock_semantics is not None:
             try:
                 await self._pipeline.recover_startup(trade_date)
             except Exception:
@@ -990,8 +1003,17 @@ class _ProductionRuntimeState:
     async def run_deadline(self, deadline: MarketDeadline) -> object:
         if self._pipeline is None:
             raise RuntimeError("live monitor requires a certified production pipeline")
-        result = await self._pipeline.run_deadline(deadline)
-        if self._dispatcher is not None:
+        if self.configuration_restart_required():
+            raise RuntimeError("monitor semantics changed; safe restart required")
+        if (
+            self._pipeline._stock_semantics is None
+            and deadline.kind is not DeadlineKind.INDEX_RECOVERY
+        ):
+            await self._pipeline._refresh_dashboard_indexes(deadline)
+            result = ()
+        else:
+            result = await self._pipeline.run_deadline(deadline)
+        if self._dispatcher is not None and self.stock_delivery_admission_open():
             await self._dispatcher.dispatch_pending()
         return result
 
@@ -1164,15 +1186,30 @@ class _ProductionRuntimeState:
             return self._process_baseline.revoked.is_set()
         if not self.configuration_is_current() or self._semantic_reload_blocked:
             return True
+        try:
+            self._require_frozen_semantics(self._configuration)
+        except RuntimeError:
+            return True
         pipeline = self._pipeline
         if pipeline is None:
             return False
-        if not pipeline._stock_certification_current() or (
+        if (
+            pipeline._stock_semantics is not None
+            and not pipeline._stock_certification_current()
+        ) or (
             pipeline._index_semantics is not None
             and not pipeline._index_certification_current()
         ):
             self._revoke_semantics()
         return self._semantic_reload_blocked
+
+    def stock_delivery_admission_open(self) -> bool:
+        pipeline = self._pipeline
+        return (
+            pipeline is not None
+            and pipeline._stock_semantics is not None
+            and pipeline._stock_certification_current()
+        )
 
 
 def create_monitor_composition_factory(
@@ -1245,6 +1282,7 @@ def create_monitor_composition(
             return (
                 not state.configuration_restart_required()
                 and current_delivery_admission(event, now)
+                and state.stock_delivery_admission_open()
                 and not process_baseline.revoked.is_set()
             )
 

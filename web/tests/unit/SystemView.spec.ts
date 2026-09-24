@@ -83,6 +83,28 @@ afterEach(() => {
 });
 
 describe("SystemView", () => {
+  it("labels a running index-only process without claiming stock monitoring", () => {
+    const wrapper = mountSystem({
+      health: {
+        ...health,
+        status: "RUNNING",
+        readOnly: false,
+        providers: [{
+          capability: "realtime_minutes",
+          checkedAt: health.observedAt,
+          errorCode: "STOCK_SEMANTICS_UNAVAILABLE",
+          latencyMs: 0,
+          nextRetryAt: null,
+          status: "ERROR",
+        }],
+      },
+    });
+    const strip = wrapper.get('[data-testid="market-status-strip"]');
+    expect(strip.text()).toContain("仅指数采集");
+    expect(strip.get('[data-testid="index-only-notice"]').text()).toContain("股票计划已阻断");
+    expect(strip.text()).not.toContain("可监控");
+  });
+
   it("shows the controlled restart action without legacy-plan maintenance", () => {
     const wrapper = mountSystem({
       health: { ...health, status: "BLOCKED", blockReason: "NEEDS_RESTART" },

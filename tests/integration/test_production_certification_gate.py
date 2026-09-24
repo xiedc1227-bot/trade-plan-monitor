@@ -29,7 +29,10 @@ from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, Del
 from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.production import ReferenceDependenciesChangedError
-from trade_plan_monitor.runtime.provider_contract import import_index_semantic_contract
+from trade_plan_monitor.runtime.provider_contract import (
+    import_index_semantic_contract,
+    import_stock_semantic_contract,
+)
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
@@ -42,6 +45,7 @@ from trade_plan_monitor.state.database import create_session_factory, create_sql
 from trade_plan_monitor.state.models import (
     AlertEvent,
     EvaluationResult,
+    MarketIndexSnapshot,
     RuntimeLiveness,
     TradingCalendar,
 )
@@ -59,7 +63,8 @@ from trade_plan_monitor.web.monitor_composition import (
 
 def _composition(
     tmp_path, monkeypatch, *, invalidate_during_request=None, fail_realtime_once=False,
-    rate_limit_realtime_once=False,
+    rate_limit_realtime_once=False, active_plan=True, include_index=False,
+    stock_certification=True, persisted_calendar=False,
 ):
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
@@ -67,7 +72,7 @@ def _composition(
     database = tmp_path / "monitor.sqlite3"
     clock = ControlledClock(NOW.replace(hour=9, minute=0))
     plan = _sample_plan()
-    _activate_plans(database, clock, (plan,))
+    _activate_plans(database, clock, (plan,) if active_plan else ())
     seeded_engine = create_sqlite_engine(database)
     try:
         with create_session_factory(seeded_engine).begin() as session:
@@ -75,11 +80,20 @@ def _composition(
                 id=1, schema_version=1, revision=0,
                 last_alive_at=clock.now().isoformat(),
             ))
+            if persisted_calendar:
+                session.add(TradingCalendar(
+                    exchange="SSE", cal_date=NOW.date(), is_open=True,
+                    previous_trade_date=NOW.date() - timedelta(days=1),
+                ))
     finally:
         seeded_engine.dispose()
     clock.current = NOW
-    config = _write_configuration_and_evidence(tmp_path, observed_at=NOW, include_index=False)
+    config = _write_configuration_and_evidence(
+        tmp_path, observed_at=NOW, include_index=include_index
+    )
     certification = tmp_path / "data/live-certification/tushare-stock-live.json"
+    if not stock_certification:
+        certification.unlink()
     semantic_contract = certification.parent / "stock-semantic.json"
 
     class InvalidatingSDK(OfflineSDK):
@@ -135,6 +149,153 @@ def _composition(
         sdk,
         certification,
     )
+
+
+@pytest.mark.parametrize("active_plan", (False, True))
+def test_production_index_runs_without_stock_semantics_or_certification(
+    tmp_path, monkeypatch, active_plan,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(
+            tmp_path, monkeypatch, active_plan=active_plan, include_index=True,
+            stock_certification=False, persisted_calendar=True,
+        )
+        try:
+            startup = await composition.start()
+            state = composition._runtime._probe_capabilities.__self__
+            assert state._pipeline is not None
+            assert startup.status is RuntimeServiceStatus.RUNNING
+            assert state._liveness_revision is not None
+            owner_revision = state._liveness_revision
+            await state.heartbeat()
+            assert state._liveness_revision == owner_revision + 1
+            deadline = MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE,
+                trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
+            )
+            await state.run_deadline(deadline)
+            assert any(name in {"idx_mins", "rt_idx_min_daily"} for name, _ in sdk.calls)
+            assert not any(
+                name in {"trade_cal", "stk_limit", "daily", "rt_min", "stk_mins"}
+                for name, _ in sdk.calls
+            )
+            with state._session_factory() as session:
+                assert session.scalar(select(func.count()).select_from(MarketIndexSnapshot)) > 0
+                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+            stock = next(
+                item for item in state.health_details().providers
+                if item.capability == "realtime_minutes"
+            )
+            assert stock.status is ProviderCapabilityStatus.ERROR
+            assert stock.error_code == "STOCK_SEMANTICS_UNAVAILABLE"
+        finally:
+            await composition.stop()
+        assert composition.health().status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
+
+
+def test_production_index_only_cold_start_waits_for_trusted_calendar(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(
+            tmp_path, monkeypatch, active_plan=False, include_index=True,
+            stock_certification=False, persisted_calendar=False,
+        )
+        try:
+            startup = await composition.start()
+            state = composition._runtime._probe_capabilities.__self__
+            assert startup.status is RuntimeServiceStatus.DEGRADED
+            assert state._pipeline is not None
+            assert state._liveness_revision is not None
+            owner_revision = state._liveness_revision
+            await state.heartbeat()
+            assert state._liveness_revision == owner_revision + 1
+            assert sdk.calls == []
+            with state._session_factory() as session:
+                assert session.scalar(select(func.count()).select_from(MarketIndexSnapshot)) == 0
+        finally:
+            await composition.stop()
+        assert composition.health().status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
+
+
+def test_index_only_deadline_never_delivers_old_stock_alert(tmp_path, monkeypatch):
+    async def scenario():
+        composition, sdk, _ = _composition(
+            tmp_path, monkeypatch, active_plan=True, include_index=True,
+            stock_certification=False, persisted_calendar=True,
+        )
+        delivered = []
+
+        class Channel:
+            channel = DeliveryChannel.IN_APP
+            enabled = True
+
+            async def deliver(self, event):
+                delivered.append(event.event_id)
+                return ChannelDeliveryResult(
+                    channel=self.channel, delivered=True, retryable=False,
+                )
+
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            state = composition._runtime._probe_capabilities.__self__
+            with state.unit_of_work_factory() as work:
+                work.alerts.enqueue_recoverable(_payload(992))
+                work.commit()
+            state._dispatcher._channels = (Channel(),)
+            monkeypatch.setattr(CurrentDeliveryAdmission, "__call__", lambda *_: True)
+            await state.run_deadline(MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
+                due_at=NOW, bar_end=NOW.replace(second=0),
+            ))
+            assert any(name in {"idx_mins", "rt_idx_min_daily"} for name, _ in sdk.calls)
+            assert delivered == []
+            await state._dispatcher.dispatch_pending()
+            assert delivered == []
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_late_stock_semantic_latches_index_only_process(tmp_path, monkeypatch):
+    async def scenario():
+        composition, sdk, certification = _composition(
+            tmp_path, monkeypatch, active_plan=False, include_index=True,
+            stock_certification=False, persisted_calendar=True,
+        )
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            state = composition._runtime._probe_capabilities.__self__
+            _write_configuration_and_evidence(
+                tmp_path, observed_at=NOW, include_index=True,
+            )
+            endpoint = str(load_application_config(tmp_path / "config/app.yaml").tushare.api_url)
+            assert import_stock_semantic_contract(
+                certification, certification.parent / "stock-semantic.json",
+                now=NOW, endpoint_url=endpoint,
+                installed_sdk_version=lambda: "1.4.29",
+            ) is not None
+            before = tuple(sdk.calls)
+            assert state.configuration_restart_required()
+            assert state._process_baseline.revoked.is_set()
+            with pytest.raises(RuntimeError, match="safe restart required"):
+                await state.run_deadline(MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
+                    due_at=NOW, bar_end=NOW.replace(second=0),
+                ))
+            (certification.parent / "stock-semantic.json").unlink()
+            assert state.configuration_restart_required()
+            assert tuple(sdk.calls) == before
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize(
