@@ -269,10 +269,12 @@ class ProductionMonitorPipeline:
         semantic_bindings: ProductionSemanticBindings | None = None,
         recovery_session_factory: Callable[[], Session] | None = None,
         configuration_current: Callable[[], bool] | None = None,
+        generation_current: Callable[[], bool] | None = None,
     ) -> None:
         self._clock = clock
         self._controller = request_controller
         self._configuration_current = configuration_current or (lambda: True)
+        self._generation_current = generation_current or (lambda: True)
         self._work = unit_of_work_factory
         self._certifications = certification_directory
         self._endpoint = str(configuration.api_url).rstrip("/")
@@ -588,11 +590,44 @@ class ProductionMonitorPipeline:
 
     async def _request(self, operation: TushareOperation, call: Callable[[], object], key: str):
         self.reference_stage = operation
+        if operation is TushareOperation.TRADING_CALENDAR:
+            await self._maybe_recheck_calendar_permission()
         return await self._controller.execute(
             operation,
             call,
             work_key=key,
             priority=RequestPriority.RECOVERY,
+        )
+
+    def _calendar_permission_anchor(self) -> date | None:
+        """Choose a completed locally persisted day; absence never authorizes a probe."""
+
+        yesterday = self._clock.now().date() - timedelta(days=1)
+        with self._work() as work:
+            days = work.references.list_trading_days(
+                "SSE", yesterday - timedelta(days=6), yesterday,
+            )
+        return None if not days else days[-1].cal_date
+
+    async def _maybe_recheck_calendar_permission(self) -> None:
+        operation = TushareOperation.TRADING_CALENDAR
+        if not self._controller.is_permission_blocked(operation):
+            return
+        due = self._controller.permission_retry_at(operation)
+        if due is None or self._clock.now() < due:
+            return
+        anchor = self._calendar_permission_anchor()
+        if anchor is None:
+            return
+        if not self._stock_certification_current() or not self._generation_current():
+            return
+        await self._controller.recheck_permission(
+            operation,
+            lambda: self.provider.probe_trading_calendar_permission("SSE", anchor),
+            work_key="permission:trade_cal:SSE",
+            validate_after=lambda: (
+                self._stock_certification_current() and self._generation_current()
+            ),
         )
 
     async def refresh_references(self, trade_date: date) -> None:

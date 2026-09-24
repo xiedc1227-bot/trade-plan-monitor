@@ -133,6 +133,7 @@ _RETRYABLE_PROVIDER_ERRORS = frozenset({
     RequestControlErrorCode.TRANSIENT,
     RequestControlErrorCode.TIMEOUT,
     RequestControlErrorCode.RATE_LIMITED,
+    RequestControlErrorCode.BLOCKED_PERMISSION,
 })
 
 FetchMinutes = Callable[[str, datetime], Awaitable[list[MinuteBar] | tuple[MinuteBar, ...]]]

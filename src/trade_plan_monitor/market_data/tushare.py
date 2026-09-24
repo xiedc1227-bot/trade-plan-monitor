@@ -327,6 +327,17 @@ class TushareMarketDataProvider:
             strict_response=True,
         )
 
+    def probe_trading_calendar_permission(self, exchange: str, anchor: date) -> None:
+        """Read one known calendar day without applying it to business state."""
+
+        if type(exchange) is not str:
+            raise TypeError("exchange must be a string")
+        rows = self._trading_calendar(
+            self._validated_exchange(exchange), anchor, anchor, strict_response=True,
+        )
+        if len(rows) != 1 or rows[0].exchange != exchange or rows[0].cal_date != anchor:
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "trade_cal")
+
     def _trading_calendar(
         self,
         exchange: str,

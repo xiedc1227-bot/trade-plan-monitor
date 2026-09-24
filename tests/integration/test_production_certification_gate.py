@@ -2,7 +2,9 @@
 
 import asyncio
 from datetime import timedelta
+from uuid import uuid4
 
+import pandas as pd
 import pytest
 from requests import ConnectionError as ProviderConnectionError
 from sqlalchemy import func, select, text
@@ -22,11 +24,17 @@ from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
+    TushareOperation,
     create_live_tushare_request_controller,
 )
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
-from trade_plan_monitor.state.models import AlertEvent, EvaluationResult, RuntimeLiveness
+from trade_plan_monitor.state.models import (
+    AlertEvent,
+    EvaluationResult,
+    RuntimeLiveness,
+    TradingCalendar,
+)
 from trade_plan_monitor.state.runtime_recovery import (
     ProviderRecoveryRepository,
     RecoveryCheckpoint,
@@ -375,5 +383,183 @@ def test_corrupt_production_checkpoint_blocks_start_and_releases_owner(
             assert replacement._runtime._request_controller.repository_bound
         finally:
             await replacement.stop()
+
+    asyncio.run(scenario())
+
+
+def test_calendar_permission_probe_uses_persisted_anchor_without_business_writes(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        runtime = composition._runtime
+        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+        control = runtime._request_controller
+        state = runtime._probe_capabilities.__self__
+        pipeline = state._pipeline
+        assert pipeline is not None
+        try:
+            def denied():
+                raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
+
+            with pytest.raises(RequestControlError):
+                await control.execute(
+                    TushareOperation.TRADING_CALENDAR, denied, work_key="calendar:fault",
+                )
+            state._clock.current += timedelta(seconds=300)
+            with create_session_factory(state._engine)() as session:
+                before = session.scalar(select(func.count()).select_from(TradingCalendar))
+            calls = len(sdk.calls)
+            await pipeline._maybe_recheck_calendar_permission()
+            assert not control.is_permission_blocked(TushareOperation.TRADING_CALENDAR)
+            assert len(sdk.calls) == calls + 1
+            name, kwargs = sdk.calls[-1]
+            assert name == "trade_cal"
+            assert kwargs["exchange"] == "SSE"
+            assert kwargs["start_date"] == kwargs["end_date"]
+            with create_session_factory(state._engine)() as session:
+                after = session.scalar(select(func.count()).select_from(TradingCalendar))
+            assert after == before
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_calendar_permission_without_anchor_never_probes_and_remains_blocked(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        runtime = composition._runtime
+        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+        control = runtime._request_controller
+        state = runtime._probe_capabilities.__self__
+        pipeline = state._pipeline
+        assert pipeline is not None
+        try:
+            def denied():
+                raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
+
+            with pytest.raises(RequestControlError):
+                await control.execute(
+                    TushareOperation.TRADING_CALENDAR, denied, work_key="calendar:fault",
+                )
+            state._clock.current += timedelta(seconds=300)
+            with state._engine.begin() as connection:
+                connection.execute(text("DELETE FROM trading_calendar"))
+            calls = len(sdk.calls)
+            await pipeline._maybe_recheck_calendar_permission()
+            assert len(sdk.calls) == calls
+            assert control.is_permission_blocked(TushareOperation.TRADING_CALENDAR)
+            with pytest.raises(RequestControlError) as caught:
+                await pipeline._request(
+                    TushareOperation.TRADING_CALENDAR, lambda: None, "calendar:retry",
+                )
+            assert caught.value.code is RequestControlErrorCode.BLOCKED_PERMISSION
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "outcome", ("empty", "rate_limit", "config_change", "generation_change")
+)
+def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
+    tmp_path, monkeypatch, outcome,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        runtime = composition._runtime
+        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+        control = runtime._request_controller
+        state = runtime._probe_capabilities.__self__
+        pipeline = state._pipeline
+        assert pipeline is not None
+        try:
+            def denied():
+                raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
+
+            with pytest.raises(RequestControlError):
+                await control.execute(
+                    TushareOperation.TRADING_CALENDAR, denied, work_key="calendar:fault",
+                )
+            state._clock.current += timedelta(seconds=300)
+            original_calendar = sdk._calendar
+
+            def probe_response(kwargs):
+                if outcome == "empty":
+                    return pd.DataFrame(columns=(
+                        "exchange", "cal_date", "is_open", "pretrade_date",
+                    ))
+                if outcome == "rate_limit":
+                    raise TushareProviderError(TushareErrorCode.RATE_LIMITED, "trade_cal")
+                result = original_calendar(kwargs)
+                if outcome == "config_change":
+                    config = tmp_path / "config/app.yaml"
+                    config.write_text(
+                        config.read_text(encoding="utf-8").replace(
+                            "offline-test-token", "offline-new-token"
+                        ),
+                        encoding="utf-8",
+                    )
+                else:
+                    state._runtime_generation = uuid4
+                return result
+
+            sdk._calendar = probe_response
+            calls = len(sdk.calls)
+            with pytest.raises(RequestControlError) as caught:
+                await pipeline._maybe_recheck_calendar_permission()
+            assert caught.value.code is (
+                RequestControlErrorCode.RATE_LIMITED if outcome == "rate_limit"
+                else RequestControlErrorCode.INVALID_RESPONSE
+            )
+            assert len(sdk.calls) == calls + 1
+            assert control.is_permission_blocked(TushareOperation.TRADING_CALENDAR)
+            assert control.permission_retry_at(
+                TushareOperation.TRADING_CALENDAR
+            ) == state._clock.now() + timedelta(seconds=300)
+            await pipeline._maybe_recheck_calendar_permission()
+            assert len(sdk.calls) == calls + 1
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        runtime = composition._runtime
+
+        def denied(_kwargs):
+            raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
+
+        sdk._calendar = denied
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
+            state = runtime._probe_capabilities.__self__
+            calendar = next(
+                item for item in state.health_details().providers
+                if item.capability == "trading_calendar"
+            )
+            assert calendar.status is ProviderCapabilityStatus.BLOCKED_PERMISSION
+            assert calendar.error_code == "BLOCKED_PERMISSION"
+            physical_calls = len(sdk.calls)
+            state._clock.current += timedelta(seconds=301)
+            await runtime._recheck_degraded_startup()
+            assert len(sdk.calls) == physical_calls
+            assert runtime.health().status is RuntimeServiceStatus.DEGRADED
+            refreshed = next(
+                item for item in state.health_details().providers
+                if item.capability == "trading_calendar"
+            )
+            assert refreshed.next_retry_at == state._clock.now()
+        finally:
+            await composition.stop()
 
     asyncio.run(scenario())

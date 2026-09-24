@@ -252,6 +252,28 @@ def test_failed_permission_recheck_preserves_block_and_shared_cooldown():
     asyncio.run(scenario())
 
 
+def test_permission_probe_cannot_clear_block_after_local_evidence_changes():
+    async def scenario():
+        clock = Clock()
+        control = controller(clock)
+        with pytest.raises(RequestControlError):
+            await control.execute(
+                OPERATION, lambda: fail(TushareErrorCode.BLOCKED_PERMISSION), work_key="stock"
+            )
+        clock.current += timedelta(seconds=300)
+        with pytest.raises(RequestControlError) as caught:
+            await control.recheck_permission(
+                OPERATION, lambda: "valid probe result", work_key="probe:stock",
+                validate_after=lambda: False,
+            )
+        assert caught.value.code is RequestControlErrorCode.INVALID_RESPONSE
+        assert control.is_permission_blocked(OPERATION)
+        assert control.permission_retry_at(OPERATION) == clock.now() + timedelta(seconds=300)
+        await control.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_bound_provider_has_one_controller_owner_until_joined(tmp_path):
     async def scenario():
         engine = create_sqlite_engine(tmp_path / "recovery.db")

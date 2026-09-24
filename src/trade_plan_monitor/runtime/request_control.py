@@ -651,6 +651,7 @@ class TushareRequestController:
         *,
         work_key: str,
         priority: RequestPriority = RequestPriority.RECOVERY,
+        validate_after: Callable[[], bool] | None = None,
     ) -> T:
         """Coalesce one operation probe while keeping ordinary work blocked.
 
@@ -660,6 +661,8 @@ class TushareRequestController:
         self._require_bound_repository()
         self._validate_request(operation, call, priority)
         self._validate_work_key(work_key)
+        if validate_after is not None and not callable(validate_after):
+            raise TypeError("validate_after must be callable")
         running = self._permission_rechecks.get(operation)
         if running is None:
             due = self.permission_retry_at(operation)
@@ -685,6 +688,12 @@ class TushareRequestController:
                         priority=priority,
                         permission_recheck=True,
                     )
+                    if validate_after is not None and validate_after() is not True:
+                        raise RequestControlError(
+                            RequestControlErrorCode.INVALID_RESPONSE,
+                            operation,
+                            attempts=0,
+                        )
                     self.reset_permission_block(operation)
                     return result
                 finally:
@@ -850,6 +859,7 @@ class TushareRequestController:
                 RequestControlErrorCode.BLOCKED_PERMISSION,
                 operation,
                 attempts=0,
+                next_retry_at=self.permission_retry_at(operation),
             )
         now = self._now()
         if self._cooldown_until is not None:

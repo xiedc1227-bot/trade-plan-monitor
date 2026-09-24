@@ -53,6 +53,7 @@ from trade_plan_monitor.runtime.provider_contract import (
 )
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
+    TushareOperation,
     TushareRequestController,
     create_live_tushare_request_controller,
 )
@@ -749,6 +750,7 @@ class _ProductionRuntimeState:
             and self._runtime_generation is not None
             and self._publisher is not None
         ):
+            generation = self._runtime_generation()
             index_binding = (
                 SemanticContractBinding(index_path, index_semantics.semantic_revision)
                 if index_semantics is not None and index_semantics.surface == "BOARD_INDEX"
@@ -761,7 +763,7 @@ class _ProductionRuntimeState:
                 clock=self._clock,
                 request_controller=self._request_controller,
                 unit_of_work_factory=self.unit_of_work_factory,
-                runtime_generation=self._runtime_generation(),
+                runtime_generation=generation,
                 publisher=self._publisher,
                 semantic_bindings=ProductionSemanticBindings(
                     stock=SemanticContractBinding(
@@ -771,6 +773,10 @@ class _ProductionRuntimeState:
                 ),
                 recovery_session_factory=self._session_factory,
                 configuration_current=self.configuration_is_current,
+                generation_current=lambda: (
+                    self._database_status is RuntimeResourceStatus.READY
+                    and self._runtime_generation() == generation
+                ),
             )
         return self._capabilities
 
@@ -852,24 +858,34 @@ class _ProductionRuntimeState:
 
     def health_details(self) -> RuntimeHealthDetails:
         checked_at = self._provider_checked_at or self._clock.now()
-        providers = tuple(
-            ProviderHealthSnapshot(
+        providers = []
+        for capability in _PROVIDER_CAPABILITIES:
+            operation = TushareOperation(capability)
+            blocked = self._request_controller.is_permission_blocked(operation)
+            permission_due = (
+                self._request_controller.permission_retry_at(operation) if blocked else None
+            )
+            observation_at = self._clock.now() if blocked else checked_at
+            providers.append(ProviderHealthSnapshot(
                 capability=capability,
                 status=(
-                    ProviderCapabilityStatus.ERROR
-                    if capability in self._stage_errors
+                    ProviderCapabilityStatus.BLOCKED_PERMISSION if blocked
+                    else ProviderCapabilityStatus.ERROR if capability in self._stage_errors
                     else getattr(self._capabilities, capability)
                 ),
-                checked_at=checked_at,
+                checked_at=observation_at,
                 latency_ms=0,
-                error_code=self._stage_errors.get(capability),
-                next_retry_at=self._stage_retry_at.get(capability),
-            )
-            for capability in _PROVIDER_CAPABILITIES
-        )
+                error_code=(
+                    "BLOCKED_PERMISSION" if blocked else self._stage_errors.get(capability)
+                ),
+                next_retry_at=(
+                    max(observation_at, permission_due) if permission_due is not None
+                    else self._stage_retry_at.get(capability)
+                ),
+            ))
         return RuntimeHealthDetails(
             recovery_issues=(() if self._pipeline is None else self._pipeline.recovery_issues()),
-            providers=providers,
+            providers=tuple(providers),
             executor=ExecutorHealthSnapshot(
                 max_workers=self._request_controller.executor_workers,
                 active_count=self._request_controller.active_count,
