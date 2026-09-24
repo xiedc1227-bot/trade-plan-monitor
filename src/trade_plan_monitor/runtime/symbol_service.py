@@ -241,7 +241,7 @@ class SymbolService:
             raw_rows = await self._request_controller.execute(
                 TushareOperation.REALTIME_MINUTES,
                 lambda: self._provider.realtime_minutes(symbols),
-                work_key=f"realtime:{bar_end.isoformat()}",
+                work_key="realtime:stock",
                 priority=RequestPriority.MARKET_DEADLINE,
             )
         except RequestControlError:

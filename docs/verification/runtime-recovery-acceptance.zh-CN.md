@@ -2,6 +2,16 @@
 
 > 第一阶段已按用户批准的离线进程重启标准于 2026-09-23 验收。第二阶段提醒安全已于 2026-09-24 完成离线接通实现及验证；更广的发布门禁仍未关闭。真实行情源验证、用户数据库迁移及部署均未获批准。下文旧章节保留其当时的阶段状态。
 
+## 业务第 3 步首个生命周期切片 — 2026-09-24
+
+失败先行的生命周期测试先证明，运行中的 `RequestControlError(TRANSIENT)` 会结束运行时并关闭控制器。有界修正保留原运行代次和请求控制器，以 `DEGRADED` 及重试下限报告状态，并在本地恢复后继续调度。本次仅将 `TRANSIENT`、`TIMEOUT` 和 `RATE_LIMITED` 归入该重试；`ERROR`、存储故障及类型/契约故障继续上抛。控制器给出的未来重试截止点会显示在健康状态，关闭可中断等待。生产组合测试用模拟 SDK 和临时 SQLite 证明：一次连接故障后出现后续物理实时请求，运行时/控制器未被替换。该测试证明接续本身，不单独证明已完成交易决策或跨进程持久重试。
+
+另一项先失败的生产测试证明，`realtime:{bar_end}` 使下一分钟在注入的五分钟传输退避内再次发起物理请求。稳定的 `realtime:stock` 故障范围使该分钟受阻且不发起物理请求。此前 RR004 测试曾被缺失的心跳夹具挡住；现在设置有效心跳。测试验证首次物理调用后删除或损坏*当前语义记录*会阻止第二次调用。冷参考缓存可以合法地重新补取参考数据，因此重复截止任务测试现核对真正的不变量：已提交目标不会再次实时取数、增加评估结果或提醒。
+
+- 红测：`test_transient_deadline_failure_keeps_owner_and_resumes_after_recovery` 超时，原 `RequestControlError` 结束运行循环；`test_next_minute_cannot_bypass_realtime_transport_backoff` 观察到两次而非一次物理 `rt_min` 调用。新增启动/复核存储及类型故障测试揭示静默重试，启动限流测试揭示 09:35 冷却被 09:30:30 的本地计时覆盖。
+- 绿测：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_lifecycle.py tests/integration/test_production_certification_gate.py tests/integration/test_monitor_production_composition.py -q --tb=short` — 66 项通过，1 项既有 Starlette/httpx 弃用警告。改动的四个源/测试文件定向 Ruff 通过。检查仅使用模拟行情结果和临时 SQLite。
+- 业务第 3 步仍开放：生产 `ProviderRecoveryRepository` 绑定；权限复核及受控重启后的冷却；股票/指数与两类计划独立故障矩阵；配置变更暂停准入与原子安装；重载时旧代次提交/发送保护；物理工作者排空失败行为；完整 A04–A06/A09/A11 和 C1/C3 验收。不兼容语义目前在启动时安全失败，尚未形成最终的逐范围受阻生命周期状态。未使用真实行情源、外部发送器、用户数据库、迁移或部署。
+
 ## RR004/RR006/A06 独立指数准入 — 2026-09-24
 
 此前开放的四项 `test_production_semantic_gate.py` 用例失败，是因为 `run_deadline` 在检查是否有计划需要股票数据前，先刷新了股票交易日历参考数据。现在无活动计划的截止任务直接进入独立的展示指数路径；股票认证无效的活动计划则在请求股票行情源前受阻，独立指数工作仍可单独调用。原有逐物理调用的指数语义校验现能在已到达的指数路径上执行。这四项测试先在前一个提交上确认失败；本次修正后整份语义门禁文件 11 项通过。相邻生产、指数和激活保护集成测试文件 91 项通过，只有 1 项既有 Starlette/httpx 弃用警告。

@@ -90,6 +90,10 @@ from trade_plan_monitor.runtime.market_indexes import (
     RuntimeMarketIndexBatch,
     RuntimeMarketIndexService,
 )
+from trade_plan_monitor.runtime.request_control import (
+    RequestControlError,
+    RequestControlErrorCode,
+)
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.runtime.symbol_service import SymbolHealthRestoreState, SymbolService
 from trade_plan_monitor.state.events import (
@@ -125,6 +129,11 @@ _OFFICIAL_RISK_SIGNAL_TYPES = frozenset(
         SignalType.RISK_EXIT_PENDING_SETTLEMENT,
     }
 )
+_RETRYABLE_PROVIDER_ERRORS = frozenset({
+    RequestControlErrorCode.TRANSIENT,
+    RequestControlErrorCode.TIMEOUT,
+    RequestControlErrorCode.RATE_LIMITED,
+})
 
 FetchMinutes = Callable[[str, datetime], Awaitable[list[MinuteBar] | tuple[MinuteBar, ...]]]
 FetchOfficialDaily = Callable[
@@ -2899,9 +2908,16 @@ class RuntimeLifecycleService:
                 await self._invoke(startup_operation, trade_date)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except RequestControlError as error:
+                if error.code not in _RETRYABLE_PROVIDER_ERRORS:
+                    raise
                 read_only = True
                 self._degraded_reason = reason
+                if error.next_retry_at is not None:
+                    self._retry_at = max(
+                        error.next_retry_at,
+                        self._retry_at or error.next_retry_at,
+                    )
 
         next_deadline = self._scheduler.next_deadline()
         if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):
@@ -2923,9 +2939,10 @@ class RuntimeLifecycleService:
             next_poll_at=self._next_poll_at,
         )
         if read_only:
-            self._retry_at = _canonical_shanghai(self._clock.now()) + timedelta(
-                seconds=self._retry_interval_seconds
+            minimum_retry = _canonical_shanghai(self._clock.now()) + timedelta(
+                seconds=self._retry_interval_seconds,
             )
+            self._retry_at = max(minimum_retry, self._retry_at or minimum_retry)
         return self._startup_result
 
     async def run_once(self) -> object | None:
@@ -2982,6 +2999,16 @@ class RuntimeLifecycleService:
                     await self._execute_deadline(deadline)
                     following = self._scheduler.next_deadline(after=self._last_deadline_at)
                     self._next_poll_at = None if following is None else following.due_at
+                except RequestControlError as error:
+                    if error.code not in _RETRYABLE_PROVIDER_ERRORS:
+                        raise
+                    self._status = RuntimeServiceStatus.DEGRADED
+                    self._read_only = True
+                    self._accepting_work = False
+                    self._degraded_reason = f"PROVIDER_{error.code.value}"
+                    self._next_poll_at = None
+                    self._retry_at = error.next_retry_at
+                    await self._retry_degraded_startup()
                 except asyncio.CancelledError:
                     if not self._accepting_work:
                         break
@@ -3008,9 +3035,10 @@ class RuntimeLifecycleService:
                 300.0,
                 self._retry_interval_seconds * (1, 2, 4, 10)[min(attempt, 3)],
             )
-            self._retry_at = _canonical_shanghai(self._clock.now()) + timedelta(
-                seconds=delay
-            )
+            now = _canonical_shanghai(self._clock.now())
+            if self._retry_at is not None:
+                delay = max(delay, (self._retry_at - now).total_seconds())
+            self._retry_at = now + timedelta(seconds=delay)
             try:
                 await asyncio.wait_for(
                     shutdown_event.wait(), timeout=delay
@@ -3059,8 +3087,12 @@ class RuntimeLifecycleService:
                 return
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except RequestControlError as error:
+            if error.code not in _RETRYABLE_PROVIDER_ERRORS:
+                raise
             self._degraded_reason = stage
+            if error.next_retry_at is not None:
+                self._retry_at = max(error.next_retry_at, self._retry_at or error.next_retry_at)
             return
         if self._stopping:
             return

@@ -6,6 +6,7 @@ from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from trade_plan_monitor.market_data.models import (
     ProviderCapabilities,
@@ -22,6 +23,11 @@ from trade_plan_monitor.runtime.health import (
     RuntimeHealthSnapshot,
     RuntimeResourceStatus,
     RuntimeServiceStatus,
+)
+from trade_plan_monitor.runtime.request_control import (
+    RequestControlError,
+    RequestControlErrorCode,
+    TushareOperation,
 )
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.runtime.service import (
@@ -380,7 +386,12 @@ def test_reference_failure_does_not_skip_independent_startup_recovery() -> None:
 
     def fail_references(_trade_date: date) -> None:
         events.append("references")
-        raise RuntimeError("unavailable")
+        raise RequestControlError(
+            RequestControlErrorCode.TRANSIENT,
+            TushareOperation.TRADING_CALENDAR,
+            attempts=1,
+            next_retry_at=_at(9, 30),
+        )
 
     service = _service(events=events, refresh_references=fail_references)
 
@@ -401,6 +412,39 @@ def test_unknown_next_deadline_starts_degraded_instead_of_claiming_running() -> 
     assert result.read_only is True
     assert result.next_poll_at is None
     asyncio.run(service.stop())
+
+
+def test_startup_storage_fault_does_not_become_provider_retry() -> None:
+    def fail_references(_trade_date: date) -> None:
+        raise SQLAlchemyError("offline storage fault")
+
+    async def scenario() -> None:
+        service = _service(refresh_references=fail_references)
+        with pytest.raises(SQLAlchemyError):
+            await service.start()
+        assert service.status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
+
+
+def test_startup_rate_limit_keeps_shared_cooldown_as_retry_floor() -> None:
+    def rate_limited(_trade_date: date) -> None:
+        raise RequestControlError(
+            RequestControlErrorCode.RATE_LIMITED,
+            TushareOperation.TRADING_CALENDAR,
+            attempts=1,
+            next_retry_at=_at(9, 35),
+        )
+
+    async def scenario() -> None:
+        service = _service(refresh_references=rate_limited)
+        try:
+            assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+            assert service.health().next_retry_at == _at(9, 35)
+        finally:
+            await service.stop()
+
+    asyncio.run(scenario())
 
 
 def test_runtime_health_exposes_sanitized_operational_facts_and_exact_ages() -> None:
@@ -717,6 +761,155 @@ def test_degraded_startup_retries_and_resumes_scheduling_without_process_restart
         return events
 
     assert "deadline" in asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "failure_code",
+    (RequestControlErrorCode.TRANSIENT, RequestControlErrorCode.RATE_LIMITED),
+)
+def test_retryable_deadline_failure_keeps_owner_and_resumes_after_recovery(
+    failure_code: RequestControlErrorCode,
+) -> None:
+    async def scenario() -> None:
+        events: list[str] = []
+        second = MarketDeadline(
+            kind=DeadlineKind.REALTIME_MINUTE,
+            trade_date=date(2026, 8, 24),
+            bar_end=_at(9, 32),
+            due_at=_at(9, 32, 12),
+        )
+
+        class TwoDeadlines:
+            def next_deadline(self, *, after=None):
+                return second if after is not None else _deadline()
+
+            async def wait_for_next(self, *, after=None):
+                if after is None:
+                    return _deadline()
+                if after == _deadline().due_at:
+                    return second
+                await asyncio.Event().wait()
+
+        completed = asyncio.Event()
+
+        async def run_deadline(deadline: MarketDeadline) -> None:
+            if deadline == _deadline():
+                events.append("transient-failure")
+                raise RequestControlError(
+                    failure_code,
+                    TushareOperation.REALTIME_MINUTES,
+                    attempts=1,
+                    next_retry_at=_at(9, 30),
+                )
+            events.append("resumed-deadline")
+            completed.set()
+
+        service = _service(
+            events=events,
+            scheduler=TwoDeadlines(),
+            run_deadline=run_deadline,
+            retry_interval_seconds=0.01,
+        )
+        generation = service.runtime_generation
+        runner = asyncio.create_task(service.run())
+        try:
+            await asyncio.wait_for(completed.wait(), 1)
+            assert not runner.done()
+            assert service.runtime_generation == generation
+            assert service.status is RuntimeServiceStatus.RUNNING
+            assert events.count("recover") >= 2
+            assert "controller-close" not in events
+        finally:
+            await service.stop()
+            await runner
+        assert events.count("controller-close") == 1
+
+    asyncio.run(scenario())
+
+
+def test_unclassified_provider_failure_is_not_silently_retried() -> None:
+    async def fail_deadline(_deadline: MarketDeadline) -> None:
+        raise RequestControlError(
+            RequestControlErrorCode.ERROR,
+            TushareOperation.REALTIME_MINUTES,
+            attempts=1,
+        )
+
+    async def scenario() -> None:
+        service = _service(run_deadline=fail_deadline, retry_interval_seconds=0.01)
+        with pytest.raises(RequestControlError) as error:
+            await asyncio.wait_for(service.run(), 1)
+        assert error.value.code is RequestControlErrorCode.ERROR
+        assert service.status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
+
+
+def test_transient_cooldown_wait_is_visible_and_interruptible() -> None:
+    async def fail_deadline(_deadline: MarketDeadline) -> None:
+        raise RequestControlError(
+            RequestControlErrorCode.TRANSIENT,
+            TushareOperation.REALTIME_MINUTES,
+            attempts=1,
+            next_retry_at=_at(9, 35),
+        )
+
+    async def scenario() -> None:
+        events: list[str] = []
+        service = _service(events=events, run_deadline=fail_deadline)
+        runner = asyncio.create_task(service.run())
+        try:
+            for _ in range(100):
+                if service.status is RuntimeServiceStatus.DEGRADED:
+                    break
+                await asyncio.sleep(0)
+            assert service.status is RuntimeServiceStatus.DEGRADED
+            assert service.health().next_retry_at == _at(9, 35)
+            await asyncio.sleep(0.03)
+            assert events.count("probe") == 1
+            assert not runner.done()
+        finally:
+            await asyncio.wait_for(service.stop(), 1)
+            await runner
+        assert events.count("controller-close") == 1
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("failure", (SQLAlchemyError("storage"), TypeError("contract")))
+def test_degraded_recheck_does_not_swallow_storage_or_contract_fault(
+    failure: Exception,
+) -> None:
+    async def scenario() -> None:
+        probes = 0
+        references = 0
+
+        def probe() -> ProviderCapabilities:
+            nonlocal probes
+            probes += 1
+            if probes == 1:
+                return _ready_capabilities().model_copy(
+                    update={"daily_bars": ProviderCapabilityStatus.UNVERIFIED}
+                )
+            return _ready_capabilities()
+
+        def refresh(_trade_date: date) -> None:
+            nonlocal references
+            references += 1
+            if references == 2:
+                raise failure
+
+        service = _service(
+            probe_capabilities=probe,
+            refresh_references=refresh,
+            retry_interval_seconds=0.01,
+        )
+        with pytest.raises(type(failure)):
+            await asyncio.wait_for(service.run(), 1)
+        assert references == 2
+        assert service.status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
 
 
 def test_compatible_semantics_can_schedule_without_claiming_provider_ready() -> None:
