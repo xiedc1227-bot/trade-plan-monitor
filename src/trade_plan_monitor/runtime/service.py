@@ -1417,6 +1417,10 @@ class RuntimeEvaluationService:
                             else unit_of_work.alerts.enqueue(payload)
                         )
                         publication_event = unit_of_work.events.get(payload.event_id)
+            pending_before = unit_of_work.projections.get_pending_official_close(
+                symbol=plan.symbol,
+                trade_date=trade_date,
+            )
             health_event = self._clear_close_pending(
                 unit_of_work,
                 plan=plan,
@@ -1426,7 +1430,7 @@ class RuntimeEvaluationService:
                 activation_revision=activation_revision,
                 runtime_generation=self._runtime_generation,
             )
-            if claim.created or health_event is not None:
+            if claim.created or pending_before is not None or health_event is not None:
                 self._require_commit_admission()
             unit_of_work.commit()
 

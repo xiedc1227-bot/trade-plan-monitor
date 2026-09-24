@@ -2840,6 +2840,35 @@ def test_completed_official_close_short_circuits_later_attempt_after_restart(
         assert session.scalar(select(func.count()).select_from(RiskState)) == 0
         assert session.scalar(select(func.count()).select_from(AlertEventRow)) == 0
 
+    # Model a concurrent completed claim with a remaining pending row. Clearing
+    # the row produces no health event because health is no longer CLOSE_PENDING.
+    assert first.facts is not None
+    with _runtime_uow_factory(
+        runtime_engine, tracker, now=first_requested_at + timedelta(minutes=1),
+    )() as work:
+        work.projections.put_pending_official_close(
+            plan_hash=plan_sha256(plan), symbol=plan.symbol, trade_date=trade_date,
+            formula_version=plan.monitoring.indicator_formula_version,
+            pending={}, observed_at=first_requested_at,
+        )
+        work.commit()
+
+    async def concurrent_claim_not_yet_visible(**_kwargs):
+        return False
+
+    first_service._official_close_completed = concurrent_claim_not_yet_visible
+    first_service._persist_official_market_context = lambda **_kwargs: (
+        first.close_reconciliation, first.facts.official_daily_bars, None,
+    )
+    first_service._commit_admission = lambda: False
+    with pytest.raises(RuntimeError, match="commit admission revoked"):
+        asyncio.run(first_service.run_official_close(
+            plan=plan, trade_date=trade_date, evaluated_at=first_requested_at,
+            close_attempt=2,
+        ))
+    with create_session_factory(runtime_engine)() as session:
+        assert session.scalar(select(func.count()).select_from(PendingOfficialClose)) == 1
+
 
 def test_official_close_accepts_scheduler_attempt_beyond_ten(runtime_engine: Engine) -> None:
     plan = _runtime_plan()

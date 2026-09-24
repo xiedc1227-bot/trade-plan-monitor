@@ -411,6 +411,7 @@ class TushareRequestController:
         "_repository_required",
         "_recovery_fault",
         "_persisted_recovery",
+        "_runtime_admission_open",
     )
 
     def __init__(
@@ -474,6 +475,7 @@ class TushareRequestController:
         self._backoff_until: dict[str, datetime] = {}
         self._cooldown_until: datetime | None = None
         self._closed = False
+        self._runtime_admission_open: Callable[[], bool] = lambda: True
         self._inflight_futures: set[asyncio.Future[object]] = set()
         self._permission_retry_at: dict[TushareOperation, datetime] = {}
         self._permission_rechecks: dict[TushareOperation, asyncio.Task[object]] = {}
@@ -848,7 +850,7 @@ class TushareRequestController:
     ) -> RequestControlError | None:
         if self._recovery_fault:
             raise RecoveryCheckpointError("provider recovery persistence is faulted")
-        if self._closed:
+        if self._closed or not self._runtime_admission_open():
             return RequestControlError(
                 RequestControlErrorCode.CLOSED,
                 operation,
@@ -887,6 +889,13 @@ class TushareRequestController:
                 attempts=0,
             )
         return None
+
+    def set_runtime_admission(self, admission_open: Callable[[], bool]) -> None:
+        """Bind process revocation to future physical provider attempts."""
+
+        if not callable(admission_open):
+            raise TypeError("admission_open must be callable")
+        self._runtime_admission_open = admission_open
 
     async def _run_sync_attempt(
         self,

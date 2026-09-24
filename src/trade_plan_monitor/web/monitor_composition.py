@@ -8,8 +8,10 @@ import logging
 import sqlite3
 from collections.abc import Awaitable, Callable
 from contextlib import closing
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
+from threading import Event
 from typing import Protocol
 from uuid import UUID
 
@@ -104,6 +106,17 @@ _PROVIDER_CAPABILITIES = (
     "trading_calendar",
 )
 _RECOVERY_PROFILE = "tushare-live-v1"
+
+
+@dataclass
+class _ProcessRuntimeBaseline:
+    """Frozen provider configuration shared by every runtime in this process."""
+
+    configuration: ApplicationConfiguration | None = None
+    semantics_frozen: bool = False
+    stock_semantic_revision: str | None = None
+    index_semantic_revision: str | None = None
+    revoked: Event = field(default_factory=Event)
 
 
 def _provider_recovery_identity(endpoint: str) -> str:
@@ -264,6 +277,7 @@ class MonitorWebComposition:
                     "degraded_reason": None,
                     "next_poll_at": None,
                     "next_retry_at": None,
+                    "stopped_at": None,
                 }
             )
         runner = self._runner_task
@@ -438,9 +452,18 @@ class MonitorWebComposition:
             try:
                 replacement = self._runtime_factory()
                 self._validate_runtime(replacement)
-                self._runtime = replacement
-                self._runtime_stopped = False
+                if getattr(replacement, "configuration_restart_required", False) is True:
+                    self._configuration_restart_required = True
+                    await self._stop_runtime(replacement)
+                    return
                 startup = await replacement.start()
+                if self._stopping:
+                    await self._stop_runtime(replacement)
+                    return
+                if getattr(replacement, "configuration_restart_required", False) is True:
+                    self._configuration_restart_required = True
+                    await self._stop_runtime(replacement)
+                    return
                 status = self._validate_startup(startup)
                 replacement_health = self._validated_health(replacement.health())
                 if (
@@ -448,12 +471,18 @@ class MonitorWebComposition:
                     or replacement_health.read_only is not startup.read_only
                 ):
                     raise ValueError("runtime startup and health readiness are inconsistent")
+                self._runtime = replacement
+                self._runtime_stopped = False
                 self._last_runtime_health = replacement_health
             except asyncio.CancelledError:
                 if self._stopping:
                     return
                 raise
             except Exception:
+                if replacement is not None and getattr(
+                    replacement, "configuration_restart_required", False
+                ) is True:
+                    self._configuration_restart_required = True
                 if replacement is not None:
                     try:
                         await self._stop_runtime(replacement)
@@ -540,6 +569,7 @@ class _ProductionRuntimeState:
         session_factory: sessionmaker[Session],
         clock: Clock,
         request_controller: TushareRequestController,
+        process_baseline: _ProcessRuntimeBaseline | None = None,
         runtime_generation: Callable[[], UUID] | None = None,
         business_commit_admission_open: Callable[[], bool] | None = None,
         publisher: Callable[..., object] | None = None,
@@ -552,6 +582,8 @@ class _ProductionRuntimeState:
         self._session_factory = session_factory
         self._clock = clock
         self._request_controller = request_controller
+        self._process_baseline = process_baseline or _ProcessRuntimeBaseline()
+        self._owner_loop: asyncio.AbstractEventLoop | None = None
         self._configuration: ApplicationConfiguration | None = None
         self._database_status = RuntimeResourceStatus.UNVERIFIED
         self._wal_status = RuntimeResourceStatus.UNVERIFIED
@@ -583,17 +615,60 @@ class _ProductionRuntimeState:
         )
 
     async def validate_configuration(self) -> None:
-        configuration = await to_thread.run_sync(load_application_config, self._config_path)
+        self._owner_loop = asyncio.get_running_loop()
+        try:
+            configuration = await to_thread.run_sync(load_application_config, self._config_path)
+        except Exception:
+            if self._process_baseline.configuration is not None:
+                self._revoke_configuration()
+            raise
+        baseline = self._process_baseline.configuration
         if (
-            self._configuration is not None
-            and configuration.tushare != self._configuration.tushare
+            (baseline is not None and configuration.tushare != baseline.tushare)
+            or (
+                self._configuration is not None
+                and configuration.tushare != self._configuration.tushare
+            )
         ):
-            self._configuration_restart_required = True
+            self._revoke_configuration()
             raise RuntimeError("monitor configuration changed; safe restart required")
+        if baseline is None:
+            self._process_baseline.configuration = configuration
         self._configuration = configuration
+        self._require_frozen_semantics(configuration)
+
+    def _require_frozen_semantics(self, configuration: ApplicationConfiguration) -> None:
+        if self._process_baseline.semantics_frozen:
+            directory = self._config_path.resolve().parent.parent / "data" / "live-certification"
+            endpoint = str(configuration.tushare.api_url)
+            for surface, filename, expected in (
+                ("STOCK", "stock-semantic.json", self._process_baseline.stock_semantic_revision),
+                (
+                    "BOARD_INDEX", "index-semantic.json",
+                    self._process_baseline.index_semantic_revision,
+                ),
+            ):
+                observed = load_semantic_contract(
+                    directory / filename, now=self._clock.now(), endpoint_url=endpoint,
+                )
+                revision = (
+                    observed.semantic_revision
+                    if observed is not None and observed.surface == surface
+                    else None
+                )
+                if revision != expected:
+                    self._revoke_semantics()
+                    raise RuntimeError("monitor semantics changed; safe restart required")
 
     async def open_database(self) -> None:
+        self._require_startup_baseline()
         await to_thread.run_sync(self._open_database_sync)
+
+    def _require_startup_baseline(self) -> None:
+        configuration = self._configuration
+        if configuration is None or not self.configuration_is_current():
+            raise RuntimeError("monitor configuration changed; safe restart required")
+        self._require_frozen_semantics(configuration)
 
     async def admit(self) -> None:
         await to_thread.run_sync(self._admit_sync)
@@ -653,6 +728,7 @@ class _ProductionRuntimeState:
             )
 
     def _open_database_sync(self) -> None:
+        self._require_startup_baseline()
         _reject_incompatible_database(self._database_path)
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -676,6 +752,8 @@ class _ProductionRuntimeState:
         return tuple(sorted(record.symbol for record in records))
 
     def probe_capabilities(self) -> ProviderCapabilities:
+        if self._semantic_reload_blocked and not self._configuration_restart_required:
+            return self._capabilities
         if self._configuration is not None and not self.configuration_is_current():
             raise RuntimeError("monitor configuration changed; safe restart required")
         if self._semantic_reload_blocked:
@@ -684,7 +762,7 @@ class _ProductionRuntimeState:
             if self._pipeline._stock_certification_current():
                 return self._capabilities
             self._pipeline = None
-            self._semantic_reload_blocked = True
+            self._revoke_semantics()
             self._capabilities = ProviderCapabilities()
             self._stage_errors.update({
                 capability: "STOCK_SEMANTICS_UNAVAILABLE"
@@ -740,7 +818,7 @@ class _ProductionRuntimeState:
         stock_semantics = load_semantic_contract(
             stock_path, now=observed_at, endpoint_url=endpoint,
         )
-        if stock_semantics is None:
+        if stock_semantics is None and not self._process_baseline.semantics_frozen:
             try:
                 stock_semantics = import_stock_semantic_contract(
                     directory / "tushare-stock-live.json", stock_path,
@@ -752,7 +830,7 @@ class _ProductionRuntimeState:
         index_semantics = load_semantic_contract(
             index_path, now=observed_at, endpoint_url=endpoint,
         )
-        if index_semantics is None:
+        if index_semantics is None and not self._process_baseline.semantics_frozen:
             try:
                 index_semantics = import_index_semantic_contract(
                     directory / "tushare-board-index-live.json", index_path,
@@ -760,6 +838,28 @@ class _ProductionRuntimeState:
                 )
             except OSError:
                 index_semantics = None
+        stock_revision = (
+            stock_semantics.semantic_revision
+            if stock_semantics is not None and stock_semantics.surface == "STOCK"
+            else None
+        )
+        index_revision = (
+            index_semantics.semantic_revision
+            if index_semantics is not None and index_semantics.surface == "BOARD_INDEX"
+            else None
+        )
+        baseline = self._process_baseline
+        if baseline.semantics_frozen:
+            if (
+                stock_revision != baseline.stock_semantic_revision
+                or index_revision != baseline.index_semantic_revision
+            ):
+                self._revoke_semantics()
+                return self._capabilities
+        else:
+            baseline.stock_semantic_revision = stock_revision
+            baseline.index_semantic_revision = index_revision
+            baseline.semantics_frozen = True
         if evidence is not None:
             self._capabilities = evidence.capabilities
         if evidence is not None and evidence.source_time_label is SourceTimeLabel.UNVERIFIED:
@@ -803,6 +903,8 @@ class _ProductionRuntimeState:
                 ),
                 recovery_session_factory=self._session_factory,
                 configuration_current=self.configuration_is_current,
+                admission_revoked=self._process_baseline.revoked.is_set,
+                on_semantic_revoked=self._revoke_semantics,
                 generation_current=lambda: (
                     self._database_status is RuntimeResourceStatus.READY
                     and self._business_commit_admission_open()
@@ -982,7 +1084,7 @@ class _ProductionRuntimeState:
         )
 
     def configuration_is_current(self) -> bool:
-        if self._configuration_restart_required:
+        if self._configuration_restart_required or self._process_baseline.revoked.is_set():
             return False
         try:
             current = (
@@ -993,12 +1095,52 @@ class _ProductionRuntimeState:
         except Exception:
             current = False
         if not current and self._configuration is not None:
-            self._configuration_restart_required = True
+            self._revoke_configuration()
         return current
+
+    def _revoke_configuration(self) -> None:
+        """Publish revocation now; leave the visible latch to the owning loop."""
+
+        self._process_baseline.revoked.set()
+        loop = self._owner_loop
+        if loop is None:
+            self._configuration_restart_required = True
+            return
+        try:
+            same_loop = asyncio.get_running_loop() is loop
+        except RuntimeError:
+            same_loop = False
+        if same_loop:
+            self._configuration_restart_required = True
+        else:
+            loop.call_soon_threadsafe(self._set_configuration_restart_required)
+
+    def _set_configuration_restart_required(self) -> None:
+        self._configuration_restart_required = True
+
+    def _revoke_semantics(self) -> None:
+        self._process_baseline.revoked.set()
+        loop = self._owner_loop
+        if loop is None:
+            self._semantic_reload_blocked = True
+            return
+        try:
+            same_loop = asyncio.get_running_loop() is loop
+        except RuntimeError:
+            same_loop = False
+        if same_loop:
+            self._semantic_reload_blocked = True
+        else:
+            loop.call_soon_threadsafe(self._set_semantic_reload_blocked)
+
+    def _set_semantic_reload_blocked(self) -> None:
+        self._semantic_reload_blocked = True
 
     def configuration_restart_required(self) -> bool:
         """Latch relevant configuration or installed semantic drift until stop."""
 
+        if self._configuration is None:
+            return self._process_baseline.revoked.is_set()
         if not self.configuration_is_current() or self._semantic_reload_blocked:
             return True
         pipeline = self._pipeline
@@ -1008,7 +1150,7 @@ class _ProductionRuntimeState:
             pipeline._index_semantics is not None
             and not pipeline._index_certification_current()
         ):
-            self._semantic_reload_blocked = True
+            self._revoke_semantics()
         return self._semantic_reload_blocked
 
 
@@ -1052,6 +1194,7 @@ def create_monitor_composition(
     if on_reference_failure is not None and not callable(on_reference_failure):
         raise TypeError("on_reference_failure must be callable")
     clock = SystemClock()
+    process_baseline = _ProcessRuntimeBaseline()
     engine = create_sqlite_engine(database_path)
     session_factory = create_session_factory(engine)
 
@@ -1068,6 +1211,9 @@ def create_monitor_composition(
     def runtime_factory() -> RuntimeLifecycleService:
         request_controller = create_live_tushare_request_controller(
             clock=clock, require_repository_binding=True,
+        )
+        request_controller.set_runtime_admission(
+            lambda: not process_baseline.revoked.is_set()
         )
         current_delivery_admission = CurrentDeliveryAdmission(
             session_factory,
@@ -1094,6 +1240,7 @@ def create_monitor_composition(
             session_factory=session_factory,
             clock=clock,
             request_controller=request_controller,
+            process_baseline=process_baseline,
             runtime_generation=lambda: lifecycle.runtime_generation,
             business_commit_admission_open=lambda: lifecycle.business_commit_admission_open,
             publisher=stream.publish_committed,

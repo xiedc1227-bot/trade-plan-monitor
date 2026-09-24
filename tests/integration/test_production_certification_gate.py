@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import timedelta
+from threading import Thread
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -20,10 +21,12 @@ from test_live_pipeline_acceptance import (
     _write_configuration_and_evidence,
 )
 
+from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.market_data.models import ProviderCapabilityStatus
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.production import ReferenceDependenciesChangedError
+from trade_plan_monitor.runtime.provider_contract import import_index_semantic_contract
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
@@ -712,6 +715,177 @@ def test_legacy_decision_rolls_back_when_token_changes_after_result_staging(
             with pytest.raises(RuntimeError):
                 await state.run_deadline(deadline)
             assert changed
+            with state._session_factory() as session:
+                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "mutation", (
+        "unchanged", "token", "invalid_yaml", "stock_semantic",
+        "new_index_semantic", "candidate_start_semantic",
+    )
+)
+def test_supervisor_replacement_cannot_adopt_configuration_changed_inside_factory(
+    tmp_path, monkeypatch, mutation,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        original_runtime = composition._runtime
+        original_factory = composition._runtime_factory
+        assert original_factory is not None
+        release_failure = asyncio.Event()
+        config = tmp_path / "config/app.yaml"
+        replacements = []
+        factory_errors = []
+
+        def install_index_semantic():
+            _write_configuration_and_evidence(
+                tmp_path, observed_at=NOW, include_index=True
+            )
+            directory = tmp_path / "data/live-certification"
+            assert import_index_semantic_contract(
+                directory / "tushare-board-index-live.json",
+                directory / "index-semantic.json",
+                now=NOW,
+                endpoint_url=str(load_application_config(config).tushare.api_url),
+            ) is not None
+
+        async def fail_after_start():
+            await release_failure.wait()
+            raise RuntimeError("offline runner failure")
+
+        def change_between_check_and_factory():
+            try:
+                if mutation == "token":
+                    config.write_text(
+                        config.read_text(encoding="utf-8").replace(
+                            "offline-test-token", "offline-new-token"
+                        ),
+                        encoding="utf-8",
+                    )
+                elif mutation == "invalid_yaml":
+                    config.write_text("tushare: [\n", encoding="utf-8")
+                elif mutation == "stock_semantic":
+                    (tmp_path / "data/live-certification/stock-semantic.json").write_text(
+                        "{}", encoding="utf-8"
+                    )
+                elif mutation == "new_index_semantic":
+                    install_index_semantic()
+                replacement = original_factory()
+                if mutation == "candidate_start_semantic":
+                    original_open = replacement._open_database
+
+                    async def edit_before_database_open():
+                        install_index_semantic()
+                        await original_open()
+
+                    replacement._open_database = edit_before_database_open
+                replacements.append(replacement)
+                return replacement
+            except Exception as error:
+                factory_errors.append(error)
+                raise
+
+        original_runtime.run = fail_after_start
+        composition._runtime_factory = change_between_check_and_factory
+        composition._restart_sleep = lambda _delay: asyncio.sleep(0)
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            release_failure.set()
+            for _ in range(200):
+                if replacements and (
+                    composition._runtime is replacements[0]
+                    or composition._runner_task.done()
+                ):
+                    break
+                await asyncio.sleep(0.01)
+            assert factory_errors == []
+            assert len(replacements) == 1
+            if mutation == "unchanged":
+                assert composition._runtime is replacements[0]
+                assert composition.health().status is RuntimeServiceStatus.RUNNING
+            else:
+                assert composition.health().status is RuntimeServiceStatus.BLOCKED
+                assert composition.health().block_reason == "NEEDS_RESTART"
+                candidate_state = replacements[0]._probe_capabilities.__self__
+                assert candidate_state._pipeline is None
+                assert candidate_state._liveness_revision is None
+            assert sdk.calls
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_worker_thread_latch_before_legacy_commit_rejects_staged_decision(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        config = tmp_path / "config/app.yaml"
+        original_persist = ProjectionRepository.add_evaluation_result
+        staged = False
+        worker_latched = False
+
+        def stage_result(self, *args, **kwargs):
+            nonlocal staged
+            value = original_persist(self, *args, **kwargs)
+            staged = True
+            return value
+
+        monkeypatch.setattr(ProjectionRepository, "add_evaluation_result", stage_result)
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            state = composition._runtime._probe_capabilities.__self__
+            pipeline = state._pipeline
+            assert pipeline is not None
+            original_generation_current = pipeline._generation_current
+
+            def interleave_worker_revocation():
+                nonlocal worker_latched
+                if staged and not worker_latched:
+                    def worker():
+                        nonlocal worker_latched
+                        original = config.read_text(encoding="utf-8")
+                        config.write_text(
+                            original.replace(
+                                "offline-test-token", "offline-new-token"
+                            ),
+                            encoding="utf-8",
+                        )
+                        worker_latched = not state.configuration_is_current()
+                        config.write_text(original, encoding="utf-8")
+
+                    thread = Thread(target=worker)
+                    thread.start()
+                    thread.join(timeout=2)
+                    assert not thread.is_alive()
+                    assert worker_latched
+                return original_generation_current()
+
+            pipeline._generation_current = interleave_worker_revocation
+            deadline = MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE,
+                trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
+            )
+            with pytest.raises(RuntimeError):
+                await state.run_deadline(deadline)
+            assert staged and worker_latched
+            calls = tuple(sdk.calls)
+            with pytest.raises(RequestControlError) as blocked:
+                await state._request_controller.execute(
+                    TushareOperation.REALTIME_MINUTES,
+                    lambda: pytest.fail("revoked provider call became physical"),
+                    work_key="post-revocation",
+                )
+            assert blocked.value.code is RequestControlErrorCode.CLOSED
+            assert tuple(sdk.calls) == calls
+            assert composition.health().block_reason == "NEEDS_RESTART"
             with state._session_factory() as session:
                 assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0

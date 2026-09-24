@@ -274,11 +274,15 @@ class ProductionMonitorPipeline:
         recovery_session_factory: Callable[[], Session] | None = None,
         configuration_current: Callable[[], bool] | None = None,
         generation_current: Callable[[], bool] | None = None,
+        admission_revoked: Callable[[], bool] | None = None,
+        on_semantic_revoked: Callable[[], None] | None = None,
     ) -> None:
         self._clock = clock
         self._controller = request_controller
         self._configuration_current = configuration_current or (lambda: True)
         self._generation_current = generation_current or (lambda: True)
+        self._admission_revoked = admission_revoked or (lambda: False)
+        self._on_semantic_revoked = on_semantic_revoked or (lambda: None)
         self._work = unit_of_work_factory
         self._certifications = certification_directory
         self._endpoint = str(configuration.api_url).rstrip("/")
@@ -463,10 +467,13 @@ class ProductionMonitorPipeline:
         if not self._configuration_current():
             return False
         if self._semantic_bindings is not None:
-            return (
+            current = (
                 self._stock_semantics is not None
                 and self._load_semantic_binding("STOCK") is not None
             )
+            if not current and self._stock_semantics is not None:
+                self._on_semantic_revoked()
+            return current
         evidence = load_stock_certification(
             self._certifications / "tushare-stock-live.json",
             now=self._clock.now(),
@@ -481,6 +488,7 @@ class ProductionMonitorPipeline:
             self._configuration_current()
             and self._stock_certification_current()
             and self._generation_current()
+            and not self._admission_revoked()
         )
 
     def _index_commit_current(self, prepared: RuntimeMarketIndexBatch) -> bool:
@@ -492,17 +500,20 @@ class ProductionMonitorPipeline:
             snapshot.health is MarketIndexHealth.BLOCKED
             for snapshot in prepared.snapshots_by_index.values()
         ):
-            return True
-        return self._index_certification_current()
+            return not self._admission_revoked()
+        return self._index_certification_current() and not self._admission_revoked()
 
     def _index_certification_current(self) -> bool:
         if not self._configuration_current():
             return False
         if self._semantic_bindings is not None:
-            return (
+            current = (
                 self._index_semantics is not None
                 and self._load_semantic_binding("BOARD_INDEX") is not None
             )
+            if not current and self._index_semantics is not None:
+                self._on_semantic_revoked()
+            return current
         evidence = load_index_certification(
             self._certifications / "tushare-board-index-live.json",
             now=self._clock.now(),
@@ -725,6 +736,7 @@ class ProductionMonitorPipeline:
             or captured_key != self._reference_dependency_key(
                 trade_date, self.active_plans(trade_date)
             )
+            or self._admission_revoked()
         ):
             raise ReferenceDependenciesChangedError
 
