@@ -40,6 +40,7 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
+from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -138,6 +139,44 @@ def test_old_evidence_allows_current_request_only_with_valid_injected_semantics(
             with work() as transaction:
                 days = transaction.references.list_trading_days("SSE", NOW.date(), NOW.date())
             assert len(days) == 1 and days[0].is_open
+
+    asyncio.run(scenario())
+
+
+def test_index_head_does_not_commit_after_configuration_drifts_during_staging(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        with _pipeline(tmp_path, monkeypatch, stock=False, index=True) as (
+            pipeline, _sdk, _directory, _sdk_version, _work,
+        ):
+            config = tmp_path / "config/app.yaml"
+            frozen = load_application_config(config).tushare
+            pipeline._configuration_current = (
+                lambda: load_application_config(config).tushare == frozen
+            )
+            original_put = ProjectionRepository.put_market_index_snapshot
+            changed = False
+
+            def drift_after_snapshot(self, *args, **kwargs):
+                nonlocal changed
+                value = original_put(self, *args, **kwargs)
+                if not changed:
+                    changed = True
+                    config.write_text(
+                        config.read_text(encoding="utf-8").replace(
+                            "offline-test-token", "offline-new-token"
+                        ),
+                        encoding="utf-8",
+                    )
+                return value
+
+            monkeypatch.setattr(
+                ProjectionRepository, "put_market_index_snapshot", drift_after_snapshot
+            )
+            with pytest.raises(RuntimeError, match="index commit admission revoked"):
+                await pipeline.run_deadline(_deadline())
+            assert changed
 
     asyncio.run(scenario())
 

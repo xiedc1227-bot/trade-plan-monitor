@@ -495,9 +495,15 @@ class RuntimeEvaluationService:
         runtime_generation: UUID = LEGACY_RUNTIME_GENERATION,
         clock: Clock | None = None,
         recovery_delivery: bool = False,
+        commit_admission: Callable[[], bool] | None = None,
+        index_commit_admission: Callable[[RuntimeMarketIndexBatch], bool] | None = None,
     ) -> None:
         if type(recovery_delivery) is not bool:
             raise TypeError("recovery_delivery must be a bool")
+        if commit_admission is not None and not callable(commit_admission):
+            raise TypeError("commit_admission must be callable")
+        if index_commit_admission is not None and not callable(index_commit_admission):
+            raise TypeError("index_commit_admission must be callable")
         dependencies = (
             fetch_minutes,
             unit_of_work_factory,
@@ -541,7 +547,13 @@ class RuntimeEvaluationService:
         # Historical alerts enter HOLD atomically. The production dispatcher
         # checks the durable eligibility row before any delivery attempt.
         self._recovery_delivery = recovery_delivery
+        self._commit_admission = commit_admission or (lambda: True)
+        self._index_commit_admission = index_commit_admission or (lambda _batch: True)
         self._official_serial = asyncio.Lock()
+
+    def _require_commit_admission(self) -> None:
+        if not self._commit_admission():
+            raise RuntimeError("runtime decision commit admission revoked")
 
     async def _post_fetch_official_observed_at(
         self,
@@ -811,6 +823,8 @@ class RuntimeEvaluationService:
                         )
                     )
                 )
+            if committed:
+                self._require_commit_admission()
             unit_of_work.commit()
         await self._publish_committed_events(tuple(committed))
 
@@ -1032,6 +1046,8 @@ class RuntimeEvaluationService:
                             else unit_of_work.alerts.enqueue(payload)
                         )
                         publication_event = unit_of_work.events.get(payload.event_id)
+            if claim.created:
+                self._require_commit_admission()
             unit_of_work.commit()
 
         if not claim.created:
@@ -1410,6 +1426,8 @@ class RuntimeEvaluationService:
                 activation_revision=activation_revision,
                 runtime_generation=self._runtime_generation,
             )
+            if claim.created or health_event is not None:
+                self._require_commit_admission()
             unit_of_work.commit()
 
         if not claim.created:
@@ -1491,6 +1509,10 @@ class RuntimeEvaluationService:
                 formula_version=plan.monitoring.indicator_formula_version,
             )
             if completed:
+                pending_before = unit_of_work.projections.get_pending_official_close(
+                    symbol=plan.symbol,
+                    trade_date=trade_date,
+                )
                 health_event = self._clear_close_pending(
                     unit_of_work,
                     plan=plan,
@@ -1500,6 +1522,8 @@ class RuntimeEvaluationService:
                     activation_revision=activation_revision,
                     runtime_generation=self._runtime_generation,
                 )
+                if pending_before is not None or health_event is not None:
+                    self._require_commit_admission()
                 unit_of_work.commit()
         await self._publish_committed_events((health_event,))
         return completed
@@ -1548,6 +1572,7 @@ class RuntimeEvaluationService:
                 activation_revision=activation_revision,
                 runtime_generation=self._runtime_generation,
             )
+            self._require_commit_admission()
             unit_of_work.commit()
         if source_as_of > evaluated_at:  # pragma: no cover - validated by caller
             raise ValueError("official source cutoff cannot follow evaluation")
@@ -1604,6 +1629,8 @@ class RuntimeEvaluationService:
                 source_as_of=bucket_end,
             )
             if provisional is None:
+                if incoming:
+                    self._require_commit_admission()
                 unit_of_work.commit()
                 return None
 
@@ -1622,6 +1649,7 @@ class RuntimeEvaluationService:
                 )
                 complete_bars.append(_five_minute_value(record))
             unit_of_work.history.upsert_daily_bars((provisional,))
+            self._require_commit_admission()
             unit_of_work.commit()
         return current_day_minutes, tuple(complete_bars), provisional
 
@@ -2178,6 +2206,8 @@ class RuntimeEvaluationService:
                             )
                         )
                     )
+            if not self._index_commit_admission(prepared):
+                raise RuntimeError("runtime index commit admission revoked")
             unit_of_work.commit()
         return (
             RuntimeMarketIndexBatch(
@@ -2812,6 +2842,17 @@ class RuntimeLifecycleService:
     @property
     def runtime_generation(self) -> UUID:
         return self._runtime_generation
+
+    @property
+    def business_commit_admission_open(self) -> bool:
+        """Stop revokes business commits before the first shutdown await."""
+
+        return (
+            not self._stopping
+            and not self._cleanup_complete
+            and not self._cleanup_failed
+            and not self._liveness_failed
+        )
 
     def health(self) -> RuntimeHealthSnapshot:
         """Build one current snapshot from owned lifecycle and injected dynamic facts."""

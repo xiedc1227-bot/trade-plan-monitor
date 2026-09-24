@@ -30,6 +30,7 @@ from trade_plan_monitor.market_data.sessions import SourceTimeLabel, expected_mi
 from trade_plan_monitor.market_data.tushare import TushareMarketDataProvider
 from trade_plan_monitor.market_data.tushare_client import create_tushare_client
 from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.market_index.models import MarketIndexHealth
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
 from trade_plan_monitor.market_index.tushare import (
     TushareMarketIndexCapabilityStatus,
@@ -53,6 +54,7 @@ from trade_plan_monitor.runtime.historical_close_evidence import (
 )
 from trade_plan_monitor.runtime.market_indexes import (
     ALWAYS_ON_INDEX_CODES,
+    RuntimeMarketIndexBatch,
     RuntimeMarketIndexService,
 )
 from trade_plan_monitor.runtime.production_context import ProductionContextBuilder
@@ -158,6 +160,7 @@ def create_explicit_runtime_evaluation_service(
     *,
     committed_event_publisher: CommittedEventPublisher | None = None,
     recovery_delivery: bool = False,
+    commit_admission: Callable[[], bool] | None = None,
 ) -> ExplicitRuntimeEvaluationService:
     """Compose the R09 BUY runtime against the production SQLite/event boundary."""
 
@@ -165,6 +168,7 @@ def create_explicit_runtime_evaluation_service(
         unit_of_work_factory,
         committed_event_publisher=committed_event_publisher,
         recovery_delivery=recovery_delivery,
+        commit_admission=commit_admission,
     )
 
 
@@ -388,6 +392,8 @@ class ProductionMonitorPipeline:
             runtime_generation=runtime_generation,
             clock=clock,
             recovery_delivery=True,
+            commit_admission=self._decision_commit_current,
+            index_commit_admission=self._index_commit_current,
         )
         self.historical_evaluations = (
             None if self._historical_reader is None else RuntimeEvaluationService(
@@ -404,12 +410,15 @@ class ProductionMonitorPipeline:
                 runtime_generation=runtime_generation,
                 clock=clock,
                 recovery_delivery=True,
+                commit_admission=self._decision_commit_current,
+                index_commit_admission=self._index_commit_current,
             )
         )
         self.explicit_evaluations = create_explicit_runtime_evaluation_service(
             unit_of_work_factory,
             committed_event_publisher=publisher,
             recovery_delivery=True,
+            commit_admission=self._decision_commit_current,
         )
         self.coordinator = RuntimeDeadlineCoordinator(
             clock=clock,
@@ -464,6 +473,27 @@ class ProductionMonitorPipeline:
             endpoint_url=self._endpoint,
         )
         return evidence is not None and evidence.ready and evidence == self._stock_evidence
+
+    def _decision_commit_current(self) -> bool:
+        """Check frozen production authority just before a synchronous decision commit."""
+
+        return (
+            self._configuration_current()
+            and self._stock_certification_current()
+            and self._generation_current()
+        )
+
+    def _index_commit_current(self, prepared: RuntimeMarketIndexBatch) -> bool:
+        """Permit independent index status; require index evidence for nonblocked captures."""
+
+        if not self._configuration_current() or not self._generation_current():
+            return False
+        if all(
+            snapshot.health is MarketIndexHealth.BLOCKED
+            for snapshot in prepared.snapshots_by_index.values()
+        ):
+            return True
+        return self._index_certification_current()
 
     def _index_certification_current(self) -> bool:
         if not self._configuration_current():
@@ -908,6 +938,8 @@ class ProductionMonitorPipeline:
     def persist_minutes(self, bars: tuple[MinuteBar, ...]) -> None:
         with self._work() as work:
             work.history.upsert_minutes(bars)
+            if not self._decision_commit_current():
+                raise ReferenceDependenciesChangedError
             work.commit()
 
     def load_minutes(self, symbol: str, *, start: datetime, end: datetime):
@@ -917,6 +949,8 @@ class ProductionMonitorPipeline:
     def persist_five_minute(self, bar: FiveMinuteBar) -> None:
         with self._work() as work:
             work.history.upsert_five_minute(**bar.model_dump())
+            if not self._decision_commit_current():
+                raise ReferenceDependenciesChangedError
             work.commit()
 
     async def run_deadline(self, deadline: MarketDeadline):

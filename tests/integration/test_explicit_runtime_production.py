@@ -50,6 +50,7 @@ from trade_plan_monitor.state.database import (
     upgrade_database,
 )
 from trade_plan_monitor.state.events import MonitorEventType
+from trade_plan_monitor.state.explicit_rules import ExplicitDecisionRepository
 from trade_plan_monitor.state.models import (
     ActivePlan,
     PlanActivationState,
@@ -1062,6 +1063,58 @@ def test_actual_deadline_waits_for_completed_bucket_and_restart_deduplicates(
                 await restarted_controller.aclose()
             else:
                 await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_explicit_decision_rolls_back_when_token_changes_after_result_staging(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    async def scenario() -> None:
+        (
+            engine, _work_factory, _plan_value, _sdk, _build_pipeline,
+            controller, pipeline, _published,
+        ) = _pipeline_fixture(tmp_path, monkeypatch, current_volume=60)
+        config = tmp_path / "config-990-60" / "app.yaml"
+        frozen = load_application_config(config).tushare
+        pipeline._configuration_current = (
+            lambda: load_application_config(config).tushare == frozen
+        )
+        original_persist = ExplicitDecisionRepository.persist
+        changed = False
+
+        def drift_after_result(self, *args, **kwargs):
+            nonlocal changed
+            value = original_persist(self, *args, **kwargs)
+            if not changed:
+                changed = True
+                config.write_text(
+                    config.read_text(encoding="utf-8").replace(
+                        "offline-test-token", "offline-new-token"
+                    ),
+                    encoding="utf-8",
+                )
+            return value
+
+        monkeypatch.setattr(ExplicitDecisionRepository, "persist", drift_after_result)
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            with pytest.raises(RuntimeError):
+                await pipeline.run_deadline(MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=TARGET.date(), due_at=PIPELINE_NOW, bar_end=TARGET,
+                ))
+            assert changed
+            with engine.connect() as connection:
+                assert connection.exec_driver_sql(
+                    "SELECT count(*) FROM explicit_evaluation_ledger"
+                ).scalar_one() == 0
+                assert connection.exec_driver_sql(
+                    "SELECT count(*) FROM alert_event"
+                ).scalar_one() == 0
+        finally:
+            await controller.aclose()
             engine.dispose()
 
     asyncio.run(scenario())

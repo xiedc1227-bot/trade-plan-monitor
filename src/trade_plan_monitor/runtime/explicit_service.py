@@ -72,6 +72,7 @@ class ExplicitRuntimeEvaluationService:
         after_evaluate: Callable[[ExplicitEvaluationResult], None] | None = None,
         committed_event_publisher: Callable[[MonitorEvent], object] | None = None,
         recovery_delivery: bool = False,
+        commit_admission: Callable[[], bool] | None = None,
     ) -> None:
         if type(recovery_delivery) is not bool:
             raise TypeError("recovery_delivery must be a bool")
@@ -81,11 +82,14 @@ class ExplicitRuntimeEvaluationService:
             raise TypeError("after_evaluate must be callable")
         if committed_event_publisher is not None and not callable(committed_event_publisher):
             raise TypeError("committed_event_publisher must be callable")
+        if commit_admission is not None and not callable(commit_admission):
+            raise TypeError("commit_admission must be callable")
         self._work = unit_of_work_factory
         self._after_evaluate = after_evaluate
         self._publisher = committed_event_publisher
         # Storage-only opt-in; the existing dispatcher does not enforce this HOLD.
         self._recovery_delivery = recovery_delivery
+        self._commit_admission = commit_admission or (lambda: True)
 
     async def run_intraday_and_publish(
         self,
@@ -200,6 +204,8 @@ class ExplicitRuntimeEvaluationService:
                         if self._recovery_delivery
                         else work.alerts.enqueue_explicit(payload)
                     )
+            if record.created and not self._commit_admission():
+                raise RuntimeError("runtime decision commit admission revoked")
             work.commit()
         return ExplicitRuntimeCycleResult(
             status=(

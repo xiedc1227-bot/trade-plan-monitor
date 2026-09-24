@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pandas as pd
@@ -30,6 +31,7 @@ from trade_plan_monitor.runtime.request_control import (
     create_live_tushare_request_controller,
 )
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
+from trade_plan_monitor.runtime.service import RuntimeEvaluationService
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import (
     AlertEvent,
@@ -37,6 +39,7 @@ from trade_plan_monitor.state.models import (
     RuntimeLiveness,
     TradingCalendar,
 )
+from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.runtime_recovery import (
     ProviderRecoveryRepository,
     RecoveryCheckpoint,
@@ -670,5 +673,100 @@ def test_invalid_new_configuration_fails_before_provider_and_can_be_fixed_for_ne
             assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
         finally:
             await replacement.stop()
+
+    asyncio.run(scenario())
+
+
+def test_legacy_decision_rolls_back_when_token_changes_after_result_staging(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, _, _ = _composition(tmp_path, monkeypatch)
+        config = tmp_path / "config/app.yaml"
+        original_persist = ProjectionRepository.add_evaluation_result
+        changed = False
+
+        def drift_after_result(self, *args, **kwargs):
+            nonlocal changed
+            value = original_persist(self, *args, **kwargs)
+            if not changed:
+                changed = True
+                config.write_text(
+                    config.read_text(encoding="utf-8").replace(
+                        "offline-test-token", "offline-new-token"
+                    ),
+                    encoding="utf-8",
+                )
+            return value
+
+        monkeypatch.setattr(ProjectionRepository, "add_evaluation_result", drift_after_result)
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            state = composition._runtime._run_deadline.__self__
+            deadline = MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE,
+                trade_date=NOW.date(),
+                due_at=NOW,
+                bar_end=NOW.replace(second=0),
+            )
+            with pytest.raises(RuntimeError):
+                await state.run_deadline(deadline)
+            assert changed
+            with state._session_factory() as session:
+                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("pending_present", (False, True))
+def test_completed_close_pending_clear_without_health_event_still_requires_commit_admission(
+    pending_present: bool,
+):
+    async def scenario():
+        commits = []
+
+        class Work:
+            evaluations = SimpleNamespace(has_claim=lambda **_kwargs: True)
+            projections = SimpleNamespace(
+                get_pending_official_close=lambda **_kwargs: (
+                    object() if pending_present else None
+                )
+            )
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def commit(self):
+                commits.append(True)
+
+        service = object.__new__(RuntimeEvaluationService)
+        service._unit_of_work_factory = Work
+        service._runtime_generation = uuid4()
+        service._commit_admission = lambda: False
+        service._require_evaluated_plan_active = lambda *_args, **_kwargs: None
+        service._clear_close_pending = lambda *_args, **_kwargs: None
+
+        async def publish(_events):
+            pass
+
+        service._publish_committed_events = publish
+        def call():
+            return service._official_close_completed(
+                plan=_sample_plan(), trade_date=NOW.date(),
+                evaluated_at=NOW, activation_revision=1,
+            )
+        if pending_present:
+            with pytest.raises(RuntimeError, match="commit admission revoked"):
+                await call()
+            assert commits == []
+        else:
+            assert await call() is True
+            assert commits == [True]
 
     asyncio.run(scenario())

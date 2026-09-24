@@ -541,6 +541,7 @@ class _ProductionRuntimeState:
         clock: Clock,
         request_controller: TushareRequestController,
         runtime_generation: Callable[[], UUID] | None = None,
+        business_commit_admission_open: Callable[[], bool] | None = None,
         publisher: Callable[..., object] | None = None,
         dispatcher: NotificationDispatcher | None = None,
         on_reference_failure: Callable[[str], None] | None = None,
@@ -561,6 +562,9 @@ class _ProductionRuntimeState:
         self._semantic_reload_blocked = False
         self._configuration_restart_required = False
         self._runtime_generation = runtime_generation
+        self._business_commit_admission_open = (
+            business_commit_admission_open or (lambda: True)
+        )
         self._publisher = publisher
         self._stage_errors: dict[str, str] = {}
         self._stage_retry_at: dict[str, datetime] = {}
@@ -801,6 +805,7 @@ class _ProductionRuntimeState:
                 configuration_current=self.configuration_is_current,
                 generation_current=lambda: (
                     self._database_status is RuntimeResourceStatus.READY
+                    and self._business_commit_admission_open()
                     and self._runtime_generation() == generation
                 ),
             )
@@ -1090,6 +1095,7 @@ def create_monitor_composition(
             clock=clock,
             request_controller=request_controller,
             runtime_generation=lambda: lifecycle.runtime_generation,
+            business_commit_admission_open=lambda: lifecycle.business_commit_admission_open,
             publisher=stream.publish_committed,
             dispatcher=dispatcher,
             on_reference_failure=on_reference_failure,
