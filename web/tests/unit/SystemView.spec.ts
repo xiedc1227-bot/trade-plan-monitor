@@ -105,6 +105,32 @@ describe("SystemView", () => {
     expect(strip.text()).not.toContain("可监控");
   });
 
+  it("keeps index-only warning when stock permissions also show blocked", () => {
+    const wrapper = mountSystem({
+      health: {
+        ...health,
+        status: "RUNNING",
+        readOnly: false,
+        providers: ["current_day_minutes", "daily_bars", "daily_limits", "realtime_minutes", "trading_calendar"].map(
+          (capability) => ({
+            capability,
+            checkedAt: health.observedAt,
+            errorCode: "STOCK_SEMANTICS_UNAVAILABLE",
+            latencyMs: 0,
+            nextRetryAt: "2026-08-24T10:05:00+08:00",
+            status: "BLOCKED_PERMISSION" as const,
+          }),
+        ),
+      },
+    });
+    const strip = wrapper.get('[data-testid="market-status-strip"]');
+    expect(strip.text()).toContain("仅指数采集");
+    expect(strip.text()).toContain("股票计划已阻断");
+    expect(strip.text()).not.toContain("可监控");
+    expect(wrapper.get('[data-testid="health-matrix"]').text()).toContain("权限阻断");
+    expect(wrapper.get('[data-testid="health-matrix"]').text()).toContain("2026-08-24 10:05:00");
+  });
+
   it("shows the controlled restart action without legacy-plan maintenance", () => {
     const wrapper = mountSystem({
       health: { ...health, status: "BLOCKED", blockReason: "NEEDS_RESTART" },

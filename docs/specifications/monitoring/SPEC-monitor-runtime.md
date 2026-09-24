@@ -144,6 +144,8 @@ Per-symbol health: `STARTING`, `LIVE`, `STALE`, `GAPPED`, `DEGRADED`, `BLOCKED`,
 
 Health exposes timestamps/ages, last completed minute, latest evaluation, gaps, next poll, next retry, cooldown, latency, error code, executor utilization, database/WAL status, and alert-delivery status. Secrets and raw provider bodies are excluded.
 
+For the bounded production index-only scope, valid index semantics and a trusted persisted `SSE` open-day calendar may keep the owner `RUNNING` while stock semantics are absent. Startup restores persisted, unexpired index snapshot/retry state locally, without stock history recovery or stock I/O; the existing index retry deadline remains schedulable after restart. Without the trusted calendar, the owner stays `DEGRADED` and infers no open day. Stock evaluation and alert dispatch remain blocked. If an older stock permission reservation also exists, the provider row retains `BLOCKED_PERMISSION` status and `nextRetryAt` while `errorCode=STOCK_SEMANTICS_UNAVAILABLE` preserves the stock semantic blocker for the index-only UI warning. This does not change the permission reservation or authorize a permission probe.
+
 ### T034 Owned Lifecycle and Health Contract
 
 - One lifecycle-owned startup task is shared by concurrent callers. It follows the fixed startup sequence above, rejects more than 10 active symbols before any provider work, and closes every resource already opened when startup fails.

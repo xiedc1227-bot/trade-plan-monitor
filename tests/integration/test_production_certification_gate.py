@@ -298,6 +298,157 @@ def test_late_stock_semantic_latches_index_only_process(tmp_path, monkeypatch):
     asyncio.run(scenario())
 
 
+def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch):
+    async def scenario():
+        composition, sdk, _ = _composition(
+            tmp_path, monkeypatch, active_plan=True, include_index=True,
+            stock_certification=False, persisted_calendar=True,
+        )
+        failed_calls = []
+
+        def fail_index(**kwargs):
+            failed_calls.append(kwargs)
+            raise ProviderConnectionError("offline index interruption")
+
+        sdk.idx_mins = fail_index
+        sdk.rt_idx_min_daily = fail_index
+        sdk.index_daily = fail_index
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            state = composition._runtime._probe_capabilities.__self__
+            await state.run_deadline(MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
+                due_at=NOW, bar_end=NOW.replace(second=0),
+            ))
+            with state.unit_of_work_factory() as work:
+                records = work.projections.list_market_index_recoveries()
+            assert len(records) == 5
+            expected_due = min(record[4] for record in records)
+            assert state.next_index_recovery_at() == expected_due
+            assert failed_calls
+        finally:
+            await composition.stop()
+
+        del sdk.idx_mins
+        del sdk.rt_idx_min_daily
+        del sdk.index_daily
+        replacement = create_monitor_composition(
+            config_path=tmp_path / "config/app.yaml",
+            database_path=tmp_path / "monitor.sqlite3",
+        )
+        try:
+            assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
+            state = replacement._runtime._probe_capabilities.__self__
+            assert state.next_index_recovery_at() == expected_due
+            sdk.clock.current = expected_due
+            before = len(sdk.calls)
+            await state.run_deadline(MarketDeadline(
+                kind=DeadlineKind.INDEX_RECOVERY, trade_date=NOW.date(),
+                due_at=expected_due,
+            ))
+            assert state.next_index_recovery_at() != expected_due
+            assert len(sdk.calls) > before
+            assert all(
+                name in {"idx_mins", "rt_idx_min_daily", "index_daily"}
+                for name, _ in sdk.calls[before:]
+            )
+            with state._session_factory() as session:
+                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+        finally:
+            await replacement.stop()
+
+    asyncio.run(scenario())
+
+
+def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(
+            tmp_path, monkeypatch, active_plan=False, include_index=True,
+            stock_certification=False, persisted_calendar=True,
+        )
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            control = composition._runtime._request_controller
+            for operation in (
+                TushareOperation.CURRENT_DAY_MINUTES,
+                TushareOperation.DAILY_BARS,
+                TushareOperation.DAILY_LIMITS,
+                TushareOperation.REALTIME_MINUTES,
+                TushareOperation.TRADING_CALENDAR,
+            ):
+                def denied(operation=operation):
+                    raise TushareProviderError(
+                        TushareErrorCode.BLOCKED_PERMISSION, operation.value,
+                    )
+
+                with pytest.raises(RequestControlError):
+                    await control.execute(operation, denied, work_key=f"blocked:{operation.value}")
+            state = composition._runtime._probe_capabilities.__self__
+            providers = state.health_details().providers
+            assert len(providers) == 5
+            assert all(
+                item.status is ProviderCapabilityStatus.BLOCKED_PERMISSION
+                for item in providers
+            )
+            assert all(item.next_retry_at is not None for item in providers)
+            assert all(item.error_code == "STOCK_SEMANTICS_UNAVAILABLE" for item in providers)
+            assert not any(
+                name in {"trade_cal", "stk_limit", "daily", "rt_min", "stk_mins"}
+                for name, _ in sdk.calls
+            )
+        finally:
+            await composition.stop()
+
+        replacement = create_monitor_composition(
+            config_path=tmp_path / "config/app.yaml",
+            database_path=tmp_path / "monitor.sqlite3",
+        )
+        delivered = []
+
+        class Channel:
+            channel = DeliveryChannel.IN_APP
+            enabled = True
+
+            async def deliver(self, event):
+                delivered.append(event.event_id)
+                return ChannelDeliveryResult(
+                    channel=self.channel, delivered=True, retryable=False,
+                )
+
+        try:
+            assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
+            state = replacement._runtime._probe_capabilities.__self__
+            providers = state.health_details().providers
+            assert all(
+                item.status is ProviderCapabilityStatus.BLOCKED_PERMISSION
+                for item in providers
+            )
+            assert all(item.next_retry_at is not None for item in providers)
+            assert all(item.error_code == "STOCK_SEMANTICS_UNAVAILABLE" for item in providers)
+            with state.unit_of_work_factory() as work:
+                work.alerts.enqueue_recoverable(_payload(993))
+                work.commit()
+            state._dispatcher._channels = (Channel(),)
+            monkeypatch.setattr(CurrentDeliveryAdmission, "__call__", lambda *_: True)
+            await state.run_deadline(MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
+                due_at=NOW, bar_end=NOW.replace(second=0),
+            ))
+            await state._dispatcher.dispatch_pending()
+            assert delivered == []
+            assert not any(
+                name in {"trade_cal", "stk_limit", "daily", "rt_min", "stk_mins"}
+                for name, _ in sdk.calls
+            )
+        finally:
+            await replacement.stop()
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize(
     "invalidated_by", ("remove_semantic", "corrupt_semantic", "change_config")
 )

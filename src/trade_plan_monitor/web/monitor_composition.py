@@ -979,7 +979,9 @@ class _ProductionRuntimeState:
                     self._stage_retry_at.pop(stage, None)
 
     async def recover_startup(self, trade_date: date) -> None:
-        if self._pipeline is not None and self._pipeline._stock_semantics is not None:
+        if self._pipeline is not None and self._pipeline._stock_semantics is None:
+            self._pipeline.restore_index_recoveries()
+        elif self._pipeline is not None:
             try:
                 await self._pipeline.recover_startup(trade_date)
             except Exception:
@@ -1037,6 +1039,7 @@ class _ProductionRuntimeState:
         for capability in _PROVIDER_CAPABILITIES:
             operation = TushareOperation(capability)
             blocked = self._request_controller.is_permission_blocked(operation)
+            stage_error = self._stage_errors.get(capability)
             permission_due = (
                 self._request_controller.permission_retry_at(operation) if blocked else None
             )
@@ -1045,13 +1048,15 @@ class _ProductionRuntimeState:
                 capability=capability,
                 status=(
                     ProviderCapabilityStatus.BLOCKED_PERMISSION if blocked
-                    else ProviderCapabilityStatus.ERROR if capability in self._stage_errors
+                    else ProviderCapabilityStatus.ERROR if stage_error is not None
                     else getattr(self._capabilities, capability)
                 ),
                 checked_at=observation_at,
                 latency_ms=0,
                 error_code=(
-                    "BLOCKED_PERMISSION" if blocked else self._stage_errors.get(capability)
+                    "BLOCKED_PERMISSION"
+                    if blocked and stage_error != "STOCK_SEMANTICS_UNAVAILABLE"
+                    else stage_error
                 ),
                 next_retry_at=(
                     max(observation_at, permission_due) if permission_due is not None

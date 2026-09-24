@@ -792,17 +792,7 @@ class ProductionMonitorPipeline:
         self.symbols.restore_health(
             symbols=symbols, states=self.evaluations.load_persisted_symbol_health(symbols)
         )
-        with self._work() as work:
-            latest = work.projections.list_latest_market_index_snapshots(
-                mapping_version="board-index-map-v1",
-                index_codes=ALWAYS_ON_INDEX_CODES,
-            )
-            records = work.projections.list_market_index_recoveries()
-        self.index_service.restore_recoveries(
-            snapshots={record.snapshot.index_code: record.snapshot for record in latest},
-            records=records,
-            now=self._clock.now(),
-        )
+        self.restore_index_recoveries()
         if self._historical_reader is None:
             await self._recover_pending_close_batches(trade_date)
         else:
@@ -815,6 +805,21 @@ class ProductionMonitorPipeline:
             )
         result = await self.recovery.recover_startup(trade_date=trade_date)
         _ensure_recovery_complete(result)
+
+    def restore_index_recoveries(self) -> None:
+        """Restore persisted display-index retries without stock recovery work."""
+
+        with self._work() as work:
+            latest = work.projections.list_latest_market_index_snapshots(
+                mapping_version="board-index-map-v1",
+                index_codes=ALWAYS_ON_INDEX_CODES,
+            )
+            records = work.projections.list_market_index_recoveries()
+        self.index_service.restore_recoveries(
+            snapshots={record.snapshot.index_code: record.snapshot for record in latest},
+            records=records,
+            now=self._clock.now(),
+        )
 
     async def _recover_historical_closes(self, *, before_date: date | None) -> None:
         """Resume each legacy plan independently after its last committed close."""
