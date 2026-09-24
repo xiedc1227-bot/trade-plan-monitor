@@ -2,6 +2,12 @@
 
 > 第一阶段已按用户批准的离线进程重启标准于 2026-09-23 验收。第二阶段提醒安全已于 2026-09-24 完成离线接通实现及验证；更广的发布门禁仍未关闭。真实行情源验证、用户数据库迁移及部署均未获批准。下文旧章节保留其当时的阶段状态。
 
+## RR004/RR006/A06 独立指数准入 — 2026-09-24
+
+此前开放的四项 `test_production_semantic_gate.py` 用例失败，是因为 `run_deadline` 在检查是否有计划需要股票数据前，先刷新了股票交易日历参考数据。现在无活动计划的截止任务直接进入独立的展示指数路径；股票认证无效的活动计划则在请求股票行情源前受阻，独立指数工作仍可单独调用。原有逐物理调用的指数语义校验现能在已到达的指数路径上执行。这四项测试先在前一个提交上确认失败；本次修正后整份语义门禁文件 11 项通过。相邻生产、指数和激活保护集成测试文件 91 项通过，只有 1 项既有 Starlette/httpx 弃用警告。
+
+这是有界的依赖准入修正，不代表已证明完整的逐计划依赖恢复、配置重载、股票失败后的调度器接续、业务第 3 步、A06 的两类计划完整故障矩阵、C0–C5 或发布就绪。测试使用模拟行情和临时状态；未使用真实行情源、外部发送器、用户数据库或部署。
+
 ## RR010 激活保护与指数捕获修正 — 2026-09-24
 
 此前的 `test_deadline_does_not_admit_captured_plan_reactivated_during_reference_await` 在修改前单独复现失败：截止任务等待参考数据刷新后，用重新读取的计划/激活依赖键覆盖入口时捕获的键，因此同一计划重激活未抛出 `ReferenceDependenciesChangedError`。`run_deadline` 现保留入口键，并在参考数据刷新及历史恢复后、准入计划前核对。原回归和新增的历史等待期间重激活回归均通过；旧身份计划不会被准入。
@@ -9,7 +15,7 @@
 此前记录的两项 `test_live_pipeline_acceptance.py` 指数失败也各自复现。`test_market_index_persistence_reuses_an_older_canonical_content_revision` 在后续出现相同修订时，快照头时间仍停在第一次捕获的 10:36，未前进到 10:38。`test_startup_batches_persisted_pending_closes_by_date_and_shared_index[index_error]` 在新的指数请求失败后复用旧 `LIVE` 快照头，致使依赖该指数的历史决策错误显示 `LIVE`。二者均源于同一持久化短路：旧头为 `LIVE` 或问题码相同，就丢弃较新的 `BLOCKED` 捕获。移除短路后保留规范快照复用及修订冲突校验，同时记录当前捕获；两项定向测试现均通过。本修正针对指数捕获持久化，不代表完整依赖恢复生命周期已完成。
 
 - RR010 指定回归：`tests/integration/test_explicit_runtime_production.py tests/integration/test_recovery_activation_fences.py` — 31 项通过、1 项既有 Starlette/httpx 弃用警告。相邻遗漏收盘/生产组合/历史读取回归 — 48 项通过，同一警告。离线指数测试组（`test_live_pipeline_acceptance.py`、`test_market_index_runtime.py`、`test_persistent_market_index_history.py`、`test_market_index_data.py`）— 53 项通过；（`test_market_index_snapshots.py`、`test_market_index_web.py`、`test_tushare_market_index.py`）— 39 项通过。原激活用例在保护修正前失败，两项指数用例在持久化修正前失败。
-- 另有四项不同的 `test_production_semantic_gate.py` 用例仍失败：`test_missing_stock_binding_does_not_block_index_only_display`、`test_wrong_surface_bindings_cannot_issue_requests`、`test_index_contract_is_rechecked_between_physical_calls` 和 `test_index_display_remains_independently_callable_after_selected_stock_is_blocked`。它们在新增 RR010 校验前失败：无计划/仅指数截止任务仍请求股票交易日历，或返回该请求错误而非预期的股票认证阻断。因此，所选股票失败后的独立指数展示尚未证明；下一项有界依赖恢复修正应处理此问题。业务第 3 步、C0–C5 及完整发布门禁仍开放。未使用真实行情源、外部发送器、用户数据库迁移或部署。
+- 在该 RR010 检查点，另有四项不同的 `test_production_semantic_gate.py` 用例仍失败：`test_missing_stock_binding_does_not_block_index_only_display`、`test_wrong_surface_bindings_cannot_issue_requests`、`test_index_contract_is_rechecked_between_physical_calls` 和 `test_index_display_remains_independently_callable_after_selected_stock_is_blocked`。它们在新增 RR010 校验前失败：无计划/仅指数截止任务请求了股票交易日历，或返回该请求错误而非预期的股票认证阻断。上文后续 RR004/RR006/A06 修正解决了这四项具体失败；业务第 3 步、C0–C5 及完整发布门禁仍开放。未使用真实行情源、外部发送器、用户数据库迁移或部署。
 
 ## 第二阶段离线接通证据 — 2026-09-24
 

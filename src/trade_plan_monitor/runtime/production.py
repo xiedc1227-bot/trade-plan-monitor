@@ -834,9 +834,12 @@ class ProductionMonitorPipeline:
             return await self.evaluations.recover_transient_market_indexes(
                 evaluated_at=max(self._clock.now(), deadline.due_at)
             )
-        if self._semantic_bindings is None and not self._stock_certification_current():
-            raise RuntimeError("stock certification must be refreshed before execution")
         plans = self.active_plans(deadline.trade_date)
+        if not plans:
+            await self._refresh_dashboard_indexes(deadline)
+            return ()
+        if not self._stock_certification_current():
+            raise RuntimeError("stock certification must be refreshed before execution")
         if (
             deadline.kind is DeadlineKind.REALTIME_MINUTE
             and deadline.bar_end is not None
