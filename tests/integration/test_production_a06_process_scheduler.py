@@ -40,7 +40,7 @@ FIRST_TARGET = NOW.replace(second=0).isoformat()
 SECOND_TARGET = (NOW.replace(second=0) + timedelta(minutes=5)).isoformat()
 
 
-def _run_scheduled_monitor(root: str, observed_at, malformed_legacy: bool, outcomes) -> None:
+def _run_scheduled_monitor(root: str, observed_at, failed_symbol: str | None, outcomes) -> None:
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
@@ -50,8 +50,8 @@ def _run_scheduled_monitor(root: str, observed_at, malformed_legacy: bool, outco
     class FakeSDK(OfflineSDK):
         def _stock_minutes(self, name, kwargs):
             frame = super()._stock_minutes(name, kwargs)
-            if malformed_legacy and name == "rt_min":
-                frame.loc[frame["ts_code"] == LEGACY_SYMBOL, "close"] = "malformed"
+            if failed_symbol is not None and name == "rt_min":
+                frame.loc[frame["ts_code"] == failed_symbol, "close"] = "malformed"
             return frame
 
     sdk = FakeSDK(clock, (LEGACY_SYMBOL, EXPLICIT_SYMBOL))
@@ -96,7 +96,7 @@ def _run_scheduled_monitor(root: str, observed_at, malformed_legacy: bool, outco
 
             await asyncio.wait_for(scheduler_reached_next_sleep(), timeout=15)
             assert clock.sleep_calls[0] == (
-                NOW if malformed_legacy else NOW + timedelta(minutes=5)
+                observed_at + timedelta(minutes=1)
             ).replace(second=12)
             return (
                 tuple(clock.sleep_calls),
@@ -109,12 +109,12 @@ def _run_scheduled_monitor(root: str, observed_at, malformed_legacy: bool, outco
     outcomes.put(asyncio.run(scenario()))
 
 
-def _spawn_scheduled_monitor(root: Path, observed_at, *, malformed_legacy: bool):
+def _spawn_scheduled_monitor(root: Path, observed_at, *, failed_symbol: str | None):
     context = get_context("spawn")
     outcomes = context.Queue()
     process = context.Process(
         target=_run_scheduled_monitor,
-        args=(str(root), observed_at, malformed_legacy, outcomes),
+        args=(str(root), observed_at, failed_symbol, outcomes),
     )
     process.start()
     process.join(timeout=60)
@@ -126,8 +126,9 @@ def _spawn_scheduled_monitor(root: Path, observed_at, *, malformed_legacy: bool)
     return outcomes.get(timeout=5)
 
 
-def test_malformed_legacy_row_recovers_in_new_process_via_scheduler(
-    tmp_path, monkeypatch,
+@pytest.mark.parametrize("failed_symbol", (LEGACY_SYMBOL, EXPLICIT_SYMBOL))
+def test_malformed_family_row_recovers_in_new_process_via_scheduler(
+    tmp_path, monkeypatch, failed_symbol,
 ):
     database = tmp_path / "monitor.sqlite3"
     seed_clock = ControlledClock(NOW.replace(hour=9, minute=0))
@@ -157,7 +158,7 @@ def test_malformed_legacy_row_recovers_in_new_process_via_scheduler(
     )
 
     first_sleeps, first_calls, first_delivered = _spawn_scheduled_monitor(
-        tmp_path, FIRST_CLOCK, malformed_legacy=True,
+        tmp_path, FIRST_CLOCK, failed_symbol=failed_symbol,
     )
     assert first_sleeps[0].minute == 0
     assert "rt_min" in first_calls
@@ -165,18 +166,43 @@ def test_malformed_legacy_row_recovers_in_new_process_via_scheduler(
     engine = create_sqlite_engine(database)
     try:
         with create_session_factory(engine)() as session:
+            legacy_first = session.scalar(
+                select(func.count()).select_from(EvaluationResult).where(
+                    EvaluationResult.symbol == LEGACY_SYMBOL,
+                    EvaluationResult.plan_hash == plan_sha256(legacy_plan),
+                    EvaluationResult.evaluation_kind == "INTRADAY",
+                    EvaluationResult.target_value == FIRST_TARGET,
+                )
+            )
+            explicit_first = session.scalar(
+                select(func.count()).select_from(ExplicitEvaluationLedger).where(
+                    ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
+                    ExplicitEvaluationLedger.plan_hash == plan_sha256(explicit_plan),
+                    ExplicitEvaluationLedger.activation_revision == 1,
+                    ExplicitEvaluationLedger.target_value == FIRST_TARGET,
+                )
+            )
+            assert (legacy_first, explicit_first) == (
+                (0, 1) if failed_symbol == LEGACY_SYMBOL else (1, 0)
+            )
             assert session.scalar(
                 select(func.count()).select_from(EvaluationResult).where(
                     EvaluationResult.symbol == LEGACY_SYMBOL,
                     EvaluationResult.target_value == FIRST_TARGET,
                 )
-            ) == 0
+            ) == legacy_first
             assert session.scalar(
                 select(func.count()).select_from(ExplicitEvaluationLedger).where(
                     ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
                     ExplicitEvaluationLedger.target_value == FIRST_TARGET,
                 )
-            ) == 1
+            ) == explicit_first
+            if failed_symbol == EXPLICIT_SYMBOL:
+                head = session.get(SymbolDecisionHead, LEGACY_SYMBOL)
+                assert head is not None
+                assert head.plan_hash == plan_sha256(legacy_plan)
+                assert head.activation_revision == 1
+                assert head.target_value == FIRST_TARGET
             assert session.scalar(
                 select(func.count(func.distinct(MarketIndexSnapshot.index_code)))
             ) == 5
@@ -186,7 +212,7 @@ def test_malformed_legacy_row_recovers_in_new_process_via_scheduler(
         engine.dispose()
 
     second_sleeps, second_calls, second_delivered = _spawn_scheduled_monitor(
-        tmp_path, SECOND_CLOCK, malformed_legacy=False,
+        tmp_path, SECOND_CLOCK, failed_symbol=None,
     )
     assert second_sleeps[0].minute == 5
     assert "rt_min" in second_calls
@@ -199,6 +225,12 @@ def test_malformed_legacy_row_recovers_in_new_process_via_scheduler(
                     EvaluationResult.symbol == LEGACY_SYMBOL,
                     EvaluationResult.plan_hash == plan_sha256(legacy_plan),
                     EvaluationResult.evaluation_kind == "INTRADAY",
+                    EvaluationResult.target_value == SECOND_TARGET,
+                )
+            ) == 1
+            assert session.scalar(
+                select(func.count()).select_from(EvaluationResult).where(
+                    EvaluationResult.symbol == LEGACY_SYMBOL,
                     EvaluationResult.target_value == SECOND_TARGET,
                 )
             ) == 1
@@ -218,9 +250,27 @@ def test_malformed_legacy_row_recovers_in_new_process_via_scheduler(
             assert session.scalar(
                 select(func.count()).select_from(ExplicitEvaluationLedger).where(
                     ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
-                    ExplicitEvaluationLedger.target_value == FIRST_TARGET,
+                    ExplicitEvaluationLedger.target_value == SECOND_TARGET,
                 )
             ) == 1
+            if failed_symbol == EXPLICIT_SYMBOL:
+                assert session.scalar(
+                    select(func.count()).select_from(EvaluationResult).where(
+                        EvaluationResult.symbol == LEGACY_SYMBOL,
+                        EvaluationResult.plan_hash == plan_sha256(legacy_plan),
+                        EvaluationResult.evaluation_kind == "INTRADAY",
+                        EvaluationResult.target_value == FIRST_TARGET,
+                    )
+                ) == 1
+            else:
+                assert session.scalar(
+                    select(func.count()).select_from(ExplicitEvaluationLedger).where(
+                        ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
+                        ExplicitEvaluationLedger.plan_hash == plan_sha256(explicit_plan),
+                        ExplicitEvaluationLedger.activation_revision == 1,
+                        ExplicitEvaluationLedger.target_value == FIRST_TARGET,
+                    )
+                ) == 1
             assert session.scalar(select(func.count()).select_from(AlertEvent)) == first_alerts
     finally:
         engine.dispose()
