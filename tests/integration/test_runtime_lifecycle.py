@@ -331,6 +331,37 @@ def test_read_only_standby_keeps_local_heartbeat_alive():
     asyncio.run(scenario())
 
 
+def test_provider_outage_keeps_legal_software_owner_heartbeat_alive():
+    beats = asyncio.Event()
+
+    class Liveness:
+        async def admit(self):
+            return None
+
+        async def heartbeat(self):
+            beats.set()
+
+    def disconnected(_trade_date: date):
+        raise RequestControlError(
+            RequestControlErrorCode.TRANSIENT,
+            TushareOperation.TRADING_CALENDAR,
+            attempts=1,
+        )
+
+    async def scenario():
+        service = _service(
+            liveness_owner=Liveness(),
+            refresh_references=disconnected,
+            heartbeat_interval_seconds=0.01,
+        )
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        await asyncio.wait_for(beats.wait(), timeout=1)
+        assert service.health().status is RuntimeServiceStatus.DEGRADED
+        await service.stop()
+
+    asyncio.run(scenario())
+
+
 def test_startup_owns_the_required_sequence_and_accepts_exactly_ten_symbols() -> None:
     events: list[str] = []
     symbols = tuple(f"60000{index}.SH" for index in range(10))
