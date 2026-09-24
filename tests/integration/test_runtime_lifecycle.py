@@ -1433,5 +1433,6 @@ def test_configuration_drift_blocks_without_supervisor_exit_and_keeps_owner_hear
         assert "controller-close" not in events
         await service.stop()
         await running
+        assert service.health().status is RuntimeServiceStatus.STOPPED
 
     asyncio.run(scenario())

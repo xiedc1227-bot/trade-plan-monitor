@@ -3216,6 +3216,7 @@ class RuntimeLifecycleService:
         self._stopping = True
         self._status = RuntimeServiceStatus.STOPPING
         self._degraded_reason = None
+        self._block_reason = None
         self._retry_at = None
         self._accepting_work = False
         self._heartbeat_stop.set()
