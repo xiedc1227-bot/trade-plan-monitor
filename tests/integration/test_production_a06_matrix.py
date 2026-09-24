@@ -11,6 +11,7 @@ from test_live_pipeline_acceptance import (
     NOW,
     _activate_plans,
     _index_condition_evidence,
+    _sample_plan,
 )
 from test_live_pipeline_acceptance import (
     _plan as legacy_plan,
@@ -29,9 +30,11 @@ from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import (
+    AlertEvent,
     EvaluationResult,
     ExplicitEvaluationLedger,
     MarketIndexSnapshot,
+    SymbolDecisionHead,
 )
 from trade_plan_monitor.state.repositories import ManualEventRiskStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
@@ -115,15 +118,31 @@ def test_one_malformed_stock_row_does_not_block_other_plan_family_or_indexes(
                 due_at=sdk.clock.now(),
                 bar_end=NOW.replace(second=0) + timedelta(minutes=5),
             ))
+            target = (NOW.replace(second=0) + timedelta(minutes=5)).isoformat()
             with state._session_factory() as session:
                 assert session.scalar(
                     select(func.count()).select_from(EvaluationResult)
-                    .where(EvaluationResult.symbol == legacy_symbol)
-                ) >= 1
+                    .where(
+                        EvaluationResult.symbol == legacy_symbol,
+                        EvaluationResult.plan_hash == plan_sha256(_sample_plan()),
+                        EvaluationResult.evaluation_kind == "INTRADAY",
+                        EvaluationResult.target_value == target,
+                    )
+                ) == 1
+                legacy_head = session.get(SymbolDecisionHead, legacy_symbol)
+                assert legacy_head is not None
+                assert legacy_head.plan_hash == plan_sha256(_sample_plan())
+                assert legacy_head.activation_revision == 1
+                assert legacy_head.target_value == target
                 assert session.scalar(
                     select(func.count()).select_from(ExplicitEvaluationLedger)
-                    .where(ExplicitEvaluationLedger.symbol == explicit_plan.symbol)
-                ) >= 1
+                    .where(
+                        ExplicitEvaluationLedger.symbol == explicit_plan.symbol,
+                        ExplicitEvaluationLedger.plan_hash == plan_sha256(explicit_plan),
+                        ExplicitEvaluationLedger.activation_revision == 1,
+                        ExplicitEvaluationLedger.target_value == target,
+                    )
+                ) == 1
             assert sum(name == "rt_min" for name, _ in sdk.calls) == 2
         finally:
             await replacement.stop()
@@ -241,6 +260,7 @@ def test_required_index_failure_isolates_mixed_family_deadline(
                     MarketIndexCode(required_code)
                 ]
                 assert MarketIndexIssueCode.PROVIDER_UNAVAILABLE in failed_snapshot.issues
+                failed_snapshot_hash = failed_snapshot.snapshot_hash
                 evidence = tuple(
                     item for root in legacy.snapshot.condition_evidence
                     for item in _index_condition_evidence(root)
@@ -282,15 +302,54 @@ def test_required_index_failure_isolates_mixed_family_deadline(
                 state = replacement._runtime._probe_capabilities.__self__
                 state._dispatcher._channels = (Channel(),)
                 assert state.next_index_recovery_at() == retry_at
+                with SqlAlchemyUnitOfWork(
+                    state._session_factory, clock=sdk.clock.now,
+                ) as work:
+                    persisted = work.projections.list_latest_market_index_snapshots(
+                        mapping_version="board-index-map-v1",
+                        index_codes=(MarketIndexCode(required_code),),
+                    )
+                assert len(persisted) == 1
+                assert persisted[0].snapshot.snapshot_hash == failed_snapshot_hash
+                with state._session_factory() as session:
+                    business_counts_before = tuple(
+                        session.scalar(select(func.count()).select_from(model))
+                        for model in (EvaluationResult, ExplicitEvaluationLedger, AlertEvent)
+                    )
+                delivered_before = tuple(delivered)
                 before = len(sdk.calls)
                 await state.run_deadline(MarketDeadline(
                     kind=DeadlineKind.INDEX_RECOVERY,
                     trade_date=NOW.date(), due_at=retry_at,
                 ))
+                retry_calls = sdk.calls[before:]
+                assert retry_calls
                 assert all(
                     name in {"idx_mins", "rt_idx_min_daily", "index_daily"}
-                    for name, _ in sdk.calls[before:]
+                    for name, _ in retry_calls
                 )
+                assert any(
+                    kwargs.get("ts_code") == required_code
+                    for _, kwargs in retry_calls
+                )
+                with SqlAlchemyUnitOfWork(
+                    state._session_factory, clock=sdk.clock.now,
+                ) as work:
+                    persisted = work.projections.list_latest_market_index_snapshots(
+                        mapping_version="board-index-map-v1",
+                        index_codes=(MarketIndexCode(required_code),),
+                    )
+                assert len(persisted) == 1
+                recovered = persisted[0].snapshot
+                assert recovered.decision_cutoff == NOW.replace(second=0)
+                assert recovered.health is MarketIndexHealth.LIVE
+                assert recovered.snapshot_hash != failed_snapshot_hash
+                with state._session_factory() as session:
+                    assert tuple(
+                        session.scalar(select(func.count()).select_from(model))
+                        for model in (EvaluationResult, ExplicitEvaluationLedger, AlertEvent)
+                    ) == business_counts_before
+                assert tuple(delivered) == delivered_before
                 assert state.next_index_recovery_at() is None
                 sdk.clock.current = NOW + timedelta(minutes=5)
                 results = await state.run_deadline(MarketDeadline(
