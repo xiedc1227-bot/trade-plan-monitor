@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime, timedelta
 from hashlib import sha256
+from multiprocessing import get_context
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.tushare import (
@@ -122,6 +124,23 @@ def _snapshot(engine):
         ).all()
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
     return rows, version
+
+
+def _interrupt_during_new_scope_insert(database_path: str) -> None:
+    engine = create_sqlite_engine(database_path)
+
+    @event.listens_for(engine, "connect")
+    def register_interrupt(dbapi_connection, _record):
+        dbapi_connection.create_function("interrupt_migration", 0, lambda: os._exit(83))
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TRIGGER interrupt_index_scope_insert "
+            "BEFORE INSERT ON provider_recovery_checkpoint "
+            "WHEN NEW.scope_key='rt_idx_min_daily' "
+            "BEGIN SELECT interrupt_migration(); END"
+        )
+    upgrade_database(engine)
 
 
 @pytest.mark.parametrize("new_scopes", ((), ("idx_mins",), NEW_PERMISSIONS))
@@ -277,6 +296,40 @@ def test_invalid_second_provider_prevents_first_provider_rewrite(tmp_path):
         with pytest.raises(RuntimeError, match="provider recovery"):
             upgrade_database(engine)
         assert _snapshot(engine) == before
+    finally:
+        engine.dispose()
+
+
+def test_child_process_interruption_rolls_back_partial_scope_split(tmp_path):
+    database = tmp_path / "state.db"
+    engine = create_sqlite_engine(database)
+    try:
+        _migrate(engine, "0022_runtime_liveness")
+        _seed(engine, new_scopes=("idx_mins",))
+        before = _snapshot(engine)
+        process = get_context("spawn").Process(
+            target=_interrupt_during_new_scope_insert, args=(str(database),)
+        )
+        process.start()
+        process.join(timeout=20)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+            pytest.fail("interrupted migration child did not exit")
+        assert process.exitcode == 83
+        assert _snapshot(engine) == before
+        with engine.begin() as connection:
+            connection.exec_driver_sql("DROP TRIGGER interrupt_index_scope_insert")
+        upgrade_database(engine)
+        scopes = {
+            row.scope_key
+            for row in ProviderRecoveryRepository(
+                create_session_factory(engine), provider_identity=IDENTITY
+            ).load()
+            if row.kind == "permission"
+        }
+        assert "index_minutes" not in scopes
+        assert set(NEW_PERMISSIONS) <= scopes
     finally:
         engine.dispose()
 
@@ -492,6 +545,26 @@ def test_runtime_load_rejects_legacy_scope_even_after_upgrade(tmp_path):
         before = _snapshot(engine)
         with pytest.raises(RecoveryCheckpointError):
             repository.load()
+        assert _snapshot(engine) == before
+    finally:
+        engine.dispose()
+
+
+def test_downgrade_rejects_new_scope_even_in_corrupt_kind_row(tmp_path):
+    engine = create_sqlite_engine(tmp_path / "state.db")
+    try:
+        upgrade_database(engine)
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO provider_recovery_checkpoint VALUES "
+                    "(:identity, 'backoff', 'idx_mins', 1, :retry, 1, 'TRANSIENT')"
+                ),
+                {"identity": IDENTITY, "retry": NOW.isoformat()},
+            )
+        before = _snapshot(engine)
+        with pytest.raises(RuntimeError, match="refuses to discard"):
+            _migrate(engine, "0022_runtime_liveness", downgrade=True)
         assert _snapshot(engine) == before
     finally:
         engine.dispose()
