@@ -3217,8 +3217,8 @@ class RuntimeLifecycleService:
 
         return self._cleanup_failed
 
-    async def stop(self) -> None:
-        """Stop admission, bound task completion, close resources, and checkpoint WAL."""
+    def begin_shutdown(self) -> None:
+        """Synchronously revoke new work, including before a candidate is published."""
 
         if self._cleanup_complete:
             return
@@ -3238,6 +3238,13 @@ class RuntimeLifecycleService:
                 self._request_controller_closed = not callable(
                     getattr(self._request_controller, "aclose", None)
                 )
+
+    async def stop(self) -> None:
+        """Stop admission, bound task completion, close resources, and checkpoint WAL."""
+
+        if self._cleanup_complete:
+            return
+        self.begin_shutdown()
         stop_task = self._stop_task
         if stop_task is None or stop_task.done():
             caller = asyncio.current_task()

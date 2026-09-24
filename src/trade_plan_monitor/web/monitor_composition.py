@@ -164,6 +164,7 @@ class MonitorWebComposition:
         if read_service is None:
             raise TypeError("read_service is required")
         self._runtime = runtime
+        self._candidate_runtime: MonitorRuntime | None = None
         self._runtime_factory = runtime_factory
         self._restart_sleep = restart_sleep
         self._read_service = read_service
@@ -354,10 +355,25 @@ class MonitorWebComposition:
             return
         self._stopping = True
         first_error: BaseException | None = None
+        candidate = self._candidate_runtime
+        if candidate is not None:
+            begin_shutdown = getattr(candidate, "begin_shutdown", None)
+            if callable(begin_shutdown):
+                try:
+                    begin_shutdown()
+                except BaseException as error:
+                    first_error = error
         try:
             await self._stop_runtime()
         except BaseException as error:
             first_error = error
+
+        if candidate is not None:
+            try:
+                await self._stop_runtime(candidate)
+            except BaseException as error:
+                if first_error is None:
+                    first_error = error
 
         runner = self._runner_task
         if runner is not None:
@@ -451,6 +467,7 @@ class MonitorWebComposition:
             replacement: MonitorRuntime | None = None
             try:
                 replacement = self._runtime_factory()
+                self._candidate_runtime = replacement
                 self._validate_runtime(replacement)
                 if getattr(replacement, "configuration_restart_required", False) is True:
                     self._configuration_restart_required = True
@@ -472,6 +489,7 @@ class MonitorWebComposition:
                 ):
                     raise ValueError("runtime startup and health readiness are inconsistent")
                 self._runtime = replacement
+                self._candidate_runtime = None
                 self._runtime_stopped = False
                 self._last_runtime_health = replacement_health
             except asyncio.CancelledError:
@@ -489,6 +507,9 @@ class MonitorWebComposition:
                     except Exception:
                         pass
                 return
+            finally:
+                if self._candidate_runtime is replacement:
+                    self._candidate_runtime = None
             if not self._needs_runner(replacement, status):
                 return
             self._runner_failed = False
@@ -1224,6 +1245,7 @@ def create_monitor_composition(
             return (
                 not state.configuration_restart_required()
                 and current_delivery_admission(event, now)
+                and not process_baseline.revoked.is_set()
             )
 
         dispatcher = NotificationDispatcher(

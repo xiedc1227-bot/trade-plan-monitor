@@ -20,10 +20,13 @@ from test_live_pipeline_acceptance import (
     _sample_plan,
     _write_configuration_and_evidence,
 )
+from test_notification_delivery import _payload
 
 from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.market_data.models import ProviderCapabilityStatus
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, DeliveryChannel
+from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.production import ReferenceDependenciesChangedError
 from trade_plan_monitor.runtime.provider_contract import import_index_semantic_contract
@@ -889,6 +892,223 @@ def test_worker_thread_latch_before_legacy_commit_rejects_staged_decision(
             with state._session_factory() as session:
                 assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_revocation_after_final_permit_finishes_one_inflight_decision(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, _, _ = _composition(tmp_path, monkeypatch)
+        config = tmp_path / "config/app.yaml"
+        original_persist = ProjectionRepository.add_evaluation_result
+        staged = False
+        revoked_after_permit = False
+
+        def stage_result(self, *args, **kwargs):
+            nonlocal staged
+            value = original_persist(self, *args, **kwargs)
+            staged = True
+            return value
+
+        monkeypatch.setattr(ProjectionRepository, "add_evaluation_result", stage_result)
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            state = composition._runtime._probe_capabilities.__self__
+            pipeline = state._pipeline
+            assert pipeline is not None
+            original_admission = pipeline._decision_commit_current
+
+            def admit_then_revoke():
+                nonlocal revoked_after_permit
+                allowed = original_admission()
+                if staged and allowed and not revoked_after_permit:
+                    def worker():
+                        original = config.read_text(encoding="utf-8")
+                        config.write_text(
+                            original.replace("offline-test-token", "offline-new-token"),
+                            encoding="utf-8",
+                        )
+                        assert not state.configuration_is_current()
+                        config.write_text(original, encoding="utf-8")
+
+                    thread = Thread(target=worker)
+                    thread.start()
+                    thread.join(timeout=2)
+                    assert not thread.is_alive()
+                    assert state._process_baseline.revoked.is_set()
+                    assert not state._configuration_restart_required
+                    revoked_after_permit = True
+                return allowed
+
+            pipeline._decision_commit_current = admit_then_revoke
+            pipeline.evaluations._commit_admission = admit_then_revoke
+            deadline = MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE,
+                trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
+            )
+            await state.run_deadline(deadline)
+            assert revoked_after_permit
+            with state._session_factory() as session:
+                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 1
+            assert composition.health().block_reason == "NEEDS_RESTART"
+            assert not pipeline._decision_commit_current()
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_stop_before_final_decision_permit_rolls_back_staged_result(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, _, _ = _composition(tmp_path, monkeypatch)
+        original_persist = ProjectionRepository.add_evaluation_result
+        stop_started = False
+
+        def stop_after_staging(self, *args, **kwargs):
+            nonlocal stop_started
+            value = original_persist(self, *args, **kwargs)
+            if not stop_started:
+                stop_started = True
+                composition._runtime.begin_shutdown()
+            return value
+
+        monkeypatch.setattr(ProjectionRepository, "add_evaluation_result", stop_after_staging)
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            state = composition._runtime._probe_capabilities.__self__
+            deadline = MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE,
+                trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
+            )
+            with pytest.raises(RuntimeError, match="commit admission revoked"):
+                await state.run_deadline(deadline)
+            assert stop_started
+            with state._session_factory() as session:
+                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_stop_revokes_unpublished_candidate_during_replacement_start(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        original_runtime = composition._runtime
+        original_factory = composition._runtime_factory
+        assert original_factory is not None
+        release_failure = asyncio.Event()
+        candidate_entered = asyncio.Event()
+        release_candidate = asyncio.Event()
+        candidates = []
+
+        async def fail_after_start():
+            await release_failure.wait()
+            raise RuntimeError("offline runner failure")
+
+        def delayed_factory():
+            candidate = original_factory()
+            probe = candidate._probe_capabilities
+
+            async def wait_before_probe():
+                candidate_entered.set()
+                await release_candidate.wait()
+                return probe()
+
+            candidate._probe_capabilities = wait_before_probe
+            candidates.append(candidate)
+            return candidate
+
+        original_runtime.run = fail_after_start
+        composition._runtime_factory = delayed_factory
+        composition._restart_sleep = lambda _delay: asyncio.sleep(0)
+        stop_task = None
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            initial_calls = tuple(sdk.calls)
+            release_failure.set()
+            await asyncio.wait_for(candidate_entered.wait(), timeout=2)
+            assert len(candidates) == 1
+            candidate = candidates[0]
+            assert candidate.business_commit_admission_open
+            stop_task = asyncio.create_task(composition.stop())
+            await asyncio.sleep(0)
+            assert composition._stopping
+            assert not candidate.business_commit_admission_open
+            assert candidate._request_controller._closed
+            release_candidate.set()
+            await asyncio.wait_for(stop_task, timeout=2)
+            assert tuple(sdk.calls) == initial_calls
+        finally:
+            release_candidate.set()
+            if stop_task is not None:
+                await asyncio.gather(stop_task, return_exceptions=True)
+            else:
+                await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_delivery_revoked_during_final_db_admission_never_enters_channel(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, _, _ = _composition(tmp_path, monkeypatch)
+        config = tmp_path / "config/app.yaml"
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            state = composition._runtime._probe_capabilities.__self__
+            with state.unit_of_work_factory() as work:
+                work.alerts.enqueue_recoverable(_payload(991))
+                work.commit()
+            entered = []
+
+            class Channel:
+                channel = DeliveryChannel.IN_APP
+                enabled = True
+
+                async def deliver(self, event):
+                    entered.append((event.event_id, state._process_baseline.revoked.is_set()))
+                    return ChannelDeliveryResult(
+                        channel=self.channel, delivered=True, retryable=False,
+                    )
+
+            state._dispatcher._channels = (Channel(),)
+            admission_calls = 0
+
+            def revoke_during_final_admission(_self, _event, _now):
+                nonlocal admission_calls
+                admission_calls += 1
+                if admission_calls == 2:
+                    def worker():
+                        original = config.read_text(encoding="utf-8")
+                        config.write_text(
+                            original.replace("offline-test-token", "offline-new-token"),
+                            encoding="utf-8",
+                        )
+                        assert not state.configuration_is_current()
+                        config.write_text(original, encoding="utf-8")
+
+                    thread = Thread(target=worker)
+                    thread.start()
+                    thread.join(timeout=2)
+                    assert not thread.is_alive()
+                return True
+
+            monkeypatch.setattr(CurrentDeliveryAdmission, "__call__", revoke_during_final_admission)
+            await state._dispatcher.dispatch_pending()
+            assert admission_calls == 2
+            assert state._process_baseline.revoked.is_set()
+            assert entered == []
         finally:
             await composition.stop()
 
