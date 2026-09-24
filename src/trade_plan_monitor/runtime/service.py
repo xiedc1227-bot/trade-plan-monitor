@@ -63,7 +63,6 @@ from trade_plan_monitor.market_index.canonical import validate_market_index_snap
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import (
     MarketIndexBar,
-    MarketIndexHealth,
     MarketIndexSnapshot,
 )
 from trade_plan_monitor.market_index.requirements import iter_plan_index_conditions
@@ -2086,18 +2085,6 @@ class RuntimeEvaluationService:
                     decision_cutoff=snapshot.decision_cutoff,
                     request_set_hash=snapshot.request_set_hash,
                 )
-                if (
-                    current_head is not None
-                    and current_head.snapshot.health is MarketIndexHealth.LIVE
-                    and snapshot.health is not MarketIndexHealth.LIVE
-                ) or (
-                    current_head is not None
-                    and current_head.snapshot.health is MarketIndexHealth.BLOCKED
-                    and snapshot.health is MarketIndexHealth.BLOCKED
-                    and current_head.snapshot.issues == snapshot.issues
-                ):
-                    canonical[index_code] = current_head.snapshot
-                    continue
                 if stored is not None:
                     if not _equivalent_market_index_capture(stored.snapshot, snapshot):
                         raise ProjectionIdentityConflictError(

@@ -136,6 +136,27 @@ def test_deadline_does_not_admit_captured_plan_reactivated_during_reference_awai
     asyncio.run(scenario())
 
 
+def test_deadline_does_not_admit_captured_plan_reactivated_during_recovery_await(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
+            sdk.stock_symbols = (_sample_plan().symbol,)
+            admitted = record_deadline_admission(pipeline)
+
+            async def reactivate_during_recovery(*, before_date):
+                assert before_date == NOW.date()
+                replace_or_reactivate(work, pipeline, _sample_plan())
+
+            pipeline._recover_historical_closes = reactivate_during_recovery
+            with pytest.raises(RuntimeError, match="reference dependencies changed"):
+                await pipeline.run_deadline(_deadline())
+            assert not admitted
+            assert pipeline._deadline_plans is None
+
+    asyncio.run(scenario())
+
+
 def test_metadata_only_refresh_during_request_preserves_dependency_identity(tmp_path, monkeypatch):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch) as (pipeline, _, directory, _, _):

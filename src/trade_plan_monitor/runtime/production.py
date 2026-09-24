@@ -860,9 +860,12 @@ class ProductionMonitorPipeline:
         reference_key = self._reference_dependency_key(deadline.trade_date, plans)
         if self._reference_key != reference_key:
             await self.refresh_references(deadline.trade_date)
+        if self._reference_key != reference_key:
+            raise ReferenceDependenciesChangedError
         await self._recover_historical_closes(before_date=deadline.trade_date)
         plans = self.active_plans(deadline.trade_date)
-        reference_key = self._reference_dependency_key(deadline.trade_date, plans)
+        if reference_key != self._reference_dependency_key(deadline.trade_date, plans):
+            raise ReferenceDependenciesChangedError
         cutoff = deadline.bar_end or datetime.combine(
             deadline.trade_date, time(15), deadline.due_at.tzinfo
         )

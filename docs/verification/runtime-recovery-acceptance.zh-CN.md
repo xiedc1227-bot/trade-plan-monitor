@@ -2,6 +2,15 @@
 
 > 第一阶段已按用户批准的离线进程重启标准于 2026-09-23 验收。第二阶段提醒安全已于 2026-09-24 完成离线接通实现及验证；更广的发布门禁仍未关闭。真实行情源验证、用户数据库迁移及部署均未获批准。下文旧章节保留其当时的阶段状态。
 
+## RR010 激活保护与指数捕获修正 — 2026-09-24
+
+此前的 `test_deadline_does_not_admit_captured_plan_reactivated_during_reference_await` 在修改前单独复现失败：截止任务等待参考数据刷新后，用重新读取的计划/激活依赖键覆盖入口时捕获的键，因此同一计划重激活未抛出 `ReferenceDependenciesChangedError`。`run_deadline` 现保留入口键，并在参考数据刷新及历史恢复后、准入计划前核对。原回归和新增的历史等待期间重激活回归均通过；旧身份计划不会被准入。
+
+此前记录的两项 `test_live_pipeline_acceptance.py` 指数失败也各自复现。`test_market_index_persistence_reuses_an_older_canonical_content_revision` 在后续出现相同修订时，快照头时间仍停在第一次捕获的 10:36，未前进到 10:38。`test_startup_batches_persisted_pending_closes_by_date_and_shared_index[index_error]` 在新的指数请求失败后复用旧 `LIVE` 快照头，致使依赖该指数的历史决策错误显示 `LIVE`。二者均源于同一持久化短路：旧头为 `LIVE` 或问题码相同，就丢弃较新的 `BLOCKED` 捕获。移除短路后保留规范快照复用及修订冲突校验，同时记录当前捕获；两项定向测试现均通过。本修正针对指数捕获持久化，不代表完整依赖恢复生命周期已完成。
+
+- RR010 指定回归：`tests/integration/test_explicit_runtime_production.py tests/integration/test_recovery_activation_fences.py` — 31 项通过、1 项既有 Starlette/httpx 弃用警告。相邻遗漏收盘/生产组合/历史读取回归 — 48 项通过，同一警告。离线指数测试组（`test_live_pipeline_acceptance.py`、`test_market_index_runtime.py`、`test_persistent_market_index_history.py`、`test_market_index_data.py`）— 53 项通过；（`test_market_index_snapshots.py`、`test_market_index_web.py`、`test_tushare_market_index.py`）— 39 项通过。原激活用例在保护修正前失败，两项指数用例在持久化修正前失败。
+- 另有四项不同的 `test_production_semantic_gate.py` 用例仍失败：`test_missing_stock_binding_does_not_block_index_only_display`、`test_wrong_surface_bindings_cannot_issue_requests`、`test_index_contract_is_rechecked_between_physical_calls` 和 `test_index_display_remains_independently_callable_after_selected_stock_is_blocked`。它们在新增 RR010 校验前失败：无计划/仅指数截止任务仍请求股票交易日历，或返回该请求错误而非预期的股票认证阻断。因此，所选股票失败后的独立指数展示尚未证明；下一项有界依赖恢复修正应处理此问题。业务第 3 步、C0–C5 及完整发布门禁仍开放。未使用真实行情源、外部发送器、用户数据库迁移或部署。
+
 ## 第二阶段离线接通证据 — 2026-09-24
 
 生产的两类评估器现与规范提醒一起提交初始 `HOLD` 回执。生产发送器在逐渠道认领前，以及认领后紧邻渠道 I/O 前，均调用 `CurrentDeliveryAdmission` 读取最新状态。测试仅使用本地 `IN_APP` 和模拟渠道。使用临时 SQLite 的三进程重启验收现还确认：恢复后此前暂缓的风险提醒产生一次持久的本地投递尝试，重复重启不增加规范结果/提醒。SQLite 事务不跨渠道 I/O，既有不确定发送重试行为保持。
@@ -9,7 +18,7 @@
 接通测试覆盖 D1 突破后 D2 退出或解除、D2/D3 相同退出只释放最新项、人工卖出使当前持仓不再适用、只指定数量的期初余额退出、已证明的旧风险提醒在停用后抑制、显式风险和操作提醒、90 秒失效、当前权威证据缺失、认领后变化，以及较早 `HOLD` 行存在时的待发扫描。重复复核相同的显式或旧版分类不会增加审计数和修订号。每次检查从同一个已提交本地快照读取历史归属、当前官方收盘完成度、激活身份、持仓及运行代次证据。缺失或无效前提绝不构成发送许可。
 
 - 接通回归：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_notification_delivery.py tests/integration/test_delivery_admission.py tests/integration/test_delivery_eligibility_storage.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_missed_close_execution.py tests/integration/test_runtime_restart_gap_acceptance.py tests/integration/test_monitor_production_composition.py tests/integration/test_explicit_runtime_production.py tests/unit/test_legacy_recovery_delivery_eligibility.py -q --tb=short` — 264 项通过、1 项既有 Starlette/httpx 弃用警告，91.24 秒。
-- 本接通检查点不关闭 C0–C5，也不保证每个历史数据库都能自动恢复。完整 `not live` 测试、高交易量证明预算、尚未解决的行情指数失败、更广停机矩阵及独立发布评审仍待完成。此前记录的 `test_deadline_does_not_admit_captured_plan_reactivated_during_reference_await` 单独运行仍失败，原因是未抛出预期的 `RuntimeError`；最终发送准入会独立复核当前激活身份，但该评估器准入失败仍未解决。未使用真实行情源、外部发送器、用户数据库、迁移或部署。
+- 在这个第二阶段检查点，C0–C5、完整 `not live` 测试、高交易量证明预算、更广停机矩阵及独立发布评审仍待完成。当时两项市场指数测试和 `test_deadline_does_not_admit_captured_plan_reactivated_during_reference_await` 仍失败；上文较后的 RR010 修正解决了这几项特定失败，不改变本阶段限定的投递结论。未使用真实行情源、外部发送器、用户数据库、迁移或部署。
 
 ## 第一阶段进程重启验收 — 2026-09-23
 
