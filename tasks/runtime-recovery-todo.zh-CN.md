@@ -20,6 +20,22 @@
 
 主线顺序为 1 → 2 → 3 → 4 → 5。离线组装/重启测试基础提前到第 1 步，依赖重试测试随第 3 步执行，不等到第 5 步才首次运行。RR002 评审通过后，可并行准备独立的状态/客户端工作，但不能据此宣称第 4 步完成。原任务依赖仍是验收/默认启用门禁，不禁止提前测试注入式集成。
 
+### 业务第 3 步离线测试顺序 — 2026-09-24
+
+以下是计划中的分片，不是已完成的检查点。缺少行为时，各片先写失败的离线测试，使用临时 SQLite 和模拟行情源/渠道边界，再运行列明的专项与相邻回归文件。已批准的 `INDEX_MINUTES` 决策记录在 D4/D6；迁移及真实端点认证尚未执行。不得凭单个切片关闭 C1 或 C3，也不得将本顺序视为第 4 步页面完成或第 5 步发布验收。
+
+| 顺序 / 门槛 | 前置条件 | 最小验收 | 专项与相邻回归 |
+|---|---|---|---|
+| S3-01 A04 | 既有所有者/存活证据及类型化传输恢复 | 连续四次瞬态故障保留同一所有者和运行代次、本地读取可用、遵守 30/60/120/300 秒重试下限，随后由调度器提交一个精确目标；普通故障不消耗崩溃监督次数。改变重试时序前，先评审可中断的测试计时接口。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_certification_gate.py tests/integration/test_runtime_lifecycle.py -q --tb=short` |
+| S3-02 A05 | S3-01 及已批准的 D4/D6 端点范围 | 在临时 SQLite 中，旧 `INDEX_MINUTES` 经幂等/中断迁移后同时阻断 `idx_mins` 与 `rt_idx_min_daily`；各自 300 秒受控探针仅解除自身封锁。共享 429 冷却、1.25 秒节流及失败后重新封锁保持有效。不声称真实权限。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py tests/integration/test_production_certification_gate.py tests/integration/test_market_index_runtime.py -q --tb=short` |
+| S3-03 C1 | S3-01–S3-02 | A01/A02/A04/A05 离线证据、有界串行请求、旧状态安全阻断迁移及独立 `xhigh` 评审；全部条件通过前 C1 保持开放。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py tests/integration/test_provider_cooldown_process_restart.py tests/integration/test_production_certification_gate.py tests/integration/test_runtime_lifecycle.py -q --tb=short` |
+| S3-04 A03/A07/A10 | C1 及可信会话/日历证据 | 开盘前、午休、收盘后、跨日及时钟回拨选择正确目标；空/部分批次不能证明就绪，未完成收盘义务保留，封顶工作在内存有界的前提下公平推进。 | `.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py tests/integration/test_runtime_recovery_coverage.py tests/integration/test_missed_close_execution.py -q --tb=short` |
+| S3-05 A06 | S3-02 及 S3-04 | 单个股票/指数故障仍让无关 Schema v1/v2 和 Schema v3 计划及展示指数推进；必需 `INDEX_*` 依赖仅阻断其计划。指数重试跨正常 OS 进程停止/重启及调度器唤醒保留，纯指数路径不发股票请求或通知。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_a06_matrix.py tests/integration/test_production_a06_process_scheduler.py tests/integration/test_market_index_runtime.py -q --tb=short` |
+| S3-06 A09 | S3-04–S3-05 及冻结配置 | 捕获至提交期间计划停用/替换/重激活、语义或来源漂移、停止所有权变化，均不得发布旧结果、待收盘变更或通知；仅刷新元数据不受影响。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_recovery_activation_fences.py tests/integration/test_production_certification_gate.py -q --tb=short` |
+| S3-07 A08/D5 | S3-06 及既有发送准入 | 提交/发送窗口停止或被杀后，业务意图保持唯一，不确定发送处理保留。物理工作、已开始发送、持久回执和所有者心跳须在 WAL/数据库/所有者释放前排空；排空失败保留所有权并允许安全清理重试。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_lifecycle.py tests/integration/test_monitor_production_composition.py tests/integration/test_notification_delivery.py tests/integration/test_delivery_admission.py -q --tb=short` |
+| S3-08 A11 | S3-01 及 S3-04–S3-07 | 已安装运行时的本地读取服务报告存活、待机、恢复中或受阻，并显示原因及下一唤醒/重试；旧缓存事实和连接正常的心跳不能代表业务进展。这是提前验证最小后端状态，不代表第 4 步完整页面/协议。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_persistent_monitor_read_service.py tests/integration/test_monitor_production_composition.py tests/integration/test_runtime_lifecycle.py -q --tb=short` |
+| S3-09 C3 | C1 及 S3-04–S3-08 | 汇总 A04/A08–A11 及相关 A03/A05–A07 证据、迁移/回滚和停机矩阵，并完成独立 `xhigh` 提交/崩溃/发送评审。仍有实质故障时 C3 保持开放；C4/C5、第 4 步和第 5 步另行处理。 | `.\.venv\Scripts\python.exe -m pytest -m "not live" --ignore=tests/integration/test_backtest_acceptance.py -q --tb=short` 与 `.\.venv\Scripts\python.exe -m ruff check src tests scripts` |
+
 ### D5 受控重启决策 — 2026-09-24
 
 用户将运行中重载方案改为安全停止 → 人工编辑配置 → 启动新进程。范围内不包含 watcher、`reload_configuration`、候选运行时或自动数据源/代次安装。运行中相关配置变化或无效 YAML 必须锁存可见的 `NEEDS_RESTART` 阻断：不再启动行情请求/通知工作，监督器不替换运行时，且把文件改回也不得清除锁存。普通网络/429/权限故障仍走自动恢复路径。成功停止须在数据库检查点/关闭前排空物理请求、迟到的恢复检查点写入、已开始的发送及持久回执、在途所有者心跳；停止失败则保留所有权，禁止第二实例取得同一数据库。新进程在工作前校验一份冻结配置及既有持久冷却/预约；启动配置无效时行情/通知调用均为零，可修正后再次启动。相同端点的令牌更换保留恢复身份及 1.25 秒节流。120 小时门禁只使用本地合法所有者持久 `last_alive_at`；该进程运行时行情源/协调器故障不计为停机。仅刷新语义元数据无需重启。失败先行离线测试及完整 A05/A06/A09/C1/C3 验收仍开放。
@@ -74,7 +90,7 @@
 
 存在可信的已持久化 `SSE` 开市日历及有效指数语义时，即使缺少股票语义或认证，生产进程仍可为指数采集保持 `RUNNING`，且不获取股票行情、不判断、不产生新股票提醒。股票供应方健康保持 `ERROR` 并标注 `STOCK_SEMANTICS_UNAVAILABLE`；状态条明确显示仅指数采集、股票计划受阻。没有可信日历时，启动保持 `DEGRADED`，不推断开市日或发起请求。纯指数 deadline 或直接调用分发器时，旧股票 outbox 行均不得进入渠道。冻结进程基线后新增股票语义 sidecar 会锁存重启要求，删除该文件也不能解除。直接调用 `ProductionMonitorPipeline` 时，缺少认证的活动股票工作仍被拒绝。这是有界 P2/A06 切片，不代表完整依赖故障矩阵或业务第 3 步完成。
 
-后续 P2/A06 切片在纯指数重启时恢复已持久化且未过期的指数重试，不进入股票恢复。五个受阻指数快照保留重试截止点，到期处理时不请求股票行情、不产生判断或发送。若旧股票权限预约覆盖供应方状态，健康信息保留 `BLOCKED_PERMISSION` 及重试时间，同时保留 `STOCK_SEMANTICS_UNAVAILABLE` 作为纯指数界面提示的原因。权限预约本身不变；独立的 `INDEX_MINUTES` 检查点设计仍等待用户答复。
+后续 P2/A06 切片在纯指数重启时恢复已持久化且未过期的指数重试，不进入股票恢复。五个受阻指数快照保留重试截止点，到期处理时不请求股票行情、不产生判断或发送。若旧股票权限预约覆盖供应方状态，健康信息保留 `BLOCKED_PERMISSION` 及重试时间，同时保留 `STOCK_SEMANTICS_UNAVAILABLE` 作为纯指数界面提示的原因。该切片的权限预约本身不变；独立的 `INDEX_MINUTES` 检查点设计现已获批，但尚未实现。
 
 后续仅加测试的 A06 生产组合矩阵在股票响应畸形用例中同时激活 Schema v1 `TradePlan` 与 Schema v3 `ExplicitTradePlan`，在指数依赖用例中同时激活 Schema v2 `TradePlan` 与 Schema v3 `ExplicitTradePlan`。任一族的一条股票响应畸形时，另一族仍提交判断，五个展示指数仍可用；受控停止后在同一进程内创建第二个组合并恢复模拟数据，两族均为精确的 10:05 目标及当前计划身份各提交一条结果。Schema v2 计划必需的 `INDEX_*` 参考指数发生瞬态故障时，产生精确缺失输入证据且没有旧版行动提醒，而独立 Schema v3 规则提交并进入模拟渠道；另四个指数保持实时。其持久重试由第二个组合恢复：一组非空的纯指数物理请求使原截止点的持久快照在下一目标前变为 `LIVE`，恢复期间不新增股票判断、提醒或发送。负控具有相同的 `reference_market`，但没有 `INDEX_*` 叶子，因此保持独立。四项测试在既有运行时代码上全部通过，这只增加证据，不虚称产品修复。截止点由测试直接调用；在该检查点尚未证明跨进程重启或调度器接续。更广的 A06/C3 矩阵仍开放；Schema v3 不增加指数条件。
 
