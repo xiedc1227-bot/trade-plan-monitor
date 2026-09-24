@@ -12,6 +12,11 @@ This is a locally verified code path, not approval for a real provider, external
 ## Objective
 
 One runtime owner can start at any time. After an interruption no longer than 120 hours it may reconcile eligible plans; after a longer interruption all active trading plans must expire before any recovery or alert dispatch. No trading decision may bypass exact dependency, activation or freshness guards.
+
+## D5 controlled restart — 2026-09-24 decision
+
+Configuration replacement uses safe stop, manual file edit and a new process start. Stop first blocks admission, then waits for physical provider requests and started notification sends with durable receipts before releasing storage and provider ownership. Failed draining retains ownership and forbids another instance on that database. A new process validates and freezes the whole configuration before provider or notification work; invalid configuration fails closed with zero such calls and may be corrected before another start. A relevant configuration change discovered while running pauses the old source and requires a safe stop/restart; supervision must not turn it into an automatic runtime or source replacement. Semantic-file metadata refresh alone does not require restart. Capture and recheck activation, semantic revision and runtime generation before commits and sends. The 120-hour outage clock uses only the legal local owner's durable heartbeat; provider/coordinator faults while that process remains alive are not outage, and importer activity or WebSocket pings cannot sign it.
+
 ## Five-day admission and proposed manual-sale amendment
 
 - D8/A13: Record durable local owner liveness at bounded cadence, including standby/degraded operation; never use last startup or provider success as last-alive evidence. At startup, after storage opens but before active work, provider I/O or send admission, compare the last committed liveness with now. Exactly 120 hours remains recoverable; more than 120 hours expires all active plans of both families in one idempotent, audited transaction. Terminate their pending closes and suppress unsent alerts without deleting plans, holdings, confirmed trades, canonical results or audit. Missing/corrupt liveness or clock reversal blocks automatic admission pending operator review. Do not apply to a live database without approved migration and backup.
@@ -38,7 +43,7 @@ The following existing contract applies to eligible plans and remains unchanged 
 - Reference keys include plan family, required data, activation and semantic revision, not merely symbol/date. Captured generation/activation must still match at commit.
 - Both plan families preserve immutable evaluation identities. Store delivery eligibility atomically with each result/outbox transaction, outside canonical hashes. Unsent actionable intraday alerts expire after source cutoff + 90 seconds.
 - Risk notices are state-validity based, not blanket 90-second expiry. A per-plan recovery barrier holds risk delivery until that plan reaches the current target, then rechecks latest risk/activation immediately before send. HOLD is not terminal suppression. Historical obsolete alerts remain auditable; external uncertain sends cannot guarantee exactly once.
-- Shutdown stops admission and joins owned tasks/workers before closing persistence. Invalid replacement configuration blocks affected work, never silently falls back.
+- Shutdown stops admission and joins owned tasks/workers and started send/receipt work before closing persistence. Invalid startup configuration blocks work; running configuration drift pauses the old source until safe stop and new process start, without fallback or automatic replacement.
 ## Injected incremental interfaces
 
 - `RecoveryCoordinator` owns one `run(stop=...)` invocation for its entire lifetime. It synchronously reads local `requirements(now)`, claims one `RecoveryTicket`, awaits one bounded `execute(ticket)`, rereads requirements, then accepts only the still-current result. These callbacks do not authorize evaluation or delivery. `wake()` is an event-loop-local coalesced notification, cleared before the next local snapshot.

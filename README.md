@@ -180,7 +180,7 @@ Open `/plans` to use AI drafting and persistent plan management. The first lifes
 or upgrades `data/monitor.sqlite3`; saving, querying, importing, activating, and deactivating plans
 uses that same SQLite file on later starts. Keep the database and its WAL/SHM companions private
 and do not copy an in-use WAL database as a backup.
-Edit `config/app.yaml` and restart Web to change AI settings.
+To change `config/app.yaml`, stop the foreground Web/monitor process and wait for it to exit, edit the file, then start a new process. Do not edit provider settings while it runs. If startup rejects invalid configuration, correct the file while stopped and start again. A failed stop must be resolved before another instance uses the same database. Semantic-file metadata refresh alone does not require a restart.
 
 ### 5. Offline verification
 
