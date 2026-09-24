@@ -75,6 +75,22 @@ describe("health API", () => {
       code: "INVALID_RESPONSE",
     });
   });
+
+  it("accepts a restart-required block without treating it as a legacy-plan block", async () => {
+    const blocked = {
+      ...degradedHealth,
+      status: "BLOCKED",
+      blockReason: "NEEDS_RESTART",
+    };
+    const fetchImplementation = vi.fn(async () =>
+      new Response(JSON.stringify(blocked), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+
+    await expect(createHealthApi(fetchImplementation).getHealth()).resolves.toEqual(blocked);
+  });
 });
 
 describe("/system route", () => {

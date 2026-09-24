@@ -1521,7 +1521,7 @@ export type RuntimeGapView = {
 };
 
 export type RuntimeHealthResponse = {
-  blockReason?: ("LEGACY_PLANS_REQUIRE_REVIEW") | (null);
+  blockReason?: ("LEGACY_PLANS_REQUIRE_REVIEW" | "NEEDS_RESTART") | (null);
   cooldownUntil: (string) | (null);
   database: components["schemas"]["DatabaseHealthView"];
   degradedReason?: (string) | (null);

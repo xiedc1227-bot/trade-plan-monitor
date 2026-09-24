@@ -71,6 +71,15 @@ const errorMessage = computed(() =>
     </p>
 
     <template v-if="availableHealth !== null">
+      <p
+        v-if="availableHealth.status === 'BLOCKED' &&
+          availableHealth.blockReason === 'NEEDS_RESTART'"
+        class="system-view__restart"
+        data-testid="restart-required"
+        role="alert"
+      >
+        配置已变化，监控已暂停。请停止监控程序并等待退出，人工修正配置后重新启动。
+      </p>
       <LegacyPlanInvalidationPanel
         v-if="availableHealth.status === 'BLOCKED' &&
           availableHealth.blockReason === 'LEGACY_PLANS_REQUIRE_REVIEW'"
@@ -138,6 +147,14 @@ const errorMessage = computed(() =>
   margin-block-start: var(--space-2);
   color: var(--color-text-muted);
   line-height: 1.6;
+}
+
+.system-view__restart {
+  margin: 0;
+  padding: var(--space-4);
+  border: var(--border-technical);
+  color: var(--color-text-mineral);
+  background: var(--color-surface-raised);
 }
 
 .system-view__refresh {

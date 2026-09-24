@@ -242,7 +242,7 @@ class RuntimeHealthSnapshot(RuntimeHealthDetails):
 
     status: RuntimeServiceStatus
     read_only: bool = Field(strict=True)
-    block_reason: Literal["LEGACY_PLANS_REQUIRE_REVIEW"] | None = None
+    block_reason: Literal["LEGACY_PLANS_REQUIRE_REVIEW", "NEEDS_RESTART"] | None = None
     degraded_reason: HealthErrorCode | None = None
     runtime_generation: UUID4 = Field(default_factory=uuid4, exclude=True)
     observed_at: ShanghaiDatetime

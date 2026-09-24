@@ -26,6 +26,10 @@ def enforce_blocked_read_only(connection: HTTPConnection) -> None:
     snapshot = health()
     if snapshot.status is not RuntimeServiceStatus.BLOCKED:
         return
-    if method == "POST" and connection.url.path == _MAINTENANCE_PATH:
+    if (
+        method == "POST"
+        and connection.url.path == _MAINTENANCE_PATH
+        and snapshot.block_reason == "LEGACY_PLANS_REQUIRE_REVIEW"
+    ):
         return
     raise ApiError(ApiErrorCode.CONFLICT)

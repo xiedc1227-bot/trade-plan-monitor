@@ -137,7 +137,7 @@ class DeliveryHealthView(ReadModel):
 class RuntimeHealthResponse(ReadModel):
     status: RuntimeServiceStatus
     read_only: bool = Field(strict=True)
-    block_reason: Literal["LEGACY_PLANS_REQUIRE_REVIEW"] | None = None
+    block_reason: Literal["LEGACY_PLANS_REQUIRE_REVIEW", "NEEDS_RESTART"] | None = None
     degraded_reason: HealthErrorCode | None = None
     runtime_generation: UUID4 = Field(default=LEGACY_RUNTIME_GENERATION, exclude=True)
     observed_at: ShanghaiDatetime

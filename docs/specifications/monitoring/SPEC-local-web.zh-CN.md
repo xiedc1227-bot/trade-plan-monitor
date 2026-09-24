@@ -152,7 +152,7 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`46e85675ea6514a225bb787c37a1ef251453b5b9094fafd86d2a0bc60d42be4f`
+OpenAPI 快照 SHA-256：`3fd053faa64ab4613b810df68b7e375dacdc701e87e640908aafa87516f7dd93`
 
 R17 契约修复（2026-09-14）：将后端已有的 `PlanExtractionView.diagnosticStatus` 同步到此快照及前端生成契约。该字段可省略/为 null，仅接受 `RECORDED` 或 `WRITE_FAILED`；它表示诊断持久化状态，不表示提取成功。浏览器必须接受生产 QUEUED/RUNNING/终态 DTO，包括含 0–10,000 项字段映射的 v4 部分审核草稿，并保留激活阻断。轮询失败时保留已受理操作，提供仅 GET 的查询恢复，不再次发起提取 POST。本次用户要求的修复不新增 API 路径或供应商调用；证据与验证见 `../../verification/R17-contract-diagnostics-remediation.zh-CN.md`。
 
@@ -571,3 +571,5 @@ R12 完成普通用户的 v4 AI 提取、不可变 Schema-v3 保存、八项政�
 ## 准入受阻时的旧计划维护
 
 `GET /api/v1/health` 仅在活动计划缺少心跳时显示 `BLOCKED` 和 `blockReason=LEGACY_PLANS_REQUIRE_REVIEW`。系统页面使用 `GET /api/v1/system/legacy-plan-invalidation` 展示最多 10 个准确的 `{symbol, planVersionId, revision}` 身份及小写 SHA-256 `fingerprint`；其他情况下返回 `available=false`、`plans=[]`、`fingerprint=null`。经过独立的勾选和确认后，`POST /api/v1/system/legacy-plan-invalidation` 接收 `{fingerprint, confirmation:"INVALIDATE_LEGACY_PLANS"}`，返回 `{symbols, restartRequired:true}`。缺少确认返回 `422`，证据变化返回 `409`。POST 仅可在自有监控代际受阻且没有调度任务时执行；该状态下普通 HTTP 写入返回 `409`。既有本地同源 HTTP 防护继续生效。响应不包含凭证或原始存储错误。操作人须先重启工具再创建新计划；该操作绝不修改持仓或已确认成交。当前 OpenAPI 文档含 51 条路径，包括这条新增的实时路径。`GET /api/v1/health` 还提供有界的 `recoveryIssues`，分别包含受影响标的、稳定原因码及 `nextRetryAt`；系统页面将它们与传输新鲜度分别展示。未配置 Tushare 与股票语义证据不可用分别使用安全原因码 `TUSHARE_NOT_CONFIGURED` 和 `STOCK_SEMANTICS_UNAVAILABLE`；降级的运行时报告稳定的 `degradedReason` 和下次重试时间。
+
+按 D5 受控重启，运行中相关配置漂移后，`GET /api/v1/health` 也可显示 `BLOCKED` 和 `blockReason=NEEDS_RESTART`。此状态下全部普通 HTTP 写入，包括旧计划维护 POST，均返回 `409`。该原因要求安全停止、人工修正配置并启动新进程，不授权进程内替换数据源。120 小时准入使用的 `last_alive_at` 是本地合法软件所有者的持久心跳，与协调器进展及 WebSocket 健康信号分开。

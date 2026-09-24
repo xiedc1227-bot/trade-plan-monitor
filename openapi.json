@@ -9756,7 +9756,10 @@
           "blockReason": {
             "anyOf": [
               {
-                "const": "LEGACY_PLANS_REQUIRE_REVIEW",
+                "enum": [
+                  "LEGACY_PLANS_REQUIRE_REVIEW",
+                  "NEEDS_RESTART"
+                ],
                 "type": "string"
               },
               {

@@ -83,6 +83,14 @@ afterEach(() => {
 });
 
 describe("SystemView", () => {
+  it("shows the controlled restart action without legacy-plan maintenance", () => {
+    const wrapper = mountSystem({
+      health: { ...health, status: "BLOCKED", blockReason: "NEEDS_RESTART" },
+    });
+    expect(wrapper.get('[data-testid="restart-required"]').text()).toContain("停止监控程序");
+    expect(wrapper.find('[data-testid="legacy-plan-list"]').exists()).toBe(false);
+  });
+
   it("shows the blocked legacy preview and requires a second checked confirmation", async () => {
     const fingerprint = "a".repeat(64);
     const invalidate = vi.fn().mockResolvedValue({ symbols: ["600000.SH"], restartRequired: true });

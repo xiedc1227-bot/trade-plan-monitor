@@ -132,9 +132,11 @@ function isRuntimeHealthResponse(value: unknown): value is RuntimeHealthResponse
     typeof status === "string" &&
     runtimeStatuses.has(status) &&
     (value.blockReason === undefined || value.blockReason === null ||
-      value.blockReason === "LEGACY_PLANS_REQUIRE_REVIEW") &&
+      value.blockReason === "LEGACY_PLANS_REQUIRE_REVIEW" ||
+      value.blockReason === "NEEDS_RESTART") &&
     (status === "BLOCKED"
-      ? value.blockReason === "LEGACY_PLANS_REQUIRE_REVIEW" && value.readOnly === true
+      ? (value.blockReason === "LEGACY_PLANS_REQUIRE_REVIEW" ||
+          value.blockReason === "NEEDS_RESTART") && value.readOnly === true
       : value.blockReason === undefined || value.blockReason === null) &&
     isNullableDateTime(stoppedAt) &&
     (status !== "RUNNING" || value.readOnly === false) &&
