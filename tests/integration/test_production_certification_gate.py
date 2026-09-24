@@ -1219,6 +1219,88 @@ def test_stop_revokes_unpublished_candidate_during_replacement_start(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("recover_drain", (False, True))
+def test_failed_candidate_drain_remains_owned_for_stop_retry(
+    tmp_path, monkeypatch, recover_drain,
+):
+    async def scenario():
+        composition, _, _ = _composition(tmp_path, monkeypatch)
+        original_runtime = composition._runtime
+        original_factory = composition._runtime_factory
+        assert original_factory is not None
+        release_failure = asyncio.Event()
+        candidate_entered = asyncio.Event()
+        release_candidate = asyncio.Event()
+        drain_fails = [True]
+        candidates = []
+
+        async def fail_after_start():
+            await release_failure.wait()
+            raise RuntimeError("offline runner failure")
+
+        def delayed_factory():
+            candidate = original_factory()
+            refresh = candidate._refresh_references
+            drain = candidate._dispatcher.aclose
+
+            async def wait_before_refresh(trade_date):
+                candidate_entered.set()
+                await release_candidate.wait()
+                return await refresh(trade_date)
+
+            async def fail_drain_until_recovered():
+                if drain_fails[0]:
+                    raise RuntimeError("offline candidate drain failure")
+                await drain()
+
+            candidate._refresh_references = wait_before_refresh
+            candidate._dispatcher.aclose = fail_drain_until_recovered
+            candidates.append(candidate)
+            return candidate
+
+        original_runtime.run = fail_after_start
+        composition._runtime_factory = delayed_factory
+        composition._restart_sleep = lambda _delay: asyncio.sleep(0)
+        try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            release_failure.set()
+            await asyncio.wait_for(candidate_entered.wait(), timeout=2)
+            candidate = candidates[0]
+            assert candidate._database_opened
+            release_candidate.set()
+            with pytest.raises(RuntimeError, match="offline candidate drain failure"):
+                await composition.stop()
+            assert not candidate._cleanup_complete
+            assert candidate._database_opened
+            assert composition._candidate_runtime is candidate
+            repository = candidate._request_controller._recovery_repository
+            assert repository is not None
+            repository.assert_owner(candidate._request_controller)
+
+            drain_fails[0] = not recover_drain
+            if recover_drain:
+                await composition.stop()
+                assert candidate._cleanup_complete
+                assert not candidate._database_opened
+                assert candidate._request_controller_closed
+                assert composition._candidate_runtime is None
+                with pytest.raises(RecoveryCheckpointError):
+                    repository.assert_owner(candidate._request_controller)
+            else:
+                with pytest.raises(RuntimeError, match="offline candidate drain failure"):
+                    await composition.stop()
+                assert composition._candidate_runtime is candidate
+                assert candidate._database_opened
+                repository.assert_owner(candidate._request_controller)
+        finally:
+            release_candidate.set()
+            drain_fails[0] = False
+            if not composition._stopped:
+                await composition.stop()
+
+    asyncio.run(scenario())
+
+
 def test_delivery_revoked_during_final_db_admission_never_enters_channel(
     tmp_path, monkeypatch,
 ):

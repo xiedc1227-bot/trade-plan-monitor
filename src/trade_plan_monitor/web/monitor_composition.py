@@ -511,9 +511,6 @@ class MonitorWebComposition:
                     except Exception:
                         pass
                 return
-            finally:
-                if self._candidate_runtime is replacement:
-                    self._candidate_runtime = None
             if not self._needs_runner(replacement, status):
                 return
             self._runner_failed = False
@@ -533,6 +530,8 @@ class MonitorWebComposition:
             await target.stop()
             if target is self._runtime:
                 self._runtime_stopped = True
+            if target is self._candidate_runtime:
+                self._candidate_runtime = None
 
     def _observe_runner(self, task: asyncio.Task[None]) -> None:
         if not task.cancelled():
