@@ -35,6 +35,8 @@ from trade_plan_monitor.runtime.service import (
     MaintenanceCommandService,
     RuntimeLifecycleService,
     RuntimeShutdownError,
+    _RetryWaitOutcome,
+    _wait_for_retry_or_shutdown,
 )
 
 
@@ -148,6 +150,7 @@ def _service(
     liveness_owner: object | None = None,
     heartbeat_interval_seconds: float = 30.0,
     retry_interval_seconds: float = 30.0,
+    retry_wait: Callable[[asyncio.Event, float], Awaitable[_RetryWaitOutcome]] | None = None,
     probe_capabilities: Callable[[], ProviderCapabilities] | None = None,
     can_schedule: Callable[[ProviderCapabilities], bool] | None = None,
     health_details: Callable[[], RuntimeHealthDetails] = _healthy_runtime_details,
@@ -174,6 +177,7 @@ def _service(
         liveness_owner=liveness_owner,
         heartbeat_interval_seconds=heartbeat_interval_seconds,
         retry_interval_seconds=retry_interval_seconds,
+        retry_wait=retry_wait,
         load_active_symbols=lambda: (observed.append("plans"), symbols)[1],
         probe_capabilities=probe_capabilities or (lambda: (
             observed.append("probe"),
@@ -831,6 +835,171 @@ def test_degraded_run_remains_alive_until_explicit_shutdown() -> None:
 
     assert remained_alive is True
     assert status is RuntimeServiceStatus.STOPPED
+
+
+def test_retry_wait_stop_before_wait_does_not_start_recheck() -> None:
+    async def scenario() -> None:
+        events: list[str] = []
+        waits: list[float] = []
+
+        async def retry_wait(_shutdown: asyncio.Event, delay: float) -> _RetryWaitOutcome:
+            waits.append(delay)
+            return _RetryWaitOutcome.TIMEOUT
+
+        unavailable = _ready_capabilities().model_copy(
+            update={"daily_bars": ProviderCapabilityStatus.UNVERIFIED}
+        )
+        service = _service(events=events, capabilities=unavailable, retry_wait=retry_wait)
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        service.begin_shutdown()
+        await service._retry_degraded_startup()
+        await service.stop()
+        assert waits == []
+        assert events.count("probe") == 1
+        assert service.status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
+
+
+def test_retry_wait_stop_during_wait_wakes_without_recheck() -> None:
+    async def scenario() -> None:
+        events: list[str] = []
+        entered = asyncio.Event()
+
+        async def retry_wait(shutdown: asyncio.Event, _delay: float) -> _RetryWaitOutcome:
+            entered.set()
+            await shutdown.wait()
+            return _RetryWaitOutcome.SHUTDOWN
+
+        unavailable = _ready_capabilities().model_copy(
+            update={"daily_bars": ProviderCapabilityStatus.UNVERIFIED}
+        )
+        service = _service(events=events, capabilities=unavailable, retry_wait=retry_wait)
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        runner = asyncio.create_task(service.run())
+        await asyncio.wait_for(entered.wait(), timeout=1)
+        await service.stop()
+        await runner
+        assert events.count("probe") == 1
+        assert service.owned_task_count == 0
+
+    asyncio.run(scenario())
+
+
+def test_retry_wait_timeout_after_begin_shutdown_does_not_recheck() -> None:
+    async def scenario() -> None:
+        events: list[str] = []
+        unavailable = _ready_capabilities().model_copy(
+            update={"daily_bars": ProviderCapabilityStatus.UNVERIFIED}
+        )
+        service: RuntimeLifecycleService
+
+        async def retry_wait(_shutdown: asyncio.Event, _delay: float) -> _RetryWaitOutcome:
+            service.begin_shutdown()
+            return _RetryWaitOutcome.TIMEOUT
+
+        service = _service(events=events, capabilities=unavailable, retry_wait=retry_wait)
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        await service.run()
+        assert events.count("probe") == 1
+        assert service.status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
+
+
+def test_retry_wait_timeout_before_begin_shutdown_allows_only_started_recheck() -> None:
+    async def scenario() -> None:
+        attempts = 0
+        unavailable = _ready_capabilities().model_copy(
+            update={"daily_bars": ProviderCapabilityStatus.UNVERIFIED}
+        )
+        service: RuntimeLifecycleService
+
+        def probe() -> ProviderCapabilities:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 2:
+                service.begin_shutdown()
+            return unavailable
+
+        async def retry_wait(_shutdown: asyncio.Event, _delay: float) -> _RetryWaitOutcome:
+            return _RetryWaitOutcome.TIMEOUT
+
+        service = _service(probe_capabilities=probe, retry_wait=retry_wait)
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        await service.run()
+        assert attempts == 2
+        assert service.status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
+
+
+def test_retry_wait_external_cancellation_never_rechecks() -> None:
+    async def scenario() -> None:
+        events: list[str] = []
+        entered = asyncio.Event()
+
+        async def retry_wait(_shutdown: asyncio.Event, _delay: float) -> _RetryWaitOutcome:
+            entered.set()
+            await asyncio.Event().wait()
+            return _RetryWaitOutcome.TIMEOUT
+
+        unavailable = _ready_capabilities().model_copy(
+            update={"daily_bars": ProviderCapabilityStatus.UNVERIFIED}
+        )
+        service = _service(events=events, capabilities=unavailable, retry_wait=retry_wait)
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        runner = asyncio.create_task(service.run())
+        await asyncio.wait_for(entered.wait(), timeout=1)
+        runner.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await runner
+        assert events.count("probe") == 1
+        assert service.status is RuntimeServiceStatus.STOPPED
+
+    asyncio.run(scenario())
+
+
+def test_default_retry_wait_returns_timeout_or_shutdown() -> None:
+    async def scenario() -> None:
+        shutdown = asyncio.Event()
+        assert await _wait_for_retry_or_shutdown(shutdown, 0.001) is (
+            _RetryWaitOutcome.TIMEOUT
+        )
+        shutdown.set()
+        assert await _wait_for_retry_or_shutdown(shutdown, 1) is (
+            _RetryWaitOutcome.SHUTDOWN
+        )
+        pending = asyncio.create_task(
+            _wait_for_retry_or_shutdown(asyncio.Event(), 60)
+        )
+        await asyncio.sleep(0)
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+
+    asyncio.run(scenario())
+
+
+def test_retry_wait_preserves_later_controller_floor() -> None:
+    async def scenario() -> None:
+        observed: list[tuple[float, datetime | None]] = []
+        unavailable = _ready_capabilities().model_copy(
+            update={"daily_bars": ProviderCapabilityStatus.UNVERIFIED}
+        )
+        service: RuntimeLifecycleService
+
+        async def retry_wait(_shutdown: asyncio.Event, delay: float) -> _RetryWaitOutcome:
+            observed.append((delay, service.health().next_retry_at))
+            return _RetryWaitOutcome.SHUTDOWN
+
+        service = _service(capabilities=unavailable, retry_wait=retry_wait)
+        assert (await service.start()).status is RuntimeServiceStatus.DEGRADED
+        service._retry_at = _at(9, 35)
+        await service.run()
+        assert observed == [(300.0, _at(9, 35))]
+
+    asyncio.run(scenario())
 
 
 def test_degraded_startup_retries_and_resumes_scheduling_without_process_restart() -> None:

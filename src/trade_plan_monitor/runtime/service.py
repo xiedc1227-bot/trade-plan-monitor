@@ -2693,6 +2693,21 @@ class RuntimeStartupResult(_RuntimeValue):
         return self
 
 
+class _RetryWaitOutcome(StrEnum):
+    SHUTDOWN = "SHUTDOWN"
+    TIMEOUT = "TIMEOUT"
+
+
+async def _wait_for_retry_or_shutdown(
+    shutdown_event: asyncio.Event, delay: float,
+) -> _RetryWaitOutcome:
+    try:
+        await asyncio.wait_for(shutdown_event.wait(), timeout=delay)
+    except TimeoutError:
+        return _RetryWaitOutcome.TIMEOUT
+    return _RetryWaitOutcome.SHUTDOWN
+
+
 class RuntimeLifecycleService:
     """Own startup, scheduling tasks, resource shutdown, and WAL checkpointing."""
 
@@ -2718,6 +2733,7 @@ class RuntimeLifecycleService:
         liveness_owner: object | None = None,
         heartbeat_interval_seconds: float = 30.0,
         retry_interval_seconds: float = 30.0,
+        retry_wait: Callable[[asyncio.Event, float], Awaitable[_RetryWaitOutcome]] | None = None,
         shutdown_timeout_seconds: float = 5.0,
     ) -> None:
         if not isinstance(clock, Clock):
@@ -2754,6 +2770,8 @@ class RuntimeLifecycleService:
             not callable(getattr(liveness_owner, name, None)) for name in ("admit", "heartbeat")
         ):
             raise TypeError("liveness_owner must expose admit and heartbeat")
+        if retry_wait is not None and not callable(retry_wait):
+            raise TypeError("retry_wait must be callable")
         if (
             isinstance(heartbeat_interval_seconds, bool)
             or not isinstance(heartbeat_interval_seconds, int | float)
@@ -2792,6 +2810,9 @@ class RuntimeLifecycleService:
         self._liveness_owner = liveness_owner
         self._heartbeat_interval_seconds = float(heartbeat_interval_seconds)
         self._retry_interval_seconds = float(retry_interval_seconds)
+        self._retry_wait = (
+            _wait_for_retry_or_shutdown if retry_wait is None else retry_wait
+        )
         self._heartbeat_stop = asyncio.Event()
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._liveness_failed = False
@@ -3102,14 +3123,12 @@ class RuntimeLifecycleService:
             if self._retry_at is not None:
                 delay = max(delay, (self._retry_at - now).total_seconds())
             self._retry_at = now + timedelta(seconds=delay)
-            try:
-                await asyncio.wait_for(
-                    shutdown_event.wait(), timeout=delay
-                )
+            outcome = await self._retry_wait(shutdown_event, delay)
+            if outcome is _RetryWaitOutcome.SHUTDOWN:
                 return
-            except TimeoutError:
-                pass
-            if self._stopping:
+            if outcome is not _RetryWaitOutcome.TIMEOUT:
+                raise TypeError("retry_wait must return SHUTDOWN or TIMEOUT")
+            if self._stopping or shutdown_event.is_set():
                 return
             work_task = asyncio.create_task(self._recheck_degraded_startup())
             self._work_tasks.add(work_task)
