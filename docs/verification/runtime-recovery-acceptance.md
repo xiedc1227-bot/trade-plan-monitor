@@ -2,6 +2,10 @@
 
 > STAGE 1 ACCEPTED for the user's approved offline process-restart criterion on 2026-09-23. Stage 2 connected delivery safety was implemented and verified offline on 2026-09-24; broader release gates remain open. Live-provider validation, user database migration and deployment are not approved. Earlier sections retain their time-bounded historical status.
 
+## Business step 3 relevant-configuration comparison — 2026-09-24
+
+A valid `web.port` edit previously made `configuration_is_current()` false and would block the existing Tushare pipeline. A fail-first production test reproduces that outcome. The check now fully parses YAML and compares only the validated `tushare` projection for provider generation identity; the same pipeline stays installed after a web-only edit, with no additional SDK call. Existing token-change tests still block provider work. Invalid YAML still fails validation. This narrow correction does not perform reload or alter owner, database, supervisor or generation installation.
+
 ## Business step 3 reference commit fence — 2026-09-24
 
 The first fake `trade_cal` response previously committed 399 calendar rows even when its SDK call changed the local token before returning; the next provider call then failed. The new transaction fence checks captured activation/plan requirements, current configuration, stock semantic revision and runtime generation immediately before each calendar, daily-limit and historical daily-bar reference commit. The changed-token case now rolls back the first result, leaves zero calendar rows and starts no second physical request. The dedicated production test was RED at 399 rows and is GREEN at zero; the affected production/live-pipeline/restart files pass after updating three earlier tests to expect the stronger precommit `ReferenceDependenciesChangedError`. This fence does not implement validated reload or cover every decision/send commit.

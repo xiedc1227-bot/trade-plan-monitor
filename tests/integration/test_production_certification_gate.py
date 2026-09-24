@@ -584,3 +584,29 @@ def test_reference_result_cannot_commit_after_configuration_changes_mid_request(
             engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_web_only_configuration_edit_preserves_current_provider_pipeline(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+        state = composition._runtime._probe_capabilities.__self__
+        pipeline = state._pipeline
+        calls = tuple(sdk.calls)
+        try:
+            config = tmp_path / "config/app.yaml"
+            config.write_text(
+                config.read_text(encoding="utf-8") + "web:\n  port: 8766\n",
+                encoding="utf-8",
+            )
+            assert state.configuration_is_current()
+            await state.validate_configuration()
+            state.probe_capabilities()
+            assert state._pipeline is pipeline
+            assert tuple(sdk.calls) == calls
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())

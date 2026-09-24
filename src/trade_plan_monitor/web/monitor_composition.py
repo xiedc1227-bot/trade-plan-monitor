@@ -555,7 +555,10 @@ class _ProductionRuntimeState:
 
     async def validate_configuration(self) -> None:
         configuration = await to_thread.run_sync(load_application_config, self._config_path)
-        if self._configuration is not None and configuration != self._configuration:
+        if (
+            self._configuration is not None
+            and configuration.tushare != self._configuration.tushare
+        ):
             raise RuntimeError("monitor configuration changed before validated reload")
         self._configuration = configuration
 
@@ -645,7 +648,7 @@ class _ProductionRuntimeState:
     def probe_capabilities(self) -> ProviderCapabilities:
         if (
             self._configuration is not None
-            and load_application_config(self._config_path) != self._configuration
+            and load_application_config(self._config_path).tushare != self._configuration.tushare
         ):
             raise RuntimeError("monitor configuration changed before validated reload")
         if self._semantic_reload_blocked:
@@ -954,7 +957,8 @@ class _ProductionRuntimeState:
         try:
             return (
                 self._configuration is not None
-                and load_application_config(self._config_path) == self._configuration
+                and load_application_config(self._config_path).tushare
+                == self._configuration.tushare
             )
         except Exception:
             return False
