@@ -3244,6 +3244,10 @@ class RuntimeLifecycleService:
                     first_error = error
             else:
                 setattr(self, state_name, True)
+            if state_name == "_dispatcher_closed" and not self._dispatcher_closed:
+                # A started channel send may still need the SQLite receipt.
+                # Keep the provider owner and database until it is finalized.
+                raise first_error or RuntimeError("alert delivery did not drain")
         if not self._request_controller_closed:
             # A timed-out or failed physical join can still persist a late
             # provider outcome. Keep its SQLite connection and owner alive.

@@ -1373,6 +1373,118 @@ def test_concurrent_dispatchers_atomically_claim_one_external_delivery(
     assert rows[0].status == DeliveryAttemptStatus.DELIVERED.value
 
 
+@pytest.mark.parametrize("cancel_waiter", (False, True))
+def test_dispatcher_close_waits_for_started_external_send_and_receipt(
+    database_engine: Engine, cancel_waiter: bool,
+) -> None:
+    with _unit_of_work(database_engine) as work:
+        committed = work.alerts.enqueue(_payload(91))
+        later = work.alerts.enqueue(_payload(92))
+        work.commit()
+
+    in_app = NotificationDispatcher(
+        create_session_factory(database_engine), channels=(), clock=lambda: NOW,
+    )
+    asyncio.run(in_app.dispatch_pending())
+
+    async def scenario() -> None:
+        started = asyncio.Event()
+        release = asyncio.Event()
+        delivered_ids: list[UUID] = []
+
+        class BlockingChannel:
+            channel = DeliveryChannel.CONSOLE
+            enabled = True
+
+            async def deliver(self, event: object) -> ChannelDeliveryResult:
+                delivered_ids.append(event.event_id)
+                started.set()
+                await release.wait()
+                return ChannelDeliveryResult(
+                    channel=self.channel, delivered=True, retryable=False,
+                )
+
+        dispatcher = NotificationDispatcher(
+            create_session_factory(database_engine),
+            channels=(BlockingChannel(),), clock=lambda: NOW,
+        )
+        sending = asyncio.create_task(dispatcher.dispatch_pending())
+        await asyncio.wait_for(started.wait(), timeout=5)
+        if cancel_waiter:
+            sending.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await sending
+        closing = asyncio.create_task(dispatcher.aclose())
+        await asyncio.sleep(0)
+        assert not closing.done()
+        assert await dispatcher.dispatch_event(later.event_id) == ()
+        release.set()
+        if not cancel_waiter:
+            assert len(await sending) == 1
+        await closing
+        assert delivered_ids == [committed.event_id]
+
+    asyncio.run(scenario())
+    with create_session_factory(database_engine)() as session:
+        receipt = session.scalar(select(DeliveryAttempt).where(
+            DeliveryAttempt.event_id == str(committed.event_id),
+            DeliveryAttempt.channel == DeliveryChannel.CONSOLE.value,
+        ))
+    assert receipt is not None
+    assert receipt.status == DeliveryAttemptStatus.DELIVERED.value
+
+
+def test_delivery_drain_timeout_keeps_send_alive_for_later_cleanup(
+    database_engine: Engine, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import trade_plan_monitor.notifications.dispatcher as dispatcher_module
+
+    with _unit_of_work(database_engine) as work:
+        committed = work.alerts.enqueue(_payload(93))
+        work.commit()
+    asyncio.run(NotificationDispatcher(
+        create_session_factory(database_engine), channels=(), clock=lambda: NOW,
+    ).dispatch_pending())
+    monkeypatch.setattr(dispatcher_module, "_DELIVERY_DRAIN_SECONDS", 0.01)
+
+    async def scenario() -> None:
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        class BlockingChannel:
+            channel = DeliveryChannel.CONSOLE
+            enabled = True
+
+            async def deliver(self, _event: object) -> ChannelDeliveryResult:
+                started.set()
+                await release.wait()
+                return ChannelDeliveryResult(
+                    channel=self.channel, delivered=True, retryable=False,
+                )
+
+        dispatcher = NotificationDispatcher(
+            create_session_factory(database_engine),
+            channels=(BlockingChannel(),), clock=lambda: NOW,
+        )
+        sending = asyncio.create_task(dispatcher.dispatch_pending())
+        await asyncio.wait_for(started.wait(), timeout=5)
+        with pytest.raises(DeliveryStorageError, match="did not drain"):
+            await dispatcher.aclose()
+        assert not sending.done()
+        release.set()
+        assert len(await sending) == 1
+        await dispatcher.aclose()
+
+    asyncio.run(scenario())
+    with create_session_factory(database_engine)() as session:
+        receipt = session.scalar(select(DeliveryAttempt).where(
+            DeliveryAttempt.event_id == str(committed.event_id),
+            DeliveryAttempt.channel == DeliveryChannel.CONSOLE.value,
+        ))
+    assert receipt is not None
+    assert receipt.status == DeliveryAttemptStatus.DELIVERED.value
+
+
 def test_restart_reclaims_an_expired_attempt_without_allocating_a_new_attempt(
     database_engine: Engine,
 ) -> None:

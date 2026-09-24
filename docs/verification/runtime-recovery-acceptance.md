@@ -2,6 +2,10 @@
 
 > STAGE 1 ACCEPTED for the user's approved offline process-restart criterion on 2026-09-23. Stage 2 connected delivery safety was implemented and verified offline on 2026-09-24; broader release gates remain open. Live-provider validation, user database migration and deployment are not approved. Earlier sections retain their time-bounded historical status.
 
+## Business step 3 delivery-drain slice — 2026-09-24
+
+A temporary SQLite case first showed `NotificationDispatcher.aclose()` returning while a fake external send was still inside `deliver`, before its receipt existed. A lifecycle case showed that a dispatcher drain error still released the provider controller and closed the database. Both were RED. Dispatcher close now blocks new sends, tracks and shields started channel I/O plus receipt finalization, and waits up to five seconds before closing channel resources. If it times out, the send remains active and a later close can finish after its receipt commits. A failed dispatcher drain prevents controller owner release, WAL checkpoint and database close. The test also cancels the initiating waiter and proves the send receipt still commits. Notification delivery, lifecycle, composition and production certification regression: **122 passed**, one existing Starlette/httpx warning; targeted Ruff and diff checks passed. This does not establish the complete reload/shutdown acceptance matrix.
+
 ## Business step 3 relevant-configuration comparison — 2026-09-24
 
 A valid `web.port` edit previously made `configuration_is_current()` false and would block the existing Tushare pipeline. A fail-first production test reproduces that outcome. The check now fully parses YAML and compares only the validated `tushare` projection for provider generation identity; the same pipeline stays installed after a web-only edit, with no additional SDK call. Existing token-change tests still block provider work. Invalid YAML still fails validation. This narrow correction does not perform reload or alter owner, database, supervisor or generation installation.

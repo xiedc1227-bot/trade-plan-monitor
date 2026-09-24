@@ -153,6 +153,7 @@ def _service(
     health_details: Callable[[], RuntimeHealthDetails] = _healthy_runtime_details,
     shutdown_timeout_seconds: float = 0.05,
     request_controller: object | None = None,
+    dispatcher: object | None = None,
 ) -> RuntimeLifecycleService:
     observed = events if events is not None else []
 
@@ -185,7 +186,7 @@ def _service(
         recover_startup=recover_startup,
         scheduler=scheduler if scheduler is not None else _Scheduler(),
         run_deadline=run_deadline if run_deadline is not None else record_deadline,
-        dispatcher=_AsyncCloser(observed),
+        dispatcher=dispatcher or _AsyncCloser(observed),
         request_controller=request_controller or _SyncCloser(observed),
         checkpoint_wal=lambda: observed.append("wal-checkpoint"),
         close_database=(
@@ -681,6 +682,49 @@ def test_failed_physical_join_keeps_database_open_until_cleanup_succeeds() -> No
         await service.stop()
         assert events.index("controller-join") < events.index("wal-checkpoint")
         assert events[-1] == "database-close"
+
+    asyncio.run(scenario())
+
+
+def test_failed_dispatcher_drain_keeps_provider_owner_and_database_open() -> None:
+    class OwnedController:
+        def __init__(self, events: list[str]) -> None:
+            self.events = events
+
+        def close(self) -> None:
+            self.events.append("controller-stop-admission")
+
+        async def aclose(self) -> None:
+            self.events.append("controller-release-owner")
+
+    class DrainingDispatcher:
+        def __init__(self, events: list[str]) -> None:
+            self.events = events
+            self.can_drain = False
+
+        async def aclose(self) -> None:
+            self.events.append("dispatcher-drain")
+            if not self.can_drain:
+                raise RuntimeError("delivery remains active")
+
+    async def scenario() -> None:
+        events: list[str] = []
+        dispatcher = DrainingDispatcher(events)
+        service = _service(
+            events=events, dispatcher=dispatcher,
+            request_controller=OwnedController(events),
+        )
+        assert (await service.start()).status is RuntimeServiceStatus.RUNNING
+        with pytest.raises(RuntimeError, match="delivery remains active"):
+            await service.stop()
+        assert "controller-stop-admission" in events
+        assert "controller-release-owner" not in events
+        assert "wal-checkpoint" not in events
+        assert "database-close" not in events
+        dispatcher.can_drain = True
+        await service.stop()
+        assert events.index("dispatcher-drain") < events.index("database-close")
+        assert events.index("controller-release-owner") < events.index("database-close")
 
     asyncio.run(scenario())
 

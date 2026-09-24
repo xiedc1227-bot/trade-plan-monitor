@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -40,6 +41,7 @@ DEFAULT_RETRY_BACKOFF = (
     timedelta(seconds=300),
 )
 DEFAULT_CLAIM_LEASE = timedelta(seconds=60)
+_DELIVERY_DRAIN_SECONDS = 5.0
 MAX_DISPATCH_LIMIT = 100
 _MAX_RETRY_DELAYS = 10
 _MAX_RETRY_DELAY = timedelta(days=1)
@@ -130,6 +132,11 @@ class NotificationDispatcher:
             raise TypeError("admission must be callable")
         self._admission = admission
         self._scan_after: dict[DeliveryChannel, int] = {}
+        self._closed = False
+        self._close_lock = asyncio.Lock()
+        self._active_deliveries: set[asyncio.Task[DeliveryAttemptRecord | None]] = set()
+        self._delivery_drain_failed = False
+        self._closed_channels: set[DeliveryChannel] = set()
 
         configured = (
             (InAppChannel(), ConsoleChannel()) if channels is None else _bounded_channels(channels)
@@ -163,6 +170,8 @@ class NotificationDispatcher:
         """Attempt at most ``limit`` due event/channel pairs in stable order."""
 
         _validate_dispatch_limit(limit)
+        if self._closed:
+            return ()
         now = self._now()
         pending: list[tuple[NotificationEvent, NotificationChannel]] = []
         for channel in self._enabled_channels():
@@ -179,6 +188,8 @@ class NotificationDispatcher:
     async def dispatch_event(self, event_id: UUID) -> tuple[DeliveryAttemptRecord, ...]:
         """Attempt every due enabled channel for one committed event."""
 
+        if self._closed:
+            return ()
         normalized_id = _event_id(event_id)
         event = self._load_event(normalized_id)
         if not self._event_is_delivery_allowed(event, self._now()):
@@ -191,12 +202,35 @@ class NotificationDispatcher:
         return tuple(attempts)
 
     async def aclose(self) -> None:
-        """Close channel resources that expose an asynchronous close hook."""
+        """Stop admission, drain started sends and receipts, then close channels."""
 
-        for channel in self._channels:
-            close = getattr(channel, "aclose", None)
-            if callable(close):
-                await close()
+        self._closed = True
+        async with self._close_lock:
+            pending = tuple(self._active_deliveries)
+            if pending:
+                done, remaining = await asyncio.wait(
+                    pending, timeout=_DELIVERY_DRAIN_SECONDS,
+                )
+                if remaining:
+                    raise DeliveryStorageError("Alert delivery did not drain") from None
+                if any(task.cancelled() or task.exception() is not None for task in done):
+                    self._delivery_drain_failed = True
+            if self._delivery_drain_failed:
+                raise DeliveryStorageError(
+                    "Alert delivery receipt could not be finalized"
+                ) from None
+            for channel in self._channels:
+                if channel.channel in self._closed_channels:
+                    continue
+                close = getattr(channel, "aclose", None)
+                if callable(close):
+                    await close()
+                self._closed_channels.add(channel.channel)
+
+    def _observe_delivery(self, task: asyncio.Task[DeliveryAttemptRecord | None]) -> None:
+        self._active_deliveries.discard(task)
+        if task.cancelled() or task.exception() is not None:
+            self._delivery_drain_failed = True
 
     def _enabled_channels(self) -> tuple[NotificationChannel, ...]:
         return tuple(channel for channel in self._channels if channel.enabled)
@@ -206,6 +240,8 @@ class NotificationDispatcher:
         event: NotificationEvent,
         channel: NotificationChannel,
     ) -> DeliveryAttemptRecord | None:
+        if self._closed:
+            return None
         claim_started_at = self._now()
         if not self._event_is_delivery_allowed(event, claim_started_at):
             return None
@@ -221,8 +257,21 @@ class NotificationDispatcher:
         if claim is None:
             return None
 
-        # The claim and the channel call are separate transactions. A plan, risk
-        # result or holding can change in between, so the final check is here.
+        delivery = asyncio.create_task(self._deliver_claim(event, channel, claim))
+        self._active_deliveries.add(delivery)
+        delivery.add_done_callback(self._observe_delivery)
+        return await asyncio.shield(delivery)
+
+    async def _deliver_claim(
+        self,
+        event: NotificationEvent,
+        channel: NotificationChannel,
+        claim: DeliveryAttemptRecord,
+    ) -> DeliveryAttemptRecord | None:
+        if self._closed:
+            return None
+        # A claim is not a send permit. Recheck committed authority immediately
+        # before external I/O, then finish its receipt even during shutdown.
         if self._admission is not None and not self._event_is_delivery_allowed(
             event, self._now()
         ):
