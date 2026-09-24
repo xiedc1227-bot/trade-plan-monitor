@@ -2337,7 +2337,7 @@ def test_live_request_controller_classifies_transport_failures_for_index_recover
         try:
             with pytest.raises(RequestControlError) as caught:
                 await controller.execute(
-                    TushareOperation.INDEX_MINUTES,
+                    TushareOperation.INDEX_HISTORICAL_MINUTES,
                     fail,
                     work_key="index:test:transport",
                 )

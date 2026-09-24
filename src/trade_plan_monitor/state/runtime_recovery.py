@@ -24,7 +24,8 @@ _OPERATIONS = frozenset(
         "trading_calendar",
         "daily_limits",
         "daily_bars",
-        "index_minutes",
+        "idx_mins",
+        "rt_idx_min_daily",
         "index_daily",
     }
 )
@@ -73,7 +74,7 @@ def _validate(checkpoints: tuple[RecoveryCheckpoint, ...]) -> None:
 
 
 class ProviderRecoveryRepository:
-    """One explicitly configured provider namespace, containing at most 74 rows.
+    """One explicitly configured provider namespace, containing at most 75 rows.
 
     The identity is a digest of stable endpoint/profile settings, never of credentials.
     The runtime must join its old owner before replacing a bound controller.
@@ -121,7 +122,7 @@ class ProviderRecoveryRepository:
                     .where(
                         ProviderRecoveryCheckpoint.provider_identity == self._provider_identity,
                     )
-                    .limit(75)
+                    .limit(76)
                 ).all()
                 if any(
                     row.schema_version != 1 or row.reason_code != _REASONS.get(row.kind)

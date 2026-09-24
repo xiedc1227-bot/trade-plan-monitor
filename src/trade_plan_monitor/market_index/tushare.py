@@ -294,7 +294,7 @@ class TushareMarketIndexProvider:
             )
             stage = "REALTIME_MINUTES"
             realtime_minute_frame = await self._request_controller.execute(
-                TushareOperation.INDEX_MINUTES,
+                TushareOperation.INDEX_REALTIME_MINUTES,
                 lambda: self._fetch_realtime_index_minutes(index_code),
                 work_key=f"{work_prefix}:realtime-minutes",
                 priority=RequestPriority.MARKET_DEADLINE,
@@ -390,7 +390,7 @@ class TushareMarketIndexProvider:
         if cached is not None:
             return cached.copy(deep=True), False
         frame = await self._request_controller.execute(
-            TushareOperation.INDEX_MINUTES,
+            TushareOperation.INDEX_HISTORICAL_MINUTES,
             lambda: self._fetch_index_minutes(index_code, cutoff),
             work_key=work_key,
             priority=RequestPriority.MARKET_DEADLINE,

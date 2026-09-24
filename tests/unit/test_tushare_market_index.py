@@ -96,9 +96,7 @@ def test_index_adapter_classifies_transient_fetch_separately_from_processing(
     class FailingController(_Controller):
         async def execute(self, operation, call, *, work_key, priority):
             del call, work_key, priority
-            raise RequestControlError(
-                reason, operation, attempts=1
-            )
+            raise RequestControlError(reason, operation, attempts=1)
 
     provider = TushareMarketIndexProvider(
         client=_Client(),
@@ -110,9 +108,7 @@ def test_index_adapter_classifies_transient_fetch_separately_from_processing(
         asyncio.run(
             provider.acquire_index_data(
                 index_code=MarketIndexCode.SHENZHEN_COMPONENT,
-                decision_cutoff=datetime(
-                    2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")
-                ),
+                decision_cutoff=datetime(2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
                 five_minute_bar_count=1,
                 official_daily_bar_count=2,
             )
@@ -418,9 +414,9 @@ def test_certified_index_provider_fetches_each_endpoint_once_and_normalizes_unit
     )
 
     assert controller.calls == [
-        (TushareOperation.INDEX_MINUTES, "index:399001.SZ:20260907T1000:minutes"),
+        (TushareOperation.INDEX_HISTORICAL_MINUTES, "index:399001.SZ:20260907T1000:minutes"),
         (
-            TushareOperation.INDEX_MINUTES,
+            TushareOperation.INDEX_REALTIME_MINUTES,
             "index:399001.SZ:20260907T1000:realtime-minutes",
         ),
         (TushareOperation.INDEX_DAILY, "index:399001.SZ:20260907T1000:daily"),
@@ -500,10 +496,10 @@ def test_index_provider_reuses_stable_reference_frames_during_intraday_refresh()
     assert len(client.idx_calls) == 1
     assert len(client.daily_calls) == 1
     assert [operation for operation, _work_key in controller.calls] == [
-        TushareOperation.INDEX_MINUTES,
-        TushareOperation.INDEX_MINUTES,
+        TushareOperation.INDEX_HISTORICAL_MINUTES,
+        TushareOperation.INDEX_REALTIME_MINUTES,
         TushareOperation.INDEX_DAILY,
-        TushareOperation.INDEX_MINUTES,
+        TushareOperation.INDEX_REALTIME_MINUTES,
     ]
 
 
@@ -527,17 +523,13 @@ def test_index_provider_does_not_cache_reference_frames_from_a_failed_batch() ->
         with pytest.raises(TushareMarketIndexProviderError):
             await provider.acquire_index_data(
                 index_code=MarketIndexCode.SHENZHEN_COMPONENT,
-                decision_cutoff=datetime(
-                    2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")
-                ),
+                decision_cutoff=datetime(2026, 9, 7, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
                 five_minute_bar_count=2,
                 official_daily_bar_count=2,
             )
         await provider.acquire_index_data(
             index_code=MarketIndexCode.SHENZHEN_COMPONENT,
-            decision_cutoff=datetime(
-                2026, 9, 7, 10, 5, tzinfo=ZoneInfo("Asia/Shanghai")
-            ),
+            decision_cutoff=datetime(2026, 9, 7, 10, 5, tzinfo=ZoneInfo("Asia/Shanghai")),
             five_minute_bar_count=2,
             official_daily_bar_count=2,
         )

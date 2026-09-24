@@ -528,7 +528,12 @@ def test_index_probe_keeps_authorization_and_failures_per_index(tmp_path: Path) 
         if code not in {MarketIndexCode.STAR_50, MarketIndexCode.BSE_50}
     )
     assert controller.calls[0] is TushareOperation.TRADING_CALENDAR
-    assert controller.calls.count(TushareOperation.INDEX_MINUTES) == 2 * (len(MarketIndexCode) - 1)
+    assert controller.calls.count(TushareOperation.INDEX_HISTORICAL_MINUTES) == (
+        len(MarketIndexCode) - 1
+    )
+    assert controller.calls.count(TushareOperation.INDEX_REALTIME_MINUTES) == (
+        len(MarketIndexCode) - 1
+    )
     assert controller.calls.count(TushareOperation.INDEX_DAILY) == len(MarketIndexCode) - 1
     assert all(
         kwargs.get("ts_code") != MarketIndexCode.BSE_50.value

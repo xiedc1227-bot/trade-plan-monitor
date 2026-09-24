@@ -457,7 +457,7 @@ async def certify_board_indexes(
             minutes = await _call_frame(
                 client=client,
                 request_controller=request_controller,
-                operation=TushareOperation.INDEX_MINUTES,
+                operation=TushareOperation.INDEX_HISTORICAL_MINUTES,
                 endpoint="idx_mins",
                 work_key=f"live-index-minutes-{code.value}",
                 kwargs={
@@ -484,7 +484,7 @@ async def certify_board_indexes(
                 realtime_minutes = await _call_frame(
                     client=client,
                     request_controller=request_controller,
-                    operation=TushareOperation.INDEX_MINUTES,
+                    operation=TushareOperation.INDEX_REALTIME_MINUTES,
                     endpoint="rt_idx_min_daily",
                     work_key=f"live-index-realtime-minutes-{code.value}",
                     kwargs={
