@@ -578,6 +578,64 @@ def test_monitor_composition_never_restarts_after_cleanup_failure() -> None:
     asyncio.run(scenario())
 
 
+def test_configuration_drift_never_enters_in_process_supervisor_replacement() -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        failed = _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+        failed.configuration_restart_required = True
+        failed.allow_run_exit.set()
+        factory_calls = 0
+
+        def runtime_factory() -> _RecordingRuntime:
+            nonlocal factory_calls
+            factory_calls += 1
+            return _RecordingRuntime(status=RuntimeServiceStatus.RUNNING)
+
+        composition = MonitorWebComposition(
+            runtime=failed,
+            runtime_factory=runtime_factory,
+            restart_sleep=lambda _delay: asyncio.sleep(0),
+            read_service=_DegradedReadService(),
+        )
+        await composition.start()
+        for _ in range(20):
+            await asyncio.sleep(0)
+        snapshot = composition.health()
+        assert snapshot.status is RuntimeServiceStatus.BLOCKED
+        assert snapshot.read_only is True
+        assert snapshot.block_reason == "NEEDS_RESTART"
+        assert factory_calls == 0
+        await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_configuration_drift_overrides_degraded_retry_health() -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    class Degraded(_RecordingRuntime):
+        configuration_restart_required = True
+
+        def health(self) -> RuntimeHealthSnapshot:
+            return super().health().model_copy(
+                update={"degraded_reason": "PROVIDER_UNAVAILABLE"}
+            )
+
+    async def scenario() -> None:
+        composition = MonitorWebComposition(
+            runtime=Degraded(status=RuntimeServiceStatus.DEGRADED),
+            read_service=_DegradedReadService(),
+        )
+        snapshot = await composition.start()
+        assert snapshot.status is RuntimeServiceStatus.BLOCKED
+        assert snapshot.block_reason == "NEEDS_RESTART"
+        assert snapshot.degraded_reason is None
+        await composition.stop()
+
+    asyncio.run(scenario())
+
+
 def test_monitor_composition_never_retries_a_replacement_startup_failure() -> None:
     from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
 

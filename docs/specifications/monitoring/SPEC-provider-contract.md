@@ -11,7 +11,7 @@ Separate durable evidence of provider data interpretation from current credentia
 - Compatibility checks the installed SDK and the application adapter mapping. Version 1 supports the reviewed Tushare 1.4.29 adapter only. Unknown compatibility fails closed.
 - Stock and index records are independent. Import only verified scopes; never promote unverified labels, missing 399107.SZ evidence or deferred BSE.
 - Semantic revision includes interpretation fields, excludes verifiedAt/provenance timestamps. Metadata-only reimport is harmless. Writes are atomic, idempotent; original evidence remains unchanged. Hashes are integrity checks, not authentication.
-- Production requests validate the installed interpretation identity before acquisition. Reconfiguration drains old workers before replacement; no old-generation commit.
+- Production requests validate the installed interpretation identity before acquisition. Relevant configuration or incompatible semantic drift blocks the old source and requires safe stop, manual correction and a new process start. Stop drains old workers and their durable outcomes before releasing storage; no stale-generation commit. Metadata-only semantic refresh does not require restart.
 ## Structure and style
 
 Own runtime/provider_contract.py and live_profiles.py. Frozen typed records; narrow validated boundary functions; no provider network IO in import.

@@ -204,7 +204,7 @@ class NotificationDispatcher:
     async def aclose(self) -> None:
         """Stop admission, drain started sends and receipts, then close channels."""
 
-        self._closed = True
+        self.begin_shutdown()
         async with self._close_lock:
             pending = tuple(self._active_deliveries)
             if pending:
@@ -226,6 +226,11 @@ class NotificationDispatcher:
                 if callable(close):
                     await close()
                 self._closed_channels.add(channel.channel)
+
+    def begin_shutdown(self) -> None:
+        """Synchronously revoke every new send before shutdown yields."""
+
+        self._closed = True
 
     def _observe_delivery(self, task: asyncio.Task[DeliveryAttemptRecord | None]) -> None:
         self._active_deliveries.discard(task)

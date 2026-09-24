@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pandas as pd
 import pytest
+import yaml
 from requests import ConnectionError as ProviderConnectionError
 from sqlalchemy import func, select, text
 from test_live_pipeline_acceptance import (
@@ -608,5 +609,66 @@ def test_web_only_configuration_edit_preserves_current_provider_pipeline(
             assert tuple(sdk.calls) == calls
         finally:
             await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_running_token_drift_latches_restart_without_new_provider_or_alert_work(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+        original_runtime = composition._runtime
+        state = original_runtime._probe_capabilities.__self__
+        config = tmp_path / "config/app.yaml"
+        original = config.read_text(encoding="utf-8")
+        calls = tuple(sdk.calls)
+        try:
+            config.write_text(
+                original.replace("offline-test-token", "offline-new-token"),
+                encoding="utf-8",
+            )
+            blocked = composition.health()
+            assert blocked.status is RuntimeServiceStatus.BLOCKED
+            assert blocked.block_reason == "NEEDS_RESTART"
+            assert not state.configuration_is_current()
+            config.write_text(original, encoding="utf-8")
+            assert not state.configuration_is_current()
+            assert composition._runtime is original_runtime
+            with pytest.raises(RuntimeError, match="safe restart required"):
+                state.probe_capabilities()
+            assert tuple(sdk.calls) == calls
+            engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
+            try:
+                with create_session_factory(engine)() as session:
+                    assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+            finally:
+                engine.dispose()
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_invalid_new_configuration_fails_before_provider_and_can_be_fixed_for_new_start(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        config = tmp_path / "config/app.yaml"
+        original = config.read_text(encoding="utf-8")
+        config.write_text("tushare: [\n", encoding="utf-8")
+        with pytest.raises(yaml.YAMLError):
+            await composition.start()
+        assert sdk.calls == []
+        config.write_text(original, encoding="utf-8")
+        replacement = create_monitor_composition(
+            config_path=config, database_path=tmp_path / "monitor.sqlite3"
+        )
+        try:
+            assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
+        finally:
+            await replacement.stop()
 
     asyncio.run(scenario())

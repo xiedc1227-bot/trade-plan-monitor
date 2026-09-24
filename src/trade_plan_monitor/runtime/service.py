@@ -2667,6 +2667,7 @@ class RuntimeLifecycleService:
         *,
         clock: Clock,
         validate_configuration: Callable[[], object],
+        configuration_restart_required: Callable[[], bool] | None = None,
         open_database: Callable[[], object],
         load_active_symbols: Callable[[], object],
         probe_capabilities: Callable[[], object],
@@ -2703,6 +2704,10 @@ class RuntimeLifecycleService:
             raise TypeError("runtime lifecycle dependencies must be callable")
         if can_schedule is not None and not callable(can_schedule):
             raise TypeError("can_schedule must be callable")
+        if configuration_restart_required is not None and not callable(
+            configuration_restart_required
+        ):
+            raise TypeError("configuration_restart_required must be callable")
         if not callable(getattr(scheduler, "next_deadline", None)) or not callable(
             getattr(scheduler, "wait_for_next", None)
         ):
@@ -2736,6 +2741,7 @@ class RuntimeLifecycleService:
 
         self._clock = clock
         self._validate_configuration = validate_configuration
+        self._configuration_restart_required = configuration_restart_required or (lambda: False)
         self._open_database = open_database
         self._load_active_symbols = load_active_symbols
         self._probe_capabilities = probe_capabilities
@@ -2770,6 +2776,7 @@ class RuntimeLifecycleService:
         self._database_opened = False
         self._dispatcher_closed = False
         self._request_controller_closed = False
+        self._request_controller_admission_closed = False
         self._wal_checkpointed = False
         self._schedule_owner: asyncio.Task[object] | None = None
         self._schedule_wait_task: asyncio.Task[MarketDeadline | None] | None = None
@@ -2987,6 +2994,9 @@ class RuntimeLifecycleService:
                     return
                 startup = self._startup_result
             while self._accepting_work:
+                if self._configuration_restart_required():
+                    self._mark_configuration_restart_required()
+                    break
                 try:
                     deadline = await self._wait_for_next(after=self._last_deadline_at)
                 except asyncio.CancelledError:
@@ -3014,6 +3024,13 @@ class RuntimeLifecycleService:
                     if not self._accepting_work:
                         break
                     raise
+            if self._block_reason == "NEEDS_RESTART":
+                await self._wait_for_explicit_stop()
+        except Exception:
+            if not self._configuration_restart_required():
+                raise
+            self._mark_configuration_restart_required()
+            await self._wait_for_explicit_stop()
         finally:
             self._unexpected_run_exit = (
                 startup is not None
@@ -3127,6 +3144,29 @@ class RuntimeLifecycleService:
         return self._unexpected_run_exit
 
     @property
+    def configuration_restart_required(self) -> bool:
+        return self._block_reason == "NEEDS_RESTART" or self._configuration_restart_required()
+
+    def _mark_configuration_restart_required(self) -> None:
+        self._status = RuntimeServiceStatus.BLOCKED
+        self._read_only = True
+        self._accepting_work = False
+        self._block_reason = "NEEDS_RESTART"
+        self._degraded_reason = None
+        self._retry_at = None
+        self._next_poll_at = None
+        wait_task = self._schedule_wait_task
+        if wait_task is not None and not wait_task.done():
+            wait_task.cancel()
+
+    async def _wait_for_explicit_stop(self) -> None:
+        shutdown_event = asyncio.Event()
+        self._shutdown_requested_event = shutdown_event
+        if self._stopping:
+            shutdown_event.set()
+        await shutdown_event.wait()
+
+    @property
     def cleanup_failed(self) -> bool:
         """Whether cleanup failed and a replacement runtime would be unsafe."""
 
@@ -3137,6 +3177,22 @@ class RuntimeLifecycleService:
 
         if self._cleanup_complete:
             return
+        self._stopping = True
+        self._accepting_work = False
+        begin_shutdown = getattr(self._dispatcher, "begin_shutdown", None)
+        if callable(begin_shutdown):
+            begin_shutdown()
+        if not self._request_controller_admission_closed:
+            try:
+                self._request_controller.close()
+            except BaseException:
+                # The owned stop task retries and reports the cleanup failure.
+                pass
+            else:
+                self._request_controller_admission_closed = True
+                self._request_controller_closed = not callable(
+                    getattr(self._request_controller, "aclose", None)
+                )
         stop_task = self._stop_task
         if stop_task is None or stop_task.done():
             caller = asyncio.current_task()
@@ -3166,12 +3222,13 @@ class RuntimeLifecycleService:
         if self._shutdown_requested_event is not None:
             self._shutdown_requested_event.set()
         first_error: BaseException | None = None
-        if not self._request_controller_closed:
+        if not self._request_controller_admission_closed:
             try:
                 await self._invoke(self._request_controller.close)
             except BaseException as error:
                 first_error = error
             else:
+                self._request_controller_admission_closed = True
                 self._request_controller_closed = not callable(
                     getattr(self._request_controller, "aclose", None)
                 )
@@ -3345,6 +3402,8 @@ class RuntimeLifecycleService:
                     self._heartbeat_stop.wait(), timeout=self._heartbeat_interval_seconds
                 )
             except TimeoutError:
+                if self._configuration_restart_required():
+                    self._mark_configuration_restart_required()
                 await self._invoke(self._liveness_owner.heartbeat)
 
     def _observe_heartbeat_result(self, task: asyncio.Task[None]) -> None:

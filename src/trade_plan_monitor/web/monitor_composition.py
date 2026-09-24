@@ -172,6 +172,7 @@ class MonitorWebComposition:
         self._runner_failed = False
         self._restart_pending = False
         self._restart_attempts = 0
+        self._configuration_restart_required = False
 
     @property
     def read_service(self) -> object:
@@ -251,6 +252,20 @@ class MonitorWebComposition:
             snapshot = self._last_runtime_health
         else:
             self._last_runtime_health = snapshot
+        self._configuration_restart_required |= getattr(
+            self._runtime, "configuration_restart_required", False
+        ) is True
+        if self._configuration_restart_required and not self._stopping:
+            return snapshot.model_copy(
+                update={
+                    "status": RuntimeServiceStatus.BLOCKED,
+                    "read_only": True,
+                    "block_reason": "NEEDS_RESTART",
+                    "degraded_reason": None,
+                    "next_poll_at": None,
+                    "next_retry_at": None,
+                }
+            )
         runner = self._runner_task
         runner_failed = (
             not self._stopping
@@ -382,6 +397,11 @@ class MonitorWebComposition:
             if type(cleanup_failed) is not bool or cleanup_failed:
                 self._runner_failed = True
                 return
+            if getattr(runtime, "configuration_restart_required", False) is True:
+                self._configuration_restart_required = True
+                self._runner_failed = False
+                await self._stop_runtime(runtime)
+                return
             if not unexpected_exit and exit_health.status is not RuntimeServiceStatus.RUNNING:
                 self._runner_failed = False
                 return
@@ -408,6 +428,10 @@ class MonitorWebComposition:
             finally:
                 self._restart_pending = False
             if self._stopping:
+                return
+
+            if getattr(runtime, "configuration_restart_required", False) is True:
+                self._configuration_restart_required = True
                 return
 
             replacement: MonitorRuntime | None = None
@@ -535,6 +559,7 @@ class _ProductionRuntimeState:
         self._capabilities = ProviderCapabilities()
         self._pipeline: ProductionMonitorPipeline | None = None
         self._semantic_reload_blocked = False
+        self._configuration_restart_required = False
         self._runtime_generation = runtime_generation
         self._publisher = publisher
         self._stage_errors: dict[str, str] = {}
@@ -559,7 +584,8 @@ class _ProductionRuntimeState:
             self._configuration is not None
             and configuration.tushare != self._configuration.tushare
         ):
-            raise RuntimeError("monitor configuration changed before validated reload")
+            self._configuration_restart_required = True
+            raise RuntimeError("monitor configuration changed; safe restart required")
         self._configuration = configuration
 
     async def open_database(self) -> None:
@@ -646,11 +672,8 @@ class _ProductionRuntimeState:
         return tuple(sorted(record.symbol for record in records))
 
     def probe_capabilities(self) -> ProviderCapabilities:
-        if (
-            self._configuration is not None
-            and load_application_config(self._config_path).tushare != self._configuration.tushare
-        ):
-            raise RuntimeError("monitor configuration changed before validated reload")
+        if self._configuration is not None and not self.configuration_is_current():
+            raise RuntimeError("monitor configuration changed; safe restart required")
         if self._semantic_reload_blocked:
             return self._capabilities
         if self._pipeline is not None:
@@ -954,14 +977,34 @@ class _ProductionRuntimeState:
         )
 
     def configuration_is_current(self) -> bool:
+        if self._configuration_restart_required:
+            return False
         try:
-            return (
+            current = (
                 self._configuration is not None
                 and load_application_config(self._config_path).tushare
                 == self._configuration.tushare
             )
         except Exception:
+            current = False
+        if not current and self._configuration is not None:
+            self._configuration_restart_required = True
+        return current
+
+    def configuration_restart_required(self) -> bool:
+        """Latch relevant configuration or installed semantic drift until stop."""
+
+        if not self.configuration_is_current() or self._semantic_reload_blocked:
+            return True
+        pipeline = self._pipeline
+        if pipeline is None:
             return False
+        if not pipeline._stock_certification_current() or (
+            pipeline._index_semantics is not None
+            and not pipeline._index_certification_current()
+        ):
+            self._semantic_reload_blocked = True
+        return self._semantic_reload_blocked
 
 
 def create_monitor_composition_factory(
@@ -1021,15 +1064,23 @@ def create_monitor_composition(
         request_controller = create_live_tushare_request_controller(
             clock=clock, require_repository_binding=True,
         )
+        current_delivery_admission = CurrentDeliveryAdmission(
+            session_factory,
+            runtime_generation=lambda: lifecycle.runtime_generation,
+        )
+
+        def delivery_admission(event, now) -> bool:
+            return (
+                not state.configuration_restart_required()
+                and current_delivery_admission(event, now)
+            )
+
         dispatcher = NotificationDispatcher(
             session_factory,
             channels=(InAppChannel(),),
             clock=clock.now,
             enforce_current_plan=True,
-            admission=CurrentDeliveryAdmission(
-                session_factory,
-                runtime_generation=lambda: lifecycle.runtime_generation,
-            ),
+            admission=delivery_admission,
         )
         state = _ProductionRuntimeState(
             config_path=config_path,
@@ -1051,6 +1102,7 @@ def create_monitor_composition(
         lifecycle = RuntimeLifecycleService(
             clock=clock,
             validate_configuration=state.validate_configuration,
+            configuration_restart_required=state.configuration_restart_required,
             open_database=state.open_database,
             load_active_symbols=state.load_active_symbols,
             probe_capabilities=state.probe_capabilities,

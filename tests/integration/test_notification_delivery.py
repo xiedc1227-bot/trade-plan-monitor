@@ -1414,6 +1414,8 @@ def test_dispatcher_close_waits_for_started_external_send_and_receipt(
             sending.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await sending
+        dispatcher.begin_shutdown()
+        assert await dispatcher.dispatch_event(later.event_id) == ()
         closing = asyncio.create_task(dispatcher.aclose())
         await asyncio.sleep(0)
         assert not closing.done()

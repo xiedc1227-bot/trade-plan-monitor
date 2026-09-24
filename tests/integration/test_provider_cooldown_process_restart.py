@@ -99,7 +99,10 @@ def _spawn(root: Path, observed_at, induce_limit: bool):
     return outcomes.get(timeout=5)
 
 
-def test_observed_429_blocks_physical_work_after_controlled_process_restart(tmp_path):
+@pytest.mark.parametrize("change_token", (False, True))
+def test_observed_429_blocks_physical_work_after_controlled_process_restart(
+    tmp_path, change_token: bool,
+):
     database = tmp_path / "monitor.sqlite3"
     clock = ControlledClock(NOW.replace(hour=9, minute=0))
     _activate_plans(database, clock, (_sample_plan(),))
@@ -115,6 +118,14 @@ def test_observed_429_blocks_physical_work_after_controlled_process_restart(tmp_
     _write_configuration_and_evidence(tmp_path, observed_at=NOW, include_index=False)
 
     first_cooldown, first_calls = _spawn(tmp_path, NOW, True)
+    if change_token:
+        config = tmp_path / "config/app.yaml"
+        config.write_text(
+            config.read_text(encoding="utf-8").replace(
+                "offline-test-token", "offline-new-token"
+            ),
+            encoding="utf-8",
+        )
     second_cooldown, second_calls = _spawn(
         tmp_path, NOW + timedelta(minutes=2), False,
     )

@@ -154,6 +154,7 @@ def _service(
     shutdown_timeout_seconds: float = 0.05,
     request_controller: object | None = None,
     dispatcher: object | None = None,
+    configuration_restart_required: Callable[[], bool] | None = None,
 ) -> RuntimeLifecycleService:
     observed = events if events is not None else []
 
@@ -166,6 +167,7 @@ def _service(
     return RuntimeLifecycleService(
         clock=_Clock(),
         validate_configuration=lambda: observed.append("config"),
+        configuration_restart_required=configuration_restart_required,
         open_database=(
             open_database if open_database is not None else lambda: observed.append("database")
         ),
@@ -1392,3 +1394,44 @@ def test_maintenance_service_wires_validate_once_run_replay_and_backup() -> None
         return events
 
     assert asyncio.run(scenario()) == ["validate", "once", "run", "replay", "backup"]
+
+
+def test_configuration_drift_blocks_without_supervisor_exit_and_keeps_owner_heartbeat() -> None:
+    async def scenario() -> None:
+        drift = False
+        events: list[str] = []
+
+        class Owner:
+            def admit(self) -> None:
+                events.append("admit")
+
+            def heartbeat(self) -> None:
+                events.append("heartbeat")
+
+        async def deadline(_target: MarketDeadline) -> None:
+            nonlocal drift
+            drift = True
+            raise RuntimeError("configuration changed")
+
+        service = _service(
+            events=events,
+            run_deadline=deadline,
+            liveness_owner=Owner(),
+            heartbeat_interval_seconds=0.01,
+            configuration_restart_required=lambda: drift,
+        )
+        await service.start()
+        running = asyncio.create_task(service.run())
+        for _ in range(100):
+            if service.health().status is RuntimeServiceStatus.BLOCKED:
+                break
+            await asyncio.sleep(0.001)
+        assert service.health().block_reason == "NEEDS_RESTART"
+        assert not running.done()
+        await asyncio.sleep(0.03)
+        assert "heartbeat" in events
+        assert "controller-close" not in events
+        await service.stop()
+        await running
+
+    asyncio.run(scenario())

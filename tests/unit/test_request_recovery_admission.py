@@ -4,6 +4,8 @@ import asyncio
 import threading
 from datetime import datetime, timedelta
 from hashlib import sha256
+from multiprocessing import get_context
+from pathlib import Path
 
 import pytest
 import requests
@@ -57,6 +59,71 @@ def controller(clock, repository=None, *, require_binding=False):
 
 def fail(code):
     raise TushareProviderError(code, OPERATION.value)
+
+
+def _permission_restart_child(database: str, second: bool, outcomes) -> None:
+    async def scenario() -> None:
+        engine = create_sqlite_engine(Path(database))
+        repository = ProviderRecoveryRepository(
+            create_session_factory(engine), provider_identity="a" * 64,
+        )
+        clock = Clock()
+        clock.current += timedelta(minutes=6 if second else 0)
+        control = controller(clock, repository)
+        physical_calls: list[str] = []
+        try:
+            if second:
+                with pytest.raises(RequestControlError) as caught:
+                    await control.recheck_permission(
+                        OPERATION, lambda: physical_calls.append("unexpected"), work_key="stock"
+                    )
+                outcomes.put((caught.value.attempts, tuple(physical_calls)))
+            else:
+                with pytest.raises(RequestControlError):
+                    await control.execute(
+                        OPERATION,
+                        lambda: fail(TushareErrorCode.BLOCKED_PERMISSION),
+                        work_key="stock",
+                    )
+                clock.current += timedelta(minutes=5)
+                with pytest.raises(RequestControlError):
+                    await control.recheck_permission(
+                        OPERATION,
+                        lambda: fail(TushareErrorCode.TRANSIENT),
+                        work_key="stock",
+                    )
+                outcomes.put((control.permission_retry_at(OPERATION).isoformat(),))
+        finally:
+            await control.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_permission_reservation_survives_independent_controlled_process_restart(tmp_path):
+    database = tmp_path / "permission.db"
+    engine = create_sqlite_engine(database)
+    upgrade_database(engine)
+    engine.dispose()
+    context = get_context("spawn")
+    for second in (False, True):
+        outcomes = context.Queue()
+        process = context.Process(
+            target=_permission_restart_child,
+            args=(str(database), second, outcomes),
+        )
+        process.start()
+        process.join(timeout=30)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+            pytest.fail("offline permission child did not stop")
+        assert process.exitcode == 0
+        result = outcomes.get(timeout=5)
+        if second:
+            assert result == (0, ())
+        else:
+            assert result[0] == (Clock().now() + timedelta(minutes=10)).isoformat()
 
 
 def test_required_repository_binding_blocks_requests_until_restored(tmp_path):
