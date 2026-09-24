@@ -42,7 +42,7 @@ class Clock:
         self.current = max(self.current, deadline)
 
 
-def controller(clock, repository=None):
+def controller(clock, repository=None, *, require_binding=False):
     return TushareRequestController(
         clock=clock,
         executor_workers=1,
@@ -51,11 +51,105 @@ def controller(clock, repository=None):
         jitter=timedelta(0),
         in_cycle_retries=0,
         recovery_repository=repository,
+        require_repository_binding=require_binding,
     )
 
 
 def fail(code):
     raise TushareProviderError(code, OPERATION.value)
+
+
+def test_required_repository_binding_blocks_requests_until_restored(tmp_path):
+    async def scenario():
+        engine = create_sqlite_engine(tmp_path / "bound.db")
+        upgrade_database(engine)
+        repository = ProviderRecoveryRepository(
+            create_session_factory(engine), provider_identity="a" * 64,
+        )
+        clock = Clock()
+        control = controller(clock, require_binding=True)
+        physical_calls = []
+
+        def request():
+            physical_calls.append(1)
+            return "ok"
+
+        try:
+            with pytest.raises(RecoveryCheckpointError):
+                await control.execute(OPERATION, request, work_key="stock")
+            with pytest.raises(RecoveryCheckpointError):
+                await control.recheck_permission(OPERATION, request, work_key="stock")
+            with pytest.raises(RecoveryCheckpointError):
+                control.reset_permission_block(OPERATION)
+            assert physical_calls == []
+            control.bind_recovery_repository(repository)
+            assert await control.execute(OPERATION, request, work_key="stock") == "ok"
+            assert physical_calls == [1]
+        finally:
+            await control.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_failed_repository_binding_releases_owner_without_admitting_work(tmp_path):
+    class InvalidRepository(ProviderRecoveryRepository):
+        def load(self):
+            raise RecoveryCheckpointError("bad recovery record")
+
+    async def scenario():
+        engine = create_sqlite_engine(tmp_path / "invalid.db")
+        upgrade_database(engine)
+        factory = create_session_factory(engine)
+        repository = InvalidRepository(factory, provider_identity="a" * 64)
+        control = controller(Clock(), require_binding=True)
+        try:
+            with pytest.raises(RecoveryCheckpointError):
+                control.bind_recovery_repository(repository)
+            with pytest.raises(RecoveryCheckpointError):
+                await control.execute(OPERATION, lambda: "unexpected", work_key="stock")
+            replacement = controller(
+                Clock(), ProviderRecoveryRepository(factory, provider_identity="a" * 64)
+            )
+            await replacement.aclose()
+        finally:
+            await control.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_new_production_owner_waits_one_full_pacing_interval_before_first_call(tmp_path):
+    async def scenario():
+        engine = create_sqlite_engine(tmp_path / "paced.db")
+        upgrade_database(engine)
+        repository = ProviderRecoveryRepository(
+            create_session_factory(engine), provider_identity="a" * 64,
+        )
+        elapsed = [0.0]
+
+        async def advance(seconds):
+            elapsed[0] += seconds
+            await asyncio.sleep(0)
+
+        control = TushareRequestController(
+            clock=Clock(), executor_workers=1, max_concurrency=1,
+            min_interval=timedelta(milliseconds=1_250), jitter=timedelta(0),
+            in_cycle_retries=0, monotonic=lambda: elapsed[0],
+            pace_sleep=advance, require_repository_binding=True,
+        )
+        physical_starts = []
+        try:
+            control.bind_recovery_repository(repository)
+            assert await control.execute(
+                OPERATION, lambda: physical_starts.append(elapsed[0]), work_key="stock",
+            ) is None
+            assert physical_starts == [1.25]
+        finally:
+            await control.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
 
 
 def test_shared_cooldown_and_stable_backoff_survive_controller_restart(tmp_path):

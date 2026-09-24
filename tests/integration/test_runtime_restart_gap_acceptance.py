@@ -51,10 +51,11 @@ def _run_monitor_process(
     clock = ControlledClock(observed_at)
     sdk = OfflineSDK(clock, (SYMBOL,), official_closes={TRADE_DATE: "55.00"})
 
-    def controller_factory(*, clock):
+    def controller_factory(*, clock, require_repository_binding=False):
         pace = VirtualPace()
         return create_live_tushare_request_controller(
             clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            require_repository_binding=require_repository_binding,
         )
 
     monitor_composition.SystemClock = lambda: clock

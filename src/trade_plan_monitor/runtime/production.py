@@ -60,10 +60,16 @@ from trade_plan_monitor.runtime.provider_contract import (
     ProviderSemanticContract,
     load_semantic_contract,
 )
-from trade_plan_monitor.runtime.recovery import RecoveryBatchResult, RecoveryService
+from trade_plan_monitor.runtime.recovery import (
+    RecoveryBatchResult,
+    RecoveryErrorCode,
+    RecoveryService,
+)
 from trade_plan_monitor.runtime.request_control import (
     LIVE_TUSHARE_MIN_INTERVAL,
     LIVE_TUSHARE_TIMEOUT_SECONDS,
+    RequestControlError,
+    RequestControlErrorCode,
     RequestPriority,
     TushareOperation,
     TushareRequestController,
@@ -186,8 +192,35 @@ _GAP_REPAIR_RESERVE = (
 def _ensure_recovery_complete(result: RecoveryBatchResult) -> None:
     """Fail startup closed when current-day or pending-close recovery is incomplete."""
 
+    failures = tuple(item for item in result.results if item.error_code is not None)
+    retryable = {
+        RecoveryErrorCode.TRANSIENT,
+        RecoveryErrorCode.TIMEOUT,
+        RecoveryErrorCode.RATE_LIMITED,
+    }
     if (
-        any(item.error_code is not None for item in result.results)
+        failures and not result.pending_close_results and not result.yielded_to_realtime
+        and all(item.error_code in retryable for item in failures)
+    ):
+        codes = {item.error_code for item in failures}
+        code = next(
+            candidate for candidate in (
+                RequestControlErrorCode.RATE_LIMITED,
+                RequestControlErrorCode.TIMEOUT,
+                RequestControlErrorCode.TRANSIENT,
+            ) if RecoveryErrorCode(candidate.value) in codes
+        )
+        deadlines = tuple(
+            item.next_retry_at for item in failures if item.next_retry_at is not None
+        )
+        raise RequestControlError(
+            code,
+            TushareOperation.CURRENT_DAY_MINUTES,
+            attempts=0,
+            next_retry_at=max(deadlines) if deadlines else None,
+        )
+    if (
+        failures
         or any(not item.resolved for item in result.pending_close_results)
         or result.yielded_to_realtime
     ):
@@ -235,9 +268,11 @@ class ProductionMonitorPipeline:
         publisher: CommittedEventPublisher,
         semantic_bindings: ProductionSemanticBindings | None = None,
         recovery_session_factory: Callable[[], Session] | None = None,
+        configuration_current: Callable[[], bool] | None = None,
     ) -> None:
         self._clock = clock
         self._controller = request_controller
+        self._configuration_current = configuration_current or (lambda: True)
         self._work = unit_of_work_factory
         self._certifications = certification_directory
         self._endpoint = str(configuration.api_url).rstrip("/")
@@ -414,6 +449,8 @@ class ProductionMonitorPipeline:
         return record
 
     def _stock_certification_current(self) -> bool:
+        if not self._configuration_current():
+            return False
         if self._semantic_bindings is not None:
             return (
                 self._stock_semantics is not None
@@ -427,6 +464,8 @@ class ProductionMonitorPipeline:
         return evidence is not None and evidence.ready and evidence == self._stock_evidence
 
     def _index_certification_current(self) -> bool:
+        if not self._configuration_current():
+            return False
         if self._semantic_bindings is not None:
             return (
                 self._index_semantics is not None

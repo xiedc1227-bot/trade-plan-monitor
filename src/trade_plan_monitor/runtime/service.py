@@ -3243,6 +3243,10 @@ class RuntimeLifecycleService:
                     first_error = error
             else:
                 setattr(self, state_name, True)
+        if not self._request_controller_closed:
+            # A timed-out or failed physical join can still persist a late
+            # provider outcome. Keep its SQLite connection and owner alive.
+            raise first_error or RuntimeError("provider worker did not drain")
         if self._database_opened:
             if not self._wal_checkpointed:
                 try:

@@ -353,8 +353,9 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
     monkeypatch.setattr(
         monitor_composition,
         "create_live_tushare_request_controller",
-        lambda *, clock: real_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep
+        lambda *, clock, require_repository_binding=False: real_controller(
+            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            require_repository_binding=require_repository_binding,
         ),
     )
     sources = approved_sources()
@@ -827,8 +828,9 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
     monkeypatch.setattr(
         monitor_composition,
         "create_live_tushare_request_controller",
-        lambda *, clock: real_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep
+        lambda *, clock, require_repository_binding=False: real_controller(
+            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            require_repository_binding=require_repository_binding,
         ),
     )
     plans = PersistentPlanWebLifecycle(database_path=database, clock=clock.now)

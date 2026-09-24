@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import sqlite3
 from collections.abc import Awaitable, Callable
@@ -17,7 +18,7 @@ from sqlalchemy import Engine, and_, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from trade_plan_monitor.config import load_application_config
+from trade_plan_monitor.config import ApplicationConfiguration, load_application_config
 from trade_plan_monitor.live_profiles import load_stock_certification
 from trade_plan_monitor.market_data.models import (
     ProviderCapabilities,
@@ -73,6 +74,7 @@ from trade_plan_monitor.state.legacy_plan_invalidation import (
 )
 from trade_plan_monitor.state.models import AlertEvent, DeliveryAttempt, PlanVersionStatus
 from trade_plan_monitor.state.runtime_liveness import RuntimeLivenessRepository
+from trade_plan_monitor.state.runtime_recovery import ProviderRecoveryRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
 from trade_plan_monitor.web.backtest_pagination import BacktestApiCursorSigner
@@ -100,6 +102,15 @@ _PROVIDER_CAPABILITIES = (
     "realtime_minutes",
     "trading_calendar",
 )
+_RECOVERY_PROFILE = "tushare-live-v1"
+
+
+def _provider_recovery_identity(endpoint: str) -> str:
+    """Use the same effective endpoint as both live transport adapters."""
+
+    return hashlib.sha256(
+        f"{_RECOVERY_PROFILE}\0{endpoint}".encode()
+    ).hexdigest()
 
 
 class MonitorRuntime(Protocol):
@@ -515,12 +526,14 @@ class _ProductionRuntimeState:
         self._session_factory = session_factory
         self._clock = clock
         self._request_controller = request_controller
+        self._configuration: ApplicationConfiguration | None = None
         self._database_status = RuntimeResourceStatus.UNVERIFIED
         self._wal_status = RuntimeResourceStatus.UNVERIFIED
         self._last_checkpoint_at: datetime | None = None
         self._provider_checked_at: datetime | None = None
         self._capabilities = ProviderCapabilities()
         self._pipeline: ProductionMonitorPipeline | None = None
+        self._semantic_reload_blocked = False
         self._runtime_generation = runtime_generation
         self._publisher = publisher
         self._stage_errors: dict[str, str] = {}
@@ -540,7 +553,10 @@ class _ProductionRuntimeState:
         )
 
     async def validate_configuration(self) -> None:
-        await to_thread.run_sync(load_application_config, self._config_path)
+        configuration = await to_thread.run_sync(load_application_config, self._config_path)
+        if self._configuration is not None and configuration != self._configuration:
+            raise RuntimeError("monitor configuration changed before validated reload")
+        self._configuration = configuration
 
     async def open_database(self) -> None:
         await to_thread.run_sync(self._open_database_sync)
@@ -626,13 +642,56 @@ class _ProductionRuntimeState:
         return tuple(sorted(record.symbol for record in records))
 
     def probe_capabilities(self) -> ProviderCapabilities:
+        if (
+            self._configuration is not None
+            and load_application_config(self._config_path) != self._configuration
+        ):
+            raise RuntimeError("monitor configuration changed before validated reload")
+        if self._semantic_reload_blocked:
+            return self._capabilities
+        if self._pipeline is not None:
+            if self._pipeline._stock_certification_current():
+                return self._capabilities
+            self._pipeline = None
+            self._semantic_reload_blocked = True
+            self._capabilities = ProviderCapabilities()
+            self._stage_errors.update({
+                capability: "STOCK_SEMANTICS_UNAVAILABLE"
+                for capability in _PROVIDER_CAPABILITIES
+            })
+            return self._capabilities
         self._capabilities = ProviderCapabilities()
         self._pipeline = None
         self._stage_errors.clear()
         self._stage_retry_at.clear()
         self._provider_checked_at = self._clock.now()
-        configuration = load_application_config(self._config_path).tushare
+        validated = self._configuration
+        if validated is None:
+            if self._request_controller.repository_binding_required:
+                raise RuntimeError("production configuration must be validated before recovery")
+            validated = load_application_config(self._config_path)
+        configuration = validated.tushare
         if configuration.api_url is None:
+            self._stage_errors.update({
+                capability: "TUSHARE_NOT_CONFIGURED"
+                for capability in _PROVIDER_CAPABILITIES
+            })
+            return self._capabilities
+        if self._request_controller.repository_binding_required:
+            if (
+                self._database_status is not RuntimeResourceStatus.READY
+                or self._liveness_revision is None
+            ):
+                raise RuntimeError("provider recovery binding requires local admission")
+            if not self._request_controller.repository_bound:
+                endpoint_identity = str(configuration.api_url).rstrip("/")
+                self._request_controller.bind_recovery_repository(
+                    ProviderRecoveryRepository(
+                        self._session_factory,
+                        provider_identity=_provider_recovery_identity(endpoint_identity),
+                    )
+                )
+        if configuration.token is None:
             self._stage_errors.update({
                 capability: "TUSHARE_NOT_CONFIGURED"
                 for capability in _PROVIDER_CAPABILITIES
@@ -711,6 +770,7 @@ class _ProductionRuntimeState:
                     index=index_binding,
                 ),
                 recovery_session_factory=self._session_factory,
+                configuration_current=self.configuration_is_current,
             )
         return self._capabilities
 
@@ -874,6 +934,15 @@ class _ProductionRuntimeState:
             clock=self._clock.now,
         )
 
+    def configuration_is_current(self) -> bool:
+        try:
+            return (
+                self._configuration is not None
+                and load_application_config(self._config_path) == self._configuration
+            )
+        except Exception:
+            return False
+
 
 def create_monitor_composition_factory(
     *,
@@ -929,7 +998,9 @@ def create_monitor_composition(
     )
 
     def runtime_factory() -> RuntimeLifecycleService:
-        request_controller = create_live_tushare_request_controller(clock=clock)
+        request_controller = create_live_tushare_request_controller(
+            clock=clock, require_repository_binding=True,
+        )
         dispatcher = NotificationDispatcher(
             session_factory,
             channels=(InAppChannel(),),

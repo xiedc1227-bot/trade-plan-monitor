@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import pytest
 from requests import ConnectionError as ProviderConnectionError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from test_live_pipeline_acceptance import (
     NOW,
     ControlledClock,
@@ -17,6 +17,7 @@ from test_live_pipeline_acceptance import (
 )
 
 from trade_plan_monitor.market_data.models import ProviderCapabilityStatus
+from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
@@ -26,11 +27,20 @@ from trade_plan_monitor.runtime.request_control import (
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import AlertEvent, EvaluationResult, RuntimeLiveness
-from trade_plan_monitor.web.monitor_composition import create_monitor_composition
+from trade_plan_monitor.state.runtime_recovery import (
+    ProviderRecoveryRepository,
+    RecoveryCheckpoint,
+    RecoveryCheckpointError,
+)
+from trade_plan_monitor.web.monitor_composition import (
+    _provider_recovery_identity,
+    create_monitor_composition,
+)
 
 
 def _composition(
     tmp_path, monkeypatch, *, invalidate_during_request=None, fail_realtime_once=False,
+    rate_limit_realtime_once=False,
 ):
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
@@ -65,21 +75,35 @@ def _composition(
                     and sum(item == "rt_min" for item, _ in self.calls) == 1
                 ):
                     raise ProviderConnectionError("offline transport interruption")
+                if (
+                    rate_limit_realtime_once
+                    and name == "rt_min"
+                    and sum(item == "rt_min" for item, _ in self.calls) == 1
+                ):
+                    raise TushareProviderError(TushareErrorCode.RATE_LIMITED, "rt_min")
                 if len(self.calls) == 1:
                     if invalidate_during_request == "remove_semantic":
                         semantic_contract.unlink()
                     elif invalidate_during_request == "corrupt_semantic":
                         semantic_contract.write_text("{}", encoding="utf-8")
+                    elif invalidate_during_request == "change_config":
+                        config.write_text(
+                            config.read_text(encoding="utf-8").replace(
+                                "offline-test-token", "offline-new-token"
+                            ),
+                            encoding="utf-8",
+                        )
                 return result
 
             return call
 
     sdk = InvalidatingSDK(clock, (plan.symbol,))
 
-    def controller_factory(*, clock):
+    def controller_factory(*, clock, require_repository_binding=False):
         pace = VirtualPace()
         return create_live_tushare_request_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep
+            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            require_repository_binding=require_repository_binding,
         )
 
     monkeypatch.setattr(monitor_composition, "SystemClock", lambda: clock)
@@ -94,7 +118,9 @@ def _composition(
     )
 
 
-@pytest.mark.parametrize("invalidated_by", ("remove_semantic", "corrupt_semantic"))
+@pytest.mark.parametrize(
+    "invalidated_by", ("remove_semantic", "corrupt_semantic", "change_config")
+)
 def test_startup_stops_physical_stock_calls_when_semantics_become_invalid(
     tmp_path, monkeypatch, invalidated_by
 ):
@@ -118,9 +144,13 @@ def test_repeated_capability_probe_discards_the_previous_ready_pipeline(tmp_path
         composition, sdk, certification = _composition(tmp_path, monkeypatch)
         state = composition._runtime._probe_capabilities.__self__
         try:
+            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             assert state.probe_capabilities().realtime_minutes is ProviderCapabilityStatus.READY
             assert state._pipeline is not None
-            certification.write_text("{}", encoding="utf-8")
+            original_pipeline = state._pipeline
+            state.probe_capabilities()
+            assert state._pipeline is original_pipeline
+            calls = tuple(sdk.calls)
             (certification.parent / "stock-semantic.json").write_text(
                 "{}", encoding="utf-8"
             )
@@ -128,7 +158,12 @@ def test_repeated_capability_probe_discards_the_previous_ready_pipeline(tmp_path
                 state.probe_capabilities().realtime_minutes is ProviderCapabilityStatus.UNVERIFIED
             )
             assert state._pipeline is None
-            assert not sdk.calls
+            assert (
+                state.probe_capabilities().realtime_minutes
+                is ProviderCapabilityStatus.UNVERIFIED
+            )
+            assert state._pipeline is None
+            assert tuple(sdk.calls) == calls
         finally:
             await composition.stop()
 
@@ -223,5 +258,122 @@ def test_next_minute_cannot_bypass_realtime_transport_backoff(tmp_path, monkeypa
             assert runtime.status is RuntimeServiceStatus.RUNNING
         finally:
             await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_production_429_cooldown_restores_before_provider_work_after_restart(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(
+            tmp_path, monkeypatch, rate_limit_realtime_once=True,
+        )
+        first = composition._runtime
+        clock = first._run_deadline.__self__._clock
+        clock.released_sleeps = 1
+        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+        try:
+            for _ in range(200):
+                if first._request_controller.cooldown_until is not None:
+                    break
+                await asyncio.sleep(0.01)
+            cooldown = first._request_controller.cooldown_until
+            assert cooldown == clock.now() + timedelta(seconds=300)
+            assert first._request_controller.repository_bound
+        finally:
+            await composition.stop()
+
+        calls = tuple(sdk.calls)
+        config_path = tmp_path / "config/app.yaml"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8").replace(
+                "offline-test-token", "offline-new-token"
+            ),
+            encoding="utf-8",
+        )
+        replacement = create_monitor_composition(
+            config_path=config_path,
+            database_path=tmp_path / "monitor.sqlite3",
+        )
+        try:
+            health = await replacement.start()
+            assert health.status is RuntimeServiceStatus.DEGRADED
+            assert replacement._runtime._request_controller.cooldown_until == cooldown
+            assert tuple(sdk.calls) == calls
+        finally:
+            await replacement.stop()
+
+    asyncio.run(scenario())
+
+
+def test_configuration_edit_between_validation_and_binding_blocks_provider_work(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        runtime = composition._runtime
+        state = runtime._liveness_owner
+        original_admit = state.admit
+
+        async def edit_after_admission():
+            await original_admit()
+            config_path = tmp_path / "config/app.yaml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8").replace(
+                    "offline-test-token", "offline-new-token"
+                ),
+                encoding="utf-8",
+            )
+
+        state.admit = edit_after_admission
+        with pytest.raises(RuntimeError, match="configuration changed"):
+            await composition.start()
+        assert not sdk.calls
+        assert not runtime._request_controller.repository_bound
+        await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_corrupt_production_checkpoint_blocks_start_and_releases_owner(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch)
+        database = tmp_path / "monitor.sqlite3"
+        engine = create_sqlite_engine(database)
+        repository = ProviderRecoveryRepository(
+            create_session_factory(engine),
+            provider_identity=_provider_recovery_identity("https://example.test"),
+        )
+        repository.save((
+            RecoveryCheckpoint("cooldown", "shared", NOW + timedelta(minutes=5), 0),
+        ))
+        with engine.begin() as connection:
+            connection.execute(text(
+                "UPDATE provider_recovery_checkpoint SET retry_at = 'corrupt'"
+            ))
+        engine.dispose()
+
+        with pytest.raises(RecoveryCheckpointError):
+            await composition.start()
+        assert not sdk.calls
+        assert not composition._runtime._request_controller.repository_bound
+
+        repair_engine = create_sqlite_engine(database)
+        ProviderRecoveryRepository(
+            create_session_factory(repair_engine),
+            provider_identity=_provider_recovery_identity("https://example.test"),
+        ).save(())
+        repair_engine.dispose()
+        replacement = create_monitor_composition(
+            config_path=tmp_path / "config/app.yaml", database_path=database,
+        )
+        try:
+            assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
+            assert replacement._runtime._request_controller.repository_bound
+        finally:
+            await replacement.stop()
 
     asyncio.run(scenario())

@@ -152,6 +152,7 @@ def _service(
     can_schedule: Callable[[ProviderCapabilities], bool] | None = None,
     health_details: Callable[[], RuntimeHealthDetails] = _healthy_runtime_details,
     shutdown_timeout_seconds: float = 0.05,
+    request_controller: object | None = None,
 ) -> RuntimeLifecycleService:
     observed = events if events is not None else []
 
@@ -185,7 +186,7 @@ def _service(
         scheduler=scheduler if scheduler is not None else _Scheduler(),
         run_deadline=run_deadline if run_deadline is not None else record_deadline,
         dispatcher=_AsyncCloser(observed),
-        request_controller=_SyncCloser(observed),
+        request_controller=request_controller or _SyncCloser(observed),
         checkpoint_wal=lambda: observed.append("wal-checkpoint"),
         close_database=(
             close_database
@@ -650,6 +651,38 @@ def test_shutdown_stops_scheduling_allows_bounded_finish_and_checkpoints_wal() -
         "database-close",
     ]
     assert owned_task_count == 0
+
+
+def test_failed_physical_join_keeps_database_open_until_cleanup_succeeds() -> None:
+    class PhysicalController:
+        def __init__(self, events: list[str]) -> None:
+            self.events = events
+            self.can_join = False
+
+        def close(self) -> None:
+            self.events.append("controller-close")
+
+        async def aclose(self) -> None:
+            self.events.append("controller-join")
+            if not self.can_join:
+                raise RuntimeError("physical worker remains active")
+
+    async def scenario() -> None:
+        events: list[str] = []
+        controller = PhysicalController(events)
+        service = _service(events=events, request_controller=controller)
+        assert (await service.start()).status is RuntimeServiceStatus.RUNNING
+        with pytest.raises(RuntimeError, match="physical worker"):
+            await service.stop()
+        assert "wal-checkpoint" not in events
+        assert "database-close" not in events
+        assert service.status is RuntimeServiceStatus.STOPPING
+        controller.can_join = True
+        await service.stop()
+        assert events.index("controller-join") < events.index("wal-checkpoint")
+        assert events[-1] == "database-close"
+
+    asyncio.run(scenario())
 
 
 def test_shutdown_cancels_the_owned_scheduler_wait_before_it_can_admit_work() -> None:

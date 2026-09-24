@@ -250,6 +250,14 @@ class _ProviderAdmission:
     def waiting_count(self) -> int:
         return len(self._waiters)
 
+    def defer_first_start(self) -> None:
+        """Keep a new owner's first start clear of the previous owner's last start."""
+
+        now = self._monotonic()
+        if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
+            raise ValueError("monotonic must return a finite non-negative value")
+        self._next_start_monotonic = now + self._min_interval.total_seconds()
+
     async def acquire(
         self,
         priority: int,
@@ -400,6 +408,7 @@ class TushareRequestController:
         "_permission_retry_at",
         "_permission_rechecks",
         "_recovery_repository",
+        "_repository_required",
         "_recovery_fault",
         "_persisted_recovery",
     )
@@ -420,7 +429,10 @@ class TushareRequestController:
         monotonic: Callable[[], float] = time.monotonic,
         pace_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         recovery_repository: ProviderRecoveryRepository | None = None,
+        require_repository_binding: bool = False,
     ) -> None:
+        if type(require_repository_binding) is not bool:
+            raise TypeError("require_repository_binding must be a bool")
         self._validate_configuration(
             clock=clock,
             executor_workers=executor_workers,
@@ -465,33 +477,60 @@ class TushareRequestController:
         self._inflight_futures: set[asyncio.Future[object]] = set()
         self._permission_retry_at: dict[TushareOperation, datetime] = {}
         self._permission_rechecks: dict[TushareOperation, asyncio.Task[object]] = {}
-        self._recovery_repository = recovery_repository
+        self._recovery_repository: ProviderRecoveryRepository | None = None
+        self._repository_required = require_repository_binding
         self._recovery_fault = False
         self._persisted_recovery: tuple[RecoveryCheckpoint, ...] = ()
         if recovery_repository is not None:
-            acquired = False
             try:
-                recovery_repository.acquire_owner(self)
-                acquired = True
-                restored = recovery_repository.load()
+                self.bind_recovery_repository(recovery_repository)
             except RecoveryCheckpointError:
-                if acquired:
-                    recovery_repository.release_owner(self)
                 self._executor.shutdown(wait=False, cancel_futures=True)
                 raise
-            self._persisted_recovery = tuple(
-                sorted(restored, key=lambda item: (item.kind, item.scope_key))
-            )
-            for item in restored:
-                if item.kind == "cooldown":
-                    self._cooldown_until = item.retry_at
-                elif item.kind == "permission":
-                    operation = TushareOperation(item.scope_key)
-                    self._blocked_operations.add(operation)
-                    self._permission_retry_at[operation] = item.retry_at
-                else:
-                    self._backoff_failures[item.scope_key] = item.failures
-                    self._backoff_until[item.scope_key] = item.retry_at
+
+    def bind_recovery_repository(self, repository: ProviderRecoveryRepository) -> None:
+        """Install one restored checkpoint before admitting any physical request."""
+
+        if not isinstance(repository, ProviderRecoveryRepository):
+            raise TypeError("repository must be a ProviderRecoveryRepository")
+        if self._closed or self._recovery_repository is not None:
+            raise RecoveryCheckpointError("provider recovery binding is unavailable")
+        if (
+            self._admission.active_count or self._admission.waiting_count
+            or self._inflight_futures or self._permission_rechecks
+            or self._backoff_failures or self._blocked_operations
+            or self._cooldown_until is not None
+        ):
+            raise RecoveryCheckpointError("provider recovery binding requires idle admission")
+        acquired = False
+        try:
+            repository.acquire_owner(self)
+            acquired = True
+            restored = repository.load()
+            if self._repository_required:
+                self._admission.defer_first_start()
+        except BaseException:
+            if acquired:
+                repository.release_owner(self)
+            raise
+        self._persisted_recovery = tuple(
+            sorted(restored, key=lambda item: (item.kind, item.scope_key))
+        )
+        for item in restored:
+            if item.kind == "cooldown":
+                self._cooldown_until = item.retry_at
+            elif item.kind == "permission":
+                operation = TushareOperation(item.scope_key)
+                self._blocked_operations.add(operation)
+                self._permission_retry_at[operation] = item.retry_at
+            else:
+                self._backoff_failures[item.scope_key] = item.failures
+                self._backoff_until[item.scope_key] = item.retry_at
+        self._recovery_repository = repository
+
+    def _require_bound_repository(self) -> None:
+        if self._repository_required and self._recovery_repository is None:
+            raise RecoveryCheckpointError("provider recovery checkpoint is not bound")
 
     @staticmethod
     def _validate_configuration(
@@ -572,6 +611,14 @@ class TushareRequestController:
     def cooldown_until(self) -> datetime | None:
         return self._cooldown_until
 
+    @property
+    def repository_binding_required(self) -> bool:
+        return self._repository_required
+
+    @property
+    def repository_bound(self) -> bool:
+        return self._recovery_repository is not None
+
     def backoff_until(self, work_key: str) -> datetime | None:
         return self._backoff_until.get(self._storage_key(work_key))
 
@@ -581,6 +628,7 @@ class TushareRequestController:
         return operation in self._blocked_operations
 
     def reset_permission_block(self, operation: TushareOperation) -> None:
+        self._require_bound_repository()
         if not isinstance(operation, TushareOperation):
             raise TypeError("operation must be a TushareOperation")
         self._blocked_operations.discard(operation)
@@ -609,6 +657,7 @@ class TushareRequestController:
         Reservation is durable before queue admission. Cancellation of a waiter
         cannot cancel a shared probe or release its reservation early.
         """
+        self._require_bound_repository()
         self._validate_request(operation, call, priority)
         self._validate_work_key(work_key)
         running = self._permission_rechecks.get(operation)
@@ -657,6 +706,7 @@ class TushareRequestController:
     ) -> T:
         """Run one repeatable synchronous call under bounded runtime policy."""
 
+        self._require_bound_repository()
         return await self._execute(operation, call, work_key=work_key, priority=priority)
 
     async def _execute(
@@ -1015,6 +1065,7 @@ def create_live_tushare_request_controller(
     monotonic: Callable[[], float] = time.monotonic,
     pace_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     recovery_repository: ProviderRecoveryRepository | None = None,
+    require_repository_binding: bool = False,
 ) -> TushareRequestController:
     """Build the production live profile without inheriting retry-oriented defaults."""
 
@@ -1030,6 +1081,7 @@ def create_live_tushare_request_controller(
         monotonic=monotonic,
         pace_sleep=pace_sleep,
         recovery_repository=recovery_repository,
+        require_repository_binding=require_repository_binding,
     )
 
 

@@ -888,12 +888,13 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
         sdk = OfflineSDK(clock, (plan.symbol,))
         controllers = []
 
-        def controller_factory(*, clock: ControlledClock):
+        def controller_factory(*, clock: ControlledClock, require_repository_binding=False):
             pace = VirtualPace()
             controller = create_live_tushare_request_controller(
                 clock=clock,
                 monotonic=pace.monotonic,
                 pace_sleep=pace.sleep,
+                require_repository_binding=require_repository_binding,
             )
             controllers.append(controller)
             return controller
