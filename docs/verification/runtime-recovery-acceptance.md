@@ -2,6 +2,10 @@
 
 > STAGE 1 ACCEPTED for the user's approved offline process-restart criterion on 2026-09-23. Stage 2 connected delivery safety was implemented and verified offline on 2026-09-24; broader release gates remain open. Live-provider validation, user database migration and deployment are not approved. Earlier sections retain their time-bounded historical status.
 
+## Business step 3 reference commit fence — 2026-09-24
+
+The first fake `trade_cal` response previously committed 399 calendar rows even when its SDK call changed the local token before returning; the next provider call then failed. The new transaction fence checks captured activation/plan requirements, current configuration, stock semantic revision and runtime generation immediately before each calendar, daily-limit and historical daily-bar reference commit. The changed-token case now rolls back the first result, leaves zero calendar rows and starts no second physical request. The dedicated production test was RED at 399 rows and is GREEN at zero; the affected production/live-pipeline/restart files pass after updating three earlier tests to expect the stronger precommit `ReferenceDependenciesChangedError`. This fence does not implement validated reload or cover every decision/send commit.
+
 ## Business step 3 calendar-permission slice — 2026-09-24
 
 Only `TRADING_CALENDAR` is connected to controlled production permission recheck. A persisted completed `SSE` day from the prior seven days supplies the anchor. The dedicated read-only `trade_cal` call requests exactly that exchange and day, strictly validates every returned row, and requires one nonempty normalized result. The controller durably reserves the operation for 300 seconds before admission, retains its permission latch during the physical call and applies any shared 429 cooldown first. After success, current configuration, stock semantic revision and runtime generation are checked again before clearing the latch. No anchor leaves a visible `BLOCKED_PERMISSION` provider health record and makes no physical probe. The probe does not persist calendar or decision data.

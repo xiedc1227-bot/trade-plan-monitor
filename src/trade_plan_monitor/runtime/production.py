@@ -649,6 +649,7 @@ class ProductionMonitorPipeline:
                 raise ReferenceDataUnavailableError("current trading calendar is unavailable")
             with self._work() as work:
                 work.references.upsert_trading_days(days)
+                self._assert_reference_generation(trade_date, captured_key)
                 work.commit()
             if exchange == "SSE":
                 self._calendar = {day.cal_date: day.is_open for day in days}
@@ -663,6 +664,7 @@ class ProductionMonitorPipeline:
                 work.references.upsert_daily_limits(
                     tuple(row for row in limits if row.symbol in active_symbols)
                 )
+                self._assert_reference_generation(trade_date, captured_key)
                 work.commit()
         for plan in legacy_plans:
             bars = await self._request(
@@ -676,11 +678,25 @@ class ProductionMonitorPipeline:
                 raise ReferenceDataUnavailableError("official reference history is unavailable")
             with self._work() as work:
                 work.history.upsert_daily_bars(bars)
+                self._assert_reference_generation(trade_date, captured_key)
                 work.commit()
         current_key = self._reference_dependency_key(trade_date, self.active_plans(trade_date))
         if captured_key != current_key:
             raise ReferenceDependenciesChangedError
         self._reference_key = captured_key
+
+    def _assert_reference_generation(
+        self, trade_date: date, captured_key: ReferenceDependencyKey,
+    ) -> None:
+        if (
+            not self._configuration_current()
+            or not self._stock_certification_current()
+            or not self._generation_current()
+            or captured_key != self._reference_dependency_key(
+                trade_date, self.active_plans(trade_date)
+            )
+        ):
+            raise ReferenceDependenciesChangedError
 
     def _reference_dependency_key(
         self, trade_date: date, plans: tuple[ExecutableTradePlan, ...],

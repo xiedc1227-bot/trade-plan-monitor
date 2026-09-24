@@ -21,6 +21,7 @@ from test_live_pipeline_acceptance import (
 from trade_plan_monitor.market_data.models import ProviderCapabilityStatus
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+from trade_plan_monitor.runtime.production import ReferenceDependenciesChangedError
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
@@ -137,9 +138,8 @@ def test_startup_stops_physical_stock_calls_when_semantics_become_invalid(
             tmp_path, monkeypatch, invalidate_during_request=invalidated_by
         )
         try:
-            with pytest.raises(RequestControlError) as caught:
+            with pytest.raises(ReferenceDependenciesChangedError):
                 await composition.start()
-            assert caught.value.code is RequestControlErrorCode.ERROR
             assert [name for name, _ in sdk.calls] == ["trade_cal"]
         finally:
             await composition.stop()
@@ -561,5 +561,26 @@ def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
             assert refreshed.next_retry_at == state._clock.now()
         finally:
             await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_reference_result_cannot_commit_after_configuration_changes_mid_request(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        composition, sdk, _ = _composition(
+            tmp_path, monkeypatch, invalidate_during_request="change_config",
+        )
+        with pytest.raises(RuntimeError):
+            await composition.start()
+        engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
+        try:
+            with create_session_factory(engine)() as session:
+                count = session.scalar(select(func.count()).select_from(TradingCalendar))
+            assert count == 0
+            assert len(sdk.calls) == 1
+        finally:
+            engine.dispose()
 
     asyncio.run(scenario())
