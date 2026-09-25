@@ -417,14 +417,19 @@ class TushareMarketDataProvider:
 
         return self._daily_limits(trade_date, strict_response=True)
 
-    def probe_daily_limits_permission(self, anchor: date) -> None:
+    def probe_daily_limits_permission(
+        self, anchor: date, *, _physical_start: Callable[[], None] | None = None,
+    ) -> None:
         """Validate the whole raw daily-limit batch without business conversion."""
 
         self._validated_date(anchor, name="anchor")
+        trade_date = self._date_argument(anchor)
+        if _physical_start is not None:
+            _physical_start()
         frame = self._fetch_frame(
             "stk_limit",
             fields=_DAILY_LIMIT_FIELDS,
-            trade_date=self._date_argument(anchor),
+            trade_date=trade_date,
         )
         required = {"trade_date", "ts_code", "up_limit", "down_limit"}
         self._require_columns(frame, "stk_limit", required)
