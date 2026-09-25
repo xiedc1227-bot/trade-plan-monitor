@@ -18,4 +18,4 @@ RED 首先因缺少内部执行器而失败。模拟 SDK 与临时 SQLite 测试
 git diff --check
 ```
 
-后续调度接入必须证明权限结果不消耗市场截止点游标；本切片仅提供内部调用，尚无调度派发或游标可供验证。既有 `historical_anchor`、`_historical_index_permission_anchor` 和实时 `current_open` 仍接受错误的周末开市记录；统一六路接入前须另做有界修复。其他权限作用域、生产调度及端到端 C1 验收保持 OPEN。未请求真实 Tushare 行情、发送通知、修改用户数据库、推送或部署。
+后续调度接入必须证明权限结果不消耗市场截止点游标；本切片仅提供内部调用，尚无调度派发或游标可供验证。后续有界修复已从 `historical_anchor`、`_historical_index_permission_anchor` 和实时 `current_open` 中排除错误的周末开市记录，见 `2026-09-26-b2-weekend-permission-candidate-consistency.zh-CN.md`。其他权限作用域、生产调度及端到端 C1 验收保持 OPEN。未请求真实 Tushare 行情、发送通知、修改用户数据库、推送或部署。

@@ -791,10 +791,17 @@ class ProductionMonitorPipeline:
         return _PermissionEvidence(
             calendar_anchor=recent[-1].cal_date if recent else None,
             historical_anchor=next(
-                (day.cal_date for day in reversed(recent) if day.is_open is True), None,
+                (
+                    day.cal_date for day in reversed(recent)
+                    if day.cal_date.weekday() < 5 and day.is_open is True
+                ), None,
             ),
             completed_open_days=open_days,
-            current_open=len(today_rows) == 1 and today_rows[0].is_open is True,
+            current_open=(
+                now.date().weekday() < 5
+                and len(today_rows) == 1
+                and today_rows[0].is_open is True
+            ),
             legacy_symbols=legacy_symbols,
             legacy_bar_symbols=legacy_bar_symbols,
             official_pairs=frozenset(official),
@@ -1244,7 +1251,10 @@ class ProductionMonitorPipeline:
             days = work.references.list_trading_days(
                 "SSE", yesterday - timedelta(days=6), yesterday,
             )
-        return next((day.cal_date for day in reversed(days) if day.is_open), None)
+        return next((
+            day.cal_date for day in reversed(days)
+            if day.cal_date.weekday() < 5 and day.is_open is True
+        ), None)
 
     def next_historical_index_permission_due_at(self) -> datetime | None:
         """Expose one independent permission maintenance deadline while authority holds."""
