@@ -276,6 +276,21 @@ def test_monitor_schedule_after_cursor_makes_each_due_deadline_eligible_once() -
     assert second.due_at == _shanghai(9, 32, 12)
 
 
+def test_elapsed_market_query_retains_a_fresh_due_after_clock_advances() -> None:
+    clock, _, scheduler = _scheduler(_shanghai(10, 5, 13))
+
+    elapsed = scheduler.elapsed_market_deadlines(
+        after=_shanghai(10, 4, 12), through=clock.now(),
+    )
+    future = scheduler.next_deadline(after=_shanghai(10, 4, 12))
+
+    assert len(elapsed) == 1
+    assert elapsed[0].kind is DeadlineKind.REALTIME_MINUTE
+    assert elapsed[0].bar_end == _shanghai(10, 5)
+    assert elapsed[0].due_at == _shanghai(10, 5, 12)
+    assert future is not None and future.due_at == _shanghai(10, 6, 12)
+
+
 def test_monitor_schedule_applies_configurable_grace_without_polling_closed_intervals() -> None:
     _, _, scheduler = _scheduler(_shanghai(11, 30, 29), grace=timedelta(seconds=30))
 

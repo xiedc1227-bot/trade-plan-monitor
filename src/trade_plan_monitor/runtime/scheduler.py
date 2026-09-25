@@ -37,6 +37,10 @@ class DeadlineKind(StrEnum):
     INDEX_PERMISSION = "INDEX_PERMISSION"
 
 
+class MarketDeadlineReviewError(ValueError):
+    """Elapsed market duties cannot be reviewed within the bounded interval."""
+
+
 @dataclass(frozen=True, slots=True)
 class MarketDeadline:
     """One immutable session deadline in canonical Shanghai time."""
@@ -183,6 +187,28 @@ class MarketSessionScheduler:
         if self._calendar_state(trade_date) is not True:
             return ()
         return self._deadlines_for_open_date(trade_date)
+
+    def elapsed_market_deadlines(
+        self, *, after: datetime, through: datetime,
+    ) -> tuple[MarketDeadline, ...]:
+        """Read original market duties independently of the current scheduler clock."""
+        start = _canonical_shanghai(after)
+        end = _canonical_shanghai(through)
+        if end < start or (end.date() - start.date()).days > 2:
+            raise MarketDeadlineReviewError(
+                "market deadline review is outside bounded lookahead"
+            )
+        elapsed: list[MarketDeadline] = []
+        trade_date = start.date()
+        while trade_date <= end.date():
+            elapsed.extend(
+                deadline for deadline in self.deadlines_for_date(trade_date)
+                if start < deadline.due_at <= end
+            )
+            if trade_date == end.date():
+                break
+            trade_date += _ONE_DAY
+        return tuple(elapsed)
 
     def permission_market_window(
         self, *, since: datetime, through: datetime,

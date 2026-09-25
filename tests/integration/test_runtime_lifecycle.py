@@ -107,6 +107,13 @@ class _Scheduler:
             return None
         return self.deadline
 
+    def elapsed_market_deadlines(
+        self, *, after: datetime, through: datetime,
+    ) -> tuple[MarketDeadline, ...]:
+        if self.deadline is not None and after < self.deadline.due_at <= through:
+            return (self.deadline,)
+        return ()
+
     async def wait_for_next(self, *, after: datetime | None = None) -> MarketDeadline | None:
         self.calls += 1
         if self.calls == 1 and after is None:
@@ -1061,6 +1068,12 @@ def test_retryable_deadline_failure_keeps_owner_and_resumes_after_recovery(
         class TwoDeadlines:
             def next_deadline(self, *, after=None):
                 return second if after is not None else _deadline()
+
+            def elapsed_market_deadlines(self, *, after, through):
+                return tuple(
+                    deadline for deadline in (_deadline(), second)
+                    if after < deadline.due_at <= through
+                )
 
             async def wait_for_next(self, *, after=None):
                 if after is None:

@@ -94,7 +94,11 @@ from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
 )
-from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
+from trade_plan_monitor.runtime.scheduler import (
+    DeadlineKind,
+    MarketDeadline,
+    MarketDeadlineReviewError,
+)
 from trade_plan_monitor.runtime.symbol_service import SymbolHealthRestoreState, SymbolService
 from trade_plan_monitor.state.events import (
     MonitorEvent,
@@ -3071,11 +3075,34 @@ class RuntimeLifecycleService:
                     raise
                 if deadline is None or not self._accepting_work:
                     break
+                market_review_after = self._last_deadline_at or _canonical_shanghai(
+                    self._clock.now()
+                )
                 self._advance_progress_deadline(deadline)
                 try:
                     await self._execute_deadline(deadline)
+                    if not self._accepting_work:
+                        break
+                    await self._consume_one_fresh_elapsed_market_deadline(
+                        after=(
+                            market_review_after
+                            if deadline.kind is DeadlineKind.INDEX_PERMISSION
+                            else deadline.due_at
+                        ),
+                    )
+                    if not self._accepting_work:
+                        break
                     following = self._scheduler.next_deadline(after=self._last_deadline_at)
                     self._next_poll_at = None if following is None else following.due_at
+                except MarketDeadlineReviewError:
+                    self._status = RuntimeServiceStatus.DEGRADED
+                    self._read_only = True
+                    self._accepting_work = False
+                    self._degraded_reason = "MARKET_DEADLINE_REVIEW_UNAVAILABLE"
+                    self._next_poll_at = None
+                    self._retry_at = None
+                    await self._wait_for_explicit_stop()
+                    break
                 except RequestControlError as error:
                     if error.code not in _RETRYABLE_PROVIDER_ERRORS:
                         raise
@@ -3201,6 +3228,26 @@ class RuntimeLifecycleService:
         if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):
             raise TypeError("scheduler must return MarketDeadline or None")
         self._next_poll_at = None if next_deadline is None else next_deadline.due_at
+
+    async def _consume_one_fresh_elapsed_market_deadline(
+        self, *, after: datetime,
+    ) -> None:
+        """Consume one elapsed minute while its original target remains actionable."""
+        elapsed = self._scheduler.elapsed_market_deadlines(
+            after=after, through=_canonical_shanghai(self._clock.now()),
+        )
+        if len(elapsed) != 1:
+            return
+        deadline = elapsed[0]
+        if (
+            deadline.kind is not DeadlineKind.REALTIME_MINUTE
+            or deadline.bar_end is None
+            or self._clock.now() > deadline.bar_end + timedelta(seconds=90)
+            or not self._accepting_work
+        ):
+            return
+        self._advance_progress_deadline(deadline)
+        await self._execute_deadline(deadline)
 
     @property
     def unexpected_run_exit(self) -> bool:
