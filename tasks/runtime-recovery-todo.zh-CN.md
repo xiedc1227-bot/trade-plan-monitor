@@ -14,7 +14,7 @@
 |---|---|---|
 | 1. 历史状态恢复 | 已按批准的限定离线标准完成：三个独立进程使用已接通的生产组合和同一临时 SQLite 数据库，补齐一次遗漏的官方收盘，保留活动计划，并在再次重启后不增加结果/提醒。五天准入门禁仍在前置。高交易量证据上限及完整跨日/故障矩阵仍待完成 | 限定重启证据见成对 `docs/verification/runtime-recovery-acceptance.zh-CN.md`；不受限制的历史恢复、真实行情源验证及完整 RR007–RR010/C2/A13 发布验收另行处理 |
 | 2. 提醒安全 | 已接通离线实现：生产组合原子写入初始 HOLD，并在每次渠道调用前复核已提交的身份、风险、持仓、已完成目标及恢复屏障。已有模拟渠道/重启专项证据；完整发布门禁和真实运行仍待完成 | 两类计划在模拟渠道准入前使用重新读取的风险/持仓/恢复门禁证据；过时提醒抑制，相同且适用的退出提醒只保留最新，证据不足等待；保留不确定发送处理。RR011–RR013 |
-| 3. 实际启停集成 | 五天准入与定期心跳已接入生产生命周期。RR010 拒绝所捕获激活身份变化；有界 RR004/RR006/A06 修正隔离指数展示并稳定实时传输退避。类型化传输故障保留本地所有者及重试下限。生产环境于准入后绑定持久行情恢复状态，在受控跨进程重启后恢复 429 冷却，冻结初始配置，并在物理排空失败时保持数据库打开。有界的单 API `TRADING_CALENDAR` 权限探针使用已持久化的前一日锚点、严格单日响应及持久 300 秒预约；无锚点时可见受阻。其他权限接口、受控重启围栏、更广的依赖隔离及完整关闭验收仍待完成 | 同一应用组装能从依赖不可用中恢复；配置变更需要安全停止、人工编辑并启动新进程。验收须证明冻结的启动配置、漂移后不在进程内替换、旧任务围栏以及释放所有者/存储前完整排空。RR004–RR006、RR010、RR014、C1/C3 |
+| 3. 实际启停集成 | 五天准入与定期心跳已接入生产生命周期。RR010 拒绝所捕获激活身份变化；有界 RR004/RR006/A06 修正隔离指数展示并稳定实时传输退避。类型化传输故障保留本地所有者及重试下限。生产环境于准入后绑定持久行情恢复状态，在受控跨进程重启后恢复 429 冷却，冻结初始配置，并在物理排空失败时保持数据库打开。有界只读权限探针覆盖 `TRADING_CALENDAR`、`idx_mins` 和 `rt_idx_min_daily`，各自保留持久 300 秒预约；缺少可信锚点时可见受阻。其他权限接口、更广的依赖隔离及完整关闭验收仍待完成 | 同一应用组装能从依赖不可用中恢复；配置变更需要安全停止、人工编辑并启动新进程。验收须证明冻结的启动配置、漂移后不在进程内替换、旧任务围栏以及释放所有者/存储前完整排空。RR004–RR006、RR010、RR014、C1/C3 |
 | 4. 状态接口和页面 | 仅有契约草案 | 真实后端状态到达页面，区分待机/恢复中/受阻/连接异常并提供原因和重试信息；旧客户端安全失败。RR002、RR015–RR019、C4 |
 | 5. 重启/故障验收 | 第一阶段限定三进程重启及第二阶段模拟渠道场景已通过；完整跨日/故障矩阵仍未完成 | 完成全部 A01–A14 场景、第 7 节全部离线门禁、迁移/回滚证据及最终独立审查；部署仍须单独批准。RR020–RR022、C5 |
 
@@ -22,19 +22,23 @@
 
 ### 业务第 3 步离线测试顺序 — 2026-09-24
 
-以下是计划中的分片，不是已完成的检查点。缺少行为时，各片先写失败的离线测试，使用临时 SQLite 和模拟行情源/渠道边界，再运行列明的专项与相邻回归文件。已批准的 `INDEX_MINUTES` 决策记录在 D4/D6；迁移及真实端点认证尚未执行。不得凭单个切片关闭 C1 或 C3，也不得将本顺序视为第 4 步页面完成或第 5 步发布验收。
+以下是计划中的分片，不是已完成的检查点。缺少行为时，各片先写失败的离线测试，使用临时 SQLite 和模拟行情源/渠道边界，再运行列明的专项与相邻回归文件。已批准的 `INDEX_MINUTES` 决策记录在 D4/D6；检查点迁移与两个离线端点探针已实现，真实端点认证尚未执行。不得凭单个切片关闭 C1 或 C3，也不得将本顺序视为第 4 步页面完成或第 5 步发布验收。
 
 | 顺序 / 门槛 | 前置条件 | 最小验收 | 专项与相邻回归 |
 |---|---|---|---|
 | S3-01 A04 | 既有所有者/存活证据及类型化传输恢复 | 连续四次瞬态故障保留同一所有者和运行代次、本地读取可用、遵守 30/60/120/300 秒重试下限，随后由调度器提交一个精确目标；普通故障不消耗崩溃监督次数。改变重试时序前，先评审可中断的测试计时接口。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_certification_gate.py tests/integration/test_runtime_lifecycle.py -q --tb=short` |
 | S3-02 A05 | S3-01 及已批准的 D4/D6 端点范围 | 在临时 SQLite 中，旧 `INDEX_MINUTES` 经幂等/中断迁移后同时阻断 `idx_mins` 与 `rt_idx_min_daily`；各自 300 秒受控探针仅解除自身封锁。共享 429 冷却、1.25 秒节流及失败后重新封锁保持有效。不声称真实权限。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py tests/integration/test_production_certification_gate.py tests/integration/test_market_index_runtime.py -q --tb=short` |
-| S3-03 C1 | S3-01–S3-02 | A01/A02/A04/A05 离线证据、有界串行请求、旧状态安全阻断迁移及独立 `xhigh` 评审；全部条件通过前 C1 保持开放。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py tests/integration/test_provider_cooldown_process_restart.py tests/integration/test_production_certification_gate.py tests/integration/test_runtime_lifecycle.py -q --tb=short` |
+| S3-03 C1 | S3-01–S3-02 | A01/A02/A04/A05 离线证据、有界串行请求、旧状态安全阻断迁移及独立 `xhigh` 评审；全部条件通过前 C1 保持开放。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py tests/integration/test_provider_cooldown_process_restart.py tests/integration/test_production_certification_gate.py tests/integration/test_runtime_lifecycle.py -q --tb=short`，另加下方补充命令 |
 | S3-04 A03/A07/A10 | C1 及可信会话/日历证据 | 开盘前、午休、收盘后、跨日及时钟回拨选择正确目标；空/部分批次不能证明就绪，未完成收盘义务保留，封顶工作在内存有界的前提下公平推进。 | `.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py tests/integration/test_runtime_recovery_coverage.py tests/integration/test_missed_close_execution.py -q --tb=short` |
 | S3-05 A06 | S3-02 及 S3-04 | 单个股票/指数故障仍让无关 Schema v1/v2 和 Schema v3 计划及展示指数推进；必需 `INDEX_*` 依赖仅阻断其计划。指数重试跨正常 OS 进程停止/重启及调度器唤醒保留，纯指数路径不发股票请求或通知。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_a06_matrix.py tests/integration/test_production_a06_process_scheduler.py tests/integration/test_market_index_runtime.py -q --tb=short` |
 | S3-06 A09 | S3-04–S3-05 及冻结配置 | 捕获至提交期间计划停用/替换/重激活、语义或来源漂移、停止所有权变化，均不得发布旧结果、待收盘变更或通知；仅刷新元数据不受影响。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_recovery_activation_fences.py tests/integration/test_production_certification_gate.py -q --tb=short` |
 | S3-07 A08/D5 | S3-06 及既有发送准入 | 提交/发送窗口停止或被杀后，业务意图保持唯一，不确定发送处理保留。物理工作、已开始发送、持久回执和所有者心跳须在 WAL/数据库/所有者释放前排空；排空失败保留所有权并允许安全清理重试。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_lifecycle.py tests/integration/test_monitor_production_composition.py tests/integration/test_notification_delivery.py tests/integration/test_delivery_admission.py -q --tb=short` |
 | S3-08 A11 | S3-01 及 S3-04–S3-07 | 已安装运行时的本地读取服务报告存活、待机、恢复中或受阻，并显示原因及下一唤醒/重试；旧缓存事实和连接正常的心跳不能代表业务进展。这是提前验证最小后端状态，不代表第 4 步完整页面/协议。 | `.\.venv\Scripts\python.exe -m pytest tests/integration/test_persistent_monitor_read_service.py tests/integration/test_monitor_production_composition.py tests/integration/test_runtime_lifecycle.py -q --tb=short` |
 | S3-09 C3 | C1 及 S3-04–S3-08 | 汇总 A04/A08–A11 及相关 A03/A05–A07 证据、迁移/回滚和停机矩阵，并完成独立 `xhigh` 提交/崩溃/发送评审。仍有实质故障时 C3 保持开放；C4/C5、第 4 步和第 5 步另行处理。 | `.\.venv\Scripts\python.exe -m pytest -m "not live" --ignore=tests/integration/test_backtest_acceptance.py -q --tb=short` 与 `.\.venv\Scripts\python.exe -m ruff check src tests scripts` |
+
+S3-03 补充矩阵：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_provider_contract.py tests/unit/test_live_certification_profiles.py tests/unit/test_request_recovery_admission.py tests/integration/test_certified_production_runtime.py tests/integration/test_production_a04_retry_timeline.py tests/integration/test_index_permission_scope_migration.py tests/integration/test_production_index_historical_permission_probe.py tests/integration/test_production_index_realtime_permission_probe.py tests/integration/test_index_permission_process_restart.py -q --tb=short`。另运行 `tests/unit/test_monitor_runtime.py` 中的 `test_live_tushare_request_profile_is_serial_paced_bounded_and_never_retries`、`test_request_concurrency_rejects_work_beyond_bounded_tushare_queue` 和 `test_recovery_timeout_keeps_late_physical_call_serial_before_next_symbol`。成对的 `docs/verification/2026-09-25-c1-provider-recovery-evidence.zh-CN.md` 记录有界结果；C1 在最终独立复核前保持开放。
+
+独立 C1 复核发现 P1 功能缺口：`DAILY_LIMITS`、`DAILY_BARS`、`CURRENT_DAY_MINUTES`、`REALTIME_MINUTES` 与 `INDEX_DAILY` 尚无受控生产权限复核。它们的持久阻断在同端点更换 token 后仍可能锁存。双进程指数测试不能关闭 A05 或 C1；仍需后续设计与实现评审。
 
 ### D5 受控重启决策 — 2026-09-24
 
@@ -60,7 +64,7 @@
 
 ### 业务第 3 步日历权限切片 — 2026-09-24
 
-目前仅 `TRADING_CALENDAR` 有生产权限复核。其已持久化的 300 秒预约及任何共享 429 冷却到期后，从最近七天已持久化的已完成 `SSE` 日期选取一个锚点，仅对该日期执行一次严格、只读的 `trade_cal` 请求。缺少锚点时不发探针，行情健康持续显示 `BLOCKED_PERMISSION`。空表、混入不符记录、畸形及重复响应均不能解锁。控制器在物理结果之后、清除封锁之前再次检查当前配置、股票语义及运行代次；失败保留封锁及预约。探针成功不会写入业务日历记录。其他 API 操作，尤其双端点 `INDEX_MINUTES` 范围，及 A05/业务第 3 步仍未完成。证据见成对验收文档。
+首个生产权限复核覆盖 `TRADING_CALENDAR`。其已持久化的 300 秒预约及任何共享 429 冷却到期后，从最近七天已持久化的已完成 `SSE` 日期选取一个锚点，仅对该日期执行一次严格、只读的 `trade_cal` 请求。缺少锚点时不发探针，行情健康持续显示 `BLOCKED_PERMISSION`。空表、混入不符记录、畸形及重复响应均不能解锁。控制器在物理结果之后、清除封锁之前再次检查当前配置、股票语义及运行代次；失败保留封锁及预约。探针成功不会写入业务日历记录。后续 S3-02 工作增加独立的 `idx_mins` 与 `rt_idx_min_daily` 探针及旧状态检查点迁移。其他 API 权限、完整 A05 验收与业务第 3 步仍未完成。证据见成对 S3-02 与 C1 记录。
 
 ### 业务第 3 步参考数据提交围栏 — 2026-09-24
 
