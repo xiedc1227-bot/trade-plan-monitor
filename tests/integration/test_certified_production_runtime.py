@@ -239,17 +239,23 @@ class SDK:
 
 
 def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monkeypatch):
+    from test_live_pipeline_acceptance import ControlledClock, VirtualPace
+
     import trade_plan_monitor.runtime.production as production
+    import trade_plan_monitor.web.monitor_composition as monitor_composition
     from trade_plan_monitor.domain.plan_codec import load_plan_yaml
     from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+    from trade_plan_monitor.runtime.health import RuntimeResourceStatus, RuntimeServiceStatus
     from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
     from trade_plan_monitor.state.database import upgrade_database
+    from trade_plan_monitor.state.models import EvaluationResult, RuntimeLiveness
     from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+    from trade_plan_monitor.web.monitor_composition import create_monitor_composition
 
     async def scenario():
-        clock = Clock()
-        clock.current = NOW.replace(hour=9, minute=0)
-        engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
+        clock = ControlledClock(NOW.replace(hour=9, minute=0))
+        database = tmp_path / "monitor.sqlite3"
+        engine = create_sqlite_engine(database)
         upgrade_database(engine)
         sessions = create_session_factory(engine)
 
@@ -266,6 +272,11 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
                 validation=validate_trade_plan(plan, available_market_evidence=ALL_MARKET_EVIDENCE),
             )
             transaction.commit()
+        with sessions.begin() as session:
+            session.add(RuntimeLiveness(
+                id=1, schema_version=1, revision=0,
+                last_alive_at=clock.now().isoformat(),
+            ))
         clock.current = NOW
         config = tmp_path / "config/app.yaml"
         config.parent.mkdir()
@@ -284,50 +295,74 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
         )
         sdk = SDK(clock, engine)
         monkeypatch.setattr(production, "create_tushare_client", lambda config: sdk)
-        published = []
-        controller = create_live_tushare_request_controller(clock=clock)
+        monkeypatch.setattr(monitor_composition, "SystemClock", lambda: clock)
 
-        def state():
-            return _ProductionRuntimeState(
-                config_path=config,
-                database_path=tmp_path / "monitor.sqlite3",
-                engine=engine,
-                session_factory=sessions,
+        def controller_factory(*, clock, require_repository_binding=False):
+            pace = VirtualPace()
+            return create_live_tushare_request_controller(
                 clock=clock,
-                request_controller=controller,
-                runtime_generation=uuid4,
-                publisher=published.append,
+                monotonic=pace.monotonic,
+                pace_sleep=pace.sleep,
+                require_repository_binding=require_repository_binding,
+            )
+
+        monkeypatch.setattr(
+            monitor_composition, "create_live_tushare_request_controller",
+            controller_factory,
+        )
+
+        def composition():
+            return create_monitor_composition(
+                config_path=config, database_path=database,
             )
 
         try:
-            first = state()
-            assert first.probe_capabilities() == capabilities
-            await first.refresh_references(NOW.date())
-            await first.recover_startup(NOW.date())
-            deadline = MarketDeadline(
-                kind=DeadlineKind.REALTIME_MINUTE,
-                trade_date=NOW.date(),
-                due_at=NOW,
-                bar_end=NOW.replace(second=0),
-            )
-            result = await first.run_deadline(deadline)
-            assert [row.status.value for row in result] == ["COMMITTED"]
-            with work() as transaction:
-                before = transaction.projections.get_decision_head(plan.symbol)
-            assert before is not None
-            calls = len(sdk.calls)
-            assert await first.run_deadline(deadline) == ()
-            assert len(sdk.calls) == calls
-            second = state()
-            second.probe_capabilities()
-            await second.recover_startup(NOW.date())
-            with work() as transaction:
-                after = transaction.projections.get_decision_head(plan.symbol)
-            assert before == after
-            assert sum(name == "rt_min" for name, _ in sdk.calls) == 1
-            assert published
+            first = composition()
+            try:
+                sdk.engine = first._runtime._run_deadline.__self__._engine
+                assert (await first.start()).status is RuntimeServiceStatus.RUNNING
+                state = first._runtime._run_deadline.__self__
+                assert state._capabilities == capabilities
+                assert state._database_status is RuntimeResourceStatus.READY
+                assert state._liveness_revision is not None
+                assert first._runtime._request_controller.repository_bound
+                generation = first._runtime.runtime_generation
+                assert state._pipeline is not None
+                assert state._pipeline._generation_current()
+                deadline = MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=NOW.date(),
+                    due_at=NOW,
+                    bar_end=NOW.replace(second=0),
+                )
+                result = await state.run_deadline(deadline)
+                assert [row.status.value for row in result] == ["COMMITTED"]
+                with work() as transaction:
+                    before = transaction.projections.get_decision_head(plan.symbol)
+                with sessions() as session:
+                    assert session.query(EvaluationResult).count() == 1
+                assert before is not None
+                calls = len(sdk.calls)
+                assert await state.run_deadline(deadline) == ()
+                assert len(sdk.calls) == calls
+            finally:
+                await first.stop()
+
+            second = composition()
+            try:
+                sdk.engine = second._runtime._run_deadline.__self__._engine
+                assert (await second.start()).status is RuntimeServiceStatus.RUNNING
+                assert second._runtime.runtime_generation != generation
+                assert await second._runtime._run_deadline.__self__.run_deadline(deadline) == ()
+                with work() as transaction:
+                    after = transaction.projections.get_decision_head(plan.symbol)
+                assert before == after
+                with sessions() as session:
+                    assert session.query(EvaluationResult).count() == 1
+                assert sum(name == "rt_min" for name, _ in sdk.calls) == 1
+            finally:
+                await second.stop()
         finally:
-            await controller.aclose()
             engine.dispose()
 
     asyncio.run(scenario())
