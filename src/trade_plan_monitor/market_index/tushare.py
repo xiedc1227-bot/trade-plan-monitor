@@ -27,7 +27,11 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from trade_plan_monitor.market_data.sessions import DEFAULT_DATA_GRACE
-from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+from trade_plan_monitor.market_data.tushare import (
+    TushareErrorCode,
+    TushareMarketDataProvider,
+    TushareProviderError,
+)
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import (
     MarketIndexBar,
@@ -40,6 +44,7 @@ from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
+    RequestNotStartedError,
     RequestPriority,
     TushareOperation,
     TushareRequestController,
@@ -541,6 +546,63 @@ class TushareMarketIndexProvider:
                 raise ValueError("unrecognized historical index extra row")
         except Exception:
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "idx_mins") from None
+
+    def probe_official_daily_permission(
+        self, index_code: MarketIndexCode, anchor: date,
+    ) -> None:
+        """Prove one certified official daily row without touching index caches."""
+
+        if (
+            not isinstance(index_code, MarketIndexCode)
+            or type(anchor) is not date
+            or self._profile.capabilities[index_code]
+            is not TushareMarketIndexCapabilityStatus.READY
+            or self._client is None
+            or self._now is None
+        ):
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, _INDEX_DAILY_ENDPOINT)
+        provider_error: TushareProviderError | None = None
+        try:
+            frame = getattr(self._client, _INDEX_DAILY_ENDPOINT)(
+                ts_code=index_code.value,
+                start_date=anchor.strftime("%Y%m%d"),
+                end_date=anchor.strftime("%Y%m%d"),
+                fields=_INDEX_DAILY_FIELDS,
+            )
+        except RequestNotStartedError:
+            raise
+        except Exception as error:
+            provider_error = TushareMarketDataProvider._safe_provider_error(
+                _INDEX_DAILY_ENDPOINT, error,
+            )
+        if provider_error is not None:
+            raise provider_error
+        try:
+            required = set(_INDEX_DAILY_FIELDS.split(","))
+            if not isinstance(frame, pd.DataFrame) or len(frame) != 1:
+                raise ValueError("official index daily response must contain one row")
+            self._require_columns(frame, required)
+            if len(Counter(frame.columns)) != len(frame.columns):
+                raise ValueError("official index daily schema is invalid")
+            row = frame.iloc[0].to_dict()
+            if row["ts_code"] != index_code.value or row["trade_date"] != anchor.strftime(
+                "%Y%m%d"
+            ):
+                raise ValueError("official index daily identity is invalid")
+            self._bar(
+                row,
+                index_code=index_code,
+                interval=MarketIndexInterval.OFFICIAL_DAILY,
+                bar_at=datetime.combine(anchor, time(15, 0), _SHANGHAI),
+                observed_at=self._observed_at(),
+                source_kind=MarketIndexSourceKind.OFFICIAL,
+                revision=1,
+                daily_units=True,
+            )
+        except Exception:
+            raise TushareProviderError(
+                TushareErrorCode.INVALID_RESPONSE, _INDEX_DAILY_ENDPOINT,
+            ) from None
 
     def _fetch_realtime_index_minutes(self, index_code: MarketIndexCode) -> object:
         endpoint = getattr(self._client, _INDEX_REALTIME_MINUTE_ENDPOINT)

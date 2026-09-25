@@ -6,6 +6,7 @@ thread-pool execution, and live entitlement checks belong to later runtime tasks
 
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter
 from collections.abc import Callable, Hashable
@@ -416,6 +417,74 @@ class TushareMarketDataProvider:
 
         return self._daily_limits(trade_date, strict_response=True)
 
+    def probe_daily_limits_permission(self, anchor: date) -> None:
+        """Validate the whole raw daily-limit batch without business conversion."""
+
+        self._validated_date(anchor, name="anchor")
+        frame = self._fetch_frame(
+            "stk_limit",
+            fields=_DAILY_LIMIT_FIELDS,
+            trade_date=self._date_argument(anchor),
+        )
+        required = {"trade_date", "ts_code", "up_limit", "down_limit"}
+        self._require_columns(frame, "stk_limit", required)
+        if len(Counter(frame.columns)) != len(frame.columns):
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "stk_limit")
+        if not 1 <= len(frame) <= 5_800:
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "stk_limit")
+        seen: set[tuple[str, date]] = set()
+        try:
+            for row in frame.to_dict(orient="records"):
+                symbol = self._validated_symbol(row["ts_code"])
+                trade_date = self._source_date(row["trade_date"])
+                if trade_date != anchor or (symbol, trade_date) in seen:
+                    raise ValueError("daily-limit proof identity is invalid")
+                seen.add((symbol, trade_date))
+                upper = self._probe_limit_price(row["up_limit"])
+                lower = self._probe_limit_price(row["down_limit"])
+                if lower >= upper:
+                    raise ValueError("daily-limit proof prices are unordered")
+        except _ROW_ERRORS:
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "stk_limit") from None
+
+    @classmethod
+    def _probe_limit_price(cls, value: object) -> Decimal:
+        """Check a raw finite positive price within the stock decimal bound."""
+
+        if type(value) is str:
+            if not 1 <= len(value) <= _MAX_NORMALIZED_INTEGER_DIGITS:
+                raise ValueError("daily-limit proof raw price is too long")
+        elif type(value) is Decimal:
+            if len(value.as_tuple().digits) > _MAX_NORMALIZED_INTEGER_DIGITS:
+                raise ValueError("daily-limit proof coefficient is too long")
+        elif type(value) is int:
+            if value.bit_length() > 2_127:
+                raise ValueError("daily-limit proof integer is too long")
+        elif type(value) is float:
+            if not math.isfinite(value):
+                raise ValueError("daily-limit proof float is not finite")
+        else:
+            raise TypeError("daily-limit proof price type is invalid")
+        raw = str(value)
+        if not 1 <= len(raw) <= _MAX_NORMALIZED_INTEGER_DIGITS:
+            raise ValueError("daily-limit proof raw price is too long")
+        price = cls._nonnegative_decimal(raw)
+        if price <= 0:
+            raise ValueError("daily-limit proof price must be positive")
+        _sign, digits, exponent = price.as_tuple()
+        if len(digits) > _MAX_NORMALIZED_INTEGER_DIGITS:
+            raise ValueError("daily-limit proof coefficient is too long")
+        decimal_position = len(digits) + int(exponent)
+        if exponent >= 0:
+            expanded_length = decimal_position
+        elif decimal_position > 0:
+            expanded_length = len(digits) + 1
+        else:
+            expanded_length = 2 - int(exponent)
+        if expanded_length > _MAX_NORMALIZED_INTEGER_DIGITS:
+            raise ValueError("daily-limit proof price expansion is too long")
+        return price
+
     def _daily_limits(
         self,
         trade_date: date,
@@ -490,6 +559,13 @@ class TushareMarketDataProvider:
         """Return fail-closed daily bars for historical synchronization."""
 
         return self._daily_bars(symbol, start, end, strict_response=True)
+
+    def probe_daily_bars_permission(self, symbol: str, anchor: date) -> None:
+        """Prove one official daily row exists without changing business state."""
+
+        rows = self._daily_bars(symbol, anchor, anchor, strict_response=True)
+        if len(rows) != 1:
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "daily")
 
     def _daily_bars(
         self,
