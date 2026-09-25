@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from trade_plan_monitor.market_data.sessions import DEFAULT_DATA_GRACE
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import (
@@ -548,6 +549,120 @@ class TushareMarketIndexProvider:
             freq="5MIN",
             fields=_INDEX_REALTIME_MINUTE_FIELDS,
         )
+
+    def probe_realtime_minutes_permission(
+        self, index_code: MarketIndexCode, trade_date: date,
+        physical_start: Callable[[], datetime],
+    ) -> None:
+        """Validate one current-day response without updating index caches or business state."""
+
+        endpoint = _INDEX_REALTIME_MINUTE_ENDPOINT
+        if (
+            not isinstance(index_code, MarketIndexCode)
+            or type(trade_date) is not date
+            or not callable(physical_start)
+            or self._profile.capabilities[index_code]
+            is not TushareMarketIndexCapabilityStatus.READY
+            or self._profile.source_time_label
+            is TushareMarketIndexSourceTimeLabel.UNVERIFIED
+            or self._client is None
+        ):
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint)
+        sdk_call = getattr(self._client, endpoint)
+        physical_started_at = physical_start()
+        if (
+            not isinstance(physical_started_at, datetime)
+            or physical_started_at.tzinfo is None
+            or physical_started_at.utcoffset() != timedelta(hours=8)
+            or physical_started_at.date() != trade_date
+        ):
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint)
+        frame = sdk_call(
+            ts_code=index_code.value,
+            freq="5MIN",
+            fields=_INDEX_REALTIME_MINUTE_FIELDS,
+        )
+        try:
+            if not isinstance(frame, pd.DataFrame) or not 1 <= len(frame) <= 49:
+                raise ValueError("realtime index response row count is invalid")
+            counts = Counter(frame.columns)
+            if len(frame.columns) != len(counts):
+                raise ValueError("realtime index response has duplicate columns")
+            identity_columns = tuple(
+                column for column in ("ts_code", "code")
+                if counts[column] == 1
+            )
+            if len(identity_columns) != 1:
+                raise ValueError("realtime index identity schema is invalid")
+            identity_column = identity_columns[0]
+            required = {
+                identity_column, "time", "open", "close", "high", "low", "vol", "amount",
+            }
+            self._require_columns(frame, required)
+            frequency_count = counts["freq"]
+            if frequency_count not in (0, 1) or set(frame.columns) != (
+                required | ({"freq"} if frequency_count else set())
+            ):
+                raise ValueError("realtime index response schema is invalid")
+            session_ends = tuple(
+                datetime.combine(trade_date, time(hour, minute))
+                + timedelta(minutes=5 * offset)
+                for hour, minute in ((9, 35), (13, 5))
+                for offset in range(24)
+            )
+            completed_ends = tuple(
+                bar_end for bar_end in session_ends
+                if bar_end.replace(tzinfo=_SHANGHAI) + DEFAULT_DATA_GRACE
+                <= physical_started_at
+            )
+            if not completed_ends:
+                raise ValueError("no completed current-day index minute")
+            offset = (
+                timedelta(minutes=5)
+                if self._profile.source_time_label is TushareMarketIndexSourceTimeLabel.START
+                else timedelta(0)
+            )
+            expected_sources = {bar_end - offset for bar_end in completed_ends}
+            opening_snapshot = datetime.combine(trade_date, time(9, 30))
+            seen: set[datetime] = set()
+            extra_seen = False
+            for row in frame.to_dict(orient="records"):
+                if row[identity_column] != index_code.value:
+                    raise ValueError("realtime index identity is invalid")
+                if frequency_count and row["freq"] != "5MIN":
+                    raise ValueError("realtime index frequency is invalid")
+                raw_time = row["time"]
+                if type(raw_time) is not str:
+                    raise ValueError("realtime index time is invalid")
+                source_at = datetime.strptime(raw_time, "%Y-%m-%d %H:%M:%S")
+                if source_at.strftime("%Y-%m-%d %H:%M:%S") != raw_time:
+                    raise ValueError("realtime index time is invalid")
+                extra = (
+                    self._profile.source_time_label is TushareMarketIndexSourceTimeLabel.END
+                    and source_at == opening_snapshot
+                    and not extra_seen
+                )
+                if extra:
+                    extra_seen = True
+                elif source_at in expected_sources and source_at not in seen:
+                    seen.add(source_at)
+                else:
+                    raise ValueError("realtime index time is invalid")
+                points = tuple(
+                    self._positive_decimal(row[column])
+                    for column in ("open", "high", "low", "close")
+                )
+                opening, high, low, closing = points
+                if high < max(opening, closing) or low > min(opening, closing):
+                    raise ValueError("realtime index OHLC is invalid")
+                volume = self._nonnegative_decimal(row["vol"])
+                amount = self._nonnegative_decimal(row["amount"])
+                for value in (*points, volume, amount):
+                    _validate_decimal_expansion(value)
+            if not seen:
+                raise ValueError("realtime index response has no completed five-minute bar")
+        except Exception:
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint) from None
 
     @staticmethod
     def _combined_minute_frame(

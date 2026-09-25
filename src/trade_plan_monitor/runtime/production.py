@@ -1,10 +1,11 @@
 """Certified live providers bound to the persistent monitoring services."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from pathlib import Path
+from threading import Event, Lock
 from typing import Literal
 from uuid import UUID
 
@@ -26,8 +27,12 @@ from trade_plan_monitor.live_profiles import (
     load_stock_certification,
 )
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar, five_minute_bucket_end
-from trade_plan_monitor.market_data.models import MinuteBar
-from trade_plan_monitor.market_data.sessions import SourceTimeLabel, expected_minute_ends
+from trade_plan_monitor.market_data.models import MinuteBar, TradingDay
+from trade_plan_monitor.market_data.sessions import (
+    DEFAULT_DATA_GRACE,
+    SourceTimeLabel,
+    expected_minute_ends,
+)
 from trade_plan_monitor.market_data.tushare import TushareMarketDataProvider
 from trade_plan_monitor.market_data.tushare_client import create_tushare_client
 from trade_plan_monitor.market_index.identity import MarketIndexCode
@@ -336,7 +341,11 @@ class ProductionMonitorPipeline:
         else:
             stock_label = SourceTimeLabel(self._stock_semantics.source_time_label)
         self._calendar: dict[date, bool] = {}
+        self._calendar_epoch_lock = Lock()
+        self._calendar_epoch = 0
+        self._calendar_revoked = Event()
         self._historical_probe_deferred_until: datetime | None = None
+        self._realtime_probe_deferred_until: datetime | None = None
         self._reference_key: ReferenceDependencyKey | None = None
         self._deadline_plans: tuple[ExecutableTradePlan, ...] | None = None
         self._running_deadline = False
@@ -744,6 +753,184 @@ class ProductionMonitorPipeline:
             due = max(due, self._historical_probe_deferred_until)
         return due
 
+    def next_realtime_index_permission_due_at(self) -> datetime | None:
+        """Keep an independently blocked realtime endpoint on the maintenance clock."""
+
+        operation = TushareOperation.INDEX_REALTIME_MINUTES
+        if not self._controller.is_permission_blocked(operation):
+            return None
+        now = self._clock.now()
+        semantics = self._index_semantics
+        if semantics is None or not self._realtime_index_probe_current(
+            now.date(), semantics.semantic_revision,
+        ):
+            return None
+        if not any(
+            code.value in semantics.capability_scope
+            and self.index_provider.profile.capabilities[code]
+            is TushareMarketIndexCapabilityStatus.READY
+            for code in (MarketIndexCode.SSE_COMPOSITE, MarketIndexCode.STAR_50)
+        ):
+            return None
+        due = self._controller.permission_retry_at(operation)
+        if due is None:
+            return None
+        first_bar_due = datetime.combine(now.date(), time(9, 35), now.tzinfo)
+        first_bar_due += DEFAULT_DATA_GRACE
+        due = max(due, first_bar_due)
+        if self._realtime_probe_deferred_until is not None:
+            due = max(due, self._realtime_probe_deferred_until)
+        return due
+
+    def _realtime_index_probe_current(self, request_date: date, revision: str) -> bool:
+        now = self._clock.now()
+        semantics = self._index_semantics
+        return (
+            self._semantic_bindings is not None
+            and semantics is not None
+            and semantics.semantic_revision == revision
+            and "rt_idx_min_daily" in semantics.interface_scope
+            and now.date() == request_date
+            and now < semantics.provenance.valid_until
+            and self._configuration_current()
+            and self._generation_current()
+            and not self._admission_revoked()
+            and self._index_certification_current()
+        )
+
+    def _persisted_sse_open_on(self, trade_date: date) -> bool:
+        """Read the current SSE row on the owner thread, never in an SDK worker."""
+
+        with self._work() as work:
+            days = work.references.list_trading_days("SSE", trade_date, trade_date)
+        return trade_date.weekday() < 5 and len(days) == 1 and days[0].is_open is True
+
+    async def _maybe_recheck_realtime_index_permission(self) -> PermissionMaintenanceResult:
+        """Reserve one current-day read proof without caching or business writes."""
+
+        operation = TushareOperation.INDEX_REALTIME_MINUTES
+        if not self._controller.is_permission_blocked(operation):
+            return PermissionMaintenanceResult.SKIPPED
+        now = self._clock.now()
+        due = self.next_realtime_index_permission_due_at()
+        if due is None or now < due:
+            return PermissionMaintenanceResult.SKIPPED
+        semantics = self._index_semantics
+        if semantics is None or not self._realtime_index_probe_current(
+            now.date(), semantics.semantic_revision,
+        ):
+            return PermissionMaintenanceResult.SKIPPED
+        index_code = next((
+            code for code in (MarketIndexCode.SSE_COMPOSITE, MarketIndexCode.STAR_50)
+            if code.value in semantics.capability_scope
+            and self.index_provider.profile.capabilities[code]
+            is TushareMarketIndexCapabilityStatus.READY
+        ), None)
+        if index_code is None:
+            return PermissionMaintenanceResult.SKIPPED
+        if not self._persisted_sse_open_on(now.date()):
+            self._realtime_probe_deferred_until = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
+        if self._permission_market_window is None:
+            self._realtime_probe_deferred_until = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
+        with self._calendar_epoch_lock:
+            if self._calendar_revoked.is_set():
+                # A failed correction stays revoked until this fresh SQLite read.
+                self._calendar_revoked = Event()
+            epoch = self._calendar_epoch
+            revoked = self._calendar_revoked
+        try:
+            latest_start = now + timedelta(seconds=LIVE_TUSHARE_TIMEOUT_SECONDS)
+            market_window = _FrozenPermissionMarketWindow(
+                captured_at=now,
+                latest_start_at=latest_start,
+                deadlines=self._permission_market_window(
+                    now, latest_start + _INDEX_PERMISSION_GUARD,
+                ),
+            )
+            blocker = market_window.blocker(now)
+        except ValueError:
+            self._realtime_probe_deferred_until = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
+        if blocker is not None:
+            self._realtime_probe_deferred_until = max(now, blocker[0]) + timedelta(
+                microseconds=1,
+            )
+            return PermissionMaintenanceResult.DEFERRED
+        request_date = now.date()
+        revision = semantics.semantic_revision
+
+        def current_token(at: datetime) -> bool:
+            try:
+                with self._calendar_epoch_lock:
+                    return (
+                        epoch == self._calendar_epoch
+                        and revoked is self._calendar_revoked
+                        and not revoked.is_set()
+                        and market_window.blocker(at) is None
+                    )
+            except ValueError:
+                return False
+
+        def can_start() -> bool:
+            return (
+                self._realtime_index_probe_current(request_date, revision)
+                and current_token(self._clock.now())
+            )
+
+        def probe() -> None:
+            if not self._realtime_index_probe_current(request_date, revision):
+                raise RequestNotStartedError("realtime index authority changed")
+            with self._calendar_epoch_lock:
+                admitted_at = self._clock.now()
+                try:
+                    admitted = (
+                        epoch == self._calendar_epoch
+                        and revoked is self._calendar_revoked
+                        and not revoked.is_set()
+                        and market_window.blocker(admitted_at) is None
+                    )
+                except ValueError:
+                    admitted = False
+            if not admitted:
+                raise RequestNotStartedError("realtime index calendar or market time changed")
+
+            def physical_start() -> datetime:
+                if not self._realtime_index_probe_current(request_date, revision):
+                    raise RequestNotStartedError("realtime index authority changed")
+                at = self._clock.now()
+                if not current_token(at):
+                    raise RequestNotStartedError(
+                        "realtime index calendar or market time changed before SDK call"
+                    )
+                return at
+
+            self.index_provider.probe_realtime_minutes_permission(
+                index_code, request_date, physical_start,
+            )
+
+        def validate_after() -> bool:
+            return (
+                self._realtime_index_probe_current(request_date, revision)
+                and self._persisted_sse_open_on(request_date)
+                and current_token(self._clock.now())
+            )
+
+        try:
+            await self._controller.recheck_permission(
+                operation, probe,
+                work_key=f"permission:rt_idx_min_daily:{index_code.value}:{request_date}",
+                validate_after=validate_after,
+                can_start=can_start,
+            )
+            self._realtime_probe_deferred_until = None
+            return PermissionMaintenanceResult.PROBED
+        except RequestNotStartedError:
+            return PermissionMaintenanceResult.DEFERRED
+        except RequestControlError:
+            return PermissionMaintenanceResult.FAILED
+
     def _historical_index_probe_current(self, request_date: date, revision: str) -> bool:
         now = self._clock.now()
         semantics = self._index_semantics
@@ -881,12 +1068,9 @@ class ProductionMonitorPipeline:
             )
             if not any(day.cal_date == trade_date for day in days):
                 raise ReferenceDataUnavailableError("current trading calendar is unavailable")
-            with self._work() as work:
-                work.references.upsert_trading_days(days)
-                self._assert_reference_generation(trade_date, captured_key)
-                work.commit()
-            if exchange == "SSE":
-                self._calendar = {day.cal_date: day.is_open for day in days}
+            self._commit_trading_days(
+                days, trade_date=trade_date, captured_key=captured_key,
+            )
         if legacy_plans and self.is_open_on(trade_date):
             limits = await self._request(
                 TushareOperation.DAILY_LIMITS,
@@ -918,6 +1102,26 @@ class ProductionMonitorPipeline:
         if captured_key != current_key:
             raise ReferenceDependenciesChangedError
         self._reference_key = captured_key
+
+    def _commit_trading_days(
+        self, days: Sequence[TradingDay], *, trade_date: date,
+        captured_key: ReferenceDependencyKey,
+    ) -> None:
+        """Revoke current SSE proof before the sole supported calendar write path."""
+
+        sse_days = tuple(day for day in days if day.exchange == "SSE")
+        if sse_days:
+            with self._calendar_epoch_lock:
+                self._calendar_epoch += 1
+                self._calendar_revoked.set()
+        with self._work() as work:
+            work.references.upsert_trading_days(days)
+            self._assert_reference_generation(trade_date, captured_key)
+            work.commit()
+        if sse_days:
+            self._calendar = {day.cal_date: day.is_open for day in sse_days}
+            with self._calendar_epoch_lock:
+                self._calendar_revoked = Event()
 
     def _assert_reference_generation(
         self, trade_date: date, captured_key: ReferenceDependencyKey,
@@ -1165,6 +1369,12 @@ class ProductionMonitorPipeline:
 
     async def run_deadline(self, deadline: MarketDeadline):
         if deadline.kind is DeadlineKind.INDEX_PERMISSION:
+            realtime_due = self.next_realtime_index_permission_due_at()
+            historical_due = self.next_historical_index_permission_due_at()
+            if realtime_due is not None and (
+                historical_due is None or realtime_due < historical_due
+            ):
+                return await self._maybe_recheck_realtime_index_permission()
             return await self._maybe_recheck_historical_index_permission()
         if deadline.kind is DeadlineKind.INDEX_RECOVERY:
             self._defer_permission_blocked_index_recoveries(self._clock.now())
