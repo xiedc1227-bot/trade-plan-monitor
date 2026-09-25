@@ -125,6 +125,13 @@ class RequestNotStartedError(RuntimeError):
     """
 
 
+class PermissionReservationCallbackError(RuntimeError):
+    """A local reservation acknowledgement failed after durable persistence."""
+
+    def __init__(self) -> None:
+        super().__init__("permission reservation callback failed")
+
+
 class AIQueueFullError(RuntimeError):
     """The bounded AI admission queue has no remaining waiting slot."""
 
@@ -662,6 +669,7 @@ class TushareRequestController:
         priority: RequestPriority = RequestPriority.RECOVERY,
         validate_after: Callable[[], bool] | None = None,
         can_start: Callable[[], bool] | None = None,
+        on_reserved: Callable[[], None] | None = None,
     ) -> T:
         """Coalesce one operation probe while keeping ordinary work blocked.
 
@@ -675,6 +683,20 @@ class TushareRequestController:
             raise TypeError("validate_after must be callable")
         if can_start is not None and not callable(can_start):
             raise TypeError("can_start must be callable")
+        if on_reserved is not None:
+            callback_method = type(on_reserved).__call__ if callable(on_reserved) else None
+            if (
+                not callable(on_reserved)
+                or inspect.iscoroutinefunction(on_reserved)
+                or inspect.isasyncgenfunction(on_reserved)
+                or inspect.iscoroutinefunction(callback_method)
+                or inspect.isasyncgenfunction(callback_method)
+            ):
+                raise TypeError("on_reserved must be a synchronous callable")
+            if self._recovery_repository is None:
+                raise RecoveryCheckpointError(
+                    "permission reservation callback requires a bound repository"
+                )
         running = self._permission_rechecks.get(operation)
         if running is None:
             due = self.permission_retry_at(operation)
@@ -690,6 +712,17 @@ class TushareRequestController:
                 PERMISSION_RECHECK_INTERVAL,
             )
             self._persist_recovery()
+            if on_reserved is not None:
+                acknowledgement_failed = False
+                try:
+                    acknowledged = on_reserved()
+                    if inspect.iscoroutine(acknowledged):
+                        acknowledged.close()
+                    acknowledgement_failed = acknowledged is not None
+                except BaseException:
+                    acknowledgement_failed = True
+                if acknowledgement_failed:
+                    raise PermissionReservationCallbackError from None
 
             async def probe() -> T:
                 try:
