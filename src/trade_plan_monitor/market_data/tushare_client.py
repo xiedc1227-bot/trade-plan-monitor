@@ -34,6 +34,108 @@ class _ConfigurableDataApi(Protocol):
     query: Callable[..., pd.DataFrame]
 
 
+class _DefaultTushareQuery:
+    """Preserve HTTP status on one official SDK instance's default URL route."""
+
+    def __init__(self, configuration: TushareConfiguration, token: str) -> None:
+        self._endpoint = str(configuration.api_url).rstrip("/")
+        self._timeout = configuration.timeout_seconds
+        self._token = token
+
+    def __call__(self, api_name: str, fields: str = "", **kwargs: object) -> pd.DataFrame:
+        if not isinstance(api_name, str) or _ENDPOINT_NAME.fullmatch(api_name) is None:
+            raise ValueError("Tushare operation name is invalid")
+        kwargs.setdefault("ts_type_name", self._endpoint)
+        payload = {
+            "api_name": api_name,
+            "token": self._token,
+            "params": kwargs,
+            "fields": fields,
+        }
+        failure: Exception | None = None
+        frame: pd.DataFrame | None = None
+        response: requests.Response | None = None
+        try:
+            response = requests.post(
+                f"{self._endpoint}/{api_name}", json=payload, timeout=self._timeout,
+            )
+            status = response.status_code
+            if type(status) is not int or not 100 <= status <= 599:
+                failure = TushareProviderError(
+                    TushareErrorCode.INVALID_RESPONSE,
+                    api_name,
+                    failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
+                )
+            elif not 200 <= status < 300:
+                safe_response = requests.Response()
+                safe_response.status_code = status
+                failure = requests.HTTPError(
+                    "Tushare HTTP request failed", response=safe_response,
+                )
+            else:
+                try:
+                    result = json.loads(response.text)
+                except (TypeError, UnicodeError, ValueError):
+                    failure = TushareProviderError(
+                        TushareErrorCode.INVALID_RESPONSE,
+                        api_name,
+                        failure_kind=TushareFailureKind.RESPONSE_DECODE,
+                    )
+                else:
+                    try:
+                        provider_code = result["code"]
+                    except (KeyError, TypeError):
+                        failure = TushareProviderError(
+                            TushareErrorCode.INVALID_RESPONSE,
+                            api_name,
+                            failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
+                        )
+                    else:
+                        if provider_code != 0:
+                            failure = _safe_application_failure(api_name, result.get("msg", ""))
+                        else:
+                            try:
+                                data = result["data"]
+                                frame = pd.DataFrame(data["items"], columns=data["fields"])
+                            except (KeyError, TypeError, ValueError):
+                                failure = TushareProviderError(
+                                    TushareErrorCode.INVALID_RESPONSE,
+                                    api_name,
+                                    failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
+                                )
+        except requests.Timeout:
+            failure = requests.Timeout("Tushare request timed out")
+            failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_TIMEOUT
+        except requests.exceptions.SSLError:
+            failure = requests.ConnectionError("Tushare TLS connection failed")
+            failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_TLS
+        except requests.ConnectionError:
+            failure = requests.ConnectionError("Tushare connection failed")
+            failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_CONNECTION
+        except requests.RequestException:
+            failure = requests.ConnectionError("Tushare request failed")
+            failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_CONNECTION
+        except Exception:
+            failure = TushareProviderError(
+                TushareErrorCode.INVALID_RESPONSE,
+                api_name,
+                failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
+            )
+        finally:
+            if response is not None:
+                try:
+                    response.close()
+                except Exception:
+                    # Cleanup cannot replace the already classified provider outcome.
+                    pass
+        if failure is not None:
+            # Raise outside the handler so raw response text cannot become __context__.
+            raise failure
+        if frame is None:
+            raise RuntimeError("Tushare response is invalid")
+        return frame
+
+
 class _DirectTushareQuery:
     """One SDK instance's explicit address route with the original TLS identity.
 
@@ -183,6 +285,8 @@ def create_tushare_client[ClientT](
         configured_client._DataApi__http_url = endpoint
         if configuration.connect_ip is not None:
             configured_client.query = _DirectTushareQuery(configuration, token)
+        elif data_api_factory is None:
+            configured_client.query = _DefaultTushareQuery(configuration, token)
     except Exception:
         initialization_failed = True
     finally:
