@@ -1469,7 +1469,7 @@ def test_tushare_unverified_source_time_fails_before_sdk_call() -> None:
     [
         (Exception("403 permission denied"), TushareErrorCode.BLOCKED_PERMISSION),
         (Exception("429 rate limit"), TushareErrorCode.RATE_LIMITED),
-        (Timeout("request timed out"), TushareErrorCode.TRANSIENT),
+        (Timeout("request timed out"), TushareErrorCode.TIMEOUT),
         (Exception("unclassified provider failure"), TushareErrorCode.ERROR),
         (Exception("invalid symbol 600403.SH"), TushareErrorCode.ERROR),
         (Exception("unknown token abc429xyz"), TushareErrorCode.ERROR),

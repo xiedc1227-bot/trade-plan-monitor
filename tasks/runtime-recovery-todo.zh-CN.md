@@ -40,7 +40,7 @@ S3-03 补充矩阵：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_provi
 
 独立 C1 复核发现 P1 功能缺口：`DAILY_LIMITS`、`DAILY_BARS`、`CURRENT_DAY_MINUTES`、`REALTIME_MINUTES` 与 `INDEX_DAILY` 尚无受控生产权限复核。它们的持久阻断在同端点更换 token 后仍可能锁存。双进程指数测试不能关闭 A05 或 C1；仍需后续设计与实现评审。
 
-有界 S1/S2 离线修正现让官方默认 URL 客户端保留 401/403/429 状态，使既有控制器能够持久化权限阻断与共享冷却。其假 HTTP 的 RED→GREEN 证据、408/500 与 2xx 回归、58 项专项及 190 项相邻测试通过结果和独立 Sol/`xhigh` 评审，记录在成对的 `docs/verification/2026-09-25-c1-default-url-http-status.zh-CN.md`。独立的基线 `test_market_data.py` `requests.Timeout` 预期与未改动的 HEAD 映射冲突（`TRANSIENT` 对 `TIMEOUT`）。上述五个权限复核作用域、真实服务认证及 C1 关闭仍待完成。
+有界 S1/S2 离线修正现让官方默认 URL 客户端保留 401/403/429 状态，使既有控制器能够持久化权限阻断与共享冷却。其假 HTTP 的 RED→GREEN 证据、408/500 与 2xx 回归、58 项专项及 190 项相邻测试通过结果和独立 Sol/`xhigh` 评审，记录在成对的 `docs/verification/2026-09-25-c1-default-url-http-status.zh-CN.md`。当时独立的基线 `test_market_data.py` `requests.Timeout` 预期与未改动的 HEAD 映射冲突（`TRANSIENT` 对 `TIMEOUT`）；后续仅测试校正记录在 `docs/verification/2026-09-25-c1-timeout-test-alignment.zh-CN.md`。上述五个权限复核作用域、真实服务认证及 C1 关闭仍待完成。
 
 `DAILY_LIMITS`、`DAILY_BARS` 和 `INDEX_DAILY` 的**纯 provider 证明**已完成并通过独立复审；离线专项 53 项、相邻 266 项测试通过（排除 14 项既有基线用例）。`DAILY_LIMITS` 在股票本地 640 字符/位安全边界下检查全市场每条原始记录，不转换为分单位。`DAILY_BARS` 与 `INDEX_DAILY` 要求准确的官方交易日身份；指数探针还保留安全的 401/403/429 控制器分类及物理请求未开始信号。成对的 `docs/verification/2026-09-25-c1-daily-permission-probes.zh-CN.md` 记录证据。生产锚点选择、五个作用域的 300 秒维护接线，以及另行发现的普通指数请求及既有指数权限复核中的 SDK HTTP 分类缺口仍开放；C1 保持 **OPEN**。
 
