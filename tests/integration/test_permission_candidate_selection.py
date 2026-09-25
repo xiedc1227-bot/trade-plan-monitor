@@ -125,7 +125,7 @@ def test_anchorless_scope_does_not_reserve_and_index_daily_has_no_stock_dependen
             evidence = pipeline._read_permission_evidence(
                 runtime._clock.now(), include_legacy=False, include_history=False,
             )
-            assert weekend in evidence.completed_open_days
+            assert weekend not in evidence.completed_open_days
             assert outside not in evidence.completed_open_days
             candidates = pipeline.permission_probe_candidates()
             assert [candidate.operation for candidate in candidates] == [
@@ -299,6 +299,7 @@ def test_calendar_seven_day_and_daily_366_day_boundaries(
             yesterday = NOW.date() - timedelta(days=1)
             seventh = yesterday - timedelta(days=6)
             eighth = seventh - timedelta(days=1)
+            day_365 = yesterday - timedelta(days=364)
             day_366 = yesterday - timedelta(days=365)
             day_367 = day_366 - timedelta(days=1)
             database = tmp_path / "monitor.sqlite3"
@@ -320,12 +321,20 @@ def test_calendar_seven_day_and_daily_366_day_boundaries(
             assert TushareOperation.TRADING_CALENDAR not in {
                 item.operation for item in candidates
             }
+            assert TushareOperation.INDEX_DAILY not in {
+                item.operation for item in candidates
+            }
+            _seed_open_day(database, day_365)
+            candidates = pipeline.permission_probe_candidates()
             daily = next(
                 item for item in candidates
                 if item.operation is TushareOperation.INDEX_DAILY
             )
-            assert daily.anchor_date == day_366
-            assert day_366 in pipeline._read_permission_evidence(
+            assert daily.anchor_date == day_365
+            assert day_365 in pipeline._read_permission_evidence(
+                NOW, include_legacy=False, include_history=False,
+            ).completed_open_days
+            assert day_366 not in pipeline._read_permission_evidence(
                 NOW, include_legacy=False, include_history=False,
             ).completed_open_days
             assert day_367 not in pipeline._read_permission_evidence(

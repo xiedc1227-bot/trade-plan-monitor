@@ -550,6 +550,7 @@ class TushareMarketIndexProvider:
 
     def probe_official_daily_permission(
         self, index_code: MarketIndexCode, anchor: date,
+        *, _physical_start: Callable[[], None] | None = None,
     ) -> None:
         """Prove one certified official daily row without touching index caches."""
 
@@ -562,6 +563,8 @@ class TushareMarketIndexProvider:
             or self._now is None
         ):
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, _INDEX_DAILY_ENDPOINT)
+        if _physical_start is not None:
+            _physical_start()
         frame = self._call_index_sdk(
             _INDEX_DAILY_ENDPOINT,
             ts_code=index_code.value,
