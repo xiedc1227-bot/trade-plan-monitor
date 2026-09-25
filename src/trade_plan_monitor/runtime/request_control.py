@@ -655,6 +655,7 @@ class TushareRequestController:
         work_key: str,
         priority: RequestPriority = RequestPriority.RECOVERY,
         validate_after: Callable[[], bool] | None = None,
+        can_start: Callable[[], bool] | None = None,
     ) -> T:
         """Coalesce one operation probe while keeping ordinary work blocked.
 
@@ -666,6 +667,8 @@ class TushareRequestController:
         self._validate_work_key(work_key)
         if validate_after is not None and not callable(validate_after):
             raise TypeError("validate_after must be callable")
+        if can_start is not None and not callable(can_start):
+            raise TypeError("can_start must be callable")
         running = self._permission_rechecks.get(operation)
         if running is None:
             due = self.permission_retry_at(operation)
@@ -690,6 +693,7 @@ class TushareRequestController:
                         work_key=work_key,
                         priority=priority,
                         permission_recheck=True,
+                        can_start=can_start,
                     )
                     if validate_after is not None and validate_after() is not True:
                         raise RequestControlError(
@@ -729,6 +733,7 @@ class TushareRequestController:
         work_key: str,
         priority: RequestPriority,
         permission_recheck: bool = False,
+        can_start: Callable[[], bool] | None = None,
     ) -> T:
         self._validate_request(operation, call, priority)
         normalized_key = self._storage_key(work_key)
@@ -749,6 +754,7 @@ class TushareRequestController:
                     operation,
                     normalized_key,
                     permission_recheck,
+                    can_start,
                 )
             except RequestControlError as caught:
                 deferred_error = caught
@@ -905,12 +911,19 @@ class TushareRequestController:
         operation: TushareOperation,
         work_key: str,
         permission_recheck: bool = False,
+        can_start: Callable[[], bool] | None = None,
     ) -> T:
         loop = asyncio.get_running_loop()
+
+        def before_start() -> RequestControlError | None:
+            if can_start is not None and can_start() is not True:
+                raise RequestNotStartedError("provider request yielded before worker start")
+            return self._preflight_error(operation, work_key, permission_recheck)
+
         async with asyncio.timeout(self._timeout_seconds):
             await self._admission.acquire(
                 int(priority),
-                lambda: self._preflight_error(operation, work_key, permission_recheck),
+                before_start,
             )
         future: asyncio.Future[T] | None = None
         slot_held = True

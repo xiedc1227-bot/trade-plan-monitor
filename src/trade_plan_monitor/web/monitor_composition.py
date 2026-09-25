@@ -615,6 +615,7 @@ class _ProductionRuntimeState:
         self._provider_checked_at: datetime | None = None
         self._capabilities = ProviderCapabilities()
         self._pipeline: ProductionMonitorPipeline | None = None
+        self._permission_scheduler: MarketSessionScheduler | None = None
         self._semantic_reload_blocked = False
         self._configuration_restart_required = False
         self._runtime_generation = runtime_generation
@@ -632,10 +633,26 @@ class _ProductionRuntimeState:
         self._alert_sweep_target = 0
 
     def next_index_recovery_at(self) -> datetime | None:
+        if self._pipeline is None:
+            return None
+        return self._pipeline.index_service.next_recovery_due_at(now=self._clock.now())
+
+    def next_index_permission_at(self) -> datetime | None:
         return (
-            None
-            if self._pipeline is None
-            else self._pipeline.index_service.next_recovery_due_at(now=self._clock.now())
+            None if self._pipeline is None
+            else self._pipeline.next_historical_index_permission_due_at()
+        )
+
+    def bind_permission_scheduler(self, scheduler: MarketSessionScheduler) -> None:
+        self._permission_scheduler = scheduler
+
+    def permission_market_window(
+        self, since: datetime, through: datetime,
+    ) -> tuple[tuple[datetime, bool], ...]:
+        if self._permission_scheduler is None:
+            raise RuntimeError("permission scheduler is unavailable")
+        return self._permission_scheduler.permission_market_window(
+            since=since, through=through,
         )
 
     async def validate_configuration(self) -> None:
@@ -943,6 +960,7 @@ class _ProductionRuntimeState:
                     and self._business_commit_admission_open()
                     and self._runtime_generation() == generation
                 ),
+                permission_market_window=self.permission_market_window,
             )
         return self._capabilities
 
@@ -1008,13 +1026,17 @@ class _ProductionRuntimeState:
             raise RuntimeError("monitor semantics changed; safe restart required")
         if (
             self._pipeline._stock_semantics is None
-            and deadline.kind is not DeadlineKind.INDEX_RECOVERY
+            and deadline.kind not in (DeadlineKind.INDEX_RECOVERY, DeadlineKind.INDEX_PERMISSION)
         ):
             await self._pipeline._refresh_dashboard_indexes(deadline)
             result = ()
         else:
             result = await self._pipeline.run_deadline(deadline)
-        if self._dispatcher is not None and self.stock_delivery_admission_open():
+        if (
+            deadline.kind is not DeadlineKind.INDEX_PERMISSION
+            and self._dispatcher is not None
+            and self.stock_delivery_admission_open()
+        ):
             await self._dispatcher.dispatch_pending()
         return result
 
@@ -1315,7 +1337,9 @@ def create_monitor_composition(
             clock=clock,
             is_open_on=state.is_open_on,
             next_index_recovery_at=state.next_index_recovery_at,
+            next_index_permission_at=state.next_index_permission_at,
         )
+        state.bind_permission_scheduler(scheduler)
         lifecycle = RuntimeLifecycleService(
             clock=clock,
             validate_configuration=state.validate_configuration,

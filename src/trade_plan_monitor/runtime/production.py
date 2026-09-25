@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -72,6 +73,7 @@ from trade_plan_monitor.runtime.request_control import (
     LIVE_TUSHARE_TIMEOUT_SECONDS,
     RequestControlError,
     RequestControlErrorCode,
+    RequestNotStartedError,
     RequestPriority,
     TushareOperation,
     TushareRequestController,
@@ -92,6 +94,37 @@ from trade_plan_monitor.runtime.symbol_service import SymbolService
 from trade_plan_monitor.state.models import EvaluationKind, PlanVersionStatus
 
 _REFERENCE_DAYS = 366
+_INDEX_PERMISSION_GUARD = (
+    timedelta(seconds=2 * LIVE_TUSHARE_TIMEOUT_SECONDS) + LIVE_TUSHARE_MIN_INTERVAL
+)
+
+
+class PermissionMaintenanceResult(StrEnum):
+    SKIPPED = "SKIPPED"
+    DEFERRED = "DEFERRED"
+    PROBED = "PROBED"
+    FAILED = "FAILED"
+
+
+@dataclass(frozen=True, slots=True)
+class _FrozenPermissionMarketWindow:
+    captured_at: datetime
+    latest_start_at: datetime
+    deadlines: tuple[tuple[datetime, bool], ...]
+
+    def blocker(self, now: datetime) -> tuple[datetime, bool] | None:
+        """Check only immutable market times at queue and SDK worker boundaries."""
+        if now < self.captured_at or now > self.latest_start_at:
+            raise ValueError("permission market window expired or clock moved backward")
+        horizon = now + _INDEX_PERMISSION_GUARD
+        return min(
+            (
+                (due, known) for due, known in self.deadlines
+                if due <= horizon and (known or due >= now)
+            ),
+            key=lambda item: item[0],
+            default=None,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +309,9 @@ class ProductionMonitorPipeline:
         generation_current: Callable[[], bool] | None = None,
         admission_revoked: Callable[[], bool] | None = None,
         on_semantic_revoked: Callable[[], None] | None = None,
+        permission_market_window: (
+            Callable[[datetime, datetime], tuple[tuple[datetime, bool], ...]] | None
+        ) = None,
     ) -> None:
         self._clock = clock
         self._controller = request_controller
@@ -283,6 +319,7 @@ class ProductionMonitorPipeline:
         self._generation_current = generation_current or (lambda: True)
         self._admission_revoked = admission_revoked or (lambda: False)
         self._on_semantic_revoked = on_semantic_revoked or (lambda: None)
+        self._permission_market_window = permission_market_window
         self._work = unit_of_work_factory
         self._certifications = certification_directory
         self._endpoint = str(configuration.api_url).rstrip("/")
@@ -299,6 +336,7 @@ class ProductionMonitorPipeline:
         else:
             stock_label = SourceTimeLabel(self._stock_semantics.source_time_label)
         self._calendar: dict[date, bool] = {}
+        self._historical_probe_deferred_until: datetime | None = None
         self._reference_key: ReferenceDependencyKey | None = None
         self._deadline_plans: tuple[ExecutableTradePlan, ...] | None = None
         self._running_deadline = False
@@ -671,6 +709,161 @@ class ProductionMonitorPipeline:
             ),
         )
 
+    def _historical_index_permission_anchor(self) -> date | None:
+        """Use only a persisted, already completed SSE open session."""
+
+        yesterday = self._clock.now().date() - timedelta(days=1)
+        with self._work() as work:
+            days = work.references.list_trading_days(
+                "SSE", yesterday - timedelta(days=6), yesterday,
+            )
+        return next((day.cal_date for day in reversed(days) if day.is_open), None)
+
+    def next_historical_index_permission_due_at(self) -> datetime | None:
+        """Expose one independent permission maintenance deadline while authority holds."""
+        operation = TushareOperation.INDEX_HISTORICAL_MINUTES
+        if not self._controller.is_permission_blocked(operation):
+            return None
+        now = self._clock.now()
+        semantics = self._index_semantics
+        if semantics is None or not self._historical_index_probe_current(
+            now.date(), semantics.semantic_revision,
+        ):
+            return None
+        if not any(
+            code.value in semantics.capability_scope
+            and self.index_provider.profile.capabilities[code]
+            is TushareMarketIndexCapabilityStatus.READY
+            for code in (MarketIndexCode.SSE_COMPOSITE, MarketIndexCode.STAR_50)
+        ):
+            return None
+        due = self._controller.permission_retry_at(operation)
+        if due is None:
+            return None
+        if self._historical_probe_deferred_until is not None:
+            due = max(due, self._historical_probe_deferred_until)
+        return due
+
+    def _historical_index_probe_current(self, request_date: date, revision: str) -> bool:
+        now = self._clock.now()
+        semantics = self._index_semantics
+        return (
+            self._semantic_bindings is not None
+            and semantics is not None
+            and semantics.semantic_revision == revision
+            and "idx_mins" in semantics.interface_scope
+            and now.date() == request_date
+            and now < semantics.provenance.valid_until
+            and self._configuration_current()
+            and self._generation_current()
+            and not self._admission_revoked()
+            and self._index_certification_current()
+        )
+
+    async def _maybe_recheck_historical_index_permission(self) -> PermissionMaintenanceResult:
+        """Reserve one exact `idx_mins` proof at an independent maintenance deadline."""
+
+        operation = TushareOperation.INDEX_HISTORICAL_MINUTES
+        if not self._controller.is_permission_blocked(operation):
+            return PermissionMaintenanceResult.SKIPPED
+        now = self._clock.now()
+        due = self.next_historical_index_permission_due_at()
+        if due is None or now < due:
+            return PermissionMaintenanceResult.SKIPPED
+        semantics = self._index_semantics
+        if semantics is None or not self._historical_index_probe_current(
+            now.date(), semantics.semantic_revision,
+        ):
+            return PermissionMaintenanceResult.SKIPPED
+        index_code = next((
+            code for code in (MarketIndexCode.SSE_COMPOSITE, MarketIndexCode.STAR_50)
+            if code.value in semantics.capability_scope
+            and self.index_provider.profile.capabilities[code]
+            is TushareMarketIndexCapabilityStatus.READY
+        ), None)
+        if index_code is None:
+            return PermissionMaintenanceResult.SKIPPED
+        anchor = self._historical_index_permission_anchor()
+        if anchor is None:
+            self._historical_probe_deferred_until = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
+        market_window = None
+        if self._permission_market_window is not None:
+            try:
+                latest_start = now + timedelta(seconds=LIVE_TUSHARE_TIMEOUT_SECONDS)
+                market_window = _FrozenPermissionMarketWindow(
+                    captured_at=now,
+                    latest_start_at=latest_start,
+                    deadlines=self._permission_market_window(
+                        now, latest_start + _INDEX_PERMISSION_GUARD,
+                    ),
+                )
+                blocker = market_window.blocker(now)
+            except ValueError:
+                self._historical_probe_deferred_until = now + timedelta(seconds=30)
+                return PermissionMaintenanceResult.DEFERRED
+            if blocker is not None:
+                blocked_due, _known = blocker
+                self._historical_probe_deferred_until = max(
+                    now, blocked_due,
+                ) + timedelta(microseconds=1)
+                return PermissionMaintenanceResult.DEFERRED
+        request_date = now.date()
+        revision = semantics.semantic_revision
+
+        def can_start() -> bool:
+            if not self._historical_index_probe_current(request_date, revision):
+                return False
+            if market_window is None:
+                return True
+            try:
+                return market_window.blocker(self._clock.now()) is None
+            except ValueError:
+                return False
+
+        def probe() -> None:
+            if not can_start():
+                raise RequestNotStartedError("historical index authority or market time changed")
+            self.index_provider.probe_historical_minutes_permission(index_code, anchor)
+
+        try:
+            await self._controller.recheck_permission(
+                operation,
+                probe,
+                work_key=f"permission:idx_mins:{index_code.value}:{anchor}",
+                validate_after=lambda: self._historical_index_probe_current(
+                    request_date, revision,
+                ),
+                can_start=can_start,
+            )
+            self._historical_probe_deferred_until = None
+            return PermissionMaintenanceResult.PROBED
+        except RequestNotStartedError:
+            return PermissionMaintenanceResult.DEFERRED
+        except RequestControlError:
+            # The durable permission latch and 300-second reservation remain in place.
+            return PermissionMaintenanceResult.FAILED
+
+    def _defer_permission_blocked_index_recoveries(self, now: datetime) -> None:
+        """A zero-call historical block cannot spend an index recovery attempt."""
+        if not self._controller.is_permission_blocked(
+            TushareOperation.INDEX_HISTORICAL_MINUTES
+        ):
+            return
+        records = self.index_service.recovery_records()
+        affected = frozenset(
+            code for code, _cutoff, _first, _attempts, due in records
+            if due <= now
+            and not self.index_provider.historical_minutes_cached(code, _cutoff.date())
+        )
+        if affected:
+            permission_due = self.next_historical_index_permission_due_at()
+            self.index_service.defer_due_recoveries(
+                now=now,
+                until=max(now + timedelta(seconds=30), permission_due or now),
+                index_codes=affected,
+            )
+
     async def refresh_references(self, trade_date: date) -> None:
         plans = self.active_plans(trade_date)
         captured_key = self._reference_dependency_key(trade_date, plans)
@@ -971,7 +1164,10 @@ class ProductionMonitorPipeline:
             work.commit()
 
     async def run_deadline(self, deadline: MarketDeadline):
+        if deadline.kind is DeadlineKind.INDEX_PERMISSION:
+            return await self._maybe_recheck_historical_index_permission()
         if deadline.kind is DeadlineKind.INDEX_RECOVERY:
+            self._defer_permission_blocked_index_recoveries(self._clock.now())
             return await self.evaluations.recover_transient_market_indexes(
                 evaluated_at=max(self._clock.now(), deadline.due_at)
             )

@@ -3195,7 +3195,8 @@ class RuntimeLifecycleService:
     def _advance_progress_deadline(self, deadline: MarketDeadline) -> None:
         """Publish the following due time before current provider work can block."""
 
-        self._last_deadline_at = deadline.due_at
+        if deadline.kind is not DeadlineKind.INDEX_PERMISSION:
+            self._last_deadline_at = deadline.due_at
         next_deadline = self._scheduler.next_deadline(after=self._last_deadline_at)
         if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):
             raise TypeError("scheduler must return MarketDeadline or None")

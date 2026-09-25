@@ -86,18 +86,43 @@ class RuntimeMarketIndexService:
         self._latest_by_index: dict[MarketIndexCode, MarketIndexSnapshot] = {}
         self._publication_lag_retry_cutoffs: set[datetime] = set()
         self._recoveries: dict[MarketIndexCode, _Recovery] = {}
+        self._recovery_deferrals: dict[MarketIndexCode, datetime] = {}
 
     def next_recovery_due_at(self, *, now: datetime | None = None) -> datetime | None:
         """Earliest pending retry for the existing serial runtime scheduler."""
         if now is not None:
             self._expire_recoveries(now)
-        return min((state.due_at for state in self._recoveries.values()), default=None)
+        return min(
+            (
+                max(state.due_at, self._recovery_deferrals.get(code, state.due_at))
+                for code, state in self._recoveries.items()
+            ),
+            default=None,
+        )
+
+    def defer_due_recoveries(
+        self, *, now: datetime, until: datetime, index_codes: frozenset[MarketIndexCode]
+    ) -> None:
+        """Delay only targets unable to start a physical request; retain retry budget."""
+        self._expire_recoveries(now)
+        if until <= now:
+            raise ValueError("recovery deferral must be in the future")
+        for code in index_codes:
+            state = self._recoveries.get(code)
+            if state is not None and state.due_at <= now:
+                self._recovery_deferrals[code] = max(
+                    until, self._recovery_deferrals.get(code, until)
+                )
 
     def _expire_recoveries(self, now: datetime) -> None:
         self._recoveries = {
             code: state
             for code, state in self._recoveries.items()
             if now <= state.first_failed_at + _RECOVERY_WINDOW
+        }
+        self._recovery_deferrals = {
+            code: due for code, due in self._recovery_deferrals.items()
+            if code in self._recoveries and due > now
         }
 
     def recovery_records(
@@ -141,6 +166,7 @@ class RuntimeMarketIndexService:
             if latest is not snapshot:
                 if latest is not None and latest.health is MarketIndexHealth.LIVE:
                     self._recoveries.pop(code, None)
+                    self._recovery_deferrals.pop(code, None)
                 continue
             current = self._recoveries.get(code)
             if current is not None and current.decision_cutoff > snapshot.decision_cutoff:
@@ -149,6 +175,7 @@ class RuntimeMarketIndexService:
                 code, snapshot.decision_cutoff
             ):
                 self._recoveries.pop(code, None)
+                self._recovery_deferrals.pop(code, None)
                 continue
             if current is not None and current.decision_cutoff == snapshot.decision_cutoff:
                 if not retry:
@@ -160,14 +187,17 @@ class RuntimeMarketIndexService:
                 first_failed_at = snapshot.observed_at
             if attempts >= len(_RECOVERY_DELAYS):
                 self._recoveries.pop(code, None)
+                self._recovery_deferrals.pop(code, None)
                 continue
             due_at = snapshot.observed_at + _RECOVERY_DELAYS[attempts]
             if due_at > first_failed_at + _RECOVERY_WINDOW:
                 self._recoveries.pop(code, None)
+                self._recovery_deferrals.pop(code, None)
                 continue
             self._recoveries[code] = _Recovery(
                 snapshot.decision_cutoff, first_failed_at, attempts, due_at
             )
+            self._recovery_deferrals.pop(code, None)
 
     async def retry_recoverable(
         self, *, observed_no_later_than: datetime
@@ -177,7 +207,10 @@ class RuntimeMarketIndexService:
         due = {
             code: state
             for code, state in self._recoveries.items()
-            if state.due_at <= observed_no_later_than
+            if max(
+                state.due_at,
+                self._recovery_deferrals.get(code, state.due_at),
+            ) <= observed_no_later_than
             and self._latest_by_index.get(code) is not None
             and self._latest_by_index[code].decision_cutoff == state.decision_cutoff
         }

@@ -26,12 +26,14 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import (
     MarketIndexBar,
     MarketIndexInterval,
     MarketIndexIssueCode,
     MarketIndexSourceKind,
+    _validate_decimal_expansion,
 )
 from trade_plan_monitor.market_index.provider import MarketIndexProviderBatch
 from trade_plan_monitor.runtime.request_control import (
@@ -235,6 +237,10 @@ class TushareMarketIndexProvider:
     @property
     def profile(self) -> TushareMarketIndexProfile:
         return self._profile
+
+    def historical_minutes_cached(self, index_code: MarketIndexCode, trade_date: date) -> bool:
+        """Whether this index can proceed without a new historical minute request."""
+        return (index_code, trade_date) in self._historical_minute_cache
 
     async def acquire_index_data(
         self,
@@ -443,6 +449,97 @@ class TushareMarketIndexProvider:
             end_date=decision_cutoff.strftime("%Y-%m-%d %H:%M:%S"),
             fields=_INDEX_MINUTE_FIELDS,
         )
+
+    def probe_historical_minutes_permission(
+        self, index_code: MarketIndexCode, anchor: date,
+    ) -> None:
+        """Validate one complete closed-session `idx_mins` response without caching it."""
+
+        if (
+            not isinstance(index_code, MarketIndexCode)
+            or type(anchor) is not date
+            or self._profile.capabilities[index_code]
+            is not TushareMarketIndexCapabilityStatus.READY
+            or self._profile.source_time_label
+            is TushareMarketIndexSourceTimeLabel.UNVERIFIED
+            or self._client is None
+            or self._now is None
+        ):
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "idx_mins")
+        frame = getattr(self._client, _INDEX_MINUTE_ENDPOINT)(
+            ts_code=index_code.value,
+            freq="5min",
+            start_date=f"{anchor:%Y-%m-%d} 09:30:00",
+            end_date=f"{anchor:%Y-%m-%d} 15:00:00",
+            fields=_INDEX_MINUTE_FIELDS,
+        )
+        required = set(_INDEX_MINUTE_COLUMNS)
+        try:
+            if not isinstance(frame, pd.DataFrame) or len(frame) not in (48, 49):
+                raise ValueError("incomplete historical index response")
+            self._require_columns(frame, required)
+            if set(frame.columns) != required:
+                raise ValueError("unexpected historical index columns")
+            expected_ends = tuple(
+                datetime.combine(anchor, time(hour, minute)) + timedelta(minutes=5 * offset)
+                for hour, minute in ((9, 35), (13, 5))
+                for offset in range(24)
+            )
+            source_offset = (
+                timedelta(minutes=5)
+                if self._profile.source_time_label is TushareMarketIndexSourceTimeLabel.START
+                else timedelta(0)
+            )
+            expected_sources = {bar_end - source_offset for bar_end in expected_ends}
+            extra_source = datetime.combine(anchor, time(9, 30))
+            allow_extra = (
+                len(frame) == 49
+                and self._profile.source_time_label is TushareMarketIndexSourceTimeLabel.END
+            )
+            seen: set[datetime] = set()
+            extra_seen = False
+            observed_at = self._observed_at()
+            for row in frame.to_dict(orient="records"):
+                raw_time = row["trade_time"]
+                if type(raw_time) is not str or row["ts_code"] != index_code.value:
+                    raise ValueError("historical index identity is invalid")
+                source_at = datetime.strptime(raw_time, "%Y-%m-%d %H:%M:%S")
+                if source_at.strftime("%Y-%m-%d %H:%M:%S") != raw_time:
+                    raise ValueError("historical index time is invalid")
+                if source_at == extra_source and allow_extra and not extra_seen:
+                    extra_seen = True
+                    points = tuple(
+                        self._positive_decimal(row[column])
+                        for column in ("open", "high", "low", "close")
+                    )
+                    opening, high, low, closing = points
+                    if high < max(opening, closing) or low > min(opening, closing):
+                        raise ValueError("historical index extra row OHLC is invalid")
+                    volume = self._nonnegative_decimal(row["vol"])
+                    amount = self._nonnegative_decimal(row["amount"])
+                    for value in (*points, volume, amount):
+                        _validate_decimal_expansion(value)
+                    continue
+                elif source_at in expected_sources and source_at not in seen:
+                    seen.add(source_at)
+                else:
+                    raise ValueError("historical index time is invalid")
+                self._bar(
+                    row,
+                    index_code=index_code,
+                    interval=MarketIndexInterval.FIVE_MINUTE,
+                    bar_at=(source_at + source_offset).replace(tzinfo=_SHANGHAI),
+                    observed_at=observed_at,
+                    source_kind=MarketIndexSourceKind.PROVISIONAL,
+                    revision=1,
+                    daily_units=False,
+                )
+            if seen != expected_sources:
+                raise ValueError("historical index coverage is incomplete")
+            if allow_extra and not extra_seen:
+                raise ValueError("unrecognized historical index extra row")
+        except Exception:
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "idx_mins") from None
 
     def _fetch_realtime_index_minutes(self, index_code: MarketIndexCode) -> object:
         endpoint = getattr(self._client, _INDEX_REALTIME_MINUTE_ENDPOINT)

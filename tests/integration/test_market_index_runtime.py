@@ -120,6 +120,84 @@ def test_transient_index_recovery_targets_one_index_and_stops_after_success() ->
     assert service.next_recovery_due_at() is None
 
 
+def test_permission_defer_is_process_only_and_preserves_recovery_budget() -> None:
+    class OnceFailingProvider(_DashboardProvider):
+        failed = False
+
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            if kwargs["index_code"] is MarketIndexCode.SSE_COMPOSITE and not self.failed:
+                self.failed = True
+                self.calls.append(MarketIndexCode.SSE_COMPOSITE)
+                raise TushareMarketIndexProviderError(
+                    stage="HISTORICAL_MINUTES", reason=RequestControlErrorCode.TRANSIENT
+                )
+            return await super().acquire_index_data(**kwargs)
+
+    provider = OnceFailingProvider()
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    asyncio.run(service.prepare(
+        plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT,
+    ))
+    durable = service.recovery_records()
+    due = OBSERVED_AT + timedelta(seconds=30)
+    assert durable[0][4] == due
+    before = tuple(provider.calls)
+    service.defer_due_recoveries(
+        now=due, until=due + timedelta(seconds=30),
+        index_codes=frozenset({MarketIndexCode.SSE_COMPOSITE}),
+    )
+    assert service.next_recovery_due_at(now=due) == due + timedelta(seconds=30)
+    assert asyncio.run(service.retry_recoverable(observed_no_later_than=due)) is None
+    assert tuple(provider.calls) == before
+    assert service.recovery_records() == durable
+
+    restarted = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    restarted.restore_recoveries(
+        snapshots=service.latest_snapshots(), records=durable, now=due,
+    )
+    assert restarted.next_recovery_due_at(now=due) == due
+    restarted.defer_due_recoveries(
+        now=due, until=due + timedelta(seconds=30),
+        index_codes=frozenset({MarketIndexCode.SSE_COMPOSITE}),
+    )
+    assert restarted.next_recovery_due_at(now=due) == due + timedelta(seconds=30)
+    assert restarted.recovery_records() == durable
+
+
+def test_permission_defer_allows_unaffected_index_recovery() -> None:
+    class OnceFailingProvider(_DashboardProvider):
+        failed: set[MarketIndexCode] = set()
+
+        async def acquire_index_data(self, **kwargs: object) -> MarketIndexProviderBatch:
+            code = kwargs["index_code"]
+            if (
+                code in {MarketIndexCode.SSE_COMPOSITE, MarketIndexCode.STAR_50}
+                and code not in self.failed
+            ):
+                self.failed.add(code)
+                self.calls.append(code)
+                raise TushareMarketIndexProviderError(
+                    stage="HISTORICAL_MINUTES", reason=RequestControlErrorCode.TRANSIENT
+                )
+            return await super().acquire_index_data(**kwargs)
+
+    provider = OnceFailingProvider()
+    service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))
+    asyncio.run(service.prepare(
+        plans=(), decision_cutoff=CUTOFF, observed_no_later_than=OBSERVED_AT,
+    ))
+    due = OBSERVED_AT + timedelta(seconds=30)
+    service.defer_due_recoveries(
+        now=due, until=due + timedelta(seconds=30),
+        index_codes=frozenset({MarketIndexCode.SSE_COMPOSITE}),
+    )
+    recovered = asyncio.run(service.retry_recoverable(observed_no_later_than=due))
+    assert recovered is not None
+    assert set(recovered.snapshots_by_index) == {MarketIndexCode.STAR_50}
+    assert service.recovery_records()[0][0] is MarketIndexCode.SSE_COMPOSITE
+    assert service.recovery_records()[0][3] == 0
+
+
 def test_processing_failure_is_not_retried() -> None:
     provider = _Provider(TushareMarketIndexProviderError(stage="PROCESSING"))
     service = RuntimeMarketIndexService(MarketIndexSnapshotCoordinator(provider))

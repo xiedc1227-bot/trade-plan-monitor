@@ -34,6 +34,7 @@ class DeadlineKind(StrEnum):
     REALTIME_MINUTE = "REALTIME_MINUTE"
     OFFICIAL_CLOSE = "OFFICIAL_CLOSE"
     INDEX_RECOVERY = "INDEX_RECOVERY"
+    INDEX_PERMISSION = "INDEX_PERMISSION"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +57,7 @@ class MarketDeadline:
         if canonical_due.date() != self.trade_date:
             raise ValueError("due_at must match trade_date")
 
-        if self.kind is DeadlineKind.INDEX_RECOVERY:
+        if self.kind in (DeadlineKind.INDEX_RECOVERY, DeadlineKind.INDEX_PERMISSION):
             if self.bar_end is not None or self.close_attempt is not None:
                 raise ValueError("index recovery has no market bar or close attempt")
             return
@@ -84,6 +85,7 @@ class MarketSessionScheduler:
         "_grace",
         "_is_open_on",
         "_next_index_recovery_at",
+        "_next_index_permission_at",
         "_official_close_attempts",
     )
 
@@ -95,6 +97,7 @@ class MarketSessionScheduler:
         grace: timedelta = DEFAULT_DATA_GRACE,
         official_close_attempts: tuple[time, ...] = DEFAULT_OFFICIAL_CLOSE_ATTEMPTS,
         next_index_recovery_at: Callable[[], datetime | None] | None = None,
+        next_index_permission_at: Callable[[], datetime | None] | None = None,
     ) -> None:
         if not isinstance(clock, Clock):
             raise TypeError("clock must implement Clock")
@@ -117,6 +120,7 @@ class MarketSessionScheduler:
         self._grace = grace
         self._official_close_attempts = official_close_attempts
         self._next_index_recovery_at = next_index_recovery_at
+        self._next_index_permission_at = next_index_permission_at
 
     @staticmethod
     def _validate_official_close_attempts(attempts: tuple[time, ...]) -> None:
@@ -180,28 +184,51 @@ class MarketSessionScheduler:
             return ()
         return self._deadlines_for_open_date(trade_date)
 
+    def permission_market_window(
+        self, *, since: datetime, through: datetime,
+    ) -> tuple[tuple[datetime, bool], ...]:
+        """Freeze bounded known and possible market times on the owning event loop."""
+        start = _canonical_shanghai(since)
+        horizon = _canonical_shanghai(through)
+        if horizon < start or (horizon.date() - start.date()).days > 2:
+            raise ValueError("market admission elapsed beyond bounded calendar lookahead")
+        deadlines: list[tuple[datetime, bool]] = []
+        trade_date = start.date()
+        while trade_date <= horizon.date():
+            known_open = self._calendar_state(trade_date)
+            if known_open is not False:
+                for deadline in self._deadlines_for_open_date(trade_date):
+                    if deadline.due_at > horizon:
+                        break
+                    if deadline.due_at >= start:
+                        deadlines.append((deadline.due_at, known_open is True))
+            trade_date += _ONE_DAY
+        return tuple(deadlines)
+
     def next_deadline(self, *, after: datetime | None = None) -> MarketDeadline | None:
         """Return the next due-at-or-after-now deadline, exclusive of ``after``."""
 
         now = _canonical_shanghai(self._clock.now())
         canonical_after = None if after is None else _canonical_shanghai(after)
-        recovery_at = (
-            None if self._next_index_recovery_at is None else self._next_index_recovery_at()
+        maintenance_deadlines: list[MarketDeadline] = []
+        for kind, callback in (
+            (DeadlineKind.INDEX_PERMISSION, self._next_index_permission_at),
+            (DeadlineKind.INDEX_RECOVERY, self._next_index_recovery_at),
+        ):
+            due_at = None if callback is None else callback()
+            if due_at is not None:
+                due_at = max(
+                    _canonical_shanghai(due_at),
+                    now,
+                    (canonical_after + timedelta(microseconds=1))
+                    if canonical_after is not None else now,
+                )
+                maintenance_deadlines.append(MarketDeadline(
+                    kind=kind, trade_date=due_at.date(), due_at=due_at,
+                ))
+        recovery_deadline = min(
+            maintenance_deadlines, key=lambda item: item.due_at, default=None,
         )
-        recovery_deadline = None
-        if recovery_at is not None:
-            recovery_due = max(
-                _canonical_shanghai(recovery_at),
-                now,
-                (canonical_after + timedelta(microseconds=1))
-                if canonical_after is not None
-                else now,
-            )
-            recovery_deadline = MarketDeadline(
-                kind=DeadlineKind.INDEX_RECOVERY,
-                trade_date=recovery_due.date(),
-                due_at=recovery_due,
-            )
         start_date = max(
             now.date(),
             canonical_after.date() if canonical_after is not None else now.date(),
