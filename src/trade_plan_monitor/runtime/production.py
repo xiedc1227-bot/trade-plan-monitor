@@ -1,7 +1,8 @@
 """Certified live providers bound to the persistent monitoring services."""
 
+from bisect import bisect_right
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -121,6 +122,17 @@ class PermissionProbeCandidate:
     next_due_at: datetime
     symbol: str | None = None
     index_code: MarketIndexCode | None = None
+    daily_bar_pool: Literal["O", "F"] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _PermissionRotationState:
+    """One atomic in-memory cursor snapshot advanced only after reservation."""
+
+    last_operation: TushareOperation | None = None
+    official_pair: tuple[str, date] | None = None
+    fallback_pair: tuple[str, date] | None = None
+    next_daily_bar_pool: Literal["O", "F"] = "O"
 
 
 @dataclass(frozen=True, slots=True)
@@ -372,7 +384,7 @@ class ProductionMonitorPipeline:
         self._historical_probe_deferred_until: datetime | None = None
         self._realtime_probe_deferred_until: datetime | None = None
         self._permission_probe_deferred_until: dict[TushareOperation, datetime] = {}
-        self._last_reserved_permission_operation: TushareOperation | None = None
+        self._permission_rotation_state = _PermissionRotationState()
         self._reference_key: ReferenceDependencyKey | None = None
         self._deadline_plans: tuple[ExecutableTradePlan, ...] | None = None
         self._running_deadline = False
@@ -828,6 +840,51 @@ class ProductionMonitorPipeline:
         )
         return preferred, fallback
 
+    @staticmethod
+    def _next_daily_bar_pair(
+        pool: tuple[tuple[str, date], ...],
+        last_pair: tuple[str, date] | None,
+    ) -> tuple[str, date] | None:
+        """Choose the strict sorted successor, including when a prior pair vanished."""
+
+        if not pool:
+            return None
+        if last_pair is None:
+            return pool[0]
+        def sort_key(pair: tuple[str, date]) -> tuple[int, str]:
+            return -pair[1].toordinal(), pair[0]
+        keys = tuple(sort_key(pair) for pair in pool)
+        return pool[bisect_right(keys, sort_key(last_pair)) % len(pool)]
+
+    def _permission_probe_reservation_callback(
+        self, candidate: PermissionProbeCandidate,
+    ) -> Callable[[], None]:
+        """Precompute one immutable cursor transition for controller on_reserved."""
+
+        if not isinstance(candidate, PermissionProbeCandidate):
+            raise TypeError("candidate must be a PermissionProbeCandidate")
+        current = self._permission_rotation_state
+        if candidate.operation is TushareOperation.DAILY_BARS:
+            if candidate.symbol is None or candidate.daily_bar_pool not in ("O", "F"):
+                raise ValueError("daily-bar candidate must identify its pool and symbol")
+            pair = (candidate.symbol, candidate.anchor_date)
+            next_state = replace(
+                current,
+                last_operation=candidate.operation,
+                official_pair=pair if candidate.daily_bar_pool == "O" else current.official_pair,
+                fallback_pair=pair if candidate.daily_bar_pool == "F" else current.fallback_pair,
+                next_daily_bar_pool="F" if candidate.daily_bar_pool == "O" else "O",
+            )
+        else:
+            if candidate.daily_bar_pool is not None:
+                raise ValueError("only daily-bar candidates can identify a pool")
+            next_state = replace(current, last_operation=candidate.operation)
+
+        def on_reserved() -> None:
+            self._permission_rotation_state = next_state
+
+        return on_reserved
+
     def _permission_probe_state(
         self,
     ) -> tuple[tuple[PermissionProbeCandidate, ...], tuple[TushareOperation, ...]]:
@@ -878,6 +935,7 @@ class ProductionMonitorPipeline:
             anchor: date | None = None
             symbol: str | None = None
             index_code: MarketIndexCode | None = None
+            daily_bar_pool: Literal["O", "F"] | None = None
             demanded = False
             local_defer = self._permission_probe_deferred_until.get(operation)
             if operation is TushareOperation.TRADING_CALENDAR:
@@ -913,8 +971,23 @@ class ProductionMonitorPipeline:
                 official, fallback = self._daily_bar_permission_pools(
                     legacy_bar_symbols, open_days, evidence.official_pairs,
                 )
-                if official or fallback:
-                    symbol, anchor = (official or fallback)[0]
+                if official and fallback:
+                    daily_bar_pool = self._permission_rotation_state.next_daily_bar_pool
+                elif official:
+                    daily_bar_pool = "O"
+                elif fallback:
+                    daily_bar_pool = "F"
+                if daily_bar_pool is not None:
+                    pair = self._next_daily_bar_pair(
+                        official if daily_bar_pool == "O" else fallback,
+                        (
+                            self._permission_rotation_state.official_pair
+                            if daily_bar_pool == "O"
+                            else self._permission_rotation_state.fallback_pair
+                        ),
+                    )
+                    if pair is not None:
+                        symbol, anchor = pair
             elif operation is TushareOperation.INDEX_DAILY:
                 index_code = self._permission_index_code("index_daily")
                 demanded = index_code is not None
@@ -934,10 +1007,11 @@ class ProductionMonitorPipeline:
                 operation=operation, anchor_date=anchor,
                 raw_due_at=raw, next_due_at=next_due,
                 symbol=symbol, index_code=index_code,
+                daily_bar_pool=daily_bar_pool,
             ))
         last_index = (
-            scopes.index(self._last_reserved_permission_operation)
-            if self._last_reserved_permission_operation in scopes else -1
+            scopes.index(self._permission_rotation_state.last_operation)
+            if self._permission_rotation_state.last_operation in scopes else -1
         )
         ordered = tuple(sorted(candidates, key=lambda candidate: (
             candidate.raw_due_at,
