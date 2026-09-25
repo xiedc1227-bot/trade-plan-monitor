@@ -447,8 +447,8 @@ class TushareMarketIndexProvider:
         index_code: MarketIndexCode,
         decision_cutoff: datetime,
     ) -> object:
-        endpoint = getattr(self._client, _INDEX_MINUTE_ENDPOINT)
-        return endpoint(
+        return self._call_index_sdk(
+            _INDEX_MINUTE_ENDPOINT,
             ts_code=index_code.value,
             freq="5min",
             start_date=(decision_cutoff - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
@@ -472,7 +472,8 @@ class TushareMarketIndexProvider:
             or self._now is None
         ):
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "idx_mins")
-        frame = getattr(self._client, _INDEX_MINUTE_ENDPOINT)(
+        frame = self._call_index_sdk(
+            _INDEX_MINUTE_ENDPOINT,
             ts_code=index_code.value,
             freq="5min",
             start_date=f"{anchor:%Y-%m-%d} 09:30:00",
@@ -561,22 +562,13 @@ class TushareMarketIndexProvider:
             or self._now is None
         ):
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, _INDEX_DAILY_ENDPOINT)
-        provider_error: TushareProviderError | None = None
-        try:
-            frame = getattr(self._client, _INDEX_DAILY_ENDPOINT)(
-                ts_code=index_code.value,
-                start_date=anchor.strftime("%Y%m%d"),
-                end_date=anchor.strftime("%Y%m%d"),
-                fields=_INDEX_DAILY_FIELDS,
-            )
-        except RequestNotStartedError:
-            raise
-        except Exception as error:
-            provider_error = TushareMarketDataProvider._safe_provider_error(
-                _INDEX_DAILY_ENDPOINT, error,
-            )
-        if provider_error is not None:
-            raise provider_error
+        frame = self._call_index_sdk(
+            _INDEX_DAILY_ENDPOINT,
+            ts_code=index_code.value,
+            start_date=anchor.strftime("%Y%m%d"),
+            end_date=anchor.strftime("%Y%m%d"),
+            fields=_INDEX_DAILY_FIELDS,
+        )
         try:
             required = set(_INDEX_DAILY_FIELDS.split(","))
             if not isinstance(frame, pd.DataFrame) or len(frame) != 1:
@@ -605,8 +597,8 @@ class TushareMarketIndexProvider:
             ) from None
 
     def _fetch_realtime_index_minutes(self, index_code: MarketIndexCode) -> object:
-        endpoint = getattr(self._client, _INDEX_REALTIME_MINUTE_ENDPOINT)
-        return endpoint(
+        return self._call_index_sdk(
+            _INDEX_REALTIME_MINUTE_ENDPOINT,
             ts_code=index_code.value,
             freq="5MIN",
             fields=_INDEX_REALTIME_MINUTE_FIELDS,
@@ -630,7 +622,6 @@ class TushareMarketIndexProvider:
             or self._client is None
         ):
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint)
-        sdk_call = getattr(self._client, endpoint)
         physical_started_at = physical_start()
         if (
             not isinstance(physical_started_at, datetime)
@@ -639,7 +630,8 @@ class TushareMarketIndexProvider:
             or physical_started_at.date() != trade_date
         ):
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint)
-        frame = sdk_call(
+        frame = self._call_index_sdk(
+            endpoint,
             ts_code=index_code.value,
             freq="5MIN",
             fields=_INDEX_REALTIME_MINUTE_FIELDS,
@@ -764,13 +756,27 @@ class TushareMarketIndexProvider:
         index_code: MarketIndexCode,
         decision_cutoff: datetime,
     ) -> object:
-        endpoint = getattr(self._client, _INDEX_DAILY_ENDPOINT)
-        return endpoint(
+        return self._call_index_sdk(
+            _INDEX_DAILY_ENDPOINT,
             ts_code=index_code.value,
             start_date=(decision_cutoff.date() - timedelta(days=400)).strftime("%Y%m%d"),
             end_date=decision_cutoff.date().strftime("%Y%m%d"),
             fields=_INDEX_DAILY_FIELDS,
         )
+
+    def _call_index_sdk(self, endpoint: str, **kwargs: object) -> object:
+        """Classify one physical SDK failure without retaining its raw context."""
+
+        provider_error: TushareProviderError | None = None
+        try:
+            frame = getattr(self._client, endpoint)(**kwargs)
+        except RequestNotStartedError:
+            raise
+        except Exception as error:
+            provider_error = TushareMarketDataProvider._safe_provider_error(endpoint, error)
+        if provider_error is not None:
+            raise provider_error
+        return frame
 
     def _observed_at(self) -> datetime:
         if self._now is None:  # pragma: no cover - constructor gate
