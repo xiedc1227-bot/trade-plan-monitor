@@ -647,6 +647,12 @@ class TushareRequestController:
             return max(deadline, self._cooldown_until)
         return deadline
 
+    def raw_permission_retry_at(self, operation: TushareOperation) -> datetime | None:
+        """Read one durable permission reservation without shared cooldown."""
+        if not isinstance(operation, TushareOperation):
+            raise TypeError("operation must be a TushareOperation")
+        return self._permission_retry_at.get(operation)
+
     async def recheck_permission(
         self,
         operation: TushareOperation,

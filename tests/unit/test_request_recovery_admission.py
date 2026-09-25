@@ -61,6 +61,48 @@ def fail(code):
     raise TushareProviderError(code, OPERATION.value)
 
 
+def test_raw_permission_reservation_excludes_shared_cooldown_and_survives_restart(tmp_path):
+    async def scenario():
+        engine = create_sqlite_engine(tmp_path / "raw-permission.db")
+        upgrade_database(engine)
+        repository = ProviderRecoveryRepository(
+            create_session_factory(engine), provider_identity="a" * 64,
+        )
+        clock = Clock()
+        first = controller(clock, repository)
+        try:
+            assert first.raw_permission_retry_at(OPERATION) is None
+            with pytest.raises(TypeError):
+                first.raw_permission_retry_at("daily_bars")
+            with pytest.raises(RequestControlError):
+                await first.execute(
+                    OPERATION, lambda: fail(TushareErrorCode.BLOCKED_PERMISSION),
+                    work_key="stock",
+                )
+            raw_due = first.raw_permission_retry_at(OPERATION)
+            assert raw_due == clock.now() + timedelta(seconds=300)
+            clock.current += timedelta(seconds=100)
+            with pytest.raises(RequestControlError):
+                await first.execute(
+                    TushareOperation.INDEX_DAILY,
+                    lambda: fail(TushareErrorCode.RATE_LIMITED),
+                    work_key="index",
+                )
+            assert first.raw_permission_retry_at(OPERATION) == raw_due
+            assert first.permission_retry_at(OPERATION) == clock.now() + timedelta(seconds=300)
+        finally:
+            await first.aclose()
+        second = controller(clock, repository)
+        try:
+            assert second.raw_permission_retry_at(OPERATION) == raw_due
+            assert second.permission_retry_at(OPERATION) == clock.now() + timedelta(seconds=300)
+        finally:
+            await second.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def _permission_restart_child(database: str, second: bool, outcomes) -> None:
     async def scenario() -> None:
         engine = create_sqlite_engine(Path(database))

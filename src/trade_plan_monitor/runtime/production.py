@@ -112,6 +112,31 @@ class PermissionMaintenanceResult(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class PermissionProbeCandidate:
+    """One read-only, persisted-evidence permission maintenance candidate."""
+
+    operation: TushareOperation
+    anchor_date: date
+    raw_due_at: datetime
+    next_due_at: datetime
+    symbol: str | None = None
+    index_code: MarketIndexCode | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _PermissionEvidence:
+    """One short SQLite read snapshot for bounded permission demand and anchors."""
+
+    calendar_anchor: date | None
+    historical_anchor: date | None
+    completed_open_days: tuple[date, ...]
+    current_open: bool
+    legacy_symbols: tuple[str, ...]
+    legacy_bar_symbols: tuple[str, ...]
+    official_pairs: frozenset[tuple[str, date]]
+
+
+@dataclass(frozen=True, slots=True)
 class _FrozenPermissionMarketWindow:
     captured_at: datetime
     latest_start_at: datetime
@@ -346,6 +371,8 @@ class ProductionMonitorPipeline:
         self._calendar_revoked = Event()
         self._historical_probe_deferred_until: datetime | None = None
         self._realtime_probe_deferred_until: datetime | None = None
+        self._permission_probe_deferred_until: dict[TushareOperation, datetime] = {}
+        self._last_reserved_permission_operation: TushareOperation | None = None
         self._reference_key: ReferenceDependencyKey | None = None
         self._deadline_plans: tuple[ExecutableTradePlan, ...] | None = None
         self._running_deadline = False
@@ -696,6 +723,278 @@ class ProductionMonitorPipeline:
                 "SSE", yesterday - timedelta(days=6), yesterday,
             )
         return None if not days else days[-1].cal_date
+
+    def _read_permission_evidence(
+        self, now: datetime, *, include_legacy: bool, include_history: bool,
+    ) -> _PermissionEvidence:
+        """Read calendar, demand and official rows inside one bounded transaction."""
+
+        yesterday = now.date() - timedelta(days=1)
+        oldest = yesterday - timedelta(days=365)
+        with self._work() as work:
+            days = work.references.list_trading_days("SSE", oldest, yesterday)
+            today_rows = work.references.list_trading_days("SSE", now.date(), now.date())
+            legacy_symbols: tuple[str, ...] = ()
+            legacy_bar_symbols: tuple[str, ...] = ()
+            if include_legacy:
+                records, _ = work.plans.list_version_details(
+                    offset=0, limit=11, status=PlanVersionStatus.ACTIVE,
+                )
+                if len(records) > 10:
+                    raise ValueError("production supports at most ten active plans")
+                active_plans = tuple(
+                    _load_active_plan(record.payload_json) for record in records
+                )
+                legacy_symbols = tuple(sorted({
+                    plan.symbol
+                    for plan in active_plans
+                    if isinstance(plan, TradePlan)
+                    and activation_is_eligible_on(plan.activation, now.date())
+                }))
+                if include_history:
+                    # Historical and pending-close recovery can consume DAILY_BARS
+                    # after a single-day legacy activation has ended.
+                    legacy_bar_symbols = tuple(sorted({
+                        plan.symbol for plan in active_plans
+                        if isinstance(plan, TradePlan)
+                    }))
+            open_days = tuple(
+                day.cal_date for day in reversed(days) if day.is_open is True
+            )
+            official: set[tuple[str, date]] = set()
+            if include_history and legacy_bar_symbols and open_days:
+                open_set = set(open_days)
+                for symbol in legacy_bar_symbols:
+                    official.update(
+                        (symbol, bar.trade_date)
+                        for bar in work.history.list_daily_bars(
+                            symbol, start=oldest, end=yesterday,
+                        )
+                        if bar.is_official is True and bar.trade_date in open_set
+                    )
+        recent = tuple(day for day in days if day.cal_date >= yesterday - timedelta(days=6))
+        return _PermissionEvidence(
+            calendar_anchor=recent[-1].cal_date if recent else None,
+            historical_anchor=next(
+                (day.cal_date for day in reversed(recent) if day.is_open is True), None,
+            ),
+            completed_open_days=open_days,
+            current_open=len(today_rows) == 1 and today_rows[0].is_open is True,
+            legacy_symbols=legacy_symbols,
+            legacy_bar_symbols=legacy_bar_symbols,
+            official_pairs=frozenset(official),
+        )
+
+    def _permission_index_code(self, endpoint: str) -> MarketIndexCode | None:
+        semantics = self._index_semantics
+        if (
+            semantics is None
+            or endpoint not in semantics.interface_scope
+            or not self._index_certification_current()
+            or not self._generation_current()
+            or self._admission_revoked()
+        ):
+            return None
+        return next((
+            code for code in (MarketIndexCode.SSE_COMPOSITE, MarketIndexCode.STAR_50)
+            if code.value in semantics.capability_scope
+            and self.index_provider.profile.capabilities[code]
+            is TushareMarketIndexCapabilityStatus.READY
+        ), None)
+
+    def _daily_bar_permission_pools(
+        self,
+        symbols: tuple[str, ...],
+        open_days: tuple[date, ...],
+        official_pairs: frozenset[tuple[str, date]],
+    ) -> tuple[tuple[tuple[str, date], ...], tuple[tuple[str, date], ...]]:
+        """Build disjoint official and fallback pairs in a bounded 366-day window."""
+
+        if not symbols or not open_days:
+            return (), ()
+        relevant_symbols = set(symbols)
+        relevant_days = set(open_days)
+        preferred = tuple(sorted(
+            (
+                pair for pair in official_pairs
+                if pair[0] in relevant_symbols and pair[1] in relevant_days
+            ),
+            key=lambda pair: (-pair[1].toordinal(), pair[0]),
+        ))
+        fallback = tuple(
+            (symbol, day) for day in sorted(relevant_days, reverse=True)
+            for symbol in sorted(relevant_symbols)
+            if (symbol, day) not in official_pairs
+        )
+        return preferred, fallback
+
+    def _permission_probe_state(
+        self,
+    ) -> tuple[tuple[PermissionProbeCandidate, ...], tuple[TushareOperation, ...]]:
+        """Read candidate and missing-anchor needs without reserving provider work."""
+
+        now = self._clock.now()
+        scopes = (
+            TushareOperation.TRADING_CALENDAR,
+            TushareOperation.INDEX_HISTORICAL_MINUTES,
+            TushareOperation.INDEX_REALTIME_MINUTES,
+            TushareOperation.DAILY_LIMITS,
+            TushareOperation.DAILY_BARS,
+            TushareOperation.INDEX_DAILY,
+        )
+        blocked = tuple(
+            operation for operation in scopes
+            if self._controller.is_permission_blocked(operation)
+            and self._controller.raw_permission_retry_at(operation) is not None
+        )
+        if not blocked:
+            return (), ()
+        stock_authorized = (
+            self._stock_certification_current()
+            and self._generation_current()
+            and not self._admission_revoked()
+        ) if any(operation in blocked for operation in (
+            TushareOperation.TRADING_CALENDAR,
+            TushareOperation.DAILY_LIMITS,
+            TushareOperation.DAILY_BARS,
+        )) else False
+        include_legacy = stock_authorized and any(
+            operation in blocked for operation in (
+                TushareOperation.DAILY_LIMITS, TushareOperation.DAILY_BARS,
+            )
+        )
+        evidence = self._read_permission_evidence(
+            now,
+            include_legacy=include_legacy,
+            include_history=include_legacy and TushareOperation.DAILY_BARS in blocked,
+        )
+        open_days = evidence.completed_open_days
+        legacy_symbols = evidence.legacy_symbols
+        legacy_bar_symbols = evidence.legacy_bar_symbols
+        shared = self._controller.cooldown_until
+        candidates: list[PermissionProbeCandidate] = []
+        missing: list[TushareOperation] = []
+        for operation in blocked:
+            anchor: date | None = None
+            symbol: str | None = None
+            index_code: MarketIndexCode | None = None
+            demanded = False
+            local_defer = self._permission_probe_deferred_until.get(operation)
+            if operation is TushareOperation.TRADING_CALENDAR:
+                demanded = stock_authorized
+                anchor = evidence.calendar_anchor if demanded else None
+            elif operation is TushareOperation.INDEX_HISTORICAL_MINUTES:
+                index_code = self._permission_index_code("idx_mins")
+                if index_code is not None:
+                    demanded = True
+                    anchor = evidence.historical_anchor
+                    if self._historical_probe_deferred_until is not None:
+                        local_defer = max(
+                            local_defer or self._historical_probe_deferred_until,
+                            self._historical_probe_deferred_until,
+                        )
+            elif operation is TushareOperation.INDEX_REALTIME_MINUTES:
+                index_code = self._permission_index_code("rt_idx_min_daily")
+                if index_code is not None:
+                    demanded = True
+                if index_code is not None and evidence.current_open:
+                    anchor = now.date()
+                    first_bar_due = datetime.combine(
+                        anchor, time(9, 35), now.tzinfo,
+                    ) + DEFAULT_DATA_GRACE
+                    local_defer = max(local_defer or first_bar_due, first_bar_due)
+                    if self._realtime_probe_deferred_until is not None:
+                        local_defer = max(local_defer, self._realtime_probe_deferred_until)
+            elif operation is TushareOperation.DAILY_LIMITS:
+                demanded = stock_authorized and bool(legacy_symbols)
+                anchor = open_days[0] if demanded and open_days else None
+            elif operation is TushareOperation.DAILY_BARS:
+                demanded = stock_authorized and bool(legacy_bar_symbols)
+                official, fallback = self._daily_bar_permission_pools(
+                    legacy_bar_symbols, open_days, evidence.official_pairs,
+                )
+                if official or fallback:
+                    symbol, anchor = (official or fallback)[0]
+            elif operation is TushareOperation.INDEX_DAILY:
+                index_code = self._permission_index_code("index_daily")
+                demanded = index_code is not None
+                anchor = open_days[0] if index_code is not None and open_days else None
+            if anchor is None:
+                if demanded:
+                    missing.append(operation)
+                continue
+            raw = self._controller.raw_permission_retry_at(operation)
+            if raw is None:
+                continue
+            next_due = max(
+                deadline for deadline in (raw, local_defer, shared)
+                if deadline is not None
+            )
+            candidates.append(PermissionProbeCandidate(
+                operation=operation, anchor_date=anchor,
+                raw_due_at=raw, next_due_at=next_due,
+                symbol=symbol, index_code=index_code,
+            ))
+        last_index = (
+            scopes.index(self._last_reserved_permission_operation)
+            if self._last_reserved_permission_operation in scopes else -1
+        )
+        ordered = tuple(sorted(candidates, key=lambda candidate: (
+            candidate.raw_due_at,
+            (scopes.index(candidate.operation) - last_index - 1) % len(scopes),
+        )))
+        return ordered, tuple(missing)
+
+    def permission_probe_candidates(self) -> tuple[PermissionProbeCandidate, ...]:
+        """Peek bounded, currently justified permission probes without side effects."""
+
+        return self._permission_probe_state()[0]
+
+    def next_permission_probe_due_at(self) -> datetime | None:
+        """Cheap pure deadline read; evidence is checked only by maintenance work."""
+
+        scopes = (
+            TushareOperation.TRADING_CALENDAR,
+            TushareOperation.INDEX_HISTORICAL_MINUTES,
+            TushareOperation.INDEX_REALTIME_MINUTES,
+            TushareOperation.DAILY_LIMITS,
+            TushareOperation.DAILY_BARS,
+            TushareOperation.INDEX_DAILY,
+        )
+        deadlines: list[datetime] = []
+        for operation in scopes:
+            if not self._controller.is_permission_blocked(operation):
+                continue
+            raw = self._controller.raw_permission_retry_at(operation)
+            if raw is not None:
+                local = self._permission_probe_deferred_until.get(operation)
+                if operation is TushareOperation.INDEX_HISTORICAL_MINUTES:
+                    local = max(
+                        (value for value in (local, self._historical_probe_deferred_until)
+                         if value is not None), default=None,
+                    )
+                elif operation is TushareOperation.INDEX_REALTIME_MINUTES:
+                    local = max(
+                        (value for value in (local, self._realtime_probe_deferred_until)
+                         if value is not None), default=None,
+                    )
+                deadlines.append(max(
+                    deadline for deadline in (
+                        raw,
+                        local,
+                        self._controller.cooldown_until,
+                    ) if deadline is not None
+                ))
+        return min(deadlines, default=None)
+
+    def select_due_permission_probe(self) -> PermissionProbeCandidate | None:
+        """Peek only currently due candidates; repeated reads never rotate ties."""
+
+        now = self._clock.now()
+        return next((
+            item for item in self.permission_probe_candidates()
+            if item.next_due_at <= now
+        ), None)
 
     async def _maybe_recheck_calendar_permission(self) -> None:
         operation = TushareOperation.TRADING_CALENDAR
