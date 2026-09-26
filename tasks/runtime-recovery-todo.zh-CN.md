@@ -38,13 +38,30 @@
 
 S3-03 补充矩阵：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_provider_contract.py tests/unit/test_live_certification_profiles.py tests/unit/test_request_recovery_admission.py tests/integration/test_certified_production_runtime.py tests/integration/test_production_a04_retry_timeline.py tests/integration/test_index_permission_scope_migration.py tests/integration/test_production_index_historical_permission_probe.py tests/integration/test_production_index_realtime_permission_probe.py tests/integration/test_index_permission_process_restart.py -q --tb=short`。另运行 `tests/unit/test_monitor_runtime.py` 中的 `test_live_tushare_request_profile_is_serial_paced_bounded_and_never_retries`、`test_request_concurrency_rejects_work_beyond_bounded_tushare_queue` 和 `test_recovery_timeout_keeps_late_physical_call_serial_before_next_symbol`。成对的 `docs/verification/2026-09-25-c1-provider-recovery-evidence.zh-CN.md` 记录有界结果；C1 在最终独立复核前保持开放。
 
-独立 C1 复核发现 P1 功能缺口：`DAILY_LIMITS`、`DAILY_BARS`、`CURRENT_DAY_MINUTES`、`REALTIME_MINUTES` 与 `INDEX_DAILY` 尚无受控生产权限复核。它们的持久阻断在同端点更换 token 后仍可能锁存。双进程指数测试不能关闭 A05 或 C1；仍需后续设计与实现评审。
+2026-09-25 的独立 C1 复核发现 P1 功能缺口：当时 `DAILY_LIMITS`、`DAILY_BARS`、`CURRENT_DAY_MINUTES`、`REALTIME_MINUTES` 与 `INDEX_DAILY` 尚无受控生产权限复核。它们的持久阻断在同端点更换 token 后仍可能锁存。双进程指数测试不能关闭 A05 或 C1；后续有界进展记录于下方，完整调度验收仍开放。
 
 有界 S1/S2 离线修正现让官方默认 URL 客户端保留 401/403/429 状态，使既有控制器能够持久化权限阻断与共享冷却。其假 HTTP 的 RED→GREEN 证据、408/500 与 2xx 回归、58 项专项及 190 项相邻测试通过结果和独立 Sol/`xhigh` 评审，记录在成对的 `docs/verification/2026-09-25-c1-default-url-http-status.zh-CN.md`。当时独立的基线 `test_market_data.py` `requests.Timeout` 预期与未改动的 HEAD 映射冲突（`TRANSIENT` 对 `TIMEOUT`）；后续仅测试校正记录在 `docs/verification/2026-09-25-c1-timeout-test-alignment.zh-CN.md`。上述五个权限复核作用域、真实服务认证及 C1 关闭仍待完成。
 
 `DAILY_LIMITS`、`DAILY_BARS` 和 `INDEX_DAILY` 的**纯 provider 证明**已完成并通过独立复审；离线专项 53 项、相邻 266 项测试通过（排除 14 项既有基线用例）。`DAILY_LIMITS` 在股票本地 640 字符/位安全边界下检查全市场每条原始记录，不转换为分单位。`DAILY_BARS` 与 `INDEX_DAILY` 要求准确的官方交易日身份；指数探针还保留安全的 401/403/429 控制器分类及物理请求未开始信号。成对的 `docs/verification/2026-09-25-c1-daily-permission-probes.zh-CN.md` 记录证据。生产锚点选择、五个作用域的 300 秒维护接线，以及另行发现的普通指数请求及既有指数权限复核中的 SDK HTTP 分类缺口仍开放；C1 保持 **OPEN**。
 
 普通 `idx_mins`、`rt_idx_min_daily`、`index_daily` 请求及两个既有指数权限探针现复用一个私有安全 SDK 调用分类器。模拟 HTTP 401/403 保留各自受影响 operation 的权限阻断和 300 秒预约；429 启动共享冷却；`RequestNotStartedError` 仍表示物理请求未开始。成对的 `docs/verification/2026-09-25-c1-index-http-classification.zh-CN.md` 记录 **16 项 RED → 17 项 GREEN** 专项用例、**198 项相邻**测试通过及独立 Sol/`xhigh` 批准。五个业务权限作用域仍需接入生产维护调度；C1 保持 **OPEN**。
+
+### 业务第 3 步 B1/B2 截至 a1eb84f 的进展 — 同步于 2026-09-27
+
+截至 `a1eb84f268dbc5685a9e7154858753c0f4562703`，以下离线切片已完成并通过独立评审。它们更新上方历史权限缺口的状态，不代表 RUNNING/DEGRADED 自动维护完成，也不关闭 C1/C3。
+
+- **B1 只读选择：**六作用域（`TRADING_CALENDAR`、`INDEX_HISTORICAL_MINUTES`、`INDEX_REALTIME_MINUTES`、`DAILY_LIMITS`、`DAILY_BARS`、`INDEX_DAILY`）使用有界持久证据及原始到期排序。证据最多包含 10 个 ACTIVE 计划及 366 个已结束日历日；O/F 池合计最多 3,660 个 `(S,D)` 对。重复窥视不调用 SDK，也不预约。证据：`docs/verification/2026-09-26-b1-permission-candidate-selection.md` 及其 `.zh-CN.md` 配对文件。
+- **B2 持久确认：**`on_reserved` 仅在 300 秒预约提交后、探针工作启动前执行。持久化失败不推进游标；回调故障保持为脱敏的本地故障。证据：`docs/verification/2026-09-26-b2-controller-reservation-ack.md` 及其 `.zh-CN.md` 配对文件。
+- **B2 轮转：**作用域并列位置及独立的 `DAILY_BARS` O/F 游标仅由持久确认推进，包括随后在 SDK 启动前中止的预约。已覆盖 O/F 交替、候选消失与空池恢复；游标仍为进程内状态。证据：`docs/verification/2026-09-26-b2-permission-candidate-rotation.md` 及其 `.zh-CN.md` 配对文件。
+- **INDEX_DAILY 内部入口：**串行维护重新选择全局到期候选，响应前后检查准确的持久工作日开市锚点，并在物理启动前各阶段检查授权与日历 epoch。响应时钟回拨被拒绝。证据：`docs/verification/2026-09-26-b2-index-daily-permission-maintenance.md` 及其 `.zh-CN.md` 配对文件。
+- **DAILY_LIMITS 内部入口：**同一串行边界支持显式 STOCK 语义及 legacy 认证，在需求/锚点/授权不可用时固定本地延后 30 秒，并由所有者线程检查终态需求与锚点，worker 不访问数据库。整市场日期证明不写业务缓存。证据：`docs/verification/2026-09-26-b2-daily-limits-permission-maintenance.md` 及其 `.zh-CN.md` 配对文件。
+- **周末一致性：**已结束指数锚点排除错误的周末开市记录；实时指数候选要求工作日。日历权限证明仍可使用已结束的周末记录。证据：`docs/verification/2026-09-26-b2-weekend-permission-candidate-consistency.md` 及其 `.zh-CN.md` 配对文件。
+
+DAILY_LIMITS 配对记录中的 **138 项相关离线测试通过**、全量 Ruff 及差异检查，来自上一实现批次和独立评审。本次文档同步未重跑这些测试，也不新增运行时验证结论。
+
+下一步仍为 OPEN：经评审的 `DAILY_BARS` 消费需求与身份判定及其内部接线；股票分钟权限探针（`CURRENT_DAY_MINUTES`、`REALTIME_MINUTES`）；统一 RUNNING/DEGRADED 维护，包括 B3 无候选时 30 秒唤醒行为，以及权限工作不消耗市场截止点游标的证明；完整跨进程 C1 验收。S3-04–S3-09 仍未完成，C1/C3 保持未勾选。此处不采纳尚未审定的 DAILY_BARS 方案。
+
+物理 SDK 工作跨越市场截止点、期间进程被强制终止，以及重启后的义务重建（或等价持久证据）仍须验证。31.25 秒准入保护不能证明强杀安全，也不能证明遗漏义务可被重建。
 
 ### D5 受控重启决策 — 2026-09-24
 
