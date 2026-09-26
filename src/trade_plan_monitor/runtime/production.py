@@ -11,6 +11,7 @@ from threading import Event, Lock
 from typing import Literal
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_plan_monitor.ai.review import load_explicit_plan_draft_json
@@ -18,9 +19,11 @@ from trade_plan_monitor.config import TushareConfiguration
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import (
+    DateRangeActivation,
     ExecutableTradePlan,
     ExplicitTradePlan,
     TradePlan,
+    TradingDayActivation,
     activation_is_eligible_on,
 )
 from trade_plan_monitor.live_profiles import (
@@ -57,6 +60,8 @@ from trade_plan_monitor.runtime.historical_close_context import (
     StaleHistoricalCloseError,
 )
 from trade_plan_monitor.runtime.historical_close_evidence import (
+    DemandCursor,
+    DemandReceipt,
     LegacyHistoricalCloseReader,
     UnknownHistoricalClose,
 )
@@ -98,11 +103,36 @@ from trade_plan_monitor.runtime.service import (
     UnitOfWorkFactory,
 )
 from trade_plan_monitor.runtime.symbol_service import SymbolService
-from trade_plan_monitor.state.models import EvaluationKind, PlanVersionStatus
+from trade_plan_monitor.state.models import (
+    ActivePlan,
+    AuditLog,
+    EvaluationKind,
+    EvaluationLedger,
+    EvaluationResult,
+    MonitorEvent,
+    MonitorSequence,
+    PlanActivationState,
+    PlanVersion,
+    PlanVersionStatus,
+    TradingCalendar,
+)
+from trade_plan_monitor.state.models import (
+    DailyBar as StoredDailyBar,
+)
+from trade_plan_monitor.state.recovery_read_session import require_owned_recovery_session
+from trade_plan_monitor.state.repositories import MarketHistoryRepository, MarketReferenceRepository
 
 _REFERENCE_DAYS = 366
 _INDEX_PERMISSION_GUARD = (
     timedelta(seconds=2 * LIVE_TUSHARE_TIMEOUT_SECONDS) + LIVE_TUSHARE_MIN_INTERVAL
+)
+_PERMISSION_SCOPES = (
+    TushareOperation.TRADING_CALENDAR,
+    TushareOperation.INDEX_HISTORICAL_MINUTES,
+    TushareOperation.INDEX_REALTIME_MINUTES,
+    TushareOperation.DAILY_LIMITS,
+    TushareOperation.DAILY_BARS,
+    TushareOperation.INDEX_DAILY,
 )
 
 
@@ -127,6 +157,20 @@ class PermissionProbeCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class _DailyBarPermissionPreparation:
+    """Current-snapshot preparation facts, never reservation or execution authority."""
+
+    status: Literal["PREPARED", "UNKNOWN", "SKIPPED"]
+    captured_at: datetime
+    reason: str
+    candidate: PermissionProbeCandidate | None = None
+    receipt: DemandReceipt | None = None
+    semantic_bound: bool = False
+    semantic_revision: str | None = None
+    calendar_epoch: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class _PermissionRotationState:
     """One atomic in-memory cursor snapshot advanced only after reservation."""
 
@@ -147,6 +191,7 @@ class _PermissionEvidence:
     legacy_symbols: tuple[str, ...]
     legacy_bar_symbols: tuple[str, ...]
     official_pairs: frozenset[tuple[str, date]]
+    legacy_plans: tuple[TradePlan, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -348,6 +393,7 @@ class ProductionMonitorPipeline:
         publisher: CommittedEventPublisher,
         semantic_bindings: ProductionSemanticBindings | None = None,
         recovery_session_factory: Callable[[], Session] | None = None,
+        permission_session_factory: Callable[[], Session] | None = None,
         configuration_current: Callable[[], bool] | None = None,
         generation_current: Callable[[], bool] | None = None,
         admission_revoked: Callable[[], bool] | None = None,
@@ -395,6 +441,17 @@ class ProductionMonitorPipeline:
             None if recovery_session_factory is None
             else LegacyHistoricalCloseReader(recovery_session_factory)
         )
+        self._permission_session_factory = (
+            permission_session_factory
+            if permission_session_factory is not None else recovery_session_factory
+        )
+        self._permission_demand_reader = (
+            None if self._permission_session_factory is None
+            else LegacyHistoricalCloseReader(self._permission_session_factory)
+        )
+        self._daily_bar_demand_cursors: dict[str, DemandCursor] = {}
+        self._daily_bar_demand_receipts: dict[str, DemandReceipt] = {}
+        self._daily_bar_history_after: str | None = None
         self._historical_blocked: dict[str, str] = {}
         self._historical_retry_at: dict[str, datetime] = {}
         self._historical_identity: dict[str, tuple[str, int, datetime]] = {}
@@ -743,13 +800,8 @@ class ProductionMonitorPipeline:
     ) -> _PermissionEvidence:
         """Read calendar, demand and official rows inside one bounded transaction."""
 
-        yesterday = now.date() - timedelta(days=1)
-        oldest = yesterday - timedelta(days=365)
         with self._work() as work:
-            days = work.references.list_trading_days("SSE", oldest, yesterday)
-            today_rows = work.references.list_trading_days("SSE", now.date(), now.date())
-            legacy_symbols: tuple[str, ...] = ()
-            legacy_bar_symbols: tuple[str, ...] = ()
+            active_plans: tuple[ExecutableTradePlan, ...] = ()
             if include_legacy:
                 records, _ = work.plans.list_version_details(
                     offset=0, limit=11, status=PlanVersionStatus.ACTIVE,
@@ -759,34 +811,41 @@ class ProductionMonitorPipeline:
                 active_plans = tuple(
                     _load_active_plan(record.payload_json) for record in records
                 )
-                legacy_symbols = tuple(sorted({
-                    plan.symbol
-                    for plan in active_plans
-                    if isinstance(plan, TradePlan)
-                    and activation_is_eligible_on(plan.activation, now.date())
-                }))
-                if include_history:
-                    # Historical and pending-close recovery can consume DAILY_BARS
-                    # after a single-day legacy activation has ended.
-                    legacy_bar_symbols = tuple(sorted({
-                        plan.symbol for plan in active_plans
-                        if isinstance(plan, TradePlan)
-                    }))
-            open_days = tuple(
-                day.cal_date for day in reversed(days)
-                if day.cal_date.weekday() < 5 and day.is_open is True
+            return self._permission_evidence_from_repositories(
+                now, work.references, work.history, active_plans, include_history=include_history,
             )
-            official: set[tuple[str, date]] = set()
-            if include_history and legacy_bar_symbols and open_days:
-                open_set = set(open_days)
-                for symbol in legacy_bar_symbols:
-                    official.update(
-                        (symbol, bar.trade_date)
-                        for bar in work.history.list_daily_bars(
-                            symbol, start=oldest, end=yesterday,
-                        )
-                        if bar.is_official is True and bar.trade_date in open_set
-                    )
+
+    @staticmethod
+    def _permission_evidence_from_repositories(
+        now: datetime, references: MarketReferenceRepository, history: MarketHistoryRepository,
+        active_plans: tuple[ExecutableTradePlan, ...], *, include_history: bool,
+    ) -> _PermissionEvidence:
+        """Use only repositories already bound to the caller's single snapshot."""
+        yesterday = now.date() - timedelta(days=1)
+        oldest = yesterday - timedelta(days=365)
+        days = references.list_trading_days("SSE", oldest, yesterday)
+        today_rows = references.list_trading_days("SSE", now.date(), now.date())
+        legacy_plans = tuple(plan for plan in active_plans if isinstance(plan, TradePlan))
+        legacy_symbols = tuple(sorted({
+            plan.symbol for plan in legacy_plans
+            if activation_is_eligible_on(plan.activation, now.date())
+        }))
+        legacy_bar_symbols = (
+            tuple(sorted({plan.symbol for plan in legacy_plans})) if include_history else ()
+        )
+        open_days = tuple(
+            day.cal_date for day in reversed(days)
+            if day.cal_date.weekday() < 5 and day.is_open is True
+        )
+        official: set[tuple[str, date]] = set()
+        if include_history and legacy_bar_symbols and open_days:
+            open_set = set(open_days)
+            for symbol in legacy_bar_symbols:
+                official.update(
+                    (symbol, bar.trade_date)
+                    for bar in history.list_daily_bars(symbol, start=oldest, end=yesterday)
+                    if bar.is_official is True and bar.trade_date in open_set
+                )
         recent = tuple(day for day in days if day.cal_date >= yesterday - timedelta(days=6))
         return _PermissionEvidence(
             calendar_anchor=recent[-1].cal_date if recent else None,
@@ -805,6 +864,7 @@ class ProductionMonitorPipeline:
             legacy_symbols=legacy_symbols,
             legacy_bar_symbols=legacy_bar_symbols,
             official_pairs=frozenset(official),
+            legacy_plans=legacy_plans,
         )
 
     def _permission_index_code(self, endpoint: str) -> MarketIndexCode | None:
@@ -896,19 +956,12 @@ class ProductionMonitorPipeline:
         return on_reserved
 
     def _permission_probe_state(
-        self,
+        self, *, now: datetime | None = None, evidence: _PermissionEvidence | None = None,
     ) -> tuple[tuple[PermissionProbeCandidate, ...], tuple[TushareOperation, ...]]:
         """Read candidate and missing-anchor needs without reserving provider work."""
 
-        now = self._clock.now()
-        scopes = (
-            TushareOperation.TRADING_CALENDAR,
-            TushareOperation.INDEX_HISTORICAL_MINUTES,
-            TushareOperation.INDEX_REALTIME_MINUTES,
-            TushareOperation.DAILY_LIMITS,
-            TushareOperation.DAILY_BARS,
-            TushareOperation.INDEX_DAILY,
-        )
+        now = self._clock.now() if now is None else now
+        scopes = _PERMISSION_SCOPES
         blocked = tuple(
             operation for operation in scopes
             if self._controller.is_permission_blocked(operation)
@@ -930,11 +983,12 @@ class ProductionMonitorPipeline:
                 TushareOperation.DAILY_LIMITS, TushareOperation.DAILY_BARS,
             )
         )
-        evidence = self._read_permission_evidence(
-            now,
-            include_legacy=include_legacy,
-            include_history=include_legacy and TushareOperation.DAILY_BARS in blocked,
-        )
+        if evidence is None:
+            evidence = self._read_permission_evidence(
+                now,
+                include_legacy=include_legacy,
+                include_history=include_legacy and TushareOperation.DAILY_BARS in blocked,
+            )
         open_days = evidence.completed_open_days
         legacy_symbols = evidence.legacy_symbols
         legacy_bar_symbols = evidence.legacy_bar_symbols
@@ -1019,15 +1073,18 @@ class ProductionMonitorPipeline:
                 symbol=symbol, index_code=index_code,
                 daily_bar_pool=daily_bar_pool,
             ))
-        last_index = (
-            scopes.index(self._permission_rotation_state.last_operation)
-            if self._permission_rotation_state.last_operation in scopes else -1
-        )
-        ordered = tuple(sorted(candidates, key=lambda candidate: (
-            candidate.raw_due_at,
-            (scopes.index(candidate.operation) - last_index - 1) % len(scopes),
+        ordered = tuple(sorted(candidates, key=lambda candidate: self._permission_priority(
+            candidate.operation, candidate.raw_due_at,
         )))
         return ordered, tuple(missing)
+
+    def _permission_priority(
+        self, operation: TushareOperation, raw: datetime,
+    ) -> tuple[datetime, int]:
+        scopes = _PERMISSION_SCOPES
+        last = self._permission_rotation_state.last_operation
+        last_index = scopes.index(last) if last in scopes else -1
+        return raw, (scopes.index(operation) - last_index - 1) % len(scopes)
 
     def permission_probe_candidates(self) -> tuple[PermissionProbeCandidate, ...]:
         """Peek bounded, currently justified permission probes without side effects."""
@@ -1088,6 +1145,152 @@ class ProductionMonitorPipeline:
         with self._work() as work:
             days = work.references.list_trading_days("SSE", anchor, anchor)
         return len(days) == 1 and days[0].is_open is True
+
+    async def _prepare_daily_bar_permission(self) -> _DailyBarPermissionPreparation:
+        """Prepare one due candidate; reserve nothing and invoke no provider work."""
+        operation = TushareOperation.DAILY_BARS
+        async with self._permission_maintenance_lock:
+            now = self._clock.now()
+
+            def defer(reason: str) -> _DailyBarPermissionPreparation:
+                self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
+                return _DailyBarPermissionPreparation("UNKNOWN", now, reason)
+
+            if not self._controller.is_permission_blocked(operation):
+                return _DailyBarPermissionPreparation("SKIPPED", now, "not_blocked")
+            raw = self._controller.raw_permission_retry_at(operation)
+            if raw is None:
+                return _DailyBarPermissionPreparation("SKIPPED", now, "no_due")
+            due = max(value for value in (
+                raw, self._permission_probe_deferred_until.get(operation),
+                self._controller.cooldown_until,
+            ) if value is not None)
+            if now < due:
+                return _DailyBarPermissionPreparation("SKIPPED", now, "not_due")
+            bound_mode = self._semantic_bindings is not None
+            semantics = self._stock_semantics
+            revision = semantics.semantic_revision if semantics is not None else None
+
+            def authority_current() -> bool:
+                current = self._stock_semantics
+                semantic_current = (
+                    self._semantic_bindings is not None
+                    and current is not None and current.semantic_revision == revision
+                    and "daily" in current.interface_scope
+                ) if bound_mode else (self._semantic_bindings is None and current is None)
+                return (
+                    semantic_current and self._stock_certification_current()
+                    and self._generation_current() and not self._admission_revoked()
+                    and self._clock.now() >= now and self._clock.now().date() == now.date()
+                )
+
+            if not authority_current():
+                return defer("authority_unavailable")
+            factory = self._permission_session_factory
+            reader = self._permission_demand_reader
+            if factory is None or reader is None:
+                return defer("no_safe_session")
+            session = factory()
+            try:
+                require_owned_recovery_session(session, (
+                    ActivePlan, AuditLog, EvaluationLedger, EvaluationResult, MonitorEvent,
+                    MonitorSequence, PlanActivationState, PlanVersion, TradingCalendar,
+                    StoredDailyBar,
+                ))
+            except ValueError:
+                # A borrowed session remains its caller's property, including its transaction.
+                return defer("no_safe_session")
+            with self._calendar_epoch_lock:
+                epoch = self._calendar_epoch
+            with session, session.no_autoflush:
+                documents = session.scalars(select(func.substr(
+                    PlanVersion.payload_json, 1, 1_048_577,
+                )).where(PlanVersion.status == PlanVersionStatus.ACTIVE)
+                    .order_by(PlanVersion.symbol).limit(11)).all()
+                if len(documents) > 10:
+                    raise ValueError("production supports at most ten active plans")
+                if any(len(document) > 1_048_576 for document in documents):
+                    raise ValueError("active plan payload exceeds the recovery read limit")
+                plans = tuple(_load_active_plan(document) for document in documents)
+                evidence = self._permission_evidence_from_repositories(
+                    now, MarketReferenceRepository(session), MarketHistoryRepository(session),
+                    plans, include_history=True,
+                )
+                # The synthetic own rank also applies when no broad DAILY_BARS anchor exists.
+                own_rank = self._permission_priority(operation, raw)
+                candidates, _ = self._permission_probe_state(now=now, evidence=evidence)
+                if any(item.operation is not operation and item.next_due_at <= now
+                       and self._permission_priority(item.operation, item.raw_due_at) < own_rank
+                       for item in candidates):
+                    return _DailyBarPermissionPreparation("SKIPPED", now, "other_scope_due")
+                self._refresh_daily_bar_demand(session, evidence.legacy_plans, now, reader)
+                valid_symbols = []
+                # This <=10 receipt point-check budget is separate from the one historical page.
+                for symbol, receipt in tuple(self._daily_bar_demand_receipts.items()):
+                    if reader.validate_permission_demand_in_session(session, receipt, now):
+                        valid_symbols.append(symbol)
+                    else:
+                        del self._daily_bar_demand_receipts[symbol]
+                narrowed = replace(evidence, legacy_bar_symbols=tuple(sorted(valid_symbols)))
+                candidates, _ = self._permission_probe_state(now=now, evidence=narrowed)
+                candidate = next((item for item in candidates if item.operation is operation), None)
+                if candidate is None:
+                    return defer("no_demand_or_anchor")
+                if not authority_current():
+                    return defer("authority_unavailable")
+                with self._calendar_epoch_lock:
+                    if self._calendar_epoch != epoch or self._calendar_revoked.is_set():
+                        return defer("calendar_changed")
+                return _DailyBarPermissionPreparation(
+                    "PREPARED", now, "current_snapshot", candidate,
+                    self._daily_bar_demand_receipts[candidate.symbol],
+                    bound_mode, revision, epoch,
+                )
+
+    def _refresh_daily_bar_demand(
+        self, session: Session, plans: tuple[TradePlan, ...], now: datetime,
+        reader: LegacyHistoricalCloseReader,
+    ) -> None:
+        """Maintain <=10 receipts/cursors and inspect one strict-successor history symbol."""
+        symbols = {plan.symbol for plan in plans}
+        self._daily_bar_demand_cursors = {
+            symbol: cursor for symbol, cursor in self._daily_bar_demand_cursors.items()
+            if symbol in symbols
+        }
+        self._daily_bar_demand_receipts = {
+            symbol: receipt for symbol, receipt in self._daily_bar_demand_receipts.items()
+            if symbol in symbols and receipt.captured_at.date() == now.date()
+        }
+        today = tuple(sorted(plan.symbol for plan in plans
+                             if activation_is_eligible_on(plan.activation, now.date())))
+        historical = tuple(sorted(plan.symbol for plan in plans if (
+            isinstance(plan.activation, TradingDayActivation)
+            and plan.activation.trading_day < now.date()
+        ) or (
+            isinstance(plan.activation, DateRangeActivation)
+            and plan.activation.end_date < now.date()
+        )))
+        selected = None
+        if historical:
+            index = (0 if self._daily_bar_history_after is None else
+                     bisect_right(historical, self._daily_bar_history_after) % len(historical))
+            selected = historical[index]
+        for symbol in (*today, *((selected,) if selected is not None else ())):
+            receipt = self._daily_bar_demand_receipts.get(symbol)
+            if receipt is not None and now < receipt.captured_at and symbol in today:
+                # Do not replace a future receipt with a fresh TODAY receipt on clock rollback.
+                continue
+            result = reader.inspect_permission_demand_in_session(
+                session, symbol, now, self._daily_bar_demand_cursors.get(symbol),
+            )
+            if symbol == selected:
+                self._daily_bar_history_after = symbol
+            if result.next_cursor is not None:
+                self._daily_bar_demand_cursors[symbol] = result.next_cursor
+            elif result.reason in {"invalid_cursor", "checkpoint_rollback"}:
+                self._daily_bar_demand_cursors.pop(symbol, None)
+            if result.receipt is not None:
+                self._daily_bar_demand_receipts[symbol] = result.receipt
 
     async def _maybe_recheck_index_daily_permission(self) -> PermissionMaintenanceResult:
         """Run one serial, read-only INDEX_DAILY permission proof."""
