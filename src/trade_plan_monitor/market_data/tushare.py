@@ -783,10 +783,15 @@ class TushareMarketDataProvider:
 
         return self._daily_bars(symbol, start, end, strict_response=True)
 
-    def probe_daily_bars_permission(self, symbol: str, anchor: date) -> None:
+    def probe_daily_bars_permission(
+        self, symbol: str, anchor: date, *,
+        _physical_start: Callable[[], None] | None = None,
+    ) -> None:
         """Prove one official daily row exists without changing business state."""
 
-        rows = self._daily_bars(symbol, anchor, anchor, strict_response=True)
+        rows = self._daily_bars(
+            symbol, anchor, anchor, strict_response=True, _physical_start=_physical_start,
+        )
         if len(rows) != 1:
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "daily")
 
@@ -797,18 +802,21 @@ class TushareMarketDataProvider:
         end: date,
         *,
         strict_response: bool,
+        _physical_start: Callable[[], None] | None = None,
     ) -> list[DailyBar]:
         """Fetch and normalize one daily-bar response."""
 
         requested_symbol = self._validated_symbol(symbol)
         self._validated_date_range(start, end)
-        frame = self._fetch_frame(
-            "daily",
-            fields=_DAILY_FIELDS,
-            ts_code=requested_symbol,
-            start_date=self._date_argument(start),
-            end_date=self._date_argument(end),
-        )
+        request = {
+            "fields": _DAILY_FIELDS,
+            "ts_code": requested_symbol,
+            "start_date": self._date_argument(start),
+            "end_date": self._date_argument(end),
+        }
+        if _physical_start is not None:
+            _physical_start()
+        frame = self._fetch_frame("daily", **request)
         self._require_columns(
             frame,
             "daily",

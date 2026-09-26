@@ -52,6 +52,7 @@ from trade_plan_monitor.market_index.tushare import (
     unverified_tushare_market_index_profile,
 )
 from trade_plan_monitor.runtime.clock import Clock
+from trade_plan_monitor.runtime.close_recovery_evidence import _calendar_open_on
 from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
 from trade_plan_monitor.runtime.health import RecoveryIssueSnapshot, SymbolHealthTracker
 from trade_plan_monitor.runtime.historical_close_context import (
@@ -168,6 +169,8 @@ class _DailyBarPermissionPreparation:
     semantic_bound: bool = False
     semantic_revision: str | None = None
     calendar_epoch: int | None = None
+    reader: LegacyHistoricalCloseReader | None = None
+    session_factory: Callable[[], Session] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1147,105 +1150,109 @@ class ProductionMonitorPipeline:
         return len(days) == 1 and days[0].is_open is True
 
     async def _prepare_daily_bar_permission(self) -> _DailyBarPermissionPreparation:
-        """Prepare one due candidate; reserve nothing and invoke no provider work."""
-        operation = TushareOperation.DAILY_BARS
+        """Prepare one due candidate under the shared maintenance lock."""
         async with self._permission_maintenance_lock:
-            now = self._clock.now()
+            return self._prepare_daily_bar_permission_locked()
 
-            def defer(reason: str) -> _DailyBarPermissionPreparation:
-                self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
-                return _DailyBarPermissionPreparation("UNKNOWN", now, reason)
+    def _prepare_daily_bar_permission_locked(self) -> _DailyBarPermissionPreparation:
+        """Prepare once while the caller holds the shared maintenance lock."""
+        operation = TushareOperation.DAILY_BARS
+        now = self._clock.now()
 
-            if not self._controller.is_permission_blocked(operation):
-                return _DailyBarPermissionPreparation("SKIPPED", now, "not_blocked")
-            raw = self._controller.raw_permission_retry_at(operation)
-            if raw is None:
-                return _DailyBarPermissionPreparation("SKIPPED", now, "no_due")
-            due = max(value for value in (
-                raw, self._permission_probe_deferred_until.get(operation),
-                self._controller.cooldown_until,
-            ) if value is not None)
-            if now < due:
-                return _DailyBarPermissionPreparation("SKIPPED", now, "not_due")
-            bound_mode = self._semantic_bindings is not None
-            semantics = self._stock_semantics
-            revision = semantics.semantic_revision if semantics is not None else None
+        def defer(reason: str) -> _DailyBarPermissionPreparation:
+            self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
+            return _DailyBarPermissionPreparation("UNKNOWN", now, reason)
 
-            def authority_current() -> bool:
-                current = self._stock_semantics
-                semantic_current = (
-                    self._semantic_bindings is not None
-                    and current is not None and current.semantic_revision == revision
-                    and "daily" in current.interface_scope
-                ) if bound_mode else (self._semantic_bindings is None and current is None)
-                return (
-                    semantic_current and self._stock_certification_current()
-                    and self._generation_current() and not self._admission_revoked()
-                    and self._clock.now() >= now and self._clock.now().date() == now.date()
-                )
+        if not self._controller.is_permission_blocked(operation):
+            return _DailyBarPermissionPreparation("SKIPPED", now, "not_blocked")
+        raw = self._controller.raw_permission_retry_at(operation)
+        if raw is None:
+            return _DailyBarPermissionPreparation("SKIPPED", now, "no_due")
+        due = max(value for value in (
+            raw, self._permission_probe_deferred_until.get(operation),
+            self._controller.cooldown_until,
+        ) if value is not None)
+        if now < due:
+            return _DailyBarPermissionPreparation("SKIPPED", now, "not_due")
+        bound_mode = self._semantic_bindings is not None
+        semantics = self._stock_semantics
+        revision = semantics.semantic_revision if semantics is not None else None
 
+        def authority_current() -> bool:
+            current = self._stock_semantics
+            semantic_current = (
+                self._semantic_bindings is not None
+                and current is not None and current.semantic_revision == revision
+                and "daily" in current.interface_scope
+            ) if bound_mode else (self._semantic_bindings is None and current is None)
+            return (
+                semantic_current and self._stock_certification_current()
+                and self._generation_current() and not self._admission_revoked()
+                and self._clock.now() >= now and self._clock.now().date() == now.date()
+            )
+
+        if not authority_current():
+            return defer("authority_unavailable")
+        factory = self._permission_session_factory
+        reader = self._permission_demand_reader
+        if factory is None or reader is None:
+            return defer("no_safe_session")
+        session = factory()
+        try:
+            require_owned_recovery_session(session, (
+                ActivePlan, AuditLog, EvaluationLedger, EvaluationResult, MonitorEvent,
+                MonitorSequence, PlanActivationState, PlanVersion, TradingCalendar,
+                StoredDailyBar,
+            ))
+        except ValueError:
+            # A borrowed session remains its caller's property, including its transaction.
+            return defer("no_safe_session")
+        with self._calendar_epoch_lock:
+            epoch = self._calendar_epoch
+        with session, session.no_autoflush:
+            documents = session.scalars(select(func.substr(
+                PlanVersion.payload_json, 1, 1_048_577,
+            )).where(PlanVersion.status == PlanVersionStatus.ACTIVE)
+                .order_by(PlanVersion.symbol).limit(11)).all()
+            if len(documents) > 10:
+                raise ValueError("production supports at most ten active plans")
+            if any(len(document) > 1_048_576 for document in documents):
+                raise ValueError("active plan payload exceeds the recovery read limit")
+            plans = tuple(_load_active_plan(document) for document in documents)
+            evidence = self._permission_evidence_from_repositories(
+                now, MarketReferenceRepository(session), MarketHistoryRepository(session),
+                plans, include_history=True,
+            )
+            # The synthetic own rank also applies when no broad DAILY_BARS anchor exists.
+            own_rank = self._permission_priority(operation, raw)
+            candidates, _ = self._permission_probe_state(now=now, evidence=evidence)
+            if any(item.operation is not operation and item.next_due_at <= now
+                   and self._permission_priority(item.operation, item.raw_due_at) < own_rank
+                   for item in candidates):
+                return _DailyBarPermissionPreparation("SKIPPED", now, "other_scope_due")
+            self._refresh_daily_bar_demand(session, evidence.legacy_plans, now, reader)
+            valid_symbols = []
+            # This <=10 receipt point-check budget is separate from the one historical page.
+            for symbol, receipt in tuple(self._daily_bar_demand_receipts.items()):
+                if reader.validate_permission_demand_in_session(session, receipt, now):
+                    valid_symbols.append(symbol)
+                else:
+                    del self._daily_bar_demand_receipts[symbol]
+            narrowed = replace(evidence, legacy_bar_symbols=tuple(sorted(valid_symbols)))
+            candidates, _ = self._permission_probe_state(now=now, evidence=narrowed)
+            candidate = next((item for item in candidates if item.operation is operation), None)
+            if candidate is None:
+                return defer("no_demand_or_anchor")
             if not authority_current():
                 return defer("authority_unavailable")
-            factory = self._permission_session_factory
-            reader = self._permission_demand_reader
-            if factory is None or reader is None:
-                return defer("no_safe_session")
-            session = factory()
-            try:
-                require_owned_recovery_session(session, (
-                    ActivePlan, AuditLog, EvaluationLedger, EvaluationResult, MonitorEvent,
-                    MonitorSequence, PlanActivationState, PlanVersion, TradingCalendar,
-                    StoredDailyBar,
-                ))
-            except ValueError:
-                # A borrowed session remains its caller's property, including its transaction.
-                return defer("no_safe_session")
             with self._calendar_epoch_lock:
-                epoch = self._calendar_epoch
-            with session, session.no_autoflush:
-                documents = session.scalars(select(func.substr(
-                    PlanVersion.payload_json, 1, 1_048_577,
-                )).where(PlanVersion.status == PlanVersionStatus.ACTIVE)
-                    .order_by(PlanVersion.symbol).limit(11)).all()
-                if len(documents) > 10:
-                    raise ValueError("production supports at most ten active plans")
-                if any(len(document) > 1_048_576 for document in documents):
-                    raise ValueError("active plan payload exceeds the recovery read limit")
-                plans = tuple(_load_active_plan(document) for document in documents)
-                evidence = self._permission_evidence_from_repositories(
-                    now, MarketReferenceRepository(session), MarketHistoryRepository(session),
-                    plans, include_history=True,
-                )
-                # The synthetic own rank also applies when no broad DAILY_BARS anchor exists.
-                own_rank = self._permission_priority(operation, raw)
-                candidates, _ = self._permission_probe_state(now=now, evidence=evidence)
-                if any(item.operation is not operation and item.next_due_at <= now
-                       and self._permission_priority(item.operation, item.raw_due_at) < own_rank
-                       for item in candidates):
-                    return _DailyBarPermissionPreparation("SKIPPED", now, "other_scope_due")
-                self._refresh_daily_bar_demand(session, evidence.legacy_plans, now, reader)
-                valid_symbols = []
-                # This <=10 receipt point-check budget is separate from the one historical page.
-                for symbol, receipt in tuple(self._daily_bar_demand_receipts.items()):
-                    if reader.validate_permission_demand_in_session(session, receipt, now):
-                        valid_symbols.append(symbol)
-                    else:
-                        del self._daily_bar_demand_receipts[symbol]
-                narrowed = replace(evidence, legacy_bar_symbols=tuple(sorted(valid_symbols)))
-                candidates, _ = self._permission_probe_state(now=now, evidence=narrowed)
-                candidate = next((item for item in candidates if item.operation is operation), None)
-                if candidate is None:
-                    return defer("no_demand_or_anchor")
-                if not authority_current():
-                    return defer("authority_unavailable")
-                with self._calendar_epoch_lock:
-                    if self._calendar_epoch != epoch or self._calendar_revoked.is_set():
-                        return defer("calendar_changed")
-                return _DailyBarPermissionPreparation(
-                    "PREPARED", now, "current_snapshot", candidate,
-                    self._daily_bar_demand_receipts[candidate.symbol],
-                    bound_mode, revision, epoch,
-                )
+                if self._calendar_epoch != epoch or self._calendar_revoked.is_set():
+                    return defer("calendar_changed")
+            return _DailyBarPermissionPreparation(
+                "PREPARED", now, "current_snapshot", candidate,
+                self._daily_bar_demand_receipts[candidate.symbol],
+                bound_mode, revision, epoch, reader, factory,
+            )
 
     def _refresh_daily_bar_demand(
         self, session: Session, plans: tuple[TradePlan, ...], now: datetime,
@@ -1291,6 +1298,165 @@ class ProductionMonitorPipeline:
                 self._daily_bar_demand_cursors.pop(symbol, None)
             if result.receipt is not None:
                 self._daily_bar_demand_receipts[symbol] = result.receipt
+
+    async def _maybe_recheck_daily_bars_permission(self) -> PermissionMaintenanceResult:
+        """Recheck the original prepared demand without granting business execution."""
+        owner_task = asyncio.current_task()
+        cancelled = Event()
+        operation = TushareOperation.DAILY_BARS
+        try:
+            async with self._permission_maintenance_lock:
+                prepared = self._prepare_daily_bar_permission_locked()
+                if prepared.status == "SKIPPED":
+                    return PermissionMaintenanceResult.SKIPPED
+                if prepared.status == "UNKNOWN":
+                    return PermissionMaintenanceResult.DEFERRED
+                candidate, receipt = prepared.candidate, prepared.receipt
+                reader, factory = prepared.reader, prepared.session_factory
+
+                def defer_local() -> PermissionMaintenanceResult:
+                    self._permission_probe_deferred_until[operation] = (
+                        self._clock.now() + timedelta(seconds=30)
+                    )
+                    return PermissionMaintenanceResult.DEFERRED
+
+                if (candidate is None or receipt is None or reader is None or factory is None
+                        or candidate.operation is not operation
+                        or candidate.symbol != receipt.identity.symbol
+                        or candidate.daily_bar_pool not in {"O", "F"}):
+                    return defer_local()
+                anchor, symbol = candidate.anchor_date, candidate.symbol
+                with self._calendar_epoch_lock:
+                    revoked = self._calendar_revoked
+
+                def authority_current() -> bool:
+                    current = self._stock_semantics
+                    semantic_current = (
+                        self._semantic_bindings is not None and current is not None
+                        and current.semantic_revision == prepared.semantic_revision
+                        and "daily" in current.interface_scope
+                    ) if prepared.semantic_bound else (
+                        self._semantic_bindings is None and current is None
+                    )
+                    now = self._clock.now()
+                    if (cancelled.is_set() or now < prepared.captured_at
+                            or now.date() != prepared.captured_at.date()
+                            or self._permission_demand_reader is not reader
+                            or self._permission_session_factory is not factory
+                            or not semantic_current or not self._stock_certification_current()
+                            or not self._generation_current() or self._admission_revoked()):
+                        return False
+                    with self._calendar_epoch_lock:
+                        return (prepared.calendar_epoch == self._calendar_epoch
+                                and revoked is self._calendar_revoked and not revoked.is_set())
+
+                if not authority_current() or self._permission_market_window is None:
+                    return defer_local()
+                try:
+                    latest_start = prepared.captured_at + timedelta(
+                        seconds=LIVE_TUSHARE_TIMEOUT_SECONDS,
+                    )
+                    market_window = _FrozenPermissionMarketWindow(
+                        captured_at=prepared.captured_at, latest_start_at=latest_start,
+                        deadlines=self._permission_market_window(
+                            prepared.captured_at, latest_start + _INDEX_PERMISSION_GUARD,
+                        ),
+                    )
+                    blocker = market_window.blocker(self._clock.now())
+                except ValueError:
+                    return defer_local()
+                if blocker is not None:
+                    self._permission_probe_deferred_until[operation] = (
+                        max(self._clock.now(), blocker[0]) + timedelta(microseconds=1)
+                    )
+                    return PermissionMaintenanceResult.DEFERRED
+
+                def start_current() -> bool:
+                    if not authority_current():
+                        return False
+                    try:
+                        return market_window.blocker(self._clock.now()) is None
+                    except ValueError:
+                        return False
+
+                def defer_start() -> PermissionMaintenanceResult:
+                    now = self._clock.now()
+                    try:
+                        blocker = market_window.blocker(now)
+                    except ValueError:
+                        blocker = None
+                    if blocker is not None:
+                        self._permission_probe_deferred_until[operation] = (
+                            max(now, blocker[0]) + timedelta(microseconds=1)
+                        )
+                        return PermissionMaintenanceResult.DEFERRED
+                    return defer_local()
+
+                provider_probe = self.provider.probe_daily_bars_permission
+
+                def probe() -> None:
+                    if not start_current():
+                        raise RequestNotStartedError("daily bars authority changed at worker entry")
+
+                    def physical_start() -> None:
+                        if not start_current():
+                            raise RequestNotStartedError("daily bars authority changed before SDK")
+
+                    provider_probe(symbol, anchor, _physical_start=physical_start)
+
+                def owner_current() -> bool:
+                    return (owner_task is not None and owner_task.cancelling() == 0
+                            and authority_current())
+
+                def validate_after() -> bool:
+                    if not owner_current():
+                        return False
+                    response_at = self._clock.now()
+                    if anchor.weekday() >= 5 or anchor >= response_at.date():
+                        return False
+                    session = factory()
+                    require_owned_recovery_session(session, (
+                        ActivePlan, AuditLog, EvaluationLedger, EvaluationResult, MonitorEvent,
+                        MonitorSequence, PlanActivationState, PlanVersion, TradingCalendar,
+                    ))
+                    with session, session.no_autoflush:
+                        valid = (
+                            reader.validate_permission_demand_in_session(
+                                session, receipt, response_at,
+                            )
+                            and _calendar_open_on(session, anchor, anchor)(anchor) is True
+                        )
+                    # The read snapshot ends before the controller's separate recovery write.
+                    return valid and owner_current()
+
+                callback = self._permission_probe_reservation_callback(candidate)
+                if not start_current():
+                    return defer_start()
+                try:
+                    await self._controller.recheck_permission(
+                        operation, probe, work_key=f"permission:daily:{symbol}:{anchor}",
+                        validate_after=validate_after, can_start=start_current,
+                        on_reserved=callback,
+                    )
+                except RequestNotStartedError:
+                    return defer_start()
+                except RequestControlError as error:
+                    if error.code not in {
+                        RequestControlErrorCode.BLOCKED_PERMISSION,
+                        RequestControlErrorCode.RATE_LIMITED,
+                        RequestControlErrorCode.TRANSIENT,
+                        RequestControlErrorCode.TIMEOUT,
+                        RequestControlErrorCode.INVALID_RESPONSE,
+                    }:
+                        raise
+                    return PermissionMaintenanceResult.FAILED
+                self._permission_probe_deferred_until.pop(operation, None)
+                return PermissionMaintenanceResult.PROBED
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        finally:
+            cancelled.set()
 
     async def _maybe_recheck_index_daily_permission(self) -> PermissionMaintenanceResult:
         """Run one serial, read-only INDEX_DAILY permission proof."""
