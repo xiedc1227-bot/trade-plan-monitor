@@ -43,6 +43,8 @@ class _DefaultTushareQuery:
         self._token = token
 
     def __call__(self, api_name: str, fields: str = "", **kwargs: object) -> pd.DataFrame:
+        from trade_plan_monitor.runtime.request_control import RequestNotStartedError
+
         if not isinstance(api_name, str) or _ENDPOINT_NAME.fullmatch(api_name) is None:
             raise ValueError("Tushare operation name is invalid")
         kwargs.setdefault("ts_type_name", self._endpoint)
@@ -103,6 +105,10 @@ class _DefaultTushareQuery:
                                     api_name,
                                     failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
                                 )
+        except RequestNotStartedError:
+            raise
+        except requests.HTTPError as error:
+            failure = TushareMarketDataProvider._safe_provider_error(api_name, error)
         except requests.Timeout:
             failure = requests.Timeout("Tushare request timed out")
             failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_TIMEOUT
@@ -151,6 +157,8 @@ class _DirectTushareQuery:
         self._token = token
 
     def __call__(self, api_name: str, fields: str = "", **kwargs: object) -> pd.DataFrame:
+        from trade_plan_monitor.runtime.request_control import RequestNotStartedError
+
         if not isinstance(api_name, str) or _ENDPOINT_NAME.fullmatch(api_name) is None:
             raise ValueError("Tushare operation name is invalid")
         endpoint = urlsplit(self._endpoint)
@@ -215,6 +223,10 @@ class _DirectTushareQuery:
                                     api_name,
                                     failure_kind=TushareFailureKind.RESPONSE_SCHEMA,
                                 )
+        except RequestNotStartedError:
+            raise
+        except requests.HTTPError as error:
+            failure = TushareMarketDataProvider._safe_provider_error(api_name, error)
         except urllib3.exceptions.TimeoutError:
             failure = requests.Timeout("Tushare request timed out")
             failure._tushare_failure_kind = TushareFailureKind.TRANSPORT_TIMEOUT

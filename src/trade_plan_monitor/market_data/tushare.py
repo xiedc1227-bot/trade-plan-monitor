@@ -10,10 +10,11 @@ import math
 import re
 from collections import Counter
 from collections.abc import Callable, Hashable
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, DecimalException
 from enum import StrEnum
-from typing import TypeVar
+from typing import Literal, TypeVar
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -36,6 +37,7 @@ from trade_plan_monitor.market_data.sessions import (
     SourceTimeMappingUnverifiedError,
     is_minute_usable,
     normalize_source_minute,
+    session_for_minute_end,
 )
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -123,6 +125,30 @@ class TushareProviderError(RuntimeError):
         self.failure_kind = failure_kind
         self.http_status_class = http_status_class
         super().__init__(f"Tushare {operation} failed ({code.value})")
+
+
+class _NoPositiveMinuteProof(TushareProviderError):
+    """A structurally valid response without any completed permission evidence."""
+
+    def __init__(self, operation: str) -> None:
+        super().__init__(TushareErrorCode.INVALID_RESPONSE, operation)
+        self.args = (f"Tushare {operation} failed (NO_POSITIVE_PROOF)",)
+
+
+@dataclass(frozen=True, slots=True)
+class MinutePermissionEvidence:
+    """Validated raw evidence; persisted calendar/authority checks still belong to the owner."""
+
+    operation: Literal["rt_min_daily", "rt_min"]
+    symbol: str
+    request_date: date
+    started_at: datetime
+    received_at: datetime
+    source_label: SourceTimeLabel
+    source_dates: tuple[date, ...]
+    completed_count: int
+    opening_count: int
+    incomplete_count: int
 
 
 class TushareMarketDataProvider:
@@ -289,6 +315,198 @@ class TushareMarketDataProvider:
             requested=frozenset({requested_symbol}),
             require_current_day_frequency=True,
         )
+
+    def probe_current_day_minutes_permission(
+        self, symbol: str, trade_date: date, *, physical_start: Callable[[], datetime],
+    ) -> MinutePermissionEvidence:
+        """Validate one entire rt_min_daily response without storing business minutes."""
+
+        return self._probe_minutes_permission("rt_min_daily", symbol, trade_date, physical_start)
+
+    def probe_realtime_minutes_permission(
+        self, symbol: str, trade_date: date, *, physical_start: Callable[[], datetime],
+    ) -> MinutePermissionEvidence:
+        """Validate bounded, potentially multi-day rt_min evidence without calendar I/O."""
+
+        return self._probe_minutes_permission("rt_min", symbol, trade_date, physical_start)
+
+    def _probe_minutes_permission(
+        self, operation: Literal["rt_min_daily", "rt_min"], symbol: str,
+        trade_date: date, physical_start: Callable[[], datetime],
+    ) -> MinutePermissionEvidence:
+        from trade_plan_monitor.runtime.request_control import RequestNotStartedError
+
+        if type(symbol) is not str or type(trade_date) is not date:
+            raise ValueError("minute proof requires a canonical symbol and date")
+        symbol = self._validated_symbol(symbol)
+        source_label = self._source_time_label
+        if (
+            not isinstance(source_label, SourceTimeLabel)
+            or source_label is SourceTimeLabel.UNVERIFIED
+        ):
+            raise SourceTimeMappingUnverifiedError("source time label mapping is UNVERIFIED")
+        if self._grace != DEFAULT_DATA_GRACE:
+            raise ValueError("minute proof requires 12-second grace")
+        if not callable(physical_start):
+            raise TypeError("physical_start must be callable")
+        endpoint = getattr(self._client, operation)
+        fields = _CURRENT_DAY_FIELDS if operation == "rt_min_daily" else _MINUTE_FIELDS
+        # The guard and its clock validation precede the SDK and sanitizer.
+        started_at = self._minute_proof_clock(physical_start(), trade_date)
+        failure = None
+        try:
+            raw_frame = endpoint(fields=fields, ts_code=symbol, freq="1MIN")
+        except RequestNotStartedError:
+            raise
+        except Exception as error:
+            classified = self._safe_provider_error(operation, error)
+            # Rebuild even a typed SDK error so a raw cause/context cannot escape.
+            failure = TushareProviderError(
+                classified.code, operation, failure_kind=classified.failure_kind,
+                http_status_class=classified.http_status_class,
+            )
+        else:
+            received_at = self._now()
+        if failure is not None:
+            raise failure
+
+        invalid_response = False
+        try:
+            received_at = self._minute_proof_clock(received_at, trade_date)
+            if not timedelta(0) <= received_at - started_at <= timedelta(seconds=15):
+                raise ValueError("minute proof evidence interval is invalid")
+            dates, completed, opening, incomplete = self._minute_proof_rows(
+                raw_frame, operation, symbol, trade_date, started_at, received_at, source_label,
+            )
+        except _ROW_ERRORS:
+            invalid_response = True
+        # Raise after the catch: bad provider cells must not survive in __context__.
+        if invalid_response:
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, operation)
+        if completed == 0:
+            raise _NoPositiveMinuteProof(operation)
+        return MinutePermissionEvidence(
+            operation, symbol, trade_date, started_at, received_at, source_label,
+            dates, completed, opening, incomplete,
+        )
+
+    @staticmethod
+    def _minute_proof_clock(value: datetime, trade_date: date) -> datetime:
+        if (
+            type(value) is not datetime or value.tzinfo is None
+            or value.utcoffset() != timedelta(hours=8) or value.date() != trade_date
+        ):
+            raise ValueError("minute proof clock must be on the Shanghai request date")
+        return value.replace(tzinfo=_SHANGHAI)
+
+    def _minute_proof_rows(
+        self, frame: object, operation: str, symbol: str, trade_date: date,
+        started_at: datetime, received_at: datetime, source_label: SourceTimeLabel,
+    ) -> tuple[tuple[date, ...], int, int, int]:
+        limit = 241 if operation == "rt_min_daily" else 1000
+        if not isinstance(frame, pd.DataFrame) or not (
+            0 <= len(frame) <= limit and 8 <= len(frame.columns) <= 9
+        ):
+            raise ValueError("minute proof dimensions are invalid")
+        columns = tuple(frame.columns)
+        if any(type(column) is not str or len(column) > 7 for column in columns):
+            raise ValueError("minute proof column type is invalid")
+        names = set(columns)
+        identities = names & {"ts_code", "code"}
+        if len(identities) != 1 or (operation == "rt_min" and identities != {"ts_code"}):
+            raise ValueError("minute proof identity column is invalid")
+        identity_column = next(iter(identities))
+        required = {identity_column, "time", "open", "close", "high", "low", "vol", "amount"}
+        if len(names) != len(columns) or not required <= names <= required | {"freq"}:
+            raise ValueError("minute proof schema is invalid")
+        dates: set[date] = set()
+        seen: set[datetime] = set()
+        completed = opening = incomplete = 0
+        # to_dict boxes numeric object subclasses by invoking their conversion hooks.
+        # Tuple iteration preserves object cells for the exact-type scalar preflight.
+        for cells in frame.itertuples(index=False, name=None):
+            row = dict(zip(columns, cells, strict=True))
+            if type(row[identity_column]) is not str or row[identity_column] != symbol:
+                raise ValueError("minute proof symbol is invalid")
+            if "freq" in names and (type(row["freq"]) is not str or row["freq"] != "1MIN"):
+                raise ValueError("minute proof frequency is invalid")
+            raw_time = row["time"]
+            if type(raw_time) is not str or len(raw_time) != 19:
+                raise ValueError("minute proof time type is invalid")
+            source_at = datetime.strptime(raw_time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=_SHANGHAI)
+            if source_at.strftime("%Y-%m-%d %H:%M:%S") != raw_time or source_at.second:
+                raise ValueError("minute proof time is not canonical")
+            source_date = source_at.date()
+            if source_date > trade_date or (
+                operation == "rt_min_daily" and source_date != trade_date
+            ):
+                raise ValueError("minute proof date is invalid")
+            if source_at in seen:
+                raise ValueError("minute proof identity is duplicated")
+            seen.add(source_at)
+            dates.add(source_date)
+            self._minute_proof_payload(row)
+            if source_label is SourceTimeLabel.END and (
+                source_at.hour, source_at.minute
+            ) == (9, 30):
+                if source_at > received_at:
+                    raise ValueError("minute proof opening is in the future")
+                opening += 1
+                continue
+            bar_end = source_at + (
+                timedelta(minutes=1) if source_label is SourceTimeLabel.START
+                else timedelta(0)
+            )
+            if session_for_minute_end(bar_end) is None:
+                raise ValueError("minute proof interval is outside a session")
+            if bar_end + DEFAULT_DATA_GRACE <= started_at:
+                completed += 1
+            elif source_date == trade_date and bar_end - timedelta(minutes=1) <= received_at:
+                incomplete += 1
+                if incomplete > 2:
+                    raise ValueError("minute proof has too many incomplete intervals")
+            else:
+                raise ValueError("minute proof interval has not started")
+        return tuple(sorted(dates)), completed, opening, incomplete
+
+    @classmethod
+    def _minute_proof_payload(cls, row: dict[str, object]) -> None:
+        values = {key: cls._minute_proof_number(row[key]) for key in (
+            "open", "close", "high", "low", "vol", "amount",
+        )}
+        opening, closing, high, low = (
+            cls._price_fen(values[key]) for key in ("open", "close", "high", "low")
+        )
+        if high < max(opening, closing) or low > min(opening, closing):
+            raise ValueError("minute proof OHLC is invalid")
+        cls._scaled_integer(values["vol"], places=0)
+
+    @staticmethod
+    def _minute_proof_number(value: object) -> Decimal:
+        """Bound scalar work before coercion, including zero exponent fast paths."""
+
+        if type(value) not in (str, int, float, Decimal):
+            raise ValueError("minute proof numeric type is invalid")
+        if type(value) is int and value.bit_length() > 2127:
+            raise ValueError("minute proof integer is too large")
+        if type(value) is not Decimal:
+            raw = str(value)
+            if not 1 <= len(raw) <= _MAX_NORMALIZED_INTEGER_DIGITS:
+                raise ValueError("minute proof numeric text is too long")
+            value = Decimal(raw)
+        if not value.is_finite() or value < 0:
+            raise ValueError("minute proof numeric value is invalid")
+        sign, digits, exponent = value.as_tuple()
+        if len(digits) > _MAX_NORMALIZED_INTEGER_DIGITS:
+            raise ValueError("minute proof coefficient is too long")
+        decimal_position = len(digits) + exponent
+        expanded = (
+            decimal_position if exponent >= 0 else
+            len(digits) + 1 if decimal_position > 0 else 2 - exponent
+        ) + sign
+        if expanded > _MAX_NORMALIZED_INTEGER_DIGITS:
+            raise ValueError("minute proof expanded value is too long")
+        return value
 
     def trading_calendar(
         self,
@@ -643,10 +861,14 @@ class TushareMarketDataProvider:
         )
 
     def _fetch_frame(self, operation: str, *, fields: str, **kwargs: object) -> pd.DataFrame:
+        from trade_plan_monitor.runtime.request_control import RequestNotStartedError
+
         provider_error: TushareProviderError | None = None
         try:
             endpoint = getattr(self._client, operation)
             frame = endpoint(fields=fields, **kwargs)
+        except RequestNotStartedError:
+            raise
         except Exception as error:
             provider_error = self._safe_provider_error(operation, error)
         if provider_error is not None:
@@ -1039,6 +1261,7 @@ class TushareMarketDataProvider:
 
 
 __all__ = [
+    "MinutePermissionEvidence",
     "TushareErrorCode",
     "TushareFailureKind",
     "TushareHTTPStatusClass",
