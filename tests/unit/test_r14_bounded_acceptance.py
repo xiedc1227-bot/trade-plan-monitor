@@ -187,6 +187,7 @@ def test_ai_guard_allows_only_one_approved_prompt_and_counts_failed_attempt() ->
         "model": APPROVED_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 4096,
+        "temperature": 0,
         "thinking": {"type": "disabled"},
         "response_format": {"type": "json_object"},
         "stream": False,
@@ -205,6 +206,38 @@ def test_ai_guard_allows_only_one_approved_prompt_and_counts_failed_attempt() ->
     asyncio.run(exercise())
     assert len(sent) == 1
     assert budget.snapshot()["totalAttempts"] == 1
+
+
+@pytest.mark.parametrize("temperature", [None, 0.1], ids=["missing", "nonzero"])
+def test_ai_guard_rejects_unapproved_temperature_before_transport(temperature) -> None:
+    _, prompt = next(iter(approved_sources().values()))
+    budget = Budget(total=1, per_key={key: 1 for key in approved_sources()}, seconds=60)
+    sent: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(503)
+
+    payload = {
+        "model": APPROVED_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 4096,
+        "thinking": {"type": "disabled"},
+        "response_format": {"type": "json_object"},
+        "stream": False,
+    }
+    if temperature is not None:
+        payload["temperature"] = temperature
+
+    async def exercise() -> None:
+        transport = AIBudgetTransport(budget, inner=httpx.MockTransport(handler))
+        async with httpx.AsyncClient(transport=transport) as client:
+            with pytest.raises(BudgetDenied):
+                await client.post("https://api.deepseek.com/chat/completions", json=payload)
+
+    asyncio.run(exercise())
+    assert sent == []
+    assert budget.snapshot()["totalAttempts"] == 0
 
 
 def test_approved_sources_are_the_three_fixed_repository_inputs() -> None:

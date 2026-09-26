@@ -112,7 +112,11 @@ def test_reference_failure_retains_closed_category_and_recovery_clears_it(tmp_pa
 
     class Pipeline:
         reference_stage = TushareOperation.TRADING_CALENDAR
+        _stock_semantics = object()
         failing = True
+
+        def recovery_issues(self):
+            return ()
 
         async def refresh_references(self, trade_date):
             if self.failing:
@@ -155,6 +159,44 @@ def test_reference_failure_retains_closed_category_and_recovery_clears_it(tmp_pa
 
     try:
         asyncio.run(scenario())
+    finally:
+        controller.close()
+        engine.dispose()
+
+
+def test_missing_stock_binding_skips_reference_refresh_without_stage_errors(tmp_path):
+    refreshed_dates = []
+    observed_failures = []
+
+    class Pipeline:
+        reference_stage = TushareOperation.TRADING_CALENDAR
+        _stock_semantics = None
+
+        def recovery_issues(self):
+            return ()
+
+        async def refresh_references(self, trade_date):
+            refreshed_dates.append(trade_date)
+            raise AssertionError("unbound stock references must not refresh")
+
+    engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
+    controller = create_live_tushare_request_controller(clock=Clock())
+    state = _ProductionRuntimeState(
+        config_path=tmp_path / "unused.yaml",
+        database_path=tmp_path / "monitor.sqlite3",
+        engine=engine,
+        session_factory=create_session_factory(engine),
+        clock=Clock(),
+        request_controller=controller,
+        on_reference_failure=observed_failures.append,
+    )
+    state._pipeline = Pipeline()
+    try:
+        asyncio.run(state.refresh_references(NOW.date()))
+        assert refreshed_dates == []
+        assert state._stage_errors == {}
+        assert state._stage_retry_at == {}
+        assert observed_failures == []
     finally:
         controller.close()
         engine.dispose()
@@ -203,6 +245,10 @@ def test_reference_diagnostic_never_logs_untrusted_exception(tmp_path, caplog, f
     observed_failures: list[str] = []
     class Pipeline:
         reference_stage = TushareOperation.TRADING_CALENDAR
+        _stock_semantics = object()
+
+        def recovery_issues(self):
+            return ()
 
         async def refresh_references(self, trade_date):
             raise failure

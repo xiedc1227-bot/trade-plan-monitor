@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import date, datetime
 from pathlib import Path
@@ -21,11 +22,18 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
-from trade_plan_monitor.state.models import AuditLog
+from trade_plan_monitor.state.models import (
+    AuditLog,
+    PositionLot,
+    RequestIdempotency,
+    RuntimeLiveness,
+)
+from trade_plan_monitor.state.runtime_liveness import RuntimeLivenessRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.monitor_composition import (
     MonitorWebComposition,
+    SystemClock,
     create_monitor_composition,
 )
 
@@ -34,6 +42,15 @@ _FIXED_NOW = datetime(2026, 9, 3, 10, 30, tzinfo=_SHANGHAI)
 _SAMPLE_PLAN_PATH = (
     Path(__file__).resolve().parents[2] / "config" / "plans" / "003043.SZ.sample.yaml"
 )
+
+
+@pytest.fixture(autouse=True)
+def _fixed_production_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def sleep_until(_clock: SystemClock, _deadline: datetime) -> None:
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(SystemClock, "now", lambda _clock: _FIXED_NOW)
+    monkeypatch.setattr(SystemClock, "sleep_until", sleep_until)
 
 
 @pytest.fixture(autouse=True)
@@ -49,19 +66,25 @@ def _reject_provider_requests(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(DataApi, "query", reject)
 
 
-def _seed_active_plan(database_path: Path) -> None:
+def _seed_active_plan(database_path: Path, *, initialize_liveness: bool = True) -> None:
     engine = create_sqlite_engine(database_path)
     try:
         upgrade_database(engine)
+        sessions = create_session_factory(engine)
+        if initialize_liveness:
+            RuntimeLivenessRepository(sessions).initialize_empty(_FIXED_NOW)
         plan_source = _SAMPLE_PLAN_PATH.read_text(encoding="utf-8")
         plan = load_plan_yaml(plan_source)
+        assert plan.schema_version == 1
+        assert plan.activation.mode == "MANUAL"
+        assert plan.position.max_qty == 200
         validation = validate_trade_plan(
             plan,
             available_market_evidence=set(ALL_MARKET_EVIDENCE),
         )
         assert validation.can_activate
         with SqlAlchemyUnitOfWork(
-            create_session_factory(engine),
+            sessions,
             clock=lambda: _FIXED_NOW,
         ) as work:
             work.plans.save_draft(plan, source_text=plan_source)
@@ -97,13 +120,15 @@ def _seed_active_plan(database_path: Path) -> None:
         engine.dispose()
 
 
-def _production_position_app(tmp_path: Path) -> tuple[FastAPI, MonitorWebComposition, Path]:
+def _production_position_app(
+    tmp_path: Path, *, initialize_liveness: bool = True,
+) -> tuple[FastAPI, MonitorWebComposition, Path]:
     config_path = tmp_path / "config" / "app.yaml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text("{}\n", encoding="utf-8")
     database_path = tmp_path / "state" / "monitor.sqlite3"
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    _seed_active_plan(database_path)
+    _seed_active_plan(database_path, initialize_liveness=initialize_liveness)
     composition = create_monitor_composition(
         config_path=config_path,
         database_path=database_path,
@@ -136,6 +161,46 @@ def _assert_conflict(response: Response) -> None:
 def _assert_unavailable(response: Response) -> None:
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
+
+
+def test_missing_liveness_blocks_position_write_without_mutation(tmp_path: Path) -> None:
+    app, _composition, database_path = _production_position_app(
+        tmp_path, initialize_liveness=False,
+    )
+    engine = create_sqlite_engine(database_path)
+    sessions = create_session_factory(engine)
+
+    def mutation_snapshot():
+        with sessions() as session:
+            return {
+                model.__tablename__: session.execute(
+                    select(model.__table__).order_by(*model.__table__.primary_key),
+                ).all()
+                for model in (PositionLot, RequestIdempotency, AuditLog)
+            }
+
+    try:
+        before = mutation_snapshot()
+        assert before["position_lot"] == []
+        assert before["request_idempotency"] == []
+        with sessions() as session:
+            assert session.scalars(select(RuntimeLiveness)).all() == []
+        with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            health = client.get("/api/v1/health")
+            assert health.status_code == 200
+            assert health.json()["status"] == "BLOCKED"
+            assert health.json()["blockReason"] == "LEGACY_PLANS_REQUIRE_REVIEW"
+            response = client.post(
+                "/api/v1/position-lots",
+                headers={"Idempotency-Key": "webf09-missing-liveness"},
+                json=_buy_payload(),
+            )
+            _assert_conflict(response)
+            assert mutation_snapshot() == before
+            with sessions() as session:
+                assert session.scalars(select(RuntimeLiveness)).all() == []
+    finally:
+        engine.dispose()
 
 
 def test_default_monitor_composition_injects_persistent_position_service(
