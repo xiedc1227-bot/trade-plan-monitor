@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Literal
+from uuid import uuid4
 
 from sqlalchemy import Integer, case, cast, func, select
 from sqlalchemy.orm import Session
@@ -18,6 +19,11 @@ from trade_plan_monitor.decision.models import (
     SignalType,
 )
 from trade_plan_monitor.domain.plan_hash import plan_sha256
+from trade_plan_monitor.domain.plan_models import (
+    DateRangeActivation,
+    TradingDayActivation,
+    activation_is_eligible_on,
+)
 from trade_plan_monitor.market_data.models import TradingDay
 from trade_plan_monitor.market_data.sessions import SHANGHAI
 from trade_plan_monitor.runtime.clock import _canonical_shanghai
@@ -112,6 +118,50 @@ class ProvenHistoricalClose:
     status: Literal["PROVEN"] = field(default="PROVEN", init=False)
 
 
+@dataclass(frozen=True, slots=True)
+class DemandIdentity:
+    symbol: str
+    plan_version_id: str
+    plan_hash: str
+    formula_version: str
+    activation_revision: int
+    activated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class DemandCheckpoint:
+    identity: OfficialCloseEvaluationIdentity
+    result_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class DemandCursor:
+    identity: DemandIdentity
+    next_date: date
+    checkpoint: DemandCheckpoint | None
+    observed_at: datetime
+    reader_token: str
+
+
+@dataclass(frozen=True, slots=True)
+class DemandReceipt:
+    identity: DemandIdentity
+    kind: Literal["TODAY_REFERENCE", "HISTORICAL_CLOSE"]
+    d_need: date | None
+    checkpoint: DemandCheckpoint | None
+    captured_at: datetime
+    reader_token: str
+
+
+@dataclass(frozen=True, slots=True)
+class DemandCheck:
+    status: Literal["NEEDED", "NONE", "UNKNOWN"]
+    identity: DemandIdentity | None
+    receipt: DemandReceipt | None
+    reason: str
+    next_cursor: DemandCursor | None = None
+
+
 class LegacyHistoricalCloseReader:
     """Prepare the earliest missing suffix close in one owned SQLite snapshot.
 
@@ -121,6 +171,113 @@ class LegacyHistoricalCloseReader:
 
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
+        self._permission_token = str(uuid4())
+
+    def inspect_permission_demand_in_session(
+        self, session: Session, symbol: str, now: datetime, cursor: DemandCursor | None = None,
+    ) -> DemandCheck:
+        """Read one permission-demand page; never authorize historical execution.
+
+        The caller provides an explicit-BEGIN snapshot. Cursor progress is a search
+        hint only, never accumulated proof that earlier pages were complete.
+        """
+        symbol = _SYMBOL.validate_python(symbol, strict=True)
+        now = _canonical_shanghai(now)
+        identity = None
+        with session.no_autoflush:
+            try:
+                scope, sequence, identity = _permission_scope(session, symbol, now)
+                if cursor is not None:
+                    if (not isinstance(cursor, DemandCursor)
+                            or cursor.reader_token != self._permission_token
+                            or now < cursor.observed_at):
+                        return DemandCheck("UNKNOWN", identity, None, "invalid_cursor")
+                    if cursor.identity != identity:
+                        cursor = None
+                if activation_is_eligible_on(scope.plan.activation, now.date()):
+                    receipt = DemandReceipt(identity, "TODAY_REFERENCE", None, None,
+                                            now, self._permission_token)
+                    return DemandCheck("NEEDED", identity, receipt, "today_reference")
+                start, end = _permission_bounds(scope)
+                if start > end:
+                    return DemandCheck("NONE", identity, None, "empty_applicable_range")
+                reader = _CompletionReader(session, scope, sequence)
+                checkpoint = _permission_checkpoint(session, scope, reader, end)
+                if cursor is not None and _checkpoint_regressed(cursor.checkpoint, checkpoint):
+                    return DemandCheck("UNKNOWN", identity, None, "checkpoint_rollback")
+                if checkpoint is not None:
+                    start = max(start, checkpoint.identity.official_trade_date + timedelta(days=1))
+                if start > end:
+                    return DemandCheck("NONE", identity, None, "checkpoint_covers_end")
+                page_start = start
+                if cursor is not None:
+                    _require(type(cursor.next_date) is date)
+                    page_start = max(start, cursor.next_date)
+                    if page_start > end:
+                        page_start = start
+                window = _permission_window(session, scope, reader, page_start, end)
+                next_date = (window.window_end + timedelta(days=1)
+                             if window.window_end < end else start)
+                next_cursor = DemandCursor(identity, next_date, checkpoint, now,
+                                           self._permission_token)
+                absent = next((item for item in window.candidates
+                               if item.status is CompletionStatus.ABSENT), None)
+                if absent is not None:
+                    receipt = DemandReceipt(identity, "HISTORICAL_CLOSE",
+                                            absent.identity.official_trade_date, checkpoint,
+                                            now, self._permission_token)
+                    return DemandCheck("NEEDED", identity, receipt, "historical_absence",
+                                       next_cursor)
+                if (page_start == start and window.window_end == end
+                        and all(item.status is CompletionStatus.PROVEN
+                                for item in window.candidates)):
+                    return DemandCheck("NONE", identity, None, "complete_current_snapshot")
+                return DemandCheck("UNKNOWN", identity, None, "incomplete_current_snapshot",
+                                   next_cursor)
+            except ActivationHistoryLimit, _HistoryLimit:
+                reason = "history_limit"
+            except MissingActivationEvidence, _MissingEvidence:
+                reason = "missing_evidence"
+            except (*_CONTENT_ERRORS, OverflowError):
+                reason = "invalid_evidence"
+            return DemandCheck("UNKNOWN", identity, None, reason)
+
+    def validate_permission_demand_in_session(
+        self, session: Session, receipt: DemandReceipt, now: datetime,
+    ) -> bool:
+        """Recheck one same-day witness in the caller's current read snapshot."""
+        now = _canonical_shanghai(now)
+        with session.no_autoflush:
+            try:
+                if (not isinstance(receipt, DemandReceipt)
+                        or receipt.reader_token != self._permission_token
+                        or now < receipt.captured_at
+                        or now.date() != receipt.captured_at.date()):
+                    return False
+                scope, sequence, identity = _permission_scope(session, receipt.identity.symbol, now)
+                if identity != receipt.identity:
+                    return False
+                today_eligible = activation_is_eligible_on(scope.plan.activation, now.date())
+                if receipt.kind == "TODAY_REFERENCE":
+                    return today_eligible and receipt.d_need is None and receipt.checkpoint is None
+                if receipt.kind != "HISTORICAL_CLOSE" or today_eligible:
+                    return False
+                start, end = _permission_bounds(scope)
+                day = receipt.d_need
+                if type(day) is not date or not start <= day <= end:
+                    return False
+                reader = _CompletionReader(session, scope, sequence)
+                checkpoint = _permission_checkpoint(session, scope, reader, end)
+                if (_checkpoint_regressed(receipt.checkpoint, checkpoint)
+                        or (checkpoint is not None
+                            and checkpoint.identity.official_trade_date >= day)):
+                    return False
+                window = _permission_window(session, scope, reader, day, day)
+                return (len(window.candidates) == 1
+                        and window.candidates[0].status is CompletionStatus.ABSENT)
+            except (ActivationHistoryLimit, MissingActivationEvidence, _HistoryLimit,
+                    _MissingEvidence, *_CONTENT_ERRORS, OverflowError):
+                return False
 
     def missing_targets(
         self, symbol: str, observed_at: datetime,
@@ -273,6 +430,73 @@ def _scan_close_suffix(scope, session, completion_on, start):
         if window.next_window_start is None:
             return
         window_start = window.next_window_start
+
+
+def _permission_scope(session, symbol, now):
+    read_monitor_highwater(session)
+    history = read_activation_history(session, symbol)
+    _require(all(item.occurred_at <= now for item in history))
+    boundary = history[-1]
+    _require(boundary.plan_version_id is not None)
+    scope = LegacyCloseRecoveryReader._scope(session, symbol, now, boundary)
+    _require(not isinstance(scope, UnknownCloseRecovery))
+    identity = DemandIdentity(
+        symbol, scope.plan_version_id, plan_sha256(scope.plan),
+        scope.plan.monitoring.indicator_formula_version, scope.activation_revision,
+        scope.activated_at,
+    )
+    return scope, boundary.sequence, identity
+
+
+def _permission_bounds(scope):
+    # Today-eligible plans have already short-circuited. Only expired date policies
+    # reach the scanner; future policies have an empty interval, manual has none.
+    policy = scope.plan.activation
+    if isinstance(policy, DateRangeActivation):
+        first, last = policy.start_date, policy.end_date
+    elif isinstance(policy, TradingDayActivation):
+        first = last = policy.trading_day
+    else:
+        raise ValueError("Historical permission demand requires an expired date policy")
+    return max(scope.activated_at.date(), first), min(last, scope.observed_at.date())
+
+
+def _permission_checkpoint(session, scope, reader, end):
+    result = _latest_completed_close(session, scope, reader, end + timedelta(days=1))
+    if result is None:
+        return None
+    identity = result.evaluation_identity
+    start, _ = _permission_bounds(scope)
+    _require(isinstance(identity, OfficialCloseEvaluationIdentity))
+    day = identity.official_trade_date
+    _require(start <= day <= end
+             and identity.plan_hash == plan_sha256(scope.plan)
+             and identity.symbol == scope.plan.symbol
+             and identity.formula_version == scope.plan.monitoring.indicator_formula_version
+             and result.snapshot.plan_id == scope.plan.plan_id
+             and result.snapshot.plan_version == scope.plan.version
+             and activation_is_eligible_on(scope.plan.activation, day)
+             and _calendar_open_on(session, day, day)(day) is True)
+    return DemandCheckpoint(identity, result.result_hash)
+
+
+def _checkpoint_regressed(previous, current):
+    if previous is None:
+        return False
+    if current is None:
+        return True
+    old_day = previous.identity.official_trade_date
+    new_day = current.identity.official_trade_date
+    return new_day < old_day or (new_day == old_day and previous != current)
+
+
+def _permission_window(session, scope, reader, start, end):
+    length = min(MAX_CLOSE_DISCOVERY_DAYS, (end - start).days + 1)
+    calendar_end = start + timedelta(days=length - 1)
+    return discover_missed_closes(
+        scope=scope, is_open_on=_calendar_open_on(session, start, calendar_end),
+        completion_on=reader.read, window_start=start, max_calendar_days=length,
+    )
 
 
 def _latest_completed_close(session, scope, reader, target_date):
