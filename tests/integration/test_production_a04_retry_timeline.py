@@ -17,7 +17,7 @@ from test_live_pipeline_acceptance import (
 )
 
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+from trade_plan_monitor.runtime.health import RuntimeResourceStatus, RuntimeServiceStatus
 from trade_plan_monitor.runtime.request_control import create_live_tushare_request_controller
 from trade_plan_monitor.runtime.service import RuntimeLifecycleService, _RetryWaitOutcome
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
@@ -194,6 +194,27 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
                 assert gate.calls_before == attempt
                 assert runtime._retry_at is not None
                 assert gate.started_at + timedelta(seconds=gate.delay) >= runtime._retry_at
+                retry_due = gate.started_at + timedelta(seconds=gate.delay)
+                health = await composition.read_service.get_health()
+                assert health.status is RuntimeServiceStatus.DEGRADED and health.read_only
+                assert health.degraded_reason == "REFERENCE_REFRESH_FAILED"
+                assert health.block_reason is None
+                assert health.next_retry_at == runtime._retry_at == retry_due
+                assert health.database.status is RuntimeResourceStatus.READY
+                assert health.database.wal_status is RuntimeResourceStatus.READY
+                assert composition._runtime is runtime
+                assert runtime.runtime_generation == generation
+                assert state._liveness_revision == owner
+                assert not composition._runner_failed and composition._restart_attempts == 0
+                dashboard = await composition.read_service.get_dashboard()
+                assert dashboard.availability == "UNAVAILABLE"
+                assert dashboard.reason.value == "AWAITING_FIRST_EVALUATION"
+                assert await composition.read_service.get_symbol_health(symbol=plan.symbol) is None
+                frame = composition.websocket_service._heartbeat_frame(dashboard.sequence)
+                assert frame["runtimeLive"] is False and frame["runtimeGeneration"] is None
+                with state._session_factory() as session:
+                    assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                    assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
                 backoff = controller.backoff_until(f"calendar:SSE:{NOW.date()}")
                 assert backoff is not None
                 assert gate.started_at + timedelta(seconds=gate.delay) >= backoff
@@ -233,9 +254,27 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
             with state._session_factory() as session:
                 assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
-            deadline = timeline.scheduler_deadlines[1]
-            assert deadline.hour == 10 and deadline.minute == 10
-            target = (deadline - timedelta(seconds=12)).isoformat()
+            evaluation_due = NOW.replace(hour=10, minute=10, second=12, microsecond=0)
+            target = NOW.replace(hour=10, minute=10, second=0, microsecond=0).isoformat()
+            # New maintenance duties may legitimately wake before the original
+            # market target. Release real waits, never infer a duty from its ordinal.
+            for _ in range(8):
+                deadline = timeline.scheduler_deadlines[-1]
+                assert deadline <= evaluation_due
+                if deadline == evaluation_due:
+                    break
+                count = len(timeline.scheduler_deadlines)
+                timeline.scheduler_release.set()
+                await _until(lambda previous=count: len(timeline.scheduler_deadlines) > previous)
+                assert composition._runtime is runtime
+                assert runtime.runtime_generation == generation
+                assert not composition._runner_failed and composition._restart_attempts == 0
+                with state._session_factory() as session:
+                    assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                    assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+            else:
+                raise AssertionError("original 10:10:12 duty was not reached within eight wakes")
+            assert timeline.scheduler_deadlines[-1] == evaluation_due
             timeline.scheduler_release.set()
 
             def committed() -> bool:
@@ -255,7 +294,14 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
                     )
 
             await _until(committed)
+            assert composition._runtime is runtime
+            assert runtime.runtime_generation == generation
+            assert not composition._runner_failed
             with state._session_factory() as session:
+                results = tuple(session.scalars(select(EvaluationResult)))
+                assert len(results) == 1
+                assert results[0].target_value == target
+                assert results[0].evaluated_at == evaluation_due.isoformat()
                 head = session.get(SymbolDecisionHead, plan.symbol)
                 assert head is not None
                 assert head.plan_hash == plan_sha256(plan)
