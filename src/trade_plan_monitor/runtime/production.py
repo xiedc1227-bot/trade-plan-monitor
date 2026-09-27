@@ -873,8 +873,6 @@ class ProductionMonitorPipeline:
 
     async def _request(self, operation: TushareOperation, call: Callable[[], object], key: str):
         self.reference_stage = operation
-        if operation is TushareOperation.TRADING_CALENDAR:
-            await self._maybe_recheck_calendar_permission()
         return await self._controller.execute(
             operation,
             call,
@@ -1228,25 +1226,21 @@ class ProductionMonitorPipeline:
                 continue
             raw = self._controller.raw_permission_retry_at(operation)
             if raw is not None:
-                local = self._permission_probe_deferred_until.get(operation)
-                if operation is TushareOperation.INDEX_HISTORICAL_MINUTES:
-                    local = max(
-                        (value for value in (local, self._historical_probe_deferred_until)
-                         if value is not None), default=None,
-                    )
-                elif operation is TushareOperation.INDEX_REALTIME_MINUTES:
-                    local = max(
-                        (value for value in (local, self._realtime_probe_deferred_until)
-                         if value is not None), default=None,
-                    )
-                deadlines.append(max(
-                    deadline for deadline in (
-                        raw,
-                        local,
-                        self._controller.cooldown_until,
-                    ) if deadline is not None
-                ))
+                deadlines.append(self._permission_effective_due(operation, raw))
         return min(deadlines, default=None)
+
+    def _permission_effective_due(self, operation: TushareOperation, raw: datetime) -> datetime:
+        """Read all established local/shared floors without evidence or clock I/O."""
+        legacy = (
+            self._historical_probe_deferred_until
+            if operation is TushareOperation.INDEX_HISTORICAL_MINUTES else
+            self._realtime_probe_deferred_until
+            if operation is TushareOperation.INDEX_REALTIME_MINUTES else None
+        )
+        return max(value for value in (
+            raw, self._permission_probe_deferred_until.get(operation), legacy,
+            self._controller.cooldown_until,
+        ) if value is not None)
 
     def select_due_permission_probe(self) -> PermissionProbeCandidate | None:
         """Peek only currently due candidates; repeated reads never rotate ties."""
@@ -1469,14 +1463,10 @@ class ProductionMonitorPipeline:
             )
 
     async def _maybe_recheck_current_day_minutes_permission(self) -> PermissionMaintenanceResult:
-        return await self._recheck_stock_minute_permission(
-            TushareOperation.CURRENT_DAY_MINUTES, asyncio.current_task(), Event(),
-        )
+        return await self._run_permission_maintenance(TushareOperation.CURRENT_DAY_MINUTES)
 
     async def _maybe_recheck_realtime_minutes_permission(self) -> PermissionMaintenanceResult:
-        return await self._recheck_stock_minute_permission(
-            TushareOperation.REALTIME_MINUTES, asyncio.current_task(), Event(),
-        )
+        return await self._run_permission_maintenance(TushareOperation.REALTIME_MINUTES)
 
     @staticmethod
     def _stock_minute_evidence_matches(
@@ -1538,198 +1528,187 @@ class ProductionMonitorPipeline:
                 return False
         return True
 
-    async def _recheck_stock_minute_permission(
+    async def _recheck_stock_minute_permission_locked(
         self, operation: TushareOperation, owner_task: asyncio.Task | None, cancelled: Event,
+        prepared: _StockMinutePermissionPreparation,
     ) -> PermissionMaintenanceResult:
-        """One invocation owns its proof, start sample, cancellation and response snapshot."""
+        if prepared.status == "SKIPPED":
+            return PermissionMaintenanceResult.SKIPPED
+        if prepared.status == "UNKNOWN":
+            return PermissionMaintenanceResult.DEFERRED
+        candidate, consumer = prepared.candidate, prepared.consumer
+        provider, source = prepared.provider, prepared.source
+        factory = prepared.session_factory
+        sdk_source = (
+            source._client if isinstance(source, _CertifiedTushareClient) else source
+        )
+        revoked = prepared.calendar_revoked
+
+        def defer_local() -> PermissionMaintenanceResult:
+            self._permission_probe_deferred_until[operation] = (
+                self._clock.now() + timedelta(seconds=30)
+            )
+            return PermissionMaintenanceResult.DEFERRED
+
+        if (candidate is None or consumer is None or provider is None or factory is None
+                or revoked is None or candidate.operation is not operation
+                or candidate.symbol != consumer.symbol
+                or candidate.anchor_date != consumer.request_date):
+            return defer_local()
+        semantics, stock_evidence = self._stock_semantics, self._stock_evidence
+        authority_revoked = Event()
+
+        def authority_io() -> bool:
+            if cancelled.is_set() or authority_revoked.is_set():
+                return False
+            if not self._stock_minute_authorized(operation):
+                authority_revoked.set()
+                return False
+            return True
+
+        def memory_current(at: datetime) -> bool:
+            semantic_current = (
+                self._semantic_bindings is not None and self._stock_semantics is semantics
+                and semantics is not None
+                and semantics.semantic_revision == prepared.semantic_revision
+            ) if prepared.semantic_bound else (
+                self._semantic_bindings is None and self._stock_semantics is None
+                and self._stock_evidence is stock_evidence and stock_evidence is not None
+                and stock_evidence.observed_at <= at <= stock_evidence.valid_until
+            )
+            valid = (
+                not cancelled.is_set() and not authority_revoked.is_set()
+                and semantic_current and self.provider is provider
+                and provider._client is source
+                and (not isinstance(source, _CertifiedTushareClient)
+                     or source._client is sdk_source)
+                and provider._source_time_label is prepared.source_time_label
+                and self._permission_session_factory is factory
+                and at >= prepared.captured_at and at.date() == consumer.request_date
+                and self._generation_current() and not self._admission_revoked()
+            )
+            with self._calendar_epoch_lock:
+                valid = valid and (
+                    prepared.calendar_epoch == self._calendar_epoch
+                    and revoked is self._calendar_revoked and not revoked.is_set()
+                )
+            if not valid:
+                authority_revoked.set()
+            return valid
+
+        if self._permission_market_window is None:
+            return defer_local()
+        latest_start = prepared.captured_at + timedelta(seconds=15)
+        market_window = _FrozenPermissionMarketWindow(
+            prepared.captured_at, latest_start,
+            self._permission_market_window(
+                prepared.captured_at, latest_start + _INDEX_PERMISSION_GUARD,
+            ),
+        )
+
+        def time_to_start(at: datetime) -> bool:
+            try:
+                return (self._stock_minute_start_at(at) == at
+                        and market_window.blocker(at) is None)
+            except ValueError:
+                return False
+
+        def start_current() -> bool:
+            if not authority_io():
+                return False
+            at = self._clock.now()
+            return memory_current(at) and time_to_start(at)
+
+        def defer_start() -> PermissionMaintenanceResult:
+            at = self._clock.now()
+            try:
+                blocker = market_window.blocker(at)
+            except ValueError:
+                blocker = None
+            if blocker is not None:
+                self._permission_probe_deferred_until[operation] = (
+                    max(at, blocker[0]) + timedelta(microseconds=1)
+                )
+                return PermissionMaintenanceResult.DEFERRED
+            return defer_local()
+
+        evidence_slot: list[object] = []
+        started: list[datetime] = []
+        provider_probe = (
+            provider.probe_current_day_minutes_permission
+            if operation is TushareOperation.CURRENT_DAY_MINUTES
+            else provider.probe_realtime_minutes_permission
+        )
+
+        def probe() -> None:
+            if not start_current():
+                raise RequestNotStartedError("stock minute authority changed at worker")
+
+            def physical_start() -> datetime:
+                # Resolver checks are finished. Complete final authority I/O before one S.
+                if not authority_io():
+                    raise RequestNotStartedError("stock minute authority changed pre-SDK")
+                at = _canonical_shanghai(self._clock.now())
+                # Nothing below this sample performs authority I/O or resamples S.
+                if started or not memory_current(at) or not time_to_start(at):
+                    raise RequestNotStartedError("stock minute final start fence changed")
+                started.append(at)
+                return at
+
+            evidence_slot.append(provider_probe(
+                consumer.symbol, consumer.request_date, physical_start=physical_start,
+            ))
+
+        def owner_current(received_at: datetime) -> bool:
+            if owner_task is None or owner_task.cancelling() or not authority_io():
+                return False
+            if owner_task.cancelling():
+                return False
+            at = self._clock.now()
+            return at >= received_at and memory_current(at)
+
+        def validate_after() -> bool:
+            if len(evidence_slot) != 1 or len(started) != 1:
+                return False
+            proof = evidence_slot[0]
+            if not self._stock_minute_evidence_matches(
+                proof, prepared, operation, started[0],
+            ):
+                return False
+            if not owner_current(proof.received_at):
+                return False
+            dates = tuple(sorted(set(proof.source_dates) | {consumer.request_date}))
+            session = factory()
+            require_owned_recovery_session(session, (
+                ActivePlan, PlanActivationState, PlanVersion, TradingCalendar,
+            ))
+            with session, session.no_autoflush:
+                consumers, _ = self._stock_minute_consumers_in_session(
+                    session, self._clock.now(),
+                )
+                valid = (consumer in consumers
+                         and self._stock_minute_dates_open(session, dates))
+            return valid and owner_current(proof.received_at)
+
+        callback = self._permission_probe_reservation_callback(candidate)
+        admitted = start_current()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not admitted:
+            return defer_start()
         try:
-            async with self._permission_maintenance_lock:
-                prepared = self._prepare_stock_minute_permission_locked(operation)
-                if prepared.status == "SKIPPED":
-                    return PermissionMaintenanceResult.SKIPPED
-                if prepared.status == "UNKNOWN":
-                    return PermissionMaintenanceResult.DEFERRED
-                candidate, consumer = prepared.candidate, prepared.consumer
-                provider, source = prepared.provider, prepared.source
-                factory = prepared.session_factory
-                sdk_source = (
-                    source._client if isinstance(source, _CertifiedTushareClient) else source
-                )
-                revoked = prepared.calendar_revoked
-
-                def defer_local() -> PermissionMaintenanceResult:
-                    self._permission_probe_deferred_until[operation] = (
-                        self._clock.now() + timedelta(seconds=30)
-                    )
-                    return PermissionMaintenanceResult.DEFERRED
-
-                if (candidate is None or consumer is None or provider is None or factory is None
-                        or revoked is None or candidate.operation is not operation
-                        or candidate.symbol != consumer.symbol
-                        or candidate.anchor_date != consumer.request_date):
-                    return defer_local()
-                semantics, stock_evidence = self._stock_semantics, self._stock_evidence
-                authority_revoked = Event()
-
-                def authority_io() -> bool:
-                    if cancelled.is_set() or authority_revoked.is_set():
-                        return False
-                    if not self._stock_minute_authorized(operation):
-                        authority_revoked.set()
-                        return False
-                    return True
-
-                def memory_current(at: datetime) -> bool:
-                    semantic_current = (
-                        self._semantic_bindings is not None and self._stock_semantics is semantics
-                        and semantics is not None
-                        and semantics.semantic_revision == prepared.semantic_revision
-                    ) if prepared.semantic_bound else (
-                        self._semantic_bindings is None and self._stock_semantics is None
-                        and self._stock_evidence is stock_evidence and stock_evidence is not None
-                        and stock_evidence.observed_at <= at <= stock_evidence.valid_until
-                    )
-                    valid = (
-                        not cancelled.is_set() and not authority_revoked.is_set()
-                        and semantic_current and self.provider is provider
-                        and provider._client is source
-                        and (not isinstance(source, _CertifiedTushareClient)
-                             or source._client is sdk_source)
-                        and provider._source_time_label is prepared.source_time_label
-                        and self._permission_session_factory is factory
-                        and at >= prepared.captured_at and at.date() == consumer.request_date
-                        and self._generation_current() and not self._admission_revoked()
-                    )
-                    with self._calendar_epoch_lock:
-                        valid = valid and (
-                            prepared.calendar_epoch == self._calendar_epoch
-                            and revoked is self._calendar_revoked and not revoked.is_set()
-                        )
-                    if not valid:
-                        authority_revoked.set()
-                    return valid
-
-                if self._permission_market_window is None:
-                    return defer_local()
-                latest_start = prepared.captured_at + timedelta(seconds=15)
-                market_window = _FrozenPermissionMarketWindow(
-                    prepared.captured_at, latest_start,
-                    self._permission_market_window(
-                        prepared.captured_at, latest_start + _INDEX_PERMISSION_GUARD,
-                    ),
-                )
-
-                def time_to_start(at: datetime) -> bool:
-                    try:
-                        return (self._stock_minute_start_at(at) == at
-                                and market_window.blocker(at) is None)
-                    except ValueError:
-                        return False
-
-                def start_current() -> bool:
-                    if not authority_io():
-                        return False
-                    at = self._clock.now()
-                    return memory_current(at) and time_to_start(at)
-
-                def defer_start() -> PermissionMaintenanceResult:
-                    at = self._clock.now()
-                    try:
-                        blocker = market_window.blocker(at)
-                    except ValueError:
-                        blocker = None
-                    if blocker is not None:
-                        self._permission_probe_deferred_until[operation] = (
-                            max(at, blocker[0]) + timedelta(microseconds=1)
-                        )
-                        return PermissionMaintenanceResult.DEFERRED
-                    return defer_local()
-
-                evidence_slot: list[object] = []
-                started: list[datetime] = []
-                provider_probe = (
-                    provider.probe_current_day_minutes_permission
-                    if operation is TushareOperation.CURRENT_DAY_MINUTES
-                    else provider.probe_realtime_minutes_permission
-                )
-
-                def probe() -> None:
-                    if not start_current():
-                        raise RequestNotStartedError("stock minute authority changed at worker")
-
-                    def physical_start() -> datetime:
-                        # Resolver checks are finished. Complete final authority I/O before one S.
-                        if not authority_io():
-                            raise RequestNotStartedError("stock minute authority changed pre-SDK")
-                        at = _canonical_shanghai(self._clock.now())
-                        # Nothing below this sample performs authority I/O or resamples S.
-                        if started or not memory_current(at) or not time_to_start(at):
-                            raise RequestNotStartedError("stock minute final start fence changed")
-                        started.append(at)
-                        return at
-
-                    evidence_slot.append(provider_probe(
-                        consumer.symbol, consumer.request_date, physical_start=physical_start,
-                    ))
-
-                def owner_current(received_at: datetime) -> bool:
-                    if owner_task is None or owner_task.cancelling() or not authority_io():
-                        return False
-                    at = self._clock.now()
-                    return at >= received_at and memory_current(at)
-
-                def validate_after() -> bool:
-                    if len(evidence_slot) != 1 or len(started) != 1:
-                        return False
-                    proof = evidence_slot[0]
-                    if not self._stock_minute_evidence_matches(
-                        proof, prepared, operation, started[0],
-                    ):
-                        return False
-                    if not owner_current(proof.received_at):
-                        return False
-                    dates = tuple(sorted(set(proof.source_dates) | {consumer.request_date}))
-                    session = factory()
-                    require_owned_recovery_session(session, (
-                        ActivePlan, PlanActivationState, PlanVersion, TradingCalendar,
-                    ))
-                    with session, session.no_autoflush:
-                        consumers, _ = self._stock_minute_consumers_in_session(
-                            session, self._clock.now(),
-                        )
-                        valid = (consumer in consumers
-                                 and self._stock_minute_dates_open(session, dates))
-                    return valid and owner_current(proof.received_at)
-
-                callback = self._permission_probe_reservation_callback(candidate)
-                if not start_current():
-                    return defer_start()
-                try:
-                    await self._controller.recheck_permission(
-                        operation, probe,
-                        work_key=f"permission:{operation.value}:{consumer.symbol}:{consumer.request_date}",
-                        priority=RequestPriority.RECOVERY, validate_after=validate_after,
-                        can_start=start_current, on_reserved=callback,
-                    )
-                except RequestNotStartedError:
-                    return defer_start()
-                except RequestControlError as error:
-                    if error.code not in {
-                        RequestControlErrorCode.BLOCKED_PERMISSION,
-                        RequestControlErrorCode.RATE_LIMITED,
-                        RequestControlErrorCode.TRANSIENT,
-                        RequestControlErrorCode.TIMEOUT,
-                        RequestControlErrorCode.INVALID_RESPONSE,
-                    }:
-                        raise
-                    return PermissionMaintenanceResult.FAILED
-                self._permission_probe_deferred_until.pop(operation, None)
-                return PermissionMaintenanceResult.PROBED
-        except asyncio.CancelledError:
-            cancelled.set()
-            raise
-        finally:
-            cancelled.set()
+            await self._controller.recheck_permission(
+                operation, probe,
+                work_key=f"permission:{operation.value}:{consumer.symbol}:{consumer.request_date}",
+                priority=RequestPriority.RECOVERY, validate_after=validate_after,
+                can_start=start_current, on_reserved=callback,
+            )
+        except RequestNotStartedError:
+            return defer_start()
+        except RequestControlError as error:
+            return self._permission_failure_result(operation, error)
+        self._permission_probe_deferred_until.pop(operation, None)
+        return PermissionMaintenanceResult.PROBED
 
     async def _prepare_daily_bar_permission(self) -> _DailyBarPermissionPreparation:
         """Prepare one due candidate under the shared maintenance lock."""
@@ -1885,479 +1864,521 @@ class ProductionMonitorPipeline:
                 self._daily_bar_demand_receipts[symbol] = result.receipt
 
     async def _maybe_recheck_daily_bars_permission(self) -> PermissionMaintenanceResult:
-        """Recheck the original prepared demand without granting business execution."""
-        owner_task = asyncio.current_task()
-        cancelled = Event()
+        return await self._run_permission_maintenance(TushareOperation.DAILY_BARS)
+
+    async def _recheck_daily_bars_permission_locked(
+        self, owner_task: asyncio.Task | None, cancelled: Event,
+        prepared: _DailyBarPermissionPreparation,
+    ) -> PermissionMaintenanceResult:
         operation = TushareOperation.DAILY_BARS
+        if prepared.status == "SKIPPED":
+            return PermissionMaintenanceResult.SKIPPED
+        if prepared.status == "UNKNOWN":
+            return PermissionMaintenanceResult.DEFERRED
+        candidate, receipt = prepared.candidate, prepared.receipt
+        reader, factory = prepared.reader, prepared.session_factory
+
+        def defer_local() -> PermissionMaintenanceResult:
+            self._permission_probe_deferred_until[operation] = (
+                self._clock.now() + timedelta(seconds=30)
+            )
+            return PermissionMaintenanceResult.DEFERRED
+
+        if (candidate is None or receipt is None or reader is None or factory is None
+                or candidate.operation is not operation
+                or candidate.symbol != receipt.identity.symbol
+                or candidate.daily_bar_pool not in {"O", "F"}):
+            return defer_local()
+        anchor, symbol = candidate.anchor_date, candidate.symbol
+        stock_evidence = self._stock_evidence
+        with self._calendar_epoch_lock:
+            revoked = self._calendar_revoked
+
+        def authority_current() -> bool:
+            current = self._stock_semantics
+            semantic_current = (
+                self._semantic_bindings is not None and current is not None
+                and current.semantic_revision == prepared.semantic_revision
+                and "daily" in current.interface_scope
+            ) if prepared.semantic_bound else (
+                self._semantic_bindings is None and current is None
+            )
+            now = self._clock.now()
+            if (cancelled.is_set() or now < prepared.captured_at
+                    or now.date() != prepared.captured_at.date()
+                    or self._permission_demand_reader is not reader
+                    or self._permission_session_factory is not factory
+                    or not semantic_current or not self._stock_certification_current()
+                    or not self._generation_current() or self._admission_revoked()):
+                return False
+            with self._calendar_epoch_lock:
+                return (prepared.calendar_epoch == self._calendar_epoch
+                        and revoked is self._calendar_revoked and not revoked.is_set())
+
+        authorized = authority_current()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not authorized or self._permission_market_window is None:
+            return defer_local()
         try:
-            async with self._permission_maintenance_lock:
-                prepared = self._prepare_daily_bar_permission_locked()
-                if prepared.status == "SKIPPED":
-                    return PermissionMaintenanceResult.SKIPPED
-                if prepared.status == "UNKNOWN":
-                    return PermissionMaintenanceResult.DEFERRED
-                candidate, receipt = prepared.candidate, prepared.receipt
-                reader, factory = prepared.reader, prepared.session_factory
+            latest_start = prepared.captured_at + timedelta(
+                seconds=LIVE_TUSHARE_TIMEOUT_SECONDS,
+            )
+            market_window = _FrozenPermissionMarketWindow(
+                captured_at=prepared.captured_at, latest_start_at=latest_start,
+                deadlines=self._permission_market_window(
+                    prepared.captured_at, latest_start + _INDEX_PERMISSION_GUARD,
+                ),
+            )
+            blocker = market_window.blocker(self._clock.now())
+        except ValueError:
+            return defer_local()
+        if blocker is not None:
+            self._permission_probe_deferred_until[operation] = (
+                max(self._clock.now(), blocker[0]) + timedelta(microseconds=1)
+            )
+            return PermissionMaintenanceResult.DEFERRED
 
-                def defer_local() -> PermissionMaintenanceResult:
-                    self._permission_probe_deferred_until[operation] = (
-                        self._clock.now() + timedelta(seconds=30)
-                    )
-                    return PermissionMaintenanceResult.DEFERRED
-
-                if (candidate is None or receipt is None or reader is None or factory is None
-                        or candidate.operation is not operation
-                        or candidate.symbol != receipt.identity.symbol
-                        or candidate.daily_bar_pool not in {"O", "F"}):
-                    return defer_local()
-                anchor, symbol = candidate.anchor_date, candidate.symbol
-                stock_evidence = self._stock_evidence
+        def start_current() -> bool:
+            if not authority_current():
+                return False
+            at = self._clock.now()
+            if not prepared.semantic_bound and (
+                stock_evidence is None or self._stock_evidence is not stock_evidence
+                or not stock_evidence.observed_at <= at <= stock_evidence.valid_until
+            ):
+                return False
+            try:
                 with self._calendar_epoch_lock:
-                    revoked = self._calendar_revoked
-
-                def authority_current() -> bool:
-                    current = self._stock_semantics
-                    semantic_current = (
-                        self._semantic_bindings is not None and current is not None
-                        and current.semantic_revision == prepared.semantic_revision
-                        and "daily" in current.interface_scope
-                    ) if prepared.semantic_bound else (
-                        self._semantic_bindings is None and current is None
+                    return (
+                        not cancelled.is_set()
+                        and prepared.calendar_epoch == self._calendar_epoch
+                        and revoked is self._calendar_revoked and not revoked.is_set()
+                        and at.date() == prepared.captured_at.date()
+                        and market_window.blocker(at) is None
                     )
-                    now = self._clock.now()
-                    if (cancelled.is_set() or now < prepared.captured_at
-                            or now.date() != prepared.captured_at.date()
-                            or self._permission_demand_reader is not reader
-                            or self._permission_session_factory is not factory
-                            or not semantic_current or not self._stock_certification_current()
-                            or not self._generation_current() or self._admission_revoked()):
-                        return False
-                    with self._calendar_epoch_lock:
-                        return (prepared.calendar_epoch == self._calendar_epoch
-                                and revoked is self._calendar_revoked and not revoked.is_set())
+            except ValueError:
+                return False
 
-                if not authority_current() or self._permission_market_window is None:
-                    return defer_local()
-                try:
-                    latest_start = prepared.captured_at + timedelta(
-                        seconds=LIVE_TUSHARE_TIMEOUT_SECONDS,
-                    )
-                    market_window = _FrozenPermissionMarketWindow(
-                        captured_at=prepared.captured_at, latest_start_at=latest_start,
-                        deadlines=self._permission_market_window(
-                            prepared.captured_at, latest_start + _INDEX_PERMISSION_GUARD,
-                        ),
-                    )
-                    blocker = market_window.blocker(self._clock.now())
-                except ValueError:
-                    return defer_local()
-                if blocker is not None:
-                    self._permission_probe_deferred_until[operation] = (
-                        max(self._clock.now(), blocker[0]) + timedelta(microseconds=1)
-                    )
-                    return PermissionMaintenanceResult.DEFERRED
+        def defer_start() -> PermissionMaintenanceResult:
+            now = self._clock.now()
+            try:
+                blocker = market_window.blocker(now)
+            except ValueError:
+                blocker = None
+            if blocker is not None:
+                self._permission_probe_deferred_until[operation] = (
+                    max(now, blocker[0]) + timedelta(microseconds=1)
+                )
+                return PermissionMaintenanceResult.DEFERRED
+            return defer_local()
 
-                def start_current() -> bool:
-                    if not authority_current():
-                        return False
-                    at = self._clock.now()
-                    if not prepared.semantic_bound and (
-                        stock_evidence is None or self._stock_evidence is not stock_evidence
-                        or not stock_evidence.observed_at <= at <= stock_evidence.valid_until
-                    ):
-                        return False
-                    try:
-                        with self._calendar_epoch_lock:
-                            return (
-                                not cancelled.is_set()
-                                and prepared.calendar_epoch == self._calendar_epoch
-                                and revoked is self._calendar_revoked and not revoked.is_set()
-                                and at.date() == prepared.captured_at.date()
-                                and market_window.blocker(at) is None
-                            )
-                    except ValueError:
-                        return False
+        provider_probe = self.provider.probe_daily_bars_permission
 
-                def defer_start() -> PermissionMaintenanceResult:
-                    now = self._clock.now()
-                    try:
-                        blocker = market_window.blocker(now)
-                    except ValueError:
-                        blocker = None
-                    if blocker is not None:
-                        self._permission_probe_deferred_until[operation] = (
-                            max(now, blocker[0]) + timedelta(microseconds=1)
-                        )
-                        return PermissionMaintenanceResult.DEFERRED
-                    return defer_local()
+        def probe() -> None:
+            if not start_current():
+                raise RequestNotStartedError("daily bars authority changed at worker entry")
 
-                provider_probe = self.provider.probe_daily_bars_permission
-
-                def probe() -> None:
-                    if not start_current():
-                        raise RequestNotStartedError("daily bars authority changed at worker entry")
-
-                    def physical_start() -> None:
-                        if not start_current():
-                            raise RequestNotStartedError("daily bars authority changed before SDK")
-
-                    provider_probe(symbol, anchor, _physical_start=physical_start)
-
-                def owner_current() -> bool:
-                    return (owner_task is not None and owner_task.cancelling() == 0
-                            and authority_current())
-
-                def validate_after() -> bool:
-                    if not owner_current():
-                        return False
-                    response_at = self._clock.now()
-                    if anchor.weekday() >= 5 or anchor >= response_at.date():
-                        return False
-                    session = factory()
-                    require_owned_recovery_session(session, (
-                        ActivePlan, AuditLog, EvaluationLedger, EvaluationResult, MonitorEvent,
-                        MonitorSequence, PlanActivationState, PlanVersion, TradingCalendar,
-                    ))
-                    with session, session.no_autoflush:
-                        valid = (
-                            reader.validate_permission_demand_in_session(
-                                session, receipt, response_at,
-                            )
-                            and _calendar_open_on(session, anchor, anchor)(anchor) is True
-                        )
-                    # The read snapshot ends before the controller's separate recovery write.
-                    return valid and owner_current()
-
-                callback = self._permission_probe_reservation_callback(candidate)
+            def physical_start() -> None:
                 if not start_current():
-                    return defer_start()
-                try:
-                    await self._controller.recheck_permission(
-                        operation, probe, work_key=f"permission:daily:{symbol}:{anchor}",
-                        validate_after=validate_after, can_start=start_current,
-                        on_reserved=callback,
+                    raise RequestNotStartedError("daily bars authority changed before SDK")
+
+            provider_probe(symbol, anchor, _physical_start=physical_start)
+
+        def owner_current() -> bool:
+            return (owner_task is not None and owner_task.cancelling() == 0
+                    and authority_current() and owner_task.cancelling() == 0)
+
+        def validate_after() -> bool:
+            if not owner_current():
+                return False
+            response_at = self._clock.now()
+            if anchor.weekday() >= 5 or anchor >= response_at.date():
+                return False
+            session = factory()
+            require_owned_recovery_session(session, (
+                ActivePlan, AuditLog, EvaluationLedger, EvaluationResult, MonitorEvent,
+                MonitorSequence, PlanActivationState, PlanVersion, TradingCalendar,
+            ))
+            with session, session.no_autoflush:
+                valid = (
+                    reader.validate_permission_demand_in_session(
+                        session, receipt, response_at,
                     )
-                except RequestNotStartedError:
-                    return defer_start()
-                except RequestControlError as error:
-                    if error.code not in {
-                        RequestControlErrorCode.BLOCKED_PERMISSION,
-                        RequestControlErrorCode.RATE_LIMITED,
-                        RequestControlErrorCode.TRANSIENT,
-                        RequestControlErrorCode.TIMEOUT,
-                        RequestControlErrorCode.INVALID_RESPONSE,
-                    }:
-                        raise
-                    return PermissionMaintenanceResult.FAILED
-                self._permission_probe_deferred_until.pop(operation, None)
-                return PermissionMaintenanceResult.PROBED
-        except asyncio.CancelledError:
-            cancelled.set()
-            raise
-        finally:
-            cancelled.set()
+                    and _calendar_open_on(session, anchor, anchor)(anchor) is True
+                )
+            # The read snapshot ends before the controller's separate recovery write.
+            return valid and owner_current()
+
+        callback = self._permission_probe_reservation_callback(candidate)
+        admitted = start_current()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not admitted:
+            return defer_start()
+        try:
+            await self._controller.recheck_permission(
+                operation, probe, work_key=f"permission:daily:{symbol}:{anchor}",
+                validate_after=validate_after, can_start=start_current,
+                on_reserved=callback,
+            )
+        except RequestNotStartedError:
+            return defer_start()
+        except RequestControlError as error:
+            return self._permission_failure_result(operation, error)
+        self._permission_probe_deferred_until.pop(operation, None)
+        return PermissionMaintenanceResult.PROBED
 
     async def _maybe_recheck_index_daily_permission(self) -> PermissionMaintenanceResult:
-        """Run one serial, read-only INDEX_DAILY permission proof."""
+        return await self._run_permission_maintenance(TushareOperation.INDEX_DAILY)
 
+    async def _recheck_index_daily_permission_locked(
+        self, owner_task: asyncio.Task | None, cancelled: Event,
+    ) -> PermissionMaintenanceResult:
         operation = TushareOperation.INDEX_DAILY
-        async with self._permission_maintenance_lock:
-            now = self._clock.now()
-            if not self._controller.is_permission_blocked(operation):
-                return PermissionMaintenanceResult.SKIPPED
-            raw = self._controller.raw_permission_retry_at(operation)
-            if raw is None or now < max(
-                deadline for deadline in (
-                    raw,
-                    self._permission_probe_deferred_until.get(operation),
-                    self._controller.cooldown_until,
-                ) if deadline is not None
-            ):
-                return PermissionMaintenanceResult.SKIPPED
-            candidates, missing = self._permission_probe_state()
-            if operation in missing:
-                self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
-                return PermissionMaintenanceResult.DEFERRED
-            candidate = next(
-                (item for item in candidates if item.next_due_at <= now), None,
+        now = self._clock.now()
+        if not self._controller.is_permission_blocked(operation):
+            return PermissionMaintenanceResult.SKIPPED
+        raw = self._controller.raw_permission_retry_at(operation)
+        if raw is None or now < max(
+            deadline for deadline in (
+                raw,
+                self._permission_probe_deferred_until.get(operation),
+                self._controller.cooldown_until,
+            ) if deadline is not None
+        ):
+            return PermissionMaintenanceResult.SKIPPED
+        candidates, missing = self._permission_probe_state()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if operation in missing:
+            self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
+        candidate = next(
+            (item for item in candidates if item.next_due_at <= now), None,
+        )
+        if candidate is None or candidate.operation is not operation:
+            return PermissionMaintenanceResult.SKIPPED
+        semantics = self._index_semantics
+        if semantics is None or candidate.index_code is None:
+            return PermissionMaintenanceResult.SKIPPED
+        request_date = now.date()
+        revision = semantics.semantic_revision
+        anchor = candidate.anchor_date
+        index_code = candidate.index_code
+
+        def authority_current() -> bool:
+            current = self._index_semantics
+            return (
+                self._clock.now().date() == request_date
+                and current is not None
+                and current.semantic_revision == revision
+                and self._permission_index_code("index_daily") is index_code
             )
-            if candidate is None or candidate.operation is not operation:
-                return PermissionMaintenanceResult.SKIPPED
-            semantics = self._index_semantics
-            if semantics is None or candidate.index_code is None:
-                return PermissionMaintenanceResult.SKIPPED
-            request_date = now.date()
-            revision = semantics.semantic_revision
-            anchor = candidate.anchor_date
-            index_code = candidate.index_code
 
-            def authority_current() -> bool:
-                current = self._index_semantics
+        authorized = authority_current()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not authorized:
+            return PermissionMaintenanceResult.SKIPPED
+        with self._calendar_epoch_lock:
+            read_epoch = self._calendar_epoch
+        anchor_current = self._persisted_completed_sse_open_on(anchor)
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not anchor_current:
+            self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
+        with self._calendar_epoch_lock:
+            if read_epoch != self._calendar_epoch:
+                return PermissionMaintenanceResult.DEFERRED
+            if self._calendar_revoked.is_set():
+                self._calendar_revoked = Event()
+            epoch = self._calendar_epoch
+            revoked = self._calendar_revoked
+        if self._permission_market_window is None:
+            self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
+        try:
+            latest_start = now + timedelta(seconds=LIVE_TUSHARE_TIMEOUT_SECONDS)
+            market_window = _FrozenPermissionMarketWindow(
+                captured_at=now,
+                latest_start_at=latest_start,
+                deadlines=self._permission_market_window(
+                    now, latest_start + _INDEX_PERMISSION_GUARD,
+                ),
+            )
+            blocker = market_window.blocker(now)
+        except ValueError:
+            self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
+        if blocker is not None:
+            self._permission_probe_deferred_until[operation] = (
+                max(now, blocker[0]) + timedelta(microseconds=1)
+            )
+            return PermissionMaintenanceResult.DEFERRED
+
+        def calendar_current() -> bool:
+            with self._calendar_epoch_lock:
                 return (
-                    self._clock.now().date() == request_date
-                    and current is not None
-                    and current.semantic_revision == revision
-                    and self._permission_index_code("index_daily") is index_code
+                    epoch == self._calendar_epoch
+                    and revoked is self._calendar_revoked
+                    and not revoked.is_set()
                 )
 
-            if not authority_current():
-                return PermissionMaintenanceResult.SKIPPED
-            with self._calendar_epoch_lock:
-                read_epoch = self._calendar_epoch
-            if not self._persisted_completed_sse_open_on(anchor):
-                self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
-                return PermissionMaintenanceResult.DEFERRED
-            with self._calendar_epoch_lock:
-                if read_epoch != self._calendar_epoch:
-                    return PermissionMaintenanceResult.DEFERRED
-                if self._calendar_revoked.is_set():
-                    self._calendar_revoked = Event()
-                epoch = self._calendar_epoch
-                revoked = self._calendar_revoked
-            if self._permission_market_window is None:
-                self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
-                return PermissionMaintenanceResult.DEFERRED
+        def start_current() -> bool:
+            if cancelled.is_set() or not authority_current() or not calendar_current():
+                return False
+            at = self._clock.now()
             try:
-                latest_start = now + timedelta(seconds=LIVE_TUSHARE_TIMEOUT_SECONDS)
-                market_window = _FrozenPermissionMarketWindow(
-                    captured_at=now,
-                    latest_start_at=latest_start,
-                    deadlines=self._permission_market_window(
-                        now, latest_start + _INDEX_PERMISSION_GUARD,
-                    ),
+                return (
+                    at.date() == request_date and calendar_current()
+                    and market_window.blocker(at) is None
                 )
-                blocker = market_window.blocker(now)
             except ValueError:
-                self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
-                return PermissionMaintenanceResult.DEFERRED
-            if blocker is not None:
-                self._permission_probe_deferred_until[operation] = (
-                    max(now, blocker[0]) + timedelta(microseconds=1)
-                )
-                return PermissionMaintenanceResult.DEFERRED
+                return False
 
-            def calendar_current() -> bool:
-                with self._calendar_epoch_lock:
-                    return (
-                        epoch == self._calendar_epoch
-                        and revoked is self._calendar_revoked
-                        and not revoked.is_set()
-                    )
+        def probe() -> None:
+            if not start_current():
+                raise RequestNotStartedError("index daily authority or market time changed")
 
-            def start_current() -> bool:
-                if not authority_current() or not calendar_current():
-                    return False
-                at = self._clock.now()
-                try:
-                    return (
-                        at.date() == request_date and calendar_current()
-                        and market_window.blocker(at) is None
-                    )
-                except ValueError:
-                    return False
-
-            def probe() -> None:
+            def physical_start() -> None:
                 if not start_current():
-                    raise RequestNotStartedError("index daily authority or market time changed")
+                    raise RequestNotStartedError(
+                        "index daily authority or market time changed before SDK call"
+                    )
 
-                def physical_start() -> None:
-                    if not start_current():
-                        raise RequestNotStartedError(
-                            "index daily authority or market time changed before SDK call"
-                        )
+            self.index_provider.probe_official_daily_permission(
+                index_code, anchor, _physical_start=physical_start,
+            )
 
-                self.index_provider.probe_official_daily_permission(
-                    index_code, anchor, _physical_start=physical_start,
-                )
+        def owner_current() -> bool:
+            return (
+                owner_task is not None and not owner_task.cancelling() and not cancelled.is_set()
+                and authority_current() and not owner_task.cancelling()
+                and not cancelled.is_set() and calendar_current()
+            )
 
-            def validate_after() -> bool:
-                return (
-                    self._clock.now() >= market_window.captured_at
-                    and authority_current()
-                    and calendar_current()
-                    and self._persisted_completed_sse_open_on(anchor)
-                )
+        def validate_after() -> bool:
+            return (
+                self._clock.now() >= market_window.captured_at
+                and owner_current() and self._persisted_completed_sse_open_on(anchor)
+                and owner_current()
+            )
 
-            callback = self._permission_probe_reservation_callback(candidate)
-            try:
-                await self._controller.recheck_permission(
-                    operation, probe,
-                    work_key=f"permission:index_daily:{index_code.value}:{anchor}",
-                    validate_after=validate_after,
-                    can_start=start_current,
-                    on_reserved=callback,
-                )
-                self._permission_probe_deferred_until.pop(operation, None)
-                return PermissionMaintenanceResult.PROBED
-            except RequestNotStartedError:
-                return PermissionMaintenanceResult.DEFERRED
-            except RequestControlError:
-                return PermissionMaintenanceResult.FAILED
+        callback = self._permission_probe_reservation_callback(candidate)
+        try:
+            await self._controller.recheck_permission(
+                operation, probe,
+                work_key=f"permission:index_daily:{index_code.value}:{anchor}",
+                validate_after=validate_after,
+                can_start=start_current,
+                on_reserved=callback,
+            )
+            self._permission_probe_deferred_until.pop(operation, None)
+            return PermissionMaintenanceResult.PROBED
+        except RequestNotStartedError:
+            return PermissionMaintenanceResult.DEFERRED
+        except RequestControlError as error:
+            return self._permission_failure_result(operation, error)
 
     async def _maybe_recheck_daily_limits_permission(self) -> PermissionMaintenanceResult:
-        """Run one serial, read-only whole-market DAILY_LIMITS permission proof."""
+        return await self._run_permission_maintenance(TushareOperation.DAILY_LIMITS)
 
+    async def _recheck_daily_limits_permission_locked(
+        self, owner_task: asyncio.Task | None, cancelled: Event,
+    ) -> PermissionMaintenanceResult:
         operation = TushareOperation.DAILY_LIMITS
-        async with self._permission_maintenance_lock:
-            now = self._clock.now()
+        now = self._clock.now()
 
-            def defer_local() -> PermissionMaintenanceResult:
-                self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
-                return PermissionMaintenanceResult.DEFERRED
+        def defer_local() -> PermissionMaintenanceResult:
+            self._permission_probe_deferred_until[operation] = now + timedelta(seconds=30)
+            return PermissionMaintenanceResult.DEFERRED
 
-            if not self._controller.is_permission_blocked(operation):
-                return PermissionMaintenanceResult.SKIPPED
-            raw = self._controller.raw_permission_retry_at(operation)
-            if raw is None or now < max(
-                deadline for deadline in (
-                    raw,
-                    self._permission_probe_deferred_until.get(operation),
-                    self._controller.cooldown_until,
-                ) if deadline is not None
-            ):
-                return PermissionMaintenanceResult.SKIPPED
-            bound_mode = self._semantic_bindings is not None
-            semantics = self._stock_semantics
-            stock_evidence = self._stock_evidence
-            if bound_mode and (
-                semantics is None or "stk_limit" not in semantics.interface_scope
-            ):
-                return defer_local()
-            if not bound_mode and semantics is not None:
-                return defer_local()
-            request_date = now.date()
-            revision = semantics.semantic_revision if semantics is not None else None
+        if not self._controller.is_permission_blocked(operation):
+            return PermissionMaintenanceResult.SKIPPED
+        raw = self._controller.raw_permission_retry_at(operation)
+        if raw is None or now < max(
+            deadline for deadline in (
+                raw,
+                self._permission_probe_deferred_until.get(operation),
+                self._controller.cooldown_until,
+            ) if deadline is not None
+        ):
+            return PermissionMaintenanceResult.SKIPPED
+        bound_mode = self._semantic_bindings is not None
+        semantics = self._stock_semantics
+        stock_evidence = self._stock_evidence
+        if bound_mode and (
+            semantics is None or "stk_limit" not in semantics.interface_scope
+        ):
+            return defer_local()
+        if not bound_mode and semantics is not None:
+            return defer_local()
+        request_date = now.date()
+        revision = semantics.semantic_revision if semantics is not None else None
 
-            def authority_current() -> bool:
-                current = self._stock_semantics
-                semantic_current = (
-                    self._semantic_bindings is not None
-                    and current is not None
-                    and current.semantic_revision == revision
-                    and "stk_limit" in current.interface_scope
-                ) if bound_mode else (
-                    self._semantic_bindings is None and current is None
-                )
-                return (
-                    self._clock.now().date() == request_date
-                    and semantic_current
-                    and self._stock_certification_current()
-                    and self._generation_current()
-                    and not self._admission_revoked()
-                )
-
-            if not authority_current():
-                return defer_local()
-            candidates, _missing = self._permission_probe_state()
-            own = next((item for item in candidates if item.operation is operation), None)
-            if own is None:
-                return defer_local()
-            candidate = next(
-                (item for item in candidates if item.next_due_at <= now), None,
+        def authority_current() -> bool:
+            current = self._stock_semantics
+            semantic_current = (
+                self._semantic_bindings is not None
+                and current is not None
+                and current.semantic_revision == revision
+                and "stk_limit" in current.interface_scope
+            ) if bound_mode else (
+                self._semantic_bindings is None and current is None
             )
-            if candidate is None or candidate.operation is not operation:
-                return PermissionMaintenanceResult.SKIPPED
-            anchor = candidate.anchor_date
+            return (
+                self._clock.now().date() == request_date
+                and semantic_current
+                and self._stock_certification_current()
+                and self._generation_current()
+                and not self._admission_revoked()
+            )
 
-            def demand_current() -> bool:
-                evidence = self._read_permission_evidence(
-                    self._clock.now(), include_legacy=True, include_history=False,
-                )
-                return bool(evidence.legacy_symbols) and anchor in evidence.completed_open_days
+        authorized = authority_current()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not authorized:
+            return defer_local()
+        candidates, _missing = self._permission_probe_state()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        own = next((item for item in candidates if item.operation is operation), None)
+        if own is None:
+            return defer_local()
+        candidate = next(
+            (item for item in candidates if item.next_due_at <= now), None,
+        )
+        if candidate is None or candidate.operation is not operation:
+            return PermissionMaintenanceResult.SKIPPED
+        anchor = candidate.anchor_date
 
-            with self._calendar_epoch_lock:
-                read_epoch = self._calendar_epoch
-            if not demand_current():
-                return defer_local()
-            with self._calendar_epoch_lock:
-                if read_epoch != self._calendar_epoch:
-                    return PermissionMaintenanceResult.DEFERRED
-                if self._calendar_revoked.is_set():
-                    self._calendar_revoked = Event()
-                epoch = self._calendar_epoch
-                revoked = self._calendar_revoked
-            if self._permission_market_window is None:
-                return defer_local()
-            try:
-                latest_start = now + timedelta(seconds=LIVE_TUSHARE_TIMEOUT_SECONDS)
-                market_window = _FrozenPermissionMarketWindow(
-                    captured_at=now,
-                    latest_start_at=latest_start,
-                    deadlines=self._permission_market_window(
-                        now, latest_start + _INDEX_PERMISSION_GUARD,
-                    ),
-                )
-                blocker = market_window.blocker(now)
-            except ValueError:
-                return defer_local()
-            if blocker is not None:
-                self._permission_probe_deferred_until[operation] = (
-                    max(now, blocker[0]) + timedelta(microseconds=1)
-                )
+        def demand_current() -> bool:
+            evidence = self._read_permission_evidence(
+                self._clock.now(), include_legacy=True, include_history=False,
+            )
+            return bool(evidence.legacy_symbols) and anchor in evidence.completed_open_days
+
+        with self._calendar_epoch_lock:
+            read_epoch = self._calendar_epoch
+        demanded = demand_current()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not demanded:
+            return defer_local()
+        with self._calendar_epoch_lock:
+            if read_epoch != self._calendar_epoch:
                 return PermissionMaintenanceResult.DEFERRED
+            if self._calendar_revoked.is_set():
+                self._calendar_revoked = Event()
+            epoch = self._calendar_epoch
+            revoked = self._calendar_revoked
+        if self._permission_market_window is None:
+            return defer_local()
+        try:
+            latest_start = now + timedelta(seconds=LIVE_TUSHARE_TIMEOUT_SECONDS)
+            market_window = _FrozenPermissionMarketWindow(
+                captured_at=now,
+                latest_start_at=latest_start,
+                deadlines=self._permission_market_window(
+                    now, latest_start + _INDEX_PERMISSION_GUARD,
+                ),
+            )
+            blocker = market_window.blocker(now)
+        except ValueError:
+            return defer_local()
+        if blocker is not None:
+            self._permission_probe_deferred_until[operation] = (
+                max(now, blocker[0]) + timedelta(microseconds=1)
+            )
+            return PermissionMaintenanceResult.DEFERRED
 
-            def calendar_current() -> bool:
-                with self._calendar_epoch_lock:
-                    return (
-                        epoch == self._calendar_epoch
-                        and revoked is self._calendar_revoked
-                        and not revoked.is_set()
-                    )
-
-            def start_current() -> bool:
-                if not authority_current() or not calendar_current():
-                    return False
-                at = self._clock.now()
-                if not bound_mode and (
-                    stock_evidence is None or self._stock_evidence is not stock_evidence
-                    or not stock_evidence.observed_at <= at <= stock_evidence.valid_until
-                ):
-                    return False
-                try:
-                    return (
-                        at.date() == request_date and calendar_current()
-                        and market_window.blocker(at) is None
-                    )
-                except ValueError:
-                    return False
-
-            def probe() -> None:
-                if not start_current():
-                    raise RequestNotStartedError("daily limits authority or market time changed")
-
-                def physical_start() -> None:
-                    if not start_current():
-                        raise RequestNotStartedError(
-                            "daily limits authority or market time changed before SDK call"
-                        )
-
-                self.provider.probe_daily_limits_permission(
-                    anchor, _physical_start=physical_start,
-                )
-
-            def validate_after() -> bool:
+        def calendar_current() -> bool:
+            with self._calendar_epoch_lock:
                 return (
-                    self._clock.now() >= market_window.captured_at
-                    and authority_current()
-                    and calendar_current()
-                    and demand_current()
+                    epoch == self._calendar_epoch
+                    and revoked is self._calendar_revoked
+                    and not revoked.is_set()
                 )
 
-            callback = self._permission_probe_reservation_callback(candidate)
+        def start_current() -> bool:
+            if cancelled.is_set() or not authority_current() or not calendar_current():
+                return False
+            at = self._clock.now()
+            if not bound_mode and (
+                stock_evidence is None or self._stock_evidence is not stock_evidence
+                or not stock_evidence.observed_at <= at <= stock_evidence.valid_until
+            ):
+                return False
             try:
-                await self._controller.recheck_permission(
-                    operation, probe,
-                    work_key=f"permission:stk_limit:{anchor}",
-                    validate_after=validate_after,
-                    can_start=start_current,
-                    on_reserved=callback,
+                return (
+                    at.date() == request_date and calendar_current()
+                    and market_window.blocker(at) is None
                 )
-                self._permission_probe_deferred_until.pop(operation, None)
-                return PermissionMaintenanceResult.PROBED
-            except RequestNotStartedError:
-                return PermissionMaintenanceResult.DEFERRED
-            except RequestControlError:
-                return PermissionMaintenanceResult.FAILED
+            except ValueError:
+                return False
+
+        def probe() -> None:
+            if not start_current():
+                raise RequestNotStartedError("daily limits authority or market time changed")
+
+            def physical_start() -> None:
+                if not start_current():
+                    raise RequestNotStartedError(
+                        "daily limits authority or market time changed before SDK call"
+                    )
+
+            self.provider.probe_daily_limits_permission(
+                anchor, _physical_start=physical_start,
+            )
+
+        def owner_current() -> bool:
+            return (
+                owner_task is not None and not owner_task.cancelling() and not cancelled.is_set()
+                and authority_current() and not owner_task.cancelling()
+                and not cancelled.is_set() and calendar_current()
+            )
+
+        def validate_after() -> bool:
+            return (
+                self._clock.now() >= market_window.captured_at
+                and owner_current() and demand_current() and owner_current()
+            )
+
+        callback = self._permission_probe_reservation_callback(candidate)
+        try:
+            await self._controller.recheck_permission(
+                operation, probe,
+                work_key=f"permission:stk_limit:{anchor}",
+                validate_after=validate_after,
+                can_start=start_current,
+                on_reserved=callback,
+            )
+            self._permission_probe_deferred_until.pop(operation, None)
+            return PermissionMaintenanceResult.PROBED
+        except RequestNotStartedError:
+            return PermissionMaintenanceResult.DEFERRED
+        except RequestControlError as error:
+            return self._permission_failure_result(operation, error)
+
+    def _permission_failure_result(
+        self, operation: TushareOperation, error: RequestControlError,
+    ) -> PermissionMaintenanceResult:
+        if error.code not in {
+            RequestControlErrorCode.BLOCKED_PERMISSION, RequestControlErrorCode.RATE_LIMITED,
+            RequestControlErrorCode.TRANSIENT, RequestControlErrorCode.TIMEOUT,
+            RequestControlErrorCode.INVALID_RESPONSE,
+        }:
+            raise error
+        if error.next_retry_at is not None:
+            self._defer_legacy_permission(operation, error.next_retry_at)
+        return PermissionMaintenanceResult.FAILED
+
+    def _permission_owner_current(self) -> bool:
+        if self._admission_revoked():
+            raise RecoveryAdmissionChangedError("permission maintenance authority changed")
+        return self._generation_current()
 
     def _defer_legacy_permission(
         self, operation: TushareOperation, until: datetime | None = None,
@@ -2370,13 +2391,106 @@ class ProductionMonitorPipeline:
             self._realtime_probe_deferred_until = due
         return PermissionMaintenanceResult.DEFERRED
 
-    async def _run_legacy_permission_owner(
-        self, operation: TushareOperation,
+    async def run_permission_maintenance_unit(self) -> PermissionMaintenanceResult:
+        """Perform at most one globally selected read-only permission attempt."""
+        return await self._run_permission_maintenance()
+
+    async def _run_permission_maintenance(
+        self, requested_operation: TushareOperation | None = None,
     ) -> PermissionMaintenanceResult:
         owner, cancelled = asyncio.current_task(), Event()
         try:
             async with self._permission_maintenance_lock:
-                return await self._recheck_legacy_permission_locked(operation, owner, cancelled)
+                now = self._clock.now()
+                due = {}
+                for operation in _PERMISSION_SCOPES:
+                    raw = self._controller.raw_permission_retry_at(operation)
+                    if raw is None or not self._controller.is_permission_blocked(operation):
+                        continue
+                    floor = self._permission_effective_due(operation, raw)
+                    if floor <= now:
+                        due[operation] = raw
+                if not due:
+                    return PermissionMaintenanceResult.SKIPPED
+                if not self._permission_owner_current():
+                    return PermissionMaintenanceResult.SKIPPED
+                candidates, _ = self._permission_probe_state(now=now)
+                if not self._permission_owner_current():
+                    return PermissionMaintenanceResult.SKIPPED
+                checked_at = self._clock.now()
+                available = {item.operation: item for item in candidates}
+                runnable = []
+                deferred = False
+                for operation in due:
+                    candidate = available.get(operation)
+                    # The scope rank is synthetic; only its one preparation may select a receipt.
+                    if operation is TushareOperation.DAILY_BARS:
+                        runnable.append(operation)
+                    elif candidate is None or candidate.next_due_at > now:
+                        self._defer_legacy_permission(
+                            operation, candidate.next_due_at if candidate is not None
+                            and candidate.next_due_at > checked_at
+                            else checked_at + timedelta(seconds=30),
+                        )
+                        deferred = True
+                    else:
+                        runnable.append(operation)
+                if not runnable:
+                    return (PermissionMaintenanceResult.DEFERRED if deferred
+                            else PermissionMaintenanceResult.SKIPPED)
+                operation = min(runnable, key=lambda op: self._permission_priority(op, due[op]))
+                if requested_operation is not None and operation is not requested_operation:
+                    return PermissionMaintenanceResult.SKIPPED
+                if operation in (*_STOCK_MINUTE_SCOPES, TushareOperation.DAILY_BARS):
+                    prior_defer = self._permission_probe_deferred_until.get(operation)
+                    prepared = (
+                        self._prepare_daily_bar_permission_locked()
+                        if operation is TushareOperation.DAILY_BARS
+                        else self._prepare_stock_minute_permission_locked(operation)
+                    )
+                    if not self._permission_owner_current():
+                        # Only this synchronous preparation's own timing write is unwound.
+                        if prior_defer is None:
+                            self._permission_probe_deferred_until.pop(operation, None)
+                        else:
+                            self._permission_probe_deferred_until[operation] = prior_defer
+                        return PermissionMaintenanceResult.SKIPPED
+                    if prepared.status == "UNKNOWN":
+                        self._defer_legacy_permission(operation, max(
+                            self._clock.now() + timedelta(seconds=30),
+                            self._permission_probe_deferred_until.get(operation, now),
+                        ))
+                if operation in _PERMISSION_SCOPES[:3]:
+                    result = await self._recheck_legacy_permission_locked(
+                        operation, owner, cancelled,
+                    )
+                elif operation in _STOCK_MINUTE_SCOPES:
+                    result = await self._recheck_stock_minute_permission_locked(
+                        operation, owner, cancelled, prepared,
+                    )
+                elif operation is TushareOperation.DAILY_BARS:
+                    result = await self._recheck_daily_bars_permission_locked(
+                        owner, cancelled, prepared,
+                    )
+                elif operation is TushareOperation.DAILY_LIMITS:
+                    result = await self._recheck_daily_limits_permission_locked(owner, cancelled)
+                else:
+                    result = await self._recheck_index_daily_permission_locked(owner, cancelled)
+                if (result is PermissionMaintenanceResult.SKIPPED
+                        and not self._permission_owner_current()):
+                    return result
+                if result in {
+                    PermissionMaintenanceResult.SKIPPED, PermissionMaintenanceResult.DEFERRED,
+                }:
+                    completed_at = self._clock.now()
+                    if (self._controller.is_permission_blocked(operation)
+                            and self._permission_effective_due(
+                                operation, due[operation],
+                            ) <= completed_at):
+                        return self._defer_legacy_permission(
+                            operation, completed_at + timedelta(seconds=30),
+                        )
+                return result
         except asyncio.CancelledError:
             cancelled.set()
             raise
@@ -2384,7 +2498,7 @@ class ProductionMonitorPipeline:
             cancelled.set()
 
     async def _maybe_recheck_calendar_permission(self) -> PermissionMaintenanceResult:
-        return await self._run_legacy_permission_owner(TushareOperation.TRADING_CALENDAR)
+        return await self._run_permission_maintenance(TushareOperation.TRADING_CALENDAR)
 
     async def _recheck_legacy_permission_locked(
         self, operation: TushareOperation, owner: asyncio.Task | None, cancelled: Event,
@@ -2399,6 +2513,8 @@ class ProductionMonitorPipeline:
         with self._calendar_epoch_lock:
             epoch, prior_token = self._calendar_epoch, self._calendar_revoked
         candidates, _ = self._permission_probe_state(now=captured_at)
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
         candidate = next((item for item in candidates if item.next_due_at <= captured_at), None)
         if candidate is None:
             own = next((item for item in candidates if item.operation is operation), None)
@@ -2471,9 +2587,16 @@ class ProductionMonitorPipeline:
                         TradingCalendar.cal_date == anchor)).one_or_none()
                 return None if row is None else tuple(row)
 
-        if factory is None or not authority_io():
+        if factory is None:
+            return self._defer_legacy_permission(operation)
+        authorized = authority_io()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not authorized:
             return self._defer_legacy_permission(operation)
         original_anchor = read_anchor()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
         if (original_anchor is None
                 or (not realtime and anchor >= captured_at.date())
                 or (not calendar and (anchor.weekday() >= 5 or original_anchor[2] is not True))
@@ -2562,7 +2685,15 @@ class ProductionMonitorPipeline:
             return valid and owner_current()
 
         # Recheck the original row, never select a substitute date before reservation.
-        if read_anchor() != original_anchor or not can_start():
+        anchor_current = read_anchor() == original_anchor
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not anchor_current:
+            return defer_start()
+        admitted = can_start()
+        if not self._permission_owner_current():
+            return PermissionMaintenanceResult.SKIPPED
+        if not admitted:
             return defer_start()
         callback = self._permission_probe_reservation_callback(candidate)
         try:
@@ -2682,7 +2813,7 @@ class ProductionMonitorPipeline:
         return trade_date.weekday() < 5 and len(days) == 1 and days[0].is_open is True
 
     async def _maybe_recheck_realtime_index_permission(self) -> PermissionMaintenanceResult:
-        return await self._run_legacy_permission_owner(TushareOperation.INDEX_REALTIME_MINUTES)
+        return await self._run_permission_maintenance(TushareOperation.INDEX_REALTIME_MINUTES)
 
     def _historical_index_probe_current(self, request_date: date, revision: str) -> bool:
         now = self._clock.now()
@@ -2701,7 +2832,7 @@ class ProductionMonitorPipeline:
         )
 
     async def _maybe_recheck_historical_index_permission(self) -> PermissionMaintenanceResult:
-        return await self._run_legacy_permission_owner(TushareOperation.INDEX_HISTORICAL_MINUTES)
+        return await self._run_permission_maintenance(TushareOperation.INDEX_HISTORICAL_MINUTES)
 
     def _defer_permission_blocked_index_recoveries(self, now: datetime) -> None:
         """A zero-call historical block cannot spend an index recovery attempt."""

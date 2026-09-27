@@ -459,10 +459,18 @@ def test_1000_sparse_dates_plus_request_day_share_one_response_transaction(
         ])
     env.rows = [row(env, day=source_day) for source_day in dates]
     sessions, chunks, begins = [], [], []
+    phase = "selection"
+    original_prepare = env.pipeline._prepare_stock_minute_permission_locked
+    def prepare(operation):
+        nonlocal phase
+        phase = "execution"
+        return original_prepare(operation)
+    monkeypatch.setattr(env.pipeline, "_prepare_stock_minute_permission_locked", prepare)
     def factory():
         session = env.sessions()
-        sessions.append(session)
-        event.listen(session, "after_begin", lambda s, tx, conn: begins.append(s))
+        stage = "response" if env.calls else phase
+        sessions.append((stage, session))
+        event.listen(session, "after_begin", lambda s, tx, conn: begins.append((stage, s)))
         return session
     monkeypatch.setattr(env.pipeline, "_permission_session_factory", factory)
     monkeypatch.setattr(env.pipeline, "_work", lambda: pytest.fail("no second UnitOfWork"))
@@ -472,7 +480,11 @@ def test_1000_sparse_dates_plus_request_day_share_one_response_transaction(
             chunks.append((statement, params))
     event.listen(env.engine, "before_cursor_execute", sql)
     assert recheck(env, operation) is PermissionMaintenanceResult.PROBED
-    assert len(sessions) == len(begins) == 2 and sessions[0] is not sessions[1]
+    assert sessions == begins
+    assert [stage for stage, _ in sessions] == ["selection", "execution", "response"]
+    assert len({id(session) for _, session in sessions}) == 3
+    execution_sessions = [session for stage, session in sessions if stage != "selection"]
+    assert len(execution_sessions) == 2 and execution_sessions[0] is not execution_sessions[1]
     assert len(chunks) == 5
     queried = [date for _, params in chunks for date in params[1:-2]]
     assert set(queried) == {source_day.isoformat() for source_day in (*dates, day)}

@@ -23,9 +23,11 @@ from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProv
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.production import PermissionMaintenanceResult
+from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.request_control import (
     PermissionReservationCallbackError,
     RequestControlError,
+    RequestControlErrorCode,
     TushareOperation,
 )
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
@@ -422,16 +424,14 @@ def test_restored_stock_semantic_file_keeps_restart_latch_and_local_defer(
             finally:
                 path.write_bytes(original)
             assert pipeline._admission_revoked()
-
-            assert await pipeline._maybe_recheck_daily_limits_permission() is (
-                PermissionMaintenanceResult.DEFERRED
-            )
-            local_due = runtime._clock.now() + timedelta(seconds=30)
-            assert pipeline.next_permission_probe_due_at() == local_due
-            assert await pipeline._maybe_recheck_daily_limits_permission() is (
-                PermissionMaintenanceResult.SKIPPED
-            )
-            assert pipeline.next_permission_probe_due_at() == local_due
+            raw = control.raw_permission_retry_at(TushareOperation.DAILY_LIMITS)
+            for _ in range(2):
+                with pytest.raises(RecoveryAdmissionChangedError):
+                    await pipeline._maybe_recheck_daily_limits_permission()
+                assert control.raw_permission_retry_at(TushareOperation.DAILY_LIMITS) == raw
+                assert pipeline._permission_probe_deferred_until == {}
+                assert pipeline._permission_rotation_state.last_operation is None
+                assert pipeline._admission_revoked()
             assert tuple(sdk.calls) == sdk_before
             assert control.is_permission_blocked(TushareOperation.DAILY_LIMITS)
         finally:
@@ -460,10 +460,17 @@ def test_unauthorized_daily_limits_defer_does_not_take_index_due_slot(
             runtime._clock.current += timedelta(seconds=301)
             sdk_before = tuple(sdk.calls)
             pipeline._stock_semantics = None
+            raw = control.raw_permission_retry_at(TushareOperation.DAILY_LIMITS)
+            expected_check = runtime._clock.now() + timedelta(seconds=30)
 
             assert await pipeline._maybe_recheck_daily_limits_permission() is (
-                PermissionMaintenanceResult.DEFERRED
+                PermissionMaintenanceResult.SKIPPED
             )
+            assert pipeline._permission_probe_deferred_until[TushareOperation.DAILY_LIMITS] == (
+                expected_check
+            )
+            assert control.raw_permission_retry_at(TushareOperation.DAILY_LIMITS) == raw
+            assert control.is_permission_blocked(TushareOperation.DAILY_LIMITS)
             due = pipeline.select_due_permission_probe()
             assert due is not None and due.operation is TushareOperation.INDEX_DAILY
             assert pipeline._permission_rotation_state.last_operation is None
@@ -605,13 +612,12 @@ def test_daily_limits_gate_does_not_reserve_or_call_sdk(
                 pipeline._generation_current = lambda: False
             result = await pipeline._maybe_recheck_daily_limits_permission()
             if reason == "no_authority":
-                assert result is PermissionMaintenanceResult.DEFERRED
-                local_due = runtime._clock.now() + timedelta(seconds=30)
-                assert pipeline.next_permission_probe_due_at() == local_due
+                assert result is PermissionMaintenanceResult.SKIPPED
+                assert pipeline._permission_probe_deferred_until == {}
                 assert await pipeline._maybe_recheck_daily_limits_permission() is (
                     PermissionMaintenanceResult.SKIPPED
                 )
-                assert pipeline.next_permission_probe_due_at() == local_due
+                assert pipeline._permission_probe_deferred_until == {}
             else:
                 assert result is PermissionMaintenanceResult.SKIPPED
             assert control.raw_permission_retry_at(TushareOperation.DAILY_LIMITS) == raw
@@ -738,10 +744,14 @@ def test_reserved_daily_limits_keeps_block_after_nonproof_outcome(
                     control.close()
                 release.set()
                 assert await blocker == "released"
-                assert await attempt is (
-                    PermissionMaintenanceResult.DEFERRED
-                    if outcome == "queue_abort" else PermissionMaintenanceResult.FAILED
-                )
+                if outcome == "queue_abort":
+                    assert await attempt is PermissionMaintenanceResult.DEFERRED
+                else:
+                    with pytest.raises(RequestControlError) as caught:
+                        await attempt
+                    assert caught.value.code is RequestControlErrorCode.CLOSED
+                    assert caught.value.operation is TushareOperation.DAILY_LIMITS
+                    assert caught.value.attempts == 0
                 assert tuple(sdk.calls) == sdk_before
             else:
                 assert await attempt is PermissionMaintenanceResult.FAILED

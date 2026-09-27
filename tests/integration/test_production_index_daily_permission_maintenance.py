@@ -20,6 +20,7 @@ from trade_plan_monitor.runtime.production import PermissionMaintenanceResult
 from trade_plan_monitor.runtime.request_control import (
     PermissionReservationCallbackError,
     RequestControlError,
+    RequestControlErrorCode,
     RequestNotStartedError,
     TushareOperation,
 )
@@ -203,10 +204,14 @@ def test_reserved_index_daily_advances_once_without_false_success(
                     control.close()
                 release.set()
                 assert await blocker == "released"
-                assert await attempt is (
-                    PermissionMaintenanceResult.DEFERRED
-                    if outcome == "queue_abort" else PermissionMaintenanceResult.FAILED
-                )
+                if outcome == "queue_abort":
+                    assert await attempt is PermissionMaintenanceResult.DEFERRED
+                else:
+                    with pytest.raises(RequestControlError) as caught:
+                        await attempt
+                    assert caught.value.code is RequestControlErrorCode.CLOSED
+                    assert caught.value.operation is TushareOperation.INDEX_DAILY
+                    assert caught.value.attempts == 0
                 assert tuple(sdk.calls) == sdk_before
             else:
                 assert await attempt is PermissionMaintenanceResult.FAILED
