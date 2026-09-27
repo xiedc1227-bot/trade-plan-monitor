@@ -1376,6 +1376,7 @@ def create_monitor_composition(
             revoke_active_recovery_attempts=state.revoke_active_recovery_attempts,
             scheduler=scheduler,
             run_deadline=state.run_deadline,
+            next_permission_maintenance_at=state.next_index_permission_at,
             dispatcher=dispatcher,
             request_controller=request_controller,
             checkpoint_wal=state.checkpoint_wal,

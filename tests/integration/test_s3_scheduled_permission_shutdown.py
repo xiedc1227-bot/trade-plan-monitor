@@ -1,12 +1,14 @@
-"""Drain a held proof from the real RUNNING permission scheduler before disposal."""
+"""Drain a held proof from real RUNNING/DEGRADED owners before disposal."""
 
 import asyncio
 from datetime import timedelta
 from threading import Event, get_ident
 
+import pytest
 from sqlalchemy import event
 from test_live_pipeline_acceptance import NOW
 from test_s3_permission_reservation_process import IDENTITY, _business_rows, _checkpoint_rows
+from test_unified_permission_degraded import _degraded_composition
 from test_unified_permission_running import _composition
 
 from trade_plan_monitor.market_index.identity import MarketIndexCode
@@ -23,41 +25,59 @@ from trade_plan_monitor.state.runtime_recovery import ProviderRecoveryRepository
 SCOPE = TushareOperation.INDEX_HISTORICAL_MINUTES
 
 
+@pytest.mark.parametrize("mode", (RuntimeServiceStatus.RUNNING, RuntimeServiceStatus.DEGRADED))
 def test_scheduled_permission_stop_revokes_before_cancel_and_drains_late_proof(
-    tmp_path, monkeypatch,
+    tmp_path, monkeypatch, mode,
 ):
     async def scenario():
-        composition, sdk = _composition(tmp_path, monkeypatch, stock=False)
         database = tmp_path / "monitor.sqlite3"
         due = NOW + timedelta(seconds=1)
-        seed_engine = create_sqlite_engine(database)
-        try:
-            # Fixture latch only. The real automatic unit must replace this
-            # deadline with its own durable now+300 reservation before the SDK.
-            ProviderRecoveryRepository(
-                create_session_factory(seed_engine), provider_identity=IDENTITY,
-            ).save((RecoveryCheckpoint("permission", SCOPE.value, due, 0),))
-        finally:
-            seed_engine.dispose()
+        wait = None
+        if mode is RuntimeServiceStatus.DEGRADED:
+            composition, sdk, wait = _degraded_composition(
+                tmp_path, monkeypatch,
+                scopes=(TushareOperation.TRADING_CALENDAR, SCOPE), seconds=1,
+            )
+        else:
+            composition, sdk = _composition(tmp_path, monkeypatch, stock=False)
+            seed_engine = create_sqlite_engine(database)
+            try:
+                # Fixture latch only. The real automatic unit must replace this
+                # deadline with its own durable now+300 reservation before the SDK.
+                ProviderRecoveryRepository(
+                    create_session_factory(seed_engine), provider_identity=IDENTITY,
+                ).save((RecoveryCheckpoint("permission", SCOPE.value, due, 0),))
+            finally:
+                seed_engine.dispose()
         seeded = _checkpoint_rows(database)
         entered, release = Event(), Event()
         shutdown_published, owner_cancelled = asyncio.Event(), asyncio.Event()
-        active_deadlines, boundaries, disposals, returned = {}, [], [], []
+        active_deadlines, boundaries, disposals, returned, executed = {}, [], [], [], []
         owner_thread = get_ident()
         drive = stop = None
         engine = disposal_listener = owner = None
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition.start()).status is mode
             runtime, runner = composition._runtime, composition._runner_task
             state = runtime._run_deadline.__self__
             pipeline, control, clock = state._pipeline, runtime._request_controller, runtime._clock
             engine = state._engine
             generation = runtime.runtime_generation
-            assert pipeline._stock_semantics is None and pipeline._index_semantics is not None
+            assert (pipeline._stock_semantics is None) is (mode is RuntimeServiceStatus.RUNNING)
+            assert pipeline._index_semantics is not None
+            assert runtime._accepting_work is (mode is RuntimeServiceStatus.RUNNING)
             assert runtime._shutdown_timeout_seconds == 5.0
             assert sdk.calls == [] and _checkpoint_rows(database) == seeded
-            assert await clock.park(failed=runner.done)
-            assert clock.parked[0] == due
+            startup_due = runtime.health().next_retry_at
+            if wait is None:
+                assert await clock.park(failed=runner.done)
+                assert clock.parked[0] == due
+            else:
+                assert startup_due == NOW + timedelta(seconds=30)
+                assert runtime.health().degraded_reason == "REFERENCE_REFRESH_FAILED"
+                assert state._stage_errors["trading_calendar"] == "REFERENCE_BLOCKED_PERMISSION"
+                assert await wait.park() == due
+                assert clock.sleep_calls == []
             before = _business_rows(database)
             original_deadline = runtime._run_deadline
             original_sdk = sdk._historical_index_minutes
@@ -67,6 +87,11 @@ def test_scheduled_permission_stop_revokes_before_cancel_and_drains_late_proof(
 
             async def observe_deadline(deadline):
                 task = asyncio.current_task()
+                assert task in runtime._work_tasks
+                assert deadline.kind is DeadlineKind.INDEX_PERMISSION
+                assert runtime.status is mode
+                assert runtime._accepting_work is (mode is RuntimeServiceStatus.RUNNING)
+                executed.append(deadline)
                 active_deadlines[task] = deadline
                 try:
                     return await original_deadline(deadline)
@@ -122,13 +147,20 @@ def test_scheduled_permission_stop_revokes_before_cancel_and_drains_late_proof(
             )
             event.listen(engine, "engine_disposed", observe_disposal)
             disposal_listener = observe_disposal
-            drive = asyncio.create_task(clock.drive(
-                due, stop_when=entered.is_set,
-                failed=lambda: composition.health().degraded_reason == "RUNTIME_RUNNER_FAILED",
-            ))
+            if wait is None:
+                drive = asyncio.create_task(clock.drive(
+                    due, stop_when=entered.is_set,
+                    failed=lambda: composition.health().degraded_reason == "RUNTIME_RUNNER_FAILED",
+                ))
+            else:
+                # Only release the genuine lifecycle retry wait. Its own loop
+                # selects calendar, then the due historical sibling, without a
+                # direct maintenance call or enabling ordinary market work.
+                await wait.release(composition)
             async with asyncio.timeout(3):
                 while not entered.is_set():
-                    assert not drive.done(), "real scheduler did not enter the permission SDK"
+                    assert drive is None or not drive.done(), "owner did not enter permission SDK"
+                    assert not runner.done() and not composition._runner_failed
                     await asyncio.sleep(0.005)
             (owner, deadline), = active_deadlines.items()
             assert deadline.kind is DeadlineKind.INDEX_PERMISSION and deadline.due_at == due
@@ -147,9 +179,19 @@ def test_scheduled_permission_stop_revokes_before_cancel_and_drains_late_proof(
                 "permission", SCOPE.value, reserved.isoformat(), 0, "BLOCKED_PERMISSION",
             ),)
             assert persisted != seeded and _business_rows(database) == before
-            assert composition.health().status is RuntimeServiceStatus.RUNNING
+            assert composition.health().status is mode
+            assert runtime._accepting_work is (mode is RuntimeServiceStatus.RUNNING)
+            assert runtime.business_commit_admission_open and pipeline._generation_current()
+            assert runtime.health().next_retry_at == startup_due
             assert composition.health().runtime_generation == generation
-            assert len(sdk.calls) == 1 and sdk.calls[0][0] == "idx_mins"
+            expected_calls = ("idx_mins",) if wait is None else ("trade_cal", "idx_mins")
+            assert tuple(name for name, _ in sdk.calls) == expected_calls
+            assert len(executed) == len(expected_calls)
+            assert all(item.kind is DeadlineKind.INDEX_PERMISSION for item in executed)
+            if wait is not None:
+                assert not control.is_permission_blocked(TushareOperation.TRADING_CALENDAR)
+                assert clock.sleep_calls == []  # No normal market scheduling while DEGRADED.
+                assert state._pipeline is pipeline and before["minute_bar"]
             calls = tuple(sdk.calls)
 
             monkeypatch.setattr(runtime, "begin_shutdown", observe_begin_shutdown)

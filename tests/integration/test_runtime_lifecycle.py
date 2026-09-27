@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -167,6 +167,13 @@ def _service(
     configuration_restart_required: Callable[[], bool] | None = None,
 ) -> RuntimeLifecycleService:
     observed = events if events is not None else []
+    clock = _Clock()
+
+    async def default_retry_wait(shutdown: asyncio.Event, delay: float) -> _RetryWaitOutcome:
+        outcome = await _wait_for_retry_or_shutdown(shutdown, delay)
+        if outcome is _RetryWaitOutcome.TIMEOUT:
+            clock.current += timedelta(seconds=delay)
+        return outcome
 
     async def record_deadline(_deadline: MarketDeadline) -> None:
         observed.append("deadline")
@@ -175,7 +182,7 @@ def _service(
         observed.append("recover")
 
     return RuntimeLifecycleService(
-        clock=_Clock(),
+        clock=clock,
         validate_configuration=lambda: observed.append("config"),
         configuration_restart_required=configuration_restart_required,
         open_database=(
@@ -184,7 +191,7 @@ def _service(
         liveness_owner=liveness_owner,
         heartbeat_interval_seconds=heartbeat_interval_seconds,
         retry_interval_seconds=retry_interval_seconds,
-        retry_wait=retry_wait,
+        retry_wait=default_retry_wait if retry_wait is None else retry_wait,
         load_active_symbols=lambda: (observed.append("plans"), symbols)[1],
         probe_capabilities=probe_capabilities or (lambda: (
             observed.append("probe"),
@@ -930,6 +937,7 @@ def test_retry_wait_timeout_before_begin_shutdown_allows_only_started_recheck() 
             return unavailable
 
         async def retry_wait(_shutdown: asyncio.Event, _delay: float) -> _RetryWaitOutcome:
+            service._clock.current += timedelta(seconds=_delay)
             return _RetryWaitOutcome.TIMEOUT
 
         service = _service(probe_capabilities=probe, retry_wait=retry_wait)

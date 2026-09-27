@@ -96,6 +96,7 @@ from trade_plan_monitor.runtime.market_indexes import (
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
+    TushareOperation,
 )
 from trade_plan_monitor.runtime.scheduler import (
     DeadlineKind,
@@ -2900,6 +2901,7 @@ class RuntimeLifecycleService:
         heartbeat_interval_seconds: float = 30.0,
         retry_interval_seconds: float = 30.0,
         retry_wait: Callable[[asyncio.Event, float], Awaitable[_RetryWaitOutcome]] | None = None,
+        next_permission_maintenance_at: Callable[[], datetime | None] | None = None,
         shutdown_timeout_seconds: float = 5.0,
         revoke_active_recovery_attempts: Callable[[], None] | None = None,
     ) -> None:
@@ -2943,6 +2945,10 @@ class RuntimeLifecycleService:
             raise TypeError("liveness_owner must expose admit and heartbeat")
         if retry_wait is not None and not callable(retry_wait):
             raise TypeError("retry_wait must be callable")
+        if next_permission_maintenance_at is not None and not callable(
+            next_permission_maintenance_at
+        ):
+            raise TypeError("next_permission_maintenance_at must be callable")
         if (
             isinstance(heartbeat_interval_seconds, bool)
             or not isinstance(heartbeat_interval_seconds, int | float)
@@ -2990,6 +2996,10 @@ class RuntimeLifecycleService:
         self._retry_wait = (
             _wait_for_retry_or_shutdown if retry_wait is None else retry_wait
         )
+        self._next_permission_maintenance_at = (
+            (lambda: None)
+            if next_permission_maintenance_at is None else next_permission_maintenance_at
+        )
         self._heartbeat_stop = asyncio.Event()
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._liveness_failed = False
@@ -3002,6 +3012,7 @@ class RuntimeLifecycleService:
         self._stopped_at: datetime | None = None
         self._next_poll_at: datetime | None = None
         self._retry_at: datetime | None = None
+        self._startup_failure_operations: set[TushareOperation] = set()
         self._startup_result: RuntimeStartupResult | None = None
         self._start_task: asyncio.Task[RuntimeStartupResult] | None = None
         self._accepting_work = False
@@ -3163,6 +3174,7 @@ class RuntimeLifecycleService:
                 if error.code not in _RETRYABLE_PROVIDER_ERRORS:
                     raise
                 read_only = True
+                self._startup_failure_operations.add(error.operation)
                 self._degraded_reason = reason
                 if error.next_retry_at is not None:
                     self._retry_at = max(
@@ -3234,6 +3246,8 @@ class RuntimeLifecycleService:
                     return
                 await self._retry_degraded_startup()
                 if not self._accepting_work:
+                    if self._block_reason == "NEEDS_RESTART":
+                        await self._wait_for_explicit_stop()
                     return
                 startup = self._startup_result
             while self._accepting_work:
@@ -3284,7 +3298,11 @@ class RuntimeLifecycleService:
                     self._accepting_work = False
                     self._degraded_reason = f"PROVIDER_{error.code.value}"
                     self._next_poll_at = None
-                    self._retry_at = error.next_retry_at
+                    self._startup_failure_operations = {error.operation}
+                    minimum_retry = _canonical_shanghai(self._clock.now()) + timedelta(
+                        seconds=self._retry_interval_seconds,
+                    )
+                    self._retry_at = max(minimum_retry, error.next_retry_at or minimum_retry)
                     await self._retry_degraded_startup()
                 except asyncio.CancelledError:
                     if not self._accepting_work:
@@ -3314,33 +3332,78 @@ class RuntimeLifecycleService:
         if self._stopping or self._cleanup_complete:
             return
         attempt = 0
+        startup_due = self._retry_at or (
+            _canonical_shanghai(self._clock.now()) + timedelta(seconds=self._retry_interval_seconds)
+        )
         while not self._stopping and self._status is RuntimeServiceStatus.DEGRADED:
-            delay = min(
-                300.0,
-                self._retry_interval_seconds * (1, 2, 4, 10)[min(attempt, 3)],
-            )
+            if self._configuration_restart_required():
+                self._mark_configuration_restart_required()
+                await self._wait_for_explicit_stop()
+                return
+            cooldown = getattr(self._request_controller, "cooldown_until", None)
+            startup_due = max(startup_due, self._retry_at or startup_due, cooldown or startup_due)
+            permission_retry_at = getattr(self._request_controller, "permission_retry_at", None)
+            if callable(permission_retry_at):
+                for operation in self._startup_failure_operations:
+                    floor = permission_retry_at(operation)
+                    if floor is not None:
+                        startup_due = max(startup_due, floor)
+            self._retry_at = startup_due
             now = _canonical_shanghai(self._clock.now())
-            if self._retry_at is not None:
-                delay = max(delay, (self._retry_at - now).total_seconds())
-            self._retry_at = now + timedelta(seconds=delay)
-            outcome = await self._retry_wait(shutdown_event, delay)
-            if outcome is _RetryWaitOutcome.SHUTDOWN:
-                return
-            if outcome is not _RetryWaitOutcome.TIMEOUT:
-                raise TypeError("retry_wait must return SHUTDOWN or TIMEOUT")
-            if self._stopping or shutdown_event.is_set():
-                return
-            work_task = asyncio.create_task(self._recheck_degraded_startup())
-            self._work_tasks.add(work_task)
-            try:
-                await work_task
-            except asyncio.CancelledError:
-                if self._stopping:
+            permission_due = self._permission_maintenance_due()
+            wake_at = min(startup_due, permission_due or startup_due)
+            if now < wake_at:
+                outcome = await self._retry_wait(shutdown_event, (wake_at - now).total_seconds())
+                if outcome is _RetryWaitOutcome.SHUTDOWN:
                     return
-                raise
-            finally:
-                self._work_tasks.discard(work_task)
-            attempt += 1
+                if outcome is not _RetryWaitOutcome.TIMEOUT:
+                    raise TypeError("retry_wait must return SHUTDOWN or TIMEOUT")
+                if self._stopping or shutdown_event.is_set():
+                    return
+                continue
+            if startup_due <= now:
+                work_task = asyncio.create_task(self._recheck_degraded_startup())
+                self._work_tasks.add(work_task)
+                try:
+                    await work_task
+                except asyncio.CancelledError:
+                    if self._stopping:
+                        return
+                    raise
+                finally:
+                    self._work_tasks.discard(work_task)
+                if self._stopping or self._status is not RuntimeServiceStatus.DEGRADED:
+                    return
+                attempt += 1
+                delay = min(
+                    300.0, self._retry_interval_seconds * (1, 2, 4, 10)[min(attempt, 3)],
+                )
+                startup_due = max(
+                    _canonical_shanghai(self._clock.now()) + timedelta(seconds=delay),
+                    self._retry_at or startup_due,
+                )
+                self._retry_at = startup_due
+                if self._configuration_restart_required():
+                    continue
+                permission_due = self._permission_maintenance_due()
+            now = _canonical_shanghai(self._clock.now())
+            if permission_due is not None and permission_due <= now:
+                try:
+                    await self._execute_deadline(MarketDeadline(
+                        kind=DeadlineKind.INDEX_PERMISSION,
+                        trade_date=now.date(),
+                        due_at=now,
+                    ))
+                except asyncio.CancelledError:
+                    if self._stopping:
+                        return
+                    raise
+
+    def _permission_maintenance_due(self) -> datetime | None:
+        due = self._next_permission_maintenance_at()
+        if due is not None and not isinstance(due, datetime):
+            raise TypeError("next_permission_maintenance_at must return datetime or None")
+        return None if due is None else _canonical_shanghai(due)
 
     async def _recheck_degraded_startup(self) -> None:
         stage = "CONFIGURATION_INVALID"
@@ -3357,6 +3420,9 @@ class RuntimeLifecycleService:
             await self._invoke(self._refresh_references, trade_date)
             stage = "STARTUP_RECOVERY_FAILED"
             await self._invoke(self._recover_startup, trade_date)
+            # Only complete dependency success proves previous failures cleared;
+            # capabilities/schedule alone never infer a provider operation.
+            self._startup_failure_operations.clear()
             stage = "SCHEDULE_UNAVAILABLE"
             next_deadline = self._scheduler.next_deadline(after=self._last_deadline_at)
             if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):
@@ -3372,6 +3438,7 @@ class RuntimeLifecycleService:
         except RequestControlError as error:
             if error.code not in _RETRYABLE_PROVIDER_ERRORS:
                 raise
+            self._startup_failure_operations.add(error.operation)
             self._degraded_reason = stage
             if error.next_retry_at is not None:
                 self._retry_at = max(error.next_retry_at, self._retry_at or error.next_retry_at)
@@ -3384,6 +3451,7 @@ class RuntimeLifecycleService:
         self._accepting_work = True
         self._next_poll_at = next_deadline.due_at
         self._retry_at = None
+        self._startup_failure_operations.clear()
         self._startup_result = RuntimeStartupResult(
             status=RuntimeServiceStatus.RUNNING,
             read_only=False,
