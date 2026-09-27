@@ -224,7 +224,7 @@ def test_failed_calendar_transaction_keeps_old_token_revoked_until_fresh_read(
 ):
     async def scenario():
         composition, sdk, state, pipeline, controller = await _blocked_case(
-            tmp_path, monkeypatch, stock_certification=True,
+            tmp_path, monkeypatch, stock_certification=True, block_historical=False,
         )
         today = pipeline._clock.now().date()
         captured_key = pipeline._reference_dependency_key(
@@ -468,7 +468,7 @@ def test_same_value_calendar_commit_during_realtime_response_revokes_probe(
 ):
     async def scenario():
         composition, sdk, state, pipeline, controller = await _blocked_case(
-            tmp_path, monkeypatch, stock_certification=True,
+            tmp_path, monkeypatch, stock_certification=True, block_historical=False,
         )
         entered = Event()
         release = Event()
@@ -508,7 +508,7 @@ def test_same_value_calendar_commit_while_probe_queued_prevents_sdk_start(
 ):
     async def scenario():
         composition, sdk, state, pipeline, controller = await _blocked_case(
-            tmp_path, monkeypatch, stock_certification=True,
+            tmp_path, monkeypatch, stock_certification=True, block_historical=False,
         )
         entered = Event()
         release = Event()
@@ -548,7 +548,7 @@ def test_same_value_calendar_commit_while_probe_queued_prevents_sdk_start(
 def test_revoke_before_worker_gate_prevents_physical_sdk_call(tmp_path, monkeypatch):
     async def scenario():
         composition, sdk, state, pipeline, controller = await _blocked_case(
-            tmp_path, monkeypatch, stock_certification=True,
+            tmp_path, monkeypatch, stock_certification=True, block_historical=False,
         )
         entered = Event()
         release = Event()
@@ -590,7 +590,7 @@ def test_admitted_probe_rechecks_before_sdk_after_calendar_commit(
 ):
     async def scenario():
         composition, sdk, state, pipeline, controller = await _blocked_case(
-            tmp_path, monkeypatch, stock_certification=True,
+            tmp_path, monkeypatch, stock_certification=True, block_historical=False,
         )
         entered = Event()
         release = Event()

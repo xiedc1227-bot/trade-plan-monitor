@@ -28,7 +28,10 @@ from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProv
 from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, DeliveryChannel
 from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
-from trade_plan_monitor.runtime.production import ReferenceDependenciesChangedError
+from trade_plan_monitor.runtime.production import (
+    PermissionMaintenanceResult,
+    ReferenceDependenciesChangedError,
+)
 from trade_plan_monitor.runtime.provider_contract import (
     import_index_semantic_contract,
     import_stock_semantic_contract,
@@ -860,9 +863,32 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
 
             sdk._calendar = probe_response
             calls = len(sdk.calls)
-            with pytest.raises(RequestControlError) as caught:
-                await pipeline._maybe_recheck_calendar_permission()
-            assert caught.value.code is (
+            original_recheck = control.recheck_permission
+            failures = []
+
+            async def capture_failure(*args, **kwargs):
+                try:
+                    return await original_recheck(*args, **kwargs)
+                except RequestControlError as error:
+                    failures.append(error)
+                    raise
+
+            monkeypatch.setattr(type(control), "recheck_permission",
+                                lambda _self, *args, **kwargs: capture_failure(*args, **kwargs))
+            tables = ("trading_calendar", "minute_bar", "latest_quote", "market_index_snapshot",
+                      "evaluation_ledger", "alert_event", "delivery_attempt")
+
+            def business_rows():
+                with state._session_factory() as session:
+                    return tuple(tuple(session.execute(text(f"SELECT * FROM {table}")))
+                                 for table in tables)
+
+            before = business_rows()
+            assert await pipeline._maybe_recheck_calendar_permission() is (
+                PermissionMaintenanceResult.FAILED
+            )
+            assert len(failures) == 1
+            assert failures[0].code is (
                 RequestControlErrorCode.RATE_LIMITED if outcome == "rate_limit"
                 else RequestControlErrorCode.INVALID_RESPONSE
             )
@@ -873,6 +899,7 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
             ) == state._clock.now() + timedelta(seconds=300)
             await pipeline._maybe_recheck_calendar_permission()
             assert len(sdk.calls) == calls + 1
+            assert business_rows() == before
         finally:
             await composition.stop()
 
