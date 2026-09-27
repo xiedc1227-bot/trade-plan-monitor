@@ -33,6 +33,10 @@ from trade_plan_monitor.live_profiles import (
 )
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar, five_minute_bucket_end
 from trade_plan_monitor.market_data.models import MinuteBar, TradingDay
+from trade_plan_monitor.market_data.sdk_call_boundary import (
+    PermissionEndpointResolver,
+    resolve_permission_endpoint,
+)
 from trade_plan_monitor.market_data.sessions import (
     DEFAULT_DATA_GRACE,
     SourceTimeLabel,
@@ -296,7 +300,7 @@ def create_explicit_runtime_evaluation_service(
     )
 
 
-class _CertifiedTushareClient:
+class _CertifiedTushareClient(PermissionEndpointResolver):
     """Check evidence in the provider worker immediately before each SDK call."""
 
     def __init__(self, client: object, current: Callable[[], bool]) -> None:
@@ -310,6 +314,12 @@ class _CertifiedTushareClient:
             return getattr(self._client, operation)(**kwargs)
 
         return request
+
+    def prepare_permission_endpoint(self, operation: str) -> Callable[..., object]:
+        """Finish certification and unwrap this call before the provider's final guard."""
+        if not self._current():
+            raise RequestNotStartedError("provider certification is not current")
+        return resolve_permission_endpoint(self._client, operation)
 
 
 _GAP_REPAIR_RESERVE = (
@@ -1326,6 +1336,7 @@ class ProductionMonitorPipeline:
                         or candidate.daily_bar_pool not in {"O", "F"}):
                     return defer_local()
                 anchor, symbol = candidate.anchor_date, candidate.symbol
+                stock_evidence = self._stock_evidence
                 with self._calendar_epoch_lock:
                     revoked = self._calendar_revoked
 
@@ -1374,8 +1385,21 @@ class ProductionMonitorPipeline:
                 def start_current() -> bool:
                     if not authority_current():
                         return False
+                    at = self._clock.now()
+                    if not prepared.semantic_bound and (
+                        stock_evidence is None or self._stock_evidence is not stock_evidence
+                        or not stock_evidence.observed_at <= at <= stock_evidence.valid_until
+                    ):
+                        return False
                     try:
-                        return market_window.blocker(self._clock.now()) is None
+                        with self._calendar_epoch_lock:
+                            return (
+                                not cancelled.is_set()
+                                and prepared.calendar_epoch == self._calendar_epoch
+                                and revoked is self._calendar_revoked and not revoked.is_set()
+                                and at.date() == prepared.captured_at.date()
+                                and market_window.blocker(at) is None
+                            )
                     except ValueError:
                         return False
 
@@ -1548,8 +1572,12 @@ class ProductionMonitorPipeline:
             def start_current() -> bool:
                 if not authority_current() or not calendar_current():
                     return False
+                at = self._clock.now()
                 try:
-                    return market_window.blocker(self._clock.now()) is None
+                    return (
+                        at.date() == request_date and calendar_current()
+                        and market_window.blocker(at) is None
+                    )
                 except ValueError:
                     return False
 
@@ -1615,6 +1643,7 @@ class ProductionMonitorPipeline:
                 return PermissionMaintenanceResult.SKIPPED
             bound_mode = self._semantic_bindings is not None
             semantics = self._stock_semantics
+            stock_evidence = self._stock_evidence
             if bound_mode and (
                 semantics is None or "stk_limit" not in semantics.interface_scope
             ):
@@ -1703,8 +1732,17 @@ class ProductionMonitorPipeline:
             def start_current() -> bool:
                 if not authority_current() or not calendar_current():
                     return False
+                at = self._clock.now()
+                if not bound_mode and (
+                    stock_evidence is None or self._stock_evidence is not stock_evidence
+                    or not stock_evidence.observed_at <= at <= stock_evidence.valid_until
+                ):
+                    return False
                 try:
-                    return market_window.blocker(self._clock.now()) is None
+                    return (
+                        at.date() == request_date and calendar_current()
+                        and market_window.blocker(at) is None
+                    )
                 except ValueError:
                     return False
 
@@ -1845,9 +1883,9 @@ class ProductionMonitorPipeline:
             and now.date() == request_date
             and now < semantics.provenance.valid_until
             and self._configuration_current()
+            and self._index_certification_current()
             and self._generation_current()
             and not self._admission_revoked()
-            and self._index_certification_current()
         )
 
     def _persisted_sse_open_on(self, trade_date: date) -> bool:
@@ -1952,7 +1990,8 @@ class ProductionMonitorPipeline:
                 if not self._realtime_index_probe_current(request_date, revision):
                     raise RequestNotStartedError("realtime index authority changed")
                 at = self._clock.now()
-                if not current_token(at):
+                if (at.date() != request_date or at >= semantics.provenance.valid_until
+                        or not current_token(at)):
                     raise RequestNotStartedError(
                         "realtime index calendar or market time changed before SDK call"
                     )

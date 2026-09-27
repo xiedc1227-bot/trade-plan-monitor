@@ -31,6 +31,7 @@ from trade_plan_monitor.market_data.models import (
     ProviderCapabilityStatus,
     TradingDay,
 )
+from trade_plan_monitor.market_data.sdk_call_boundary import resolve_permission_endpoint
 from trade_plan_monitor.market_data.sessions import (
     DEFAULT_DATA_GRACE,
     SourceTimeLabel,
@@ -349,13 +350,14 @@ class TushareMarketDataProvider:
             raise ValueError("minute proof requires 12-second grace")
         if not callable(physical_start):
             raise TypeError("physical_start must be callable")
-        endpoint = getattr(self._client, operation)
         fields = _CURRENT_DAY_FIELDS if operation == "rt_min_daily" else _MINUTE_FIELDS
+        request = {"fields": fields, "ts_code": symbol, "freq": "1MIN"}
+        endpoint = resolve_permission_endpoint(self._client, operation)
         # The guard and its clock validation precede the SDK and sanitizer.
         started_at = self._minute_proof_clock(physical_start(), trade_date)
         failure = None
         try:
-            raw_frame = endpoint(fields=fields, ts_code=symbol, freq="1MIN")
+            raw_frame = endpoint(**request)
         except RequestNotStartedError:
             raise
         except Exception as error:
@@ -642,11 +644,10 @@ class TushareMarketDataProvider:
 
         self._validated_date(anchor, name="anchor")
         trade_date = self._date_argument(anchor)
-        if _physical_start is not None:
-            _physical_start()
         frame = self._fetch_frame(
             "stk_limit",
             fields=_DAILY_LIMIT_FIELDS,
+            _physical_start=_physical_start,
             trade_date=trade_date,
         )
         required = {"trade_date", "ts_code", "up_limit", "down_limit"}
@@ -814,9 +815,7 @@ class TushareMarketDataProvider:
             "start_date": self._date_argument(start),
             "end_date": self._date_argument(end),
         }
-        if _physical_start is not None:
-            _physical_start()
-        frame = self._fetch_frame("daily", **request)
+        frame = self._fetch_frame("daily", _physical_start=_physical_start, **request)
         self._require_columns(
             frame,
             "daily",
@@ -868,13 +867,22 @@ class TushareMarketDataProvider:
             key=lambda value: (value.symbol, value.trade_date),
         )
 
-    def _fetch_frame(self, operation: str, *, fields: str, **kwargs: object) -> pd.DataFrame:
+    def _fetch_frame(
+        self, operation: str, *, fields: str,
+        _physical_start: Callable[[], None] | None = None, **kwargs: object,
+    ) -> pd.DataFrame:
         from trade_plan_monitor.runtime.request_control import RequestNotStartedError
 
+        request = {"fields": fields, **kwargs}
+        endpoint = None
+        if _physical_start is not None:
+            endpoint = resolve_permission_endpoint(self._client, operation)
+            _physical_start()
         provider_error: TushareProviderError | None = None
         try:
-            endpoint = getattr(self._client, operation)
-            frame = endpoint(fields=fields, **kwargs)
+            if endpoint is None:
+                endpoint = getattr(self._client, operation)
+            frame = endpoint(**request)
         except RequestNotStartedError:
             raise
         except Exception as error:

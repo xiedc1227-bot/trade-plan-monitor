@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from trade_plan_monitor.market_data.sdk_call_boundary import resolve_permission_endpoint
 from trade_plan_monitor.market_data.sessions import DEFAULT_DATA_GRACE
 from trade_plan_monitor.market_data.tushare import (
     TushareErrorCode,
@@ -563,10 +564,9 @@ class TushareMarketIndexProvider:
             or self._now is None
         ):
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, _INDEX_DAILY_ENDPOINT)
-        if _physical_start is not None:
-            _physical_start()
         frame = self._call_index_sdk(
             _INDEX_DAILY_ENDPOINT,
+            _physical_start=_physical_start,
             ts_code=index_code.value,
             start_date=anchor.strftime("%Y%m%d"),
             end_date=anchor.strftime("%Y%m%d"),
@@ -625,16 +625,22 @@ class TushareMarketIndexProvider:
             or self._client is None
         ):
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint)
-        physical_started_at = physical_start()
-        if (
-            not isinstance(physical_started_at, datetime)
-            or physical_started_at.tzinfo is None
-            or physical_started_at.utcoffset() != timedelta(hours=8)
-            or physical_started_at.date() != trade_date
-        ):
-            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint)
+        physical_started_at: datetime
+
+        def capture_start() -> None:
+            nonlocal physical_started_at
+            physical_started_at = physical_start()
+            if (
+                not isinstance(physical_started_at, datetime)
+                or physical_started_at.tzinfo is None
+                or physical_started_at.utcoffset() != timedelta(hours=8)
+                or physical_started_at.date() != trade_date
+            ):
+                raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, endpoint)
+
         frame = self._call_index_sdk(
             endpoint,
+            _physical_start=capture_start,
             ts_code=index_code.value,
             freq="5MIN",
             fields=_INDEX_REALTIME_MINUTE_FIELDS,
@@ -767,12 +773,21 @@ class TushareMarketIndexProvider:
             fields=_INDEX_DAILY_FIELDS,
         )
 
-    def _call_index_sdk(self, endpoint: str, **kwargs: object) -> object:
+    def _call_index_sdk(
+        self, endpoint: str, *, _physical_start: Callable[[], None] | None = None,
+        **kwargs: object,
+    ) -> object:
         """Classify one physical SDK failure without retaining its raw context."""
 
+        call = None
+        if _physical_start is not None:
+            call = resolve_permission_endpoint(self._client, endpoint)
+            _physical_start()
         provider_error: TushareProviderError | None = None
         try:
-            frame = getattr(self._client, endpoint)(**kwargs)
+            if call is None:
+                call = getattr(self._client, endpoint)
+            frame = call(**kwargs)
         except RequestNotStartedError:
             raise
         except Exception as error:
