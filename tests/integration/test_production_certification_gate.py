@@ -33,6 +33,7 @@ from trade_plan_monitor.runtime.provider_contract import (
     import_index_semantic_contract,
     import_stock_semantic_contract,
 )
+from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
@@ -536,6 +537,24 @@ def test_cold_reference_cache_does_not_repeat_a_committed_deadline(tmp_path, mon
     asyncio.run(scenario())
 
 
+def _release_actual_scheduler_until(monkeypatch, clock, through):
+    """Release bounded real duties through a target, not a fixed sleep ordinal."""
+    released = []
+
+    async def sleep_until(deadline):
+        clock.sleep_calls.append(deadline)
+        if deadline <= through:
+            assert len(released) < 8, "too many scheduler wakes before the market target"
+            released.append(deadline)
+            clock.current = max(clock.current, deadline)
+            await asyncio.sleep(0)
+            return
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(clock, "sleep_until", sleep_until)
+    return released
+
+
 def test_production_composition_resumes_after_one_runtime_transport_failure(
     tmp_path, monkeypatch,
 ):
@@ -546,15 +565,18 @@ def test_production_composition_resumes_after_one_runtime_transport_failure(
         runtime = composition._runtime
         controller = runtime._request_controller
         state = runtime._run_deadline.__self__
-        state._clock.released_sleeps = 2
+        through = NOW.replace(minute=2, second=12, microsecond=0)
+        released = _release_actual_scheduler_until(monkeypatch, state._clock, through)
         controller._backoff = (timedelta(milliseconds=10),)
         runtime._retry_interval_seconds = 0.01
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             for _ in range(200):
-                if sum(name == "rt_min" for name, _ in sdk.calls) >= 2:
+                if state._clock.sleep_calls and state._clock.sleep_calls[-1] > through:
                     break
                 await asyncio.sleep(0.01)
+            assert state._clock.sleep_calls[-1] > through
+            assert through in released and state._clock.now() == through
             assert sum(name == "rt_min" for name, _ in sdk.calls) >= 2
             assert composition._runtime is runtime
             assert runtime._request_controller is controller
@@ -575,15 +597,19 @@ def test_next_minute_cannot_bypass_realtime_transport_backoff(tmp_path, monkeypa
         runtime = composition._runtime
         controller = runtime._request_controller
         state = runtime._run_deadline.__self__
-        state._clock.released_sleeps = 2
+        through = NOW.replace(minute=2, second=12, microsecond=0)
+        released = _release_actual_scheduler_until(monkeypatch, state._clock, through)
         controller._backoff = (timedelta(minutes=5),)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             for _ in range(200):
-                if len(state._clock.sleep_calls) >= 3:
+                if state._clock.sleep_calls and state._clock.sleep_calls[-1] > through:
                     break
                 await asyncio.sleep(0.01)
-            assert len(state._clock.sleep_calls) >= 3
+            # The next wait proves the second market duty has returned; observing
+            # its sleep entry alone would not prove the backoff was enforced.
+            assert state._clock.sleep_calls[-1] > through
+            assert through in released and state._clock.now() == through
             assert sum(name == "rt_min" for name, _ in sdk.calls) == 1
             assert runtime.status is RuntimeServiceStatus.RUNNING
         finally:
@@ -601,7 +627,8 @@ def test_production_429_cooldown_restores_before_provider_work_after_restart(
         )
         first = composition._runtime
         clock = first._run_deadline.__self__._clock
-        clock.released_sleeps = 1
+        through = NOW.replace(minute=1, second=12, microsecond=0)
+        released = _release_actual_scheduler_until(monkeypatch, clock, through)
         assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
         try:
             for _ in range(200):
@@ -609,6 +636,7 @@ def test_production_429_cooldown_restores_before_provider_work_after_restart(
                     break
                 await asyncio.sleep(0.01)
             cooldown = first._request_controller.cooldown_until
+            assert through in released and clock.now() == through
             assert cooldown == clock.now() + timedelta(seconds=300)
             assert first._request_controller.repository_bound
         finally:
@@ -1262,7 +1290,8 @@ def test_revocation_after_final_permit_finishes_one_inflight_decision(
                 kind=DeadlineKind.REALTIME_MINUTE,
                 trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
             )
-            await state.run_deadline(deadline)
+            with pytest.raises(RecoveryAdmissionChangedError):
+                await state.run_deadline(deadline)
             assert revoked_after_permit
             with state._session_factory() as session:
                 assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 1
