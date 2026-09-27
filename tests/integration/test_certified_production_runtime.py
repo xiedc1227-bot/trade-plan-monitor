@@ -383,7 +383,11 @@ def test_production_deadline_repairs_only_detected_gaps_with_realtime_budget(
     from trade_plan_monitor.domain.plan_codec import load_plan_yaml
     from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
     from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
-    from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
+    from trade_plan_monitor.runtime.scheduler import (
+        DeadlineKind,
+        MarketDeadline,
+        MarketSessionScheduler,
+    )
     from trade_plan_monitor.state.database import upgrade_database
     from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -462,10 +466,20 @@ def test_production_deadline_repairs_only_detected_gaps_with_realtime_budget(
             runtime_generation=uuid4(),
             publisher=lambda _event: None,
         )
+        scheduler = MarketSessionScheduler(
+            clock=clock, is_open_on=pipeline.is_open_on,
+            next_stock_recovery_at=pipeline.next_stock_recovery_at,
+        )
+        def market_window(since, through):
+            return scheduler.permission_market_window(since=since, through=through)
+
+        pipeline._permission_market_window = market_window
         gap = base_minute.replace(hour=9, minute=59)
         try:
             await pipeline.refresh_references(base_minute.date())
             await pipeline.recover_startup(base_minute.date())
+            startup_retry = clock.now() + timedelta(seconds=30)
+            assert pipeline.next_stock_recovery_at() == startup_retry
             with work() as transaction:
                 assert transaction.history.list_minutes(plan.symbol, start=gap, end=gap) == ()
 
@@ -484,7 +498,40 @@ def test_production_deadline_repairs_only_detected_gaps_with_realtime_budget(
             with work() as transaction:
                 repaired = transaction.history.list_minutes(plan.symbol, start=gap, end=gap)
                 assert transaction.projections.get_decision_head(plan.symbol) is None
+            assert repaired == ()
+            assert sum(name == "rt_min_daily" for name, _ in sdk.calls) == 1
+            assert pipeline.next_stock_recovery_at() == startup_retry
+
+            # Market only synchronized demand. The original startup +30 floor
+            # must elapse before a separately owned, bounded maintenance unit.
+            clock.current = base_minute + timedelta(minutes=1, seconds=seconds_after_minute)
+            assert clock.now() >= startup_retry
+            maintenance = scheduler.next_deadline()
+            assert maintenance.kind is DeadlineKind.STOCK_RECOVERY
+            next_market = base_minute + timedelta(minutes=2, seconds=12)
+            assert (next_market - clock.now()).total_seconds() == (57 if repair_expected else 13)
+            calls_before_maintenance = len(sdk.calls)
+            repair = await pipeline.run_deadline(maintenance)
+            await asyncio.sleep(0)
+            assert set(asyncio.all_tasks()) == tasks_before
+            if repair_expected:
+                assert repair.ready and repair.symbol == plan.symbol
+                assert repair.target.completed_minute_end == base_minute + timedelta(minutes=1)
+                assert [(name, kwargs["ts_code"]) for name, kwargs
+                        in sdk.calls[calls_before_maintenance:]] == [("rt_min_daily", plan.symbol)]
+            else:
+                assert repair is None
+                assert len(sdk.calls) == calls_before_maintenance
+            with work() as transaction:
+                repaired = transaction.history.list_minutes(plan.symbol, start=gap, end=gap)
+                assert transaction.projections.get_decision_head(plan.symbol) is None
+                assert transaction.history.list_minutes(
+                    plan.symbol, start=base_minute + timedelta(minutes=2),
+                    end=base_minute + timedelta(minutes=3),
+                ) == ()
             assert bool(repaired) is repair_expected
+            if not repair_expected:
+                assert pipeline.next_stock_recovery_at() == next_market + timedelta(microseconds=1)
             assert sum(name == "rt_min_daily" for name, _ in sdk.calls) == (
                 2 if repair_expected else 1
             )

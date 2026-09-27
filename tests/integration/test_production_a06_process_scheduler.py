@@ -22,6 +22,7 @@ from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
 from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, DeliveryChannel
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+from trade_plan_monitor.runtime.scheduler import DeadlineKind
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import (
     AlertEvent,
@@ -45,7 +46,19 @@ def _run_scheduled_monitor(root: str, observed_at, failed_symbol: str | None, ou
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
     base = Path(root)
-    clock = ControlledClock(observed_at, released_sleeps=1)
+    target_due = (observed_at + timedelta(minutes=1)).replace(second=12)
+
+    class BoundedTargetClock(ControlledClock):
+        async def sleep_until(self, deadline):
+            self.sleep_calls.append(deadline)
+            if deadline <= target_due:
+                assert len(self.sleep_calls) <= 8, "scheduler exceeded its original target bound"
+                self.current = max(self.current, deadline)
+                await asyncio.sleep(0)
+                return
+            await asyncio.Event().wait()
+
+    clock = BoundedTargetClock(observed_at)
 
     class FakeSDK(OfflineSDK):
         def _stock_minutes(self, name, kwargs):
@@ -86,18 +99,46 @@ def _run_scheduled_monitor(root: str, observed_at, failed_symbol: str | None, ou
             database_path=base / "monitor.sqlite3",
         )
         composition._runtime._dispatcher._channels = (FakeChannel(),)
+        runtime = composition._runtime
+        generation = runtime.runtime_generation
+        original_run = runtime._run_deadline
+        executed = []
+
+        async def record(deadline):
+            before = len(sdk.calls)
+            result = await original_run(deadline)
+            if deadline.kind is DeadlineKind.STOCK_RECOVERY:
+                calls = sdk.calls[before:]
+                assert len(calls) <= 1 and all(name == "rt_min_daily" for name, _ in calls)
+            assert runtime.runtime_generation == generation
+            assert runtime.status is RuntimeServiceStatus.RUNNING
+            executed.append(deadline)
+            return result
+
+        runtime._run_deadline = record
         try:
             health = await composition.start()
             assert health.status is RuntimeServiceStatus.RUNNING
+            runner = composition._runner_task
+            startup_calls = [(name, kwargs) for name, kwargs in sdk.calls if name == "rt_min_daily"]
+            assert len(startup_calls) == 1 and startup_calls[0][1]["ts_code"] == LEGACY_SYMBOL
 
             async def scheduler_reached_next_sleep():
-                while len(clock.sleep_calls) < 2:
+                while not (
+                    any(item.kind is DeadlineKind.REALTIME_MINUTE and item.due_at == target_due
+                        for item in executed)
+                    and clock.sleep_calls[-1] > target_due
+                ):
+                    assert not composition._runner_failed and not runner.done()
                     await asyncio.sleep(0.01)
 
             await asyncio.wait_for(scheduler_reached_next_sleep(), timeout=15)
-            assert clock.sleep_calls[0] == (
-                observed_at + timedelta(minutes=1)
-            ).replace(second=12)
+            assert target_due in clock.sleep_calls
+            market, = [item for item in executed if item.kind is DeadlineKind.REALTIME_MINUTE]
+            assert market.due_at == target_due and market.bar_end == target_due.replace(second=0)
+            assert any(item.kind is DeadlineKind.STOCK_RECOVERY for item in executed)
+            assert composition._runtime is runtime and composition._runner_task is runner
+            assert runtime.runtime_generation == generation
             return (
                 tuple(clock.sleep_calls),
                 tuple(name for name, _ in sdk.calls),
@@ -160,7 +201,7 @@ def test_malformed_family_row_recovers_in_new_process_via_scheduler(
     first_sleeps, first_calls, first_delivered = _spawn_scheduled_monitor(
         tmp_path, FIRST_CLOCK, failed_symbol=failed_symbol,
     )
-    assert first_sleeps[0].minute == 0
+    assert NOW.replace(second=12) in first_sleeps
     assert "rt_min" in first_calls
     assert first_delivered == ()
     engine = create_sqlite_engine(database)
@@ -214,7 +255,7 @@ def test_malformed_family_row_recovers_in_new_process_via_scheduler(
     second_sleeps, second_calls, second_delivered = _spawn_scheduled_monitor(
         tmp_path, SECOND_CLOCK, failed_symbol=None,
     )
-    assert second_sleeps[0].minute == 5
+    assert NOW.replace(second=12) + timedelta(minutes=5) in second_sleeps
     assert "rt_min" in second_calls
     assert second_delivered == ()
     engine = create_sqlite_engine(database)

@@ -17,6 +17,7 @@ from test_live_pipeline_acceptance import (
     _plan as legacy_plan,
 )
 from test_production_certification_gate import _composition
+from test_s3_permission_reservation_process import _business_rows
 
 from trade_plan_monitor.decision.models import ConditionOutcome, SignalType
 from trade_plan_monitor.domain.plan_hash import plan_sha256
@@ -39,6 +40,28 @@ from trade_plan_monitor.state.models import (
 from trade_plan_monitor.state.repositories import ManualEventRiskStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.monitor_composition import create_monitor_composition
+
+
+async def _complete_pending_explicit_prefetch(composition, sdk, database, *, startup_calls):
+    """Prepare the one remaining family, not a second startup or a business evaluation."""
+    startup_history = [(name, kwargs) for name, kwargs in sdk.calls[startup_calls:]
+                       if name == "rt_min_daily"]
+    assert len(startup_history) == 1 and startup_history[0][1]["ts_code"] == "003043.SZ"
+    state = composition._runtime._probe_capabilities.__self__
+    pipeline = state._pipeline
+    assert pipeline.next_stock_recovery_at() <= sdk.clock.now()
+    before_calls = len(sdk.calls)
+    before = {key: value for key, value in _business_rows(database).items()
+              if key not in {"minute_bar", "latest_quote"}}
+    result = await state.run_deadline(MarketDeadline(
+        kind=DeadlineKind.STOCK_RECOVERY, trade_date=sdk.clock.now().date(), due_at=sdk.clock.now(),
+    ))
+    assert result.ready and result.symbol == "300001.SZ"
+    assert [(name, kwargs["ts_code"]) for name, kwargs in sdk.calls[before_calls:]] == [
+        ("rt_min_daily", "300001.SZ"),
+    ]
+    assert {key: value for key, value in _business_rows(database).items()
+            if key not in {"minute_bar", "latest_quote"}} == before
 
 
 @pytest.mark.parametrize("failed_family", ("legacy", "explicit"))
@@ -78,8 +101,12 @@ def test_one_malformed_stock_row_does_not_block_other_plan_family_or_indexes(
 
         sdk._stock_minutes = one_bad_row
         try:
+            startup_calls = len(sdk.calls)
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._probe_capabilities.__self__
+            await _complete_pending_explicit_prefetch(
+                composition, sdk, tmp_path / "monitor.sqlite3", startup_calls=startup_calls,
+            )
             await state.run_deadline(MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
                 due_at=NOW, bar_end=NOW.replace(second=0),
@@ -111,8 +138,12 @@ def test_one_malformed_stock_row_does_not_block_other_plan_family_or_indexes(
             database_path=tmp_path / "monitor.sqlite3",
         )
         try:
+            startup_calls = len(sdk.calls)
             assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
             state = replacement._runtime._probe_capabilities.__self__
+            await _complete_pending_explicit_prefetch(
+                replacement, sdk, tmp_path / "monitor.sqlite3", startup_calls=startup_calls,
+            )
             await state.run_deadline(MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
                 due_at=sdk.clock.now(),
@@ -231,9 +262,13 @@ def test_required_index_failure_isolates_mixed_family_deadline(
                 )
 
         try:
+            startup_calls = len(sdk.calls)
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._probe_capabilities.__self__
             state._dispatcher._channels = (Channel(),)
+            await _complete_pending_explicit_prefetch(
+                composition, sdk, tmp_path / "monitor.sqlite3", startup_calls=startup_calls,
+            )
             results = await state.run_deadline(MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
                 due_at=NOW, bar_end=NOW.replace(second=0),
@@ -298,6 +333,7 @@ def test_required_index_failure_isolates_mixed_family_deadline(
                 database_path=tmp_path / "monitor.sqlite3",
             )
             try:
+                startup_calls = len(sdk.calls)
                 assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
                 state = replacement._runtime._probe_capabilities.__self__
                 state._dispatcher._channels = (Channel(),)
@@ -352,6 +388,9 @@ def test_required_index_failure_isolates_mixed_family_deadline(
                 assert tuple(delivered) == delivered_before
                 assert state.next_index_recovery_at() is None
                 sdk.clock.current = NOW + timedelta(minutes=5)
+                await _complete_pending_explicit_prefetch(
+                    replacement, sdk, tmp_path / "monitor.sqlite3", startup_calls=startup_calls,
+                )
                 results = await state.run_deadline(MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
                     due_at=sdk.clock.now(),

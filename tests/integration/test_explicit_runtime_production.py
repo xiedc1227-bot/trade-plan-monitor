@@ -318,7 +318,8 @@ class _SchedulerClock(_PipelineClock):
 
     async def sleep_until(self, deadline: datetime) -> None:
         self.sleep_calls.append(deadline)
-        if len(self.sleep_calls) == 1:
+        if deadline <= TARGET + timedelta(seconds=12):
+            assert len(self.sleep_calls) <= 8, "bounded scheduler did not reach the original target"
             self.current = max(self.current, deadline)
             await asyncio.sleep(0)
             return
@@ -1167,8 +1168,23 @@ def test_real_monitor_composition_scheduler_dispatches_explicit_buy(
             config_path=config,
             database_path=database,
         )
+        runtime = composition._runtime
+        generation = runtime.runtime_generation
+        original_run = runtime._run_deadline
+        executed = []
+        market_finished = asyncio.Event()
+
+        async def record(deadline):
+            result = await original_run(deadline)
+            executed.append(deadline)
+            if deadline.kind is DeadlineKind.REALTIME_MINUTE:
+                market_finished.set()
+            return result
+
+        runtime._run_deadline = record
         try:
             await composition.start()
+            runner = composition._runner_task
             for _ in range(300):
                 engine = create_sqlite_engine(database)
                 try:
@@ -1188,8 +1204,24 @@ def test_real_monitor_composition_scheduler_dispatches_explicit_buy(
                     break
                 await asyncio.sleep(0.01)
             assert len(alerts) == 1 and total == 1
-            assert clock.sleep_calls[0] > TARGET
-            assert clock.sleep_calls[0].replace(second=0, microsecond=0) == TARGET
+            await asyncio.wait_for(market_finished.wait(), timeout=5)
+            assert TARGET + timedelta(seconds=12) in clock.sleep_calls
+            market, = [item for item in executed if item.kind is DeadlineKind.REALTIME_MINUTE]
+            assert market.bar_end == TARGET and market.due_at == TARGET + timedelta(seconds=12)
+            assert any(item.kind is DeadlineKind.STOCK_RECOVERY for item in executed)
+            assert composition._runtime is runtime and composition._runner_task is runner
+            assert runtime.runtime_generation == generation and not composition._runner_failed
+            ledger_engine = create_sqlite_engine(database)
+            try:
+                with ledger_engine.connect() as connection:
+                    target, evaluated_at, revision = connection.exec_driver_sql(
+                        "SELECT target_value, evaluated_at, activation_revision "
+                        "FROM explicit_evaluation_ledger"
+                    ).one()
+            finally:
+                ledger_engine.dispose()
+            assert target == TARGET.isoformat() and revision == 1
+            assert evaluated_at == (TARGET + timedelta(seconds=12)).isoformat()
             assert set(sdk.calls) <= {"trade_cal", "rt_min", "rt_min_daily"}
         finally:
             await composition.stop()

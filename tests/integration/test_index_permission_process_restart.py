@@ -109,14 +109,40 @@ def _run_installed_process(
                 assert control.permission_retry_at(HISTORICAL) == NOW - timedelta(seconds=1)
                 assert control.permission_retry_at(REALTIME) == NOW - timedelta(seconds=1)
                 assert [name for name, _ in sdk.calls if name in ENDPOINTS.values()] == []
-                assert await probe(first) is PermissionMaintenanceResult.PROBED
                 sdk.fail_endpoint = ENDPOINTS[second]
-                assert await probe(second) is PermissionMaintenanceResult.FAILED
+                if first is REALTIME:
+                    rotation = pipeline._permission_rotation_state
+                    assert await probe(first) is PermissionMaintenanceResult.SKIPPED
+                    assert pipeline._permission_rotation_state == rotation
+                    assert all(control.is_permission_blocked(op) for op in (HISTORICAL, REALTIME))
+                    assert all(control.raw_permission_retry_at(op) == NOW - timedelta(seconds=1)
+                               for op in (HISTORICAL, REALTIME))
+                    assert not [name for name, _ in sdk.calls if name in ENDPOINTS.values()]
+                for operation in (HISTORICAL, REALTIME):
+                    before = len(sdk.calls)
+                    sibling = REALTIME if operation is HISTORICAL else HISTORICAL
+                    sibling_state = (
+                        control.is_permission_blocked(sibling),
+                        control.raw_permission_retry_at(sibling),
+                    )
+                    expected = (PermissionMaintenanceResult.PROBED if operation is first
+                                else PermissionMaintenanceResult.FAILED)
+                    assert await pipeline.run_permission_maintenance_unit() is expected
+                    assert [name for name, _ in sdk.calls[before:]] == [ENDPOINTS[operation]]
+                    assert control.is_permission_blocked(operation) is (operation is second)
+                    assert (
+                        control.is_permission_blocked(sibling),
+                        control.raw_permission_retry_at(sibling),
+                    ) == sibling_state
+                    if operation is second:
+                        assert control.raw_permission_retry_at(operation) == (
+                            NOW + timedelta(seconds=300)
+                        )
                 assert not control.is_permission_blocked(first)
                 assert control.is_permission_blocked(second)
                 assert control.permission_retry_at(second) == NOW + timedelta(seconds=300)
                 assert [name for name, _ in sdk.calls if name in ENDPOINTS.values()] == [
-                    ENDPOINTS[first], ENDPOINTS[second],
+                    ENDPOINTS[HISTORICAL], ENDPOINTS[REALTIME],
                 ]
             else:
                 assert not control.is_permission_blocked(first)
@@ -209,7 +235,7 @@ def test_migrated_index_permissions_recheck_independently_across_processes(
     first = _spawn(tmp_path, NOW, first_scope, 1)
     assert first == (
         1, (NOW + timedelta(seconds=300)).isoformat(),
-        (ENDPOINTS[first_scope], ENDPOINTS[REALTIME if first_scope is HISTORICAL else HISTORICAL]),
+        (ENDPOINTS[HISTORICAL], ENDPOINTS[REALTIME]),
     )
     engine = create_sqlite_engine(database)
     try:
