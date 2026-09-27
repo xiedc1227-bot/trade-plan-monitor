@@ -86,6 +86,7 @@ from trade_plan_monitor.runtime.provider_contract import (
 )
 from trade_plan_monitor.runtime.reconciliation import (
     MAINTENANCE_INTERVAL,
+    RecoveryDisposition,
     RecoveryRequirement,
     RecoverySchedule,
     RecoveryStepResult,
@@ -97,6 +98,7 @@ from trade_plan_monitor.runtime.recovery import (
     RecoveryMode,
     RecoveryService,
     RecoverySymbolResult,
+    ScopedRecoveryResult,
 )
 from trade_plan_monitor.runtime.recovery_targets import (
     RecoveryCapture,
@@ -2946,6 +2948,135 @@ class ProductionMonitorPipeline:
             self._stock_recovery_schedule.next_wake_at(now=now) if desired else None
         )
 
+    async def run_stock_recovery_unit(self) -> ScopedRecoveryResult | None:
+        """Own one fresh, bounded maintenance attempt; never loop or replay decisions."""
+        if self._stock_recovery_owner_retired():
+            return None
+        self._synchronize_stock_recovery()
+        ticket = self._stock_recovery_schedule.claim(now=self._clock.now())
+        if ticket is None:
+            return None
+        result = None
+        step = RecoveryStepResult(RecoveryDisposition.PENDING)
+        deferred_until: list[datetime] = []
+        try:
+            desired = self._stock_recovery_demands[ticket.requirement.scope_key]
+            if desired.capture is None:
+                raise RecoveryAdmissionChangedError("stock recovery target is still unknown")
+            capture = self._capture_recovery_scope(desired.capture.symbol)
+            if (capture is None or not self._stock_recovery_schedule.is_current(ticket)
+                    or capture.target.observed_at < desired.capture.target.observed_at
+                    or capture.target.trade_date != desired.capture.target.trade_date
+                    or capture.target.completed_minute_end
+                    != desired.capture.target.completed_minute_end
+                    or replace(capture, target=desired.capture.target) != desired.capture):
+                raise RecoveryAdmissionChangedError("stock recovery ticket changed before fetch")
+            observed_at = self._clock.now()
+            latest_start = observed_at + timedelta(seconds=15)
+            window = (
+                None if self._permission_market_window is None else
+                _FrozenPermissionMarketWindow(
+                    observed_at, latest_start,
+                    self._permission_market_window(
+                        observed_at, latest_start + _INDEX_PERMISSION_GUARD,
+                    ),
+                )
+            )
+
+            def maintenance_start() -> None:
+                at = self._clock.now()
+                try:
+                    blocker = None if window is None else window.blocker(at)
+                except ValueError:
+                    blocker = None
+                    expired = True
+                else:
+                    expired = window is None
+                if expired or blocker is not None:
+                    wake = (at + MAINTENANCE_INTERVAL if blocker is None else
+                            max(at, blocker[0]) + timedelta(microseconds=1))
+                    deferred_until[:] = [wake]
+                    raise RequestNotStartedError("stock maintenance yielded its market window")
+
+            result = await self._recover_frozen_scope(
+                capture, physical_start_guard=maintenance_start,
+            )
+            if (not isinstance(result, ScopedRecoveryResult) or result.symbol != capture.symbol
+                    or result.target != capture.target
+                    or result.coverage.required_ends != capture.required_ends):
+                raise RuntimeError("stock recovery result does not match its capture")
+            if result.persistence_error is not None:
+                raise result.persistence_error
+            completed_at = self._clock.now()
+            if result.error_code in {
+                RecoveryErrorCode.RATE_LIMITED,
+                RecoveryErrorCode.TRANSIENT,
+                RecoveryErrorCode.TIMEOUT,
+            }:
+                # A simultaneous target invalidation cannot erase an established cooldown.
+                step = RecoveryStepResult.retry(max(
+                    completed_at + MAINTENANCE_INTERVAL,
+                    result.next_retry_at or completed_at,
+                ))
+            elif result.error_code is RecoveryErrorCode.BLOCKED_PERMISSION:
+                step = RecoveryStepResult.blocked()
+            elif result.error_code is not None:
+                if result.request_error is not None:
+                    raise result.request_error
+                raise RuntimeError(f"stock recovery failed ({result.error_code.value})")
+            else:
+                step = (RecoveryStepResult.ready() if result.ready else RecoveryStepResult.retry(
+                    deferred_until[0] if deferred_until else completed_at + MAINTENANCE_INTERVAL,
+                ))
+        except (RecoveryAdmissionChangedError, RequestNotStartedError):
+            step = RecoveryStepResult.retry(
+                deferred_until[0] if deferred_until else self._clock.now() + MAINTENANCE_INTERVAL,
+            )
+        except BaseException:
+            self._stock_recovery_schedule.complete(ticket, step)
+            self._stock_recovery_next_at = None
+            raise
+        try:
+            retired = self._stock_recovery_owner_retired()
+        except BaseException:
+            self._stock_recovery_schedule.complete(ticket, step)
+            self._stock_recovery_next_at = None
+            raise
+        if retired and (result is None or result.error_code not in {
+            RecoveryErrorCode.RATE_LIMITED, RecoveryErrorCode.TRANSIENT, RecoveryErrorCode.TIMEOUT,
+        }):
+            step = RecoveryStepResult(RecoveryDisposition.PENDING)
+        self._stock_recovery_schedule.complete(ticket, step)
+        if retired:
+            return None
+        self._synchronize_stock_recovery()
+        return result
+
+    def _stock_recovery_owner_retired(self) -> bool:
+        """Retire only the obsolete lifecycle, never hide authority or recorded faults."""
+        if self._generation_current():
+            return False
+        self._stock_recovery_next_at = None
+        if (not self._configuration_current() or not self._stock_certification_current()
+                or self._admission_revoked() or self._recovery_authority_revoked.is_set()):
+            raise RecoveryAdmissionChangedError(
+                "stock recovery authority revoked during retirement",
+            )
+        previous = self._stock_recovery_binding
+        client = self.provider._client
+        if previous is not None and (
+            self.provider is not previous[0] or client is not previous[1]
+            or getattr(client, "_client", client) is not previous[2]
+            or self._recovery_authority_revoked is not previous[3]
+            or previous[4:] != (
+                self._recovery_configuration_revision, self._runtime_generation,
+                self._recovery_authority_epoch(), self.provider._source_time_label,
+                None if self._stock_semantics is None else self._stock_semantics.semantic_revision,
+            )
+        ):
+            raise RecoveryAdmissionChangedError("stock recovery binding changed during retirement")
+        return True
+
     async def recover_startup(self, trade_date: date) -> None:
         # Hydrate the calendar even if the independent refresh stage failed.
         with self._work() as work:
@@ -3119,18 +3250,30 @@ class ProductionMonitorPipeline:
                     raise RecoveryAdmissionChangedError("recovery authority changed before commit")
                 work.commit()
 
-    async def _recover_frozen_scope(self, capture: RecoveryCapture):
+    async def _recover_frozen_scope(
+        self, capture: RecoveryCapture, *, physical_start_guard: Callable[[], None] | None = None,
+    ):
         cancelled = Event()
         self._active_recovery_attempts.add(cancelled)
 
         def physical_start() -> None:
             if not self._recovery_memory_current(capture, cancelled):
                 raise RequestNotStartedError("recovery authority changed before SDK start")
+            if physical_start_guard is not None:
+                physical_start_guard()
+
+        def fetch_current_day():
+            physical_start()
+            return capture.source_provider.current_day_minutes(
+                capture.symbol, _physical_start=physical_start,
+            )
 
         try:
             if not self._recovery_memory_current(capture, cancelled):
                 cancelled.set()
                 raise RecoveryAdmissionChangedError("recovery authority changed before attempt")
+            if physical_start_guard is not None:
+                physical_start_guard()
             return await self.recovery.recover_scope(
                 symbol=capture.symbol, target=capture.target, required_ends=capture.required_ends,
                 read_persisted_ends=lambda _symbol, _required: self._read_recovery_coverage(
@@ -3141,9 +3284,7 @@ class ProductionMonitorPipeline:
                     capture, rows, cancelled=cancelled,
                 ),
                 admission_current=lambda: self._recovery_memory_current(capture, cancelled),
-                fetch_current_day=lambda: capture.source_provider.current_day_minutes(
-                    capture.symbol, _physical_start=physical_start,
-                ),
+                fetch_current_day=fetch_current_day,
                 cancelled=cancelled,
             )
         finally:

@@ -89,6 +89,7 @@ class ScopedRecoveryResult:
     yielded_to_realtime: bool = False
     retarget_required: bool = False
     persistence_error: Exception | None = field(default=None, repr=False, compare=False)
+    request_error: RequestControlError | None = field(default=None, repr=False, compare=False)
 
     @property
     def ready(self) -> bool:
@@ -349,6 +350,7 @@ class RecoveryService:
                 return replace(
                     result, error_code=RecoveryErrorCode(error.code.value),
                     next_retry_at=error.next_retry_at, retarget_required=not clock_matches(),
+                    request_error=error,
                 )
             if not clock_matches():
                 return replace(result, retarget_required=True)
