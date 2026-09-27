@@ -35,6 +35,7 @@ class DeadlineKind(StrEnum):
     OFFICIAL_CLOSE = "OFFICIAL_CLOSE"
     INDEX_RECOVERY = "INDEX_RECOVERY"
     INDEX_PERMISSION = "INDEX_PERMISSION"
+    STOCK_RECOVERY = "STOCK_RECOVERY"
 
 
 class MarketDeadlineReviewError(ValueError):
@@ -61,7 +62,9 @@ class MarketDeadline:
         if canonical_due.date() != self.trade_date:
             raise ValueError("due_at must match trade_date")
 
-        if self.kind in (DeadlineKind.INDEX_RECOVERY, DeadlineKind.INDEX_PERMISSION):
+        if self.kind in (
+            DeadlineKind.INDEX_RECOVERY, DeadlineKind.INDEX_PERMISSION, DeadlineKind.STOCK_RECOVERY,
+        ):
             if self.bar_end is not None or self.close_attempt is not None:
                 raise ValueError("index recovery has no market bar or close attempt")
             return
@@ -90,6 +93,7 @@ class MarketSessionScheduler:
         "_is_open_on",
         "_next_index_recovery_at",
         "_next_index_permission_at",
+        "_next_stock_recovery_at",
         "_official_close_attempts",
     )
 
@@ -102,6 +106,7 @@ class MarketSessionScheduler:
         official_close_attempts: tuple[time, ...] = DEFAULT_OFFICIAL_CLOSE_ATTEMPTS,
         next_index_recovery_at: Callable[[], datetime | None] | None = None,
         next_index_permission_at: Callable[[], datetime | None] | None = None,
+        next_stock_recovery_at: Callable[[], datetime | None] | None = None,
     ) -> None:
         if not isinstance(clock, Clock):
             raise TypeError("clock must implement Clock")
@@ -125,6 +130,7 @@ class MarketSessionScheduler:
         self._official_close_attempts = official_close_attempts
         self._next_index_recovery_at = next_index_recovery_at
         self._next_index_permission_at = next_index_permission_at
+        self._next_stock_recovery_at = next_stock_recovery_at
 
     @staticmethod
     def _validate_official_close_attempts(attempts: tuple[time, ...]) -> None:
@@ -240,6 +246,7 @@ class MarketSessionScheduler:
         for kind, callback in (
             (DeadlineKind.INDEX_PERMISSION, self._next_index_permission_at),
             (DeadlineKind.INDEX_RECOVERY, self._next_index_recovery_at),
+            (DeadlineKind.STOCK_RECOVERY, self._next_stock_recovery_at),
         ):
             due_at = None if callback is None else callback()
             if due_at is not None:

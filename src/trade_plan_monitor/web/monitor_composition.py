@@ -639,6 +639,11 @@ class _ProductionRuntimeState:
             return None
         return self._pipeline.index_service.next_recovery_due_at(now=self._clock.now())
 
+    def next_stock_recovery_at(self) -> datetime | None:
+        if self._pipeline is None or self._pipeline._stock_semantics is None:
+            return None
+        return self._pipeline.next_stock_recovery_at()
+
     def next_index_permission_at(self) -> datetime | None:
         if self._pipeline is None:
             return None
@@ -1040,6 +1045,9 @@ class _ProductionRuntimeState:
             raise RuntimeError("live monitor requires a certified production pipeline")
         if self.configuration_restart_required():
             raise RuntimeError("monitor semantics changed; safe restart required")
+        if (self._pipeline._stock_semantics is None
+                and deadline.kind is DeadlineKind.STOCK_RECOVERY):
+            return None
         if (
             self._pipeline._stock_semantics is None
             and deadline.kind not in (DeadlineKind.INDEX_RECOVERY, DeadlineKind.INDEX_PERMISSION)
@@ -1049,7 +1057,7 @@ class _ProductionRuntimeState:
         else:
             result = await self._pipeline.run_deadline(deadline)
         if (
-            deadline.kind is not DeadlineKind.INDEX_PERMISSION
+            deadline.kind not in (DeadlineKind.INDEX_PERMISSION, DeadlineKind.STOCK_RECOVERY)
             and self._dispatcher is not None
             and self.stock_delivery_admission_open()
         ):
@@ -1357,6 +1365,7 @@ def create_monitor_composition(
             clock=clock,
             is_open_on=state.is_open_on,
             next_index_recovery_at=state.next_index_recovery_at,
+            next_stock_recovery_at=state.next_stock_recovery_at,
             next_index_permission_at=state.next_index_permission_at,
         )
         state.bind_permission_scheduler(scheduler)

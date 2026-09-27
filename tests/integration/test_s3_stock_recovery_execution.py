@@ -536,6 +536,11 @@ def test_real_composition_shutdown_sets_unit_token_before_cancel_and_keeps_datab
             lifecycle = run.composition._runtime
             state = lifecycle._liveness_owner
             pipeline = state._pipeline
+            # Startup now owns the incomplete ticket and its completion+30 floor.
+            # Reach that real floor, then let the actual reserve select a safe wake.
+            lifecycle._clock.current = pipeline._stock_recovery_schedule.snapshot()[0].next_retry_at
+            await pipeline.run_stock_recovery_unit()
+            lifecycle._clock.current = pipeline._stock_recovery_schedule.snapshot()[0].next_retry_at
             client = pipeline.provider._client
             sdk = client._client
             initial_calls = len(sdk.calls)

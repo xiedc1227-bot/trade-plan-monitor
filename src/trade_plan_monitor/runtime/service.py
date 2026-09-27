@@ -142,6 +142,9 @@ _RETRYABLE_PROVIDER_ERRORS = frozenset({
     RequestControlErrorCode.RATE_LIMITED,
     RequestControlErrorCode.BLOCKED_PERMISSION,
 })
+_MARKET_CURSOR_PRESERVING_MAINTENANCE = frozenset({
+    DeadlineKind.INDEX_PERMISSION, DeadlineKind.STOCK_RECOVERY,
+})
 
 FetchMinutes = Callable[[str, datetime], Awaitable[list[MinuteBar] | tuple[MinuteBar, ...]]]
 FetchOfficialDaily = Callable[
@@ -3256,7 +3259,7 @@ class RuntimeLifecycleService:
                     await self._consume_one_fresh_elapsed_market_deadline(
                         after=(
                             market_review_after
-                            if deadline.kind is DeadlineKind.INDEX_PERMISSION
+                            if deadline.kind in _MARKET_CURSOR_PRESERVING_MAINTENANCE
                             else deadline.due_at
                         ),
                     )
@@ -3392,7 +3395,7 @@ class RuntimeLifecycleService:
     def _advance_progress_deadline(self, deadline: MarketDeadline) -> None:
         """Publish the following due time before current provider work can block."""
 
-        if deadline.kind is not DeadlineKind.INDEX_PERMISSION:
+        if deadline.kind not in _MARKET_CURSOR_PRESERVING_MAINTENANCE:
             self._last_deadline_at = deadline.due_at
         next_deadline = self._scheduler.next_deadline(after=self._last_deadline_at)
         if next_deadline is not None and not isinstance(next_deadline, MarketDeadline):

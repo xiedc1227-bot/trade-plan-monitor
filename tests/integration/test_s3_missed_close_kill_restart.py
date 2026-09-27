@@ -40,9 +40,19 @@ SYMBOL = "003043.SZ"
 class _SharedClock(ControlledClock):
     """Only the parent and its P1 child share this disposable clock value."""
 
-    def __init__(self, shared, *, released_sleeps):
+    def __init__(self, shared, *, released_sleeps, release_through=None):
         self.shared = shared
+        self.release_through = release_through
         super().__init__(self.current, released_sleeps=released_sleeps)
+
+    async def sleep_until(self, deadline):
+        if self.release_through is not None and deadline <= self.release_through:
+            assert len(self.sleep_calls) < 8, "bounded pre-kill scheduler wake guard"
+            self.sleep_calls.append(deadline)
+            self.current = max(self.current, deadline)
+            await asyncio.sleep(0)
+            return
+        await super().sleep_until(deadline)
 
     @property
     def current(self):
@@ -68,7 +78,10 @@ def _composition_child(root, phase, shared_clock, sdk_entered, reports):
     httpx.Client.send = forbidden_network
     httpx.AsyncClient.send = forbidden_network
     base = Path(root)
-    clock = _SharedClock(shared_clock, released_sleeps=0 if phase == "restart" else 1)
+    clock = _SharedClock(
+        shared_clock, released_sleeps=0 if phase == "restart" else 1,
+        release_through=SOURCE_CLOSE + timedelta(seconds=12) if phase == "blocked" else None,
+    )
     blocked = Event()  # Local thread event: never reuse a killed process's IPC wait lock.
 
     class FakeSDK(OfflineSDK):
@@ -299,7 +312,9 @@ def test_actual_composition_discovers_close_after_kill_and_deduplicates_restart(
         assert first["sleeps"][0] == CLOSE_DUE.isoformat()
         _assert_one_close(killed_state, plan)
     else:
-        assert first["sleeps"][0] == (SOURCE_CLOSE + timedelta(seconds=12)).isoformat()
+        assert SOURCE_CLOSE.isoformat() in first["sleeps"]
+        assert (SOURCE_CLOSE + timedelta(seconds=12)).isoformat() in first["sleeps"]
+        assert len(first["sleeps"]) <= 8
         assert first["now"] == AFTER_CLOSE.isoformat()
         assert all(not rows for rows in killed_state.values())
         assert _deliveries(tmp_path) == ()

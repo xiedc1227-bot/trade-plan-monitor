@@ -177,6 +177,21 @@ class _StockRecoveryDemand:
     permission_epoch: int
 
 
+@dataclass(frozen=True, slots=True)
+class _StockRecoveryFailure:
+    """Bounded startup evidence only; never retains an exception or traceback."""
+
+    requirement: RecoveryRequirement
+    error_code: RecoveryErrorCode
+    next_retry_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class _StockRecoveryOutcome:
+    result: ScopedRecoveryResult | None = None
+    guard_invalidated: bool = False
+
+
 class PermissionMaintenanceResult(StrEnum):
     SKIPPED = "SKIPPED"
     DEFERRED = "DEFERRED"
@@ -508,6 +523,7 @@ class ProductionMonitorPipeline:
         self._stock_recovery_demands: dict[str, _StockRecoveryDemand] = {}
         self._stock_recovery_next_at: datetime | None = None
         self._stock_recovery_binding: tuple[object, ...] | None = None
+        self._stock_recovery_failures: dict[str, _StockRecoveryFailure] = {}
         self._recovery_configuration_revision = sha256(
             configuration.model_dump_json().encode("utf-8")
         ).hexdigest()
@@ -851,31 +867,9 @@ class ProductionMonitorPipeline:
         deadline: MarketDeadline,
         plans: tuple[ExecutableTradePlan, ...],
     ) -> None:
-        if deadline.bar_end is None or not plans:
-            return
-        self._gap_repair_due_at = self._next_deadline_due_at(deadline)
-        try:
-            if self._realtime_pending():
-                return
-            states = self.evaluations.load_persisted_symbol_health(
-                tuple(plan.symbol for plan in plans)
-            )
-            gaps = {
-                state.symbol: tuple(
-                    gap
-                    for gap in (() if state.snapshot is None else state.snapshot.gaps)
-                    if gap.date() == deadline.trade_date and gap <= deadline.bar_end
-                )
-                for state in states
-            }
-            detected = {symbol: values for symbol, values in gaps.items() if values}
-            if detected:
-                await self.recovery.repair_detected_gaps(
-                    trade_date=deadline.trade_date,
-                    gaps=detected,
-                )
-        finally:
-            self._gap_repair_due_at = None
+        # Market work records demand only. Physical repair belongs to a later
+        # owned stock ticket, preserving its scope, retry floor and reserve.
+        self._synchronize_authorized_stock_recovery()
 
     async def _request(self, operation: TushareOperation, call: Callable[[], object], key: str):
         self.reference_stage = operation
@@ -2852,6 +2846,11 @@ class ProductionMonitorPipeline:
         """Read the owner cache only; never observe time, SQL, files or permissions."""
         return self._stock_recovery_next_at
 
+    def _synchronize_authorized_stock_recovery(self) -> None:
+        # Absence at composition construction is not revocation of installed authority.
+        if self._stock_semantics is not None:
+            self._synchronize_stock_recovery()
+
     def _synchronize_stock_recovery(self) -> None:
         """Explicit bounded local observation; no requests, loops or default wiring."""
         now = self._clock.now()
@@ -2930,6 +2929,21 @@ class ProductionMonitorPipeline:
             self._stock_recovery_next_at = None
             raise RecoveryAdmissionChangedError("stock recovery authority changed during read")
         self._stock_recovery_binding = binding
+        for key in tuple(self._stock_recovery_failures):
+            demand = desired.get(key)
+            failure = self._stock_recovery_failures[key]
+            old = self._stock_recovery_demands.get(key)
+            if demand is None or (
+                failure.error_code is RecoveryErrorCode.BLOCKED_PERMISSION
+                and old is not None and old.permission_blocked and not demand.permission_blocked
+            ) or (
+                failure.error_code in {
+                    RecoveryErrorCode.TRANSIENT, RecoveryErrorCode.TIMEOUT,
+                    RecoveryErrorCode.RATE_LIMITED,
+                }
+                and demand.capture is not None and not demand.missing_ends
+            ):
+                del self._stock_recovery_failures[key]
         self._stock_recovery_demands = desired
         self._stock_recovery_schedule.synchronize(tuple(requirements))
         # Local observation cannot consume the executor's round-robin turn.
@@ -2950,13 +2964,26 @@ class ProductionMonitorPipeline:
 
     async def run_stock_recovery_unit(self) -> ScopedRecoveryResult | None:
         """Own one fresh, bounded maintenance attempt; never loop or replay decisions."""
+        return (await self._run_stock_recovery_unit(maintenance=True)).result
+
+    async def _run_stock_recovery_unit(
+        self, *, maintenance: bool, startup_trade_date: date | None = None,
+    ) -> _StockRecoveryOutcome:
+        """Share one ticket/accounting path without imposing maintenance policy on startup."""
         if self._stock_recovery_owner_retired():
-            return None
+            return _StockRecoveryOutcome()
         self._synchronize_stock_recovery()
+        if startup_trade_date is not None and not any(
+            demand.capture is not None and demand.capture.target.trade_date == startup_trade_date
+            for demand in self._stock_recovery_demands.values()
+        ):
+            return _StockRecoveryOutcome()
         ticket = self._stock_recovery_schedule.claim(now=self._clock.now())
         if ticket is None:
-            return None
+            return _StockRecoveryOutcome()
         result = None
+        guard_invalidated = False
+        startup_date_skipped = False
         step = RecoveryStepResult(RecoveryDisposition.PENDING)
         deferred_until: list[datetime] = []
         try:
@@ -2964,6 +2991,10 @@ class ProductionMonitorPipeline:
             if desired.capture is None:
                 raise RecoveryAdmissionChangedError("stock recovery target is still unknown")
             capture = self._capture_recovery_scope(desired.capture.symbol)
+            if (startup_trade_date is not None and capture is not None
+                    and capture.target.trade_date != startup_trade_date):
+                startup_date_skipped = True
+                raise RecoveryAdmissionChangedError("scope is outside the startup trade date")
             if (capture is None or not self._stock_recovery_schedule.is_current(ticket)
                     or capture.target.observed_at < desired.capture.target.observed_at
                     or capture.target.trade_date != desired.capture.target.trade_date
@@ -2974,7 +3005,7 @@ class ProductionMonitorPipeline:
             observed_at = self._clock.now()
             latest_start = observed_at + timedelta(seconds=15)
             window = (
-                None if self._permission_market_window is None else
+                None if not maintenance or self._permission_market_window is None else
                 _FrozenPermissionMarketWindow(
                     observed_at, latest_start,
                     self._permission_market_window(
@@ -2999,7 +3030,7 @@ class ProductionMonitorPipeline:
                     raise RequestNotStartedError("stock maintenance yielded its market window")
 
             result = await self._recover_frozen_scope(
-                capture, physical_start_guard=maintenance_start,
+                capture, physical_start_guard=maintenance_start if maintenance else None,
             )
             if (not isinstance(result, ScopedRecoveryResult) or result.symbol != capture.symbol
                     or result.target != capture.target
@@ -3007,6 +3038,7 @@ class ProductionMonitorPipeline:
                 raise RuntimeError("stock recovery result does not match its capture")
             if result.persistence_error is not None:
                 raise result.persistence_error
+            guard_invalidated = result.retarget_required or result.yielded_to_realtime
             completed_at = self._clock.now()
             if result.error_code in {
                 RecoveryErrorCode.RATE_LIMITED,
@@ -3021,17 +3053,21 @@ class ProductionMonitorPipeline:
             elif result.error_code is RecoveryErrorCode.BLOCKED_PERMISSION:
                 step = RecoveryStepResult.blocked()
             elif result.error_code is not None:
-                if result.request_error is not None:
-                    raise result.request_error
-                raise RuntimeError(f"stock recovery failed ({result.error_code.value})")
+                if maintenance:
+                    if result.request_error is not None:
+                        raise result.request_error
+                    raise RuntimeError(f"stock recovery failed ({result.error_code.value})")
             else:
                 step = (RecoveryStepResult.ready() if result.ready else RecoveryStepResult.retry(
                     deferred_until[0] if deferred_until else completed_at + MAINTENANCE_INTERVAL,
                 ))
         except (RecoveryAdmissionChangedError, RequestNotStartedError):
-            step = RecoveryStepResult.retry(
-                deferred_until[0] if deferred_until else self._clock.now() + MAINTENANCE_INTERVAL,
-            )
+            guard_invalidated = not startup_date_skipped
+            if not startup_date_skipped:
+                step = RecoveryStepResult.retry(
+                    deferred_until[0]
+                    if deferred_until else self._clock.now() + MAINTENANCE_INTERVAL,
+                )
         except BaseException:
             self._stock_recovery_schedule.complete(ticket, step)
             self._stock_recovery_next_at = None
@@ -3047,10 +3083,26 @@ class ProductionMonitorPipeline:
         }):
             step = RecoveryStepResult(RecoveryDisposition.PENDING)
         self._stock_recovery_schedule.complete(ticket, step)
+        key = ticket.requirement.scope_key
+        if result is not None and result.error_code is not None:
+            effective_floor = next((
+                item.next_retry_at for item in self._stock_recovery_schedule.snapshot()
+                if item.requirement.scope_key == key
+            ), None)
+            self._stock_recovery_failures[key] = _StockRecoveryFailure(
+                ticket.requirement, result.error_code, effective_floor or result.next_retry_at,
+            )
+        elif result is not None and not guard_invalidated:
+            previous = self._stock_recovery_failures.get(key)
+            if previous is not None and previous.error_code in {
+                RecoveryErrorCode.TRANSIENT, RecoveryErrorCode.TIMEOUT,
+                RecoveryErrorCode.RATE_LIMITED,
+            }:
+                del self._stock_recovery_failures[key]
         if retired:
-            return None
+            return _StockRecoveryOutcome(guard_invalidated=guard_invalidated)
         self._synchronize_stock_recovery()
-        return result
+        return _StockRecoveryOutcome(result, guard_invalidated)
 
     def _stock_recovery_owner_retired(self) -> bool:
         """Retire only the obsolete lifecycle, never hide authority or recorded faults."""
@@ -3101,18 +3153,29 @@ class ProductionMonitorPipeline:
                     else None
                 ),
             )
+        outcome = await self._run_stock_recovery_unit(
+            maintenance=False, startup_trade_date=trade_date,
+        )
+        if outcome.guard_invalidated:
+            raise RuntimeError("startup recovery failed")
+        if outcome.result is not None and outcome.result.error_code in {
+            RecoveryErrorCode.ERROR, RecoveryErrorCode.QUEUE_FULL,
+            RecoveryErrorCode.CLOSED, RecoveryErrorCode.INVALID_RESPONSE,
+        }:
+            # Concurrently completed facts cannot erase this invocation's failure.
+            raise RuntimeError("startup recovery failed")
         results = []
-        for symbol in symbols:
-            capture = self._capture_recovery_scope(symbol)
-            if capture is None or capture.target.trade_date != trade_date:
+        for key, demand in self._stock_recovery_demands.items():
+            capture = demand.capture
+            if (capture is None or capture.target.trade_date != trade_date
+                    or not demand.missing_ends):
                 continue
-            result = await self._recover_frozen_scope(capture)
-            if result.persistence_error is not None:
-                raise result.persistence_error
-            if result.retarget_required or result.yielded_to_realtime:
-                raise RuntimeError("startup recovery failed")
+            failure = self._stock_recovery_failures.get(key)
+            error = (RecoveryErrorCode.BLOCKED_PERMISSION if demand.permission_blocked else
+                     None if failure is None else failure.error_code)
             results.append(RecoverySymbolResult(
-                symbol=symbol, error_code=result.error_code, next_retry_at=result.next_retry_at,
+                symbol=capture.symbol, error_code=error,
+                next_retry_at=None if failure is None else failure.next_retry_at,
             ))
         _ensure_recovery_complete(RecoveryBatchResult(
             mode=RecoveryMode.STARTUP, trade_date=trade_date, results=tuple(results),
@@ -3461,22 +3524,30 @@ class ProductionMonitorPipeline:
             work.commit()
 
     async def run_deadline(self, deadline: MarketDeadline):
+        if deadline.kind is DeadlineKind.STOCK_RECOVERY:
+            return await self.run_stock_recovery_unit()
         if deadline.kind is DeadlineKind.INDEX_PERMISSION:
             realtime_due = self.next_realtime_index_permission_due_at()
             historical_due = self.next_historical_index_permission_due_at()
             if realtime_due is not None and (
                 historical_due is None or realtime_due < historical_due
             ):
-                return await self._maybe_recheck_realtime_index_permission()
-            return await self._maybe_recheck_historical_index_permission()
+                result = await self._maybe_recheck_realtime_index_permission()
+            else:
+                result = await self._maybe_recheck_historical_index_permission()
+            self._synchronize_authorized_stock_recovery()
+            return result
         if deadline.kind is DeadlineKind.INDEX_RECOVERY:
             self._defer_permission_blocked_index_recoveries(self._clock.now())
-            return await self.evaluations.recover_transient_market_indexes(
+            result = await self.evaluations.recover_transient_market_indexes(
                 evaluated_at=max(self._clock.now(), deadline.due_at)
             )
+            self._synchronize_authorized_stock_recovery()
+            return result
         plans = self.active_plans(deadline.trade_date)
         if not plans:
             await self._refresh_dashboard_indexes(deadline)
+            self._synchronize_authorized_stock_recovery()
             return ()
         if not self._stock_certification_current():
             raise RuntimeError("stock certification must be refreshed before execution")
@@ -3499,6 +3570,7 @@ class ProductionMonitorPipeline:
                 )
             if complete:
                 await self._refresh_dashboard_indexes(deadline)
+                self._synchronize_authorized_stock_recovery()
                 return ()
         reference_key = self._reference_dependency_key(deadline.trade_date, plans)
         if self._reference_key != reference_key:
@@ -3557,6 +3629,7 @@ class ProductionMonitorPipeline:
                 selected.append(plan)
         if not selected:
             await self._refresh_dashboard_indexes(deadline)
+            self._synchronize_authorized_stock_recovery()
             return ()
         if not self._stock_certification_current():
             raise RuntimeError("stock certification must be refreshed before execution")
