@@ -5,9 +5,9 @@
 ## SMWO-01 Status and scope
 
 - Date: 2026-09-27.
-- Status: **Preparation design reviewed/approved for bounded implementation; execution not approved pending boundary code/owner execution validation**.
-- The coordinator reported that independent Sol final verification passed bilingual parity and all required clarifications, with no new P1/P2. Pure preparation (candidates, identity/calendar preparation, ordering/cursor structures, zero reservations and zero SDK calls) is approved for bounded implementation. It has not started because `production.py` is currently owned by the SDK-boundary writer. The existing OPEN P2 in SMWO-11 is being repaired in a separate slice and has not passed verification. Owner preparation/execution remain unimplemented and owner tests have not run.
-- Baseline: the pure provider proof contract and implementation committed as `95feccb`, documented in [the provider contract](2026-09-27-c1-stock-minute-permission-proof-contract.md). That completed slice is distinct from this unimplemented owner integration.
+- Status: **Preparation design approved; execution design conditionally approved after independent preparation acceptance; owner execution not implemented**.
+- Independent Sol review approved pure preparation (candidates, identity/calendar preparation, ordering/cursor structures, zero reservations and zero SDK calls). Preparation implementation is in progress and not yet independently accepted. The SDK-boundary prerequisite is resolved by independently verified commit `4804207`. Subsequent independent Sol execution-design review found no new P1/P2 and permits bounded execution implementation after preparation acceptance. This does not certify owner execution or close C1.
+- Baseline: the pure provider proof contract and implementation committed as `95feccb`, documented in [the provider contract](2026-09-27-c1-stock-minute-permission-proof-contract.md). That completed slice is distinct from this not-yet-accepted owner integration.
 - Proposed scope: candidate selection, preparation, and internal owner entry points for `CURRENT_DAY_MINUTES` and `REALTIME_MINUTES`. Preparation and physical execution are separate thin slices.
 - Automatic scheduler integration, the RUNNING/DEGRADED dual-clock dispatcher, status API changes, startup backoff changes, market-deadline cursor changes, and complete C1 acceptance are outside this slice.
 - The DAILY_BARS wiring consulted during design remains a reference for principles, not a substitute for owner validation. This documentation change modifies no production/provider/controller code, other documentation, or database schema. Only these two contract files are authorized for a local documentation commit.
@@ -61,10 +61,10 @@ def _prepare_stock_minute_permission_locked(
 
 Preparation returns an immutable `PREPARED / UNKNOWN / SKIPPED` result carrying the original candidate, consumer identity, capture time, STOCK semantic mode/revision, label, provider, session factory, and calendar epoch/event.
 
-1. **Candidate/preparation slice:** candidates, identity/calendar preparation, eight-scope ordering and cursor structures including two independent symbol cursors; no reservation or SDK call and no provider changes. Independent final verification and coordinator approval are complete. Implementation waits for the SDK-boundary writer to release `production.py` and for coordinator scheduling; do not begin coding in this documentation turn.
-2. **Execution slice:** first complete the separate minimal wrapper/provider adaptation and its independent validation, then run `SMW-04` and `SMW-06` through `SMW-14` RED-to-GREEN while connecting provider proof and controller. Clear only the corresponding permission block after final validation. This slice remains unapproved pending boundary code and owner execution validation.
+1. **Candidate/preparation slice:** candidates, identity/calendar preparation, eight-scope ordering and cursor structures including two independent symbol cursors; no reservation or SDK call and no provider changes. The design is approved and implementation is in progress after the SDK-boundary writer released `production.py`; independent implementation acceptance remains required.
+2. **Execution slice:** after independent preparation acceptance, connect the provider proof and controller under the conditionally approved execution design. The separate wrapper/provider adaptation has passed verification at `4804207`. Run `SMW-04` and `SMW-06` through `SMW-14` RED-to-GREEN and clear only the corresponding permission block after final validation. Owner execution implementation and acceptance remain outstanding.
 
-The preparation slice changes no provider files. The minimal wrapper/provider adaptation for execution is separate work under SMWO-11; it is not ruled out by the preparation boundary, and this contract does not approve its result. Neither slice changes the controller, automatic scheduling, startup backoff, status API, or market-deadline cursor.
+The preparation slice changes no provider files. The minimal wrapper/provider adaptation is separately completed work under SMWO-11, not permission to broaden either owner slice. Neither slice changes the controller, automatic scheduling, startup backoff, status API, or market-deadline cursor.
 
 ## SMWO-04 Request windows and calendar
 
@@ -128,7 +128,7 @@ market_guard = 31.25s
 
 Check at four points: before reservation, queue admission, worker entry, and immediately before the SDK call. Each gate checks the same date, no clock rollback, frozen latest start, legal request window, frozen market window, configuration, semantics, provider/source identity, generation, stop, calendar epoch/event, and cancellation Event. Workers access neither Task objects nor the database.
 
-These are proposed requirements, not established properties of the current production wrapper. The final physical-start boundary and placement of S remain OPEN under SMWO-11.
+The wrapper seam is implemented under SMWO-11; the owner callback must still prove every owner-specific condition. Finish the last configuration/certification/semantic I/O before sampling one S. After S, check the original mode's time rules and the in-memory generation/admission/stop, provider/factory identity, epoch/Event, cancellation and frozen-window fences, then directly invoke the resolved SDK callable. No further authority I/O or resampling of S is permitted. The resolver alone does not prove a new owner callback correct.
 
 Use the existing controller with at most one SDK call for the exact endpoint, one symbol, and `freq="1MIN"`. The endpoints retain independent permission blocks/reservations and share 429 cooldown, one physical worker, and 1.25-second pacing. Use `RequestPriority.RECOVERY`; market work remains higher priority. Preserve the original `RequestNotStartedError` sentinel. Pre-reservation revocation creates no reservation; post-reservation revocation retains the durable reservation.
 
@@ -203,11 +203,11 @@ Snapshot validation and the controller's subsequent permission reset are not one
 
 The internal proposal requires no new business parameter. Expanding lunch/after-close request windows, demonstrating that real `rt_min` supplies an A proof row, and complete automatic-recovery acceptance remain outside this slice. Fake mixed-row evidence cannot close C1.
 
-The preparation design is reviewed and approved for bounded implementation. Independent final verification passed parity and all clarifications with no new P1/P2. Execution remains PROPOSED and unapproved; the existing SMWO-11 OPEN P2 is under repair in a separate slice and has not passed verification. Preparation waits for `production.py` availability and coordinator scheduling. Owner preparation and execution remain unimplemented and their RED matrix has not been run. Execution requires boundary code validation and independent review, followed by `SMW-04` and `SMW-06` through `SMW-14` RED-to-GREEN. Documentation parity/format checks are not implementation tests.
+Preparation implementation is in progress and not yet independently accepted. Independent execution-design review conditionally permits owner execution implementation after preparation acceptance; it remains unimplemented. Its own `SMW-04` and `SMW-06` through `SMW-14` RED-to-GREEN matrix is still required. The SDK slice's 146 independent passing tests cannot substitute for owner acceptance. Documentation parity/format checks are not implementation tests. Unified scheduling and C1 remain OPEN.
 
-## SMWO-11 OPEN: production wrapper physical-start boundary
+## SMWO-11 Resolved SDK prerequisite: production wrapper physical-start boundary
 
-Independent review has reproduced this boundary offline; a separate slice is repairing it, but verification has not passed and the finding remains OPEN. In the reproduced path, the pure provider invokes `physical_start` before `endpoint(...)`, but in production that endpoint is `_CertifiedTushareClient.request`. The wrapper then runs `_current()` certificate/configuration-file checks before invoking the inner SDK:
+Independent review reproduced the following old boundary offline. The pure provider invoked `physical_start` before `endpoint(...)`, but the production endpoint was `_CertifiedTushareClient.request`. The wrapper then ran `_current()` certificate/configuration-file checks before invoking the inner SDK:
 
 ```text
 provider physical_start -> S
@@ -217,10 +217,10 @@ inner SDK invocation
 SDK return -> R
 ```
 
-The wrapper checks can advance the clock beyond `captured_at + 15s`, or authority can be revoked during the intervening interval. S still records the earlier callback time. Consequently, `S <= latest_start` and `R - S <= 15s` can both hold without establishing the required physical SDK start bound. The current seam does not establish that final admission property.
+In that old sequence, wrapper checks could cross `captured_at + 15s` or observe revocation while S retained the earlier time. Both `S <= latest_start` and `R - S <= 15s` could hold despite a late SDK start.
 
-The coordinator reported the independent reviewer's offline inline reproduction: capture at `10:00:00`, latest start at `10:00:15`, and `physical_start` at `10:00:14`; certification checks then consume 2 seconds, so the inner fake SDK starts at `10:00:16`, yet the proof can still pass. This is reviewer evidence reported by the coordinator, not a test run by this documentation author. It establishes the late-start counterexample, not an implemented fix, a newly added RED test, or a completed owner RED matrix.
+The original reviewer inline reproduction captured at `10:00:00`, set latest start to `10:00:15`, and recorded S at `10:00:14`; two seconds of certification work delayed the inner fake SDK to `10:00:16`, while the old proof passed. That inline reproduction was not owner-test evidence. The separate SDK slice subsequently added a regression and repaired this boundary.
 
-Resolution requires the per-call guard and S capture to occur after the wrapper checks at the actual SDK entry boundary. The minimal wrapper/provider protocol adaptation is being handled separately; its boundary code has not passed validation and is not approved by this contract. Do not temporarily replace a shared callback, and do not forward private hook arguments to the real SDK.
+Commit `4804207` implements a nominal per-call resolver: wrapper checks and endpoint resolution precede the final callback. See `SCB-05`/`SCB-06` in [the boundary contract](2026-09-27-c1-sdk-call-boundary-contract.md) and `SCBV-07` in [the verification report](2026-09-27-c1-sdk-call-boundary-verification.md). A further final-certification-I/O revocation finding was reproduced and fixed. Independent post-fix verification passed 122 boundary cases plus 24 realtime-index cases. These 146 cases are SDK-slice evidence, not minute-owner execution evidence. Shared callback replacement and private hook forwarding remain forbidden.
 
-The finding may also affect existing daily/index admission seams; their individual impact is not established by the minute reproduction. The boundary remains OPEN: repair work in another slice is not a verified fix. Existing source/tests remain untouched in this documentation-only turn; the coordinator separately reported a full offline run at HEAD `453cc0c`. The separate boundary work and independent review must pass before this proposal can claim a final physical-start guarantee or approve owner execution.
+The SDK slice covers its specified daily/index permission seams; `INDEX_HISTORICAL_MINUTES` and ordinary business-path guarantees were not expanded. S marks the point after local checks and immediately before invoking the resolved inner SDK callable, not network send time or zero thread-scheduling delay. This prerequisite is resolved within that scope. The owner must still implement and verify SMWO-06–09; preparation acceptance, execution acceptance, automatic dispatch and complete C1 remain separate gates.

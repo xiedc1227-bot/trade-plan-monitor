@@ -5,9 +5,9 @@
 ## SMWO-01 状态与范围
 
 - 日期：2026-09-27。
-- 状态：**Preparation design reviewed/approved for bounded implementation; execution not approved pending boundary code/owner execution validation**，即准备设计已评审并批准有界实现，执行片尚未批准，等待边界代码及 owner 执行验证。
-- 主协调转述：独立 Sol 最终核验通过双语 parity 和全部必需钉点，无新 P1/P2。纯准备片（候选、身份/日历准备、排序/游标结构、零预约、零 SDK 调用）已批准有界实现。因 `production.py` 当前由 SDK 边界 writer 占用，尚未启动。SMWO-11 既有 OPEN P2 正由另一切片修复，尚未通过验证。owner 准备/执行仍未实现，owner 测试尚未运行。
-- 基线：已提交 `95feccb` 的纯 provider 证明契约与实现，见[provider 契约](2026-09-27-c1-stock-minute-permission-proof-contract.zh-CN.md)。该已完成切片与本次未实现的 owner 接线分开。
+- 状态：**Preparation design approved; execution design conditionally approved after independent preparation acceptance; owner execution not implemented**，即准备设计已批准；执行设计获有条件批准，须先通过准备片独立验收；owner 执行尚未实现。
+- 独立 Sol 评审已批准纯准备片（候选、身份/日历准备、排序/游标结构、零预约、零 SDK 调用）。准备实现正在进行，尚未独立验收。SDK 边界前提已由通过独立验证的提交 `4804207` 解决。后续独立 Sol 执行设计复审未发现新 P1/P2，允许在准备验收后进行有界执行实现。这不代表 owner 执行已验收或 C1 已关闭。
+- 基线：已提交 `95feccb` 的纯 provider 证明契约与实现，见[provider 契约](2026-09-27-c1-stock-minute-permission-proof-contract.zh-CN.md)。该已完成切片与本次尚未验收的 owner 接线分开。
 - 提议范围：`CURRENT_DAY_MINUTES`、`REALTIME_MINUTES` 的候选选择、准备及内部 owner 入口。准备与物理执行分为两个薄步。
 - 自动 scheduler 接入、RUNNING/DEGRADED 双时钟 dispatcher、状态 API 变更、启动退避变更、市场 deadline cursor 变更及完整 C1 验收均不在本片。
 - 设计时参考的 DAILY_BARS 接线继续仅供参考原则，不能替代 owner 验证。本次文档变更不修改 production/provider/controller 代码、其他文档或数据库 schema。仅这两份契约获准本地文档提交。
@@ -61,10 +61,10 @@ def _prepare_stock_minute_permission_locked(
 
 准备返回不可变的 `PREPARED / UNKNOWN / SKIPPED` 结果，携带原 candidate、消费者身份、捕获时间、STOCK 语义模式/revision、标签、provider、session factory 及日历 epoch/event。
 
-1. **候选/准备薄步：**候选、身份/日历准备、八作用域排序及游标结构，包含两个独立 symbol 游标；零预约、零 SDK 调用、零 provider 改动。独立最终核验及主协调批准已完成。实现等待 SDK 边界 writer 释放 `production.py` 并由主协调安排；本次文档工作不开始编码。
-2. **执行薄步：**先完成独立切片的最小 wrapper/provider 适配及其独立验证，再在连接 provider proof 和 controller 时执行 `SMW-04` 及 `SMW-06` 至 `SMW-14` 的 RED→GREEN。最终验证通过后仅清对应权限阻塞。此片仍未获批准，等待边界代码和 owner 执行验证。
+1. **候选/准备薄步：**候选、身份/日历准备、八作用域排序及游标结构，包含两个独立 symbol 游标；零预约、零 SDK 调用、零 provider 改动。设计已批准，SDK 边界 writer 释放 `production.py` 后实现正在进行；仍需独立实现验收。
+2. **执行薄步：**准备片通过独立验收后，按有条件批准的执行设计连接 provider proof 和 controller。独立 wrapper/provider 适配已在 `4804207` 通过验证。执行 `SMW-04` 及 `SMW-06` 至 `SMW-14` 的 RED→GREEN，最终验证通过后仅清对应权限阻塞。owner 执行实现和验收仍未完成。
 
-准备片不修改 provider 文件。执行所需的最小 wrapper/provider 适配是 SMWO-11 下的独立工作；准备片边界不排除该适配，本契约不批准其结果。两个薄步均不修改 controller、自动调度、启动退避、状态 API 或市场 deadline cursor。
+准备片不修改 provider 文件。最小 wrapper/provider 适配是 SMWO-11 下已独立完成的工作，不授权扩张两个 owner 薄步。两个薄步均不修改 controller、自动调度、启动退避、状态 API 或市场 deadline cursor。
 
 ## SMWO-04 请求窗口与日历
 
@@ -128,7 +128,7 @@ market_guard = 31.25s
 
 在四处检查：预约前、queue admission、worker 入口、紧邻 SDK 调用。各处均检查同日、时钟未回退、冻结的最晚开始时间、合法请求窗口、冻结市场窗口、配置、语义、provider/source 身份、generation、stop、日历 epoch/event 和取消 Event。worker 不访问 Task 对象或数据库。
 
-这些是提议要求，不是当前 production wrapper 已成立的属性。最后物理开始边界及 S 的获取位置仍为 SMWO-11 中的 OPEN 项。
+wrapper seam 已按 SMWO-11 实现；owner callback 仍须证明每项 owner 条件。完成最后一次配置/认证/语义 I/O 后，只采样一个 S。在 S 之后检查原 mode 的时间规则及纯内存的 generation/admission/stop、provider/factory 身份、epoch/Event、取消和冻结窗口围栏，再直接调用已解析 SDK callable。不得继续执行 authority I/O 或重新采样 S。resolver 本身不能证明新 owner callback 正确。
 
 使用既有 controller，每次最多一次准确 endpoint 的 SDK 调用，仅一个 symbol，固定 `freq="1MIN"`。两个 endpoint 保持独立权限阻塞/预约，共享 429 cooldown、单物理 worker 和 1.25 秒 pacing。使用 `RequestPriority.RECOVERY`，市场工作继续优先。保留原 `RequestNotStartedError` sentinel。预约前撤销不创建预约；预约后撤销保留持久预约。
 
@@ -203,11 +203,11 @@ factory 必须使用具有 explicit-BEGIN 事务 hook 的应用配置 engine。`
 
 内部方案不需要新增业务参数。扩大午休/盘后请求窗口、证明真实 `rt_min` 提供 A 类证明行，以及完整自动恢复验收仍在本片之外。fake 混合行证据不能关闭 C1。
 
-准备设计已评审并批准有界实现。独立最终核验通过 parity 和全部明确化内容，无新 P1/P2。执行片仍为 PROPOSED 且未获批准；SMWO-11 既有 OPEN P2 正由另一切片修复，尚未通过验证。准备片等待 `production.py` 可用并由主协调安排。owner 准备和执行仍未实现，其 RED 矩阵尚未运行。执行片必须通过边界代码验证及独立评审，再进行 `SMW-04` 及 `SMW-06` 至 `SMW-14` 的 RED→GREEN。文档对齐/格式检查不是实现测试。
+准备实现正在进行，尚未独立验收。独立执行设计复审有条件允许在准备验收后实现 owner 执行；执行仍未实现，仍须完成自身 `SMW-04` 及 `SMW-06` 至 `SMW-14` 的 RED→GREEN 矩阵。SDK 切片独立通过的 146 项测试不能替代 owner 验收。文档对齐/格式检查不是实现测试。统一调度和 C1 保持 OPEN。
 
-## SMWO-11 OPEN：生产 wrapper 物理开始边界
+## SMWO-11 已解决的 SDK 前提：生产 wrapper 物理开始边界
 
-独立评审已离线复现该边界；另一切片正在修复，但尚未通过验证，发现仍为 OPEN。已复现路径中，纯 provider 在 `endpoint(...)` 前调用 `physical_start`，但 production 中的 endpoint 是 `_CertifiedTushareClient.request`。wrapper 随后才执行 `_current()` 证书/配置文件检查，再调用内层 SDK：
+独立评审离线复现了以下旧边界。纯 provider 在 `endpoint(...)` 前调用 `physical_start`，但 production 的 endpoint 是 `_CertifiedTushareClient.request`。wrapper 随后才执行 `_current()` 证书/配置文件检查，再调用内层 SDK：
 
 ```text
 provider physical_start -> S
@@ -217,10 +217,10 @@ inner SDK invocation
 SDK return -> R
 ```
 
-wrapper 检查可能使时钟越过 `captured_at + 15s`，也可能在中间间隔发生授权撤销。S 仍记录此前回调的时刻。因此，即使 `S <= latest_start` 和 `R - S <= 15s` 同时成立，也不能建立所要求的物理 SDK 最晚开始边界。当前 seam 尚未建立这项最后准入属性。
+在该旧顺序中，wrapper 检查可能越过 `captured_at + 15s` 或观察到撤销，而 S 仍保留较早时刻。即使 SDK 迟到启动，`S <= latest_start` 和 `R - S <= 15s` 也可能同时成立。
 
-主协调转述的独立 reviewer 离线 inline 复现为：`10:00:00` 捕获，最晚开始为 `10:00:15`，`physical_start` 在 `10:00:14`；随后认证检查耗时 2 秒，内层 fake SDK 到 `10:00:16` 才开始，但 proof 仍可通过。这是主协调报告的 reviewer 证据，不是本文档作者执行的测试。它证明迟开始反例，不代表修复已经实现、已新增 RED 测试或 owner RED 矩阵已经完成。
+原 reviewer inline 复现在 `10:00:00` 捕获，将最晚开始设为 `10:00:15`，S 记录于 `10:00:14`；两秒认证工作把内层 fake SDK 推迟到 `10:00:16`，旧 proof 仍通过。该内联复现不是 owner 测试证据。独立 SDK 切片随后新增回归并修复了该边界。
 
-解决方案要求把每次调用独立的 guard 和 S 获取放到 wrapper 检查之后、真实 SDK 入口边界。最小 wrapper/provider 协议适配由独立切片处理；边界代码尚未通过验证，本契约不予批准。不得临时替换共享 callback，也不得把私有 hook 参数透传给真实 SDK。
+提交 `4804207` 实现逐调用的名义 resolver：wrapper 检查和 endpoint 解析先于最终 callback。见[边界契约](2026-09-27-c1-sdk-call-boundary-contract.zh-CN.md) 的 `SCB-05`/`SCB-06` 及[验证报告](2026-09-27-c1-sdk-call-boundary-verification.zh-CN.md) 的 `SCBV-07`。最后认证 I/O 期间撤销的另一发现也已复现并修复。修复后独立验证通过 122 项边界测试及 24 项实时指数测试。这 146 项属于 SDK 切片证据，不是分钟 owner 执行证据。仍禁止替换共享 callback 或向 SDK 透传私有 hook。
 
-该发现可能同样影响既有 daily/index admission seam；分钟复现尚未分别证明对它们的影响。该边界仍为 OPEN：另一切片正在修复不等于修复已通过验证。本轮仅文档工作不修改已有 source/tests；主协调另行报告了 HEAD `453cc0c` 的完整 offline 运行。独立边界工作及评审通过后，本提案才能声称最后物理开始保证成立或批准 owner 执行。
+SDK 切片覆盖其明确列出的 daily/index 权限 seam；未扩展 `INDEX_HISTORICAL_MINUTES` 或普通业务路径的保证。S 标记完成本地检查后、调用已解析内层 SDK callable 前的时点，不是网络发包时间，也不保证零线程调度间隙。该前提在此范围内已解决。owner 仍须实现并验证 SMWO-06–09；准备验收、执行验收、自动调度和完整 C1 仍是独立门槛。
