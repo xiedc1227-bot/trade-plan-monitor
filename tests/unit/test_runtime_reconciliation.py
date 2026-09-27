@@ -151,3 +151,86 @@ def test_result_invariants_and_aware_timestamps() -> None:
         RecoveryStepResult.retry(NOW.replace(tzinfo=None))
     with pytest.raises(ValueError):
         RecoveryRequirement(scope_key="", revision="r")
+
+
+@pytest.mark.parametrize("result", [RecoveryStepResult.ready(), RecoveryStepResult.blocked(),
+                                   RecoveryStepResult.retry(NOW + timedelta(seconds=30))])
+def test_local_resolution_preserves_future_retry_across_targets(result):
+    schedule = RecoverySchedule()
+    old, new = _requirement("A"), _requirement("A", "new-target")
+    schedule.synchronize((old,))
+    ticket = schedule.claim(now=NOW)
+    schedule.complete(ticket, RecoveryStepResult.retry(NOW + timedelta(minutes=5)))
+    schedule.synchronize((new,))
+    before = schedule.snapshot()
+    assert not schedule.resolve_local(new, result, now=NOW)
+    assert schedule.snapshot() == before
+
+
+@pytest.mark.parametrize("removed", [False, True])
+def test_local_resolution_cannot_replace_old_scope_ticket_and_late_retry_floor(removed):
+    schedule = RecoverySchedule()
+    old, new = _requirement("A"), _requirement("A", "new-target")
+    sibling = _requirement("B")
+    schedule.synchronize((old, sibling))
+    ticket = schedule.claim(now=NOW)
+    if removed:
+        schedule.synchronize((sibling,))
+    schedule.synchronize((new, sibling))
+    before = schedule.snapshot()[0]
+    assert not schedule.resolve_local(new, RecoveryStepResult.ready(), now=NOW)
+    assert schedule.snapshot()[0] == before
+    assert schedule.resolve_local(sibling, RecoveryStepResult.ready(), now=NOW)
+    assert schedule._owned is ticket
+    assert schedule.claim(now=NOW) is None
+    assert not schedule.complete(ticket, RecoveryStepResult.retry(NOW + timedelta(minutes=5)))
+    assert schedule.snapshot()[0].next_retry_at == NOW + timedelta(minutes=5)
+
+
+@pytest.mark.parametrize("disposition", [RecoveryStepResult.ready(), RecoveryStepResult.blocked()])
+def test_local_resolution_does_not_rearm_terminal_state(disposition):
+    schedule = RecoverySchedule()
+    requirement = _requirement("A")
+    schedule.synchronize((requirement,))
+    assert schedule.resolve_local(requirement, disposition, now=NOW)
+    before = schedule.snapshot()
+    assert not schedule.resolve_local(
+        requirement, RecoveryStepResult.retry(NOW + timedelta(days=2)),
+        now=NOW + timedelta(days=1),
+    )
+    assert schedule.snapshot() == before
+
+
+def test_local_resolution_only_exact_current_and_does_not_rotate():
+    schedule = RecoverySchedule()
+    a, b, c = (_requirement(key) for key in "ABC")
+    schedule.synchronize((a, b, c))
+    assert not schedule.resolve_local(
+        _requirement("B", "stale"), RecoveryStepResult.ready(), now=NOW,
+    )
+    assert schedule.resolve_local(b, RecoveryStepResult.blocked(), now=NOW)
+    assert schedule.claim(now=NOW).requirement == a
+
+
+def test_local_retry_expiry_equality_is_eligible_but_replacement_must_be_future():
+    schedule = RecoverySchedule()
+    requirement = _requirement("A")
+    schedule.synchronize((requirement,))
+    assert schedule.resolve_local(
+        requirement, RecoveryStepResult.retry(NOW + timedelta(seconds=30)), now=NOW,
+    )
+    assert schedule.resolve_local(requirement, RecoveryStepResult.ready(),
+                                  now=NOW + timedelta(seconds=30))
+
+
+@pytest.mark.parametrize("result", [RecoveryStepResult(RecoveryDisposition.PENDING),
+                                   RecoveryStepResult.retry(NOW),
+                                   RecoveryStepResult.retry(NOW - timedelta(seconds=1))])
+def test_local_resolution_rejects_pending_and_nonfuture_retry(result):
+    schedule = RecoverySchedule()
+    requirement = _requirement("A")
+    schedule.synchronize((requirement,))
+    before = schedule.snapshot()
+    with pytest.raises(ValueError):
+        schedule.resolve_local(requirement, result, now=NOW)
+    assert schedule.snapshot() == before

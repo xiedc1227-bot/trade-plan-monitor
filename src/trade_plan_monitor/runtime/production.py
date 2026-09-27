@@ -84,6 +84,12 @@ from trade_plan_monitor.runtime.provider_contract import (
     ProviderSemanticContract,
     load_semantic_contract,
 )
+from trade_plan_monitor.runtime.reconciliation import (
+    MAINTENANCE_INTERVAL,
+    RecoveryRequirement,
+    RecoverySchedule,
+    RecoveryStepResult,
+)
 from trade_plan_monitor.runtime.recovery import (
     RecoveryAdmissionChangedError,
     RecoveryBatchResult,
@@ -156,6 +162,17 @@ _PERMISSION_SCOPES = (
     TushareOperation.REALTIME_MINUTES,
 )
 _STOCK_MINUTE_SCOPES = _PERMISSION_SCOPES[-2:]
+
+
+@dataclass(frozen=True, slots=True)
+class _StockRecoveryDemand:
+    """Latest local observation, not authority to fetch or commit a future attempt."""
+
+    requirement: RecoveryRequirement
+    capture: RecoveryCapture | None
+    missing_ends: tuple[datetime, ...]
+    permission_blocked: bool
+    permission_epoch: int
 
 
 class PermissionMaintenanceResult(StrEnum):
@@ -485,6 +502,10 @@ class ProductionMonitorPipeline:
         )
         self._runtime_generation = runtime_generation
         self._active_recovery_attempts: set[Event] = set()
+        self._stock_recovery_schedule = RecoverySchedule()
+        self._stock_recovery_demands: dict[str, _StockRecoveryDemand] = {}
+        self._stock_recovery_next_at: datetime | None = None
+        self._stock_recovery_binding: tuple[object, ...] | None = None
         self._recovery_configuration_revision = sha256(
             configuration.model_dump_json().encode("utf-8")
         ).hexdigest()
@@ -2823,6 +2844,106 @@ class ProductionMonitorPipeline:
         return ReferenceDependencyKey(
             trade_date, tuple(sorted(dependencies, key=lambda item: item.symbol)),
             semantics.semantic_revision if semantics is not None else None,
+        )
+
+    def next_stock_recovery_at(self) -> datetime | None:
+        """Read the owner cache only; never observe time, SQL, files or permissions."""
+        return self._stock_recovery_next_at
+
+    def _synchronize_stock_recovery(self) -> None:
+        """Explicit bounded local observation; no requests, loops or default wiring."""
+        now = self._clock.now()
+        if (not self._decision_commit_current() or self._admission_revoked()
+                or not self._generation_current() or self._recovery_authority_revoked.is_set()):
+            self._stock_recovery_next_at = None
+            raise RecoveryAdmissionChangedError("stock recovery owner authority changed")
+        client = self.provider._client
+        # Source/Event identity is exact; semantic metadata is not a dependency.
+        binding = (
+            self.provider, client, getattr(client, "_client", client),
+            self._recovery_authority_revoked, self._recovery_configuration_revision,
+            self._runtime_generation, self._recovery_authority_epoch(),
+            self.provider._source_time_label,
+            None if self._stock_semantics is None else self._stock_semantics.semantic_revision,
+        )
+        if self._stock_recovery_binding is not None and (
+            any(old is not new for old, new in zip(
+                self._stock_recovery_binding[:4], binding[:4], strict=True,
+            ))
+            or self._stock_recovery_binding[4:] != binding[4:]
+        ):
+            self._stock_recovery_next_at = None
+            raise RecoveryAdmissionChangedError("stock recovery owner binding changed")
+        previous = {item.requirement.scope_key: item
+                    for item in self._stock_recovery_schedule.snapshot()}
+        blocked = self._controller.is_permission_blocked(TushareOperation.CURRENT_DAY_MINUTES)
+        desired: dict[str, _StockRecoveryDemand] = {}
+        requirements = []
+        with self._work() as work:
+            records, total = work.plans.list_version_details(
+                offset=0, limit=10, status=PlanVersionStatus.ACTIVE,
+            )
+            if total > 10:
+                raise ValueError("production supports at most ten active plans")
+            target = self._recovery_target_in_work(work, now)
+            for record in sorted(records, key=lambda item: item.symbol):
+                identity = self._recovery_identity(work, record.symbol, now)
+                if identity is None:
+                    continue
+                key = f"stock-prefix:{record.symbol}"
+                old = self._stock_recovery_demands.get(key)
+                epoch = 0 if old is None else old.permission_epoch
+                if old is not None and old.permission_blocked and not blocked:
+                    epoch += 1
+                capture = None
+                missing = ()
+                if target.completed_minute_end is not None:
+                    client = self.provider._client
+                    capture = RecoveryCapture(
+                        record.symbol, target, completed_minute_ends(target), *identity,
+                        self._recovery_configuration_revision,
+                        None if self._stock_semantics is None
+                        else self._stock_semantics.semantic_revision,
+                        self._runtime_generation, self._recovery_authority_epoch(),
+                        self._recovery_authority_revoked, self.provider, client,
+                        getattr(client, "_client", client), self.provider._source_time_label,
+                    )
+                    missing = check_minute_coverage(
+                        required_ends=capture.required_ends,
+                        persisted_ends=self._recovery_covered_ends(work, capture),
+                        cutoff=target.completed_minute_end,
+                    ).missing_ends
+                revision = sha256(repr((
+                    identity, target.trade_date, target.completed_minute_end, epoch,
+                    tuple(id(item) for item in binding[:4]), binding[4:],
+                )).encode("utf-8")).hexdigest()
+                requirement = RecoveryRequirement(key, revision)
+                desired[key] = _StockRecoveryDemand(requirement, capture, missing, blocked, epoch)
+                requirements.append(
+                    previous[key].requirement if blocked and key in previous else requirement
+                )
+        if (self._recovery_authority_revoked.is_set()
+                or self._recovery_authority_epoch() != binding[6]
+                or self._admission_revoked() or not self._generation_current()):
+            self._stock_recovery_next_at = None
+            raise RecoveryAdmissionChangedError("stock recovery authority changed during read")
+        self._stock_recovery_binding = binding
+        self._stock_recovery_demands = desired
+        self._stock_recovery_schedule.synchronize(tuple(requirements))
+        # Local observation cannot consume the executor's round-robin turn.
+        for requirement in requirements:
+            demand = desired[requirement.scope_key]
+            if demand.permission_blocked:
+                result = RecoveryStepResult.blocked()
+            elif demand.capture is None:
+                result = RecoveryStepResult.retry(now + MAINTENANCE_INTERVAL)
+            elif not demand.missing_ends:
+                result = RecoveryStepResult.ready()
+            else:
+                continue
+            self._stock_recovery_schedule.resolve_local(requirement, result, now=now)
+        self._stock_recovery_next_at = (
+            self._stock_recovery_schedule.next_wake_at(now=now) if desired else None
         )
 
     async def recover_startup(self, trade_date: date) -> None:

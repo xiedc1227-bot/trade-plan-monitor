@@ -125,6 +125,36 @@ class RecoverySchedule:
         self._order.extend(key for key in keys if key not in self._order)
         self._entries = replacement
 
+    def resolve_local(
+        self, requirement: RecoveryRequirement, result: RecoveryStepResult, *, now: datetime,
+    ) -> bool:
+        """Set eligible exact local facts without consuming a round-robin turn.
+
+        Never supersede a physical owner, a future retry or terminal state. Only
+        deliberate requirement synchronization can rearm READY/BLOCKED entries.
+        """
+        if not isinstance(requirement, RecoveryRequirement):
+            raise TypeError("requirement must be a RecoveryRequirement")
+        if not isinstance(result, RecoveryStepResult):
+            raise TypeError("result must be a RecoveryStepResult")
+        current = _canonical_shanghai(now)
+        if result.disposition is RecoveryDisposition.PENDING or (
+            result.next_retry_at is not None and result.next_retry_at <= current
+        ):
+            raise ValueError("local resolution requires READY, BLOCKED or a future RETRY")
+        entry = self._entries.get(requirement.scope_key)
+        if (entry is None or entry.requirement != requirement
+                or (self._owned is not None
+                    and self._owned.requirement.scope_key == requirement.scope_key)
+                or entry.result.disposition in (
+                    RecoveryDisposition.READY, RecoveryDisposition.BLOCKED,
+                )
+                or (entry.result.next_retry_at is not None
+                    and current < entry.result.next_retry_at)):
+            return False
+        entry.result = result
+        return True
+
     def claim(self, *, now: datetime) -> RecoveryTicket | None:
         """Return at most one eligible step; absence never means business readiness."""
 
