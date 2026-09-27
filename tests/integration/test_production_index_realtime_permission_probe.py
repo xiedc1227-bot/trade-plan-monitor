@@ -749,11 +749,20 @@ def test_first_current_day_five_minute_bar_waits_until_093512(
             await _block(controller, TushareOperation.INDEX_REALTIME_MINUTES)
             runtime._clock.current = datetime(2026, 9, 8, 9, 35, tzinfo=SHANGHAI)
             before = tuple(sdk.calls)
+            raw = controller.raw_permission_retry_at(TushareOperation.INDEX_REALTIME_MINUTES)
+            rotation = pipeline._permission_rotation_state
             assert (
                 await pipeline._maybe_recheck_realtime_index_permission()
-                is PermissionMaintenanceResult.SKIPPED
+                is PermissionMaintenanceResult.DEFERRED
             )
             assert tuple(sdk.calls) == before
+            assert controller.raw_permission_retry_at(
+                TushareOperation.INDEX_REALTIME_MINUTES,
+            ) == raw
+            assert pipeline._permission_rotation_state == rotation
+            assert pipeline._permission_probe_deferred_until[
+                TushareOperation.INDEX_REALTIME_MINUTES
+            ] == datetime(2026, 9, 8, 9, 35, 12, tzinfo=SHANGHAI)
             assert state.next_index_permission_at() == datetime(
                 2026, 9, 8, 9, 35, 12, tzinfo=SHANGHAI,
             )

@@ -3664,14 +3664,7 @@ class ProductionMonitorPipeline:
         if deadline.kind is DeadlineKind.STOCK_RECOVERY:
             return await self.run_stock_recovery_unit()
         if deadline.kind is DeadlineKind.INDEX_PERMISSION:
-            realtime_due = self.next_realtime_index_permission_due_at()
-            historical_due = self.next_historical_index_permission_due_at()
-            if realtime_due is not None and (
-                historical_due is None or realtime_due < historical_due
-            ):
-                result = await self._maybe_recheck_realtime_index_permission()
-            else:
-                result = await self._maybe_recheck_historical_index_permission()
+            result = await self.run_permission_maintenance_unit()
             self._synchronize_authorized_stock_recovery()
             return result
         if deadline.kind is DeadlineKind.INDEX_RECOVERY:

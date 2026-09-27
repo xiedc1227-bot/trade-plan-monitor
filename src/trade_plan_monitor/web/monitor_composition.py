@@ -647,13 +647,7 @@ class _ProductionRuntimeState:
     def next_index_permission_at(self) -> datetime | None:
         if self._pipeline is None:
             return None
-        due = tuple(
-            candidate for candidate in (
-                self._pipeline.next_historical_index_permission_due_at(),
-                self._pipeline.next_realtime_index_permission_due_at(),
-            ) if candidate is not None
-        )
-        return min(due, default=None)
+        return self._pipeline.next_permission_probe_due_at()
 
     def bind_permission_scheduler(self, scheduler: MarketSessionScheduler) -> None:
         self._permission_scheduler = scheduler

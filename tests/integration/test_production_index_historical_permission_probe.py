@@ -25,6 +25,7 @@ from trade_plan_monitor.market_index.tushare import (
 from trade_plan_monitor.runtime.clock import SHANGHAI
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.production import PermissionMaintenanceResult
+from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.request_control import (
     ProviderRecoveryRepository,
     RecoveryCheckpoint,
@@ -337,6 +338,8 @@ def test_stale_authority_or_cooldown_cannot_start_historical_probe(
     monkeypatch,
     change,
 ) -> None:
+    from test_s3_permission_reservation_process import _business_rows
+
     async def scenario():
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
         try:
@@ -383,8 +386,20 @@ def test_stale_authority_or_cooldown_cannot_start_historical_probe(
                         work_key="shared-cooldown",
                     )
             before = tuple(sdk.calls)
-            await pipeline._maybe_recheck_historical_index_permission()
+            raw = control.raw_permission_retry_at(TushareOperation.INDEX_HISTORICAL_MINUTES)
+            rotation = pipeline._permission_rotation_state
+            business = _business_rows(tmp_path / "monitor.sqlite3")
+            if change in {"semantic", "configuration", "stopping"}:
+                with pytest.raises(RecoveryAdmissionChangedError):
+                    await pipeline._maybe_recheck_historical_index_permission()
+            else:
+                await pipeline._maybe_recheck_historical_index_permission()
             assert tuple(sdk.calls) == before
+            assert control.raw_permission_retry_at(
+                TushareOperation.INDEX_HISTORICAL_MINUTES,
+            ) == raw
+            assert pipeline._permission_rotation_state == rotation
+            assert _business_rows(tmp_path / "monitor.sqlite3") == business
             assert control.is_permission_blocked(TushareOperation.INDEX_HISTORICAL_MINUTES)
             if change == "cooldown":
                 assert pipeline.next_historical_index_permission_due_at() > pipeline._clock.now()
