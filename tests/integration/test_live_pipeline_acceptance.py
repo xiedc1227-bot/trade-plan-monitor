@@ -857,12 +857,28 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from sqlalchemy import func, select
+
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
+    from trade_plan_monitor.state.models import EvaluationResult, SymbolDecisionHead
 
     async def scenario() -> None:
         database = tmp_path / "monitor.sqlite3"
-        clock = ControlledClock(NOW.replace(hour=9, minute=0), released_sleeps=5)
+        parked = asyncio.Event()
+
+        class TimerClock(ControlledClock):
+            async def sleep_until(self, deadline):
+                self.sleep_calls.append(deadline)
+                if deadline <= NOW.replace(minute=5, second=12):
+                    assert len(self.sleep_calls) <= 12, "scheduler did not reach 10:05 target"
+                    self.current = max(self.current, deadline)
+                    await asyncio.sleep(0)
+                    return
+                parked.set()
+                await asyncio.Event().wait()
+
+        clock = TimerClock(NOW.replace(hour=9, minute=0))
         plan = _sample_plan()
         _activate_plans(database, clock, (plan,))
         # This fixture represents a restart of an already-running monitor.
@@ -909,6 +925,15 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
 
         first = create_monitor_composition(config_path=config, database_path=database)
         assert isinstance(first._runtime, RuntimeLifecycleService)
+        observed = []
+        original_run = first._runtime._run_deadline
+
+        async def capture(deadline):
+            observed.append((deadline, first._runtime.runtime_generation,
+                             first._runtime._schedule_owner))
+            return await original_run(deadline)
+
+        first._runtime._run_deadline = capture
         started = await first.start()
         assert started.status is RuntimeServiceStatus.RUNNING
         assert started.read_only is False
@@ -916,12 +941,28 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
 
         try:
             before = await _wait_for_decision_head(database, plan.symbol, clock)
+            await asyncio.wait_for(parked.wait(), timeout=5)
         except AssertionError as error:
             raise AssertionError(f"runtime={first.health()} calls={sdk.calls!r}") from error
         assert clock.sleep_calls
-        assert clock.sleep_calls[0] == NOW.replace(minute=1, second=12)
-        assert clock.sleep_calls[4] == NOW.replace(minute=5, second=12)
+        assert [deadline.due_at for deadline, _, _ in observed
+                if deadline.kind is DeadlineKind.REALTIME_MINUTE] == [
+            NOW.replace(minute=minute, second=12) for minute in range(1, 6)
+        ]
+        assert all(generation == started.runtime_generation and owner is first._runner_task
+                   for _, generation, owner in observed)
+        assert first.health().status is RuntimeServiceStatus.RUNNING
+        assert not first._runner_task.done()
         assert Counter(name for name, _ in sdk.calls)["rt_min"] == 5
+        assert before.result.evaluation_identity.bucket_end == NOW.replace(minute=5, second=0)
+        assert before.result.snapshot.evaluated_at == NOW.replace(minute=5, second=12)
+        engine, work_factory = _work_factory(database, clock)
+        try:
+            with work_factory() as work:
+                for model in (EvaluationResult, SymbolDecisionHead):
+                    assert work._session.scalar(select(func.count()).select_from(model)) == 1
+        finally:
+            engine.dispose()
         await first.stop()
         assert first.health().status is RuntimeServiceStatus.STOPPED
 
@@ -1463,7 +1504,16 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
     monkeypatch: pytest.MonkeyPatch,
     invalidated_by: str,
 ) -> None:
+    from sqlalchemy import delete, func, select
+
     import trade_plan_monitor.runtime.production as production
+    from trade_plan_monitor.market_data.models import MinuteBar
+    from trade_plan_monitor.state.models import (
+        EvaluationResult,
+        LatestQuote,
+        MarketIndexSnapshot,
+        SymbolDecisionHead,
+    )
 
     async def scenario() -> None:
         clock = ControlledClock(INDEX_CUTOFF.replace(hour=9, minute=0))
@@ -1549,6 +1599,34 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
         def work_factory() -> SqlAlchemyUnitOfWork:
             return SqlAlchemyUnitOfWork(sessions, clock=clock.now)
 
+        # Persist only historical input: startup now repairs at most one symbol.
+        symbols = tuple(plan.symbol for plan in plans)
+        prefix = tuple(INDEX_CUTOFF.replace(hour=9, minute=31) + timedelta(minutes=offset)
+                       for offset in range(64))
+        with work_factory() as work:
+            assert all(work.history.get_latest_quote(symbol) is None for symbol in symbols)
+            work.history.upsert_minutes(tuple(
+                MinuteBar(
+                    symbol=symbol, bar_end=end, open_fen=6400, high_fen=6410,
+                    low_fen=6390, close_fen=6405, volume_shares=1000,
+                    amount_yuan=Decimal("64000"), received_at=clock.now(),
+                )
+                for symbol in symbols for end in prefix
+            ))
+            # The repository derives replaceable quotes; this fixture seeds minutes only.
+            work._session.execute(delete(LatestQuote).where(LatestQuote.symbol.in_(symbols)))
+            work.commit()
+        with work_factory() as work:
+            persisted = []
+            for symbol in symbols:
+                bars = work.history.list_minutes(symbol, start=prefix[0], end=INDEX_CUTOFF)
+                assert tuple(bar.bar_end for bar in bars) == prefix
+                assert work.history.get_latest_quote(symbol) is None
+                persisted.extend(bars)
+            assert len(persisted) == 320
+            for model in (EvaluationResult, SymbolDecisionHead, MarketIndexSnapshot):
+                assert work._session.scalar(select(func.count()).select_from(model)) == 0
+
         pipeline = ProductionMonitorPipeline(
             configuration=load_application_config(config).tushare,
             certification_directory=tmp_path / "data" / "live-certification",
@@ -1582,6 +1660,7 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
 
             await pipeline.refresh_references(INDEX_CUTOFF.date())
             await pipeline.recover_startup(INDEX_CUTOFF.date())
+            assert Counter(name for name, _ in sdk.calls)["rt_min_daily"] <= 1
             results = await pipeline.run_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
@@ -1597,6 +1676,17 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
                 for result in results
                 if result.evaluation_result is not None
             }
+            assert len(results) == len(decisions) == 5
+            assert set(decisions) == set(symbols)
+            with work_factory() as work:
+                for symbol in symbols:
+                    bars = work.history.list_minutes(
+                        symbol, start=prefix[0], end=INDEX_CUTOFF,
+                    )
+                    assert tuple(bar.bar_end for bar in bars) == (*prefix, INDEX_CUTOFF)
+                    head = work.projections.get_decision_head(symbol)
+                    assert head is not None and head.activation_revision == 1
+                    assert head.result == decisions[symbol]
             first_snapshot = decisions[same_index_one.symbol].snapshot.reference_market
             second_snapshot = decisions[same_index_two.symbol].snapshot.reference_market
             assert first_snapshot is not None and second_snapshot is not None

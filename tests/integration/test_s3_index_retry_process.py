@@ -27,6 +27,7 @@ from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
 from trade_plan_monitor.market_data.models import TradingDay
 from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, DeliveryChannel
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+from trade_plan_monitor.runtime.scheduler import DeadlineKind
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import RuntimeLiveness
 from trade_plan_monitor.state.repositories import ManualEventRiskStatus
@@ -191,25 +192,63 @@ def _composition_child(root, phase, required_code, reports):
         async def next_sleep():
             return await asyncio.wait_for(clock.waiting.get(), timeout=20)
 
+        runtime = composition._runtime
+        original_run = runtime._run_deadline
+        completed = []
+        index_intervals = []
+        stock_intervals = []
+
+        async def observe(deadline):
+            before = capture()
+            result = await original_run(deadline)
+            after = capture()
+            completed.append((deadline, str(runtime.runtime_generation),
+                              runtime._schedule_owner is composition._runner_task))
+            if deadline.kind is DeadlineKind.INDEX_RECOVERY:
+                index_intervals.append((deadline, before, after))
+            elif deadline.kind is DeadlineKind.STOCK_RECOVERY:
+                stock_intervals.append((deadline, before, after))
+            return result
+
+        runtime._run_deadline = observe
+
         try:
             health = await composition.start()
             assert health.status is RuntimeServiceStatus.RUNNING, health
             pending = await next_sleep()
             stages["startup"] = capture()
             stages["first_sleep"] = pending[0]
-            pending[1].set()
-            pending = await next_sleep()
-            stages["first_wake"] = capture()
+            # Maintenance wakes can precede the market/retry duty under observation.
+            for _ in range(32):
+                pending[1].set()
+                pending = await next_sleep()
+                if phase == "failure" and any(
+                    deadline.kind is DeadlineKind.REALTIME_MINUTE
+                    and deadline.bar_end == CUTOFF for deadline, _, _ in completed
+                ):
+                    stages["first_market"] = capture()
+                    break
+                if phase == "restart" and index_intervals:
+                    stages["index_recovered"] = capture()
+                    break
+            else:
+                raise AssertionError("scheduler did not complete the required market/retry duty")
             if phase == "restart":
                 # Let normal minute wakes run up to the next five-minute decision cutoff.
-                for _ in range(10):
-                    if clock.now() >= NEXT_CUTOFF + timedelta(seconds=12):
+                for _ in range(32):
+                    if any(deadline.kind is DeadlineKind.REALTIME_MINUTE
+                           and deadline.bar_end == NEXT_CUTOFF
+                           for deadline, _, _ in completed):
                         break
+                    assert pending[0] <= NEXT_CUTOFF + timedelta(seconds=12)
                     pending[1].set()
                     pending = await next_sleep()
                 else:
                     raise AssertionError("scheduler did not reach next legal five-minute cutoff")
                 stages["next_market"] = capture()
+            stages["completed"] = tuple(completed)
+            stages["index_intervals"] = tuple(index_intervals)
+            stages["stock_intervals"] = tuple(stock_intervals)
             stages["sleeps"] = tuple(clock.sleep_calls)
         finally:
             await composition.stop()
@@ -299,8 +338,14 @@ def test_required_index_retry_survives_clean_process_restart_via_scheduler(tmp_p
     dependent, independent = _seed(tmp_path, monkeypatch)
     required_code = dependent.reference_market.index_code.value
     first = _run_process(tmp_path, "failure", required_code)
-    failed = first["first_wake"]
-    assert first["first_sleep"] == CUTOFF + timedelta(seconds=12)
+    failed = first["first_market"]
+    first_market, = [deadline for deadline, _, _ in first["completed"]
+                     if deadline.kind is DeadlineKind.REALTIME_MINUTE]
+    assert first_market.bar_end == CUTOFF
+    assert first_market.due_at == CUTOFF + timedelta(seconds=12)
+    assert failed["now"] == first_market.due_at.isoformat()
+    assert all(generation == first["startup"]["generation"] and same_owner
+               for _, generation, same_owner in first["completed"])
     assert failed["status"] == "RUNNING"
     assert failed["generation"] == first["startup"]["generation"]
     assert [event["symbol"] for event in failed["delivered"]] == [INDEPENDENT]
@@ -332,17 +377,30 @@ def test_required_index_retry_survives_clean_process_restart_via_scheduler(tmp_p
 
     second = _run_process(tmp_path, "restart", required_code)
     assert first["pid"] != second["pid"]
-    startup, recovered, market = (second[key] for key in ("startup", "first_wake", "next_market"))
+    startup, recovered, market = (second[key] for key in (
+        "startup", "index_recovered", "next_market",
+    ))
     assert startup["generation"] != failed["generation"]
-    assert startup["retry_at"] == failed["retry_at"] == second["first_sleep"]
+    assert startup["retry_at"] == failed["retry_at"]
     assert startup["state"]["market_index_recovery_state"] == (retry,)
     assert _index_head(startup["state"], required_code, CUTOFF)[1] == failed_head
     for table in BUSINESS_TABLES:
         assert startup["state"][table] == failed["state"][table], table
-    _assert_index_only(startup, recovered, required_code)
+    retry_deadline, retry_before, retry_after = second["index_intervals"][0]
+    assert len(second["index_intervals"]) == 1
+    assert retry_deadline.due_at == failed["retry_at"]
+    _assert_index_only(retry_before, retry_after, required_code)
+    for table in BUSINESS_TABLES:
+        assert recovered["state"][table] == startup["state"][table], table
+    assert recovered["delivered"] == startup["delivered"] == ()
+    assert all(generation == startup["generation"] and same_owner
+               for _, generation, same_owner in second["completed"])
+    assert sum(deadline.kind is DeadlineKind.REALTIME_MINUTE
+               and deadline.bar_end == NEXT_CUTOFF
+               for deadline, _, _ in second["completed"]) == 1
     # Negative oracle controls mutate copied observations, never product state or policy.
     for violation in ("stock", "evaluation_result", "alert_event", "send"):
-        changed = deepcopy(recovered)
+        changed = deepcopy(retry_after)
         if violation == "stock":
             changed["calls"] += (("rt_min", {"ts_code": DEPENDENT}),)
         elif violation == "send":
@@ -350,7 +408,7 @@ def test_required_index_retry_survives_clean_process_restart_via_scheduler(tmp_p
         else:
             changed["state"][violation] += (deepcopy(changed["state"][violation][0]),)
         with pytest.raises(AssertionError):
-            _assert_index_only(startup, changed, required_code)
+            _assert_index_only(retry_before, changed, required_code)
     snapshot, head = _index_head(recovered["state"], required_code, CUTOFF)
     assert snapshot["health"] == "LIVE"
     assert datetime.fromisoformat(snapshot["decision_cutoff"]) == CUTOFF

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -28,6 +28,24 @@ async def _until(predicate) -> None:
     await asyncio.wait_for(poll(), timeout=5)
 
 
+def _release_through(clock, final_due):
+    """Allow real scheduler duties through the crossing trigger, then freeze time."""
+    parked = asyncio.Event()
+
+    async def sleep_until(deadline):
+        clock.sleep_calls.append(deadline)
+        if deadline <= final_due:
+            assert len(clock.sleep_calls) <= 10, "scheduler failed to reach crossing trigger"
+            clock.current = max(clock.current, deadline)
+            await asyncio.sleep(0)
+            return
+        parked.set()
+        await asyncio.Event().wait()
+
+    clock.sleep_until = sleep_until
+    return parked
+
+
 def test_runtime_run_consumes_still_fresh_market_target_after_sdk_crosses_due(
     tmp_path, monkeypatch,
 ) -> None:
@@ -39,11 +57,12 @@ def test_runtime_run_consumes_still_fresh_market_target_after_sdk_crosses_due(
         runtime = composition._runtime
         first_due = datetime(2026, 9, 8, 10, 4, 12, tzinfo=SHANGHAI)
         crossed_due = datetime(2026, 9, 8, 10, 5, 12, tzinfo=SHANGHAI)
-        observed: list[tuple[MarketDeadline, object]] = []
+        observed: list[tuple[MarketDeadline, object, object]] = []
+        completed: list[MarketDeadline] = []
         crossed_in_sdk = False
         health_revision_after_first: int | None = None
         try:
-            runtime._clock.released_sleeps = 4
+            parked = _release_through(runtime._clock, first_due)
             original_minutes = sdk._stock_minutes
 
             def cross_due_in_started_sdk(name, kwargs):
@@ -61,8 +80,10 @@ def test_runtime_run_consumes_still_fresh_market_target_after_sdk_crosses_due(
 
             async def capture(deadline: MarketDeadline):
                 nonlocal health_revision_after_first
-                observed.append((deadline, runtime.health().runtime_generation))
+                observed.append((deadline, runtime.health().runtime_generation,
+                                 runtime._schedule_owner))
                 result = await original_run(deadline)
+                completed.append(deadline)
                 if deadline.due_at == first_due:
                     state = runtime._probe_capabilities.__self__
                     with state._session_factory() as session:
@@ -74,14 +95,19 @@ def test_runtime_run_consumes_still_fresh_market_target_after_sdk_crosses_due(
             runtime._run_deadline = capture
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             generation = runtime.health().runtime_generation
-            await _until(lambda: crossed_in_sdk and len(runtime._clock.sleep_calls) >= 5)
+            await _until(lambda: crossed_in_sdk and any(
+                deadline.due_at == crossed_due for deadline in completed
+            ) and parked.is_set())
 
-            assert all(deadline.kind is DeadlineKind.REALTIME_MINUTE for deadline, _ in observed)
-            assert [deadline.due_at for deadline, _ in observed].count(first_due) == 1
+            assert all(deadline.kind in {DeadlineKind.REALTIME_MINUTE, DeadlineKind.STOCK_RECOVERY}
+                       for deadline, _, _ in observed)
+            market = [deadline.due_at for deadline, _, _ in observed
+                      if deadline.kind is DeadlineKind.REALTIME_MINUTE]
+            assert market == [first_due + timedelta(minutes=offset) for offset in range(-3, 2)]
             assert runtime._clock.now() == crossed_due.replace(second=13)
             assert generation == runtime.health().runtime_generation
-            assert [deadline.due_at for deadline, _ in observed].count(crossed_due) == 1
-            assert all(item_generation == generation for _, item_generation in observed)
+            assert all(item_generation == generation for _, item_generation, _ in observed)
+            assert all(owner is composition._runner_task for _, _, owner in observed)
 
             state = runtime._probe_capabilities.__self__
             with state._session_factory() as session:
@@ -119,12 +145,14 @@ def test_invalid_elapsed_review_stays_read_only_and_visible_without_runner_exit(
         )
         runtime = composition._runtime
         first_due = datetime(2026, 9, 8, 10, 4, 12, tzinfo=SHANGHAI)
-        runtime._clock.released_sleeps = 4
+        _release_through(runtime._clock, first_due)
         original_run = runtime._run_deadline
         changed = False
+        observed = []
 
         async def jump_after_handler(deadline: MarketDeadline):
             nonlocal changed
+            observed.append((deadline, runtime.runtime_generation, runtime._schedule_owner))
             result = await original_run(deadline)
             if deadline.due_at == first_due:
                 runtime._clock.current = clock_after_handler
@@ -134,6 +162,7 @@ def test_invalid_elapsed_review_stays_read_only_and_visible_without_runner_exit(
         runtime._run_deadline = jump_after_handler
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            generation = runtime.runtime_generation
             await _until(lambda: changed)
             await _until(lambda: (
                 composition._runner_task.done()
@@ -147,8 +176,16 @@ def test_invalid_elapsed_review_stays_read_only_and_visible_without_runner_exit(
             assert health.next_retry_at is None
             assert not composition._runner_task.done()
             assert runtime._last_deadline_at == first_due
+            assert runtime.runtime_generation == generation
+            assert all(item_generation == generation and owner is composition._runner_task
+                       for _, item_generation, owner in observed)
+            assert [deadline.due_at for deadline, _, _ in observed
+                    if deadline.kind is DeadlineKind.REALTIME_MINUTE] == [
+                first_due + timedelta(minutes=offset) for offset in range(-3, 1)
+            ]
             with runtime._probe_capabilities.__self__._session_factory() as session:
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
         finally:
             await composition.stop()
 
