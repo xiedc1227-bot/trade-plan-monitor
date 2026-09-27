@@ -2898,6 +2898,7 @@ class RuntimeLifecycleService:
         retry_interval_seconds: float = 30.0,
         retry_wait: Callable[[asyncio.Event, float], Awaitable[_RetryWaitOutcome]] | None = None,
         shutdown_timeout_seconds: float = 5.0,
+        revoke_active_recovery_attempts: Callable[[], None] | None = None,
     ) -> None:
         if not isinstance(clock, Clock):
             raise TypeError("clock must implement Clock")
@@ -2917,6 +2918,10 @@ class RuntimeLifecycleService:
             raise TypeError("runtime lifecycle dependencies must be callable")
         if can_schedule is not None and not callable(can_schedule):
             raise TypeError("can_schedule must be callable")
+        if revoke_active_recovery_attempts is not None and not callable(
+            revoke_active_recovery_attempts
+        ):
+            raise TypeError("revoke_active_recovery_attempts must be callable")
         if configuration_restart_required is not None and not callable(
             configuration_restart_required
         ):
@@ -2963,6 +2968,12 @@ class RuntimeLifecycleService:
         self._can_schedule = can_schedule or self._all_capabilities_ready
         self._refresh_references = refresh_references
         self._recover_startup = recover_startup
+        self._revoke_active_recovery_attempts = (
+            (lambda: None)
+            if revoke_active_recovery_attempts is None else revoke_active_recovery_attempts
+        )
+        self._recovery_revocation_error: BaseException | None = None
+        self._recovery_revocation_error_reported = False
         self._scheduler = scheduler
         self._run_deadline = run_deadline
         self._dispatcher = dispatcher
@@ -3450,6 +3461,16 @@ class RuntimeLifecycleService:
             return
         self._stopping = True
         self._accepting_work = False
+        try:
+            self._revoke_active_recovery_attempts()
+        except BaseException as error:
+            if self._recovery_revocation_error is None or self._recovery_revocation_error_reported:
+                self._recovery_revocation_error = error
+                self._recovery_revocation_error_reported = False
+        else:
+            if self._recovery_revocation_error_reported:
+                self._recovery_revocation_error = None
+                self._recovery_revocation_error_reported = False
         begin_shutdown = getattr(self._dispatcher, "begin_shutdown", None)
         if callable(begin_shutdown):
             begin_shutdown()
@@ -3500,7 +3521,7 @@ class RuntimeLifecycleService:
         self._heartbeat_stop.set()
         if self._shutdown_requested_event is not None:
             self._shutdown_requested_event.set()
-        first_error: BaseException | None = None
+        first_error: BaseException | None = self._recovery_revocation_error
         if not self._request_controller_admission_closed:
             try:
                 await self._invoke(self._request_controller.close)
@@ -3576,7 +3597,7 @@ class RuntimeLifecycleService:
             try:
                 await self._invoke(operation)
             except BaseException as error:
-                if first_error is None:
+                if first_error is None or first_error is self._recovery_revocation_error:
                     first_error = error
             else:
                 setattr(self, state_name, True)
@@ -3701,6 +3722,12 @@ class RuntimeLifecycleService:
         )
 
     def _record_cleanup_failure(self, error: BaseException) -> None:
+        revocation_error = self._recovery_revocation_error
+        if revocation_error is not None:
+            if error is not revocation_error:
+                # Preserve the primary drain error and its original exception cause.
+                error.recovery_revocation_error = revocation_error
+            self._recovery_revocation_error_reported = True
         if self._cleanup_complete or self._cleanup_failed:
             return
         self._cleanup_failed = True

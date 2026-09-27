@@ -6,12 +6,13 @@ import asyncio
 import re
 import threading
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy.exc import SQLAlchemyError
 
 from trade_plan_monitor.market_data.models import AShareSymbol, MinuteBar, ShanghaiDatetime
 from trade_plan_monitor.market_data.provider import MarketDataProvider
@@ -31,6 +32,7 @@ from trade_plan_monitor.runtime.request_control import (
     TushareOperation,
     TushareRequestController,
 )
+from trade_plan_monitor.state.repositories import RepositoryError
 
 _MAX_ACTIVE_SYMBOLS = 10
 _MAX_RECOVERY_BARS = 240
@@ -67,6 +69,10 @@ class RecoveryErrorCode(StrEnum):
     PERSISTENCE_FAILED = "PERSISTENCE_FAILED"
 
 
+class RecoveryAdmissionChangedError(RuntimeError):
+    """A frozen acquisition lost authority and must be captured again."""
+
+
 @dataclass(frozen=True)
 class ScopedRecoveryResult:
     """Minute evidence only, never plan readiness or permission to evaluate.
@@ -82,6 +88,7 @@ class ScopedRecoveryResult:
     next_retry_at: datetime | None = None
     yielded_to_realtime: bool = False
     retarget_required: bool = False
+    persistence_error: Exception | None = field(default=None, repr=False, compare=False)
 
     @property
     def ready(self) -> bool:
@@ -269,6 +276,10 @@ class RecoveryService:
         required_ends: tuple[datetime, ...],
         read_persisted_ends: ReadPersistedEnds,
         now: Callable[[], datetime],
+        persist_selected: PersistMinutes | None = None,
+        admission_current: Callable[[], bool] | None = None,
+        fetch_current_day: Callable[[], object] | None = None,
+        cancelled: threading.Event | None = None,
     ) -> ScopedRecoveryResult:
         """Acquire at most one symbol and verify its bounded persisted requirement.
 
@@ -289,9 +300,15 @@ class RecoveryService:
         )
         result = ScopedRecoveryResult(symbol, target, empty)
 
+        cancelled = cancelled if cancelled is not None else threading.Event()
+
         def clock_matches() -> bool:
             current = _canonical_shanghai(now())
-            return current >= target.observed_at and current.date() == target.observed_at.date()
+            return (
+                current >= target.observed_at and current.date() == target.observed_at.date()
+                and not cancelled.is_set()
+                and (admission_current is None or admission_current())
+            )
 
         def read_coverage() -> MinuteCoverage:
             return check_minute_coverage(
@@ -304,8 +321,11 @@ class RecoveryService:
                 return replace(result, retarget_required=True)
             try:
                 result = replace(result, coverage=read_coverage())
-            except Exception:
-                return replace(result, error_code=RecoveryErrorCode.PERSISTENCE_FAILED)
+            except RecoveryAdmissionChangedError:
+                return replace(result, retarget_required=True)
+            except (OSError, SQLAlchemyError, RepositoryError) as error:
+                return replace(result, error_code=RecoveryErrorCode.PERSISTENCE_FAILED,
+                               persistence_error=error)
             if not clock_matches():
                 return replace(result, retarget_required=True)
             if result.ready or target.completed_minute_end is None:
@@ -319,7 +339,10 @@ class RecoveryService:
             if self._should_yield():
                 return replace(result, yielded_to_realtime=True)
             try:
-                raw_rows = await self._execute_joined(symbol=symbol, before_start=clock_matches)
+                raw_rows = await self._execute_joined(
+                    symbol=symbol, before_start=clock_matches,
+                    fetch_current_day=fetch_current_day, cancelled=cancelled,
+                )
             except RequestNotStartedError:
                 return replace(result, retarget_required=True)
             except RequestControlError as error:
@@ -340,10 +363,13 @@ class RecoveryService:
             selected = tuple(row for row in rows if row.bar_end in current_missing)
             try:
                 if selected:
-                    self._persist_minutes(selected)
+                    (persist_selected or self._persist_minutes)(selected)
                 result = replace(result, coverage=read_coverage())
-            except Exception:
-                return replace(result, error_code=RecoveryErrorCode.PERSISTENCE_FAILED)
+            except RecoveryAdmissionChangedError:
+                return replace(result, retarget_required=True)
+            except (OSError, SQLAlchemyError, RepositoryError) as error:
+                return replace(result, error_code=RecoveryErrorCode.PERSISTENCE_FAILED,
+                               persistence_error=error)
             return replace(result, retarget_required=not clock_matches())
 
     async def recover_startup(self, *, trade_date: date) -> RecoveryBatchResult:
@@ -538,11 +564,17 @@ class RecoveryService:
         *,
         symbol: str,
         before_start: Callable[[], bool] | None = None,
+        fetch_current_day: Callable[[], object] | None = None,
+        cancelled: threading.Event | None = None,
     ) -> object:
+        cancelled = cancelled if cancelled is not None else threading.Event()
         request = asyncio.create_task(
             self._request_controller.execute(
                 TushareOperation.CURRENT_DAY_MINUTES,
-                lambda: self._current_day_call(symbol, before_start=before_start),
+                lambda: self._current_day_call(
+                    symbol, before_start=before_start,
+                    fetch_current_day=fetch_current_day,
+                ),
                 work_key=f"recovery:{symbol}",
                 priority=RequestPriority.RECOVERY,
             )
@@ -550,6 +582,7 @@ class RecoveryService:
         try:
             return await asyncio.shield(request)
         except asyncio.CancelledError:
+            cancelled.set()
             try:
                 await request
             except Exception:
@@ -560,6 +593,7 @@ class RecoveryService:
 
     def _current_day_call(
         self, symbol: str, *, before_start: Callable[[], bool] | None = None,
+        fetch_current_day: Callable[[], object] | None = None,
     ) -> object:
         if before_start is not None and not before_start():
             raise RequestNotStartedError("recovery target changed before provider start")
@@ -571,6 +605,8 @@ class RecoveryService:
                 ) from None
             self._physical_active = True
         try:
+            if fetch_current_day is not None:
+                return fetch_current_day()
             return self._provider.current_day_minutes(symbol)
         finally:
             with self._physical_condition:

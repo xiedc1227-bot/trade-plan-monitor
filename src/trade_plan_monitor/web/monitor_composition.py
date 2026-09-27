@@ -11,7 +11,7 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from threading import Event
+from threading import Event, RLock
 from typing import Protocol
 from uuid import UUID
 
@@ -121,6 +121,8 @@ class _ProcessRuntimeBaseline:
     stock_semantic_revision: str | None = None
     index_semantic_revision: str | None = None
     revoked: Event = field(default_factory=Event)
+    authority_lock: object = field(default_factory=RLock)
+    authority_epoch: int = 0
 
 
 def _provider_recovery_identity(endpoint: str) -> str:
@@ -782,8 +784,9 @@ class _ProductionRuntimeState:
         except BaseException:
             self._engine.dispose()
             raise
-        self._database_status = RuntimeResourceStatus.READY
-        self._wal_status = RuntimeResourceStatus.READY
+        with self._process_baseline.authority_lock:
+            self._database_status = RuntimeResourceStatus.READY
+            self._wal_status = RuntimeResourceStatus.READY
 
     async def load_active_symbols(self) -> tuple[str, ...]:
         return await to_thread.run_sync(self._load_active_symbols_sync)
@@ -960,6 +963,9 @@ class _ProductionRuntimeState:
                 configuration_current=self.configuration_is_current,
                 admission_revoked=self._process_baseline.revoked.is_set,
                 on_semantic_revoked=self._revoke_semantics,
+                recovery_authority_lock=self._process_baseline.authority_lock,
+                recovery_authority_epoch=lambda: self._process_baseline.authority_epoch,
+                recovery_authority_revoked=self._process_baseline.revoked,
                 generation_current=lambda: (
                     self._database_status is RuntimeResourceStatus.READY
                     and self._business_commit_admission_open()
@@ -973,6 +979,11 @@ class _ProductionRuntimeState:
         """Semantic compatibility permits guarded requests; health stays observation-based."""
 
         return self._pipeline is not None
+
+    def revoke_active_recovery_attempts(self) -> None:
+        """Also safe while a startup candidate has no published pipeline yet."""
+        if self._pipeline is not None:
+            self._pipeline.revoke_active_recovery_attempts()
 
     async def refresh_references(self, trade_date: date) -> None:
         if self._pipeline is not None and self._pipeline._stock_semantics is not None:
@@ -1175,7 +1186,9 @@ class _ProductionRuntimeState:
     def _revoke_configuration(self) -> None:
         """Publish revocation now; leave the visible latch to the owning loop."""
 
-        self._process_baseline.revoked.set()
+        with self._process_baseline.authority_lock:
+            self._process_baseline.revoked.set()
+            self._process_baseline.authority_epoch += 1
         loop = self._owner_loop
         if loop is None:
             self._configuration_restart_required = True
@@ -1193,7 +1206,9 @@ class _ProductionRuntimeState:
         self._configuration_restart_required = True
 
     def _revoke_semantics(self) -> None:
-        self._process_baseline.revoked.set()
+        with self._process_baseline.authority_lock:
+            self._process_baseline.revoked.set()
+            self._process_baseline.authority_epoch += 1
         loop = self._owner_loop
         if loop is None:
             self._semantic_reload_blocked = True
@@ -1355,6 +1370,7 @@ def create_monitor_composition(
             can_schedule=state.can_schedule,
             refresh_references=state.refresh_references,
             recover_startup=state.recover_startup,
+            revoke_active_recovery_attempts=state.revoke_active_recovery_attempts,
             scheduler=scheduler,
             run_deadline=state.run_deadline,
             dispatcher=dispatcher,

@@ -6,8 +6,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
+from hashlib import sha256
 from pathlib import Path
-from threading import Event, Lock
+from threading import Event, Lock, RLock
 from typing import Literal
 from uuid import UUID
 
@@ -84,9 +85,19 @@ from trade_plan_monitor.runtime.provider_contract import (
     load_semantic_contract,
 )
 from trade_plan_monitor.runtime.recovery import (
+    RecoveryAdmissionChangedError,
     RecoveryBatchResult,
     RecoveryErrorCode,
+    RecoveryMode,
     RecoveryService,
+    RecoverySymbolResult,
+)
+from trade_plan_monitor.runtime.recovery_targets import (
+    RecoveryCapture,
+    check_minute_coverage,
+    completed_minute_ends,
+    derive_recovery_target,
+    select_current_day_rows,
 )
 from trade_plan_monitor.runtime.request_control import (
     LIVE_TUSHARE_MIN_INTERVAL,
@@ -452,6 +463,9 @@ class ProductionMonitorPipeline:
         generation_current: Callable[[], bool] | None = None,
         admission_revoked: Callable[[], bool] | None = None,
         on_semantic_revoked: Callable[[], None] | None = None,
+        recovery_authority_lock=None,
+        recovery_authority_epoch: Callable[[], int] | None = None,
+        recovery_authority_revoked: Event | None = None,
         permission_market_window: (
             Callable[[datetime, datetime], tuple[tuple[datetime, bool], ...]] | None
         ) = None,
@@ -462,6 +476,18 @@ class ProductionMonitorPipeline:
         self._generation_current = generation_current or (lambda: True)
         self._admission_revoked = admission_revoked or (lambda: False)
         self._on_semantic_revoked = on_semantic_revoked or (lambda: None)
+        self._recovery_authority_lock = (
+            recovery_authority_lock if recovery_authority_lock is not None else RLock()
+        )
+        self._recovery_authority_epoch = recovery_authority_epoch or (lambda: 0)
+        self._recovery_authority_revoked = (
+            recovery_authority_revoked if recovery_authority_revoked is not None else Event()
+        )
+        self._runtime_generation = runtime_generation
+        self._active_recovery_attempts: set[Event] = set()
+        self._recovery_configuration_revision = sha256(
+            configuration.model_dump_json().encode("utf-8")
+        ).hexdigest()
         self._permission_market_window = permission_market_window
         self._work = unit_of_work_factory
         self._certifications = certification_directory
@@ -2823,8 +2849,190 @@ class ProductionMonitorPipeline:
                     else None
                 ),
             )
-        result = await self.recovery.recover_startup(trade_date=trade_date)
-        _ensure_recovery_complete(result)
+        results = []
+        for symbol in symbols:
+            capture = self._capture_recovery_scope(symbol)
+            if capture is None or capture.target.trade_date != trade_date:
+                continue
+            result = await self._recover_frozen_scope(capture)
+            if result.persistence_error is not None:
+                raise result.persistence_error
+            if result.retarget_required or result.yielded_to_realtime:
+                raise RuntimeError("startup recovery failed")
+            results.append(RecoverySymbolResult(
+                symbol=symbol, error_code=result.error_code, next_retry_at=result.next_retry_at,
+            ))
+        _ensure_recovery_complete(RecoveryBatchResult(
+            mode=RecoveryMode.STARTUP, trade_date=trade_date, results=tuple(results),
+        ))
+
+    @staticmethod
+    def _recovery_identity(work, symbol: str, observed_at: datetime):
+        """Read all current identity components in the caller's owned transaction."""
+        active = work.plans.get_active(symbol)
+        state = work.plans.get_activation_state(symbol)
+        if active is None or state is None:
+            return None
+        version = work.plans.get_version_details(active.plan_version_id)
+        if version is None or version.status != PlanVersionStatus.ACTIVE:
+            return None
+        plan = load_plan_json(version.payload_json)
+        if not (
+            active.plan_version_id == state.plan_version_id == version.id
+            and active.symbol == state.symbol == version.symbol == plan.symbol == symbol
+            and active.revision == state.revision > 0
+            and active.activated_at == state.changed_at <= observed_at
+            and version.plan_id == plan.plan_id and version.version == plan.version
+            and version.plan_hash == plan_sha256(plan)
+            and version.payload_json == dump_plan_json(plan)
+            and activation_is_eligible_on(plan.activation, observed_at.date())
+        ):
+            return None
+        return (plan.plan_id, plan.version, version.id, version.plan_hash,
+                version.payload_json, active.revision, active.activated_at)
+
+    @staticmethod
+    def _recovery_target_in_work(work, observed_at: datetime):
+        days = work.references.list_trading_days("SSE", observed_at.date(), observed_at.date())
+        known = None if len(days) != 1 else days[0].is_open
+        if observed_at.weekday() >= 5 and known is True:
+            known = None
+        return derive_recovery_target(now=observed_at, is_open_on=lambda _: known)
+
+    def _capture_recovery_scope(self, symbol: str) -> RecoveryCapture | None:
+        observed_at = self._clock.now()
+        if not self._decision_commit_current():
+            raise RecoveryAdmissionChangedError("recovery authority changed before capture")
+        with self._recovery_authority_lock:
+            epoch = self._recovery_authority_epoch()
+            revoked = self._recovery_authority_revoked
+        with self._work() as work:
+            identity = self._recovery_identity(work, symbol, observed_at)
+            target = self._recovery_target_in_work(work, observed_at)
+        if identity is None or target.completed_minute_end is None:
+            return None
+        client = self.provider._client
+        capture = RecoveryCapture(
+            symbol, target, completed_minute_ends(target), *identity,
+            self._recovery_configuration_revision,
+            None if self._stock_semantics is None else self._stock_semantics.semantic_revision,
+            self._runtime_generation, epoch, revoked,
+            self.provider, client, getattr(client, "_client", client),
+            self.provider._source_time_label,
+        )
+        if not self._recovery_memory_current(capture, Event()):
+            raise RecoveryAdmissionChangedError("recovery authority changed during capture")
+        return capture
+
+    def _recovery_memory_current(self, capture: RecoveryCapture, cancelled: Event) -> bool:
+        """Thread-safe memory/clock only; never load a file, query SQL or inspect a Task."""
+        now = self._clock.now()
+        return (
+            not cancelled.is_set()
+            and capture.target.observed_at <= now
+            and now.date() == capture.target.observed_at.date()
+            and self._recovery_authority_revoked is capture.authority_revoked
+            and not capture.authority_revoked.is_set()
+            and self._recovery_authority_epoch() == capture.authority_epoch
+            and not self._admission_revoked() and self._generation_current()
+            and self._runtime_generation == capture.runtime_generation
+            and self._recovery_configuration_revision == capture.configuration_revision
+            and (None if self._stock_semantics is None else self._stock_semantics.semantic_revision)
+            == capture.semantic_revision
+            and self.provider is capture.source_provider
+            and self.provider._client is capture.source_client
+            and getattr(self.provider._client, "_client", self.provider._client)
+            is capture.source_inner_client
+            and self.provider._source_time_label is capture.source_time_label
+        )
+
+    def _require_recovery_capture(self, work, capture: RecoveryCapture) -> None:
+        identity = self._recovery_identity(work, capture.symbol, capture.target.observed_at)
+        if identity != (
+            capture.plan_id, capture.plan_version, capture.plan_version_id, capture.plan_hash,
+            capture.payload_json, capture.activation_revision, capture.activated_at,
+        ) or self._recovery_target_in_work(work, capture.target.observed_at) != capture.target:
+            raise RecoveryAdmissionChangedError("recovery identity changed")
+
+    @staticmethod
+    def _recovery_covered_ends(work, capture: RecoveryCapture) -> tuple[datetime, ...]:
+        if not capture.required_ends:
+            return ()
+        rows = work.history.list_minutes(
+            capture.symbol, start=capture.required_ends[0], end=capture.required_ends[-1],
+        )
+        return tuple(row.bar_end for row in rows if row.bar_end in capture.required_ends)
+
+    def _read_recovery_coverage(self, capture: RecoveryCapture) -> tuple[datetime, ...]:
+        with self._work() as work:
+            self._require_recovery_capture(work, capture)
+            return self._recovery_covered_ends(work, capture)
+
+    def _persist_recovery_capture(
+        self, capture: RecoveryCapture, rows: tuple[MinuteBar, ...], *, cancelled: Event,
+    ) -> None:
+        # All potentially reentrant/file-based validation precedes the final lock.
+        if (not self._decision_commit_current()
+                or not self._recovery_memory_current(capture, cancelled)):
+            raise RecoveryAdmissionChangedError("recovery authority changed")
+        selected = select_current_day_rows(
+            rows=rows, symbol=capture.symbol, target=capture.target, now=self._clock.now(),
+        )
+        with self._work() as work:
+            self._require_recovery_capture(work, capture)
+            coverage = check_minute_coverage(
+                required_ends=capture.required_ends,
+                persisted_ends=self._recovery_covered_ends(work, capture),
+                cutoff=capture.target.completed_minute_end,
+            )
+            missing = frozenset(coverage.missing_ends)
+            selected = tuple(row for row in selected if row.bar_end in missing)
+            if not selected:
+                return
+            # Both minute and latest_quote statements are already flushed by this repository.
+            work.history.upsert_minutes(selected)
+            if not self._decision_commit_current():
+                raise RecoveryAdmissionChangedError("recovery authority changed during staging")
+            with self._recovery_authority_lock:
+                if not self._recovery_memory_current(capture, cancelled):
+                    raise RecoveryAdmissionChangedError("recovery authority changed before commit")
+                work.commit()
+
+    async def _recover_frozen_scope(self, capture: RecoveryCapture):
+        cancelled = Event()
+        self._active_recovery_attempts.add(cancelled)
+
+        def physical_start() -> None:
+            if not self._recovery_memory_current(capture, cancelled):
+                raise RequestNotStartedError("recovery authority changed before SDK start")
+
+        try:
+            if not self._recovery_memory_current(capture, cancelled):
+                cancelled.set()
+                raise RecoveryAdmissionChangedError("recovery authority changed before attempt")
+            return await self.recovery.recover_scope(
+                symbol=capture.symbol, target=capture.target, required_ends=capture.required_ends,
+                read_persisted_ends=lambda _symbol, _required: self._read_recovery_coverage(
+                    capture,
+                ),
+                now=self._clock.now,
+                persist_selected=lambda rows: self._persist_recovery_capture(
+                    capture, rows, cancelled=cancelled,
+                ),
+                admission_current=lambda: self._recovery_memory_current(capture, cancelled),
+                fetch_current_day=lambda: capture.source_provider.current_day_minutes(
+                    capture.symbol, _physical_start=physical_start,
+                ),
+                cancelled=cancelled,
+            )
+        finally:
+            cancelled.set()
+            self._active_recovery_attempts.discard(cancelled)
+
+    def revoke_active_recovery_attempts(self) -> None:
+        """Owner-loop publication only; cancellation and physical drain belong to lifecycle."""
+        for cancelled in self._active_recovery_attempts:
+            cancelled.set()
 
     def restore_index_recoveries(self) -> None:
         """Restore persisted display-index retries without stock recovery work."""

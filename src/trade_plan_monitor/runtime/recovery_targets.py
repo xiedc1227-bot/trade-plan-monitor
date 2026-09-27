@@ -11,6 +11,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from enum import StrEnum
+from threading import Event
+from uuid import UUID
 
 from trade_plan_monitor.market_data.models import MinuteBar
 from trade_plan_monitor.market_data.sessions import (
@@ -21,6 +23,31 @@ from trade_plan_monitor.market_data.sessions import (
 
 _MAX_MINUTES = 240
 _SYMBOL_PATTERN = re.compile(r"^[0-9]{6}\.(?:SH|SZ|BJ)$")
+
+
+@dataclass(frozen=True)
+class RecoveryCapture:
+    """Original acquisition identity; neither a response nor a retry may advance it."""
+
+    symbol: str
+    target: RecoveryTarget
+    required_ends: tuple[datetime, ...]
+    plan_id: str
+    plan_version: int
+    plan_version_id: str
+    plan_hash: str
+    payload_json: str
+    activation_revision: int
+    activated_at: datetime
+    configuration_revision: str
+    semantic_revision: str | None
+    runtime_generation: UUID
+    authority_epoch: int
+    authority_revoked: Event
+    source_provider: object
+    source_client: object
+    source_inner_client: object
+    source_time_label: object
 
 
 class RecoveryPhase(StrEnum):
