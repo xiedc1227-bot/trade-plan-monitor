@@ -42,7 +42,10 @@ from trade_plan_monitor.market_data.sessions import (
     SourceTimeLabel,
     expected_minute_ends,
 )
-from trade_plan_monitor.market_data.tushare import TushareMarketDataProvider
+from trade_plan_monitor.market_data.tushare import (
+    MinutePermissionEvidence,
+    TushareMarketDataProvider,
+)
 from trade_plan_monitor.market_data.tushare_client import create_tushare_client
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import MarketIndexHealth
@@ -1421,6 +1424,269 @@ class ProductionMonitorPipeline:
                 source_time_label=label, provider=provider, source=source, session_factory=factory,
                 calendar_epoch=epoch, calendar_revoked=token,
             )
+
+    async def _maybe_recheck_current_day_minutes_permission(self) -> PermissionMaintenanceResult:
+        return await self._recheck_stock_minute_permission(
+            TushareOperation.CURRENT_DAY_MINUTES, asyncio.current_task(), Event(),
+        )
+
+    async def _maybe_recheck_realtime_minutes_permission(self) -> PermissionMaintenanceResult:
+        return await self._recheck_stock_minute_permission(
+            TushareOperation.REALTIME_MINUTES, asyncio.current_task(), Event(),
+        )
+
+    @staticmethod
+    def _stock_minute_evidence_matches(
+        evidence: object, prepared: _StockMinutePermissionPreparation,
+        operation: TushareOperation, actual_start: datetime | None,
+    ) -> bool:
+        """Validate the frozen proof envelope without reclassifying its A/B/C rows."""
+        if type(evidence) is not MinutePermissionEvidence or prepared.consumer is None:
+            return False
+        endpoint = "rt_min_daily" if operation is TushareOperation.CURRENT_DAY_MINUTES else "rt_min"
+        limit = 241 if endpoint == "rt_min_daily" else 1000
+        counts = (evidence.completed_count, evidence.opening_count, evidence.incomplete_count)
+        dates = evidence.source_dates
+        if not (
+            evidence.operation == endpoint and evidence.symbol == prepared.consumer.symbol
+            and type(evidence.request_date) is date
+            and evidence.request_date == prepared.consumer.request_date
+            and evidence.source_label is prepared.source_time_label
+            and all(type(count) is int and 0 <= count <= limit for count in counts)
+            and evidence.completed_count > 0 and sum(counts) <= limit
+            and type(dates) is tuple and 1 <= len(dates) <= min(limit, sum(counts))
+            and all(type(day) is date and day <= evidence.request_date for day in dates)
+        ):
+            return False
+        if dates != tuple(sorted(set(dates))) or (endpoint == "rt_min_daily"
+                                                 and dates != (evidence.request_date,)):
+            return False
+        if (evidence.incomplete_count > 2
+                or (evidence.incomplete_count and evidence.request_date not in dates)
+                or evidence.completed_count + evidence.incomplete_count > 240 * len(dates)
+                or evidence.opening_count > (
+                    len(dates) if evidence.source_label is SourceTimeLabel.END else 0
+                )):
+            return False
+        for at in (evidence.started_at, evidence.received_at):
+            if (type(at) is not datetime or at.tzinfo is None
+                    or at.utcoffset() != timedelta(hours=8) or at.date() != evidence.request_date):
+                return False
+        return (
+            actual_start is not None and evidence.started_at == actual_start
+            and prepared.captured_at <= actual_start <= prepared.captured_at + timedelta(seconds=15)
+            and timedelta(0) <= evidence.received_at - actual_start <= timedelta(seconds=15)
+        )
+
+    @staticmethod
+    def _stock_minute_dates_open(session: Session, dates: tuple[date, ...]) -> bool:
+        """Read up to 1,001 exact SSE facts in chunks within the owner's one transaction."""
+        if not 1 <= len(dates) <= 1001 or any(day.weekday() >= 5 for day in dates):
+            return False
+        for offset in range(0, len(dates), 250):
+            chunk = dates[offset:offset + 250]
+            rows = session.execute(select(
+                TradingCalendar.cal_date, cast(TradingCalendar.is_open, Integer),
+            ).where(TradingCalendar.exchange == "SSE", TradingCalendar.cal_date.in_(chunk))
+                .limit(len(chunk) + 1)).all()
+            if len(rows) != len(chunk) or {day: opened for day, opened in rows} != {
+                day: 1 for day in chunk
+            }:
+                return False
+        return True
+
+    async def _recheck_stock_minute_permission(
+        self, operation: TushareOperation, owner_task: asyncio.Task | None, cancelled: Event,
+    ) -> PermissionMaintenanceResult:
+        """One invocation owns its proof, start sample, cancellation and response snapshot."""
+        try:
+            async with self._permission_maintenance_lock:
+                prepared = self._prepare_stock_minute_permission_locked(operation)
+                if prepared.status == "SKIPPED":
+                    return PermissionMaintenanceResult.SKIPPED
+                if prepared.status == "UNKNOWN":
+                    return PermissionMaintenanceResult.DEFERRED
+                candidate, consumer = prepared.candidate, prepared.consumer
+                provider, source = prepared.provider, prepared.source
+                factory = prepared.session_factory
+                sdk_source = (
+                    source._client if isinstance(source, _CertifiedTushareClient) else source
+                )
+                revoked = prepared.calendar_revoked
+
+                def defer_local() -> PermissionMaintenanceResult:
+                    self._permission_probe_deferred_until[operation] = (
+                        self._clock.now() + timedelta(seconds=30)
+                    )
+                    return PermissionMaintenanceResult.DEFERRED
+
+                if (candidate is None or consumer is None or provider is None or factory is None
+                        or revoked is None or candidate.operation is not operation
+                        or candidate.symbol != consumer.symbol
+                        or candidate.anchor_date != consumer.request_date):
+                    return defer_local()
+                semantics, stock_evidence = self._stock_semantics, self._stock_evidence
+                authority_revoked = Event()
+
+                def authority_io() -> bool:
+                    if cancelled.is_set() or authority_revoked.is_set():
+                        return False
+                    if not self._stock_minute_authorized(operation):
+                        authority_revoked.set()
+                        return False
+                    return True
+
+                def memory_current(at: datetime) -> bool:
+                    semantic_current = (
+                        self._semantic_bindings is not None and self._stock_semantics is semantics
+                        and semantics is not None
+                        and semantics.semantic_revision == prepared.semantic_revision
+                    ) if prepared.semantic_bound else (
+                        self._semantic_bindings is None and self._stock_semantics is None
+                        and self._stock_evidence is stock_evidence and stock_evidence is not None
+                        and stock_evidence.observed_at <= at <= stock_evidence.valid_until
+                    )
+                    valid = (
+                        not cancelled.is_set() and not authority_revoked.is_set()
+                        and semantic_current and self.provider is provider
+                        and provider._client is source
+                        and (not isinstance(source, _CertifiedTushareClient)
+                             or source._client is sdk_source)
+                        and provider._source_time_label is prepared.source_time_label
+                        and self._permission_session_factory is factory
+                        and at >= prepared.captured_at and at.date() == consumer.request_date
+                        and self._generation_current() and not self._admission_revoked()
+                    )
+                    with self._calendar_epoch_lock:
+                        valid = valid and (
+                            prepared.calendar_epoch == self._calendar_epoch
+                            and revoked is self._calendar_revoked and not revoked.is_set()
+                        )
+                    if not valid:
+                        authority_revoked.set()
+                    return valid
+
+                if self._permission_market_window is None:
+                    return defer_local()
+                latest_start = prepared.captured_at + timedelta(seconds=15)
+                market_window = _FrozenPermissionMarketWindow(
+                    prepared.captured_at, latest_start,
+                    self._permission_market_window(
+                        prepared.captured_at, latest_start + _INDEX_PERMISSION_GUARD,
+                    ),
+                )
+
+                def time_to_start(at: datetime) -> bool:
+                    try:
+                        return (self._stock_minute_start_at(at) == at
+                                and market_window.blocker(at) is None)
+                    except ValueError:
+                        return False
+
+                def start_current() -> bool:
+                    if not authority_io():
+                        return False
+                    at = self._clock.now()
+                    return memory_current(at) and time_to_start(at)
+
+                def defer_start() -> PermissionMaintenanceResult:
+                    at = self._clock.now()
+                    try:
+                        blocker = market_window.blocker(at)
+                    except ValueError:
+                        blocker = None
+                    if blocker is not None:
+                        self._permission_probe_deferred_until[operation] = (
+                            max(at, blocker[0]) + timedelta(microseconds=1)
+                        )
+                        return PermissionMaintenanceResult.DEFERRED
+                    return defer_local()
+
+                evidence_slot: list[object] = []
+                started: list[datetime] = []
+                provider_probe = (
+                    provider.probe_current_day_minutes_permission
+                    if operation is TushareOperation.CURRENT_DAY_MINUTES
+                    else provider.probe_realtime_minutes_permission
+                )
+
+                def probe() -> None:
+                    if not start_current():
+                        raise RequestNotStartedError("stock minute authority changed at worker")
+
+                    def physical_start() -> datetime:
+                        # Resolver checks are finished. Complete final authority I/O before one S.
+                        if not authority_io():
+                            raise RequestNotStartedError("stock minute authority changed pre-SDK")
+                        at = _canonical_shanghai(self._clock.now())
+                        # Nothing below this sample performs authority I/O or resamples S.
+                        if started or not memory_current(at) or not time_to_start(at):
+                            raise RequestNotStartedError("stock minute final start fence changed")
+                        started.append(at)
+                        return at
+
+                    evidence_slot.append(provider_probe(
+                        consumer.symbol, consumer.request_date, physical_start=physical_start,
+                    ))
+
+                def owner_current(received_at: datetime) -> bool:
+                    if owner_task is None or owner_task.cancelling() or not authority_io():
+                        return False
+                    at = self._clock.now()
+                    return at >= received_at and memory_current(at)
+
+                def validate_after() -> bool:
+                    if len(evidence_slot) != 1 or len(started) != 1:
+                        return False
+                    proof = evidence_slot[0]
+                    if not self._stock_minute_evidence_matches(
+                        proof, prepared, operation, started[0],
+                    ):
+                        return False
+                    if not owner_current(proof.received_at):
+                        return False
+                    dates = tuple(sorted(set(proof.source_dates) | {consumer.request_date}))
+                    session = factory()
+                    require_owned_recovery_session(session, (
+                        ActivePlan, PlanActivationState, PlanVersion, TradingCalendar,
+                    ))
+                    with session, session.no_autoflush:
+                        consumers, _ = self._stock_minute_consumers_in_session(
+                            session, self._clock.now(),
+                        )
+                        valid = (consumer in consumers
+                                 and self._stock_minute_dates_open(session, dates))
+                    return valid and owner_current(proof.received_at)
+
+                callback = self._permission_probe_reservation_callback(candidate)
+                if not start_current():
+                    return defer_start()
+                try:
+                    await self._controller.recheck_permission(
+                        operation, probe,
+                        work_key=f"permission:{operation.value}:{consumer.symbol}:{consumer.request_date}",
+                        priority=RequestPriority.RECOVERY, validate_after=validate_after,
+                        can_start=start_current, on_reserved=callback,
+                    )
+                except RequestNotStartedError:
+                    return defer_start()
+                except RequestControlError as error:
+                    if error.code not in {
+                        RequestControlErrorCode.BLOCKED_PERMISSION,
+                        RequestControlErrorCode.RATE_LIMITED,
+                        RequestControlErrorCode.TRANSIENT,
+                        RequestControlErrorCode.TIMEOUT,
+                        RequestControlErrorCode.INVALID_RESPONSE,
+                    }:
+                        raise
+                    return PermissionMaintenanceResult.FAILED
+                self._permission_probe_deferred_until.pop(operation, None)
+                return PermissionMaintenanceResult.PROBED
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        finally:
+            cancelled.set()
 
     async def _prepare_daily_bar_permission(self) -> _DailyBarPermissionPreparation:
         """Prepare one due candidate under the shared maintenance lock."""
