@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from inspect import isawaitable
@@ -72,6 +73,8 @@ from trade_plan_monitor.runtime.clock import Clock, SystemClock, _canonical_shan
 from trade_plan_monitor.runtime.explicit_service import (
     ExplicitRuntimeCycleResult,
     ExplicitRuntimeEvaluationService,
+    PlanCycleStale,
+    _PrecommitStale,
 )
 from trade_plan_monitor.runtime.health import (
     LEGACY_RUNTIME_GENERATION,
@@ -322,6 +325,107 @@ class IntradayCycleResult(_RuntimeValue):
         return self
 
 
+@dataclass(frozen=True)
+class PlanCycleIdentity:
+    """Origin captured before acquisition, independent of optional result facts."""
+
+    consumer_kind: str
+    symbol: str
+    plan_id: str
+    version: int
+    plan_hash: str
+    activation_revision: int
+    target_bucket_end: datetime
+    formula_version: str
+
+    @classmethod
+    def capture(
+        cls, plan: ExecutableTradePlan, *, activation_revision: int, target: datetime,
+    ) -> PlanCycleIdentity:
+        if type(activation_revision) is not int or activation_revision < 1:
+            raise ValueError("plan cycle identity requires a positive activation revision")
+        return cls(
+            consumer_kind="LEGACY" if isinstance(plan, TradePlan) else "EXPLICIT",
+            symbol=plan.symbol, plan_id=plan.plan_id, version=plan.version,
+            plan_hash=plan_sha256(plan), activation_revision=activation_revision,
+            target_bucket_end=target, formula_version=plan.monitoring.indicator_formula_version,
+        )
+
+
+@dataclass(frozen=True)
+class PlanCycleOutcome:
+    """Exactly one original plan's real result or known pre-commit invalidation."""
+
+    identity: PlanCycleIdentity
+    result: IntradayCycleResult | ExplicitRuntimeCycleResult | None = None
+    stale: PlanCycleStale | None = None
+
+    def __post_init__(self) -> None:
+        if (self.result is None) == (self.stale is None):
+            raise ValueError("plan outcome requires exactly one result or stale disposition")
+        if self.stale is not None and not isinstance(self.stale, PlanCycleStale):
+            raise TypeError("plan outcome stale disposition must be typed")
+
+
+def _account_plan_outcomes(
+    expected: tuple[PlanCycleIdentity, ...], outcomes: tuple[PlanCycleOutcome, ...],
+) -> tuple[IntradayCycleResult | ExplicitRuntimeCycleResult, ...]:
+    """Check complete accounting before extraction; this is not batch atomicity."""
+    if len(set(expected)) != len(expected):
+        raise RuntimeError("duplicate expected plan outcome identity")
+    by_identity: dict[PlanCycleIdentity, PlanCycleOutcome] = {}
+    for outcome in outcomes:
+        if not isinstance(outcome, PlanCycleOutcome) or outcome.identity in by_identity:
+            raise RuntimeError("invalid or duplicate plan outcome")
+        by_identity[outcome.identity] = outcome
+    if set(by_identity) != set(expected):
+        raise RuntimeError("plan outcomes do not exactly match due identities")
+    for identity in expected:
+        outcome = by_identity[identity]
+        result = outcome.result
+        if outcome.stale is not None:
+            reason = (PlanCycleStale.LEGACY if identity.consumer_kind == "LEGACY"
+                      else PlanCycleStale.EXPLICIT)
+            if outcome.stale is not reason:
+                raise RuntimeError("plan outcome stale consumer identity differs")
+        elif identity.consumer_kind == "EXPLICIT":
+            if not isinstance(result, ExplicitRuntimeCycleResult):
+                raise RuntimeError("plan outcome consumer identity differs")
+            evaluated = result.evaluation_result
+            if (
+                evaluated.symbol != identity.symbol or evaluated.plan_hash != identity.plan_hash
+                or evaluated.target_bucket_end != identity.target_bucket_end
+                or evaluated.activation_revision != identity.activation_revision
+            ):
+                raise RuntimeError("explicit plan outcome payload identity differs")
+        elif identity.consumer_kind == "LEGACY":
+            if not isinstance(result, IntradayCycleResult):
+                raise RuntimeError("plan outcome consumer identity differs")
+            facts, evaluated = result.facts, result.evaluation_result
+            if facts is not None and (
+                facts.symbol != identity.symbol or facts.bucket_end != identity.target_bucket_end
+                or facts.formula_version != identity.formula_version
+            ):
+                raise RuntimeError("legacy plan outcome facts identity differs")
+            if evaluated is not None:
+                actual, snapshot = evaluated.evaluation_identity, evaluated.snapshot
+                if (
+                    not isinstance(actual, IntradayEvaluationIdentity)
+                    or actual.symbol != identity.symbol or actual.plan_hash != identity.plan_hash
+                    or actual.bucket_end != identity.target_bucket_end
+                    or actual.formula_version != identity.formula_version
+                    or snapshot.plan_id != identity.plan_id
+                    or snapshot.plan_version != identity.version
+                    or snapshot.symbol != identity.symbol
+                    or snapshot.plan_hash != identity.plan_hash
+                ):
+                    raise RuntimeError("legacy plan outcome result identity differs")
+        else:
+            raise RuntimeError("unknown plan outcome consumer identity")
+    return tuple(by_identity[identity].result for identity in expected
+                 if by_identity[identity].result is not None)
+
+
 class OfficialCloseErrorCode(StrEnum):
     """Sanitized reason why an official-close target did not evaluate."""
 
@@ -480,6 +584,12 @@ class StaleActivationGenerationError(RuntimeError):
         super().__init__(f"plan activation generation changed for {symbol}")
 
 
+def _stale_activation(symbol: str, account_stale: bool) -> _PrecommitStale:
+    if account_stale:
+        return _PrecommitStale(PlanCycleStale.LEGACY)
+    raise StaleActivationGenerationError(symbol)
+
+
 class RuntimeEvaluationService:
     """Persist exact market facts, evaluate purely, then apply results atomically."""
 
@@ -636,6 +746,30 @@ class RuntimeEvaluationService:
             health_by_symbol=health_by_symbol,
             activation_revisions=activation_revisions,
             market_index_batch=market_index_batch,
+        )
+
+    async def run_intraday_outcomes_from_minutes(
+        self, *, plans: tuple[TradePlan, ...], identities: tuple[PlanCycleIdentity, ...],
+        bucket_end: datetime, evaluated_at: datetime,
+        minutes_by_symbol: Mapping[str, tuple[MinuteBar, ...]],
+        health_by_symbol: Mapping[str, SymbolHealthSnapshot] | None = None,
+        market_index_batch: RuntimeMarketIndexBatch | None = None,
+    ) -> tuple[PlanCycleOutcome, ...]:
+        """Strict production path, binding each coroutine to its original due plan."""
+        if len(plans) != len(identities) or any(
+            identity != PlanCycleIdentity.capture(
+                plan, activation_revision=identity.activation_revision, target=bucket_end,
+            )
+            for plan, identity in zip(plans, identities, strict=True)
+        ):
+            raise RuntimeError("strict batch plan outcome identities differ")
+        validated = self._validated_prefetched_minutes(plans, minutes_by_symbol)
+        return await self._run_intraday_batch(
+            plans=plans, bucket_end=bucket_end, evaluated_at=evaluated_at,
+            minutes_by_symbol=validated, health_by_symbol=health_by_symbol,
+            activation_revisions={identity.symbol: identity.activation_revision
+                                  for identity in identities},
+            market_index_batch=market_index_batch, associated_identities=identities,
         )
 
     async def prepare_intraday_market_indexes(
@@ -842,7 +976,8 @@ class RuntimeEvaluationService:
         health_by_symbol: Mapping[str, SymbolHealthSnapshot] | None = None,
         activation_revisions: Mapping[str, int] | None = None,
         market_index_batch: RuntimeMarketIndexBatch | None = None,
-    ) -> tuple[IntradayCycleResult, ...]:
+        associated_identities: tuple[PlanCycleIdentity, ...] | None = None,
+    ) -> tuple[IntradayCycleResult, ...] | tuple[PlanCycleOutcome, ...]:
         if type(plans) is not tuple or any(not isinstance(plan, TradePlan) for plan in plans):
             raise TypeError("plans must be a tuple of TradePlan values")
         if len(plans) > 10:
@@ -872,27 +1007,38 @@ class RuntimeEvaluationService:
                 for snapshot in prepared.snapshots_by_index.values()
             ):
                 raise ValueError("index snapshot observation cannot follow evaluation time")
-        results = await asyncio.gather(
-            *(
-                self._run_intraday_with_snapshot(
-                    plan=plan,
-                    bucket_end=bucket_end,
-                    evaluated_at=evaluated_at,
-                    reference_market_snapshot=(
-                        None if prepared is None else prepared.snapshot_for_plan(plan)
-                    ),
-                    health_snapshot=(
-                        None if health_by_symbol is None else health_by_symbol[plan.symbol]
-                    ),
-                    fetched_minutes=(
-                        None if minutes_by_symbol is None else minutes_by_symbol[plan.symbol]
-                    ),
-                    activation_revision=(
-                        None if activation_revisions is None else activation_revisions[plan.symbol]
-                    ),
+
+        async def evaluate_plan(plan: TradePlan, identity: PlanCycleIdentity | None):
+            result = await self._run_intraday_with_snapshot(
+                plan=plan,
+                bucket_end=bucket_end,
+                evaluated_at=evaluated_at,
+                reference_market_snapshot=(
+                    None if prepared is None else prepared.snapshot_for_plan(plan)
+                ),
+                health_snapshot=(
+                    None if health_by_symbol is None else health_by_symbol[plan.symbol]
+                ),
+                fetched_minutes=(
+                    None if minutes_by_symbol is None else minutes_by_symbol[plan.symbol]
+                ),
+                activation_revision=(
+                    None if activation_revisions is None else activation_revisions[plan.symbol]
+                ),
+                account_stale=True,
+            )
+            if identity is not None:
+                return (
+                    PlanCycleOutcome(identity=identity, stale=result.reason)
+                    if isinstance(result, _PrecommitStale)
+                    else PlanCycleOutcome(identity=identity, result=result)
                 )
-                for plan in plans
-            ),
+            return result
+
+        results = await asyncio.gather(
+            *(evaluate_plan(plan, None if associated_identities is None
+                            else associated_identities[index])
+              for index, plan in enumerate(plans)),
             return_exceptions=True,
         )
         first_error = next(
@@ -900,12 +1046,13 @@ class RuntimeEvaluationService:
                 item
                 for item in results
                 if isinstance(item, BaseException)
-                and not isinstance(item, StaleActivationGenerationError)
             ),
             None,
         )
         if first_error is not None:
             raise first_error
+        if associated_identities is not None:
+            return tuple(results)
         return tuple(item for item in results if isinstance(item, IntradayCycleResult))
 
     async def _run_intraday_with_snapshot(
@@ -918,7 +1065,8 @@ class RuntimeEvaluationService:
         health_snapshot: SymbolHealthSnapshot | None,
         fetched_minutes: tuple[MinuteBar, ...] | None = None,
         activation_revision: int | None = None,
-    ) -> IntradayCycleResult:
+        account_stale: bool = False,
+    ) -> IntradayCycleResult | _PrecommitStale:
         """Evaluate one plan using an already shared reference-index snapshot."""
 
         if not isinstance(plan, TradePlan):
@@ -928,7 +1076,11 @@ class RuntimeEvaluationService:
         if canonical_evaluated_at < canonical_bucket:
             raise ValueError("evaluated_at cannot precede bucket_end")
         if activation_revision is None:
-            activation_revision = self._capture_plan_activation_revision(plan)
+            activation_revision = self._capture_plan_activation_revision(
+                plan, account_stale=account_stale,
+            )
+            if isinstance(activation_revision, _PrecommitStale):
+                return activation_revision
 
         fetched = (
             await self._fetch_minutes(plan.symbol, canonical_bucket)
@@ -994,12 +1146,15 @@ class RuntimeEvaluationService:
         publication_event: MonitorEvent | None = None
         health_event: MonitorEvent | None = None
         with self._unit_of_work_factory() as unit_of_work:
-            self._require_evaluated_plan_active(
+            active_guard = self._require_evaluated_plan_active(
                 unit_of_work,
                 plan,
                 expected_revision=activation_revision,
                 market_date=canonical_bucket.date(),
+                account_stale=account_stale,
             )
+            if isinstance(active_guard, _PrecommitStale):
+                return active_guard
             identity = result.evaluation_identity
             claim = unit_of_work.evaluations.claim(
                 plan_hash=identity.plan_hash,
@@ -2232,9 +2387,10 @@ class RuntimeEvaluationService:
         *,
         expected_revision: int,
         market_date: date,
-    ) -> None:
+        account_stale: bool = False,
+    ) -> None | _PrecommitStale:
         if not activation_is_eligible_on(plan.activation, market_date):
-            raise StaleActivationGenerationError(plan.symbol)
+            return _stale_activation(plan.symbol, account_stale)
         activation_state = unit_of_work.plans.get_activation_state(plan.symbol)
         # The runtime service is also used as a narrow persistence primitive in
         # tests and offline tooling that have no plan registry.  Once a symbol
@@ -2242,20 +2398,20 @@ class RuntimeEvaluationService:
         # authoritative and a concurrent deactivation/rotation must fail closed.
         if activation_state is None:
             if expected_revision != 1:
-                raise StaleActivationGenerationError(plan.symbol)
+                return _stale_activation(plan.symbol, account_stale)
             return
         if activation_state.revision != expected_revision:
-            raise StaleActivationGenerationError(plan.symbol)
+            return _stale_activation(plan.symbol, account_stale)
         active = unit_of_work.plans.get_active(plan.symbol)
         if active is None or activation_state.plan_version_id != active.plan_version_id:
-            raise StaleActivationGenerationError(plan.symbol)
+            return _stale_activation(plan.symbol, account_stale)
         details = unit_of_work.plans.get_version_details(active.plan_version_id)
         if (
             details is None
             or details.plan_hash != plan_sha256(plan)
             or load_plan_json(details.payload_json) != plan
         ):
-            raise StaleActivationGenerationError(plan.symbol)
+            return _stale_activation(plan.symbol, account_stale)
 
     @staticmethod
     def _require_symbol_activation_revision(
@@ -2277,21 +2433,23 @@ class RuntimeEvaluationService:
         ):
             raise StaleActivationGenerationError(symbol)
 
-    def _capture_plan_activation_revision(self, plan: TradePlan) -> int:
+    def _capture_plan_activation_revision(
+        self, plan: TradePlan, *, account_stale: bool = False,
+    ) -> int | _PrecommitStale:
         with self._unit_of_work_factory() as unit_of_work:
             state = unit_of_work.plans.get_activation_state(plan.symbol)
             if state is None:
                 return 1
             active = unit_of_work.plans.get_active(plan.symbol)
             if active is None or active.revision != state.revision:
-                raise StaleActivationGenerationError(plan.symbol)
+                return _stale_activation(plan.symbol, account_stale)
             details = unit_of_work.plans.get_version_details(active.plan_version_id)
             if (
                 details is None
                 or details.plan_hash != plan_sha256(plan)
                 or load_plan_json(details.payload_json) != plan
             ):
-                raise StaleActivationGenerationError(plan.symbol)
+                return _stale_activation(plan.symbol, account_stale)
             return state.revision
 
     @staticmethod
@@ -2545,6 +2703,9 @@ class RuntimeDeadlineCoordinator:
         restore_states = self._evaluation_service.load_persisted_symbol_health(symbols)
         self._symbol_service.restore_health(symbols=symbols, states=restore_states)
         activation_revisions = {state.symbol: state.activation_revision for state in restore_states}
+        candidates = tuple(PlanCycleIdentity.capture(
+            plan, activation_revision=activation_revisions[plan.symbol], target=bar_end,
+        ) for plan in plans)
         market_index_batch = None
         if legacy_plans and five_minute_bucket_end(bar_end) == bar_end:
             market_index_batch = await self._evaluation_service.prepare_intraday_market_indexes(
@@ -2585,6 +2746,8 @@ class RuntimeDeadlineCoordinator:
             },
         )
         due_plans = tuple(plan for plan in plans if plan.symbol in complete_contexts)
+        due_identities = tuple(identity for identity in candidates
+                               if identity.symbol in complete_contexts)
         if not due_plans:
             return ()
         due_legacy_plans = tuple(
@@ -2603,8 +2766,10 @@ class RuntimeDeadlineCoordinator:
         minutes_by_symbol = {
             symbol: context.minutes for symbol, context in complete_contexts.items()
         }
-        legacy_results = await self._evaluation_service.run_intraday_batch_from_minutes(
+        legacy_outcomes = await self._evaluation_service.run_intraday_outcomes_from_minutes(
             plans=due_legacy_plans,
+            identities=tuple(identity for identity in due_identities
+                             if identity.consumer_kind == "LEGACY"),
             bucket_end=bar_end,
             evaluated_at=observed_at,
             minutes_by_symbol={
@@ -2615,38 +2780,30 @@ class RuntimeDeadlineCoordinator:
                 plan.symbol: complete_contexts[plan.symbol].health
                 for plan in due_legacy_plans
             },
-            activation_revisions={
-                plan.symbol: activation_revisions[plan.symbol]
-                for plan in due_legacy_plans
-            },
             market_index_batch=market_index_batch,
         )
         explicit_service = self._explicit_evaluation_service
         if due_explicit_plans and explicit_service is None:  # guarded before acquisition
             raise RuntimeError("explicit plan runtime is not composed")
-        explicit_results = []
+        explicit_outcomes = []
         if explicit_service is not None:
-            for plan in due_explicit_plans:
-                explicit_results.append(
-                    await explicit_service.run_intraday_and_publish(
-                        plan=plan,
-                        target_bucket_end=bar_end,
-                        evaluated_at=observed_at,
-                    )
+            for plan, identity in zip(due_explicit_plans, (
+                identity for identity in due_identities if identity.consumer_kind == "EXPLICIT"
+            ), strict=True):
+                result = await explicit_service.run_intraday_associated_and_publish(
+                    plan=plan,
+                    target_bucket_end=bar_end,
+                    evaluated_at=observed_at,
+                    expected_activation_revision=identity.activation_revision,
                 )
-        by_symbol = {
-            result.evaluation_result.symbol: result for result in explicit_results
-        }
-        by_symbol.update(
-            {
-                result.facts.symbol: result
-                for result in legacy_results
-                if result.facts is not None
-            }
+                explicit_outcomes.append(
+                    PlanCycleOutcome(identity=identity, stale=result.reason)
+                    if isinstance(result, _PrecommitStale)
+                    else PlanCycleOutcome(identity=identity, result=result)
+                )
+        return _account_plan_outcomes(
+            due_identities, (*legacy_outcomes, *explicit_outcomes),
         )
-        if len(by_symbol) != len(due_plans):
-            raise RuntimeError("deadline evaluation omitted a due plan")
-        return tuple(by_symbol[plan.symbol] for plan in due_plans)
 
     @staticmethod
     def _validated_active_plans(value: object) -> tuple[ExecutableTradePlan, ...]:
@@ -2656,6 +2813,8 @@ class RuntimeDeadlineCoordinator:
             raise TypeError("active_plans must return executable trade plans")
         if len(value) > 10:
             raise ActiveSymbolLimitError(len(value))
+        if len({plan.symbol for plan in value}) != len(value):
+            raise RuntimeError("active plan outcome symbols must be unique")
         return value
 
 

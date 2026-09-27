@@ -939,15 +939,15 @@ def test_real_sell_scheduler_rejects_concurrent_inventory_revision_change(
         pipeline.explicit_evaluations._after_evaluate = mutate_inventory
         try:
             await pipeline.refresh_references(TARGET.date())
-            with pytest.raises(StaleExplicitDecisionError, match="inventory changed"):
-                await pipeline.run_deadline(
-                    MarketDeadline(
-                        kind=DeadlineKind.REALTIME_MINUTE,
-                        trade_date=TARGET.date(),
-                        due_at=PIPELINE_NOW,
-                        bar_end=TARGET,
-                    )
+            results = await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW,
+                    bar_end=TARGET,
                 )
+            )
+            assert results == ()  # Normal stale is fully accounted, never a runner error.
             with work() as transaction:
                 alerts, total = transaction.alerts.list_events(
                     symbol=plan.symbol,
@@ -1324,15 +1324,15 @@ def test_actual_deadline_revision_guards_reject_stale_explicit_buy(
         pipeline.explicit_evaluations._after_evaluate = mutate
         try:
             await pipeline.refresh_references(TARGET.date())
-            with pytest.raises(StaleExplicitDecisionError):
-                await pipeline.run_deadline(
-                    MarketDeadline(
-                        kind=DeadlineKind.REALTIME_MINUTE,
-                        trade_date=TARGET.date(),
-                        due_at=PIPELINE_NOW,
-                        bar_end=TARGET,
-                    )
+            results = await pipeline.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=TARGET.date(),
+                    due_at=PIPELINE_NOW,
+                    bar_end=TARGET,
                 )
+            )
+            assert results == ()  # Business zero-write assertions below remain unchanged.
             with work() as transaction:
                 alerts, total = transaction.alerts.list_events(
                     symbol=plan.symbol,

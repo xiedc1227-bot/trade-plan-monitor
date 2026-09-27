@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import StrEnum
 from inspect import isawaitable
@@ -36,6 +37,24 @@ class StaleExplicitDecisionError(RuntimeError):
     """A consumed activation or mutable safety fact changed before commit."""
 
     code = "STALE_EXPLICIT_DECISION"
+
+
+class PlanCycleStale(StrEnum):
+    """Closed reasons produced only by known pre-commit guards."""
+
+    LEGACY = "STALE_ACTIVATION_GENERATION"
+    EXPLICIT = "STALE_EXPLICIT_DECISION"
+
+
+@dataclass(frozen=True)
+class _PrecommitStale:
+    reason: PlanCycleStale
+
+
+def _stale_explicit(message: str, account_stale: bool) -> _PrecommitStale:
+    if account_stale:
+        return _PrecommitStale(PlanCycleStale.EXPLICIT)
+    raise StaleExplicitDecisionError(message)
 
 
 class ExplicitRuntimeCycleStatus(StrEnum):
@@ -97,6 +116,7 @@ class ExplicitRuntimeEvaluationService:
         plan: ExplicitTradePlan,
         target_bucket_end: datetime,
         evaluated_at: datetime,
+        expected_activation_revision: int | None = None,
     ) -> ExplicitRuntimeCycleResult:
         """Evaluate once, then publish only the durable alert invalidations."""
 
@@ -104,7 +124,32 @@ class ExplicitRuntimeEvaluationService:
             plan=plan,
             target_bucket_end=target_bucket_end,
             evaluated_at=evaluated_at,
+            expected_activation_revision=expected_activation_revision,
         )
+        return await self._publish_result(result)
+
+    async def run_intraday_associated_and_publish(
+        self,
+        *,
+        plan: ExplicitTradePlan,
+        target_bucket_end: datetime,
+        evaluated_at: datetime,
+        expected_activation_revision: int,
+    ) -> ExplicitRuntimeCycleResult | _PrecommitStale:
+        """Keep guard disposition separate from every commit/publication error."""
+        if type(expected_activation_revision) is not int or expected_activation_revision < 1:
+            raise ValueError("strict explicit evaluation requires an activation revision")
+        result = self._run_intraday(
+            plan=plan, target_bucket_end=target_bucket_end, evaluated_at=evaluated_at,
+            expected_activation_revision=expected_activation_revision, account_stale=True,
+        )
+        if isinstance(result, _PrecommitStale):
+            return result
+        return await self._publish_result(result)
+
+    async def _publish_result(
+        self, result: ExplicitRuntimeCycleResult,
+    ) -> ExplicitRuntimeCycleResult:
         if self._publisher is None or not result.committed_events:
             return result
         with self._work() as work:
@@ -130,10 +175,31 @@ class ExplicitRuntimeEvaluationService:
         plan: ExplicitTradePlan,
         target_bucket_end: datetime,
         evaluated_at: datetime,
+        expected_activation_revision: int | None = None,
     ) -> ExplicitRuntimeCycleResult:
+        result = self._run_intraday(
+            plan=plan, target_bucket_end=target_bucket_end, evaluated_at=evaluated_at,
+            expected_activation_revision=expected_activation_revision, account_stale=False,
+        )
+        if not isinstance(result, ExplicitRuntimeCycleResult):
+            raise RuntimeError("standalone explicit evaluation returned a stale disposition")
+        return result
+
+    def _run_intraday(
+        self, *, plan: ExplicitTradePlan, target_bucket_end: datetime, evaluated_at: datetime,
+        expected_activation_revision: int | None, account_stale: bool,
+    ) -> ExplicitRuntimeCycleResult | _PrecommitStale:
         if type(plan) is not ExplicitTradePlan:
             raise TypeError("plan must be an ExplicitTradePlan")
-        captured = self._capture(plan, target_bucket_end)
+        if expected_activation_revision is not None and (
+            type(expected_activation_revision) is not int or expected_activation_revision < 1
+        ):
+            raise ValueError("expected activation revision must be a positive integer")
+        captured = self._capture(
+            plan, target_bucket_end, expected_activation_revision, account_stale=account_stale,
+        )
+        if isinstance(captured, _PrecommitStale):
+            return captured
         with self._work() as work:
             existing = work.explicit_rules.get(
                 plan_hash=plan_sha256(plan),
@@ -142,6 +208,7 @@ class ExplicitRuntimeEvaluationService:
                 activation_revision=captured.activation_revision,
             )
         if existing is not None:
+            self._validate_result_identity(plan, target_bucket_end, captured, existing)
             return ExplicitRuntimeCycleResult(
                 status=ExplicitRuntimeCycleStatus.DUPLICATE,
                 evaluation_result=existing,
@@ -159,12 +226,17 @@ class ExplicitRuntimeEvaluationService:
             manual_event_risk=captured.manual_event_risk,
             manual_event_risk_revision=captured.manual_event_risk_revision,
         )
+        self._validate_result_identity(plan, target_bucket_end, captured, result)
         if self._after_evaluate is not None:
             self._after_evaluate(result)
 
         committed: list[ExplicitAlertEvent] = []
         with self._work() as work:
-            self._require_active(work, plan, captured.activation_revision)
+            active = self._require_active(
+                work, plan, captured.activation_revision, account_stale=account_stale,
+            )
+            if isinstance(active, _PrecommitStale):
+                return active
             current_inventory = work.positions.inventory_snapshot(
                 plan.symbol,
                 as_of_trade_date=target_bucket_end.date(),
@@ -177,7 +249,7 @@ class ExplicitRuntimeEvaluationService:
                 or current_inventory.sellable_qty != captured.inventory.sellable_qty
                 or current_inventory.missing_reasons != captured.inventory.missing_reasons
             ):
-                raise StaleExplicitDecisionError("inventory changed before trade commit")
+                return _stale_explicit("inventory changed before trade commit", account_stale)
             if captured.manual_event_risk_revision is not None:
                 current_value, current_revision = _manual_risk_value(
                     work.manual_event_risk.get(plan.symbol),
@@ -189,7 +261,9 @@ class ExplicitRuntimeEvaluationService:
                     current_revision != captured.manual_event_risk_revision
                     or current_value != captured.manual_event_risk
                 ):
-                    raise StaleExplicitDecisionError("manual event risk changed before BUY commit")
+                    return _stale_explicit(
+                        "manual event risk changed before BUY commit", account_stale,
+                    )
             record = work.explicit_rules.persist(result)
             if record.created:
                 for signal in result.signal_intents:
@@ -217,10 +291,32 @@ class ExplicitRuntimeEvaluationService:
             committed_events=tuple(committed),
         )
 
-    def _capture(self, plan: ExplicitTradePlan, target: datetime) -> _CapturedContext:
+    @staticmethod
+    def _validate_result_identity(
+        plan: ExplicitTradePlan, target: datetime, captured: _CapturedContext,
+        result: ExplicitEvaluationResult,
+    ) -> None:
+        if (
+            not isinstance(result, ExplicitEvaluationResult)
+            or result.symbol != plan.symbol
+            or result.plan_hash != plan_sha256(plan)
+            or result.target_bucket_end != target
+            or result.activation_revision != captured.activation_revision
+            or result.execution_version != plan.execution_version
+        ):
+            raise RuntimeError("explicit result identity differs from captured plan")
+
+    def _capture(
+        self, plan: ExplicitTradePlan, target: datetime,
+        expected_activation_revision: int | None = None, *, account_stale: bool = False,
+    ) -> _CapturedContext | _PrecommitStale:
         digest = plan_sha256(plan)
         with self._work() as work:
-            active = self._require_active(work, plan, None)
+            active = self._require_active(
+                work, plan, expected_activation_revision, account_stale=account_stale,
+            )
+            if isinstance(active, _PrecommitStale):
+                return active
             inventory = work.positions.inventory_snapshot(
                 plan.symbol,
                 as_of_trade_date=target.date(),
@@ -288,7 +384,10 @@ class ExplicitRuntimeEvaluationService:
             )
 
     @staticmethod
-    def _require_active(work: UnitOfWork, plan: ExplicitTradePlan, revision: int | None):
+    def _require_active(
+        work: UnitOfWork, plan: ExplicitTradePlan, revision: int | None,
+        *, account_stale: bool = False,
+    ):
         active = work.plans.get_active(plan.symbol)
         version = work.plans.get_version(plan.plan_id, plan.version)
         if (
@@ -298,7 +397,7 @@ class ExplicitRuntimeEvaluationService:
             or version.plan_hash != plan_sha256(plan)
             or (revision is not None and active.revision != revision)
         ):
-            raise StaleExplicitDecisionError("explicit plan activation changed")
+            return _stale_explicit("explicit plan activation changed", account_stale)
         return active
 
 
