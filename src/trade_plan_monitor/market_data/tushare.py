@@ -551,13 +551,16 @@ class TushareMarketDataProvider:
             strict_response=True,
         )
 
-    def probe_trading_calendar_permission(self, exchange: str, anchor: date) -> None:
+    def probe_trading_calendar_permission(
+        self, exchange: str, anchor: date, *, _physical_start: Callable[[], None] | None = None,
+    ) -> None:
         """Read one known calendar day without applying it to business state."""
 
         if type(exchange) is not str:
             raise TypeError("exchange must be a string")
         rows = self._trading_calendar(
             self._validated_exchange(exchange), anchor, anchor, strict_response=True,
+            _physical_start=_physical_start,
         )
         if len(rows) != 1 or rows[0].exchange != exchange or rows[0].cal_date != anchor:
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "trade_cal")
@@ -569,6 +572,7 @@ class TushareMarketDataProvider:
         end: date,
         *,
         strict_response: bool = False,
+        _physical_start: Callable[[], None] | None = None,
     ) -> list[TradingDay]:
         """Fetch and normalize calendar rows for the selected exchange."""
 
@@ -576,6 +580,7 @@ class TushareMarketDataProvider:
         requested_exchange = self._validated_exchange(exchange) if exchange else None
         frame = self._fetch_frame(
             "trade_cal",
+            _physical_start=_physical_start,
             fields=_TRADING_CALENDAR_FIELDS,
             exchange=exchange,
             start_date=self._date_argument(start),

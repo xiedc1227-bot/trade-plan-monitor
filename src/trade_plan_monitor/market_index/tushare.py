@@ -459,6 +459,7 @@ class TushareMarketIndexProvider:
 
     def probe_historical_minutes_permission(
         self, index_code: MarketIndexCode, anchor: date,
+        *, _physical_start: Callable[[], None] | None = None,
     ) -> None:
         """Validate one complete closed-session `idx_mins` response without caching it."""
 
@@ -475,6 +476,7 @@ class TushareMarketIndexProvider:
             raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "idx_mins")
         frame = self._call_index_sdk(
             _INDEX_MINUTE_ENDPOINT,
+            _physical_start=_physical_start,
             ts_code=index_code.value,
             freq="5min",
             start_date=f"{anchor:%Y-%m-%d} 09:30:00",
