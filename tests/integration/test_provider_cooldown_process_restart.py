@@ -39,7 +39,24 @@ def _run_monitor(root: str, observed_at, induce_limit: bool, outcomes) -> None:
             return call
 
     base = Path(root)
-    clock = ControlledClock(observed_at, released_sleeps=1 if induce_limit else 0)
+    clock = ControlledClock(observed_at)
+    first_market_due = NOW.replace(minute=1, second=12, microsecond=0)
+    released = []
+
+    if induce_limit:
+        async def sleep_until(deadline):
+            # Maintenance may wake before the first real market duty. Release
+            # actual deadlines through that target, not a fixed sleep ordinal.
+            clock.sleep_calls.append(deadline)
+            if deadline <= first_market_due:
+                assert len(released) < 8, "too many wakes before the first market target"
+                released.append(deadline)
+                clock.current = max(clock.current, deadline)
+                await asyncio.sleep(0)
+                return
+            await asyncio.Event().wait()
+
+        clock.sleep_until = sleep_until
     sdk = OfflineRateLimitedSDK(clock, (_sample_plan().symbol,))
     real_controller = monitor_composition.create_live_tushare_request_controller
 
@@ -69,7 +86,11 @@ def _run_monitor(root: str, observed_at, induce_limit: bool, outcomes) -> None:
                     if composition._runtime._request_controller.cooldown_until is not None:
                         break
                     await asyncio.sleep(0.01)
-                assert composition._runtime._request_controller.cooldown_until is not None
+                assert first_market_due in released and clock.now() == first_market_due
+                assert composition._runtime._request_controller.cooldown_until == (
+                    first_market_due + timedelta(seconds=300)
+                )
+                assert sum(name == "rt_min" for name, _ in sdk.calls) == 1
             else:
                 assert health.status is RuntimeServiceStatus.DEGRADED
             return (
