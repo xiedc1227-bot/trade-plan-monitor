@@ -1,4 +1,5 @@
 import traceback
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal, localcontext
 from inspect import Parameter, signature
@@ -1682,9 +1683,20 @@ def test_tushare_provider_public_methods_match_the_provider_protocol() -> None:
         implementation_method = getattr(TushareMarketDataProvider, method_name)
         implementation_parameters = signature(implementation_method).parameters
         protocol_parameters = signature(protocol_method).parameters
-        assert tuple(implementation_parameters) == tuple(protocol_parameters)
+        expected_annotations = get_type_hints(protocol_method)
+        if method_name == "current_day_minutes":
+            # A07-F2 permits only this concrete opt-in seam, not a protocol change.
+            assert tuple(implementation_parameters) == (*protocol_parameters, "_physical_start")
+            physical_start = implementation_parameters["_physical_start"]
+            assert physical_start.kind is Parameter.KEYWORD_ONLY
+            assert physical_start.default is None
+            expected_annotations = {
+                **expected_annotations, "_physical_start": Callable[[], None] | None,
+            }
+        else:
+            assert tuple(implementation_parameters) == tuple(protocol_parameters)
         for parameter_name, protocol_parameter in protocol_parameters.items():
             implementation_parameter = implementation_parameters[parameter_name]
             assert implementation_parameter.kind is protocol_parameter.kind
             assert implementation_parameter.default == protocol_parameter.default
-        assert get_type_hints(implementation_method) == get_type_hints(protocol_method)
+        assert get_type_hints(implementation_method) == expected_annotations

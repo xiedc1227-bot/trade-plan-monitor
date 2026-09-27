@@ -293,14 +293,17 @@ class TushareMarketDataProvider:
             require_current_day_frequency=False,
         )
 
-    def current_day_minutes(self, symbol: str) -> list[MinuteBar]:
-        """Return completed current-day minutes for one requested symbol."""
+    def current_day_minutes(
+        self, symbol: str, *, _physical_start: Callable[[], None] | None = None,
+    ) -> list[MinuteBar]:
+        """Return business minutes, optionally fencing this call after SDK resolution."""
 
         requested_symbol = self._validated_symbol(symbol)
         self._require_verified_source_time()
         frame = self._fetch_frame(
             "rt_min_daily",
             fields=_CURRENT_DAY_FIELDS,
+            _physical_start=_physical_start,
             ts_code=requested_symbol,
             freq="1MIN",
         )
