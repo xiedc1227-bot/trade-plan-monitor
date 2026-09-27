@@ -11,12 +11,12 @@ from threading import Event, Lock
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import Integer, cast, func, select
 from sqlalchemy.orm import Session
 
 from trade_plan_monitor.ai.review import load_explicit_plan_draft_json
 from trade_plan_monitor.config import TushareConfiguration
-from trade_plan_monitor.domain.plan_codec import load_plan_json
+from trade_plan_monitor.domain.plan_codec import PlanDocumentError, dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import (
     DateRangeActivation,
@@ -55,7 +55,7 @@ from trade_plan_monitor.market_index.tushare import (
     certified_tushare_market_index_profile,
     unverified_tushare_market_index_profile,
 )
-from trade_plan_monitor.runtime.clock import Clock
+from trade_plan_monitor.runtime.clock import Clock, _canonical_shanghai
 from trade_plan_monitor.runtime.close_recovery_evidence import _calendar_open_on
 from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
 from trade_plan_monitor.runtime.health import RecoveryIssueSnapshot, SymbolHealthTracker
@@ -138,7 +138,10 @@ _PERMISSION_SCOPES = (
     TushareOperation.DAILY_LIMITS,
     TushareOperation.DAILY_BARS,
     TushareOperation.INDEX_DAILY,
+    TushareOperation.CURRENT_DAY_MINUTES,
+    TushareOperation.REALTIME_MINUTES,
 )
+_STOCK_MINUTE_SCOPES = _PERMISSION_SCOPES[-2:]
 
 
 class PermissionMaintenanceResult(StrEnum):
@@ -185,6 +188,40 @@ class _PermissionRotationState:
     official_pair: tuple[str, date] | None = None
     fallback_pair: tuple[str, date] | None = None
     next_daily_bar_pool: Literal["O", "F"] = "O"
+    current_day_minute_symbol: str | None = None
+    realtime_minute_symbol: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _StockMinuteConsumer:
+    """Exact current activation identity, not business execution authority."""
+
+    symbol: str
+    plan_version_id: str
+    plan_hash: str
+    family: Literal["LEGACY", "EXPLICIT_RULES"]
+    activation_revision: int
+    activated_at: datetime
+    request_date: date
+
+
+@dataclass(frozen=True, slots=True)
+class _StockMinutePermissionPreparation:
+    """Frozen owner read facts only; never reserves or starts provider work."""
+
+    status: Literal["PREPARED", "UNKNOWN", "SKIPPED"]
+    captured_at: datetime
+    reason: str
+    candidate: PermissionProbeCandidate | None = None
+    consumer: _StockMinuteConsumer | None = None
+    semantic_bound: bool = False
+    semantic_revision: str | None = None
+    source_time_label: SourceTimeLabel | None = None
+    provider: TushareMarketDataProvider | None = None
+    source: object | None = None
+    session_factory: Callable[[], Session] | None = None
+    calendar_epoch: int | None = None
+    calendar_revoked: Event | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +236,7 @@ class _PermissionEvidence:
     legacy_bar_symbols: tuple[str, ...]
     official_pairs: frozenset[tuple[str, date]]
     legacy_plans: tuple[TradePlan, ...] = ()
+    stock_minute_consumers: tuple[_StockMinuteConsumer, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -962,6 +1000,15 @@ class ProductionMonitorPipeline:
             if candidate.daily_bar_pool is not None:
                 raise ValueError("only daily-bar candidates can identify a pool")
             next_state = replace(current, last_operation=candidate.operation)
+            if candidate.operation in _STOCK_MINUTE_SCOPES:
+                if candidate.symbol is None:
+                    raise ValueError("stock-minute candidate must identify its symbol")
+                field = (
+                    "current_day_minute_symbol"
+                    if candidate.operation is TushareOperation.CURRENT_DAY_MINUTES
+                    else "realtime_minute_symbol"
+                )
+                next_state = replace(next_state, **{field: candidate.symbol})
 
         def on_reserved() -> None:
             self._permission_rotation_state = next_state
@@ -997,11 +1044,14 @@ class ProductionMonitorPipeline:
             )
         )
         if evidence is None:
-            evidence = self._read_permission_evidence(
-                now,
-                include_legacy=include_legacy,
-                include_history=include_legacy and TushareOperation.DAILY_BARS in blocked,
-            )
+            if any(operation in blocked for operation in _STOCK_MINUTE_SCOPES):
+                evidence = self._read_stock_minute_permission_evidence(now)
+            else:
+                evidence = self._read_permission_evidence(
+                    now,
+                    include_legacy=include_legacy,
+                    include_history=include_legacy and TushareOperation.DAILY_BARS in blocked,
+                )
         open_days = evidence.completed_open_days
         legacy_symbols = evidence.legacy_symbols
         legacy_bar_symbols = evidence.legacy_bar_symbols
@@ -1069,6 +1119,24 @@ class ProductionMonitorPipeline:
                 index_code = self._permission_index_code("index_daily")
                 demanded = index_code is not None
                 anchor = open_days[0] if index_code is not None and open_days else None
+            elif operation in _STOCK_MINUTE_SCOPES:
+                consumers = evidence.stock_minute_consumers
+                demanded = bool(consumers) and self._stock_minute_authorized(operation)
+                earliest = self._stock_minute_start_at(now)
+                if demanded and evidence.current_open and earliest is not None:
+                    anchor = now.date()
+                    if earliest > now:
+                        local_defer = max(local_defer or earliest, earliest)
+                    symbols = tuple(consumer.symbol for consumer in consumers)
+                    last_symbol = (
+                        self._permission_rotation_state.current_day_minute_symbol
+                        if operation is TushareOperation.CURRENT_DAY_MINUTES
+                        else self._permission_rotation_state.realtime_minute_symbol
+                    )
+                    symbol = (
+                        symbols[bisect_right(symbols, last_symbol) % len(symbols)]
+                        if last_symbol is not None else symbols[0]
+                    )
             if anchor is None:
                 if demanded:
                     missing.append(operation)
@@ -1107,14 +1175,7 @@ class ProductionMonitorPipeline:
     def next_permission_probe_due_at(self) -> datetime | None:
         """Cheap pure deadline read; evidence is checked only by maintenance work."""
 
-        scopes = (
-            TushareOperation.TRADING_CALENDAR,
-            TushareOperation.INDEX_HISTORICAL_MINUTES,
-            TushareOperation.INDEX_REALTIME_MINUTES,
-            TushareOperation.DAILY_LIMITS,
-            TushareOperation.DAILY_BARS,
-            TushareOperation.INDEX_DAILY,
-        )
+        scopes = _PERMISSION_SCOPES
         deadlines: list[datetime] = []
         for operation in scopes:
             if not self._controller.is_permission_blocked(operation):
@@ -1158,6 +1219,208 @@ class ProductionMonitorPipeline:
         with self._work() as work:
             days = work.references.list_trading_days("SSE", anchor, anchor)
         return len(days) == 1 and days[0].is_open is True
+
+    @staticmethod
+    def _stock_minute_start_at(now: datetime) -> datetime | None:
+        """Earliest legal start today, including the first minute's 12-second grace."""
+        at = now.time()
+        if at < time(9, 31, 12):
+            return datetime.combine(now.date(), time(9, 31, 12), now.tzinfo)
+        if time(11, 30) <= at < time(13):
+            return datetime.combine(now.date(), time(13), now.tzinfo)
+        return now if at < time(15) else None
+
+    def _stock_minute_authorized(self, operation: TushareOperation) -> bool:
+        endpoint = (
+            "rt_min_daily" if operation is TushareOperation.CURRENT_DAY_MINUTES else "rt_min"
+        )
+        semantics = self._stock_semantics
+        if self._semantic_bindings is not None:
+            if semantics is None or endpoint not in semantics.interface_scope:
+                return False
+            label = SourceTimeLabel(semantics.source_time_label)
+        else:
+            if semantics is not None or self._stock_evidence is None:
+                return False
+            label = self._stock_evidence.source_time_label
+        return (
+            label is not SourceTimeLabel.UNVERIFIED
+            and self.provider._source_time_label is label
+            and self._stock_certification_current()
+            and self._generation_current() and not self._admission_revoked()
+        )
+
+    def _stock_minute_consumers_in_session(
+        self, session: Session, now: datetime,
+    ) -> tuple[tuple[_StockMinuteConsumer, ...], tuple[ExecutableTradePlan, ...]]:
+        """Check bounded current three-table identity without historical audit scans."""
+        versions = session.execute(select(
+            PlanVersion.id, PlanVersion.plan_id, PlanVersion.version, PlanVersion.symbol,
+            PlanVersion.plan_hash, func.substr(PlanVersion.payload_json, 1, 1_048_577),
+        ).where(PlanVersion.status == PlanVersionStatus.ACTIVE)
+            .order_by(PlanVersion.symbol).limit(11)).all()
+        if len(versions) > 10:
+            raise ValueError("production supports at most ten active plans")
+        if any(len(row[5]) > 1_048_576 for row in versions):
+            raise ValueError("active plan payload exceeds the recovery read limit")
+        symbols = tuple(row.symbol for row in versions)
+        active = {row.symbol: row for row in session.scalars(
+            select(ActivePlan).where(ActivePlan.symbol.in_(symbols)).limit(11),
+        )}
+        states = {row.symbol: row for row in session.scalars(
+            select(PlanActivationState).where(PlanActivationState.symbol.in_(symbols)).limit(11),
+        )}
+        consumers, plans = [], []
+        for version in versions:
+            try:
+                plan = load_plan_json(version[5])
+            except PlanDocumentError:
+                continue
+            current, state = active.get(version.symbol), states.get(version.symbol)
+            if current is None or state is None:
+                continue
+            if not (
+                current.plan_version_id == state.plan_version_id == version.id
+                and current.symbol == state.symbol == version.symbol == plan.symbol
+                and type(current.revision) is int
+                and type(state.revision) is int
+                and current.revision == state.revision > 0
+                and current.activated_at == state.changed_at
+                and version.plan_id == plan.plan_id and version.version == plan.version
+                and version.plan_hash == plan_sha256(plan)
+                and version[5] == dump_plan_json(plan)
+            ):
+                continue
+            try:
+                activated_at = _canonical_shanghai(datetime.fromisoformat(current.activated_at))
+            except ValueError:
+                continue
+            if activated_at.isoformat() != current.activated_at or activated_at > now:
+                continue
+            plans.append(plan)
+            explicit = isinstance(plan, ExplicitTradePlan)
+            service = self.explicit_evaluations if explicit else self.evaluations
+            if service is not None and activation_is_eligible_on(plan.activation, now.date()):
+                consumers.append(_StockMinuteConsumer(
+                    plan.symbol, version.id, version.plan_hash,
+                    "EXPLICIT_RULES" if explicit else "LEGACY", current.revision,
+                    activated_at, now.date(),
+                ))
+        return tuple(consumers), tuple(plans)
+
+    def _stock_minute_evidence_in_session(
+        self, session: Session, now: datetime,
+    ) -> _PermissionEvidence:
+        consumers, plans = self._stock_minute_consumers_in_session(session, now)
+        # Read today's exact raw fact, avoiding SQLAlchemy's truthy coercion of bad booleans.
+        rows = session.scalars(select(cast(TradingCalendar.is_open, Integer)).where(
+            TradingCalendar.exchange == "SSE", TradingCalendar.cal_date == now.date(),
+        ).limit(2)).all()
+        current_open = now.date().weekday() < 5 and rows == [1]
+        if any(self._controller.is_permission_blocked(op) for op in _PERMISSION_SCOPES[:-2]):
+            evidence = self._permission_evidence_from_repositories(
+                now, MarketReferenceRepository(session), MarketHistoryRepository(session), plans,
+                include_history=self._controller.is_permission_blocked(TushareOperation.DAILY_BARS),
+            )
+            return replace(evidence, current_open=current_open, stock_minute_consumers=consumers)
+        return _PermissionEvidence(None, None, (), current_open, (), (), frozenset(),
+                                   stock_minute_consumers=consumers)
+
+    def _read_stock_minute_permission_evidence(self, now: datetime) -> _PermissionEvidence:
+        factory = self._permission_session_factory
+        if factory is None:
+            if any(self._controller.is_permission_blocked(op) for op in _PERMISSION_SCOPES[:-2]):
+                return self._read_permission_evidence(
+                    now, include_legacy=True, include_history=True,
+                )
+            return _PermissionEvidence(None, None, (), False, (), (), frozenset())
+        session = factory()
+        require_owned_recovery_session(session, (
+            ActivePlan, PlanActivationState, PlanVersion, TradingCalendar, StoredDailyBar,
+        ))
+        with session, session.no_autoflush:
+            return self._stock_minute_evidence_in_session(session, now)
+
+    def _prepare_stock_minute_permission_locked(
+        self, operation: TushareOperation,
+    ) -> _StockMinutePermissionPreparation:
+        """Prepare under the shared owner lock; no reservation, SDK or business writes."""
+        if operation not in _STOCK_MINUTE_SCOPES:
+            raise ValueError("stock-minute preparation requires a stock-minute operation")
+        now = _canonical_shanghai(self._clock.now())
+
+        def defer(
+            reason: str, until: datetime | None = None,
+        ) -> _StockMinutePermissionPreparation:
+            self._permission_probe_deferred_until[operation] = until or now + timedelta(seconds=30)
+            return _StockMinutePermissionPreparation("UNKNOWN", now, reason)
+
+        raw = self._controller.raw_permission_retry_at(operation)
+        if not self._controller.is_permission_blocked(operation) or raw is None:
+            return _StockMinutePermissionPreparation("SKIPPED", now, "not_blocked")
+        if now < max(value for value in (
+            raw, self._permission_probe_deferred_until.get(operation),
+            self._controller.cooldown_until,
+        ) if value is not None):
+            return _StockMinutePermissionPreparation("SKIPPED", now, "not_due")
+        provider, factory = self.provider, self._permission_session_factory
+        source = provider._client
+        semantics, bound = self._stock_semantics, self._semantic_bindings is not None
+        label = provider._source_time_label
+
+        def authority_current() -> bool:
+            at = self._clock.now()
+            return (
+                self.provider is provider and self._permission_session_factory is factory
+                and provider._client is source
+                and self._stock_semantics is semantics
+                and (self._semantic_bindings is not None) == bound
+                and provider._source_time_label is label
+                and at >= now and at.date() == now.date()
+                and self._stock_minute_authorized(operation)
+            )
+
+        if not authority_current():
+            return defer("authority_unavailable")
+        if factory is None:
+            return defer("no_safe_session")
+        session = factory()
+        require_owned_recovery_session(session, (
+            ActivePlan, PlanActivationState, PlanVersion, TradingCalendar, StoredDailyBar,
+        ))
+        with self._calendar_epoch_lock:
+            epoch, revoked = self._calendar_epoch, self._calendar_revoked
+        with session, session.no_autoflush:
+            evidence = self._stock_minute_evidence_in_session(session, now)
+            own_rank = self._permission_priority(operation, raw)
+            candidates, _ = self._permission_probe_state(now=now, evidence=evidence)
+            if any(item.operation is not operation and item.next_due_at <= now
+                   and self._permission_priority(item.operation, item.raw_due_at) < own_rank
+                   for item in candidates):
+                return _StockMinutePermissionPreparation("SKIPPED", now, "other_scope_due")
+            if not evidence.current_open or not evidence.stock_minute_consumers:
+                return defer("no_consumer_or_calendar")
+            earliest = self._stock_minute_start_at(now)
+            if earliest != now:
+                return defer("outside_request_window", earliest)
+            candidate = next((item for item in candidates if item.operation is operation), None)
+            if candidate is None or not authority_current():
+                return defer("authority_unavailable")
+            with self._calendar_epoch_lock:
+                if self._calendar_epoch != epoch or self._calendar_revoked is not revoked:
+                    return defer("calendar_changed")
+                if revoked.is_set():
+                    self._calendar_revoked = Event()
+                token = self._calendar_revoked
+            consumer = next(item for item in evidence.stock_minute_consumers
+                            if item.symbol == candidate.symbol)
+            return _StockMinutePermissionPreparation(
+                status="PREPARED", captured_at=now, reason="current_snapshot",
+                candidate=candidate, consumer=consumer, semantic_bound=bound,
+                semantic_revision=semantics.semantic_revision if semantics is not None else None,
+                source_time_label=label, provider=provider, source=source, session_factory=factory,
+                calendar_epoch=epoch, calendar_revoked=token,
+            )
 
     async def _prepare_daily_bar_permission(self) -> _DailyBarPermissionPreparation:
         """Prepare one due candidate under the shared maintenance lock."""
@@ -1233,6 +1496,9 @@ class ProductionMonitorPipeline:
                 now, MarketReferenceRepository(session), MarketHistoryRepository(session),
                 plans, include_history=True,
             )
+            if any(self._controller.is_permission_blocked(op) for op in _STOCK_MINUTE_SCOPES):
+                consumers, _ = self._stock_minute_consumers_in_session(session, now)
+                evidence = replace(evidence, stock_minute_consumers=consumers)
             # The synthetic own rank also applies when no broad DAILY_BARS anchor exists.
             own_rank = self._permission_priority(operation, raw)
             candidates, _ = self._permission_probe_state(now=now, evidence=evidence)
