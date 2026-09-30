@@ -76,7 +76,14 @@ test("normal installed entry preserves reminder source through restart and resto
   };
   try {
     const firstProcess = await start();
-    const before = await open("/plans");
+    const before = await open("/");
+    await expect(before.getByRole("region", { name: "监控状态", exact: true })).toBeVisible();
+    await expect(before.getByText("没有活动计划。可前往计划工作台核对并启用计划。", { exact: true })).toBeVisible();
+    // An idle first entry becomes LIVE on the existing 20s heartbeat cadence.
+    await expect(before.getByText("● 传输连接正常", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(before.getByTestId("market-index-trend-card").locator(".market-index-trend-card__high")).toHaveText("1000.00");
+    await before.screenshot({ path: join(root, "normal-overview-no-plans.png"), fullPage: true });
+    await before.goto(`${base}/plans`);
     await before.getByLabel("粘贴中文计划原文").fill(literal.sourceText);
     await before.getByRole("button", { name: "提交提取审核" }).click();
     await before.getByRole("button", { name: "保存并进入逐项复核" }).click();
@@ -148,6 +155,20 @@ test("normal installed entry preserves reminder source through restart and resto
     await expect(after.getByText("历史缓存；以下结果保留原始周期，不具备当前提醒资格。")).toBeVisible();
     await expect.poll(() => streams.some(frame => frame.type === "heartbeat" && frame.runtimeGeneration === newGeneration && frame.monitorContractVersion === 2 && frame.runtimeStatus?.lifecycle === "RUNNING" && frame.runtimeStatus.coordinator.state === "SCHEDULED"), { timeout: 30_000 }).toBe(true);
     await expect(after.getByTestId("market-index-trend-card").locator(".market-index-trend-card__high")).toHaveText("1000.00");
+    const overview = after.getByRole("region", { name: "监控状态", exact: true });
+    await expect(overview).toBeVisible();
+    await expect(overview).not.toContainText("资源生命周期");
+    await expect(overview.locator("details")).toHaveCount(0);
+    await after.getByRole("link", { name: "查看系统详情", exact: true }).click();
+    await expect(after.getByRole("heading", { name: "系统健康", exact: true })).toBeVisible();
+    await expect(after.getByRole("region", { name: "后端运行状态", exact: true })).toContainText("资源生命周期");
+    await after.goto(base);
+    await expect(after.getByRole("region", { name: "监控状态", exact: true })).toBeVisible();
+    for (const width of [320, 768, 1024, 1440]) {
+      await after.setViewportSize({ width, height: 900 });
+      const overflow = await after.getByRole("region", { name: "监控状态", exact: true }).evaluate(element => element.scrollWidth > element.clientWidth);
+      expect(overflow, `overview horizontal overflow at ${width}px`).toBe(false);
+    }
     await after.screenshot({ path: join(root, "normal-dashboard-trends.png"), fullPage: true });
     await advance("10:15");
     observations.push({ nextTarget: await runtime(), health: await read("/api/v1/health"), isolation: await read("/_test/isolation") });

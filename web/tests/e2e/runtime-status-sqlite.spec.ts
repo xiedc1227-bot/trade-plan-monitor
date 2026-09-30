@@ -97,6 +97,8 @@ test("v2 UI uses real owned runtime and SQLite, preserves source dates and obser
     expect(initial.symbols).toHaveLength(0); expect(Object.values(initial.counts)).toEqual([0, 0, 0, 0, 0, 0]);
     expect(initial.runtimeStatus.lifecycle).toBe("RUNNING"); expect(initial.runtimeStatus.coordinator.state).toBe("SCHEDULED");
     await expect(page.getByRole("heading", { name: "部分范围受影响", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "监控状态", exact: true })).toContainText("数据格式不符合监控要求");
+    await page.getByRole("link", { name: "查看系统详情", exact: true }).click();
     await expect(page.locator(".runtime-scopes")).toContainText("SEMANTICS_INCOMPATIBLE");
     await page.goto(`${base}/plans`);
     await page.getByLabel("粘贴中文计划原文").fill(literal.sourceText);
@@ -207,6 +209,8 @@ test("v2 UI uses real owned runtime and SQLite, preserves source dates and obser
     const stalledObservation = await dashboard();
     expect(stalledObservation.runtimeStatus.coordinator.state).toBe("STALLED"); expect(stalledObservation.runtimeStatus.lifecycle).toBe("RUNNING");
     await page.goto(base); await expect(page.locator('[data-rule-id="risk-950"]')).not.toHaveAttribute("data-actionable", "true");
+    await expect(page.getByRole("region", { name: "监控状态", exact: true })).toContainText("监控进度未按时更新，当前结果暂不能作为有效提醒。");
+    await expect(page.getByRole("region", { name: "监控状态", exact: true })).not.toContainText("资源生命周期");
     await expect(page.getByText("● 传输连接正常", { exact: true })).toBeVisible();
     await page.screenshot({ path: join(evidence, "s4-v2-stalled.png"), fullPage: true });
     await page.waitForTimeout(1000);

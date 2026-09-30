@@ -6,7 +6,7 @@ import { createMarketIndexApi } from "../api/marketIndexes";
 import MarketIndexDataStrip from "../components/market-index/MarketIndexDataStrip.vue";
 import { useDashboardMarketIndexTrends } from "../composables/useDashboardMarketIndexTrends";
 import { useRuntimeContext } from "./context";
-import StatusBoard from "./StatusBoard.vue";
+import OverviewStatus from "./OverviewStatus.vue";
 import PlanRow from "./PlanRow.vue";
 const { store } = useRuntimeContext();
 const marketIndexes = computed(() => store.snapshot?.marketIndexes ?? []);
@@ -26,7 +26,7 @@ const counts = { actionable: "当前提醒", blocked: "受阻", stale: "陈旧",
   <section class="runtime-page">
     <h1>监控总览</h1>
     <p v-if="store.error" role="status">{{ store.error }}</p>
-    <StatusBoard v-if="store.runtimeStatus" :status="store.runtimeStatus" />
+    <OverviewStatus v-if="store.runtimeStatus" :status="store.runtimeStatus" :live="store.transport === 'LIVE' && !store.error" :no-active-plans="store.snapshot !== null && !store.snapshot.symbols.length" />
     <MarketIndexDataStrip
       :connection-status="connectionStatus"
       :indexes="marketIndexes"
@@ -39,7 +39,6 @@ const counts = { actionable: "当前提醒", blocked: "受阻", stale: "陈旧",
       <dl class="runtime-counts" aria-label="后端快照统计">
         <div v-for="(label, key) in counts" :key="key"><dt>{{ label }}</dt><dd>{{ store.snapshot.counts[key] }}</dd></div>
       </dl>
-      <p v-if="!store.snapshot.symbols.length">没有活动计划。可前往计划工作台核对并启用计划。</p>
       <PlanRow v-for="row in store.snapshot.symbols" :key="`${row.symbol}:${row.activationRevision}`" :row="row" />
     </template>
   </section>

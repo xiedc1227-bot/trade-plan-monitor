@@ -78,6 +78,10 @@ describe("normal v2 dashboard trend preservation", () => {
       expect(wrapper.findComponent(MarketIndexSparkline).props("displayName")).toBe("科创50");
       expect(wrapper.text()).toContain("待机");
       expect(wrapper.text()).toContain("没有活动计划");
+      expect(wrapper.get('[aria-label="监控状态"]').text()).toContain("没有活动计划");
+      expect(wrapper.find('a[href="/system"]').text()).toBe("查看系统详情");
+      expect(wrapper.text()).not.toContain("资源生命周期");
+      expect(wrapper.text()).not.toContain("所需范围及进展");
       expect(wrapper.findAll('[data-testid="market-turnover-card"]')).toHaveLength(1);
       store.setTransport("DISCONNECTED"); await flushPromises();
       expect(wrapper.get('[data-testid="market-index-health"]').text()).toContain("已缓存");

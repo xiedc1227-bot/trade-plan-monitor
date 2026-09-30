@@ -316,6 +316,8 @@ Valid compatible socket: `/ws/v1/monitor?after=42&monitorContractVersion=2`. Old
 
 Use existing `/` and `/system` surfaces. Show transport disconnected/reconnecting separately from backend mode. Display standby without a stale-data recovery warning, recovering with target/progress, and failed scopes with fixed cause plus retry/reconsideration time or required action. Keep cached cutoff and historical risk date visible. No retry-now button, token screen, login, silent refresh of provider certification or client-side trading calculation is added.
 
+The overview uses a compact business summary: backend mode, a plain-language reason, no active plans when confirmed by the installed snapshot, and only non-`READY` scopes grouped by kind. Preserve stored/required cutoffs, cause and retry/reconsideration time; show summed progress only for a group containing `RECOVERING` scopes when every included scope has known counts. Different cutoffs remain an explicit range, and missing cutoffs remain unknown. Old `READY` data alone does not trigger a recovery warning. When transport is not `LIVE` or a read error is present, label the status as the last received information. Keep lifecycle, coordinator deadlines and complete scope diagnostics on the existing `/system` page, reached by the overview's details link. Preserve the original index charts, per-plan projections and eligibility rules. This is a presentation correction within RS09, with no new API, state or recovery behavior.
+
 | Acceptance | Required offline evidence before its gate closes |
 |---|---|
 | A06 / RR016 | Both plan families coexist; waiting/blocked plan never hides a healthy sibling; unsupported optional index does not block unrelated work; explicit outcomes come from their repository. |
