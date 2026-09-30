@@ -1,5 +1,7 @@
 # 运行恢复：完整流程验收证据
 
+> 2026-09-30 当前交付：已批准 D1–D8 / A01–A13 离线实现及原第四步门禁在后端 `185263aa` 完成：5948 passed, 1 skipped, 4 deselected, 1 warning, 3291.64 seconds；前端 808 项和 Chrome 43 项在未变的相关输入上通过。[最终证据](2026-09-30-runtime-recovery-final-gate.zh-CN.md)。C5 用户证据审核仍待完成；D9/A14 API、真实行情源运行和部署仍未另行批准。旧带日期章节保留实际历史范围。
+
 > 第一阶段已按用户批准的离线进程重启标准于 2026-09-23 验收。第二阶段提醒安全已于 2026-09-24 完成离线接通实现及验证；更广的发布门禁仍未关闭。真实行情源验证、用户数据库迁移及部署均未获批准。下文旧章节保留其当时的阶段状态。
 
 ## D5 受控重启范围修订 — 2026-09-24
@@ -162,7 +164,7 @@
 
 基线版本：`ac9da66705829d5da769af616363533f2f6caf7a`，分支为 `codex/consolidate-r19-r32`；检查覆盖尚未提交的接通修改。可选的 `LegacyHistoricalCloseReader` 和 `HistoricalOfficialContextBuilder` 从一次有界自有快照向既有收盘评估器提供输入。历史风险使用可归因的来源收盘时间；提交结果保存准确的已证明历史批次。D2 登记的人工卖出减少 D2 数量，但即使其生效交易日为 D1，也不减少 D1 数量。补算产生的两条风险提醒均从 `HOLD` 开始。
 
-真实临时 SQLite 场景用 200 股提交 D1，重开后用 100 股提交 D2，再次重开仅得到重复结果。结果保存前和提醒插入后模拟退出，会一起回滚占用、结果、风险及投递资格。提交后发布失败保留唯一持久结果。并发持仓/风险变化、全局发布、旧激活，以及保护核对后占用前插入的写入，均拒绝过期输入。乱序 D2 不留下待收盘标记。持仓/日历资料不足及先前受阻结果不能被占用。旧版批次模型无法表达的期初持仓保持不可用，不会从评估数量中消失。
+真实临时 SQLite 场景用 200 股提交 D1，重开后用 100 股提交 D2，再次重开仅得到重复结果。结果保存前和提醒插入后模拟退出，会一起回滚占用、结果、风险及投递资格。提交后发布失败保留唯一持久结果。并发持仓/风险变化、全局发布、旧激活，以及保护核对后占用前插入的写入，均拒绝过期输入。乱序 D2 工作不会留下 D2 待收盘标记。持仓/日历资料不足及先前受阻结果不能被占用。旧版批次模型无法表达的期初持仓保持不可用，不会从评估数量中消失。
 
 - 修复审计前驱问题前：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_execution.py tests/integration/test_historical_close_evidence.py tests/integration/test_recovery_activation_fences.py tests/integration/test_close_recovery_evidence.py tests/integration/test_close_recovery_session_ownership.py tests/unit/test_missed_close_recovery.py tests/integration/test_position_inventory_history.py tests/integration/test_inventory_history_boundaries.py tests/integration/test_recovery_alert_eligibility.py tests/integration/test_ten_symbol_runtime.py tests/integration/test_sqlite_repositories.py tests/integration/test_certified_production_runtime.py -q --tb=short` — 469 通过、1 项既有 Starlette/httpx 警告，80.93 秒。
 - 新的只读 `gpt-6-astra` / `xhigh` 评审确认了期初持仓和缺失日历问题，随后复现物理版本大于 1 时本激活首条风险变更缺少前驱审计连接。每一项均先有专项失败测试，再补保护/连接。先前 `BLOCKED_DATA` 记录也由失败测试证实后改为未知。

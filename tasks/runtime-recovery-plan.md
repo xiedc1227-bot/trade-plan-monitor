@@ -1,6 +1,6 @@
 # Implementation Proposal: Anytime Runtime Recovery
 
-> Status: IMPLEMENTATION IN PROGRESS — original proposal approved on 2026-09-21; D8 five-day admission approved on 2026-09-23. D9 business intent is confirmed, but its API contract awaits review. None is approved for deployment. Original proposal date: 2026-09-17.
+> Status: OFFLINE_IMPLEMENTATION_COMPLETE — original proposal approved on 2026-09-21; D8 five-day admission approved on 2026-09-23. D9 business intent is confirmed, but its API contract awaits review. None is approved for deployment. Original proposal date: 2026-09-17.
 > Canonical English proposal; review copy: `runtime-recovery-plan.zh-CN.md`.
 > Initiative: `runtime-recovery`. Task index: `runtime-recovery-todo.md`.
 > Stage 2 connected offline delivery admission was implemented on 2026-09-24; see the paired task index and acceptance report for evidence and remaining release gates. Earlier dated sections retain their historical status.
@@ -205,7 +205,7 @@ The task list separates bounded implementation changes (normally 3–5 source/te
 
 ### 7.1. Execution workflow revision — 2026-09-22
 
-The user requested higher implementation efficiency before continuing implementation. This revision changes work sequencing and verification cadence, not D1–D7, A01–A12, trading rules, evidence requirements or deployment authority. Existing RR001–RR022 and C0–C5 remain traceable; completed evidence is retained. The task index's five business outcomes are the progress-reporting authority, not commit counts or the model-allocation stages.
+The user requested higher implementation efficiency before continuing implementation. This revision changes work sequencing and verification cadence, not D1–D7, A01–A12, trading rules, evidence requirements or deployment authority. Existing RR001–RR022 and C0–C5 remain traceable; completed evidence is retained. The original four-stage plan remains the user-facing progress authority. The task index's entries 4a and 4b are acceptance subdivisions of the original fourth stage: status/page integration and final restart/fault verification both belong to the original fourth stage. They do not introduce a fifth stage.
 
 - **One active business outcome.** Finish a connected recovery scenario before extending unrelated foundations. Keep internal changes reviewable and independently recoverable, but group adjacent record decoders, their consumers and tests under one outcome. A passing decoder alone does not advance the business stage.
 - **Integrate early, enable late.** Build the temporary-database/fake-provider recovery composition and restart harness while implementing the recovery path, not for the first time at RR020. Reuse the real repositories, evaluator transactions and owned coordinator; do not build a second runtime or mock away the boundary under test. RR020 still gates default enablement and full process-restart acceptance.

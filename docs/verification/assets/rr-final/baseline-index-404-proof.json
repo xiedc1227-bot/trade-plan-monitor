@@ -1,0 +1,61 @@
+{
+  "baseline": "e09c3ea",
+  "identicalBaselineSource": {
+    "src/trade_plan_monitor/web/persistent_market_index_history.py": true,
+    "src/trade_plan_monitor/web/routers/market_indexes.py": true,
+    "web/src/composables/useDashboardMarketIndexTrends.ts": true,
+    "web/src/views/DashboardRouteView.vue": true
+  },
+  "scope": "Baseline reader plus identical route with read-only failed fixture DB; not a whole baseline browser run",
+  "databaseReadOnly": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-dfmd0x05\\monitor.sqlite3",
+  "records": [
+    {
+      "url": "http://testserver/api/v1/market-indexes/399006.SZ/bars?endAt=2026-09-14T10%3A20%3A15%2B08%3A00&interval=FIVE_MINUTE&limit=64&startAt=2026-09-14T09%3A30%3A00%2B08%3A00",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Resource not found",
+          "details": [],
+          "requestId": "a132ab9a25184b719a18514e8ef32cdc"
+        }
+      }
+    },
+    {
+      "url": "http://testserver/api/v1/market-indexes/000688.SH/bars?endAt=2026-09-14T10%3A20%3A15%2B08%3A00&interval=FIVE_MINUTE&limit=64&startAt=2026-09-14T09%3A30%3A00%2B08%3A00",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Resource not found",
+          "details": [],
+          "requestId": "f439cd348c334a3f8f03b46474ce5d2d"
+        }
+      }
+    },
+    {
+      "url": "http://testserver/api/v1/market-indexes/000001.SH/bars?endAt=2026-09-14T10%3A20%3A15%2B08%3A00&interval=FIVE_MINUTE&limit=64&startAt=2026-09-14T09%3A30%3A00%2B08%3A00",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Resource not found",
+          "details": [],
+          "requestId": "5ebc2c6df777428f93c4dcb5e37a95b7"
+        }
+      }
+    },
+    {
+      "url": "http://testserver/api/v1/market-indexes/399001.SZ/bars?endAt=2026-09-14T10%3A20%3A15%2B08%3A00&interval=FIVE_MINUTE&limit=64&startAt=2026-09-14T09%3A30%3A00%2B08%3A00",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Resource not found",
+          "details": [],
+          "requestId": "e3dddae1bffa440c9844711e39012980"
+        }
+      }
+    }
+  ]
+}

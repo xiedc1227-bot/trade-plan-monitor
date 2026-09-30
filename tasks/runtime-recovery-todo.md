@@ -1,6 +1,6 @@
 # Task List: Anytime Runtime Recovery
 
-> Status: IN PROGRESS since implementation authorization on 2026-09-21. Canonical English; paired copy: `runtime-recovery-todo.zh-CN.md`.
+> Status: OFFLINE_IMPLEMENTATION_COMPLETE for approved D1–D8 / A01–A13 on 2026-09-30; C5 user evidence review remains pending. Canonical English; paired copy: `runtime-recovery-todo.zh-CN.md`.
 > Governing proposal: `runtime-recovery-plan.md`. Original D1–D7/A01–A12 and D8/A13 are approved; D9/A14 business intent is confirmed, but its API awaits review.
 > Future assignments follow proposal section 2: `gpt-6-astra` / `xhigh` for architecture, adversarial review and difficult failures; `gpt-6-sol` / `high` for bounded implementation and `gpt-6-sol` / `medium` for settled documentation. Historical execution records retain their actual model/effort. Each checkpoint review is evidence only when performed.
 
@@ -8,17 +8,17 @@
 
 ### Current delivery order — updated 2026-09-30
 
-Use proposal section 7.1 for execution. The following five outcomes govern user-facing progress; RR tasks below remain the implementation/acceptance index, not five additional stages. Ordering baseline: `1f50439`, on `codex/consolidate-r19-r32`. **Business step 1 passed the user's limited offline three-process restart criterion on 2026-09-23.** This is a scoped acceptance, not closure of C0–C5 or the complete release gates; actual evidence follows below.
+Use proposal section 7.1 for execution. The original four-stage plan remains unchanged. Entries 4a and 4b are acceptance subdivisions of the original fourth stage, including documentation and final restart/fault verification. Historical reports retain their original business-step labels. RR tasks below remain the implementation/acceptance index. Ordering baseline: `1f50439`, on `codex/consolidate-r19-r32`. **The approved offline implementation and original fourth-stage gates are complete.** Final backend `185263aa`: 5948 passed, 1 skipped, 4 deselected, 1 warning, 3291.64 seconds; frontend 808 tests, type/build/contract checks and all 43 Chrome tests passed on unchanged relevant inputs. C0–C4 and RR001–RR022 close only for approved D1–D8 / A01–A13; C5 user evidence review and the unapproved D9/A14 API remain separate.
 
 | Business step | Current state | Completion evidence / RR mapping |
 |---|---|---|
-| 1. Historical-state recovery | Complete under the approved limited offline criterion: three independent processes use the installed production composition and one temporary SQLite database to resume a missed official close once, retain the active plan and avoid duplicate result/alert after another restart. The five-day admission gate remains in front. High-volume evidence limits and the complete cross-day/fault matrix remain open | Scoped restart evidence is recorded in paired `docs/verification/runtime-recovery-acceptance.md`; unrestricted historical recovery, real-provider validation and full RR007–RR010/C2/A13 release acceptance remain separate |
-| 2. Notification safety | Connected offline implementation: production composition writes initial HOLD and rechecks committed identity, risk, inventory, completed target and recovery barrier before each channel call. Focused fake-channel/restart evidence exists; full release gates and live operation remain open | Both plan families use freshly reconstructed risk/inventory/barrier evidence before fake-channel admission; obsolete notices suppressed, identical applicable exits latest-only, insufficient evidence held; uncertain sends preserved. RR011–RR013 |
-| 3. Actual lifecycle integration | Complete within the approved offline lifecycle scope on 2026-09-27: eight-scope permission recovery, independent DEGRADED clocks, bounded same-generation stock repair, identity/configuration fences, installed read/liveness behavior and process/stop-drain evidence. Fixed source/test HEAD `e35f344` passed the full S3-09 command: 5711 passed, 1 skipped, 4 deselected, 1 warning in 1074.18s. Astra approved source/matrix closure; final four-document parity has passed | [Final evidence and limits](../docs/verification/2026-09-27-s3-final-offline-gate.md). C1/C3 close only for this offline scope. Safe stop → manual edit → new process remains required. RR004–RR006, RR010 and RR014 remain the mapping, not automatically completed RR checkboxes; steps 4/5 and real operation remain separate |
-| 4. Status APIs and page | Complete within the approved business step 4 offline scope: RR002, RR015–RR019 and C4 closed. Frozen backend HEAD `0f1df66`: 5920 passed, 1 skipped, 4 deselected, 1 warning, 1140.87 seconds; frontend 807 tests and two real Chrome journeys passed; independent source/evidence and final four-document parity approved | [Final evidence and limits](../docs/verification/2026-09-30-s4-offline-status-gate.md). Default version `1` retained; version `2` requires explicit opt-in. RR020, step 5 and live operation remain separate |
-| 5. Restart/fault acceptance | The scoped three-process Stage 1 restart and Stage 2 fake-channel scenarios pass; the complete cross-day/fault matrix is still open | All A01–A14 scenarios, all section 7 offline gates, migration/rollback evidence and final independent review completed; deployment remains separate. RR020–RR022, C5 |
+| 1. Historical-state recovery | Complete within approved bounded offline scope: original three-process missed-close continuation plus chronological historical evidence, inventory, activation, crash and final regression checks. Invalid/incomplete or over-budget proof still blocks the affected plan; five-day admission remains required | [Final evidence](../docs/verification/2026-09-30-runtime-recovery-final-gate.md); historical reports remain scoped. RR007–RR010, C2, A13. No unlimited-history or real-provider claim |
+| 2. Notification safety | Complete offline: atomic initial HOLD, fresh committed identity/risk/inventory/target/barrier admission, obsolete suppression, latest applicable repeated exit and retained uncertain-send behavior. Both plan families and commit/send kills remain covered | [Final evidence](../docs/verification/2026-09-30-runtime-recovery-final-gate.md); temporary SQLite and fake channels only. RR011–RR013 |
+| 3. Actual lifecycle integration | Complete within approved offline scope: eight-scope permission recovery, independent retry clocks, bounded same-generation repair, configuration/identity fences, owner liveness and drain/kill/restart matrix. Final full regression retains the original bounds | [S3 evidence](../docs/verification/2026-09-27-s3-final-offline-gate.md) plus [final evidence](../docs/verification/2026-09-30-runtime-recovery-final-gate.md); RR004–RR006, RR010, RR014, C1/C3. Safe stop → manual edit → new process |
+| 4a. Status APIs and page (original stage 4) | Integrated through the normal production entry with monitor contract `2` and matching packaged assets. The final Chrome suite at frozen `d4db557b` passed all 43 tests across 18 specs, one worker, zero retries, 9.0 minutes | Historical [S4 evidence](../docs/verification/2026-09-30-s4-offline-status-gate.md) is retained; [final integration evidence](../docs/verification/2026-09-30-runtime-recovery-final-gate.md) supersedes its former default-version statement. RR002, RR015–RR019, C4 |
+| 4b. Restart/fault acceptance and documentation (original stage 4) | Complete offline: normal-entry session/process matrix, original crash/migration/expiry checks, all section 7 gates including heavy backtest acceptance, source/evidence review and paired documentation | Approved D1–D8 / A01–A13. [Final report](../docs/verification/2026-09-30-runtime-recovery-final-gate.md); RR020–RR022. D9/A14 remains API-unapproved; C5 user evidence review and deployment remain separate |
 
-The main sequence is 1 → 2 → 3 → 4 → 5. Bring forward offline composition/restart test scaffolding into step 1 and dependency-retry tests into step 3; do not postpone their first execution until step 5. After RR002 is reviewed, independent status/client preparation can overlap without claiming step 4 completion. Original task dependencies remain acceptance/default-enablement gates, not a ban on testing injected integrations early.
+The stage sequence remains 1 → 2 → 3 → 4; entries 4a and 4b belong to stage 4. Bring forward offline composition/restart test scaffolding into outcome 1 and dependency-retry tests into outcome 3; do not postpone their first execution until final acceptance. After RR002 is reviewed, independent status/client preparation can overlap without claiming completion. Original task dependencies remain acceptance/default-enablement gates, not a ban on testing injected integrations early. The current final integration record is [the original fourth-stage closure report](../docs/verification/2026-09-30-runtime-recovery-final-gate.md); its current status supersedes historical pending statements only where actual evidence is recorded. D9/A14 remains a separately unapproved API follow-up.
 
 ### Business step 3 offline test order — 2026-09-24
 
@@ -229,7 +229,7 @@ Current implementation handoff: alerts are not executions; only manual registrat
 
 ### Five-day scope amendment — 2026-09-23
 
-- [ ] **V1d — Implement approved D8/A13.** The 120-hour boundary, durable last-alive evidence and unknown/legacy database behavior are approved. The additive `0022_runtime_liveness` schema, persistence/classifier and temporary-database boundary/corruption/legacy/downgrade tests are implemented. Production startup admits or atomically expires plans before active loading, provider work or dispatch; a 30-second heartbeat runs in degraded mode and drains before database close. A >120-hour suspended gap stops instead of renewing stale evidence. Expiry removes pending closes, suppresses existing receipts and audits the cause; injected failure rolls back. Separate Python processes prove both post-commit exit and mid-expiry termination recover without partial or duplicate expiry. Valid legacy/explicit documents retain their definitions and holdings. The missing-heartbeat operator path serves `BLOCKED` system health without monitor work, previews exact plans and requires second confirmation; one transaction invalidates them while preserving holdings, and a restart creates fresh evidence. Post-admission heartbeat batches of at most 100 alerts now write terminal receipts for canonical alerts whose exact superseded version also has a long-outage/manual invalidation audit; ordinary deactivation does not qualify. Those terminally invalidated versions cannot be reactivated, while ordinary reactivation remains allowed. Malformed evidence is audited without raw payload, and a transient sweep failure does not delay liveness. **V1d remains open:** unclassifiable legacy records need a safe review disposition, sweep failures need visible maintenance status, and broader release-gate review remains. Never run bulk expiry on the user database in this stage.
+- [x] **V1d — Complete approved D8/A13 offline implementation.** Exact 120-hour admission, durable 30-second legal-owner heartbeat, idempotent all-plan expiry, missing-heartbeat preview/fingerprint/separate confirmation, holdings/history preservation, invalidation/send suppression and rollback/kill/restart tests pass in the final full gate. Corrupt/future liveness remains blocked for investigation. Unclassifiable old alerts retain sanitized audit without invented receipts; sweep failures log `ALERT_SWEEP_FAILED`, preserve the cursor and retry without stopping liveness. The old additional alert-review workflow/Web maintenance-status suggestions are not approved D8/A13 or RS04 contracts and are not implemented or added to this refactor. [Evidence and limits](../docs/verification/2026-09-30-runtime-recovery-final-gate.md). No user-database bulk expiry was performed.
 - [ ] **V2a — Review D9/A14 alert-page action contract.** Keep risk and sell signals separate; distinguish read acknowledgment, not-sold and actual-quantity sold. Reuse the inventory-closure boundary with idempotency and audit, then test stale alert, partial sale and repeated confirmation. Implement after the five-day admission decision, without changing evaluator rules.
 
 ### Completed scoped outcome: one provable missed close
@@ -342,7 +342,10 @@ See paired `docs/verification/2026-09-22-opening-balance-decoding.md`. This is t
 
 ## Specification gate
 
-- [ ] RR001 — Freeze semantic and recovery specifications. Effort: `xhigh`. Dependencies: proposal/map approval.
+Current completion evidence: [original fourth-stage report](../docs/verification/2026-09-30-runtime-recovery-final-gate.md). The following RR checkboxes refer only to approved D1–D8 / A01–A13 offline delivery; original A14 acceptance text is retained as an unapproved D9 API follow-up. Earlier dated pending statements describe their historical checkpoints. C5 is still the user's evidence review, not unfinished implementation.
+
+
+- [x] RR001 — Freeze semantic and recovery specifications. Effort: `xhigh`. Dependencies: proposal/map approval.
   - Acceptance: D1–D6 and A01–A10 are precise; module interfaces, actual activation boundaries, all signal delivery classes and additive migration are approved, not inferred.
   - Files: NEW paired provider-contract specification and paired runtime-recovery specification under `docs/specifications/monitoring/` (4 files).
   - Verify: trace every decision/acceptance ID, check bilingual parity, obtain specification approval.
@@ -353,7 +356,7 @@ See paired `docs/verification/2026-09-22-opening-balance-decoding.md`. This is t
 
 ### Checkpoint C0 — Approved contract
 
-- [ ] Complete review of RR001–RR002 against the user-approved proposal; changes to source semantics, alert eligibility, schema and compatibility are explicit. Isolated foundations may proceed under the 2026-09-21 implementation instruction; no production default switch or unapproved semantic expansion before this gate.
+- [x] RR001–RR002 reviewed against the approved D1–D8 / A01–A13 contracts and prior independent design/source approvals; bilingual parity and final integration evidence verified. No D9/A14 approval is inferred. [Final evidence](../docs/verification/2026-09-30-runtime-recovery-final-gate.md).
 
 ## Provider and recovery foundations
 
@@ -361,7 +364,7 @@ See paired `docs/verification/2026-09-22-opening-balance-decoding.md`. This is t
   - Acceptance: A01–A02; migration idempotent, verified scope only, original evidence untouched; semantic revision ignores metadata but checks adapter compatibility.
   - Files: NEW `src/trade_plan_monitor/runtime/provider_contract.py`, `src/trade_plan_monitor/live_profiles.py`, `tests/unit/test_live_certification_profiles.py`, NEW `tests/unit/test_provider_contract.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_live_certification_profiles.py tests/unit/test_provider_contract.py -q`.
-- [ ] RR004 — Replace whole-evidence runtime gates. Effort: `high`. Dependencies: RR003.
+- [x] RR004 — Replace whole-evidence runtime gates. Effort: `high`. Dependencies: RR003.
   - Acceptance: stock/index gates independent; old READY does not confer current health; metadata refresh harmless and incompatible change rejected before physical request.
   - Files: `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/web/monitor_composition.py`, `tests/integration/test_production_certification_gate.py`, `tests/integration/test_certified_production_runtime.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_certification_gate.py tests/integration/test_certified_production_runtime.py -q` using injected composition until RR020.
@@ -369,7 +372,7 @@ See paired `docs/verification/2026-09-22-opening-balance-decoding.md`. This is t
   - Acceptance: cooldown/retry state survives restart, contains no credentials, migration is additive/idempotent and refuses destructive loss of pending state.
   - Files: NEW migration under `src/trade_plan_monitor/state/migrations/versions/`, `src/trade_plan_monitor/state/models.py`, NEW `src/trade_plan_monitor/state/runtime_recovery.py`, NEW `tests/integration/test_runtime_recovery_storage.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py -q` with temporary database upgrade/restart cases.
-- [ ] RR006 — Add controlled reconciliation/retry admission. Effort: `high`. Dependencies: RR004–RR005.
+- [x] RR006 — Add controlled reconciliation/retry admission. Effort: `high`. Dependencies: RR004–RR005.
   - Acceptance: A04–A05; stable failure keys, one permission reprobe, preserved shared cooldown, bounded/coalesced work; no permanent permission latch loop.
   - Files: NEW `src/trade_plan_monitor/runtime/reconciliation.py`, `src/trade_plan_monitor/runtime/request_control.py`, `tests/unit/test_monitor_runtime.py`, NEW `tests/unit/test_runtime_reconciliation.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py -q` with fake clock and physical-call counters.
@@ -380,49 +383,49 @@ See paired `docs/verification/2026-09-22-opening-balance-decoding.md`. This is t
 
 ## Session and business-state recovery
 
-- [ ] RR007 — Calculate session-aware recovery targets. Effort: `high`. Dependencies: C1.
+- [x] RR007 — Calculate session-aware recovery targets. Effort: `high`. Dependencies: C1.
   - Acceptance: A03/A10; unknown calendar has a retry wake, standby is not live actionable data, rollover and clock reversal do not consume future data.
   - Files: `src/trade_plan_monitor/runtime/scheduler.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, `tests/unit/test_monitor_runtime.py`, `tests/unit/test_runtime_reconciliation.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py -q` across the full session matrix.
-- [ ] RR008 — Restore exact scoped coverage in bounded steps. Effort: `high`. Dependencies: RR007.
+- [x] RR008 — Restore exact scoped coverage in bounded steps. Effort: `high`. Dependencies: RR007.
   - Acceptance: empty/partial rows do not prove readiness; cutoff is frozen; fair per-scope progress, no all-symbol startup monopoly, existing index retry caps respected.
   - Files: `src/trade_plan_monitor/runtime/recovery.py`, `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, NEW `tests/integration/test_runtime_recovery_coverage.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_coverage.py -q`; include partial and cross-day acquisition plus constrained-capacity cases.
-- [ ] RR009 — Discover completely missed close obligations. Effort: `high`. Dependencies: RR008.
+- [x] RR009 — Discover completely missed close obligations. Effort: `high`. Dependencies: RR008.
   - Acceptance: stop before 15:20/restart after 17:00 and multi-day outages restore eligible missing closes in causal order; unknown historical state blocks only the dependent plan.
-  - Files: `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, NEW `tests/integration/test_missed_close_recovery.py`.
-  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_recovery.py -q`; do not dispatch historical alerts before RR012–RR013.
-- [ ] RR010 — Fence dependency changes and plan-family recovery. Effort: `high`. Dependencies: RR008–RR009.
+  - Files: `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, NEW `tests/unit/test_missed_close_recovery.py`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_missed_close_recovery.py tests/integration/test_historical_close_evidence.py tests/integration/test_missed_close_execution.py tests/integration/test_s3_missed_close_kill_restart.py -q`; preserve RR012–RR013 dispatch admission.
+- [x] RR010 — Fence dependency changes and plan-family recovery. Effort: `high`. Dependencies: RR008–RR009.
   - Acceptance: A06/A09; reference keys cover requirements and activation; same-symbol explicit-to-legacy replacement fetches missing references; old generations cannot commit current decisions.
   - Files: `src/trade_plan_monitor/runtime/production.py`, `src/trade_plan_monitor/runtime/production_context.py`, `tests/integration/test_explicit_runtime_production.py`, NEW `tests/integration/test_recovery_activation_fences.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_explicit_runtime_production.py tests/integration/test_recovery_activation_fences.py -q`.
 
 ### Checkpoint C2 — Correct recovery targets
 
-- [ ] A03, A06, A07, A09, A10 pass offline; independently review close discovery, state reconstruction and activation semantics at `xhigh`.
+- [x] A03, A06, A07, A09, A10 pass within approved bounded offline scope. Existing independent reviews, actual chronological close/inventory/activation evidence and final full regression are consolidated in [the final report](../docs/verification/2026-09-30-runtime-recovery-final-gate.md); unknown or over-budget proof remains blocked.
 
 ## Notification safety and lifecycle
 
-- [ ] RR011 — Add durable delivery eligibility without hash changes. Effort: `high`. Dependencies: C0, C2, migration approval.
+- [x] RR011 — Add durable delivery eligibility without hash changes. Effort: `high`. Dependencies: C0, C2, migration approval.
   - Acceptance: historical eligibility/expiry/suppression is durable, event payloads/hashes unchanged; old pending rows get fail-closed classification without deletion.
   - Files: NEW additive migration, `src/trade_plan_monitor/state/models.py`, `src/trade_plan_monitor/notifications/outbox.py`, `tests/unit/test_notification_outbox.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_notification_outbox.py -q` with migration interruption/golden payload cases.
-- [ ] RR012 — Apply intent eligibility in both evaluator transactions. Effort: `high`. Dependencies: RR010–RR011.
+- [x] RR012 — Apply intent eligibility in both evaluator transactions. Effort: `high`. Dependencies: RR010–RR011.
   - Acceptance: A08; state/claims and delivery eligibility commit atomically; preserve historical result hashes, true risk notices and explicit activation identity; no unrestricted stale intent is committed.
   - Files: `src/trade_plan_monitor/runtime/service.py`, `src/trade_plan_monitor/runtime/explicit_service.py`, `tests/integration/test_explicit_runtime_production.py`, NEW `tests/integration/test_recovery_alert_eligibility.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_recovery_alert_eligibility.py tests/integration/test_explicit_runtime_production.py -q`.
-- [ ] RR013 — Gate pending dispatch after downtime. Effort: `high`. Dependencies: RR012.
+- [x] RR013 — Gate pending dispatch after downtime. Effort: `high`. Dependencies: RR012.
   - Acceptance: obsolete unsent actionable messages suppressed with audit reason; risk messages wait for the per-plan current-state recovery barrier and latest-state recheck (D1 breach/D2 resolution); both plan loaders and existing uncertain-send behavior work.
   - Files: `src/trade_plan_monitor/notifications/dispatcher.py`, `src/trade_plan_monitor/notifications/outbox.py`, `tests/integration/test_notification_delivery.py`, `tests/integration/test_recovery_alert_eligibility.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_notification_delivery.py tests/integration/test_recovery_alert_eligibility.py -q` using fake channels only.
-- [ ] RR014 — Keep a coordinator alive through degraded startup. Effort: `high`. Dependencies: RR006–RR013.
+- [x] RR014 — Keep a coordinator alive through degraded startup. Effort: `high`. Dependencies: RR006–RR013.
   - Acceptance: A04/A11; local bootstrap is independent of provider IO; one owner, interruptible waits, progress deadline and safe shutdown; expected errors do not exhaust crash supervision.
   - Files: `src/trade_plan_monitor/runtime/service.py`, `src/trade_plan_monitor/runtime/reconciliation.py`, `src/trade_plan_monitor/web/monitor_composition.py`, `tests/integration/test_runtime_lifecycle.py`, `tests/integration/test_monitor_production_composition.py`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_lifecycle.py tests/integration/test_monitor_production_composition.py -q` against injected new lifecycle; keep public default switch for RR020.
 
 ### Checkpoint C3 — Safe autonomous runtime
 
-- [x] A04 and A08–A11 pass within the approved step 3 offline scope; `xhigh` audit of commit/crash/send windows, generation changes and physical-worker cleanup approved. [Final evidence](../docs/verification/2026-09-27-s3-final-offline-gate.md); final four-document parity passed. This does not close C2/C4/C5 or complete release acceptance.
+- [x] A04 and A08–A11 pass within the approved step 3 offline scope; `xhigh` audit of commit/crash/send windows, generation changes and physical-worker cleanup approved. [Final evidence](../docs/verification/2026-09-27-s3-final-offline-gate.md); final four-document parity passed. This historical S3 approval is retained; current C2/C4 and original fourth-stage completion are recorded in [the final report](../docs/verification/2026-09-30-runtime-recovery-final-gate.md). C5 remains user evidence review.
 
 ## Status and user-visible recovery
 
@@ -449,19 +452,19 @@ See paired `docs/verification/2026-09-22-opening-balance-decoding.md`. This is t
 
 ### Checkpoint C4 — End-to-end status contract
 
-- [x] A06, A11, A12 and type/contract gates pass within the approved business step 4 offline scope; `xhigh` source, real Chrome and bilingual evidence review approved. Final full regression at frozen HEAD `0f1df66` passed. [Final evidence](../docs/verification/2026-09-30-s4-offline-status-gate.md). This does not close RR020/C5 or enable production defaults.
+- [x] A06, A11, A12 and type/contract gates pass within the approved business step 4 offline scope; `xhigh` source, real Chrome and bilingual evidence review approved. Final full regression at frozen HEAD `0f1df66` passed. [Final evidence](../docs/verification/2026-09-30-s4-offline-status-gate.md). This historical S4 approval is retained; RR020 and normal production defaults are now complete with the original fourth-stage gates in [the final report](../docs/verification/2026-09-30-runtime-recovery-final-gate.md). C5 remains user evidence review.
 
 ## Integration and handoff
 
-- [ ] RR020 — Enable the complete path and prove real process restart offline. Effort: `high`; fault interpretation/review: `xhigh`. Dependencies: C4.
+- [x] RR020 — Enable the complete path and prove real process restart offline. Effort: `high`; fault interpretation/review: `xhigh`. Dependencies: C4. Complete only for approved D1–D8 / A01–A13; unapproved D9/A14 remains separate.
   - Acceptance: A01–A14 across all target times; stop/kill/restart at commit and dispatch windows; migrations interrupted safely; no provider calls or real notifications.
   - Files: `src/trade_plan_monitor/web/monitor_composition.py`, NEW `tests/integration/test_anytime_runtime_recovery.py`, `web/tests/e2e/production-restart.spec.ts`, `web/tests/e2e/r13-active-process-restart.spec.ts`, NEW `web/tests/e2e/runtime-recovery.spec.ts`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`; `npm --prefix web run test:e2e -- production-restart.spec.ts r13-active-process-restart.spec.ts runtime-recovery.spec.ts` with isolated test state.
-- [ ] RR021 — Synchronize operations and verification evidence. Effort: `high`. Dependencies: RR020.
+- [x] RR021 — Synchronize operations and verification evidence. Effort: `high`. Dependencies: RR020.
   - Acceptance: restart/first-time source validation/reconfiguration/rollback instructions are accurate; record only actually executed tests; English/Chinese match.
   - Files: `docs/operations/live-certification.md`, `docs/operations/live-certification.zh-CN.md`, NEW paired `docs/verification/runtime-recovery-acceptance.md` / `runtime-recovery-acceptance.zh-CN.md`.
   - Verify: compare IDs/commands/thresholds/fields in both languages; trace every A01–A14 result to evidence.
-- [ ] RR022 — Run full offline gates and final adversarial review. Effort: `xhigh`. Dependencies: RR021.
+- [x] RR022 — Run full offline gates and final adversarial review. Effort: `xhigh`. Dependencies: RR021.
   - Acceptance: all proposal section 7 gates pass, current unrelated changes preserved, no unresolved material finding, no secret or relaxed test in diff; list any live-only limits honestly.
   - Files: paired acceptance report and this paired task list (4 files); do not hide fixes in this review task, return them to a bounded implementation task.
   - Verify: run every full command in proposal section 7; review the diff and crash matrix; record actual model/effort where available and user review outcome.

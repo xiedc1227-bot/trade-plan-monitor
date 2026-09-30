@@ -1,6 +1,6 @@
 # 任务表：任意时段重启与自动恢复
 
-> 状态：自 2026-09-21 获得实现授权起 IN PROGRESS。英文规范输入：`runtime-recovery-todo.md`；本文件为中文副本。
+> 状态：2026-09-30 已完成批准 D1–D8 / A01–A13 的 OFFLINE_IMPLEMENTATION_COMPLETE；C5 用户证据审核仍待完成。英文规范输入：`runtime-recovery-todo.md`；本文件为中文副本。
 > 上位提案：`runtime-recovery-plan.zh-CN.md`。原 D1–D7/A01–A12 及 D8/A13 已获批准；D9/A14 业务意图已确认，但 API 待评审。
 > 后续分配遵循提案第 2 节：架构、质疑式评审及疑难故障使用 `gpt-6-astra` / `xhigh`；有界实现使用 `gpt-6-sol` / `high`，已确定内容的文档同步使用 `gpt-6-sol` / `medium`。历史执行记录保留当时实际模型/强度。检查点评审仅在实际执行后才构成证据。
 
@@ -8,17 +8,17 @@
 
 ### 当前交付顺序 — 更新于 2026-09-30
 
-执行遵循提案第 7.1 节。以下五项成果作为面向用户的进度口径；下方 RR 任务仍是实现/验收索引，不是额外五个阶段。顺序决策基线：`1f50439`，分支为 `codex/consolidate-r19-r32`。**业务第 1 步已于 2026-09-23 通过用户批准的限定离线三进程重启标准。** 这是有范围的验收，不代表 C0–C5 或完整发布门禁已关闭；实际证据记录如下。
+执行遵循提案第 7.1 节，原四步方案保持不变。4a、4b 是原第四步的验收细分，包含文档同步与最终重启/故障验证。历史报告保留原来的业务步骤名称。下方 RR 任务仍是实现/验收索引。顺序决策基线：`1f50439`，分支为 `codex/consolidate-r19-r32`。**已批准离线实现及原第四步门禁均已完成。** 最终后端 `185263aa`：5948 passed, 1 skipped, 4 deselected, 1 warning, 3291.64 seconds；前端 808 项、类型/构建/契约检查及 43 项 Chrome 检查在未变的相关输入上通过。C0–C4、RR001–RR022 仅按批准 D1–D8 / A01–A13 关闭；C5 用户证据审核和未批准 D9/A14 API 保持独立。
 
 | 业务步骤 | 当前状态 | 完成证据 / RR 对应 |
 |---|---|---|
-| 1. 历史状态恢复 | 已按批准的限定离线标准完成：三个独立进程使用已接通的生产组合和同一临时 SQLite 数据库，补齐一次遗漏的官方收盘，保留活动计划，并在再次重启后不增加结果/提醒。五天准入门禁仍在前置。高交易量证据上限及完整跨日/故障矩阵仍待完成 | 限定重启证据见成对 `docs/verification/runtime-recovery-acceptance.zh-CN.md`；不受限制的历史恢复、真实行情源验证及完整 RR007–RR010/C2/A13 发布验收另行处理 |
-| 2. 提醒安全 | 已接通离线实现：生产组合原子写入初始 HOLD，并在每次渠道调用前复核已提交的身份、风险、持仓、已完成目标及恢复屏障。已有模拟渠道/重启专项证据；完整发布门禁和真实运行仍待完成 | 两类计划在模拟渠道准入前使用重新读取的风险/持仓/恢复门禁证据；过时提醒抑制，相同且适用的退出提醒只保留最新，证据不足等待；保留不确定发送处理。RR011–RR013 |
-| 3. 实际启停集成 | 已于 2026-09-27 在批准的离线生命周期范围内完成：八 scope 权限恢复、独立 DEGRADED 时钟、同代次有界股票修复、身份/配置围栏、已安装读取/存活行为及进程/stop-drain 证据。固定源码/测试 HEAD `e35f344` 通过完整 S3-09 命令：5711 passed, 1 skipped, 4 deselected, 1 warning in 1074.18s。Astra 已批准源码/矩阵关闭；最终四份文档一致性已通过 | [最终证据与限制](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)。C1/C3 仅在该离线范围关闭。仍须安全停止 → 人工编辑 → 新进程。RR004–RR006、RR010 和 RR014 仍为映射，不自动勾选 RR 项；第四/五步和真实运行另行处理 |
-| 4. 状态接口和页面 | 在批准的第四步离线范围内完成：RR002、RR015–RR019 及 C4 已关闭。冻结后端 HEAD `0f1df66`：5920 passed、1 skipped、4 deselected、1 warning，1140.87 秒；前端 807 项及两条真实 Chrome 路径通过；独立源码/证据及最终四文档一致性评审批准 | [最终证据及限制](../docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)。默认版本 `1` 保留；版本 `2` 需明确启用。RR020、第 5 步及真实运行仍独立 |
-| 5. 重启/故障验收 | 第一阶段限定三进程重启及第二阶段模拟渠道场景已通过；完整跨日/故障矩阵仍未完成 | 完成全部 A01–A14 场景、第 7 节全部离线门禁、迁移/回滚证据及最终独立审查；部署仍须单独批准。RR020–RR022、C5 |
+| 1. 历史状态恢复 | 已在批准的有界离线范围完成：原三进程遗漏收盘接续，结合按因果顺序的历史证据、持仓、启用、崩溃及最终回归检查。损坏/不完整/超预算证明仍阻断受影响计划，五天准入仍前置 | [最终证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；历史报告保留限定范围。RR007–RR010、C2、A13。不声称无限历史或真实行情源验收 |
+| 2. 提醒安全 | 离线完成：原子初始 HOLD，重新读取已提交身份/风险/持仓/目标/恢复屏障后准入，抑制过时提醒，相同且适用退出仅保留最新，保留不确定发送。两类计划及提交/发送终止矩阵仍覆盖 | [最终证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；仅临时 SQLite 与模拟渠道。RR011–RR013 |
+| 3. 实际启停集成 | 已在批准离线范围完成：八 scope 权限恢复、独立重试时钟、同代次有界修复、配置/身份围栏、所有者存活及排空/终止/重启矩阵。最终完整回归保留原阈值 | [S3 证据](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)及[最终证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；RR004–RR006、RR010、RR014、C1/C3。安全停止 → 人工编辑 → 新进程 |
+| 4a. 状态接口和页面（原第四步） | 正常生产入口已接通监控协议 `2` 和匹配安装资源。冻结 `d4db557b` 上最终 Chrome 全套 18 个规格共 43 项全部通过，单 worker、零 retries、9.0 分钟 | 保留历史 [S4 证据](../docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)；[最终集成证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md) 替代其旧默认版本描述。RR002、RR015–RR019、C4 |
+| 4b. 重启/故障验收及文档（原第四步） | 离线完成：正常入口时段/进程矩阵、原崩溃/迁移/失效检查、第 7 节全部门禁（含重型回测验收）、源码/证据审查及成对文档 | 已批准 D1–D8 / A01–A13。[最终报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；RR020–RR022。D9/A14 API 未批准，C5 用户证据审核及部署保持独立 |
 
-主线顺序为 1 → 2 → 3 → 4 → 5。离线组装/重启测试基础提前到第 1 步，依赖重试测试随第 3 步执行，不等到第 5 步才首次运行。RR002 评审通过后，可并行准备独立的状态/客户端工作，但不能据此宣称第 4 步完成。原任务依赖仍是验收/默认启用门禁，不禁止提前测试注入式集成。
+阶段顺序仍为 1 → 2 → 3 → 4；4a、4b 均归于第四步。离线组装/重启测试基础提前到成果 1，依赖重试测试随成果 3 执行，不等到最终验收才首次运行。RR002 评审通过后，可并行准备独立的状态/客户端工作，但不能据此宣称完成。原任务依赖仍是验收/默认启用门禁，不禁止提前测试注入式集成。当前最终集成记录为[原第四步收尾报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)，仅在记录了实际证据的项目上替代历史待办状态。D9/A14 仍为 API 未批准的独立后续工作。
 
 ### 业务第 3 步离线测试顺序 — 2026-09-24
 
@@ -229,7 +229,7 @@ UPD-S5 已在 `53b731271b4b3a10a8558da993ecd000f03c1d58` 完成：独立 startup
 
 ### 五天范围修订 — 2026-09-23
 
-- [ ] **V1d — 实现已批准的 D8/A13。** 120 小时边界、持久最后存活证据和未知/旧数据库处理已批准。增量结构 `0022_runtime_liveness`、持久化/判定及临时数据库的边界/损坏/旧库/降级测试已实现。生产启动在加载活动标的、请求行情或发送前准入或原子作废计划；30 秒心跳在降级模式运行，并在关闭数据库前结束。休眠空白超过 120 小时时停止运行，不刷新旧证据。作废会清理待收盘任务、抑制现有回执并审计原因；注入故障时整笔回滚。独立 Python 进程证明提交后退出与事务中途被杀都不会留下部分或重复作废。有效旧版/显式计划定义和持仓保持不变。缺心跳人工路径在没有监控工作的情况下展示 `BLOCKED` 系统状态，预览准确计划并要求二次确认；一个事务将其作废且保留持仓，重启后建立新证据。准入后每轮心跳最多处理 100 条提醒，仅为准确已停用版本还有长停机/人工作废审计的规范旧提醒补记终态回执；普通停用不符合该条件。此类终态作废版本不得重新激活，普通再激活保持允许。畸形证据仅记录不含原文的审计，暂时清理失败不拖延心跳。**V1d 仍未完成：**无法分类的旧记录需确定安全复核处置，清理失败需在维护状态中明确显示，还需更广的发布门禁评审。本阶段不对用户数据库运行批量作废。
+- [x] **V1d — 完成批准 D8/A13 离线实现。** 精确 120 小时准入、持久 30 秒合法所有者心跳、幂等全计划作废、缺心跳预览/指纹/独立确认、持仓/历史保留、作废/发送抑制及回滚/终止/重启测试均通过最终完整门禁。损坏/未来存活记录保持阻断并调查。无法分类旧提醒保留脱敏审计、不编造回执；清理失败记录 `ALERT_SWEEP_FAILED`、保留游标并重试，不停止存活记录。旧额外提醒复核流程/Web 维护状态建议不属于已批准 D8/A13 或 RS04 契约，未实现，也不加入本次改造。[证据与限制](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。未对用户数据库执行批量作废。
 - [ ] **V2a — 评审 D9/A14 提醒页操作契约。** 保持风险与卖出信号独立；区分确认已读、未卖出及登记实际卖出数量。复用带幂等和审计的持仓扣减边界，再测试过时提醒、部分卖出及重复确认。五天准入决策后实现，不改变评估规则。
 
 ### 已完成的限定成果：一次可证明的遗漏收盘
@@ -342,7 +342,10 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ## 规格门禁
 
-- [ ] RR001 — 确定语义和恢复规格。强度：`xhigh`。依赖：提案/职责图批准。
+当前完成证据：[原第四步收尾报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。以下 RR 勾选仅指已批准 D1–D8 / A01–A13 的离线交付；原 A14 验收文字保留为尚未批准 D9 API 的后续事项。此前带日期的待办状态描述当时检查点。C5 仍为用户证据审核，不是尚未完成的实现。
+
+
+- [x] RR001 — 确定语义和恢复规格。强度：`xhigh`。依赖：提案/职责图批准。
   - 验收：D1–D6、A01–A10 精确；模块接口、实际激活边界、全部信号投递分类和增量迁移明确批准，不靠推测。
   - 文件：在 `docs/specifications/monitoring/` 下 NEW 成对 provider-contract 规格和成对 runtime-recovery 规格（4 个文件）。
   - 验证：逐项追踪决策/验收 ID，检查双语一致，取得规格批准。
@@ -353,7 +356,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ### 检查点 C0 — 契约已批准
 
-- [ ] 对照用户已批准提案完成 RR001–RR002 评审；数据源语义、提醒资格、数据库结构及兼容性变化明确。2026-09-21 的实现指令允许推进隔离基础切片；本门禁通过前不切换生产默认路径、不扩大未批准语义。
+- [x] 已按批准 D1–D8 / A01–A13 契约和既有独立设计/源码批准完成 RR001–RR002 评审，并核对双语一致与最终集成证据。不推断 D9/A14 已获批准。[最终证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。
 
 ## 行情源与恢复基础
 
@@ -361,7 +364,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
   - 验收：A01–A02；迁移幂等、仅导入已验证范围、原证据不变；语义版本忽略元数据但检查适配器兼容性。
   - 文件：NEW `src/trade_plan_monitor/runtime/provider_contract.py`、`src/trade_plan_monitor/live_profiles.py`、`tests/unit/test_live_certification_profiles.py`、NEW `tests/unit/test_provider_contract.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_live_certification_profiles.py tests/unit/test_provider_contract.py -q`。
-- [ ] RR004 — 替换整份证据运行门禁。强度：`high`。依赖：RR003。
+- [x] RR004 — 替换整份证据运行门禁。强度：`high`。依赖：RR003。
   - 验收：股票/指数门禁独立；旧 READY 不授予当前健康；元数据刷新无害，不兼容变化在物理请求前被拒绝。
   - 文件：`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/web/monitor_composition.py`、`tests/integration/test_production_certification_gate.py`、`tests/integration/test_certified_production_runtime.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_production_certification_gate.py tests/integration/test_certified_production_runtime.py -q`；RR020 前使用注入的组装。
@@ -369,7 +372,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
   - 验收：重启保留冷却/重试状态，不保存凭证；迁移增量、幂等，拒绝破坏性丢失待完成状态。
   - 文件：`src/trade_plan_monitor/state/migrations/versions/` 下 NEW 迁移、`src/trade_plan_monitor/state/models.py`、NEW `src/trade_plan_monitor/state/runtime_recovery.py`、NEW `tests/integration/test_runtime_recovery_storage.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_storage.py -q`，使用临时数据库升级/重启用例。
-- [ ] RR006 — 增加受控协调/重试准入。强度：`high`。依赖：RR004–RR005。
+- [x] RR006 — 增加受控协调/重试准入。强度：`high`。依赖：RR004–RR005。
   - 验收：A04–A05；故障键稳定、单次权限复检、保留共享冷却、工作有界且合并；不陷入永久权限封锁循环。
   - 文件：NEW `src/trade_plan_monitor/runtime/reconciliation.py`、`src/trade_plan_monitor/runtime/request_control.py`、`tests/unit/test_monitor_runtime.py`、NEW `tests/unit/test_runtime_reconciliation.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py -q`，使用假时钟和物理请求计数。
@@ -380,49 +383,49 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ## 交易时段与业务状态恢复
 
-- [ ] RR007 — 计算交易时段感知恢复目标。强度：`high`。依赖：C1。
+- [x] RR007 — 计算交易时段感知恢复目标。强度：`high`。依赖：C1。
   - 验收：A03/A10；日历未知仍有重试唤醒，待机不意味着可操作实时数据，跨日和回拨不使用未来数据。
   - 文件：`src/trade_plan_monitor/runtime/scheduler.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、`tests/unit/test_monitor_runtime.py`、`tests/unit/test_runtime_reconciliation.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_monitor_runtime.py tests/unit/test_runtime_reconciliation.py -q`，覆盖完整时段矩阵。
-- [ ] RR008 — 用有界步骤恢复精确局部覆盖。强度：`high`。依赖：RR007。
+- [x] RR008 — 用有界步骤恢复精确局部覆盖。强度：`high`。依赖：RR007。
   - 验收：空/部分记录不能证明就绪；截止点冻结；各范围公平推进，不由启动全股票批次独占，保留指数现有重试上限。
   - 文件：`src/trade_plan_monitor/runtime/recovery.py`、`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、NEW `tests/integration/test_runtime_recovery_coverage.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_recovery_coverage.py -q`；包含部分/跨日获取及容量受限用例。
-- [ ] RR009 — 发现完整错过的收盘义务。强度：`high`。依赖：RR008。
+- [x] RR009 — 发现完整错过的收盘义务。强度：`high`。依赖：RR008。
   - 验收：15:20 前停止/17:00 后重启及多日停机，按因果顺序恢复符合条件的缺失收盘；未知历史状态仅阻止依赖计划。
-  - 文件：`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、NEW `tests/integration/test_missed_close_recovery.py`。
-  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_missed_close_recovery.py -q`；RR012–RR013 前不投递历史提醒。
-- [ ] RR010 — 隔离依赖变化及两类计划恢复。强度：`high`。依赖：RR008–RR009。
+  - 文件：`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、NEW `tests/unit/test_missed_close_recovery.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_missed_close_recovery.py tests/integration/test_historical_close_evidence.py tests/integration/test_missed_close_execution.py tests/integration/test_s3_missed_close_kill_restart.py -q`；保留 RR012–RR013 发送准入。
+- [x] RR010 — 隔离依赖变化及两类计划恢复。强度：`high`。依赖：RR008–RR009。
   - 验收：A06/A09；参考键覆盖需求和激活；同股票显式转旧计划补取缺失资料；旧代次不能提交当前决策。
   - 文件：`src/trade_plan_monitor/runtime/production.py`、`src/trade_plan_monitor/runtime/production_context.py`、`tests/integration/test_explicit_runtime_production.py`、NEW `tests/integration/test_recovery_activation_fences.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_explicit_runtime_production.py tests/integration/test_recovery_activation_fences.py -q`。
 
 ### 检查点 C2 — 恢复目标正确
 
-- [ ] A03、A06、A07、A09、A10 离线通过；使用 `xhigh` 独立检查收盘发现、状态重建及激活语义。
+- [x] A03、A06、A07、A09、A10 在批准的有界离线范围通过。既有独立评审、实际按因果顺序的收盘/持仓/启用证据及最终完整回归已汇总至[最终报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；未知或超预算证明仍阻断。
 
 ## 通知安全与生命周期
 
-- [ ] RR011 — 增加持久投递资格，不改变哈希。强度：`high`。依赖：C0、C2、迁移批准。
+- [x] RR011 — 增加持久投递资格，不改变哈希。强度：`high`。依赖：C0、C2、迁移批准。
   - 验收：历史资格/过期/抑制持久化，事件载荷/哈希不变；旧待发送记录按安全关闭方式分类，不删除。
   - 文件：NEW 增量迁移、`src/trade_plan_monitor/state/models.py`、`src/trade_plan_monitor/notifications/outbox.py`、`tests/unit/test_notification_outbox.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_notification_outbox.py -q`，包含迁移中断/黄金载荷用例。
-- [ ] RR012 — 两类评估事务都应用提醒资格。强度：`high`。依赖：RR010–RR011。
+- [x] RR012 — 两类评估事务都应用提醒资格。强度：`high`。依赖：RR010–RR011。
   - 验收：A08；状态/声明和投递资格原子提交；保留历史结果哈希、真实风险通知及显式激活身份；不提交无条件可投递的陈旧意图。
   - 文件：`src/trade_plan_monitor/runtime/service.py`、`src/trade_plan_monitor/runtime/explicit_service.py`、`tests/integration/test_explicit_runtime_production.py`、NEW `tests/integration/test_recovery_alert_eligibility.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_recovery_alert_eligibility.py tests/integration/test_explicit_runtime_production.py -q`。
-- [ ] RR013 — 停机后待发送提醒增加投递门禁。强度：`high`。依赖：RR012。
+- [x] RR013 — 停机后待发送提醒增加投递门禁。强度：`high`。依赖：RR012。
   - 验收：过时未发送操作消息被抑制且有审计原因；风险消息等待每计划当前状态恢复门禁及最新状态复核（D1 突破/D2 解除）；两类计划加载器及现有不确定发送处理正常。
   - 文件：`src/trade_plan_monitor/notifications/dispatcher.py`、`src/trade_plan_monitor/notifications/outbox.py`、`tests/integration/test_notification_delivery.py`、`tests/integration/test_recovery_alert_eligibility.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_notification_delivery.py tests/integration/test_recovery_alert_eligibility.py -q`，仅使用假渠道。
-- [ ] RR014 — 降级启动期间保持协调器运行。强度：`high`。依赖：RR006–RR013。
+- [x] RR014 — 降级启动期间保持协调器运行。强度：`high`。依赖：RR006–RR013。
   - 验收：A04/A11；本地启动独立于行情 IO；唯一所有者、可中断等待、进展截止时间及安全停止；预期错误不耗尽崩溃监督预算。
   - 文件：`src/trade_plan_monitor/runtime/service.py`、`src/trade_plan_monitor/runtime/reconciliation.py`、`src/trade_plan_monitor/web/monitor_composition.py`、`tests/integration/test_runtime_lifecycle.py`、`tests/integration/test_monitor_production_composition.py`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_lifecycle.py tests/integration/test_monitor_production_composition.py -q`，针对注入的新生命周期；公开默认切换保留到 RR020。
 
 ### 检查点 C3 — 安全自主运行
 
-- [x] A04、A08–A11 在批准的第三步离线范围内通过；提交/崩溃/发送窗口、代次变化和物理工作线程清理已获 `xhigh` 评审批准。[最终证据](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)；最终四份文档一致性已通过。不关闭 C2/C4/C5，也不代表完整发布验收完成。
+- [x] A04、A08–A11 在批准的第三步离线范围内通过；提交/崩溃/发送窗口、代次变化和物理工作线程清理已获 `xhigh` 评审批准。[最终证据](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)；最终四份文档一致性已通过。保留该历史 S3 批准；当前 C2/C4 及原第四步完成证据见[最终报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。C5 保持用户证据审核。
 
 ## 状态与用户可见恢复
 
@@ -449,19 +452,19 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ### 检查点 C4 — 端到端状态契约
 
-- [x] A06、A11、A12 及类型/契约门禁在批准的第四步离线范围通过；`xhigh` 源码、真实 Chrome 及双语证据评审批准。冻结 HEAD `0f1df66` 的最终全量回归通过。[最终证据](../docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)。不关闭 RR020/C5 或启用生产默认路径。
+- [x] A06、A11、A12 及类型/契约门禁在批准的第四步离线范围通过；`xhigh` 源码、真实 Chrome 及双语证据评审批准。冻结 HEAD `0f1df66` 的最终全量回归通过。[最终证据](../docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)。保留该历史 S4 批准；RR020 及正常生产默认路径现已连同原第四步门禁完成，见[最终报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。C5 保持用户证据审核。
 
 ## 集成与交付
 
-- [ ] RR020 — 启用完整路径并离线证明真实进程重启。强度：`high`；故障分析/评审：`xhigh`。依赖：C4。
+- [x] RR020 — 启用完整路径并离线证明真实进程重启。强度：`high`；故障分析/评审：`xhigh`。依赖：C4。 仅按已批准 D1–D8 / A01–A13 完成；未批准 D9/A14 保持独立。
   - 验收：所有目标时段覆盖 A01–A14；在提交和投递窗口停止/终止/重启；迁移中断安全；不访问行情源，不发送真实通知。
   - 文件：`src/trade_plan_monitor/web/monitor_composition.py`、NEW `tests/integration/test_anytime_runtime_recovery.py`、`web/tests/e2e/production-restart.spec.ts`、`web/tests/e2e/r13-active-process-restart.spec.ts`、NEW `web/tests/e2e/runtime-recovery.spec.ts`。
   - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`；`npm --prefix web run test:e2e -- production-restart.spec.ts r13-active-process-restart.spec.ts runtime-recovery.spec.ts`，使用隔离测试状态。
-- [ ] RR021 — 同步运维与验证证据。强度：`high`。依赖：RR020。
+- [x] RR021 — 同步运维与验证证据。强度：`high`。依赖：RR020。
   - 验收：重启/首次数据源验证/重新配置/回滚说明准确；仅记录实际执行的测试；中英文一致。
   - 文件：`docs/operations/live-certification.md`、`docs/operations/live-certification.zh-CN.md`、NEW 成对 `docs/verification/runtime-recovery-acceptance.md` / `runtime-recovery-acceptance.zh-CN.md`。
   - 验证：对照两种语言的 ID/命令/阈值/字段；逐项追踪 A01–A14 结果证据。
-- [ ] RR022 — 运行全量离线门禁和最终质疑评审。强度：`xhigh`。依赖：RR021。
+- [x] RR022 — 运行全量离线门禁和最终质疑评审。强度：`xhigh`。依赖：RR021。
   - 验收：提案第 7 节全部门禁通过，保留现有无关修改，无未解决实质问题，差异不包含密钥或放宽的测试；真实环境限制如实列出。
   - 文件：成对验收报告及本成对任务表（4 个文件）；不在评审任务中夹带修复，修复返回有界实现任务。
   - 验证：执行提案第 7 节全部完整命令，检查差异和崩溃矩阵；可核验时记录实际模型/强度及用户评审结果。

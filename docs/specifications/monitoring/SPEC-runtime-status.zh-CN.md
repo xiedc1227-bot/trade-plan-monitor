@@ -1,6 +1,7 @@
 # 规格：runtime-status
 
 > RR002 契约已于 2026-09-27 通过第四步隔离实施评审，源自已批准提案 D7，并受 D1–D6 约束。Astra 设计与独立 Sol 评审已批准完整契约；这不关闭 C0/C4，也不启用生产默认路径。英文正本为 `SPEC-runtime-status.md`，本文件为中文审核副本。
+> 2026-09-30 正常入口集成：`create_production_app` 与正常安装构建现选择版本 `2`；`create_app` 和显式 v1 夹具保留版本 `1` 兼容性。生命周期在启动前校验实际 v2 读取服务。本次仅启用已批准契约，不改变 RS IDs 或线上字段语义。最终验收见[原第四步报告](../../verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；此前明确启用边界保留为历史记录。
 > 依赖 [provider-contract](SPEC-provider-contract.zh-CN.md) 和 [runtime-recovery](SPEC-runtime-recovery.zh-CN.md)。任务与验收 ID 引用 `tasks/runtime-recovery-todo.md` 和 `tasks/runtime-recovery-plan.md`。
 
 ## RS01 目标与不变量

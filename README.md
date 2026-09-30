@@ -6,6 +6,12 @@ not place orders.
 
 [简体中文](README.zh-CN.md)
 
+## Runtime recovery revision
+
+The normal installed Web entry and packaged frontend now use monitor contract `2`. Compatible provider semantics remain valid across time; current dependency availability, recovery progress and per-plan data eligibility are checked separately. After a safe stop, restart resumes durable work without replaying completed decisions or interpreting reminders as trades. Configuration changes use safe stop → edit → new process. See the [operating guide](docs/operations/live-certification.md#runtime-recovery-and-normal-restart) and [final acceptance record](docs/verification/2026-09-30-runtime-recovery-final-gate.md) for exact evidence and limits. Direct alert-linked sale registration remains a separate follow-up; this refactor does not change trading rules.
+
+The product-status entries below retain the earlier T/WEBF implementation history. Their old startup age gate and v1 status descriptions are superseded by this revision.
+
 ## Product Status
 
 Tasks `T001` through `T059` and `BT001` through `BT050` are implemented and accepted. The packaged

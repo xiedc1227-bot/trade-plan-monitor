@@ -1,6 +1,7 @@
 # Spec: runtime-status
 
 > RR002 contract reviewed for isolated step 4 implementation on 2026-09-27, derived from approved proposal D7 and constrained by D1–D6. Astra design and independent Sol review approved the complete contract; this does not close C0/C4 or enable the production default. Canonical English; review copy: `SPEC-runtime-status.zh-CN.md`.
+> 2026-09-30 normal-entry integration: `create_production_app` and the normal packaged build now select version `2`; `create_app` and explicit v1 fixtures retain version `1` compatibility. The lifecycle validates the actual v2 reader before startup. This promotes the already approved contract without changing RS IDs or wire semantics. Final acceptance is recorded in [the original fourth-stage report](../../verification/2026-09-30-runtime-recovery-final-gate.md); the earlier opt-in boundary remains historical.
 > Depends on [provider-contract](SPEC-provider-contract.md) and [runtime-recovery](SPEC-runtime-recovery.md). Task and acceptance IDs refer to `tasks/runtime-recovery-todo.md` and `tasks/runtime-recovery-plan.md`.
 
 ## RS01 Objective and invariants

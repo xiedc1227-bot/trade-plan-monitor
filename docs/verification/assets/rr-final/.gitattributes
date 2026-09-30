@@ -1,0 +1,4 @@
+# Preserve exact captured bytes and hashes, including Windows line endings.
+* -text whitespace=cr-at-eol
+# Raw command logs retain original trailing spaces; these are evidence, not source.
+*.log whitespace=-trailing-space,cr-at-eol

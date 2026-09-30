@@ -1,5 +1,7 @@
 # Spec: runtime-recovery
 
+> 2026-09-30 approved D1–D8 / A01–A13 offline closure: normal production entry, original fourth-stage gates and evidence are complete in [the final report](../../verification/2026-09-30-runtime-recovery-final-gate.md). Earlier implementation-pending descriptions are historical. D9/A14 is still API-unapproved; no rule or contract is added.
+
 > Derived from approved proposal D2–D6 / A03–A10, authorized 2026-09-21. D8/A13 was approved on 2026-09-23 and is being implemented; D9/A14 business intent is confirmed but its API is not yet approved. English canonical; paired Chinese copy. Depends on provider-contract.
 
 ## Connected Stage 2 delivery boundary — 2026-09-24

@@ -144,6 +144,20 @@ followed by end-labeled five-minute bars. Certification excludes that opening sn
 determining timestamp-label semantics; runtime normalization already drops it because it is not a
 completed five-minute interval.
 
+## Runtime recovery and normal restart
+
+The installed `trade-plan-monitor web` entry uses monitor contract `2` and the matching packaged frontend. `npm --prefix web run build` builds that frontend and copies its manifest and assets into the Python package; `npm --prefix web run build:runtime-status-preview` remains an isolated preview. `python scripts/generate_frontend_types.py --check` checks both the installed v2 artifacts (`openapi.runtime-status.json`, `web/src/api/generated-runtime-status.ts`) and explicit v1 compatibility fixtures (`openapi.json`, `web/src/api/generated.ts`). Compatibility fixtures are not a selectable CLI protocol.
+
+Compatible validated provider semantics do not expire merely because seven days pass. The original evidence timestamp is retained; old `READY` evidence does not prove current permission or fresh data. First-time or incompatible provider semantics still need explicit verification. A missing credential, rejected permission or incomplete input remains visible and prevents the affected work; recovery retries use the existing bounded scheduler and shared request controller.
+
+To change configuration, safely stop the program, edit the configuration, then start a new process with `trade-plan-monitor web --config config/app.yaml`. Do not change provider configuration while monitoring is running. On restart, the owned runtime reads durable state and resumes missing work; it does not recompute completed decisions or assume a reminder was executed. The dashboard distinguishes transport, runtime progress and data eligibility. An old cached page must reload; version mismatch rejects protected commands before execution.
+
+The five-day rule measures software downtime from the last persisted owner liveness observation. Exactly `120` hours may resume; more than `120` hours invalidates active plans before provider or notification work while preserving inventory and audit. Missing old liveness uses the existing system-page preview and explicit invalidation, then a fresh plan. Corrupt or future liveness remains blocked for investigation; never enter a fabricated last-run time. A running but degraded provider is not software downtime.
+
+Before changing an actual installation, preserve an approved database backup and deploy matching backend/frontend versions together. A rollback must stop the runtime, restore a compatible package and its matching assets, and verify database-schema compatibility; use the verified backup when compatibility cannot be proved. Never overwrite a live database or infer that every schema downgrade is lossless. This refactor's acceptance uses temporary SQLite, fake provider/channel boundaries and controlled clocks; actual provider acceptance, user-database migration and deployment are separate.
+
+The historical bounded R14 diagnostic retains its approved v1 test path and requires `npm --prefix web run build:legacy-test` before execution. These isolated assets do not affect the normal CLI build. This prerequisite does not authorize a paid diagnostic or extend its existing time/budget limits.
+
 ## Authoritative References
 
 - [Tushare `trade_cal`](https://tushare.pro/document/2?doc_id=26)

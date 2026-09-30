@@ -1,6 +1,7 @@
 # Spec: local-web (Local Web Application)
 
 > Canonical agent-facing English version. The human-review Chinese version is `SPEC-local-web.zh-CN.md`; both documents must remain semantically equivalent.
+> 2026-09-30 normal-entry integration: `create_production_app` and the normal packaged frontend select monitor contract `2`, with matching `monitor-contract.json`. The default generator checks canonical v2 and explicit v1 compatibility artifacts; historical legacy fixtures use isolated assets. The earlier explicit-opt-in/default-`1` paragraph below describes its dated implementation boundary. Current evidence and completion state are in [the original fourth-stage report](../../verification/2026-09-30-runtime-recovery-final-gate.md); no wire contract or deployment authority is added.
 > RR002 amendment: the monitor-contract v2 boundary below passed Astra design and independent Sol review on 2026-09-27 for isolated step 4 implementation. Contract approval does not complete integration or enable the default; the earlier T035–WEBF14 boundaries remain implementation history until their stated replacement gate passes.
 
 ## Objective
