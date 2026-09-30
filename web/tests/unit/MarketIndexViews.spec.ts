@@ -205,6 +205,9 @@ describe("market index monitor views", () => {
 
     const footerButton = () => wrapper.get('[data-testid="market-turnover-card"] .market-turnover-card__actions button');
     expect(footerButton().text()).toBe("重试");
+    expect(wrapper.get(".market-turnover-card__actions [role='alert']").text()).toBe("当日指数走势暂不可用");
+    expect(wrapper.get('[data-testid="market-index-trend-card"]').text()).not.toContain("当日指数走势暂不可用");
+    expect(wrapper.get('[data-testid="market-index-trend-card"]').text()).not.toContain("当前暂无当日五分钟数据");
     expect(wrapper.get('[data-testid="market-index-trend-card"]').find("button").exists()).toBe(false);
     await footerButton().trigger("click");
     expect(wrapper.emitted("retryIndex")).toEqual([["000001.SH"]]);
@@ -217,7 +220,7 @@ describe("market index monitor views", () => {
     expect(wrapper.find(".market-turnover-card__actions").exists()).toBe(false);
   });
 
-  it("keeps cached chart data visible without a duplicate point table while exposing a later refresh error", () => {
+  it("keeps cached chart data visible while the parent displays refresh errors", () => {
     const wrapper = mount(MarketIndexTrendCard, {
       props: {
         connectionStatus: "CONNECTED",
@@ -242,7 +245,7 @@ describe("market index monitor views", () => {
     expect(wrapper.get(".market-index-trend-card__high").attributes("data-direction")).toBe("up");
     expect(wrapper.get(".market-index-trend-card__low").text()).toBe("1229.90");
     expect(wrapper.get(".market-index-trend-card__low").attributes("data-direction")).toBe("up");
-    expect(wrapper.get('[role="alert"]').text()).toContain("当日指数走势暂不可用");
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     expect(wrapper.find("button").exists()).toBe(false);
     const cutoffFact = wrapper
       .findAll(".market-index-trend-card__facts > div")

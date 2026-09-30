@@ -84,7 +84,10 @@ function formatSessionChange(value: string | null | undefined): string {
         />
         <MarketTurnoverCard :summary="marketTurnover">
           <template v-if="trends[selectedIdentity.indexCode].status === 'ERROR'" #actions>
-            <button type="button" @click="emit('retryIndex', selectedIdentity.indexCode)">重试</button>
+            <div class="index-strip__retry">
+              <p role="alert">{{ trends[selectedIdentity.indexCode].error }}</p>
+              <button type="button" @click="emit('retryIndex', selectedIdentity.indexCode)">重试</button>
+            </div>
           </template>
         </MarketTurnoverCard>
       </div>
@@ -144,6 +147,21 @@ function formatSessionChange(value: string | null | undefined): string {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
   min-width: 0;
+}
+
+.index-strip__retry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  text-align: center;
+}
+
+.index-strip__retry p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
 }
 
 .index-strip__selector {

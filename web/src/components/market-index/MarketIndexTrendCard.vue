@@ -170,16 +170,13 @@ function extrema(
     >
       正在加载当日五分钟走势…
     </p>
-    <p v-else-if="trend.status === 'ERROR'" class="market-index-trend-card__status" role="alert">
-      {{ trend.error }}
-    </p>
     <p
       v-else-if="bars.length === 0 && trend.status === 'EMPTY'"
       class="market-index-trend-card__status"
     >
       当前时段暂无已完成的五分钟数据。
     </p>
-    <p v-else-if="bars.length === 0" class="market-index-trend-card__status">当前暂无当日五分钟数据。</p>
+    <p v-else-if="bars.length === 0 && trend.status !== 'ERROR'" class="market-index-trend-card__status">当前暂无当日五分钟数据。</p>
     <dl class="market-index-trend-card__facts">
       <div>
         <dt>涨跌</dt>
