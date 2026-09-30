@@ -17,12 +17,7 @@ interface Props {
   trend: DashboardMarketIndexTrend;
 }
 
-interface Emits {
-  retry: [indexCode: MarketIndexSnapshotView["indexCode"]];
-}
-
 const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
 const bars = computed(() => props.trend.page?.items ?? []);
 const lastValidBarAt = computed(() => bars.value.at(-1)?.barAt ?? null);
 const highPoints = computed(() => extrema("highPoints", Math.max));
@@ -176,7 +171,7 @@ function extrema(
       正在加载当日五分钟走势…
     </p>
     <p v-else-if="trend.status === 'ERROR'" class="market-index-trend-card__status" role="alert">
-      {{ trend.error }} <button type="button" @click="emit('retry', identity.indexCode)">重试</button>
+      {{ trend.error }}
     </p>
     <p
       v-else-if="bars.length === 0 && trend.status === 'EMPTY'"
@@ -234,7 +229,6 @@ function extrema(
 }
 .market-index-trend-card__header h3, .market-index-trend-card__header code, .market-index-trend-card__status, .market-index-trend-card__issues, .market-index-trend-card__facts dd { overflow-wrap: anywhere; }
 .market-index-trend-card__status, .market-index-trend-card__issues { margin: 0; color: var(--color-text-muted); }
-.market-index-trend-card__status button { margin-inline-start: var(--space-2); }
 .market-index-trend-card__market-facts,
 .market-index-trend-card__facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin: 0; }
 .market-index-trend-card__market-facts div,

@@ -81,9 +81,12 @@ function formatSessionChange(value: string | null | undefined): string {
           :identity="selectedIdentity"
           :summary="summariesByCode.get(selectedIdentity.indexCode) ?? null"
           :trend="trends[selectedIdentity.indexCode]"
-          @retry="emit('retryIndex', $event)"
         />
-        <MarketTurnoverCard :summary="marketTurnover" />
+        <MarketTurnoverCard :summary="marketTurnover">
+          <template v-if="trends[selectedIdentity.indexCode].status === 'ERROR'" #actions>
+            <button type="button" @click="emit('retryIndex', selectedIdentity.indexCode)">重试</button>
+          </template>
+        </MarketTurnoverCard>
       </div>
     </div>
   </section>

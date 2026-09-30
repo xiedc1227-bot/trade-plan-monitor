@@ -188,6 +188,35 @@ describe("market index monitor views", () => {
     expect(wrapper.get('[data-testid="market-index-trend-card"]').text()).toContain("1234.56");
   });
 
+  it("retries the selected index from the turnover footer only when its trend failed", async () => {
+    const failedTrend = { error: "当日指数走势暂不可用", page: null, status: "ERROR" as const };
+    const wrapper = mount(MarketIndexDataStrip, {
+      props: {
+        connectionStatus: "CONNECTED",
+        indexes: [snapshot],
+        marketTurnover,
+        trends: {
+          ...emptyDashboardMarketIndexTrends,
+          "000001.SH": failedTrend,
+          "000688.SH": failedTrend,
+        },
+      },
+    });
+
+    const footerButton = () => wrapper.get('[data-testid="market-turnover-card"] .market-turnover-card__actions button');
+    expect(footerButton().text()).toBe("重试");
+    expect(wrapper.get('[data-testid="market-index-trend-card"]').find("button").exists()).toBe(false);
+    await footerButton().trigger("click");
+    expect(wrapper.emitted("retryIndex")).toEqual([["000001.SH"]]);
+
+    await wrapper.findAll('[data-testid="market-index-selector"]')[3]!.trigger("click");
+    await footerButton().trigger("click");
+    expect(wrapper.emitted("retryIndex")).toEqual([["000001.SH"], ["000688.SH"]]);
+
+    await wrapper.findAll('[data-testid="market-index-selector"]')[1]!.trigger("click");
+    expect(wrapper.find(".market-turnover-card__actions").exists()).toBe(false);
+  });
+
   it("keeps cached chart data visible without a duplicate point table while exposing a later refresh error", () => {
     const wrapper = mount(MarketIndexTrendCard, {
       props: {
@@ -214,7 +243,7 @@ describe("market index monitor views", () => {
     expect(wrapper.get(".market-index-trend-card__low").text()).toBe("1229.90");
     expect(wrapper.get(".market-index-trend-card__low").attributes("data-direction")).toBe("up");
     expect(wrapper.get('[role="alert"]').text()).toContain("当日指数走势暂不可用");
-    expect(wrapper.get("button").text()).toBe("重试");
+    expect(wrapper.find("button").exists()).toBe(false);
     const cutoffFact = wrapper
       .findAll(".market-index-trend-card__facts > div")
       .find((fact) => fact.text().includes("数据截止"));

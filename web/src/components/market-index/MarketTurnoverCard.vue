@@ -56,13 +56,16 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
       </div>
     </dl>
     <p v-if="summary === null" class="market-turnover-card__empty">暂无成交额数据</p>
+    <div v-if="$slots.actions" class="market-turnover-card__actions">
+      <slot name="actions" />
+    </div>
   </aside>
 </template>
 
 <style scoped>
 .market-turnover-card {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
   padding: var(--space-4);
@@ -75,6 +78,13 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
 .market-turnover-card dd,
 .market-turnover-card__empty {
   margin: 0;
+}
+
+.market-turnover-card__actions {
+  display: flex;
+  justify-content: center;
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
 }
 
 .market-turnover-card dl {
