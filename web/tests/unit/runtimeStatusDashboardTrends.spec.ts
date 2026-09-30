@@ -59,7 +59,7 @@ describe("normal v2 dashboard trend preservation", () => {
   it("restores all original index selectors and stored-bar charts alongside runtime status", async () => {
     const { wrapper, store, fetchImplementation } = await dashboard(true);
     try {
-      expect(wrapper.text()).toContain("主要指数走势 · 当日");
+      expect(wrapper.get("#market-index-strip-title").text()).toBe("主要指数走势");
       const selectors = wrapper.findAll('[data-testid="market-index-selector"]');
       expect(selectors.map(selector => selector.text())).toEqual([
         "上证指数+1.00%", "深证成指+1.00%", "创业板指+1.00%", "科创50+1.00%",

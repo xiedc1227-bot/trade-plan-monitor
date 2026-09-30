@@ -54,7 +54,7 @@ function formatSessionChange(value: string | null | undefined): string {
 <template>
   <section class="index-strip" aria-labelledby="market-index-strip-title">
     <header class="index-strip__header">
-      <h2 id="market-index-strip-title">主要指数走势 · 当日</h2>
+      <h2 id="market-index-strip-title">主要指数走势</h2>
       <p>上证、深证、创业板、科创50 · 已完成五分钟数据 · 虚线为昨收</p>
     </header>
     <div class="index-strip__surface">
