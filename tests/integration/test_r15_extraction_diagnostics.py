@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from hashlib import sha256
+from importlib import resources
 from pathlib import Path
 
 import httpx
@@ -192,6 +193,14 @@ def test_simulated_failures_are_durable_sanitized_and_success_remains_review_onl
 def test_simulated_production_composition_selects_the_database_sidecar(
     tmp_path: Path, monkeypatch, sink_failure: bool
 ) -> None:
+    distribution = tmp_path / "dist"
+    (distribution / "assets").mkdir(parents=True)
+    (distribution / "index.html").write_text("<!doctype html>", encoding="utf-8")
+    (distribution / "assets/app.js").write_text("export {};", encoding="utf-8")
+    (distribution / "monitor-contract.json").write_text(
+        '{"monitorContractVersion":1}', encoding="utf-8",
+    )
+    monkeypatch.setattr(resources, "files", lambda _package: tmp_path)
     config = tmp_path / "config.yaml"
     config.write_text(
         "ai:\n"

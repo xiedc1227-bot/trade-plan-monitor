@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from importlib import resources
 from pathlib import Path
 
 import httpx
@@ -358,7 +359,17 @@ ai:
     assert provider_clients[0].is_closed
 
 
-def test_production_app_defaults_to_direct_ai_configuration(tmp_path: Path) -> None:
+def test_production_app_defaults_to_direct_ai_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    distribution = tmp_path / "dist"
+    (distribution / "assets").mkdir(parents=True)
+    (distribution / "index.html").write_text("<!doctype html>", encoding="utf-8")
+    (distribution / "assets/app.js").write_text("export {};", encoding="utf-8")
+    (distribution / "monitor-contract.json").write_text(
+        '{"monitorContractVersion":1}', encoding="utf-8",
+    )
+    monkeypatch.setattr(resources, "files", lambda _package: tmp_path)
     config_directory = tmp_path / "config"
     config_directory.mkdir()
     config_path = config_directory / "app.yaml"
