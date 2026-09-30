@@ -3,6 +3,7 @@
 import asyncio
 from bisect import bisect_right
 from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
@@ -375,6 +376,8 @@ def create_explicit_runtime_evaluation_service(
     committed_event_publisher: CommittedEventPublisher | None = None,
     recovery_delivery: bool = False,
     commit_admission: Callable[[], bool] | None = None,
+    committed_result_observer=None,
+    progress_unit=None,
 ) -> ExplicitRuntimeEvaluationService:
     """Compose the R09 BUY runtime against the production SQLite/event boundary."""
 
@@ -383,6 +386,8 @@ def create_explicit_runtime_evaluation_service(
         committed_event_publisher=committed_event_publisher,
         recovery_delivery=recovery_delivery,
         commit_admission=commit_admission,
+        committed_result_observer=committed_result_observer,
+        progress_unit=progress_unit,
     )
 
 
@@ -503,6 +508,8 @@ class ProductionMonitorPipeline:
         permission_market_window: (
             Callable[[datetime, datetime], tuple[tuple[datetime, bool], ...]] | None
         ) = None,
+        enable_runtime_status: bool = False,
+        progress_owner=None,
     ) -> None:
         self._clock = clock
         self._controller = request_controller
@@ -518,6 +525,12 @@ class ProductionMonitorPipeline:
             recovery_authority_revoked if recovery_authority_revoked is not None else Event()
         )
         self._runtime_generation = runtime_generation
+        self._runtime_status_enabled = enable_runtime_status
+        self._status_progress_coverage_installed = False
+        self._status_progress_owner = progress_owner if enable_runtime_status else None
+        self._runtime_status_sessions = recovery_session_factory
+        self._runtime_status_proofs = {}
+        self._runtime_status_revision = 0
         self._active_recovery_attempts: set[Event] = set()
         self._stock_recovery_schedule = RecoverySchedule()
         self._stock_recovery_demands: dict[str, _StockRecoveryDemand] = {}
@@ -633,6 +646,7 @@ class ProductionMonitorPipeline:
             MarketIndexSnapshotCoordinator(
                 _FreshIndexProvider(self.index_provider, self._index_certification_current),
                 clock=clock,
+                progress_owner=self._status_progress_owner,
             )
         )
         self.health_tracker = SymbolHealthTracker(stale_after=timedelta(seconds=90))
@@ -646,6 +660,7 @@ class ProductionMonitorPipeline:
             is_open_on=self.is_open_on,
             health_tracker=self.health_tracker,
             clock=clock,
+            progress_unit=self._status_progress_unit if enable_runtime_status else None,
         )
         context_builder = ProductionContextBuilder(unit_of_work_factory)
         self.evaluations = RuntimeEvaluationService(
@@ -662,6 +677,10 @@ class ProductionMonitorPipeline:
             recovery_delivery=True,
             commit_admission=self._decision_commit_current,
             index_commit_admission=self._index_commit_current,
+            committed_result_observer=(
+                self._observe_status_commit if enable_runtime_status else None
+            ),
+            progress_unit=self._status_progress_unit if enable_runtime_status else None,
         )
         self.historical_evaluations = (
             None if self._historical_reader is None else RuntimeEvaluationService(
@@ -680,6 +699,10 @@ class ProductionMonitorPipeline:
                 recovery_delivery=True,
                 commit_admission=self._decision_commit_current,
                 index_commit_admission=self._index_commit_current,
+                committed_result_observer=(
+                    self._observe_status_commit if enable_runtime_status else None
+                ),
+                progress_unit=self._status_progress_unit if enable_runtime_status else None,
             )
         )
         self.explicit_evaluations = create_explicit_runtime_evaluation_service(
@@ -687,6 +710,10 @@ class ProductionMonitorPipeline:
             committed_event_publisher=publisher,
             recovery_delivery=True,
             commit_admission=self._decision_commit_current,
+            committed_result_observer=(
+                self._observe_status_commit if enable_runtime_status else None
+            ),
+            progress_unit=self._status_progress_unit if enable_runtime_status else None,
         )
         self.coordinator = RuntimeDeadlineCoordinator(
             clock=clock,
@@ -703,6 +730,305 @@ class ProductionMonitorPipeline:
             is_open_on=self.is_open_on,
             realtime_pending=self._realtime_pending,
         )
+        self._status_progress_coverage_installed = (
+            enable_runtime_status and self._runtime_status_sessions is not None
+            and progress_owner is not None
+            and all(callable(getattr(progress_owner, method, None)) for method in (
+                "begin_progress_step", "begin_progress_step_at",
+                "complete_progress_step", "progress_monotonic_now",
+            ))
+        )
+
+    def _observe_status_commit(self, plan, result, consumed_inputs) -> None:
+        """Publish proof only from a real commit, never from a GET or duplicate."""
+        if not self._runtime_status_enabled or self._runtime_status_sessions is None:
+            return
+        from trade_plan_monitor.runtime.status_authority import capture_completion_proof
+        epoch = self._recovery_authority_epoch()
+        proof = None
+        if self._decision_commit_current():
+            with self._runtime_status_sessions() as session, session.begin():
+                proof = capture_completion_proof(session, plan=plan, result=result,
+                    runtime_generation=self._runtime_generation,
+                    configuration_revision=self._recovery_configuration_revision,
+                    now=self._clock.now(), consumed_inputs=consumed_inputs)
+        if (epoch != self._recovery_authority_epoch() or not self._decision_commit_current()):
+            proof = None
+        self._runtime_status_proofs[plan.symbol] = proof
+        self._runtime_status_revision += 1
+
+    @contextmanager
+    def _status_progress_unit(self, *, timeout_seconds: float):
+        """One actual sequential unit, with no timer-based progress touching."""
+        owner = self._status_progress_owner
+        token = (None if owner is None else
+                 owner.begin_progress_step(timeout_seconds=timeout_seconds))
+        try:
+            yield
+        except RequestControlError as error:
+            # The awaited controller has returned and installed its retry/permission
+            # facts; observation of that bounded failure is genuine local progress.
+            if (owner is not None and error.next_retry_at is not None
+                    and error.code in {
+                        RequestControlErrorCode.BLOCKED_PERMISSION,
+                        RequestControlErrorCode.RATE_LIMITED,
+                        RequestControlErrorCode.TRANSIENT,
+                        RequestControlErrorCode.TIMEOUT,
+                    }):
+                owner.complete_progress_step(
+                    token, next_wake_at=self._clock.now() + MAINTENANCE_INTERVAL,
+                )
+            raise
+        else:
+            if owner is not None:
+                owner.complete_progress_step(
+                    token, next_wake_at=self._clock.now() + MAINTENANCE_INTERVAL,
+                )
+
+    @property
+    def runtime_status_progress_coverage_ready(self) -> bool:
+        """Complete installed unit instrumentation, independent of bootstrap completion."""
+        return self._status_progress_coverage_installed
+
+    @property
+    def runtime_status_progress_ready(self) -> bool:
+        return self.runtime_status_progress_coverage_ready
+
+    def runtime_status_snapshot(self):
+        """Freeze real installed identities/work on the owner loop; never synchronize queues."""
+        if not self._runtime_status_enabled or self._runtime_status_sessions is None:
+            raise RuntimeError("Runtime status authority is not enabled")
+        from trade_plan_monitor.decision.models import (
+            IntradayEvaluationTarget,
+            OfficialCloseEvaluationTarget,
+        )
+        from trade_plan_monitor.market_index.requirements import plan_index_fact_requests
+        from trade_plan_monitor.notifications.current_delivery import _current_bucket
+        from trade_plan_monitor.runtime.status_authority import PlanReadAuthority
+        from trade_plan_monitor.state.models import ActivePlan, PendingOfficialClose, PlanVersion
+        scopes = []
+        schedule = {item.requirement.scope_key: item
+                    for item in self._stock_recovery_schedule.snapshot()}
+        now = self._clock.now()
+        with self._runtime_status_sessions() as session, session.begin():
+            rows = session.scalars(select(ActivePlan).order_by(ActivePlan.symbol).limit(11)).all()
+            if len(rows) > 10:
+                raise RuntimeError("Too many active plans for runtime status")
+            for row in rows:
+                version = session.get(PlanVersion, row.plan_version_id)
+                if version is None:
+                    raise RuntimeError("Active runtime plan is unavailable")
+                plan = _load_active_plan(version.payload_json)
+                explicit = type(plan) is ExplicitTradePlan
+                target_end = _current_bucket(session, plan, now)
+                target = (
+                    None if target_end is None else IntradayEvaluationTarget(bucket_end=target_end)
+                )
+                proof = self._runtime_status_proofs.get(row.symbol)
+                pending = session.scalar(select(PendingOfficialClose).where(
+                    PendingOfficialClose.symbol == row.symbol))
+                if pending is not None:
+                    target = OfficialCloseEvaluationTarget(trade_date=pending.trade_date)
+                elif (
+                    not explicit and proof is not None
+                    and isinstance(proof.target, OfficialCloseEvaluationTarget)
+                    and proof.runtime_generation == self._runtime_generation
+                    and proof.configuration_revision == self._recovery_configuration_revision
+                    and proof.symbol == row.symbol and proof.plan_family == "LEGACY_LOW_BUY"
+                    and proof.plan_version_id == row.plan_version_id
+                    and proof.plan_hash == version.plan_hash
+                    and proof.activation_revision == row.revision
+                    and target_end is not None and target_end.time() == time(15)
+                    and proof.target.trade_date == target_end.date()
+                ):
+                    # A real committed close clears its pending row. Its owned
+                    # target remains official until a new applicable bucket;
+                    # a historical result alone cannot install this authority.
+                    target = proof.target
+                key = f"stock-prefix:{row.symbol}"
+                demand, step = self._stock_recovery_demands.get(key), schedule.get(key)
+                if proof is not None and proof.target != target:
+                    proof = None
+                reason, blocked, recovery = "AWAITING_FIRST_EVALUATION", False, False
+                if not self._configuration_current():
+                    reason, blocked, proof = "NEEDS_RESTART", True, None
+                elif not self._stock_certification_current():
+                    reason, blocked, proof = "SEMANTICS_INCOMPATIBLE", True, None
+                elif not self._generation_current() or self._admission_revoked():
+                    reason, blocked, proof = "GENERATION_CHANGED", True, None
+                elif (not explicit and plan_index_fact_requests(plan)
+                      and not self._index_certification_current()):
+                    reason, blocked, proof = "SEMANTICS_INCOMPATIBLE", True, None
+                elif pending is not None or row.symbol in self._historical_blocked:
+                    reason, recovery, proof = "CLOSE_PENDING", True, None
+                elif demand is not None and demand.permission_blocked:
+                    reason, blocked, proof = "PERMISSION_DENIED", True, None
+                elif demand is not None and demand.missing_ends:
+                    reason, recovery, proof = "COVERAGE_INCOMPLETE", True, None
+                scopes.append(PlanReadAuthority(symbol=row.symbol,
+                    plan_version_id=row.plan_version_id, plan_hash=version.plan_hash,
+                    activation_revision=row.revision,
+                    plan_family="EXPLICIT_RULES" if explicit else "LEGACY_LOW_BUY",
+                    target=target, completion=proof,
+                    evaluation_due=(target_end is not None and now.date() == target_end.date()
+                        and time(9, 35) <= now.time() < time(15)
+                        and not time(11, 30) <= now.time() < time(13)),
+                    pending_reason=reason, recovery_pending=recovery, blocked=blocked,
+                    next_retry_at=None if step is None else step.next_retry_at))
+        token = (self._runtime_generation, self._runtime_status_revision,
+                 self._recovery_authority_epoch(), self._calendar_epoch,
+                 self._configuration_current(), self._generation_current(),
+                 self._admission_revoked(), self._reference_key,
+                 self.runtime_status_dependencies_snapshot())
+        return token, self._recovery_configuration_revision, tuple(scopes)
+
+    def runtime_status_dependencies_snapshot(self):
+        """Freeze actual desired dependencies without fetching or advancing queues."""
+        from trade_plan_monitor.decision.models import IntradayEvaluationTarget
+        from trade_plan_monitor.runtime.status_authority import DependencyReadAuthority
+
+        now = self._clock.now()
+        capture = derive_recovery_target(now=now, is_open_on=self.is_open_on)
+        ends = completed_minute_ends(capture)
+        target_end = next((end for end in reversed(ends) if end.minute % 5 == 0), None)
+        target = None if target_end is None else IntradayEvaluationTarget(bucket_end=target_end)
+        current_calendar = self._calendar.get(now.date())
+        dependencies = [DependencyReadAuthority(
+            scope_key="calendar:SSE", kind="CALENDAR",
+            status="READY" if current_calendar is not None else "WAITING",
+            reason_code=None if current_calendar is not None else "CALENDAR_UNKNOWN",
+            target=target, data_cutoff=None,
+            required_count=1, completed_count=int(current_calendar is not None),
+        )]
+        latest = self.index_service.latest_snapshots()
+        retries = {code: due for code, _cutoff, _first, _attempts, due
+                   in self.index_service.recovery_records()}
+        desired = set(ALWAYS_ON_INDEX_CODES)
+        plans = self.active_plans()
+        for plan in plans:
+            if isinstance(plan, TradePlan) and plan.reference_market is not None:
+                desired.add(plan.reference_market.index_code)
+        index_ready = []
+        for code in sorted(desired, key=lambda code: code.value):
+            snapshot = latest.get(code)
+            current = (snapshot is not None and target_end is not None
+                       and snapshot.decision_cutoff == target_end)
+            ready = current and snapshot.health is MarketIndexHealth.LIVE
+            index_ready.append(bool(ready))
+            if not self._index_certification_current():
+                state, reason = "BLOCKED", "SEMANTICS_INCOMPATIBLE"
+            elif self.index_provider._profile.capabilities[code] is not (
+                TushareMarketIndexCapabilityStatus.READY
+            ):
+                state, reason = "BLOCKED", "HISTORY_UNAVAILABLE"
+            elif ready:
+                state, reason = "READY", None
+            elif code in retries:
+                state, reason = "RECOVERING", "PROVIDER_UNAVAILABLE"
+            elif current and snapshot.health is MarketIndexHealth.BLOCKED:
+                state, reason = "BLOCKED", "PROVIDER_UNAVAILABLE"
+            else:
+                state, reason = "WAITING", "PUBLICATION_PENDING"
+            dependencies.append(DependencyReadAuthority(
+                scope_key=f"index:{code.value}", kind="INDEX", index_code=code.value,
+                status=state, reason_code=reason, target=target,
+                data_cutoff=None if snapshot is None else snapshot.completed_bucket_at,
+                next_retry_at=retries.get(code),
+                required_count=None if target is None else 1,
+                completed_count=None if target is None else int(bool(ready)),
+            ))
+        # Current immutable validated snapshots prove both declared index source
+        # operations; permission blocks remain independent of cached inputs.
+        for operation, label in (
+            (TushareOperation.INDEX_HISTORICAL_MINUTES, "idx_mins"),
+            (TushareOperation.INDEX_REALTIME_MINUTES, "rt_idx_min_daily"),
+            (TushareOperation.INDEX_DAILY, "index_daily"),
+        ):
+            denied = self._controller.is_permission_blocked(operation)
+            ready = bool(index_ready) and all(index_ready) and not denied
+            dependencies.append(DependencyReadAuthority(
+                scope_key=f"provider:index:{label}", kind="PROVIDER",
+                status="BLOCKED" if denied else "READY" if ready else "WAITING",
+                reason_code=("PERMISSION_DENIED" if denied else None if ready
+                             else "PUBLICATION_PENDING"),
+                target=target, data_cutoff=target_end if ready else None,
+                next_retry_at=self._controller.permission_retry_at(operation),
+                required_count=None if target is None else len(index_ready),
+                completed_count=None if target is None else sum(index_ready),
+            ))
+        exchanges = sorted({"SSE", *(plan.market for plan in plans)})
+        with self._work() as work:
+            calendars = {
+                exchange: work.references.list_trading_days(exchange, now.date(), now.date())
+                for exchange in exchanges
+            }
+        for exchange in exchanges:
+            if exchange == "SSE":
+                continue
+            known = len(calendars[exchange]) == 1
+            dependencies.append(DependencyReadAuthority(
+                scope_key=f"calendar:{exchange}", kind="CALENDAR",
+                status="READY" if known else "WAITING",
+                reason_code=None if known else "CALENDAR_UNKNOWN",
+                target=target, required_count=1, completed_count=int(known),
+            ))
+        desired_stock = []
+        if plans:
+            desired_stock.append((TushareOperation.REALTIME_MINUTES, "rt_min"))
+            if self._stock_recovery_demands:
+                desired_stock.append((TushareOperation.CURRENT_DAY_MINUTES, "stk_mins"))
+        if any(isinstance(plan, TradePlan) for plan in plans):
+            desired_stock.extend((
+                (TushareOperation.DAILY_LIMITS, "stk_limit"),
+                (TushareOperation.DAILY_BARS, "daily"),
+            ))
+        references_current = self._reference_key == self._reference_dependency_key(
+            now.date(), plans,
+        )
+        for operation, label in [(TushareOperation.TRADING_CALENDAR, "trade_cal"), *desired_stock]:
+            denied = self._controller.is_permission_blocked(operation)
+            if operation is TushareOperation.TRADING_CALENDAR:
+                required = len(exchanges)
+                completed = sum(len(rows) == 1 for rows in calendars.values())
+                exact = True
+            elif operation in (TushareOperation.DAILY_LIMITS, TushareOperation.DAILY_BARS):
+                required = sum(isinstance(plan, TradePlan) for plan in plans)
+                completed = required if references_current else 0
+                exact = target is not None
+            else:
+                required = len(plans)
+                completed = 0
+                for plan in plans:
+                    proof = self._runtime_status_proofs.get(plan.symbol)
+                    demand = self._stock_recovery_demands.get(f"stock-prefix:{plan.symbol}")
+                    verified = (proof is not None and proof.target == target
+                                and proof.plan_hash == plan_sha256(plan))
+                    verified = verified or (
+                        demand is not None and demand.capture is not None
+                        and target_end is not None and not demand.missing_ends
+                        and demand.capture.target.completed_minute_end >= target_end
+                        and not demand.permission_blocked
+                    )
+                    completed += int(verified)
+                exact = target is not None
+            ready = exact and completed == required and not denied
+            cooldown = self._controller.cooldown_until
+            cooling = cooldown is not None and cooldown > now
+            dependencies.append(DependencyReadAuthority(
+                scope_key=f"provider:stock:{label}", kind="PROVIDER",
+                status=("BLOCKED" if denied else "READY" if ready else
+                        "RECOVERING" if cooling else "WAITING"),
+                reason_code=("PERMISSION_DENIED" if denied else None if ready else
+                             "RATE_LIMITED" if cooling else "REFERENCE_PENDING"
+                             if operation is TushareOperation.TRADING_CALENDAR else
+                             "COVERAGE_INCOMPLETE"),
+                target=target, data_cutoff=target_end if ready else None,
+                next_retry_at=(self._controller.permission_retry_at(operation)
+                               if denied else cooldown if cooling else None),
+                required_count=required if exact else None,
+                completed_count=completed if exact else None,
+            ))
+        return tuple(sorted(dependencies, key=lambda item: item.scope_key))
 
     def _load_semantic_binding(self, surface: str) -> ProviderSemanticContract | None:
         bindings = self._semantic_bindings
@@ -2398,6 +2724,12 @@ class ProductionMonitorPipeline:
     async def _run_permission_maintenance(
         self, requested_operation: TushareOperation | None = None,
     ) -> PermissionMaintenanceResult:
+        with self._status_progress_unit(timeout_seconds=90):
+            return await self._run_permission_maintenance_owned(requested_operation)
+
+    async def _run_permission_maintenance_owned(
+        self, requested_operation: TushareOperation | None = None,
+    ) -> PermissionMaintenanceResult:
         owner, cancelled = asyncio.current_task(), Event()
         try:
             async with self._permission_maintenance_lock:
@@ -2862,45 +3194,48 @@ class ProductionMonitorPipeline:
         start = trade_date - timedelta(days=_REFERENCE_DAYS)
         end = trade_date + timedelta(days=32)
         for exchange in sorted({"SSE", *(plan.market for plan in plans)}):
-            days = await self._request(
-                TushareOperation.TRADING_CALENDAR,
-                lambda exchange=exchange: self.provider.trading_calendar_for_exchange(
-                    exchange, start, end
-                ),
-                f"calendar:{exchange}:{trade_date}",
-            )
-            if not any(day.cal_date == trade_date for day in days):
-                raise ReferenceDataUnavailableError("current trading calendar is unavailable")
-            self._commit_trading_days(
-                days, trade_date=trade_date, captured_key=captured_key,
-            )
-        if legacy_plans and self.is_open_on(trade_date):
-            limits = await self._request(
-                TushareOperation.DAILY_LIMITS,
-                lambda: self.provider.daily_limits(trade_date),
-                f"limits:{trade_date}",
-            )
-            with self._work() as work:
-                active_symbols = {plan.symbol for plan in legacy_plans}
-                work.references.upsert_daily_limits(
-                    tuple(row for row in limits if row.symbol in active_symbols)
+            with self._status_progress_unit(timeout_seconds=90):
+                days = await self._request(
+                    TushareOperation.TRADING_CALENDAR,
+                    lambda exchange=exchange: self.provider.trading_calendar_for_exchange(
+                        exchange, start, end
+                    ),
+                    f"calendar:{exchange}:{trade_date}",
                 )
-                self._assert_reference_generation(trade_date, captured_key)
-                work.commit()
+                if not any(day.cal_date == trade_date for day in days):
+                    raise ReferenceDataUnavailableError("current trading calendar is unavailable")
+                self._commit_trading_days(
+                    days, trade_date=trade_date, captured_key=captured_key,
+                )
+        if legacy_plans and self.is_open_on(trade_date):
+            with self._status_progress_unit(timeout_seconds=90):
+                limits = await self._request(
+                    TushareOperation.DAILY_LIMITS,
+                    lambda: self.provider.daily_limits(trade_date),
+                    f"limits:{trade_date}",
+                )
+                with self._work() as work:
+                    active_symbols = {plan.symbol for plan in legacy_plans}
+                    work.references.upsert_daily_limits(
+                        tuple(row for row in limits if row.symbol in active_symbols)
+                    )
+                    self._assert_reference_generation(trade_date, captured_key)
+                    work.commit()
         for plan in legacy_plans:
-            bars = await self._request(
-                TushareOperation.DAILY_BARS,
-                lambda plan=plan: self.provider.daily_bars(
-                    plan.symbol, start, trade_date - timedelta(days=1)
-                ),
-                f"daily-history:{plan.symbol}:{trade_date}",
-            )
-            if not bars:
-                raise ReferenceDataUnavailableError("official reference history is unavailable")
-            with self._work() as work:
-                work.history.upsert_daily_bars(bars)
-                self._assert_reference_generation(trade_date, captured_key)
-                work.commit()
+            with self._status_progress_unit(timeout_seconds=90):
+                bars = await self._request(
+                    TushareOperation.DAILY_BARS,
+                    lambda plan=plan: self.provider.daily_bars(
+                        plan.symbol, start, trade_date - timedelta(days=1)
+                    ),
+                    f"daily-history:{plan.symbol}:{trade_date}",
+                )
+                if not bars:
+                    raise ReferenceDataUnavailableError("official reference history is unavailable")
+                with self._work() as work:
+                    work.history.upsert_daily_bars(bars)
+                    self._assert_reference_generation(trade_date, captured_key)
+                    work.commit()
         current_key = self._reference_dependency_key(trade_date, self.active_plans(trade_date))
         if captured_key != current_key:
             raise ReferenceDependenciesChangedError
@@ -3106,6 +3441,14 @@ class ProductionMonitorPipeline:
     async def _run_stock_recovery_unit(
         self, *, maintenance: bool, startup_trade_date: date | None = None,
     ) -> _StockRecoveryOutcome:
+        with self._status_progress_unit(timeout_seconds=90):
+            return await self._run_stock_recovery_unit_owned(
+                maintenance=maintenance, startup_trade_date=startup_trade_date,
+            )
+
+    async def _run_stock_recovery_unit_owned(
+        self, *, maintenance: bool, startup_trade_date: date | None = None,
+    ) -> _StockRecoveryOutcome:
         """Share one ticket/accounting path without imposing maintenance policy on startup."""
         if self._stock_recovery_owner_retired():
             return _StockRecoveryOutcome()
@@ -3267,19 +3610,20 @@ class ProductionMonitorPipeline:
         return True
 
     async def recover_startup(self, trade_date: date) -> None:
-        # Hydrate the calendar even if the independent refresh stage failed.
-        with self._work() as work:
-            days = work.references.list_trading_days(
-                "SSE",
-                trade_date - timedelta(days=_REFERENCE_DAYS),
-                trade_date + timedelta(days=32),
+        with self._status_progress_unit(timeout_seconds=30):
+            # Hydrate the calendar even if the independent refresh stage failed.
+            with self._work() as work:
+                days = work.references.list_trading_days(
+                    "SSE",
+                    trade_date - timedelta(days=_REFERENCE_DAYS),
+                    trade_date + timedelta(days=32),
+                )
+            self._calendar = {day.cal_date: day.is_open for day in days}
+            symbols = self.active_symbols()
+            self.symbols.restore_health(
+                symbols=symbols, states=self.evaluations.load_persisted_symbol_health(symbols)
             )
-        self._calendar = {day.cal_date: day.is_open for day in days}
-        symbols = self.active_symbols()
-        self.symbols.restore_health(
-            symbols=symbols, states=self.evaluations.load_persisted_symbol_health(symbols)
-        )
-        self.restore_index_recoveries()
+            self.restore_index_recoveries()
         if self._historical_reader is None:
             await self._recover_pending_close_batches(trade_date)
         else:

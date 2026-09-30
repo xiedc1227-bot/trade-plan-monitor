@@ -45,6 +45,11 @@ _MORNING_CLOSE = time(11, 30)
 _AFTERNOON_OPEN = time(13, 5)
 _SESSION_CLOSE = time(15, 0)
 _SESSION_OPEN = time(9, 35)
+# One immutable index snapshot may require historical minutes, realtime minutes
+# and official daily data. Each controller call permits at most three attempts,
+# each with 15 seconds admission plus 15 seconds physical wait, followed by
+# one bounded local validation. This is per snapshot, never a batch allowance.
+_INDEX_SNAPSHOT_PROGRESS_BUDGET_SECONDS = 3 * 3 * (15 + 15) + 30
 
 
 def _ceil_to_whole_second(value: datetime) -> datetime:
@@ -343,11 +348,13 @@ class MarketIndexSnapshotCoordinator:
         provider: LiveMarketIndexProvider,
         *,
         clock: Clock | None = None,
+        progress_owner=None,
     ) -> None:
         if clock is not None and not isinstance(clock, Clock):
             raise TypeError("clock must implement Clock")
         self._provider = provider
         self._clock = clock
+        self._progress_owner = progress_owner
         self._lock = asyncio.Lock()
         self._inflight: dict[_PrefetchKey, asyncio.Task[MarketIndexSnapshot]] = {}
         self._snapshots: OrderedDict[_SnapshotKey, MarketIndexSnapshot] = OrderedDict()
@@ -445,8 +452,7 @@ class MarketIndexSnapshotCoordinator:
         selected_minimums = {} if minimum_bar_counts is None else dict(minimum_bar_counts)
         if not set(selected_minimums).issubset(requirements):
             raise ValueError("minimum bar counts must name requested indexes")
-        snapshots = await asyncio.gather(
-            *(
+        requests = tuple(
                 self.get_snapshot(
                     index_code=index_code,
                     decision_cutoff=decision_cutoff,
@@ -456,9 +462,53 @@ class MarketIndexSnapshotCoordinator:
                     minimum_official_daily_bar_count=selected_minimums.get(index_code, (1, 1))[1],
                 )
                 for index_code in codes
-            )
         )
+        if self._progress_owner is None or not requests:
+            snapshots = await asyncio.gather(*requests)
+        else:
+            snapshots = await self._collect_owned_snapshots(codes, requests)
         return MappingProxyType(dict(zip(codes, snapshots, strict=True)))
+
+    async def _collect_owned_snapshots(self, codes, requests):
+        """Only the awaiting owner records validated completions, retaining original due times."""
+        owner = self._progress_owner
+        # Freeze each snapshot's actual maximum three-stage controller budget.
+        # A peer completion cannot refresh another snapshot's original due time.
+        try:
+            due = owner.progress_monotonic_now() + _INDEX_SNAPSHOT_PROGRESS_BUDGET_SECONDS
+            token = owner.begin_progress_step_at(deadline=due)
+        except BaseException:
+            # Rejected ownership cannot begin an otherwise unowned provider task.
+            for request in requests:
+                request.close()
+            raise
+        pending = {asyncio.create_task(request): (code, due)
+                   for code, request in zip(codes, requests, strict=True)}
+        completed = {}
+        try:
+            while pending:
+                done, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                for task in sorted(done, key=lambda task: pending[task][0].value):
+                    code, _deadline = pending[task]
+                    snapshot = task.result()
+                    # get_snapshot already validated and installed the immutable snapshot.
+                    completed[code] = snapshot
+                    del pending[task]
+                    accepted = owner.complete_progress_step(
+                        token, next_wake_at=self._clock.now() + timedelta(seconds=30),
+                    )
+                    if accepted and pending:
+                        token = owner.begin_progress_step_at(
+                            deadline=min(item[1] for item in pending.values()),
+                        )
+            return tuple(completed[code] for code in codes)
+        finally:
+            # Cancelling wrappers preserves get_snapshot's physically shielded
+            # provider work. Its lifecycle controller owns that physical drain.
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
 
     async def _acquire(
         self,

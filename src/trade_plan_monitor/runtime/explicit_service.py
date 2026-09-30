@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import StrEnum
@@ -14,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from trade_plan_monitor.decision.explicit_rules import (
     ExplicitEvaluationResult,
     ExplicitInventorySnapshot,
+    ExplicitRuleStateSnapshot,
     evaluate_explicit_rules,
 )
 from trade_plan_monitor.domain.plan_hash import plan_sha256
@@ -79,6 +81,7 @@ class _CapturedContext(BaseModel):
     trading_calendar: tuple[object, ...]
     manual_event_risk: bool | None
     manual_event_risk_revision: int | None
+    rule_states: tuple[ExplicitRuleStateSnapshot, ...] = ()
 
 
 class ExplicitRuntimeEvaluationService:
@@ -92,6 +95,10 @@ class ExplicitRuntimeEvaluationService:
         committed_event_publisher: Callable[[MonitorEvent], object] | None = None,
         recovery_delivery: bool = False,
         commit_admission: Callable[[], bool] | None = None,
+        committed_result_observer: (
+            Callable[[ExplicitTradePlan, ExplicitEvaluationResult, object], None] | None
+        ) = None,
+        progress_unit=None,
     ) -> None:
         if type(recovery_delivery) is not bool:
             raise TypeError("recovery_delivery must be a bool")
@@ -109,6 +116,10 @@ class ExplicitRuntimeEvaluationService:
         # Storage-only opt-in; the existing dispatcher does not enforce this HOLD.
         self._recovery_delivery = recovery_delivery
         self._commit_admission = commit_admission or (lambda: True)
+        if committed_result_observer is not None and not callable(committed_result_observer):
+            raise TypeError("committed_result_observer must be callable")
+        self._committed_result_observer = committed_result_observer
+        self._progress_unit = progress_unit
 
     async def run_intraday_and_publish(
         self,
@@ -189,6 +200,18 @@ class ExplicitRuntimeEvaluationService:
         self, *, plan: ExplicitTradePlan, target_bucket_end: datetime, evaluated_at: datetime,
         expected_activation_revision: int | None, account_stale: bool,
     ) -> ExplicitRuntimeCycleResult | _PrecommitStale:
+        with (nullcontext() if self._progress_unit is None else
+              self._progress_unit(timeout_seconds=30)):
+            return self._run_intraday_local(
+                plan=plan, target_bucket_end=target_bucket_end, evaluated_at=evaluated_at,
+                expected_activation_revision=expected_activation_revision,
+                account_stale=account_stale,
+            )
+
+    def _run_intraday_local(
+        self, *, plan: ExplicitTradePlan, target_bucket_end: datetime, evaluated_at: datetime,
+        expected_activation_revision: int | None, account_stale: bool,
+    ) -> ExplicitRuntimeCycleResult | _PrecommitStale:
         if type(plan) is not ExplicitTradePlan:
             raise TypeError("plan must be an ExplicitTradePlan")
         if expected_activation_revision is not None and (
@@ -214,6 +237,9 @@ class ExplicitRuntimeEvaluationService:
                 evaluation_result=existing,
                 committed_events=(),
             )
+        captured = captured.model_copy(update={
+            "rule_states": self._load_rule_states(plan, captured.activation_revision)
+        })
         result = evaluate_explicit_rules(
             plan=plan,
             bars=captured.bars,
@@ -222,7 +248,7 @@ class ExplicitRuntimeEvaluationService:
             evaluated_at=evaluated_at,
             activation_revision=captured.activation_revision,
             inventory=captured.inventory,
-            rule_states=self._load_rule_states(plan, captured.activation_revision),
+            rule_states=captured.rule_states,
             manual_event_risk=captured.manual_event_risk,
             manual_event_risk_revision=captured.manual_event_risk_revision,
         )
@@ -281,6 +307,8 @@ class ExplicitRuntimeEvaluationService:
             if record.created and not self._commit_admission():
                 raise RuntimeError("runtime decision commit admission revoked")
             work.commit()
+        if record.created and self._committed_result_observer is not None:
+            self._committed_result_observer(plan, result, captured)
         return ExplicitRuntimeCycleResult(
             status=(
                 ExplicitRuntimeCycleStatus.COMMITTED

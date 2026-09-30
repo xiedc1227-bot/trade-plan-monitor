@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable, Mapping
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
@@ -93,6 +94,7 @@ from trade_plan_monitor.runtime.market_indexes import (
     RuntimeMarketIndexBatch,
     RuntimeMarketIndexService,
 )
+from trade_plan_monitor.runtime.progress import ProgressSnapshot, RuntimeProgress
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
@@ -615,6 +617,10 @@ class RuntimeEvaluationService:
         recovery_delivery: bool = False,
         commit_admission: Callable[[], bool] | None = None,
         index_commit_admission: Callable[[RuntimeMarketIndexBatch], bool] | None = None,
+        committed_result_observer: (
+            Callable[[TradePlan, EvaluationResult, EvaluationContext], None] | None
+        ) = None,
+        progress_unit=None,
     ) -> None:
         if type(recovery_delivery) is not bool:
             raise TypeError("recovery_delivery must be a bool")
@@ -622,6 +628,10 @@ class RuntimeEvaluationService:
             raise TypeError("commit_admission must be callable")
         if index_commit_admission is not None and not callable(index_commit_admission):
             raise TypeError("index_commit_admission must be callable")
+        if committed_result_observer is not None and not callable(committed_result_observer):
+            raise TypeError("committed_result_observer must be callable")
+        self._committed_result_observer = committed_result_observer
+        self._progress_unit = progress_unit
         dependencies = (
             fetch_minutes,
             unit_of_work_factory,
@@ -879,6 +889,13 @@ class RuntimeEvaluationService:
         return tuple(states)
 
     async def persist_symbol_health_batch(
+        self, *args, **kwargs,
+    ):
+        with (nullcontext() if self._progress_unit is None else
+              self._progress_unit(timeout_seconds=30)):
+            return await self._persist_symbol_health_batch_local(*args, **kwargs)
+
+    async def _persist_symbol_health_batch_local(
         self,
         snapshots: tuple[SymbolHealthSnapshot, ...],
         *,
@@ -1039,12 +1056,20 @@ class RuntimeEvaluationService:
                 )
             return result
 
-        results = await asyncio.gather(
-            *(evaluate_plan(plan, None if associated_identities is None
-                            else associated_identities[index])
-              for index, plan in enumerate(plans)),
-            return_exceptions=True,
-        )
+        if self._progress_unit is None:
+            results = await asyncio.gather(
+                *(evaluate_plan(plan, None if associated_identities is None
+                                else associated_identities[index])
+                  for index, plan in enumerate(plans)),
+                return_exceptions=True,
+            )
+        else:
+            # The real owner serializes local commits. Concurrent children may
+            # never install/complete lifecycle progress tokens.
+            results = []
+            for index, plan in enumerate(plans):
+                identity = None if associated_identities is None else associated_identities[index]
+                results.append(await evaluate_plan(plan, identity))
         first_error = next(
             (
                 item
@@ -1060,6 +1085,13 @@ class RuntimeEvaluationService:
         return tuple(item for item in results if isinstance(item, IntradayCycleResult))
 
     async def _run_intraday_with_snapshot(
+        self, **kwargs,
+    ) -> IntradayCycleResult | _PrecommitStale:
+        with (nullcontext() if self._progress_unit is None else
+              self._progress_unit(timeout_seconds=30)):
+            return await self._run_intraday_local_with_snapshot(**kwargs)
+
+    async def _run_intraday_local_with_snapshot(
         self,
         *,
         plan: TradePlan,
@@ -1221,6 +1253,8 @@ class RuntimeEvaluationService:
                 claim_created=False,
                 committed_event=None,
             )
+        if self._committed_result_observer is not None:
+            self._committed_result_observer(plan, result, context)
         await self._publish_committed_events((publication_event, health_event))
         return IntradayCycleResult(
             status=IntradayCycleStatus.COMMITTED,
@@ -1424,6 +1458,27 @@ class RuntimeEvaluationService:
                 raise ValueError("Historical official context requires recovery_delivery=True")
             self._official_context_builder.prepare_target(plan, trade_date, canonical_evaluated_at)
 
+        with (nullcontext() if self._progress_unit is None else
+              self._progress_unit(timeout_seconds=90)):
+            canonical_evaluated_at, fetch_error, persisted = await self._fetch_official_context(
+                plan=plan, trade_date=trade_date, close_attempt=close_attempt,
+                canonical_evaluated_at=canonical_evaluated_at, source_as_of=source_as_of,
+                activation_revision=activation_revision,
+            )
+        with (nullcontext() if self._progress_unit is None else
+              self._progress_unit(timeout_seconds=30)):
+            return await self._finish_official_close(
+                plan=plan, trade_date=trade_date, close_attempt=close_attempt,
+                canonical_evaluated_at=canonical_evaluated_at, source_as_of=source_as_of,
+                activation_revision=activation_revision,
+                reference_market_snapshot=reference_market_snapshot,
+                persisted=persisted, fetch_error=fetch_error,
+            )
+
+    async def _fetch_official_context(
+        self, *, plan, trade_date, close_attempt, canonical_evaluated_at,
+        source_as_of, activation_revision,
+    ):
         fetch_error: OfficialCloseErrorCode | None = None
         try:
             fetched = await self._fetch_official_daily(
@@ -1457,6 +1512,12 @@ class RuntimeEvaluationService:
             incoming=incoming,
             activation_revision=activation_revision,
         )
+        return canonical_evaluated_at, fetch_error, persisted
+
+    async def _finish_official_close(
+        self, *, plan, trade_date, close_attempt, canonical_evaluated_at,
+        source_as_of, activation_revision, reference_market_snapshot, persisted, fetch_error,
+    ) -> OfficialCloseCycleResult:
         reconciliation, official_history, pending_event = persisted
         await self._publish_committed_events((pending_event,))
         if not reconciliation.advance_close_risk or reconciliation.official_bar is None:
@@ -1610,6 +1671,8 @@ class RuntimeEvaluationService:
                 committed_event=None,
                 error_code=None,
             )
+        if self._committed_result_observer is not None:
+            self._committed_result_observer(plan, result, context)
         await self._publish_committed_events(
             (publication_event, projection_health_event, health_event)
         )
@@ -1652,6 +1715,13 @@ class RuntimeEvaluationService:
         )
 
     async def _official_close_completed(
+        self, **kwargs,
+    ) -> bool:
+        with (nullcontext() if self._progress_unit is None else
+              self._progress_unit(timeout_seconds=30)):
+            return await self._official_close_completed_local(**kwargs)
+
+    async def _official_close_completed_local(
         self,
         *,
         plan: TradePlan,
@@ -2259,6 +2329,13 @@ class RuntimeEvaluationService:
         )
 
     def _persist_market_index_batch(
+        self, batch,
+    ):
+        with (nullcontext() if self._progress_unit is None else
+              self._progress_unit(timeout_seconds=30)):
+            return self._persist_market_index_batch_local(batch)
+
+    def _persist_market_index_batch_local(
         self,
         prepared: RuntimeMarketIndexBatch,
     ) -> tuple[RuntimeMarketIndexBatch, tuple[MonitorEvent, ...]]:
@@ -2904,6 +2981,7 @@ class RuntimeLifecycleService:
         next_permission_maintenance_at: Callable[[], datetime | None] | None = None,
         shutdown_timeout_seconds: float = 5.0,
         revoke_active_recovery_attempts: Callable[[], None] | None = None,
+        progress_monotonic: Callable[[], float] | None = None,
     ) -> None:
         if not isinstance(clock, Clock):
             raise TypeError("clock must implement Clock")
@@ -3033,6 +3111,12 @@ class RuntimeLifecycleService:
         self._stop_task: asyncio.Task[None] | None = None
         self._shutdown_requested_event: asyncio.Event | None = None
         self._runtime_generation = uuid4()
+        self._progress = (
+            None if progress_monotonic is None else RuntimeProgress(
+                self._runtime_generation, clock=clock.now, monotonic=progress_monotonic,
+            )
+        )
+        self._progress_bootstrap_completed = False
 
     @property
     def status(self) -> RuntimeServiceStatus:
@@ -3055,6 +3139,67 @@ class RuntimeLifecycleService:
     @property
     def runtime_generation(self) -> UUID:
         return self._runtime_generation
+
+    def progress_snapshot(self) -> ProgressSnapshot | None:
+        """Observe evidence only; availability does not certify hook coverage."""
+
+        return None if self._progress is None else self._progress.snapshot()
+
+    def progress_authority_token(self) -> object | None:
+        """Observe the current immutable record without renewing progress."""
+        return None if self._progress is None else self._progress.authority_token()
+
+    def _require_progress_owner(self) -> RuntimeProgress:
+        task = asyncio.current_task()
+        if task is None or (
+            task is not self._start_task and task is not self._schedule_owner
+            and task not in self._work_tasks
+        ):
+            raise RuntimeError("progress updates require the lifecycle owner task")
+        if self._progress is None:
+            raise RuntimeError("owner progress instrumentation is not enabled")
+        return self._progress
+
+    def begin_progress_step(self, *, timeout_seconds: float) -> object:
+        """Begin a known bounded unit, never an unspecified multi-request batch."""
+
+        progress = self._require_progress_owner()
+        if self._stopping or self._cleanup_complete:
+            raise RuntimeError("runtime progress owner is stopping")
+        return progress.begin_step(timeout_seconds=timeout_seconds)
+
+    def complete_progress_step(self, token: object, *, next_wake_at: datetime) -> bool:
+        """Record owner-validated completion; cancelled shutdown work cannot renew it."""
+
+        progress = self._require_progress_owner()
+        if self._stopping or self._cleanup_complete:
+            return False
+        completed = progress.complete_step(token, next_wake_at=next_wake_at)
+        if completed and asyncio.current_task() is self._start_task:
+            self._progress_bootstrap_completed = True
+        return completed
+
+    def begin_progress_step_at(self, *, deadline: float) -> object:
+        """Collect concurrent work without refreshing its original deadline."""
+        progress = self._require_progress_owner()
+        if self._stopping or self._cleanup_complete:
+            raise RuntimeError("runtime progress owner is stopping")
+        return progress.begin_step_at(deadline=deadline)
+
+    def progress_monotonic_now(self) -> float:
+        """Capture the original deadline before launching concurrent work."""
+        return self._require_progress_owner().monotonic_now()
+
+    async def run_local_progress_unit(self, operation: Callable[..., object], *args) -> object:
+        """Observe one local validation/commit, never a provider or multi-request batch."""
+        if self._progress is None:
+            return await self._invoke(operation, *args)
+        token = self.begin_progress_step(timeout_seconds=30)
+        result = await self._invoke(operation, *args)
+        self.complete_progress_step(
+            token, next_wake_at=_canonical_shanghai(self._clock.now()) + timedelta(seconds=30),
+        )
+        return result
 
     @property
     def business_commit_admission_open(self) -> bool:
@@ -3137,6 +3282,9 @@ class RuntimeLifecycleService:
         await self._invoke(self._open_database)
         self._database_opened = True
         if self._liveness_owner is not None:
+            admission_token = (
+                None if self._progress is None else self.begin_progress_step(timeout_seconds=30)
+            )
             try:
                 await self._invoke(self._liveness_owner.admit)
             except LegacyPlansRequireReview:
@@ -3149,7 +3297,15 @@ class RuntimeLifecycleService:
                     active_symbols=(),
                     capabilities=ProviderCapabilities(),
                 )
+                if admission_token is not None:
+                    self.complete_progress_step(
+                        admission_token, next_wake_at=self._clock.now() + timedelta(seconds=30),
+                    )
                 return self._startup_result
+            if admission_token is not None:
+                self.complete_progress_step(
+                    admission_token, next_wake_at=self._clock.now() + timedelta(seconds=30),
+                )
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
             self._heartbeat_task.add_done_callback(self._observe_heartbeat_result)
         raw_symbols = await self._invoke(self._load_active_symbols)
@@ -3238,11 +3394,7 @@ class RuntimeLifecycleService:
             startup = await self.start()
             if startup.read_only:
                 if startup.status is RuntimeServiceStatus.BLOCKED:
-                    shutdown_event = asyncio.Event()
-                    self._shutdown_requested_event = shutdown_event
-                    if self._stopping or self._cleanup_complete:
-                        shutdown_event.set()
-                    await shutdown_event.wait()
+                    await self._wait_for_explicit_stop()
                     return
                 await self._retry_degraded_startup()
                 if not self._accepting_work:
@@ -3336,6 +3488,10 @@ class RuntimeLifecycleService:
             _canonical_shanghai(self._clock.now()) + timedelta(seconds=self._retry_interval_seconds)
         )
         while not self._stopping and self._status is RuntimeServiceStatus.DEGRADED:
+            if self._progress is not None and self._progress_bootstrap_completed:
+                self._reconsider_progress(
+                    after=self._last_deadline_at, wake_limit=startup_due, include_market=False,
+                )
             if self._configuration_restart_required():
                 self._mark_configuration_restart_required()
                 await self._wait_for_explicit_stop()
@@ -3353,7 +3509,10 @@ class RuntimeLifecycleService:
             permission_due = self._permission_maintenance_due()
             wake_at = min(startup_due, permission_due or startup_due)
             if now < wake_at:
-                outcome = await self._retry_wait(shutdown_event, (wake_at - now).total_seconds())
+                delay = (wake_at - now).total_seconds()
+                if self._progress is not None and self._progress_bootstrap_completed:
+                    delay = min(delay, 30)
+                outcome = await self._retry_wait(shutdown_event, delay)
                 if outcome is _RetryWaitOutcome.SHUTDOWN:
                     return
                 if outcome is not _RetryWaitOutcome.TIMEOUT:
@@ -3515,8 +3674,17 @@ class RuntimeLifecycleService:
     async def _wait_for_explicit_stop(self) -> None:
         shutdown_event = asyncio.Event()
         self._shutdown_requested_event = shutdown_event
-        if self._stopping:
+        if self._stopping or self._cleanup_complete:
             shutdown_event.set()
+        if self._progress is not None and self._progress_bootstrap_completed:
+            while not shutdown_event.is_set():
+                self._reconsider_progress(after=self._last_deadline_at, include_market=False)
+                outcome = await self._retry_wait(shutdown_event, 30)
+                if outcome is _RetryWaitOutcome.SHUTDOWN:
+                    return
+                if outcome is not _RetryWaitOutcome.TIMEOUT:
+                    raise TypeError("retry_wait must return SHUTDOWN or TIMEOUT")
+            return
         await shutdown_event.wait()
 
     @property
@@ -3704,8 +3872,12 @@ class RuntimeLifecycleService:
         self._cleanup_complete = True
         self._cleanup_failed = False
         self._cleanup_error = None
+        if self._progress is not None:
+            self._progress.stop()
 
     async def _wait_for_next(self, *, after: datetime | None) -> MarketDeadline | None:
+        if self._progress is not None and self._progress_bootstrap_completed:
+            return await self._wait_for_next_with_progress(after=after)
         wait_task = asyncio.create_task(self._scheduler.wait_for_next(after=after))
         self._schedule_wait_task = wait_task
         try:
@@ -3716,6 +3888,62 @@ class RuntimeLifecycleService:
         if deadline is not None and not isinstance(deadline, MarketDeadline):
             raise TypeError("scheduler must return MarketDeadline or None")
         return deadline
+
+    def _reconsider_progress(
+        self, *, after: datetime | None, wake_limit: datetime | None = None,
+        include_market: bool = True,
+        installed_deadline: MarketDeadline | None = None,
+    ) -> tuple[MarketDeadline | None, datetime]:
+        """Complete only local installed-identity and pending-schedule reconciliation."""
+
+        token = self.begin_progress_step(timeout_seconds=30)
+        if self._configuration_restart_required():
+            self._mark_configuration_restart_required()
+        deadline = self._scheduler.next_deadline(after=after)
+        if deadline is not None and not isinstance(deadline, MarketDeadline):
+            raise TypeError("scheduler must return MarketDeadline or None")
+        # A local progress wake must preserve the market unit already selected
+        # before sleeping. The scheduler's next_deadline excludes past duties.
+        if installed_deadline is not None and (
+            deadline is None or installed_deadline.due_at <= deadline.due_at
+        ):
+            deadline = installed_deadline
+        permission_due = self._permission_maintenance_due()
+        now = _canonical_shanghai(self._clock.now())
+        wake = now + timedelta(seconds=30)
+        candidates = (
+            wake_limit, permission_due,
+            None if deadline is None or not include_market else deadline.due_at,
+        )
+        for candidate in candidates:
+            if candidate is not None and candidate > now:
+                wake = min(wake, candidate)
+        if include_market and deadline is not None and deadline.due_at <= now:
+            wake = now
+        self.complete_progress_step(token, next_wake_at=wake)
+        return deadline, wake
+
+    async def _wait_for_next_with_progress(
+        self, *, after: datetime | None,
+    ) -> MarketDeadline | None:
+        installed_deadline = None
+        while self._accepting_work:
+            deadline, wake = self._reconsider_progress(
+                after=after, installed_deadline=installed_deadline,
+            )
+            installed_deadline = deadline
+            if not self._accepting_work:
+                return None
+            if deadline is not None and deadline.due_at <= self._clock.now():
+                return deadline
+            wait_task = asyncio.create_task(self._clock.sleep_until(wake))
+            self._schedule_wait_task = wait_task
+            try:
+                await wait_task
+            finally:
+                if self._schedule_wait_task is wait_task:
+                    self._schedule_wait_task = None
+        return None
 
     def _claim_schedule_owner(self) -> asyncio.Task[object]:
         owner = asyncio.current_task()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping
+from contextlib import nullcontext
 from datetime import date, datetime, timedelta
 from typing import Self
 
@@ -153,6 +154,7 @@ class SymbolService:
         is_open_on: IsOpenOn,
         health_tracker: SymbolHealthTracker,
         clock: Clock | None = None,
+        progress_unit=None,
     ) -> None:
         dependencies = (
             active_symbols,
@@ -178,6 +180,7 @@ class SymbolService:
         self._is_open_on = is_open_on
         self._health_tracker = health_tracker
         self._clock = clock
+        self._progress_unit = progress_unit or (lambda **_kwargs: nullcontext())
         self._hydrated_generations: dict[str, int] = {}
 
     def restore_health(
@@ -237,43 +240,14 @@ class SymbolService:
                 health=summarize_system_health(observed_at=observed_at, symbols=()),
             )
 
-        try:
-            raw_rows = await self._request_controller.execute(
-                TushareOperation.REALTIME_MINUTES,
-                lambda: self._provider.realtime_minutes(symbols),
-                work_key="realtime:stock",
-                priority=RequestPriority.MARKET_DEADLINE,
-            )
-        except RequestControlError:
-            observed_at = await self._post_fetch_observed_at(observed_at)
-            return self._blocked_batch(
-                symbols=symbols,
-                bar_end=bar_end,
-                observed_at=observed_at,
-                error_code=SymbolHealthErrorCode.PROVIDER_BLOCKED,
+        with self._progress_unit(timeout_seconds=90):
+            acquisition = await self._acquire_and_validate_rows(
+                symbols=symbols, bar_end=bar_end, observed_at=observed_at,
                 required_bucket=required_bucket,
             )
-
-        observed_at = await self._post_fetch_observed_at(observed_at)
-
-        if type(raw_rows) is not list or len(raw_rows) > _MAX_PROVIDER_ROWS:
-            return self._blocked_batch(
-                symbols=symbols,
-                bar_end=bar_end,
-                observed_at=observed_at,
-                error_code=SymbolHealthErrorCode.INVALID_CONTEXT,
-                required_bucket=required_bucket,
-            )
-
-        rows_by_symbol, invalid_symbols = self._isolate_rows(
-            raw_rows,
-            symbols=symbols,
-            expected={bar_end},
-        )
-        try:
-            calendar_ready = self._is_open_on(bar_end.date()) is True
-        except Exception:
-            calendar_ready = False
+        if isinstance(acquisition, RealtimeBatchResult):
+            return acquisition
+        observed_at, rows_by_symbol, invalid_symbols, calendar_ready = acquisition
         contexts = tuple(
             self._build_symbol_context(
                 symbol=symbol,
@@ -299,6 +273,48 @@ class SymbolService:
             health=health,
         )
 
+    async def _acquire_and_validate_rows(
+        self, *, symbols, bar_end, observed_at, required_bucket,
+    ):
+        try:
+            raw_rows = await self._request_controller.execute(
+                TushareOperation.REALTIME_MINUTES,
+                lambda: self._provider.realtime_minutes(symbols),
+                work_key="realtime:stock",
+                priority=RequestPriority.MARKET_DEADLINE,
+            )
+        except RequestControlError:
+            observed_at = await self._post_fetch_observed_at(observed_at)
+            return self._blocked_batch(
+                symbols=symbols,
+                bar_end=bar_end,
+                observed_at=observed_at,
+                error_code=SymbolHealthErrorCode.PROVIDER_BLOCKED,
+                required_bucket=required_bucket,
+            )
+        observed_at = await self._post_fetch_observed_at(observed_at)
+
+        if type(raw_rows) is not list or len(raw_rows) > _MAX_PROVIDER_ROWS:
+            return self._blocked_batch(
+                symbols=symbols,
+                bar_end=bar_end,
+                observed_at=observed_at,
+                error_code=SymbolHealthErrorCode.INVALID_CONTEXT,
+                required_bucket=required_bucket,
+            )
+
+        rows_by_symbol, invalid_symbols = self._isolate_rows(
+            raw_rows,
+            symbols=symbols,
+            expected={bar_end},
+        )
+        try:
+            calendar_ready = self._is_open_on(bar_end.date()) is True
+        except Exception:
+            calendar_ready = False
+        return observed_at, rows_by_symbol, invalid_symbols, calendar_ready
+
+
     async def _post_fetch_observed_at(self, requested_at: datetime) -> datetime:
         observed_at = _ceil_to_whole_second(requested_at)
         if self._clock is None:
@@ -312,6 +328,12 @@ class SymbolService:
         return observed_at
 
     def _build_symbol_context(
+        self, **kwargs,
+    ) -> SymbolRuntimeContext:
+        with self._progress_unit(timeout_seconds=30):
+            return self._build_symbol_context_local(**kwargs)
+
+    def _build_symbol_context_local(
         self,
         *,
         symbol: str,
