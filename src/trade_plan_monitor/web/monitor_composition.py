@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import logging
 import sqlite3
+import time as monotonic_time
 from collections.abc import Awaitable, Callable
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -110,6 +111,27 @@ _PROVIDER_CAPABILITIES = (
     "trading_calendar",
 )
 _RECOVERY_PROFILE = "tushare-live-v1"
+
+
+def _runtime_standby_reason(*, plans, pipeline, observed_at: datetime) -> str:
+    """Describe idle session facts from the installed calendar without acquisition."""
+    if not plans:
+        return "NO_ACTIVE_PLANS"
+    if pipeline is None:
+        return "CALENDAR_UNKNOWN"
+    from trade_plan_monitor.runtime.recovery_targets import RecoveryPhase, derive_recovery_target
+
+    phase = derive_recovery_target(
+        now=observed_at, is_open_on=pipeline.is_open_on,
+    ).phase
+    return {
+        RecoveryPhase.PREOPEN: "BEFORE_FIRST_MINUTE",
+        RecoveryPhase.LUNCH: "SESSION_BREAK",
+        RecoveryPhase.AFTER_CLOSE: "SESSION_CLOSED",
+        RecoveryPhase.CLOSED: "SESSION_CLOSED",
+        RecoveryPhase.CALENDAR_UNKNOWN: "CALENDAR_UNKNOWN",
+        RecoveryPhase.INTRADAY: "AWAITING_FIRST_EVALUATION",
+    }[phase]
 
 
 @dataclass
@@ -601,8 +623,12 @@ class _ProductionRuntimeState:
         publisher: Callable[..., object] | None = None,
         dispatcher: NotificationDispatcher | None = None,
         on_reference_failure: Callable[[str], None] | None = None,
+        monitor_contract_version: int = 1,
+        progress_owner: Callable[[], RuntimeLifecycleService] | None = None,
     ) -> None:
         self._config_path = config_path
+        self._monitor_contract_version = monitor_contract_version
+        self._progress_owner = progress_owner
         self._database_path = database_path.expanduser().resolve()
         self._engine = engine
         self._session_factory = session_factory
@@ -621,9 +647,7 @@ class _ProductionRuntimeState:
         self._semantic_reload_blocked = False
         self._configuration_restart_required = False
         self._runtime_generation = runtime_generation
-        self._business_commit_admission_open = (
-            business_commit_admission_open or (lambda: True)
-        )
+        self._business_commit_admission_open = business_commit_admission_open or (lambda: True)
         self._publisher = publisher
         self._stage_errors: dict[str, str] = {}
         self._stage_retry_at: dict[str, datetime] = {}
@@ -808,23 +832,19 @@ class _ProductionRuntimeState:
             return self._capabilities
         if self._pipeline is not None:
             if (
-                (
-                    self._pipeline._stock_semantics is None
-                    or self._pipeline._stock_certification_current()
-                )
-                and (
-                    self._pipeline._index_semantics is None
-                    or self._pipeline._index_certification_current()
-                )
+                self._pipeline._stock_semantics is None
+                or self._pipeline._stock_certification_current()
+            ) and (
+                self._pipeline._index_semantics is None
+                or self._pipeline._index_certification_current()
             ):
                 return self._capabilities
             self._pipeline = None
             self._revoke_semantics()
             self._capabilities = ProviderCapabilities()
-            self._stage_errors.update({
-                capability: "STOCK_SEMANTICS_UNAVAILABLE"
-                for capability in _PROVIDER_CAPABILITIES
-            })
+            self._stage_errors.update(
+                {capability: "STOCK_SEMANTICS_UNAVAILABLE" for capability in _PROVIDER_CAPABILITIES}
+            )
             return self._capabilities
         self._capabilities = ProviderCapabilities()
         self._pipeline = None
@@ -838,10 +858,9 @@ class _ProductionRuntimeState:
             validated = load_application_config(self._config_path)
         configuration = validated.tushare
         if configuration.api_url is None:
-            self._stage_errors.update({
-                capability: "TUSHARE_NOT_CONFIGURED"
-                for capability in _PROVIDER_CAPABILITIES
-            })
+            self._stage_errors.update(
+                {capability: "TUSHARE_NOT_CONFIGURED" for capability in _PROVIDER_CAPABILITIES}
+            )
             return self._capabilities
         if self._request_controller.repository_binding_required:
             if (
@@ -858,10 +877,9 @@ class _ProductionRuntimeState:
                     )
                 )
         if configuration.token is None:
-            self._stage_errors.update({
-                capability: "TUSHARE_NOT_CONFIGURED"
-                for capability in _PROVIDER_CAPABILITIES
-            })
+            self._stage_errors.update(
+                {capability: "TUSHARE_NOT_CONFIGURED" for capability in _PROVIDER_CAPABILITIES}
+            )
             return self._capabilities
         directory = self._config_path.resolve().parent.parent / "data" / "live-certification"
         endpoint = str(configuration.api_url)
@@ -873,25 +891,33 @@ class _ProductionRuntimeState:
         )
         stock_path = directory / "stock-semantic.json"
         stock_semantics = load_semantic_contract(
-            stock_path, now=observed_at, endpoint_url=endpoint,
+            stock_path,
+            now=observed_at,
+            endpoint_url=endpoint,
         )
         if stock_semantics is None and not self._process_baseline.semantics_frozen:
             try:
                 stock_semantics = import_stock_semantic_contract(
-                    directory / "tushare-stock-live.json", stock_path,
-                    now=observed_at, endpoint_url=endpoint,
+                    directory / "tushare-stock-live.json",
+                    stock_path,
+                    now=observed_at,
+                    endpoint_url=endpoint,
                 )
             except OSError:
                 stock_semantics = None
         index_path = directory / "index-semantic.json"
         index_semantics = load_semantic_contract(
-            index_path, now=observed_at, endpoint_url=endpoint,
+            index_path,
+            now=observed_at,
+            endpoint_url=endpoint,
         )
         if index_semantics is None and not self._process_baseline.semantics_frozen:
             try:
                 index_semantics = import_index_semantic_contract(
-                    directory / "tushare-board-index-live.json", index_path,
-                    now=observed_at, endpoint_url=endpoint,
+                    directory / "tushare-board-index-live.json",
+                    index_path,
+                    now=observed_at,
+                    endpoint_url=endpoint,
                 )
             except OSError:
                 index_semantics = None
@@ -927,10 +953,9 @@ class _ProductionRuntimeState:
                 }
             )
         if stock_semantics is None or stock_semantics.surface != "STOCK":
-            self._stage_errors.update({
-                capability: "STOCK_SEMANTICS_UNAVAILABLE"
-                for capability in _PROVIDER_CAPABILITIES
-            })
+            self._stage_errors.update(
+                {capability: "STOCK_SEMANTICS_UNAVAILABLE" for capability in _PROVIDER_CAPABILITIES}
+            )
         if (
             (stock_revision is not None or index_revision is not None)
             and self._runtime_generation is not None
@@ -954,7 +979,8 @@ class _ProductionRuntimeState:
                 semantic_bindings=ProductionSemanticBindings(
                     stock=(
                         SemanticContractBinding(stock_path, stock_revision)
-                        if stock_revision is not None else None
+                        if stock_revision is not None
+                        else None
                     ),
                     index=index_binding,
                 ),
@@ -971,6 +997,14 @@ class _ProductionRuntimeState:
                     and self._runtime_generation() == generation
                 ),
                 permission_market_window=self.permission_market_window,
+                **(
+                    {
+                        "enable_runtime_status": True,
+                        "progress_owner": self._progress_owner(),
+                    }
+                    if self._monitor_contract_version == 2
+                    else {}
+                ),
             )
         return self._capabilities
 
@@ -1265,6 +1299,7 @@ def create_monitor_composition_factory(
     config_path: Path,
     database_path: Path,
     on_reference_failure: Callable[[str], None] | None = None,
+    monitor_contract_version: int = 1,
 ) -> Callable[[], MonitorWebComposition]:
     """Capture paths without configuration, database, provider, or task work."""
 
@@ -1280,6 +1315,7 @@ def create_monitor_composition_factory(
             config_path=config_path,
             database_path=database_path,
             on_reference_failure=on_reference_failure,
+            monitor_contract_version=monitor_contract_version,
         )
 
     return factory
@@ -1290,11 +1326,15 @@ def create_monitor_composition(
     config_path: Path,
     database_path: Path,
     on_reference_failure: Callable[[str], None] | None = None,
+    monitor_contract_version: int = 1,
+    progress_monotonic: Callable[[], float] = monotonic_time.monotonic,
 ) -> MonitorWebComposition:
     """Compose certified providers and the recoverable local monitoring runtime."""
 
     if not isinstance(config_path, Path):
         raise TypeError("config_path must be a Path")
+    if type(monitor_contract_version) is not int or monitor_contract_version not in (1, 2):
+        raise ValueError("unsupported monitor contract version")
     if not isinstance(database_path, Path):
         raise TypeError("database_path must be a Path")
     if on_reference_failure is not None and not callable(on_reference_failure):
@@ -1308,19 +1348,111 @@ def create_monitor_composition(
         return SqlAlchemyUnitOfWork(session_factory, clock=clock.now)
 
     health_binding = _HealthBinding()
-    stream = CommittedMonitorEventStream(
-        unit_of_work_factory=unit_of_work_factory,
-        runtime_liveness_provider=health_binding,
-        clock=clock.now,
-    )
+    runtime_states: dict[UUID, _ProductionRuntimeState] = {}
+
+    def read_authority():
+        from trade_plan_monitor.runtime.status_authority import RuntimeReadAuthority
+
+        owner = composition._runtime
+        if not isinstance(owner, RuntimeLifecycleService):
+            raise RuntimeError("Runtime progress authority is unavailable")
+        progress = owner.progress_snapshot()
+        if progress is None:
+            raise RuntimeError("Runtime progress authority is unavailable")
+        state = runtime_states[owner.runtime_generation]
+        health = composition.health()
+        lifecycle = (
+            "STOPPED"
+            if progress.state == "STOPPED"
+            else "STOPPING"
+            if owner._stopping
+            else "STARTING"
+            if health.status is RuntimeServiceStatus.STARTING
+            else "RUNNING"
+        )
+        block_reason = health.block_reason
+        if health.degraded_reason == "RUNTIME_RUNNER_FAILED":
+            block_reason = "RUNTIME_FAULT"
+        if health.database.status not in {
+            RuntimeResourceStatus.READY,
+            RuntimeResourceStatus.STOPPED,
+        }:
+            block_reason = "STORAGE_UNAVAILABLE"
+        pipeline = state._pipeline
+        if pipeline is None:
+            plans, dependencies = (), ()
+            revision = (
+                None
+                if state._configuration is None
+                else hashlib.sha256(
+                    state._configuration.model_dump_json().encode("utf-8"),
+                ).hexdigest()
+            )
+            token = (
+                revision,
+                state._semantic_reload_blocked,
+                state._configuration_restart_required,
+            )
+            if block_reason is None:
+                block_reason = (
+                    "CREDENTIAL_MISSING"
+                    if state._configuration is not None
+                    and state._configuration.tushare.api_url is None
+                    else "SEMANTICS_INCOMPATIBLE"
+                )
+        else:
+            if not pipeline.runtime_status_progress_ready:
+                raise RuntimeError("Runtime progress coverage is unavailable")
+            token, revision, plans = pipeline.runtime_status_snapshot()
+            from trade_plan_monitor.web.runtime_status_read_service import build_dependency_scopes
+
+            dependencies = build_dependency_scopes(pipeline.runtime_status_dependencies_snapshot())
+        return RuntimeReadAuthority(
+            token=(token, owner.progress_authority_token(), block_reason),
+            lifecycle=lifecycle,
+            progress=progress,
+            health=health,
+            configuration_revision=revision or "",
+            plans=plans,
+            dependencies=dependencies,
+            block_reason=block_reason,
+            standby_reason=_runtime_standby_reason(
+                plans=plans, pipeline=pipeline, observed_at=clock.now(),
+            ),
+        )
+
+    if monitor_contract_version == 2:
+        from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+        from trade_plan_monitor.web.runtime_status_websocket import RuntimeStatusEventStream
+
+        read_service = RuntimeStatusReadService(
+            session_factory, read_authority, clock=clock.now,
+            legacy_read_service=PersistentMonitorReadService(
+                unit_of_work_factory, health_binding, clock=clock.now,
+            ),
+        )
+        stream = RuntimeStatusEventStream(
+            unit_of_work_factory=unit_of_work_factory,
+            read_service=read_service,
+        )
+    else:
+        read_service = PersistentMonitorReadService(
+            unit_of_work_factory,
+            health_binding,
+            clock=clock.now,
+        )
+        stream = CommittedMonitorEventStream(
+            unit_of_work_factory=unit_of_work_factory,
+            runtime_liveness_provider=health_binding,
+            clock=clock.now,
+        )
 
     def runtime_factory() -> RuntimeLifecycleService:
         request_controller = create_live_tushare_request_controller(
-            clock=clock, require_repository_binding=True,
+            clock=clock,
+            require_repository_binding=True,
         )
-        request_controller.set_runtime_admission(
-            lambda: not process_baseline.revoked.is_set()
-        )
+        request_controller.set_runtime_admission(lambda: not process_baseline.revoked.is_set())
         current_delivery_admission = CurrentDeliveryAdmission(
             session_factory,
             runtime_generation=lambda: lifecycle.runtime_generation,
@@ -1354,6 +1486,8 @@ def create_monitor_composition(
             publisher=stream.publish_committed,
             dispatcher=dispatcher,
             on_reference_failure=on_reference_failure,
+            monitor_contract_version=monitor_contract_version,
+            progress_owner=lambda: lifecycle,
         )
         scheduler = MarketSessionScheduler(
             clock=clock,
@@ -1363,13 +1497,23 @@ def create_monitor_composition(
             next_index_permission_at=state.next_index_permission_at,
         )
         state.bind_permission_scheduler(scheduler)
+
+        def local_operation(operation):
+            if monitor_contract_version == 1:
+                return operation
+
+            async def observed(*args):
+                return await lifecycle.run_local_progress_unit(operation, *args)
+
+            return observed
+
         lifecycle = RuntimeLifecycleService(
             clock=clock,
-            validate_configuration=state.validate_configuration,
+            validate_configuration=local_operation(state.validate_configuration),
             configuration_restart_required=state.configuration_restart_required,
-            open_database=state.open_database,
-            load_active_symbols=state.load_active_symbols,
-            probe_capabilities=state.probe_capabilities,
+            open_database=local_operation(state.open_database),
+            load_active_symbols=local_operation(state.load_active_symbols),
+            probe_capabilities=local_operation(state.probe_capabilities),
             can_schedule=state.can_schedule,
             refresh_references=state.refresh_references,
             recover_startup=state.recover_startup,
@@ -1383,15 +1527,12 @@ def create_monitor_composition(
             close_database=state.close_database,
             health_details=state.health_details,
             liveness_owner=state,
+            progress_monotonic=progress_monotonic if monitor_contract_version == 2 else None,
         )
+        runtime_states[lifecycle.runtime_generation] = state
         return lifecycle
 
     runtime = runtime_factory()
-    read_service = PersistentMonitorReadService(
-        unit_of_work_factory,
-        health_binding,
-        clock=clock.now,
-    )
     market_index_read_service = SignedMarketIndexHistoryService(
         source=PersistentMarketIndexHistorySource(unit_of_work_factory),
         cursor_signer=BacktestApiCursorSigner(
