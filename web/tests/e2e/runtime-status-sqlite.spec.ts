@@ -10,10 +10,14 @@ let base: string; let server: ChildProcess | undefined; let serverLog = "";
 const headers = { "X-Monitor-Contract-Version": "2" };
 
 interface PresentationObservation { at: number; path: string; riskPresent: boolean; riskActionable: boolean; withdrawalMessage: boolean }
+interface ReadFailureDiagnostic {
+  path: string; method: string; status: number; requestId: string; monitorContractVersion: string;
+  cause: string; causeType?: string; causeMessage?: string;
+}
 interface FailedResponseObservation {
   at: number; phase: string; url: string; method: string; status: number;
   monitorContractVersion: string | undefined; requestIdHeader: string | undefined;
-  body: unknown; presentation: PresentationObservation[];
+  body: unknown; presentation: PresentationObservation[]; diagnostic: ReadFailureDiagnostic | null;
 }
 
 test.beforeAll(async ({ request }) => {
@@ -69,10 +73,14 @@ test("v2 UI uses real owned runtime and SQLite, preserves source dates and obser
   page.on("response", response => {
     if (response.status() < 400) return;
     const failure: FailedResponseObservation = { at: Date.now(), phase, url: response.url(), method: response.request().method(), status: response.status(),
-      monitorContractVersion: response.headers()["x-monitor-contract-version"], requestIdHeader: response.headers()["x-request-id"], body: null, presentation: [] };
+      monitorContractVersion: response.headers()["x-monitor-contract-version"], requestIdHeader: response.headers()["x-request-id"], body: null, presentation: [], diagnostic: null };
     failedResponses.push(failure);
     const pending = (async () => {
       failure.body = await response.json();
+      const diagnostics = await request.get(`${base}/_test/read-diagnostics`);
+      expect(diagnostics.status()).toBe(200);
+      failure.diagnostic = ((await diagnostics.json()) as ReadFailureDiagnostic[])
+        .find(entry => entry.requestId === failure.requestIdHeader) ?? null;
       // Observe the actual UI after the failed read. This diagnostic records
       // DOM changes only; it does not alter requests, time, or application state.
       await expect.poll(async () => (await presentationTrace()).some(entry => entry.at >= failure.at - 50 && (entry.withdrawalMessage || entry.riskPresent && !entry.riskActionable)), { timeout: 5_000 }).toBe(true);
@@ -133,6 +141,7 @@ test("v2 UI uses real owned runtime and SQLite, preserves source dates and obser
     expect(risk.sourceAlert.resultHash).not.toBe(latest.summary.resultHash);
     phase = "mixed-plan-installation";
     expect((await request.post(`${base}/_test/legacy-sibling`)).status()).toBe(200);
+    phase = "market-duty-10:30";
     expect((await request.post(`${base}/_test/advance`, { data: { now: "2026-09-14T10:30:15+08:00" } })).status()).toBe(200);
     await expect.poll(async () => (await dashboard()).symbols.length, { timeout: 30_000 }).toBe(2);
     const mixed = await dashboard(); records.push({ mixed });
@@ -228,13 +237,16 @@ test("v2 UI uses real owned runtime and SQLite, preserves source dates and obser
     await expect(page.locator('[data-rule-id="risk-950"]')).toContainText("2026-09-14 10:20:15");
     expect(sockets.length).toBeGreaterThan(0); expect(sockets.every(url => new URL(url).searchParams.get("monitorContractVersion") === "2")).toBe(true);
     await Promise.all([...pendingResponses]);
-    const permittedBoundaryPhases = ["minute-cutoff-held-35", "minute-recovery-36", "recovery-next-market-duty-40", "owned-maintenance-stall", "owned-maintenance-release-41", "post-stall-minute-duty-41", "next-market-duty-45"];
+    const permittedBoundaryPhases = ["market-duty-10:05", "market-duty-10:10", "market-duty-10:15", "market-duty-10:20", "market-duty-10:25", "market-duty-10:30", "minute-cutoff-held-35", "minute-recovery-36", "recovery-next-market-duty-40", "owned-maintenance-stall", "owned-maintenance-release-41", "post-stall-minute-duty-41", "next-market-duty-45"];
     for (const failure of failedResponses) {
       expect(failure.status).toBe(503); expect(failure.method).toBe("GET");
       expect(new URL(failure.url).pathname).toBe("/api/v1/dashboard");
       expect(permittedBoundaryPhases).toContain(failure.phase);
       expect(failure.monitorContractVersion).toBe("2"); expect(failure.requestIdHeader).toMatch(/^[0-9a-f]{32}$/);
       expect(failure.body).toEqual({ error: { code: "SERVICE_UNAVAILABLE", message: "Service unavailable", details: [], requestId: failure.requestIdHeader } });
+      expect(failure.diagnostic).toEqual({ path: "/api/v1/dashboard", method: "GET", status: 503,
+        requestId: failure.requestIdHeader, monitorContractVersion: "2", cause: "BOUNDED_AUTHORITY_RACE",
+        causeType: "ProjectionError", causeMessage: "Runtime authority changed during projection" });
       expect(failure.presentation.some(entry => entry.at >= failure.at - 50 && (entry.withdrawalMessage || entry.riskPresent && !entry.riskActionable))).toBe(true);
     }
     const expectedResourceErrors = consoleObservations.filter(entry => entry.text === "Failed to load resource: the server responded with a status of 503 (Service Unavailable)" && failedResponses.some(failure => entry.location.url === failure.url && Math.abs(entry.at - failure.at) < 1_000));
@@ -248,7 +260,8 @@ test("v2 UI uses real owned runtime and SQLite, preserves source dates and obser
       finalHealth: await (await request.get(`${base}/api/v1/health`, { headers })).json() });
     await page.screenshot({ path: join(evidence, "s4-v2-last-page.png"), fullPage: true });
     const finalIsolation = await (await request.get(`${base}/_test/isolation`)).json();
-    await writeFile(join(evidence, "s4-v2-browser-evidence.json"), JSON.stringify({ isolation, finalIsolation, records, sockets, consoleErrors, consoleObservations, failedResponses, diagnosticErrors, pageErrors, external, serverLog }, null, 2));
+    const readDiagnostics = await (await request.get(`${base}/_test/read-diagnostics`)).json();
+    await writeFile(join(evidence, "s4-v2-browser-evidence.json"), JSON.stringify({ isolation, finalIsolation, records, sockets, consoleErrors, consoleObservations, failedResponses, readDiagnostics, diagnosticErrors, pageErrors, external, serverLog }, null, 2));
     console.log(`S4 v2 browser evidence: ${evidence}`);
   }
 });

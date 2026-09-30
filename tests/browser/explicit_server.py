@@ -14,6 +14,7 @@ import os
 import sqlite3
 import tempfile
 from contextlib import ExitStack, closing
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -39,6 +40,7 @@ from trade_plan_monitor.market_data.sessions import SourceTimeLabel
 from trade_plan_monitor.state.database import create_sqlite_engine, upgrade_database
 from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
 from trade_plan_monitor.web.app import create_app, create_production_app
+from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
 
@@ -113,6 +115,72 @@ def _seed_legacy_index_history(work):
         assert not snapshot.indicator_facts
         work.projections.put_market_index_snapshot(snapshot, provider_content_revision=1)
         work.projections.advance_market_index_head(snapshot, provider_content_revision=1)
+
+
+def observe_read_failures(app, reader):
+    """Observe original read exceptions and HTTP identities without changing reads."""
+    from trade_plan_monitor.state.projections import ProjectionError
+
+    diagnostics = []
+    read_context = ContextVar("isolated_read_diagnostic", default=None)
+    original_read = reader._read
+
+    async def observed_read():
+        try:
+            return await original_read()
+        except ApiError as error:
+            holder = read_context.get()
+            if holder is not None:
+                cause = error.__context__
+                holder.update(
+                    cause=(
+                        "BOUNDED_AUTHORITY_RACE"
+                        if type(cause) is ProjectionError
+                        and str(cause) == "Runtime authority changed during projection"
+                        else "OTHER_READ_FAILURE"
+                    ),
+                    causeType=None if cause is None else type(cause).__name__,
+                    causeMessage=None if cause is None else str(cause),
+                )
+            raise
+
+    reader._read = observed_read
+
+    class ReadDiagnosticMiddleware:
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                return await self.app(scope, receive, send)
+            holder = {"cause": "UNKNOWN_READ_FAILURE"}
+            token = read_context.set(holder)
+
+            async def observed_send(message):
+                if message["type"] == "http.response.start" and message["status"] == 503:
+                    headers = dict(message["headers"])
+                    diagnostics.append({
+                        "path": scope["path"], "method": scope["method"], "status": 503,
+                        "requestId": headers.get(b"x-request-id", b"").decode(),
+                        "monitorContractVersion": headers.get(
+                            b"x-monitor-contract-version", b"",
+                        ).decode(),
+                        **holder,
+                    })
+                await send(message)
+
+            try:
+                await self.app(scope, receive, observed_send)
+            finally:
+                read_context.reset(token)
+
+    app.add_middleware(ReadDiagnosticMiddleware)
+
+    @app.get("/_test/read-diagnostics")
+    async def read_diagnostics():
+        return diagnostics
+
+    return diagnostics
 
 
 class MarketSDK(_ExplicitPipelineSDK):
@@ -408,6 +476,8 @@ def main():
                 if args.monitor_contract_version == 2 else "web/dist-legacy-test"
             ),
         )
+        if args.monitor_contract_version == 2:
+            observe_read_failures(app, composition.read_service)
 
     def owned_composition():
         return app.state.runtime_lifecycle if args.normal_entry else composition
