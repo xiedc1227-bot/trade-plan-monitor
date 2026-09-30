@@ -105,10 +105,38 @@ _TYPESCRIPT_RESERVED_WORDS: Final = frozenset(
 )
 
 
-def build_openapi_document() -> dict[str, object]:
+def build_openapi_document(*, monitor_contract_version: int = 1) -> dict[str, object]:
     """Build the public contract from the side-effect-free application factory."""
 
-    document = create_app().openapi()
+    if monitor_contract_version == 1:
+        document = create_app().openapi()
+    elif monitor_contract_version == 2:
+        from pydantic.json_schema import models_json_schema
+
+        from trade_plan_monitor.web.runtime_status_models import (
+            RuntimeHeartbeatFrame,
+            RuntimeSnapshotRequiredFrame,
+        )
+
+        class SchemaOnlyReader:
+            monitor_contract_version = 2
+
+        document = create_app(
+            monitor_contract_version=2,
+            read_service=SchemaOnlyReader(),
+        ).openapi()
+        _, control_schemas = models_json_schema(
+            [
+                (RuntimeHeartbeatFrame, "serialization"),
+                (RuntimeSnapshotRequiredFrame, "serialization"),
+            ],
+            by_alias=True,
+            ref_template="#/components/schemas/{model}",
+        )
+        for name, schema in control_schemas["$defs"].items():
+            document["components"]["schemas"].setdefault(name, schema)
+    else:
+        raise ValueError("unsupported monitor contract version")
     return json.loads(json.dumps(document, ensure_ascii=False))
 
 
@@ -331,10 +359,17 @@ class _TypeScriptRenderer:
         return "\n".join(lines)
 
 
-def render_typescript_contracts(document: Mapping[str, object]) -> str:
+def render_typescript_contracts(
+    document: Mapping[str, object],
+    *,
+    monitor_contract_version: int = 1,
+) -> str:
     """Generate frontend payload and operation types directly from OpenAPI."""
 
-    return _TypeScriptRenderer(document).render()
+    output = _TypeScriptRenderer(document).render()
+    if monitor_contract_version == 2:
+        return output.replace("from openapi.json by", "from openapi.runtime-status.json by", 1)
+    return output
 
 
 def find_stale_outputs(
@@ -409,6 +444,13 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
         description="Generate the committed OpenAPI snapshot and frontend TypeScript contracts."
     )
     parser.add_argument(
+        "--monitor-contract-version",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="generate the independent opt-in v2 artifacts when set to 2",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="fail without writing when either generated file differs",
@@ -418,10 +460,22 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
-    document = build_openapi_document()
+    version = args.monitor_contract_version
+    snapshot_path = OPENAPI_PATH if version == 1 else PROJECT_ROOT / "openapi.runtime-status.json"
+    typescript_path = (
+        TYPESCRIPT_PATH
+        if version == 1
+        else PROJECT_ROOT / "web" / "src" / "api" / "generated-runtime-status.ts"
+    )
+    document = build_openapi_document(monitor_contract_version=version)
     snapshot = render_openapi_snapshot(document)
-    typescript = render_typescript_contracts(document)
-    stale = find_stale_outputs(snapshot=snapshot, typescript=typescript)
+    typescript = render_typescript_contracts(document, monitor_contract_version=version)
+    stale = find_stale_outputs(
+        snapshot=snapshot,
+        typescript=typescript,
+        snapshot_path=snapshot_path,
+        typescript_path=typescript_path,
+    )
     if args.check:
         if stale:
             for path in stale:
@@ -432,10 +486,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("OpenAPI snapshot and frontend types are current")
         return 0
 
-    _write_generated(OPENAPI_PATH, snapshot)
-    _write_generated(TYPESCRIPT_PATH, typescript)
-    print(f"generated {OPENAPI_PATH.relative_to(PROJECT_ROOT)}")
-    print(f"generated {TYPESCRIPT_PATH.relative_to(PROJECT_ROOT)}")
+    _write_generated(snapshot_path, snapshot)
+    _write_generated(typescript_path, typescript)
+    print(f"generated {snapshot_path.relative_to(PROJECT_ROOT)}")
+    print(f"generated {typescript_path.relative_to(PROJECT_ROOT)}")
     return 0
 
 

@@ -200,6 +200,9 @@ def _error_response(
         )
     )
     headers = {_REQUEST_ID_HEADER: request_id, **SECURITY_HEADERS}
+    if getattr(request.state, "_monitor_contract_response_version", None) == 2:
+        headers["X-Monitor-Contract-Version"] = "2"
+        headers["Cache-Control"] = "no-store"
     if retry_after_seconds is not None:
         headers["Retry-After"] = str(retry_after_seconds)
     return JSONResponse(

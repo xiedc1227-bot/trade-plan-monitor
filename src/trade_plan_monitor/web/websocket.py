@@ -51,6 +51,7 @@ class CommittedMonitorEventStream:
         heartbeat_interval_seconds: int | float = DEFAULT_HEARTBEAT_SECONDS,
         runtime_liveness_provider: RuntimeLivenessProvider | None = None,
         clock: Clock | None = None,
+        fixed_heartbeat_cadence: bool = False,
     ) -> None:
         if not callable(unit_of_work_factory):
             raise TypeError("unit_of_work_factory must be callable")
@@ -67,6 +68,7 @@ class CommittedMonitorEventStream:
         if clock is not None and not callable(clock):
             raise TypeError("clock must be callable")
         self._clock = clock
+        self._fixed_heartbeat_cadence = fixed_heartbeat_cadence
         self._condition = asyncio.Condition()
         self._publication_revision = 0
 
@@ -98,16 +100,17 @@ class CommittedMonitorEventStream:
         await websocket.accept()
         cursor = after
         publication_revision = self._publication_revision
+        loop = asyncio.get_running_loop()
+        heartbeat_due = loop.time() + self._heartbeat_interval_seconds
         try:
             while True:
+                if self._fixed_heartbeat_cadence and loop.time() >= heartbeat_due:
+                    await websocket.send_json(await self._current_heartbeat_frame(cursor))
+                    heartbeat_due = loop.time() + self._heartbeat_interval_seconds
                 page = self._replay_page(cursor)
                 if page.requires_snapshot:
                     await websocket.send_json(
-                        {
-                            "type": "snapshot.required",
-                            "sequence": page.high_water_sequence,
-                            "reason": _SNAPSHOT_REASON,
-                        }
+                        self._snapshot_required_frame(page.high_water_sequence)
                     )
                     await websocket.close(code=_CLOSE_NORMAL)
                     return
@@ -117,26 +120,40 @@ class CommittedMonitorEventStream:
                         cursor = event.sequence
                     continue
 
-                publication_revision, changed = await self._wait_for_publication(
-                    publication_revision
-                )
-                if not changed:
-                    await websocket.send_json(self._heartbeat_frame(cursor))
+                if self._fixed_heartbeat_cadence:
+                    publication_revision, changed = await self._wait_for_publication(
+                        publication_revision, timeout_seconds=max(0, heartbeat_due - loop.time()),
+                    )
+                else:
+                    publication_revision, changed = await self._wait_for_publication(
+                        publication_revision,
+                    )
+                if not changed and not self._fixed_heartbeat_cadence:
+                    await websocket.send_json(await self._current_heartbeat_frame(cursor))
         except WebSocketDisconnect:
             return
+
+    def _snapshot_required_frame(self, sequence: int) -> dict[str, object]:
+        return {"type": "snapshot.required", "sequence": sequence, "reason": _SNAPSHOT_REASON}
+
+    async def _current_heartbeat_frame(self, sequence: int) -> dict[str, object]:
+        return self._heartbeat_frame(sequence)
 
     def _replay_page(self, after: int):
         with self._unit_of_work_factory() as unit_of_work:
             return unit_of_work.events.replay_page_after(after)
 
-    async def _wait_for_publication(self, revision: int) -> tuple[int, bool]:
+    async def _wait_for_publication(
+        self, revision: int, *, timeout_seconds: float | None = None,
+    ) -> tuple[int, bool]:
         async with self._condition:
             if self._publication_revision != revision:
                 return self._publication_revision, True
             try:
                 await asyncio.wait_for(
                     self._condition.wait_for(lambda: self._publication_revision != revision),
-                    timeout=self._heartbeat_interval_seconds,
+                    timeout=(self._heartbeat_interval_seconds
+                             if timeout_seconds is None else timeout_seconds),
                 )
             except TimeoutError:
                 return self._publication_revision, False
@@ -204,12 +221,26 @@ def _after_cursor(websocket: WebSocket) -> int | None:
 
 @router.websocket("/ws/v1/monitor")
 async def monitor_websocket(websocket: WebSocket) -> None:
+    if getattr(websocket.app.state, "monitor_contract_version", 1) == 2 and (
+        websocket.query_params.getlist("monitorContractVersion") != ["2"]
+    ):
+        await websocket.accept()
+        await websocket.close(
+            code=_CLOSE_POLICY_VIOLATION, reason="MONITOR_CONTRACT_MISMATCH",
+        )
+        return
     after = _after_cursor(websocket)
     if after is None:
         await websocket.accept()
         await websocket.close(code=_CLOSE_POLICY_VIOLATION)
         return
     service = getattr(websocket.app.state, "monitor_websocket_service", None)
+    if getattr(websocket.app.state, "monitor_contract_version", 1) == 2 and (
+        getattr(service, "monitor_contract_version", None) != 2
+    ):
+        await websocket.accept()
+        await websocket.close(code=_CLOSE_TRY_AGAIN_LATER)
+        return
     serve = getattr(service, "serve", None)
     if not callable(serve):
         await websocket.accept()
@@ -222,7 +253,7 @@ async def monitor_websocket(websocket: WebSocket) -> None:
     except Exception:
         try:
             await websocket.close(code=_CLOSE_INTERNAL_ERROR)
-        except RuntimeError:
+        except (RuntimeError, WebSocketDisconnect):
             pass
 
 

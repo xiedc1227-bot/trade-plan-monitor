@@ -9,7 +9,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Final
 
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, Request, Response
 
 from trade_plan_monitor.web.blocked_mutations import enforce_blocked_read_only
 from trade_plan_monitor.web.errors import install_error_boundary
@@ -21,6 +21,12 @@ from trade_plan_monitor.web.lifespan import (
     create_runtime_lifespan,
 )
 from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory
+from trade_plan_monitor.web.monitor_contract import (
+    MonitorContractGuard,
+    MonitorContractResponseHeaders,
+    install_monitor_contract_schema,
+    validate_monitor_assets,
+)
 from trade_plan_monitor.web.origin_guard import (
     DEFAULT_WEB_PORT,
     LOOPBACK_HOST,
@@ -49,6 +55,7 @@ from trade_plan_monitor.web.routers.plans import PlanOperationService
 from trade_plan_monitor.web.routers.plans import router as plans_router
 from trade_plan_monitor.web.routers.positions import PositionOperationService
 from trade_plan_monitor.web.routers.positions import router as positions_router
+from trade_plan_monitor.web.routers.runtime_status import router as runtime_status_router
 from trade_plan_monitor.web.routers.symbols import router as symbols_router
 from trade_plan_monitor.web.routers.system import router as system_router
 from trade_plan_monitor.web.schemas import ErrorResponse
@@ -236,9 +243,17 @@ def create_app(
     bind_host: str = LOOPBACK_HOST,
     bind_port: int = DEFAULT_WEB_PORT,
     static_directory: Path | None = None,
+    monitor_contract_version: int = 1,
 ) -> FastAPI:
     """Build the local API adapter without starting runtime or network work."""
 
+    if type(monitor_contract_version) is not int or monitor_contract_version not in (1, 2):
+        raise ValueError("unsupported monitor contract version")
+    if monitor_contract_version == 2 and (
+        read_service is None or getattr(read_service, "monitor_contract_version", None) != 2
+    ):
+        raise ValueError("monitor contract 2 requires an authoritative v2 read service")
+    validate_monitor_assets(static_directory, monitor_contract_version)
     if backtest_lifecycle_factory is not None and (
         backtest_read_service is not None or backtest_operation_service is not None
     ):
@@ -264,8 +279,13 @@ def create_app(
             bind_port=bind_port,
         ),
     )
+    app.state.monitor_contract_version = monitor_contract_version
+    if monitor_contract_version == 2:
+        app.add_middleware(MonitorContractGuard)
     app.add_middleware(LocalWebSecurityMiddleware, allowed_origin=allowed_origin)
     install_error_boundary(app)
+    if monitor_contract_version == 2:
+        app.add_middleware(MonitorContractResponseHeaders)
     if read_service is not None:
         app.state.monitor_read_service = read_service
     if plan_service is not None:
@@ -286,11 +306,22 @@ def create_app(
         app.state.backtest_read_service = backtest_read_service
     if backtest_operation_service is not None:
         app.state.backtest_operation_service = backtest_operation_service
-    app.include_router(dashboard_router)
-    app.include_router(symbols_router)
-    app.include_router(health_router)
+    if monitor_contract_version == 1:
+        app.include_router(dashboard_router)
+        app.include_router(symbols_router)
+        app.include_router(health_router)
+        app.include_router(plans_router)
+    else:
+        app.include_router(runtime_status_router)
+        # FastAPI clones included routes; never mutate the shared v1 routers.
+        for source, replaced in (
+            (symbols_router, {"/api/v1/symbols", "/api/v1/symbols/{symbol}"}),
+            (plans_router, {"/api/v1/explicit-plan-runtime/{symbol}"}),
+        ):
+            retained = APIRouter()
+            retained.routes.extend(route for route in source.routes if route.path not in replaced)
+            app.include_router(retained)
     app.include_router(system_router)
-    app.include_router(plans_router)
     app.include_router(ai_router)
     app.include_router(positions_router)
     app.include_router(manual_event_risk_router)
@@ -316,6 +347,8 @@ def create_app(
                 name="local-spa",
             )
         )
+    if monitor_contract_version == 2:
+        install_monitor_contract_schema(app)
     return app
 
 

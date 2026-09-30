@@ -38,6 +38,7 @@ backups/
 # Frontend dependencies and generated output
 web/node_modules/
 web/dist/
+web/dist-runtime-status/
 web/coverage/
 
 # Editor and operating-system files
