@@ -3,6 +3,7 @@ import type {
   LegacyPlanPreviewResponse,
 } from "./generated";
 import { invalidResponse, requestJson } from "./transport";
+import { resolveApiFetch } from "./context";
 
 export interface LegacyPlanApi {
   getPreview(options?: { signal?: AbortSignal }): Promise<LegacyPlanPreviewResponse>;
@@ -14,7 +15,7 @@ const fingerprintPattern = /^[0-9a-f]{64}$/;
 const symbolPattern = /^\d{6}\.(?:BJ|SH|SZ)$/;
 
 export function createLegacyPlanApi(
-  fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
+  fetchImplementation: typeof fetch = resolveApiFetch(),
 ): LegacyPlanApi {
   return Object.freeze({
     async getPreview(options?: { signal?: AbortSignal }) {

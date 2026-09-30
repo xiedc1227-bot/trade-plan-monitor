@@ -1,0 +1,23 @@
+.runtime-page { display: grid; gap: var(--space-4); min-width: 0; }
+.runtime-panel { padding: var(--space-4); background: var(--color-surface-graphite); border: var(--border-technical); min-width: 0; }
+.runtime-page h1, .runtime-panel h2 { margin-block: 0 var(--space-3); }
+.runtime-page p { line-height: 1.6; overflow-wrap: anywhere; }
+.runtime-page a { color: var(--color-signal-info-cyan); }
+.runtime-heading { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: space-between; }
+.runtime-facts, .runtime-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-3); }
+.runtime-facts dt, .runtime-counts dt { color: var(--color-text-muted); }
+.runtime-facts dd, .runtime-counts dd { margin: var(--space-1) 0; overflow-wrap: anywhere; font-family: var(--font-numeric); }
+.runtime-counts dd { font-size: 1.5rem; }
+.runtime-scopes, .runtime-rules { list-style: none; padding: 0; display: grid; gap: var(--space-3); }
+.runtime-scopes li, .runtime-rules li { border-block-start: var(--border-technical); padding-block-start: var(--space-3); overflow-wrap: anywhere; }
+.runtime-rules [data-actionable="true"] { border-inline-start: .25rem solid var(--color-signal-risk-vermilion); padding-inline-start: var(--space-3); }
+.runtime-hash { overflow-wrap: anywhere; font-family: var(--font-numeric); font-size: .85rem; }
+.runtime-page button, .app-shell__connection-banner button { color: var(--color-text-mineral); background: var(--color-surface-raised); padding: var(--space-2) var(--space-3); border: var(--border-technical); cursor: pointer; }
+.runtime-page :focus-visible, .app-shell__connection-banner button:focus-visible { outline: .1875rem solid var(--color-focus-ring); outline-offset: .1875rem; }
+.runtime-history-range { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; }
+.runtime-history-range label { display: grid; gap: var(--space-1); min-width: 0; max-width: 100%; }
+.runtime-history-range input, .runtime-history-range select { box-sizing: border-box; width: 100%; min-width: 0; color: var(--color-text-mineral); background: var(--color-surface-raised); border: var(--border-technical); padding: var(--space-2); }
+.runtime-table { max-width: 100%; overflow-x: auto; }
+.runtime-table table { border-collapse: collapse; width: 100%; }
+.runtime-table th, .runtime-table td { padding: var(--space-2); text-align: left; white-space: nowrap; border-block-end: var(--border-technical); }
+.runtime-page summary { cursor: pointer; padding-block: var(--space-3); }

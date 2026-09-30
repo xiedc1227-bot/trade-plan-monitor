@@ -4,6 +4,7 @@ import type {
 } from "./generated";
 import { isShanghaiDateTime } from "./shanghaiTime";
 import { invalidResponse, requestJson } from "./transport";
+import { resolveApiFetch } from "./context";
 
 const idempotencyKeyPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const symbolPattern = /^\d{6}\.(?:BJ|SH|SZ)$/;
@@ -15,7 +16,7 @@ export interface ManualEventRiskApi {
 }
 
 export function createManualEventRiskApi(
-  fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
+  fetchImplementation: typeof fetch = resolveApiFetch(),
 ): ManualEventRiskApi {
   return Object.freeze({
     async get(symbol: string) {

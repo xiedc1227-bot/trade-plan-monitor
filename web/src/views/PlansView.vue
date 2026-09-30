@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, shallowRef, watch } from "vue";
+import { computed, inject, shallowRef, watch } from "vue";
 
 import type {
   ActivePlanView,
@@ -14,6 +14,10 @@ import type {
 import ActivationDiffDialog from "../components/plans/ActivationDiffDialog.vue";
 import ExplicitPlanReviewPanel from "../components/plans/ExplicitPlanReviewPanel.vue";
 import ExplicitPlanRuntimePanel from "../components/plans/ExplicitPlanRuntimePanel.vue";
+import ExplicitPlanPanel from "../runtime-status/ExplicitPlanPanel.vue";
+import { runtimeContextKey } from "../runtime-status/context";
+
+const runtimeContext = inject(runtimeContextKey, undefined);
 import ExplicitPlanSupplementForm from "../components/plans/ExplicitPlanSupplementForm.vue";
 import PlanInventoryPanel from "../components/plans/PlanInventoryPanel.vue";
 import StructuredPlanEditor, {
@@ -304,10 +308,10 @@ function deactivate(command: PlanDeactivationCommand): void {
             :plan="currentPlan"
             @save-draft="emit('saveDraft', $event)"
           />
-          <ExplicitPlanRuntimePanel
-            v-if="currentPlan.status === 'ACTIVE' && currentPlan.contentHash !== null && currentPlan.contentHash !== undefined"
-            :symbol="currentPlan.symbol"
-          />
+          <template v-if="currentPlan.status === 'ACTIVE' && currentPlan.contentHash !== null && currentPlan.contentHash !== undefined">
+            <ExplicitPlanPanel v-if="runtimeContext" :symbol="currentPlan.symbol" />
+            <ExplicitPlanRuntimePanel v-else :symbol="currentPlan.symbol" />
+          </template>
           <StructuredPlanEditor
             v-if="currentPlan.contentHash === null || currentPlan.contentHash === undefined"
             :busy="busy"

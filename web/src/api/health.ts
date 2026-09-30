@@ -146,7 +146,7 @@ function isRuntimeHealthResponse(value: unknown): value is RuntimeHealthResponse
   );
 }
 
-function isOrderedGaps(value: unknown): boolean {
+export function isOrderedGaps(value: unknown): boolean {
   if (value === undefined) {
     return true;
   }
@@ -166,7 +166,7 @@ function isOrderedGaps(value: unknown): boolean {
   });
 }
 
-function isUniqueProviders(value: unknown, observedAt: unknown): boolean {
+export function isUniqueProviders(value: unknown, observedAt: unknown): boolean {
   if (value === undefined) {
     return true;
   }
@@ -187,7 +187,7 @@ function isUniqueProviders(value: unknown, observedAt: unknown): boolean {
   );
 }
 
-function matchesAge(
+export function matchesAge(
   timestamp: unknown,
   ageSeconds: unknown,
   observedAt: unknown,
@@ -205,7 +205,7 @@ function matchesAge(
   );
 }
 
-function isDatabase(value: unknown): boolean {
+export function isDatabase(value: unknown): boolean {
   return (
     isRecord(value) &&
     hasExactKeys(value, ["errorCode", "lastBackupAt", "lastCheckpointAt", "status", "walStatus"]) &&
@@ -221,7 +221,7 @@ function isDatabase(value: unknown): boolean {
   );
 }
 
-function isDelivery(value: unknown): boolean {
+export function isDelivery(value: unknown): boolean {
   return (
     isRecord(value) &&
     hasExactKeys(value, [
@@ -246,7 +246,7 @@ function isDelivery(value: unknown): boolean {
   );
 }
 
-function isExecutor(value: unknown): boolean {
+export function isExecutor(value: unknown): boolean {
   return (
     isRecord(value) &&
     hasExactKeys(value, ["activeCount", "maxWorkers", "waitingCount"]) &&
@@ -259,7 +259,7 @@ function isExecutor(value: unknown): boolean {
   );
 }
 
-function isGap(value: unknown): boolean {
+export function isGap(value: unknown): boolean {
   return (
     isRecord(value) &&
     hasExactKeys(value, ["barEnd", "symbol"]) &&
@@ -269,7 +269,7 @@ function isGap(value: unknown): boolean {
   );
 }
 
-function isProvider(value: unknown): value is ProviderHealthView {
+export function isProvider(value: unknown): value is ProviderHealthView {
   return (
     isRecord(value) &&
     hasExactKeys(value, ["capability", "checkedAt", "errorCode", "latencyMs", "nextRetryAt", "status"]) &&

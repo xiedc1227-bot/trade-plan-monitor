@@ -16,6 +16,7 @@ import type {
 } from "./generated";
 import { isShanghaiDateTime } from "./shanghaiTime";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
+import { resolveApiFetch } from "./context";
 
 export { ApiClientError };
 
@@ -79,7 +80,7 @@ export interface ExplicitPlanRuntimeApi {
 }
 
 export function createPlanApi(
-  fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
+  fetchImplementation: typeof fetch = resolveApiFetch(),
 ): PlanApi & ExplicitPlanRuntimeApi {
   return Object.freeze({
     async getExplicitPlanRuntime(symbol: string, options?: PlanRequestOptions) {

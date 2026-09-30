@@ -15,6 +15,7 @@ import {
   shanghaiDateTimeKey,
 } from "./shanghaiTime";
 import { invalidResponse, requestJson } from "./transport";
+import { resolveApiFetch } from "./context";
 
 type AlertListQuery = paths["/api/v1/alerts"]["get"]["parameters"]["query"];
 export type PublicAlertSignalType = Exclude<AlertPage["signalType"], null | undefined>;
@@ -139,7 +140,7 @@ const nextStepBySignal = Object.freeze<Record<ActionableSignalType, string>>({
 });
 
 export function createAlertApi(
-  fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
+  fetchImplementation: typeof fetch = resolveApiFetch(),
 ): AlertApi {
   return Object.freeze({
     async listAlerts(request: AlertListRequest, options?: AlertRequestOptions) {
@@ -540,7 +541,7 @@ function isExplicitAlert(value: unknown): value is ExplicitAlertView {
     (value.safetyEvidence === null || value.signalType !== "RISK_ALERT");
 }
 
-function isExplicitEvidence(value: unknown): boolean {
+export function isExplicitEvidence(value: unknown): boolean {
   if (!isRecord(value) || !hasOnlyKeys(value, ["barEnds", "children", "code", "facts", "missingInputs", "outcome", "planPath"])) {
     return false;
   }

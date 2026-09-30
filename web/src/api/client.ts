@@ -231,7 +231,7 @@ function isDashboardResponse(value: unknown): value is DashboardResponse {
   );
 }
 
-function isMarketTurnoverSummary(value: unknown, dashboardObservedAt: string): boolean {
+export function isMarketTurnoverSummary(value: unknown, dashboardObservedAt: string): boolean {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, [
@@ -543,7 +543,7 @@ function isEvidenceFact(value: unknown): boolean {
   );
 }
 
-function isDashboardMarketIndexes(value: unknown, observedAt: unknown): boolean {
+export function isDashboardMarketIndexes(value: unknown, observedAt: unknown): boolean {
   if (
     !Array.isArray(value) ||
     value.length > 5 ||
@@ -704,7 +704,7 @@ function isMarketIndexIndicatorFact(value: unknown): boolean {
   );
 }
 
-function isSymbolReferenceMarket(value: unknown): boolean {
+export function isSymbolReferenceMarket(value: unknown): boolean {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, [
@@ -863,7 +863,7 @@ function isCertifiedOfficialCloseRiskBreach(
     value.zone !== "BELOW_RISK" ||
     value.riskStatus !== "BREACHED_PENDING_CONFIRMATION" ||
     typeof marketDataAt !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T15:00:00\+08:00$/.test(marketDataAt) ||
+    !/^\d{4}-\d{2}-\d{2}T15:00:00(?:\.0{1,6})?\+08:00$/.test(marketDataAt) ||
     value.riskBreachTradeDate !== marketDataAt.slice(0, 10) ||
     dataHealth.status !== "STALE" ||
     dataHealth.requiredDataComplete !== true ||

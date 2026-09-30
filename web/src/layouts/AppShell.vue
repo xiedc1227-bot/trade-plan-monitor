@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   computed,
+  inject,
   nextTick,
   onBeforeUnmount,
   shallowRef,
@@ -11,6 +12,7 @@ import { RouterLink, RouterView, useRoute } from "vue-router";
 
 import { useMonitorStream } from "../composables/useMonitorStream";
 import type { MonitorStreamConnectionState } from "../composables/useMonitorStream";
+import { shellConnectionKey } from "./connection";
 
 defineSlots<{
   connectionBanner?(props: { state: MonitorStreamConnectionState }): unknown;
@@ -34,7 +36,7 @@ const route = useRoute();
 const isMobileNavigationOpen = shallowRef(false);
 const mainContent = useTemplateRef<HTMLElement>("mainContent");
 const mobileNavigationToggle = useTemplateRef<HTMLButtonElement>("mobileNavigationToggle");
-const { connectionState } = useMonitorStream();
+const connectionState = inject(shellConnectionKey, undefined) ?? useMonitorStream().connectionState;
 const previousTitle = document.title;
 const isBacktestRoute = computed(() => route.meta.section === "backtests");
 const currentBacktestNavigationPath = computed(() => {

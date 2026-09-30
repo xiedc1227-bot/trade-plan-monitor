@@ -23,7 +23,13 @@ function packagePythonDistribution(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [vue(), packagePythonDistribution()],
+  plugins: [vue(), {
+    name: "monitor-contract-v1",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "monitor-contract.json", source: '{"monitorContractVersion":1}\n' });
+    },
+  }, packagePythonDistribution()],
   test: {
     environment: "jsdom",
     include: ["tests/unit/**/*.spec.ts"],

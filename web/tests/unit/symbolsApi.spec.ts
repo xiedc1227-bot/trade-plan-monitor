@@ -90,6 +90,16 @@ const detail = {
 } satisfies SymbolDetailResponse;
 
 describe("symbol API", () => {
+  it("accepts equivalent timestamp precision and deterministic UUID events from the unchanged history contract", async () => {
+    const query = { startAt: "2026-08-24T00:00:00+08:00", endAt: "2026-08-24T10:05:05+08:00" };
+    const event = { symbol, sequence: 1, eventId: "00000000-0000-5000-8000-000000000001", eventType: "ALERT", occurredAt: observedAt, signalType: null, resultHash: sha256, messageText: null };
+    const page = { startAt: "2026-08-24T00:00:00.000000+08:00", endAt: observedAt, offset: 0, limit: 100, total: 1, items: [event] };
+    const api = createSymbolApi(vi.fn(async () => jsonResponse(page)) as typeof fetch);
+    await expect(api.getEvents(symbol, query)).resolves.toEqual(page);
+    await expect(createSymbolApi(vi.fn(async () => jsonResponse({ ...page, endAt: "2026-08-24T10:05:06+08:00" })) as typeof fetch).getEvents(symbol, query)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    const bars = { ...page, total: 0, items: [] };
+    await expect(createSymbolApi(vi.fn(async () => jsonResponse(bars)) as typeof fetch).getBars(symbol, query)).resolves.toEqual(bars);
+  });
   it("accepts an exact server-authoritative reference market and sorted index evidence", async () => {
     const api = createSymbolApi(
       vi.fn(async () => jsonResponse(detail)) as typeof fetch,

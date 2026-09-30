@@ -223,7 +223,7 @@ function requireHistoryQuery(query: Readonly<Record<string, unknown>>): void {
   }
 }
 
-function isSymbolDetail(value: unknown, symbol: string): value is SymbolDetailResponse {
+export function isSymbolDetail(value: unknown, symbol: string): value is SymbolDetailResponse {
   if (
     !isRecord(value) ||
     !hasOnlyKeys(value, ["indexConditionEvidence", "positionLots", "referenceMarket", "summary"]) ||
@@ -512,8 +512,8 @@ function isBarPage(
   return (
     isRecord(value) &&
     hasExactKeys(value, ["endAt", "items", "limit", "offset", "startAt", "total"]) &&
-    value.startAt === query.startAt &&
-    value.endAt === query.endAt &&
+    sameHistoryTime(value.startAt, query.startAt) &&
+    sameHistoryTime(value.endAt, query.endAt) &&
     value.offset === query.offset &&
     value.limit === query.limit &&
     isPageTotal(value.total) &&
@@ -569,8 +569,8 @@ function isEventPage(
   return (
     isRecord(value) &&
     hasExactKeys(value, ["endAt", "items", "limit", "offset", "startAt", "total"]) &&
-    value.startAt === query.startAt &&
-    value.endAt === query.endAt &&
+    sameHistoryTime(value.startAt, query.startAt) &&
+    sameHistoryTime(value.endAt, query.endAt) &&
     value.offset === query.offset &&
     value.limit === query.limit &&
     isPageTotal(value.total) &&
@@ -599,7 +599,7 @@ function isEvent(
     ]) &&
     value.symbol === symbol &&
     typeof value.eventId === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.eventId) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.eventId) &&
     typeof value.eventType === "string" &&
     eventTypes.has(value.eventType) &&
     isShanghaiDateTime(value.occurredAt) &&
@@ -615,6 +615,10 @@ function isEvent(
 
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sameHistoryTime(value: unknown, requested: string): boolean {
+  return isShanghaiDateTime(value) && shanghaiDateTimeKey(value) === shanghaiDateTimeKey(requested);
 }
 
 function hasKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {

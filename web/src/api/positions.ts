@@ -12,6 +12,7 @@ import type {
 } from "./generated";
 import { isShanghaiDateTime } from "./shanghaiTime";
 import { invalidResponse, requestJson } from "./transport";
+import { resolveApiFetch } from "./context";
 
 export type PositionLot =
   components["schemas"]["trade_plan_monitor__web__routers__positions__PositionLotView"];
@@ -68,7 +69,7 @@ const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function createPositionApi(
-  fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
+  fetchImplementation: typeof fetch = resolveApiFetch(),
 ): PositionApi & PositionInventoryApi {
   return Object.freeze({
     async getInventory(symbol: string, asOfTradeDate: string, options?: PositionRequestOptions) {

@@ -11,7 +11,8 @@
     "test": "vitest",
     "test:e2e": "playwright test",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
-    "build": "vite build"
+    "build": "vite build",
+    "build:runtime-status-preview": "vite build --config vite.runtime-status.config.ts"
   },
   "dependencies": {
     "echarts": "6.1.0",

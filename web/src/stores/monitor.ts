@@ -362,7 +362,7 @@ const entityAggregateEvents = new Set<MonitorEventType>([
   "market.index.updated",
 ]);
 
-function isMonitorEventEnvelope(value: unknown): boolean {
+export function isMonitorEventEnvelope(value: unknown): boolean {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, [
