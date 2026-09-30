@@ -72,17 +72,22 @@ test.describe("installed production restart", () => {
     const beforeRestart = await context.newPage();
     const beforeAudit = auditPage(beforeRestart);
 
-    const first = await request.get(`${baseUrl}/api/v1/dashboard`);
+    const headers = { "X-Monitor-Contract-Version": "2" };
+    expect((await request.get(`${baseUrl}/api/v1/health`)).status()).toBe(409);
+    const first = await request.get(`${baseUrl}/api/v1/dashboard`, { headers });
     expect(first.status()).toBe(200);
     expect(await first.json()).toMatchObject({
-      availability: "UNAVAILABLE",
-      reason: "EMPTY_DATABASE",
+      monitorContractVersion: 2,
+      runtimeStatus: { lifecycle: "RUNNING", mode: "BLOCKED" },
+      symbols: [],
       sequence: 0,
     });
+    const firstGeneration = (await first.json()).runtimeGeneration;
+    expect(firstGeneration).toMatch(/^[0-9a-f-]{36}$/);
 
     await beforeRestart.goto(baseUrl);
     await expect(beforeRestart.getByRole("heading", { name: "监控总览" })).toBeVisible();
-    await expect(beforeRestart.getByText(/EMPTY_DATABASE/)).toBeVisible();
+    await expect(beforeRestart.getByText("没有活动计划。可前往计划工作台核对并启用计划。")).toBeVisible();
     expect(existsSync(join(stateDirectory, "data", "monitor.sqlite3"))).toBe(true);
     await beforeRestart.close();
     expect(beforeAudit.consoleFailures).toEqual([]);
@@ -103,14 +108,16 @@ test.describe("installed production restart", () => {
     const afterAudit = auditPage(afterRestart);
     await afterRestart.goto(baseUrl);
     await expect(afterRestart.getByRole("heading", { name: "监控总览" })).toBeVisible();
-    await expect(afterRestart.getByText(/EMPTY_DATABASE/)).toBeVisible();
-    const restarted = await request.get(`${baseUrl}/api/v1/dashboard`);
+    await expect(afterRestart.getByText("没有活动计划。可前往计划工作台核对并启用计划。")).toBeVisible();
+    const restarted = await request.get(`${baseUrl}/api/v1/dashboard`, { headers });
     expect(restarted.status()).toBe(200);
     expect(await restarted.json()).toMatchObject({
-      availability: "UNAVAILABLE",
-      reason: "EMPTY_DATABASE",
+      monitorContractVersion: 2,
+      runtimeStatus: { lifecycle: "RUNNING", mode: "BLOCKED" },
+      symbols: [],
       sequence: 0,
     });
+    expect((await restarted.json()).runtimeGeneration).not.toBe(firstGeneration);
     await afterRestart.close();
     expect(afterAudit.consoleFailures).toEqual([]);
     expect(afterAudit.requestFailures).toEqual([]);
@@ -168,7 +175,9 @@ async function startInstalledServer(): Promise<InstalledServer> {
       const serverProcessId = tryParseUvicornProcessId();
       if (serverProcessId !== null) {
         try {
-          const response = await fetch(`${baseUrl}/api/v1/health`);
+          const response = await fetch(`${baseUrl}/api/v1/health`, {
+            headers: { "X-Monitor-Contract-Version": "2" },
+          });
           if (response.ok && child.exitCode === null) {
             return { launcher: child, serverProcessId };
           }

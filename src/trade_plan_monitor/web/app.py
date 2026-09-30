@@ -144,6 +144,7 @@ def create_production_app(
     backtest_lifecycle_factory: BacktestLifecycleFactory | None = None,
     bind_host: str = LOOPBACK_HOST,
     bind_port: int = DEFAULT_WEB_PORT,
+    monitor_contract_version: int = 2,
 ) -> Iterator[FastAPI]:
     """Compose the installed SPA and local transport for one server lifetime."""
 
@@ -169,6 +170,7 @@ def create_production_app(
         lifecycle_factory = create_monitor_composition_factory(
             config_path=config_path,
             database_path=database_path,
+            **({"monitor_contract_version": 2} if monitor_contract_version == 2 else {}),
         )
     plan_lifecycle_factory: PlanWebLifecycleFactory | None = None
     plan_snapshot_reader = plan_service
@@ -221,6 +223,7 @@ def create_production_app(
             bind_host=bind_host,
             bind_port=bind_port,
             static_directory=static_directory,
+            monitor_contract_version=monitor_contract_version,
         )
 
 
@@ -250,7 +253,11 @@ def create_app(
     if type(monitor_contract_version) is not int or monitor_contract_version not in (1, 2):
         raise ValueError("unsupported monitor contract version")
     if monitor_contract_version == 2 and (
-        read_service is None or getattr(read_service, "monitor_contract_version", None) != 2
+        getattr(read_service, "monitor_contract_version", None) != 2
+        and not (
+            read_service is None
+            and getattr(runtime_factory, "monitor_contract_version", None) == 2
+        )
     ):
         raise ValueError("monitor contract 2 requires an authoritative v2 read service")
     validate_monitor_assets(static_directory, monitor_contract_version)

@@ -11,7 +11,9 @@ import argparse
 import asyncio
 import json
 import os
+import sqlite3
 import tempfile
+from contextlib import ExitStack, closing
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -36,7 +38,7 @@ from trade_plan_monitor.market_data.models import ProviderCapabilities, Provider
 from trade_plan_monitor.market_data.sessions import SourceTimeLabel
 from trade_plan_monitor.state.database import create_sqlite_engine, upgrade_database
 from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
-from trade_plan_monitor.web.app import create_app
+from trade_plan_monitor.web.app import create_app, create_production_app
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
 
@@ -149,7 +151,10 @@ def main():
     parser.add_argument("--repeat-probe-tape", action="store_true")
     parser.add_argument("--persistent-risk-tape", action="store_true")
     parser.add_argument("--monitor-contract-version", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--normal-entry", action="store_true")
     args = parser.parse_args()
+    if args.normal_entry:
+        args.monitor_contract_version = 2
     assert args.port != 8765
     root = (
         args.resume_root.resolve()
@@ -308,36 +313,62 @@ def main():
     if args.monitor_contract_version == 2:
         monitoring._ProductionRuntimeState.run_deadline = controlled_deadline
     ai_service._now = clock.now
-    plans = PersistentPlanWebLifecycle(database_path=database, clock=clock.now)
-    ai = ConfiguredAIWebLifecycle(
-        config_path=config,
-        review_store=plans,
-        client_factory=lambda: httpx.AsyncClient(
-            transport=httpx.MockTransport(fake_ai), trust_env=False
-        ),
-    )
-    composition = monitoring.create_monitor_composition(
-        config_path=config, database_path=database,
-        monitor_contract_version=args.monitor_contract_version,
-        progress_monotonic=clock.monotonic,
-    )
-    if args.monitor_contract_version == 2:
-        # Only this offline fixture accelerates observation traffic; the production
-        # default remains 20 seconds and the owner clock is independently controlled.
-        composition.websocket_service._heartbeat_interval_seconds = 0.2
-    app = create_app(
-        runtime_factory=lambda: composition,
-        plan_lifecycle_factory=lambda: plans,
-        ai_lifecycle_factory=lambda: ai,
-        read_service=composition.read_service if args.monitor_contract_version == 2 else None,
-        monitor_contract_version=args.monitor_contract_version,
-        bind_port=args.port,
-        static_directory=Path(__file__).resolve().parents[2] / (
-            "web/dist-runtime-status" if args.monitor_contract_version == 2 else "web/dist"
-        ),
-    )
+    app_resources = ExitStack()
+    if args.normal_entry:
+        import trade_plan_monitor.web.plan_service as plan_service
+
+        class ControlledPlanLifecycle(PersistentPlanWebLifecycle):
+            def __init__(self, *, database_path, clock=None):
+                super().__init__(database_path=database_path, clock=clock or sdk.clock.now)
+
+        # Replace external transport and observation clocks, retaining normal
+        # production factories, installed assets, and all owned lifespans.
+        plan_service.PersistentPlanWebLifecycle = ControlledPlanLifecycle
+        ai_service._default_client = lambda: httpx.AsyncClient(
+            transport=httpx.MockTransport(fake_ai), trust_env=False,
+        )
+        os.chdir(root)
+        composition = None
+        app = app_resources.enter_context(create_production_app(
+            config_path=config, database_path=database, bind_port=args.port,
+        ))
+    else:
+        plans = PersistentPlanWebLifecycle(database_path=database, clock=clock.now)
+        ai = ConfiguredAIWebLifecycle(
+            config_path=config,
+            review_store=plans,
+            client_factory=lambda: httpx.AsyncClient(
+                transport=httpx.MockTransport(fake_ai), trust_env=False
+            ),
+        )
+        composition = monitoring.create_monitor_composition(
+            config_path=config, database_path=database,
+            monitor_contract_version=args.monitor_contract_version,
+            progress_monotonic=clock.monotonic,
+        )
+        if args.monitor_contract_version == 2:
+            # Only this offline fixture accelerates observation traffic.
+            composition.websocket_service._heartbeat_interval_seconds = 0.2
+        app = create_app(
+            runtime_factory=lambda: composition,
+            plan_lifecycle_factory=lambda: plans,
+            ai_lifecycle_factory=lambda: ai,
+            read_service=composition.read_service if args.monitor_contract_version == 2 else None,
+            monitor_contract_version=args.monitor_contract_version,
+            bind_port=args.port,
+            static_directory=Path(__file__).resolve().parents[2] / (
+                "web/dist-runtime-status"
+                if args.monitor_contract_version == 2 else "web/dist-legacy-test"
+            ),
+        )
+
+    def owned_composition():
+        return app.state.runtime_lifecycle if args.normal_entry else composition
     server = uvicorn.Server(
-        uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning")
+        uvicorn.Config(
+            app, host="127.0.0.1", port=args.port,
+            log_level="info" if args.normal_entry else "warning",
+        )
     )
 
     @app.post("/_test/shutdown")
@@ -355,6 +386,7 @@ def main():
             "database": str(database),
             "config": str(config),
             "provider": "IN_PROCESS_FAKE",
+            "entry": "NORMAL_PRODUCTION" if args.normal_entry else "INJECTED_FIXTURE",
             "now": clock.now().isoformat(),
             "sdkCalls": sdk.calls,
             "aiRequests": ai_requests,
@@ -368,7 +400,14 @@ def main():
         body = await request.json()
         target = datetime.fromisoformat(body["now"])
         while clock.now() < target:
-            clock.advance(min(clock.now() + timedelta(minutes=1), target))
+            following = min(clock.now() + timedelta(minutes=1), target)
+            if args.normal_entry and clock.deadlines:
+                # The default owner may select recovery before a market duty.
+                # Release each real installed wake instead of jumping over it.
+                installed = datetime.fromisoformat(clock.deadlines[-1])
+                if clock.now() < installed < following:
+                    following = installed
+            clock.advance(following)
             for _ in range(1000):
                 await asyncio.sleep(0.01)
                 if clock.deadlines and datetime.fromisoformat(clock.deadlines[-1]) > clock.now():
@@ -377,13 +416,25 @@ def main():
                 raise RuntimeError("scheduler did not complete the released deadline")
         return {"now": clock.now().isoformat()}
 
+    @app.get("/_test/source-truth")
+    async def source_truth():
+        if not args.normal_entry:
+            raise RuntimeError("source truth probe requires the normal entry")
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as connection:
+            return {
+                table: sorted(connection.execute(f'SELECT * FROM "{table}"'), key=repr)
+                for table in (
+                    "active_plan", "plan_activation_state", "plan_version", "alert_event",
+                )
+            }
+
     @app.post("/_test/stall")
     async def stall():
         nonlocal stall_requested
         if args.monitor_contract_version != 2 or stall_entered.is_set():
             raise RuntimeError("isolated owner stall is unavailable")
         stall_requested = True
-        owner = composition._runtime
+        owner = owned_composition()._runtime
         due = owner._scheduler.next_deadline(after=owner._last_deadline_at)
         if due is None:
             raise RuntimeError("isolated owner has no scheduled unit")
@@ -414,7 +465,7 @@ def main():
         source = source.replace("003043.SZ", "600000.SH").replace("SZSE", "SSE")
         source = source.replace("huaya-smart", "isolated-legacy-sibling")
         plan = load_plan_yaml(source)
-        with composition._legacy_maintenance_factory() as work:
+        with owned_composition()._legacy_maintenance_factory() as work:
             work.plans.save_draft(plan, source_text=source)
             work.plans.activate(
                 plan,
@@ -444,7 +495,10 @@ def main():
     app.router.routes.append(spa)
 
     print(json.dumps({"port": args.port, "root": str(root), "database": str(database)}), flush=True)
-    server.run()
+    try:
+        server.run()
+    finally:
+        app_resources.close()
 
 
 if __name__ == "__main__":

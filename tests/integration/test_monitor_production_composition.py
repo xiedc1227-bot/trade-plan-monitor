@@ -195,7 +195,7 @@ def _production_app(
 ):
     _write_distribution(tmp_path / "dist")
     monkeypatch.setattr(resources, "files", lambda _package: tmp_path)
-    return create_production_app(
+    return create_production_app(monitor_contract_version=1,
         config_path=tmp_path / "config" / "app.yaml",
         database_path=tmp_path / "state" / "monitor.sqlite3",
         ai_service=_InertAIService(),
@@ -895,7 +895,7 @@ def test_default_monitor_composition_starts_offline_with_safe_health_and_websock
     _write_distribution(tmp_path / "dist")
     monkeypatch.setattr(resources, "files", lambda _package: tmp_path)
 
-    with create_production_app(
+    with create_production_app(monitor_contract_version=1,
         config_path=config_path,
         database_path=database_path,
         ai_service=_InertAIService(),

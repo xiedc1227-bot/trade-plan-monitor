@@ -237,7 +237,7 @@ def test_simulated_production_composition_selects_the_database_sidecar(
         "trade_plan_monitor.backtest.composition.create_backtest_composition_factory",
         lambda **_kwargs: _Backtest,
     )
-    with create_production_app(
+    with create_production_app(monitor_contract_version=1,
         config_path=config,
         database_path=database,
         runtime_factory=_Runtime,

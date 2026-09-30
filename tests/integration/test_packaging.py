@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tomllib
 from contextlib import nullcontext
 from importlib import metadata, resources
@@ -90,6 +91,14 @@ def test_built_vue_distribution_is_discoverable_as_package_data() -> None:
 
         assert index.is_file()
         assert assets
+        assert json.loads((directory / "monitor-contract.json").read_text("utf-8")) == {
+            "monitorContractVersion": 2,
+        }
+        pyproject = Path(__file__).parents[2] / "pyproject.toml"
+        package_data = tomllib.loads(pyproject.read_text("utf-8"))["tool"]["setuptools"][
+            "package-data"
+        ]["trade_plan_monitor.web"]
+        assert "dist/monitor-contract.json" in package_data
         html = index.read_text(encoding="utf-8")
         assert "http://" not in html
         assert "https://" not in html
@@ -147,7 +156,7 @@ def test_production_app_keeps_api_websocket_and_spa_routes_separate(
     monkeypatch.setattr(resources, "files", lambda _package: tmp_path)
     events: list[str] = []
 
-    with create_production_app(
+    with create_production_app(monitor_contract_version=1,
         ai_service=_AIService(),
         database_path=tmp_path / "monitor.sqlite3",
         runtime_factory=lambda: _Lifecycle(events),

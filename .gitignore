@@ -39,6 +39,7 @@ backups/
 web/node_modules/
 web/dist/
 web/dist-runtime-status/
+web/dist-legacy-test/
 web/coverage/
 
 # Editor and operating-system files

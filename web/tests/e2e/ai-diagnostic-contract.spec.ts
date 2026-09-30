@@ -8,7 +8,7 @@ const operationId = "00000000-0000-4000-8000-000000000201";
 const submittedAt = "2026-09-14T14:38:12+08:00";
 
 test.beforeAll(async () => {
-  server = await createServer({ clearScreen: false, logLevel: "silent", root: process.cwd(),
+  server = await createServer({ configFile: "vite.legacy-test.config.ts", clearScreen: false, logLevel: "silent", root: process.cwd(),
     server: { hmr: false, host: "127.0.0.1", port: 0 } });
   await server.listen();
   const address = server.httpServer?.address();

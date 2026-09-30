@@ -11,7 +11,8 @@ import json
 import os
 import socket
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import date, datetime, time
 from hashlib import sha256
@@ -618,6 +619,18 @@ def _guarded_market_factory(original_factory: Callable[[object], object], guard:
     return guarded_factory
 
 
+@contextmanager
+def legacy_diagnostic_assets() -> Iterator[Path]:
+    """Keep the frozen R14 diagnostic separate from installed monitor v2 assets."""
+    from trade_plan_monitor.web.monitor_contract import validate_monitor_assets
+
+    directory = Path(__file__).resolve().parents[1] / "web/dist-legacy-test"
+    if not (directory / "monitor-contract.json").is_file():
+        raise RuntimeError("Build isolated R14 assets with npm --prefix web run build:legacy-test")
+    validate_monitor_assets(directory, 1)
+    yield directory
+
+
 def _create_guarded_app(
     *,
     config_path: Path,
@@ -720,7 +733,6 @@ async def _serve(
 
     from trade_plan_monitor.config import load_application_config
     from trade_plan_monitor.runtime import production
-    from trade_plan_monitor.web.app import installed_web_assets
     from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -826,7 +838,7 @@ async def _serve(
         plan_lifecycle = PersistentPlanWebLifecycle(
             database_path=database, clock=lambda: datetime.now(_SHANGHAI)
         )
-        with installed_web_assets() as static_directory:
+        with legacy_diagnostic_assets() as static_directory:
             app = _create_guarded_app(
                 config_path=config_path,
                 database=database,

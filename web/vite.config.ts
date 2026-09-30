@@ -24,10 +24,10 @@ function packagePythonDistribution(): Plugin {
 
 export default defineConfig({
   plugins: [vue(), {
-    name: "monitor-contract-v1",
+    name: "monitor-contract-v2",
     apply: "build",
     generateBundle() {
-      this.emitFile({ type: "asset", fileName: "monitor-contract.json", source: '{"monitorContractVersion":1}\n' });
+      this.emitFile({ type: "asset", fileName: "monitor-contract.json", source: '{"monitorContractVersion":2}\n' });
     },
   }, packagePythonDistribution()],
   test: {

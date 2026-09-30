@@ -1,4 +1,5 @@
 // This file is generated from openapi.json by scripts/generate_frontend_types.py.
+// Compatibility monitor contract v1; installed v2 types are in generated-runtime-status.ts.
 // Do not edit it by hand; update the FastAPI contract and rerun the generator.
 
 export type AIProviderConfiguration = {

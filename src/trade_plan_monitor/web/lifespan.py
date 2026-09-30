@@ -116,6 +116,12 @@ def create_runtime_lifespan(
         monitor_service_state: tuple[str, ...] = ()
         app.state.runtime_lifecycle = runtime
         try:
+            if getattr(app.state, "monitor_contract_version", 1) == 2:
+                reader = getattr(app.state, "monitor_read_service", None)
+                if reader is None:
+                    reader = getattr(runtime, "read_service", None)
+                if getattr(reader, "monitor_contract_version", None) != 2:
+                    raise TypeError("monitor contract 2 requires an authoritative v2 read service")
             app.state.runtime_startup = await start()
             monitor_service_state = _bind_monitor_service_state(app, runtime)
             if ai_lifecycle_factory is not None:

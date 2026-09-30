@@ -106,7 +106,11 @@ _TYPESCRIPT_RESERVED_WORDS: Final = frozenset(
 
 
 def build_openapi_document(*, monitor_contract_version: int = 1) -> dict[str, object]:
-    """Build the public contract from the side-effect-free application factory."""
+    """Build a selected contract; the default supports existing v1 type fixtures.
+
+    The installed contract is v2. The CLI generates/checks that canonical
+    contract together with v1 compatibility artifacts by default.
+    """
 
     if monitor_contract_version == 1:
         document = create_app().openapi()
@@ -368,8 +372,14 @@ def render_typescript_contracts(
 
     output = _TypeScriptRenderer(document).render()
     if monitor_contract_version == 2:
-        return output.replace("from openapi.json by", "from openapi.runtime-status.json by", 1)
-    return output
+        output = output.replace("from openapi.json by", "from openapi.runtime-status.json by", 1)
+        label = "// Canonical installed monitor contract v2.\n"
+    else:
+        label = (
+            "// Compatibility monitor contract v1; "
+            "installed v2 types are in generated-runtime-status.ts.\n"
+        )
+    return output.replace("\n", "\n" + label, 1)
 
 
 def find_stale_outputs(
@@ -447,8 +457,8 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
         "--monitor-contract-version",
         type=int,
         choices=(1, 2),
-        default=1,
-        help="generate the independent opt-in v2 artifacts when set to 2",
+        default=None,
+        help="select one contract; omitted generates/checks canonical v2 and compatibility v1",
     )
     parser.add_argument(
         "--check",
@@ -460,37 +470,42 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
-    version = args.monitor_contract_version
-    snapshot_path = OPENAPI_PATH if version == 1 else PROJECT_ROOT / "openapi.runtime-status.json"
-    typescript_path = (
-        TYPESCRIPT_PATH
-        if version == 1
-        else PROJECT_ROOT / "web" / "src" / "api" / "generated-runtime-status.ts"
-    )
-    document = build_openapi_document(monitor_contract_version=version)
-    snapshot = render_openapi_snapshot(document)
-    typescript = render_typescript_contracts(document, monitor_contract_version=version)
-    stale = find_stale_outputs(
-        snapshot=snapshot,
-        typescript=typescript,
-        snapshot_path=snapshot_path,
-        typescript_path=typescript_path,
-    )
-    if args.check:
-        if stale:
+    versions = (2, 1) if args.monitor_contract_version is None else (args.monitor_contract_version,)
+    any_stale = False
+    for version in versions:
+        label = "canonical monitor v2" if version == 2 else "compatibility monitor v1"
+        snapshot_path = (
+            OPENAPI_PATH if version == 1 else PROJECT_ROOT / "openapi.runtime-status.json"
+        )
+        typescript_path = (
+            TYPESCRIPT_PATH
+            if version == 1
+            else PROJECT_ROOT / "web" / "src" / "api" / "generated-runtime-status.ts"
+        )
+        document = build_openapi_document(monitor_contract_version=version)
+        snapshot = render_openapi_snapshot(document)
+        typescript = render_typescript_contracts(document, monitor_contract_version=version)
+        stale = find_stale_outputs(
+            snapshot=snapshot,
+            typescript=typescript,
+            snapshot_path=snapshot_path,
+            typescript_path=typescript_path,
+        )
+        if args.check:
+            any_stale = any_stale or bool(stale)
             for path in stale:
                 print(
-                    f"stale generated contract: {path.relative_to(PROJECT_ROOT)}", file=sys.stderr
+                    f"stale generated contract ({label}): {path.relative_to(PROJECT_ROOT)}",
+                    file=sys.stderr,
                 )
-            return 1
-        print("OpenAPI snapshot and frontend types are current")
-        return 0
-
-    _write_generated(snapshot_path, snapshot)
-    _write_generated(typescript_path, typescript)
-    print(f"generated {snapshot_path.relative_to(PROJECT_ROOT)}")
-    print(f"generated {typescript_path.relative_to(PROJECT_ROOT)}")
-    return 0
+            if not stale:
+                print(f"OpenAPI snapshot and frontend types are current ({label})")
+        else:
+            _write_generated(snapshot_path, snapshot)
+            _write_generated(typescript_path, typescript)
+            print(f"generated {snapshot_path.relative_to(PROJECT_ROOT)} ({label})")
+            print(f"generated {typescript_path.relative_to(PROJECT_ROOT)} ({label})")
+    return 1 if any_stale else 0
 
 
 if __name__ == "__main__":

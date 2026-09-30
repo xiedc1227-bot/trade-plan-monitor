@@ -1309,6 +1309,8 @@ def create_monitor_composition_factory(
         raise TypeError("database_path must be a Path")
     if on_reference_failure is not None and not callable(on_reference_failure):
         raise TypeError("on_reference_failure must be callable")
+    if type(monitor_contract_version) is not int or monitor_contract_version not in (1, 2):
+        raise ValueError("unsupported monitor contract version")
 
     def factory() -> MonitorWebComposition:
         return create_monitor_composition(
@@ -1318,6 +1320,7 @@ def create_monitor_composition_factory(
             monitor_contract_version=monitor_contract_version,
         )
 
+    factory.monitor_contract_version = monitor_contract_version
     return factory
 
 

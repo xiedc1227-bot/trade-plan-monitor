@@ -391,7 +391,7 @@ ai:
         async def stop(self) -> None:
             return None
 
-    with create_production_app(
+    with create_production_app(monitor_contract_version=1,
         config_path=config_path,
         database_path=tmp_path / "monitor.sqlite3",
         runtime_factory=Runtime,

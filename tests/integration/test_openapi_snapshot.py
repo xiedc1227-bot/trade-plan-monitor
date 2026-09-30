@@ -341,7 +341,7 @@ def test_spa_document_is_a_stable_csp_compatible_vite_entry() -> None:
     assert 'name="viewport"' in document
     assert parser.html_language == "zh-CN"
     assert parser.app_roots == 1
-    assert parser.module_scripts == ["/src/main.ts"]
+    assert parser.module_scripts == ["/src/runtime-status/main.ts"]
     assert parser.inline_style_count == 0
 
 

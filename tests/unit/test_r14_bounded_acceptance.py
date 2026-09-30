@@ -322,7 +322,9 @@ def test_simulated_r14_launcher_refuses_unwritable_diagnostics_before_ai(
 
 
 def test_isolated_app_constructs_without_database_or_network(tmp_path: Path) -> None:
-    from trade_plan_monitor.web.app import create_app, installed_web_assets
+    from scripts.r14_bounded_acceptance import legacy_diagnostic_assets
+
+    from trade_plan_monitor.web.app import create_app
     from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory
     from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
@@ -331,7 +333,7 @@ def test_isolated_app_constructs_without_database_or_network(tmp_path: Path) -> 
     database = tmp_path / "monitor.sqlite3"
     plans = PersistentPlanWebLifecycle(database_path=database)
     budget = Budget(total=3, per_key={key: 1 for key in approved_sources()}, seconds=60)
-    with installed_web_assets() as assets:
+    with legacy_diagnostic_assets() as assets:
         app = create_app(
             runtime_factory=create_monitor_composition_factory(
                 config_path=config, database_path=database

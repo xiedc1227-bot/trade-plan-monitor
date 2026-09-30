@@ -24,6 +24,7 @@ from scripts.r14_bounded_acceptance import (
     _recover_activated_symbol,
     _serve,
     approved_sources,
+    legacy_diagnostic_assets,
 )
 from tests.integration.test_explicit_plan_review_api import (
     _SOURCE as SYNTHETIC_SOURCE,
@@ -72,7 +73,6 @@ from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
 from trade_plan_monitor.runtime.request_control import create_live_tushare_request_controller
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketSessionScheduler
 from trade_plan_monitor.state.database import upgrade_database
-from trade_plan_monitor.web.app import installed_web_assets
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
 
@@ -407,7 +407,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
             },
         )
 
-    with installed_web_assets() as assets:
+    with legacy_diagnostic_assets() as assets:
         app = _create_guarded_app(
             config_path=config,
             database=database,
@@ -857,7 +857,7 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
             },
         )
 
-    with installed_web_assets() as assets:
+    with legacy_diagnostic_assets() as assets:
         app = _create_guarded_app(
             config_path=config,
             database=database,

@@ -1,4 +1,5 @@
 // This file is generated from openapi.runtime-status.json by scripts/generate_frontend_types.py.
+// Canonical installed monitor contract v2.
 // Do not edit it by hand; update the FastAPI contract and rerun the generator.
 
 export type AIProviderConfiguration = {

@@ -231,6 +231,7 @@ test.afterEach(({ page }) => {
 
 test.beforeAll(async () => {
   server = await createServer({
+    configFile: "vite.legacy-test.config.ts",
     clearScreen: false,
     logLevel: "silent",
     root: process.cwd(),

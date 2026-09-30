@@ -37,6 +37,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "trade_plan_monitor.web" = [
     "dist/index.html",
+    "dist/monitor-contract.json",
     "dist/assets/*",
 ]
 
