@@ -8,6 +8,8 @@
 
 **已实施——用户已授权实施。** 本文档记录已交付范围与验证边界；不授权超出该范围的供应商配置、API、依赖、推送或部署变更。
 
+2026-09-30 保留功能修正：`web/src/runtime-status/DashboardView.vue` 中正常 monitor-contract `2` 入口在运行状态面板旁保留本规格既有的四指数图表及成交额区域。复用 `MarketIndexDataStrip.vue`、`useDashboardMarketIndexTrends.ts`，通过注入的 fetch 上下文读取既有历史 API；保留缓存/断连及空数据展示。这是修复遗漏的 UI 接线，不改变采集、行情源语义、交易规则或四步恢复方案。
+
 ## 目标
 
 在“监控总览”增加四指数走势区域，让用户查看以下指数的当前方向和近期路径：

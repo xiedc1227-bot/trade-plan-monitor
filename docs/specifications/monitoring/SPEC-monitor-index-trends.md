@@ -8,6 +8,8 @@
 
 **IMPLEMENTED — user authorized implementation.** This document records the delivered scope and validation boundary. It does not authorize provider-profile, API, dependency, push, or deployment changes outside that scope.
 
+2026-09-30 preservation correction: the normal monitor-contract `2` entry in `web/src/runtime-status/DashboardView.vue` retains this existing four-index chart and turnover area alongside the runtime-status board. It reuses `MarketIndexDataStrip.vue`, `useDashboardMarketIndexTrends.ts` and the existing history API through the supplied fetch context; cached/disconnected and empty-data presentation remain intact. This repairs an omitted UI integration without changing acquisition, provider semantics, trading rules or the four-stage recovery plan.
+
 ## Objective
 
 Add a four-index trend area to the Monitoring Overview so the user can see the current direction and recent path of:

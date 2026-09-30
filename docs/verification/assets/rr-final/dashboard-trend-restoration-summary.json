@@ -1,0 +1,65 @@
+{
+  "status": "PASS",
+  "baseHead": "e599e06",
+  "scope": "Restore existing dashboard trend wiring only; no production Python, API, acquisition, provider, trading-rule or plan change.",
+  "productionSource": {
+    "path": "web/src/runtime-status/DashboardView.vue",
+    "sha256": "0007767ba52bfde95bae585d19fe37d10381c4025e3cdde623257e54a4b80b02"
+  },
+  "checks": {
+    "failFirst": "2 valid-fixture unit failures before UI repair",
+    "frontendUnit": "810 passed / 57 files",
+    "typeCheck": "PASS",
+    "normalBuild": "PASS",
+    "contractCheck": "canonical v2 and compatibility v1 PASS",
+    "ruff": "src tests scripts PASS",
+    "backendFocused": "26 passed, 1 existing warning, 3.21 seconds",
+    "chrome": "2 passed / 4.0 minutes; normal-entry chart-data assertion strengthened and rerun: 1 passed / 1.5 minutes"
+  },
+  "earlierAttempts": [
+    {
+      "kind": "test orchestration error",
+      "result": "809 passed / 1 failed because a simultaneous normal build replaced assets during the build-isolation digest; serial full unit rerun 810 passed, no assertion changed"
+    },
+    {
+      "kind": "offline fixture missing index history",
+      "path": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-nldltgbd\\normal-runtime-recovery.json",
+      "sha256": "1bd9f4a5c9423517e39bcd239c21140ef293e0337adfed75435ae59ad3f8ae4c",
+      "result": "Normal restart/Canvas/selector/source checks passed but original zero-error assertion rejected four 404s; extended existing blocked-cache fixture to v2, no error allowance added"
+    }
+  ],
+  "normalEntryRaw": {
+    "path": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-6aattke5\\normal-runtime-recovery.json",
+    "sha256": "09848e006ac0f2485f35a210080ec7b2dceb136e1bf9a2cb4ae89347130f6cf2",
+    "errors": [],
+    "external": []
+  },
+  "c4Raw": {
+    "path": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-9oryp7ma\\s4-v2-browser-evidence.json",
+    "sha256": "0a89e4c3be2b932ff87a220fc2d551794ba75a3234cc028f28fb230c9d56f3ce",
+    "sockets": 55,
+    "consoleErrors": 0,
+    "consoleObservations": 0,
+    "failedResponses": 0,
+    "readDiagnostics": 0,
+    "diagnosticErrors": 0,
+    "pageErrors": 0,
+    "external": 0
+  },
+  "screenshot": {
+    "path": "normal-dashboard-trends-restored.png",
+    "sha256": "4aac5e6512026835a3c2b8e1bba3b9ce92dfc0bb126b18ee088245310be41b3e",
+    "state": "Real normal entry on temporary SQLite; loaded 09:55 blocked history, not live provider evidence"
+  },
+  "installedAssets": {
+    "files": 58,
+    "monitorContractVersion": 2,
+    "manifestSha256": "b09c61c481978f8c6164141499ef44f34831f44ca52ab397caacba2f49d8bb4f"
+  },
+  "manualStaticCheck": {
+    "url": "http://127.0.0.1:8765/",
+    "status": 200,
+    "matchesCurrentBuild": true,
+    "boundary": "Only static HTML read; user database and monitoring process not modified"
+  }
+}

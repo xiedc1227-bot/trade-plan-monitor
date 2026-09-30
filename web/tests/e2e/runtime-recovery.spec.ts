@@ -130,6 +130,13 @@ test("normal installed entry preserves reminder source through restart and resto
     expect(await read("/_test/source-truth")).toEqual(truth);
     const after = await open("/");
     await expect(after.getByRole("heading", { name: "监控总览" })).toBeVisible();
+    await expect(after.getByRole("heading", { name: "主要指数走势 · 当日" })).toBeVisible();
+    await expect(after.getByTestId("market-index-selector")).toHaveCount(4);
+    await expect(after.getByTestId("market-index-sparkline").locator("canvas")).toBeVisible();
+    await after.getByRole("button", { name: /科创50/ }).click();
+    await expect(after.getByTestId("market-index-trend-card")).toContainText("000688.SH");
+    await expect(after.getByTestId("market-index-health")).toContainText("阻断");
+    await expect(after.getByTestId("market-index-sparkline").locator("canvas")).toBeVisible();
     const recovered = await runtime();
     expect(recovered.summary.availability).toBe("CACHED");
     expect(recovered.summary.currentActionable).toBe(false);
@@ -140,6 +147,8 @@ test("normal installed entry preserves reminder source through restart and resto
     expect(newGeneration).not.toBe(oldGeneration);
     await expect(after.getByText("历史缓存；以下结果保留原始周期，不具备当前提醒资格。")).toBeVisible();
     await expect.poll(() => streams.some(frame => frame.type === "heartbeat" && frame.runtimeGeneration === newGeneration && frame.monitorContractVersion === 2 && frame.runtimeStatus?.lifecycle === "RUNNING" && frame.runtimeStatus.coordinator.state === "SCHEDULED"), { timeout: 30_000 }).toBe(true);
+    await expect(after.getByTestId("market-index-trend-card").locator(".market-index-trend-card__high")).toHaveText("1000.00");
+    await after.screenshot({ path: join(root, "normal-dashboard-trends.png"), fullPage: true });
     await advance("10:15");
     observations.push({ nextTarget: await runtime(), health: await read("/api/v1/health"), isolation: await read("/_test/isolation") });
     await expect.poll(async () => (await runtime()).summary.availability, { timeout: 30_000 }).toBe("CURRENT");

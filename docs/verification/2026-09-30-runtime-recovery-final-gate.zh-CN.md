@@ -109,3 +109,13 @@ git diff --check
 RR001–RR022、C0–C4 依据实际最终门禁及汇总源码/证据评审，仅按已批准 D1–D8 / A01–A13 离线交付完成。C5 仍为用户对已完成证据的审核，不是剩余实现任务。生产备份、真实行情源验收和部署需另行授权。既有限定历史报告不改写为不受限制的历史恢复。不声称操作系统层并发实例锁或无限恢复容量。
 
 V1d 按已批准 D8/A13 和 `SPEC-runtime-recovery.md` 的存活记录及旧计划处置条款验收。缺少心跳时阻断准入，通过既有预览、指纹和独立确认进行带审计的作废；损坏/未来心跳保持阻断并调查。无法分类的旧提醒保留脱敏审计，不编造终态回执。清理失败记录 `ALERT_SWEEP_FAILED`、保留游标并重试，不中断所有者心跳。旧 V1d 关于额外提醒复核流程和 Web 维护状态字段的建议不属于已批准 D8/A13 或 RS04 契约，未实现，也不加入本次改造。证据为 `test_runtime_plan_expiry.py` 中 `test_old_alert_sweep_audits_corrupt_alert_without_losing_later_valid_one` 和 `test_long_outage_sweeps_receiptless_old_alert_after_transient_failure`。
+
+## 验收后修正：保留总览走势图 — 2026-09-30
+
+用户截图暴露正常 v2 总览仅保留指数文字快照，遗漏既有四指数走势图。这是接线回归，不是获准删除的功能。`web/src/runtime-status/DashboardView.vue` 现复用原 `MarketIndexDataStrip.vue`、`useDashboardMarketIndexTrends.ts` 和历史 API，恢复指数切换、图表、空数据/断连缓存状态及成交额卡片，同时保留运行状态面板。仅通过已提交快照及注入的 fetch 上下文读取展示数据；不修改生产 Python、采集、协议、依赖、交易规则或原四步方案。
+
+两项有效夹具回归测试先在未修复页面失败，再通过。最终前端为 57 文件 / 810 passed，类型、正常构建、双版本生成契约和 Ruff 均通过；安装包/组装/读取诊断专项 26 passed、1 条既有警告、3.21 秒。两条真实 Chrome 重启/状态场景共 2 passed、4.0 分钟；随后加强正常入口的已加载历史数据断言，单项重跑 1 passed、1.5 分钟。重启测试保留原提醒来源、当前资格及零错误断言，另验证四个选择器、真实 Canvas、指数切换和图表已加载历史数据。C4 场景记录 55 条 v2 socket，控制台/页面/响应失败/诊断/外部请求均为零。
+
+首次正常入口浏览器运行因离线 SDK 无指数历史，出现四个 `404`；将既有历史缓存夹具扩展至 v2 后通过，缓存仍为 `BLOCKED`，无指标事实，不编造实时准入。一次前端运行与正常构建同时执行，资源替换使构建隔离检查失败；串行完整重跑通过，未降低断言。原始记录路径和哈希、失败原因及最终检查汇总见[修正证据](assets/rr-final/dashboard-trend-restoration-summary.json)。[图表截图](assets/rr-final/normal-dashboard-trends-restored.png)为临时数据库中的阻断历史数据，已核对实际加载点位，不代表真实行情源验收。
+
+修正后正常与 Python 安装资源仍各 58 文件、协议 `2`，清单 SHA-256 为 `b09c61c481978f8c6164141499ef44f34831f44ca52ab397caacba2f49d8bb4f`；前文旧哈希及完整后端/43 项浏览器通过仍指各自原冻结版本，不追溯改写为此次全部重跑。只读检查确认本地 `http://127.0.0.1:8765/` 返回当前构建 HTML，未重启用户进程或修改用户数据库，刷新页面即可加载修正资源。

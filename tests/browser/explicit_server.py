@@ -73,7 +73,7 @@ class ControlledClock:
 
 
 def _seed_legacy_index_history(work):
-    """Retain unavailable legacy chart history without granting live proof."""
+    """Retain unavailable chart history for either UI without granting live proof."""
     from decimal import Decimal
 
     from trade_plan_monitor.market_index.identity import MarketIndexCode
@@ -357,8 +357,9 @@ def main():
                         amount_yuan=Decimal("0"),
                     ).model_dump()
                 )
-            if args.monitor_contract_version == 1 and not args.normal_entry:
-                _seed_legacy_index_history(work)
+            # Both UIs preserve the original charts. The offline SDK cannot
+            # certify index acquisition, so retain only honest blocked history.
+            _seed_legacy_index_history(work)
             work.commit()
     engine.dispose()
     evidence = create_stock_certification(
