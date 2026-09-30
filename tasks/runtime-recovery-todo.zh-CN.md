@@ -15,7 +15,7 @@
 | 1. 历史状态恢复 | 已按批准的限定离线标准完成：三个独立进程使用已接通的生产组合和同一临时 SQLite 数据库，补齐一次遗漏的官方收盘，保留活动计划，并在再次重启后不增加结果/提醒。五天准入门禁仍在前置。高交易量证据上限及完整跨日/故障矩阵仍待完成 | 限定重启证据见成对 `docs/verification/runtime-recovery-acceptance.zh-CN.md`；不受限制的历史恢复、真实行情源验证及完整 RR007–RR010/C2/A13 发布验收另行处理 |
 | 2. 提醒安全 | 已接通离线实现：生产组合原子写入初始 HOLD，并在每次渠道调用前复核已提交的身份、风险、持仓、已完成目标及恢复屏障。已有模拟渠道/重启专项证据；完整发布门禁和真实运行仍待完成 | 两类计划在模拟渠道准入前使用重新读取的风险/持仓/恢复门禁证据；过时提醒抑制，相同且适用的退出提醒只保留最新，证据不足等待；保留不确定发送处理。RR011–RR013 |
 | 3. 实际启停集成 | 已于 2026-09-27 在批准的离线生命周期范围内完成：八 scope 权限恢复、独立 DEGRADED 时钟、同代次有界股票修复、身份/配置围栏、已安装读取/存活行为及进程/stop-drain 证据。固定源码/测试 HEAD `e35f344` 通过完整 S3-09 命令：5711 passed, 1 skipped, 4 deselected, 1 warning in 1074.18s。Astra 已批准源码/矩阵关闭；最终四份文档一致性已通过 | [最终证据与限制](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)。C1/C3 仅在该离线范围关闭。仍须安全停止 → 人工编辑 → 新进程。RR004–RR006、RR010 和 RR014 仍为映射，不自动勾选 RR 项；第四/五步和真实运行另行处理 |
-| 4. 状态接口和页面 | IN PROGRESS：RR002 已评审；隔离 v2 模型、协商、只读投影及客户端基础已实现。真实拥有者完整覆盖、组合/页面集成和 C4 验收仍未完成 | 真实后端状态到达页面，区分待机/恢复中/受阻/连接异常并提供原因和重试信息；旧客户端安全失败。RR002、RR015–RR019、C4 |
+| 4. 状态接口和页面 | 在批准的第四步离线范围内完成：RR002、RR015–RR019 及 C4 已关闭。冻结后端 HEAD `0f1df66`：5920 passed、1 skipped、4 deselected、1 warning，1140.87 秒；前端 807 项及两条真实 Chrome 路径通过；独立源码/证据及最终四文档一致性评审批准 | [最终证据及限制](../docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)。默认版本 `1` 保留；版本 `2` 需明确启用。RR020、第 5 步及真实运行仍独立 |
 | 5. 重启/故障验收 | 第一阶段限定三进程重启及第二阶段模拟渠道场景已通过；完整跨日/故障矩阵仍未完成 | 完成全部 A01–A14 场景、第 7 节全部离线门禁、迁移/回滚证据及最终独立审查；部署仍须单独批准。RR020–RR022、C5 |
 
 主线顺序为 1 → 2 → 3 → 4 → 5。离线组装/重启测试基础提前到第 1 步，依赖重试测试随第 3 步执行，不等到第 5 步才首次运行。RR002 评审通过后，可并行准备独立的状态/客户端工作，但不能据此宣称第 4 步完成。原任务依赖仍是验收/默认启用门禁，不禁止提前测试注入式集成。
@@ -426,30 +426,30 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ## 状态与用户可见恢复
 
-- [ ] RR015 — 如实投影生命周期和局部状态。强度：`high`。依赖：C3、RR002。
+- [x] RR015 — 如实投影生命周期和局部状态。强度：`high`。依赖：C3、RR002。
   - 验收：存活/恢复/待机/阻止区分有效；全局布尔值不授权工作；正常连接不能掩盖协调器进展逾期。
-  - 文件：`src/trade_plan_monitor/runtime/health.py`、`src/trade_plan_monitor/web/routers/health.py`、`tests/integration/test_runtime_lifecycle.py`、NEW `tests/integration/test_runtime_status_contract.py`。
-  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_status_contract.py tests/integration/test_runtime_lifecycle.py -q`。
-- [ ] RR016 — 返回兼容两类计划的局部总览投影。强度：`high`。依赖：RR015。
+  - 文件：`src/trade_plan_monitor/runtime/progress.py`、`src/trade_plan_monitor/runtime/status_authority.py`、`src/trade_plan_monitor/runtime/service.py`、`src/trade_plan_monitor/runtime/production.py`、`tests/unit/test_runtime_progress.py`、`tests/integration/test_runtime_status_composition.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/unit/test_runtime_progress.py tests/integration/test_runtime_status_composition.py tests/integration/test_runtime_lifecycle.py -q`。
+- [x] RR016 — 返回兼容两类计划的局部总览投影。强度：`high`。依赖：RR015。
   - 验收：A06/A12；等待/新股票不隐藏健康条目，显式规则结果读取正确存储，缓存决策不升级为可操作。
-  - 文件：`src/trade_plan_monitor/web/persistent_monitor_read_service.py`、`src/trade_plan_monitor/web/routers/dashboard.py`、`src/trade_plan_monitor/web/routers/symbols.py`、`tests/integration/test_persistent_monitor_read_service.py`、`tests/integration/test_runtime_status_contract.py`。
-  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_persistent_monitor_read_service.py tests/integration/test_runtime_status_contract.py -q`；保留现有未提交指数读取测试。
-- [ ] RR017 — 版本化传输并重新生成契约。强度：`high`。依赖：RR016。
+  - 文件：`src/trade_plan_monitor/web/runtime_status_read_service.py`、`src/trade_plan_monitor/web/runtime_status_eligibility.py`、`src/trade_plan_monitor/web/runtime_status_models.py`、`tests/integration/test_runtime_status_projection.py`、`tests/integration/test_runtime_status_official_close.py`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_status_projection.py tests/integration/test_runtime_status_official_close.py tests/integration/test_persistent_monitor_read_service.py -q`。
+- [x] RR017 — 版本化传输并重新生成契约。强度：`high`。依赖：RR016。
   - 验收：精确实现 RR002 版本握手、安全拒绝不兼容客户端、序号/代次刷新语义；OpenAPI 和生成类型一致。
-  - 文件：`src/trade_plan_monitor/web/websocket.py`、`tests/integration/test_websocket.py`、`tests/integration/test_openapi_snapshot.py`、`openapi.json`、`web/src/api/generated.ts`。
-  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_websocket.py tests/integration/test_openapi_snapshot.py -q`；批准生成后运行 `.\.venv\Scripts\python.exe scripts/generate_frontend_types.py --check`。
-- [ ] RR018 — 前端分离传输与业务恢复状态。强度：`high`。依赖：RR017。
+  - 文件：`src/trade_plan_monitor/web/routers/runtime_status.py`、`src/trade_plan_monitor/web/runtime_status_websocket.py`、`tests/integration/test_runtime_status_routes.py`、`tests/integration/test_runtime_status_websocket.py`、`openapi.runtime-status.json`、`web/src/api/generated-runtime-status.ts`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_runtime_status_routes.py tests/integration/test_runtime_status_websocket.py tests/integration/test_openapi_snapshot.py -q` / `.\.venv\Scripts\python.exe scripts/generate_frontend_types.py --check` / `.\.venv\Scripts\python.exe scripts/generate_frontend_types.py --check --monitor-contract-version 2`。
+- [x] RR018 — 前端分离传输与业务恢复状态。强度：`high`。依赖：RR017。
   - 验收：保留代次刷新、重连和快照序号保护；后台降级不会形成含糊不清的无限 STALE/重连循环。
-  - 文件：`web/src/composables/useMonitorStream.ts`、`web/src/stores/monitor.ts`、`web/tests/unit/useMonitorStream.spec.ts`、`web/src/api/health.ts`。
-  - 验证：`npm --prefix web run test -- --run tests/unit/useMonitorStream.spec.ts`；`npm --prefix web run type-check`。
-- [ ] RR019 — 展示待机、重试和局部进展。强度：`high`。依赖：RR018。
+  - 文件：`web/src/runtime-status/`、`web/src/api/context.ts`、`web/src/api/client.ts`、`web/tests/unit/runtimeStatusProtocol.spec.ts`、`web/tests/unit/runtimeStatusStream.spec.ts`、`web/tests/unit/runtimeStatusStore.spec.ts`、`web/tests/unit/runtimeStatusDeadlines.spec.ts`、`web/tests/unit/runtimeStatusCommands.spec.ts`。
+  - 验证：`npm --prefix web run test -- --run tests/unit/runtimeStatusProtocol.spec.ts tests/unit/runtimeStatusStream.spec.ts tests/unit/runtimeStatusStore.spec.ts tests/unit/runtimeStatusDeadlines.spec.ts tests/unit/runtimeStatusCommands.spec.ts` / `npm --prefix web run type-check`。
+- [x] RR019 — 展示待机、重试和局部进展。强度：`high`。依赖：RR018。
   - 验收：原因/下次重试或必要操作明确；没有工作时不展示恢复横幅；缓存截止时间可见，健康条目仍可用。
-  - 文件：`web/src/views/SystemRouteView.vue`、`web/src/components/health/MarketStatusStrip.vue`、`web/tests/unit/SystemHealthRoute.spec.ts`、NEW `web/tests/unit/RuntimeRecoveryStatus.spec.ts`（若需额外指数卡片工作，另拆任务）。
-  - 验证：`npm --prefix web run test -- --run tests/unit/SystemHealthRoute.spec.ts tests/unit/RuntimeRecoveryStatus.spec.ts`；`npm --prefix web run type-check`。
+  - 文件：`web/src/runtime-status/`、`web/tests/unit/runtimeStatusUi.spec.ts`、`web/tests/unit/runtimeStatusStalePresentation.spec.ts`、`web/tests/unit/runtimeStatusRouteRead.spec.ts`、`web/tests/e2e/runtime-status-sqlite.spec.ts`、`web/tests/e2e/runtime-status-old-server.spec.ts`、`tests/browser/explicit_server.py`。
+  - 验证：`npm --prefix web run test -- --run tests/unit/runtimeStatusUi.spec.ts tests/unit/runtimeStatusStalePresentation.spec.ts tests/unit/runtimeStatusRouteRead.spec.ts` / `npm --prefix web run type-check` / `npm --prefix web run test:e2e -- runtime-status-sqlite.spec.ts runtime-status-old-server.spec.ts --project=chrome`。
 
 ### 检查点 C4 — 端到端状态契约
 
-- [ ] A06、A11、A12 及类型/契约门禁通过；`xhigh` 评审检查旧缓存客户端、显式计划读取及真实进展与连接活动的区别。
+- [x] A06、A11、A12 及类型/契约门禁在批准的第四步离线范围通过；`xhigh` 源码、真实 Chrome 及双语证据评审批准。冻结 HEAD `0f1df66` 的最终全量回归通过。[最终证据](../docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)。不关闭 RR020/C5 或启用生产默认路径。
 
 ## 集成与交付
 
