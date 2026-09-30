@@ -33,7 +33,12 @@ from trade_plan_monitor.live_profiles import (
     load_index_certification,
     load_stock_certification,
 )
-from trade_plan_monitor.market_data.aggregation import FiveMinuteBar, five_minute_bucket_end
+from trade_plan_monitor.market_data.aggregation import (
+    FiveMinuteBar,
+    aggregate_five_minute_bar,
+    expected_five_minute_ends,
+    five_minute_bucket_end,
+)
 from trade_plan_monitor.market_data.models import MinuteBar, TradingDay
 from trade_plan_monitor.market_data.sdk_call_boundary import (
     PermissionEndpointResolver,
@@ -176,6 +181,7 @@ class _StockRecoveryDemand:
     missing_ends: tuple[datetime, ...]
     permission_blocked: bool
     permission_epoch: int
+    missing_aggregates: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -863,7 +869,7 @@ class ProductionMonitorPipeline:
                     reason, recovery, proof = "CLOSE_PENDING", True, None
                 elif demand is not None and demand.permission_blocked:
                     reason, blocked, proof = "PERMISSION_DENIED", True, None
-                elif demand is not None and demand.missing_ends:
+                elif demand is not None and (demand.missing_ends or demand.missing_aggregates):
                     reason, recovery, proof = "COVERAGE_INCOMPLETE", True, None
                 scopes.append(PlanReadAuthority(symbol=row.symbol,
                     plan_version_id=row.plan_version_id, plan_hash=version.plan_hash,
@@ -3370,6 +3376,7 @@ class ProductionMonitorPipeline:
                     epoch += 1
                 capture = None
                 missing = ()
+                missing_aggregates = False
                 if target.completed_minute_end is not None:
                     client = self.provider._client
                     capture = RecoveryCapture(
@@ -3386,12 +3393,24 @@ class ProductionMonitorPipeline:
                         persisted_ends=self._recovery_covered_ends(work, capture),
                         cutoff=target.completed_minute_end,
                     ).missing_ends
+                    existing_buckets = {
+                        bar.bar_end for bar in work.history.list_five_minute(
+                            record.symbol, start=capture.required_ends[0],
+                            end=capture.required_ends[-1], formula_version="ta-v1",
+                        )
+                    }
+                    missing_aggregates = any(
+                        end == five_minute_bucket_end(end) and end not in existing_buckets
+                        for end in capture.required_ends
+                    )
                 revision = sha256(repr((
                     identity, target.trade_date, target.completed_minute_end, epoch,
-                    tuple(id(item) for item in binding[:4]), binding[4:],
+                    tuple(id(item) for item in binding[:4]), binding[4:], missing_aggregates,
                 )).encode("utf-8")).hexdigest()
                 requirement = RecoveryRequirement(key, revision)
-                desired[key] = _StockRecoveryDemand(requirement, capture, missing, blocked, epoch)
+                desired[key] = _StockRecoveryDemand(
+                    requirement, capture, missing, blocked, epoch, missing_aggregates,
+                )
                 requirements.append(
                     previous[key].requirement if blocked and key in previous else requirement
                 )
@@ -3425,7 +3444,7 @@ class ProductionMonitorPipeline:
                 result = RecoveryStepResult.blocked()
             elif demand.capture is None:
                 result = RecoveryStepResult.retry(now + MAINTENANCE_INTERVAL)
-            elif not demand.missing_ends:
+            elif not demand.missing_ends and not demand.missing_aggregates:
                 result = RecoveryStepResult.ready()
             else:
                 continue
@@ -3783,10 +3802,12 @@ class ProductionMonitorPipeline:
             )
             missing = frozenset(coverage.missing_ends)
             selected = tuple(row for row in selected if row.bar_end in missing)
-            if not selected:
+            if selected:
+                # Both minute and latest_quote statements are flushed by this repository.
+                work.history.upsert_minutes(selected)
+            aggregates_written = self._materialize_recovered_buckets(work, capture)
+            if not selected and not aggregates_written:
                 return
-            # Both minute and latest_quote statements are already flushed by this repository.
-            work.history.upsert_minutes(selected)
             if not self._decision_commit_current():
                 raise RecoveryAdmissionChangedError("recovery authority changed during staging")
             with self._recovery_authority_lock:
@@ -3794,11 +3815,49 @@ class ProductionMonitorPipeline:
                     raise RecoveryAdmissionChangedError("recovery authority changed before commit")
                 work.commit()
 
+    @staticmethod
+    def _materialize_recovered_buckets(work, capture: RecoveryCapture) -> bool:
+        """Fill missing derived history from exact frozen source minutes, without decisions."""
+        if not capture.required_ends:
+            return False
+        start, cutoff = capture.required_ends[0], capture.required_ends[-1]
+        existing = {
+            bar.bar_end for bar in work.history.list_five_minute(
+                capture.symbol, start=start, end=cutoff, formula_version="ta-v1",
+            )
+        }
+        minutes = {
+            bar.bar_end: bar for bar in work.history.list_minutes(
+                capture.symbol, start=start, end=cutoff,
+            )
+        }
+        required = frozenset(capture.required_ends)
+        written = False
+        for bucket in sorted({five_minute_bucket_end(end) for end in required}):
+            if bucket > cutoff or bucket in existing:
+                continue
+            ends = expected_five_minute_ends(bucket)
+            if not all(end in required and end in minutes for end in ends):
+                continue
+            aggregate = aggregate_five_minute_bar(
+                tuple(minutes[end] for end in ends), bucket_end=bucket, is_open=True,
+            )
+            if aggregate is not None:
+                work.history.upsert_five_minute(**aggregate.model_dump())
+                written = True
+        return written
+
     async def _recover_frozen_scope(
         self, capture: RecoveryCapture, *, physical_start_guard: Callable[[], None] | None = None,
     ):
         cancelled = Event()
+        local_history_checked = False
         self._active_recovery_attempts.add(cancelled)
+
+        def persist_selected(rows: tuple[MinuteBar, ...]) -> None:
+            nonlocal local_history_checked
+            self._persist_recovery_capture(capture, rows, cancelled=cancelled)
+            local_history_checked = True
 
         def physical_start() -> None:
             if not self._recovery_memory_current(capture, cancelled):
@@ -3818,19 +3877,22 @@ class ProductionMonitorPipeline:
                 raise RecoveryAdmissionChangedError("recovery authority changed before attempt")
             if physical_start_guard is not None:
                 physical_start_guard()
-            return await self.recovery.recover_scope(
+            result = await self.recovery.recover_scope(
                 symbol=capture.symbol, target=capture.target, required_ends=capture.required_ends,
                 read_persisted_ends=lambda _symbol, _required: self._read_recovery_coverage(
                     capture,
                 ),
                 now=self._clock.now,
-                persist_selected=lambda rows: self._persist_recovery_capture(
-                    capture, rows, cancelled=cancelled,
-                ),
+                persist_selected=persist_selected,
                 admission_current=lambda: self._recovery_memory_current(capture, cancelled),
                 fetch_current_day=fetch_current_day,
                 cancelled=cancelled,
             )
+            if result.ready and not local_history_checked:
+                # Complete source coverage can predate this invocation. Validate its
+                # missing derived history even when no provider acquisition was needed.
+                self._persist_recovery_capture(capture, (), cancelled=cancelled)
+            return result
         finally:
             cancelled.set()
             self._active_recovery_attempts.discard(cancelled)
