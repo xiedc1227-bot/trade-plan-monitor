@@ -11,6 +11,11 @@ from test_production_semantic_gate import _pipeline, _replace_stock_contract
 from test_recovery_activation_fences import replace_or_reactivate, seed_explicit
 from test_s3_frozen_startup_recovery import _bar
 
+from trade_plan_monitor.market_data.aggregation import (
+    aggregate_five_minute_bar,
+    expected_five_minute_ends,
+    five_minute_bucket_end,
+)
 from trade_plan_monitor.runtime.reconciliation import RecoveryDisposition, RecoveryStepResult
 from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.request_control import TushareOperation
@@ -36,6 +41,21 @@ def test_complete_committed_prefix_is_ready_without_fetch(tmp_path, monkeypatch)
             transaction.history.upsert_minutes(tuple(
                 _bar(capture, end) for end in capture.required_ends
             ))
+            required = frozenset(capture.required_ends)
+            aggregates = []
+            for bucket in sorted({five_minute_bucket_end(end) for end in required}):
+                if bucket > capture.target.completed_minute_end:
+                    continue
+                ends = expected_five_minute_ends(bucket)
+                if not all(end in required for end in ends):
+                    continue
+                aggregate = aggregate_five_minute_bar(
+                    tuple(_bar(capture, end) for end in ends), bucket_end=bucket, is_open=True,
+                )
+                assert aggregate is not None
+                transaction.history.upsert_five_minute(**aggregate.model_dump())
+                aggregates.append(aggregate)
+            assert len(aggregates) == 6
             transaction.commit()
         pipeline._synchronize_stock_recovery()
         snapshot, = pipeline._stock_recovery_schedule.snapshot()

@@ -22,6 +22,11 @@ from test_s3_permission_reservation_process import _business_rows
 from trade_plan_monitor.decision.models import ConditionOutcome, SignalType
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
+from trade_plan_monitor.market_data.aggregation import (
+    aggregate_five_minute_bar,
+    expected_five_minute_ends,
+    five_minute_bucket_end,
+)
 from trade_plan_monitor.market_data.models import TradingDay
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import MarketIndexHealth, MarketIndexIssueCode
@@ -37,7 +42,7 @@ from trade_plan_monitor.state.models import (
     MarketIndexSnapshot,
     SymbolDecisionHead,
 )
-from trade_plan_monitor.state.repositories import ManualEventRiskStatus
+from trade_plan_monitor.state.repositories import ManualEventRiskStatus, MarketHistoryRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.monitor_composition import create_monitor_composition
 
@@ -50,18 +55,50 @@ async def _complete_pending_explicit_prefetch(composition, sdk, database, *, sta
     state = composition._runtime._probe_capabilities.__self__
     pipeline = state._pipeline
     assert pipeline.next_stock_recovery_at() <= sdk.clock.now()
+    capture = pipeline._capture_recovery_scope("300001.SZ")
+    assert capture is not None and capture.required_ends
     before_calls = len(sdk.calls)
-    before = {key: value for key, value in _business_rows(database).items()
-              if key not in {"minute_bar", "latest_quote"}}
+    before = _business_rows(database)
     result = await state.run_deadline(MarketDeadline(
         kind=DeadlineKind.STOCK_RECOVERY, trade_date=sdk.clock.now().date(), due_at=sdk.clock.now(),
     ))
-    assert result.ready and result.symbol == "300001.SZ"
+    assert result.ready and result.symbol == "300001.SZ" and result.target == capture.target
     assert [(name, kwargs["ts_code"]) for name, kwargs in sdk.calls[before_calls:]] == [
         ("rt_min_daily", "300001.SZ"),
     ]
-    assert {key: value for key, value in _business_rows(database).items()
-            if key not in {"minute_bar", "latest_quote"}} == before
+    after = _business_rows(database)
+    source_tables = {"minute_bar", "latest_quote", "five_minute_bar"}
+    assert {key: value for key, value in after.items() if key not in source_tables} == {
+        key: value for key, value in before.items() if key not in source_tables
+    }
+    existing = set(before["five_minute_bar"])
+    assert existing <= set(after["five_minute_bar"])
+    existing_keys = {(row[0], row[1], row[2]) for row in existing}
+    with state._session_factory() as session:
+        minutes = MarketHistoryRepository(session).list_minutes(
+            capture.symbol, start=capture.required_ends[0], end=capture.required_ends[-1],
+        )
+    by_end = {bar.bar_end: bar for bar in minutes}
+    required = frozenset(capture.required_ends)
+    expected = set()
+    for bucket in sorted({five_minute_bucket_end(end) for end in required}):
+        key = (capture.symbol, bucket.isoformat(), "ta-v1")
+        if bucket > capture.target.completed_minute_end or key in existing_keys:
+            continue
+        ends = expected_five_minute_ends(bucket)
+        if not all(end in required and end in by_end for end in ends):
+            continue
+        aggregate = aggregate_five_minute_bar(
+            tuple(by_end[end] for end in ends), bucket_end=bucket, is_open=True,
+        )
+        assert aggregate is not None
+        expected.add((
+            aggregate.symbol, aggregate.bar_end.isoformat(), aggregate.formula_version,
+            aggregate.open_fen, aggregate.high_fen, aggregate.low_fen, aggregate.close_fen,
+            aggregate.volume_shares, str(aggregate.amount_yuan),
+        ))
+    assert expected
+    assert set(after["five_minute_bar"]) - existing == expected
 
 
 @pytest.mark.parametrize("failed_family", ("legacy", "explicit"))
