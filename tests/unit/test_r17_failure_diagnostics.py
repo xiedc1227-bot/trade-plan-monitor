@@ -94,6 +94,7 @@ def test_missing_current_calendar_has_a_distinct_local_category():
     class Pipeline(ProductionMonitorPipeline):
         def __init__(self):
             self.reference_stage = TushareOperation.TRADING_CALENDAR
+            self._status_progress_owner = None
 
         def active_plans(self, trade_date):
             return ()

@@ -1592,6 +1592,7 @@ def test_completed_close_pending_clear_without_health_event_still_requires_commi
         service = object.__new__(RuntimeEvaluationService)
         service._unit_of_work_factory = Work
         service._runtime_generation = uuid4()
+        service._progress_unit = None
         service._commit_admission = lambda: False
         service._require_evaluated_plan_active = lambda *_args, **_kwargs: None
         service._clear_close_pending = lambda *_args, **_kwargs: None
