@@ -70,6 +70,51 @@ class ControlledClock:
         self.changed.set()
 
 
+def _seed_legacy_index_history(work):
+    """Retain unavailable legacy chart history without granting live proof."""
+    from decimal import Decimal
+
+    from trade_plan_monitor.market_index.identity import MarketIndexCode
+    from trade_plan_monitor.market_index.models import (
+        MarketIndexBar,
+        MarketIndexHealth,
+        MarketIndexInterval,
+        MarketIndexSourceKind,
+    )
+    from trade_plan_monitor.market_index.snapshots import build_market_index_snapshot
+
+    cutoff = TARGET - timedelta(minutes=10)
+    for code in ("000001.SH", "399001.SZ", "399006.SZ", "000688.SH"):
+        bar = MarketIndexBar(
+            index_code=MarketIndexCode(code),
+            interval=MarketIndexInterval.FIVE_MINUTE,
+            bar_at=cutoff,
+            open_points=Decimal("1000"),
+            high_points=Decimal("1000"),
+            low_points=Decimal("1000"),
+            close_points=Decimal("1000"),
+            volume=Decimal("1"),
+            amount=Decimal("1"),
+            observed_at=cutoff + timedelta(seconds=2),
+            source_kind=MarketIndexSourceKind.PROVISIONAL,
+            provider_revision=1,
+        )
+        snapshot = build_market_index_snapshot(
+            index_code=bar.index_code,
+            decision_cutoff=cutoff,
+            requests=(),
+            five_minute_bars=(bar,),
+            official_daily_bars=(),
+            content_revision=1,
+            observed_at=bar.observed_at,
+            observed_no_later_than=bar.observed_at,
+        )
+        assert snapshot.health is MarketIndexHealth.BLOCKED
+        assert not snapshot.indicator_facts
+        work.projections.put_market_index_snapshot(snapshot, provider_content_revision=1)
+        work.projections.advance_market_index_head(snapshot, provider_content_revision=1)
+
+
 class MarketSDK(_ExplicitPipelineSDK):
     def __init__(self, clock, *, repeat_probe_tape=False, persistent_risk_tape=False):
         super().__init__(current_volume=59)
@@ -244,6 +289,8 @@ def main():
                         amount_yuan=Decimal("0"),
                     ).model_dump()
                 )
+            if args.monitor_contract_version == 1 and not args.normal_entry:
+                _seed_legacy_index_history(work)
             work.commit()
     engine.dispose()
     evidence = create_stock_certification(
@@ -401,8 +448,8 @@ def main():
         target = datetime.fromisoformat(body["now"])
         while clock.now() < target:
             following = min(clock.now() + timedelta(minutes=1), target)
-            if args.normal_entry and clock.deadlines:
-                # The default owner may select recovery before a market duty.
+            if (args.normal_entry or args.monitor_contract_version == 1) and clock.deadlines:
+                # Both installed and legacy owners can recover before a market duty.
                 # Release each real installed wake instead of jumping over it.
                 installed = datetime.fromisoformat(clock.deadlines[-1])
                 if clock.now() < installed < following:
