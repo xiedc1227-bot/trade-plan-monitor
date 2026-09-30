@@ -1,7 +1,8 @@
 """Isolated R12 browser server: real Web/SQLite/scheduler, fake provider boundaries.
 
 Run with the Playwright explicit-sqlite spec. No active plan, review or inventory
-is seeded. The test-only control route advances only clock/market input facts.
+is seeded at startup. Test controls advance clock/market facts or install a real
+legacy sibling through the existing domain repositories.
 """
 
 from __future__ import annotations
@@ -44,9 +45,13 @@ class ControlledClock:
         self.current = TARGET - timedelta(seconds=45)
         self.changed = asyncio.Event()
         self.deadlines = []
+        self.monotonic_time = 0.0
 
     def now(self):
         return self.current
+
+    def monotonic(self):
+        return self.monotonic_time
 
     async def sleep_until(self, deadline):
         self.deadlines.append(deadline.isoformat())
@@ -58,17 +63,39 @@ class ControlledClock:
     def advance(self, current):
         if current < self.current:
             raise ValueError("test clock cannot go backwards")
+        self.monotonic_time += (current - self.current).total_seconds()
         self.current = current
         self.changed.set()
 
 
 class MarketSDK(_ExplicitPipelineSDK):
-    def __init__(self, clock, *, repeat_probe_tape=False):
+    def __init__(self, clock, *, repeat_probe_tape=False, persistent_risk_tape=False):
         super().__init__(current_volume=59)
         self.clock = clock
         self.repeat_probe_tape = repeat_probe_tape
+        self.persistent_risk_tape = persistent_risk_tape
+        self.minute_cutoff = None
+        self.legacy_sibling_enabled = False
 
     def __getattr__(self, name):
+        if self.legacy_sibling_enabled and name in {"stk_limit", "daily"}:
+            from tests.integration.test_live_pipeline_acceptance import OfflineSDK
+
+            reference_sdk = OfflineSDK(self.clock, ("600000.SH",))
+
+            def reference_request(**kwargs):
+                self.calls.append(name)
+                return getattr(reference_sdk, name)(**kwargs)
+
+            return reference_request
+        if self.legacy_sibling_enabled and name == "stk_mins":
+            def missing_history(**kwargs):
+                self.calls.append(name)
+                return pd.DataFrame(columns=(
+                    "ts_code", "trade_time", "open", "high", "low", "close", "vol", "amount",
+                ))
+
+            return missing_history
         if name not in {"rt_min", "rt_min_daily"}:
             return super().__getattr__(name)
 
@@ -78,17 +105,23 @@ class MarketSDK(_ExplicitPipelineSDK):
             # The oldest 299 rolls out when the next 299 rolls in: mean stays 200.
             volumes = [100, 299, 175, 175, 175, 176, 299, 300, 100, 100, 100]
             prices = [990] * 8 + [1080, 949, 990]
+            if self.persistent_risk_tape:
+                prices[10:] = [949]
             if self.repeat_probe_tape:
                 # Separate synthetic restart probe: a later qualifying BUY bar.
                 volumes.append(301)
                 prices.append(990)
             start = TARGET.replace(hour=9, minute=30)
             end = self.clock.now().replace(second=0, microsecond=0)
+            if self.minute_cutoff is not None:
+                end = min(end, self.minute_cutoff)
             rows = []
             for offset in range(int((end - start).total_seconds() // 60)):
                 bucket, minute = divmod(offset, 5)
                 volume = volumes[bucket] if bucket < len(volumes) else 100
-                price = prices[bucket] if bucket < len(prices) else 990
+                price = prices[bucket] if bucket < len(prices) else (
+                    949 if self.persistent_risk_tape else 990
+                )
                 value = f"{price / 100:.2f}"
                 rows.append(
                     {
@@ -114,6 +147,8 @@ def main():
     parser.add_argument("--resume-root", type=Path)
     parser.add_argument("--initial-now", type=datetime.fromisoformat)
     parser.add_argument("--repeat-probe-tape", action="store_true")
+    parser.add_argument("--persistent-risk-tape", action="store_true")
+    parser.add_argument("--monitor-contract-version", type=int, choices=(1, 2), default=1)
     args = parser.parse_args()
     assert args.port != 8765
     root = (
@@ -139,7 +174,12 @@ def main():
     if args.initial_now:
         assert args.initial_now.tzinfo is not None
         clock.current = args.initial_now
-    sdk = MarketSDK(clock, repeat_probe_tape=args.repeat_probe_tape)
+    if args.persistent_risk_tape:
+        assert args.monitor_contract_version == 2
+    sdk = MarketSDK(
+        clock, repeat_probe_tape=args.repeat_probe_tape,
+        persistent_risk_tape=args.persistent_risk_tape,
+    )
     engine = create_sqlite_engine(database)
     upgrade_database(engine)
     # Seed calendar and prior completed bars only; all plans/reviews/inventory
@@ -250,6 +290,23 @@ def main():
 
     production.create_tushare_client = lambda _config: sdk
     monitoring.SystemClock = lambda: clock
+    stall_requested = False
+    stall_entered, stall_release = asyncio.Event(), asyncio.Event()
+    original_deadline = monitoring._ProductionRuntimeState.run_deadline
+
+    async def controlled_deadline(state, deadline):
+        nonlocal stall_requested
+        if stall_requested:
+            stall_requested = False
+            owner = state._progress_owner()
+            token = owner.begin_progress_step(timeout_seconds=15)
+            stall_entered.set()
+            await stall_release.wait()
+            owner.complete_progress_step(token, next_wake_at=clock.now() + timedelta(seconds=30))
+        return await original_deadline(state, deadline)
+
+    if args.monitor_contract_version == 2:
+        monitoring._ProductionRuntimeState.run_deadline = controlled_deadline
     ai_service._now = clock.now
     plans = PersistentPlanWebLifecycle(database_path=database, clock=clock.now)
     ai = ConfiguredAIWebLifecycle(
@@ -259,13 +316,25 @@ def main():
             transport=httpx.MockTransport(fake_ai), trust_env=False
         ),
     )
-    composition = monitoring.create_monitor_composition(config_path=config, database_path=database)
+    composition = monitoring.create_monitor_composition(
+        config_path=config, database_path=database,
+        monitor_contract_version=args.monitor_contract_version,
+        progress_monotonic=clock.monotonic,
+    )
+    if args.monitor_contract_version == 2:
+        # Only this offline fixture accelerates observation traffic; the production
+        # default remains 20 seconds and the owner clock is independently controlled.
+        composition.websocket_service._heartbeat_interval_seconds = 0.2
     app = create_app(
         runtime_factory=lambda: composition,
         plan_lifecycle_factory=lambda: plans,
         ai_lifecycle_factory=lambda: ai,
+        read_service=composition.read_service if args.monitor_contract_version == 2 else None,
+        monitor_contract_version=args.monitor_contract_version,
         bind_port=args.port,
-        static_directory=Path(__file__).resolve().parents[2] / "web/dist",
+        static_directory=Path(__file__).resolve().parents[2] / (
+            "web/dist-runtime-status" if args.monitor_contract_version == 2 else "web/dist"
+        ),
     )
     server = uvicorn.Server(
         uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning")
@@ -273,6 +342,7 @@ def main():
 
     @app.post("/_test/shutdown")
     async def shutdown():
+        stall_release.set()
         server.should_exit = True
         return {"stopping": True}
 
@@ -306,6 +376,68 @@ def main():
             else:
                 raise RuntimeError("scheduler did not complete the released deadline")
         return {"now": clock.now().isoformat()}
+
+    @app.post("/_test/stall")
+    async def stall():
+        nonlocal stall_requested
+        if args.monitor_contract_version != 2 or stall_entered.is_set():
+            raise RuntimeError("isolated owner stall is unavailable")
+        stall_requested = True
+        owner = composition._runtime
+        due = owner._scheduler.next_deadline(after=owner._last_deadline_at)
+        if due is None:
+            raise RuntimeError("isolated owner has no scheduled unit")
+        clock.advance(max(clock.now(), due.due_at))
+        await asyncio.wait_for(stall_entered.wait(), 10)
+        clock.advance(clock.now() + timedelta(seconds=16))
+        return {"state": "STALLED", "now": clock.now().isoformat()}
+
+    @app.post("/_test/release")
+    async def release():
+        stall_release.set()
+        return {"released": True}
+
+    @app.post("/_test/legacy-sibling")
+    async def legacy_sibling():
+        if args.monitor_contract_version != 2:
+            raise RuntimeError("isolated mixed-family control is unavailable")
+        from trade_plan_monitor.domain.plan_codec import load_plan_yaml
+        from trade_plan_monitor.domain.plan_validation import (
+            ALL_MARKET_EVIDENCE,
+            validate_trade_plan,
+        )
+
+        source = (
+            Path(__file__).resolve().parents[2]
+            / "config/plans/003043.SZ.sample.yaml"
+        ).read_text(encoding="utf-8")
+        source = source.replace("003043.SZ", "600000.SH").replace("SZSE", "SSE")
+        source = source.replace("huaya-smart", "isolated-legacy-sibling")
+        plan = load_plan_yaml(source)
+        with composition._legacy_maintenance_factory() as work:
+            work.plans.save_draft(plan, source_text=source)
+            work.plans.activate(
+                plan,
+                expected_revision=0,
+                validation=validate_trade_plan(
+                    plan, available_market_evidence=ALL_MARKET_EVIDENCE,
+                ),
+            )
+            work.commit()
+        sdk.legacy_sibling_enabled = True
+        return {"symbol": plan.symbol, "planFamily": "LEGACY_LOW_BUY"}
+
+    @app.post("/_test/hold-minute-cutoff")
+    async def hold_minute_cutoff():
+        if args.monitor_contract_version != 2:
+            raise RuntimeError("isolated minute cutoff control is unavailable")
+        sdk.minute_cutoff = clock.now().replace(second=0, microsecond=0)
+        return {"cutoff": sdk.minute_cutoff.isoformat()}
+
+    @app.post("/_test/release-minute-cutoff")
+    async def release_minute_cutoff():
+        sdk.minute_cutoff = None
+        return {"released": True}
 
     spa = next(route for route in app.router.routes if getattr(route, "name", None) == "local-spa")
     app.router.routes.remove(spa)

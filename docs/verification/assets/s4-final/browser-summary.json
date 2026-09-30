@@ -1,0 +1,1960 @@
+{
+  "verification": {
+    "project": "chrome",
+    "result": "2 passed",
+    "duration": "2.6m",
+    "productionSourceCommit": "2775f2bad6b0eb5ce38c36b81518db4a7dcfb754",
+    "testAlignmentHead": "0f1df66d20cdc52bc542cd69052b2995c1bfe614",
+    "frontendCommit": "3589186",
+    "frontendSourceManifestSha256": "CB5CDF4BE50229F74745FC8820112BC390F8A11D15986BFA04C9D2C13C056186",
+    "v2SpecSha256": "F0AC160D19D5F3E8C0092B7E7994A57B25E2AA6A6AA8CB6E9B3930291DE39006",
+    "oldServerSpecSha256": "E9BE69DE8D899D41847C9C6BD86C7E194DE9567403021EA4B3FB720AD494DC03",
+    "layoutAssertionWidths": [
+      320,
+      768,
+      1024,
+      1440
+    ],
+    "axeAssertionScope": "dashboard",
+    "axeAssertionTags": [
+      "wcag2a",
+      "wcag2aa",
+      "wcag21a",
+      "wcag21aa"
+    ],
+    "assertedAxeViolations": 0
+  },
+  "rawEvidence": {
+    "v2": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-gh8cpl9f\\s4-v2-browser-evidence.json",
+    "oldServer": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-oxrblpk_\\s4-v2-old-server-evidence.json"
+  },
+  "inventory": {
+    "symbol": "003043.SZ",
+    "status": "KNOWN",
+    "asOfTradeDate": "2026-09-14",
+    "cutoff": "2026-09-14T10:04:15+08:00",
+    "inventoryRevision": 1,
+    "totalQuantity": 100,
+    "sellableQuantity": 100,
+    "confirmationId": "b0634222-00aa-4a2d-a64b-be7e8f872960",
+    "confirmedAt": "2026-09-14T10:04:15+08:00",
+    "includedLotIds": [],
+    "openingBalances": [
+      {
+        "openingBalanceId": "fa8b2ab7-3f3d-46e6-b76a-73b56de77aac",
+        "symbol": "003043.SZ",
+        "originalQuantity": 100,
+        "remainingQuantity": 100,
+        "sellableFrom": "2026-09-14",
+        "revision": 0
+      }
+    ],
+    "missingReasons": []
+  },
+  "checkpoints": [
+    {
+      "checkpoint": "initial",
+      "observedAt": "2026-09-14T10:04:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 0,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:04:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:04:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:04:45.000000+08:00",
+        "nextRetryAt": null
+      },
+      "counts": {
+        "actionable": 0,
+        "lowZoneWatch": 0,
+        "blocked": 0,
+        "risk": 0,
+        "stale": 0,
+        "normal": 0
+      },
+      "symbols": []
+    },
+    {
+      "checkpoint": "10:05",
+      "observedAt": "2026-09-14T10:05:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 7,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:05:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:05:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:05:45.000000+08:00",
+        "nextRetryAt": null
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CACHED",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "WAITING",
+            "reasonCode": "AWAITING_FIRST_EVALUATION",
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:05:00.000000+08:00"
+            },
+            "dataCutoff": null,
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 2
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": null
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": null
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": null
+            }
+          ],
+          "resultHash": "eb0099c1d9a3121a67d2862a8ddea4b9e573cb85a677f5757bff5b4bb180de5b",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:05:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:05:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "10:10",
+      "observedAt": "2026-09-14T10:10:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 18,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:10:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:10:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:10:45.000000+08:00",
+        "nextRetryAt": null
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:10:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:10:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 4,
+              "completedCount": 4
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": "2026-09-14T10:11:30.000000+08:00",
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "NO_CURRENT_SIGNAL",
+              "actionableUntil": null,
+              "sourceAlert": null
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": false,
+              "reasonCode": "NO_CURRENT_SIGNAL",
+              "actionableUntil": null,
+              "sourceAlert": null
+            }
+          ],
+          "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:10:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:10:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "10:15",
+      "observedAt": "2026-09-14T10:15:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 29,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:15:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:15:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:15:45.000000+08:00",
+        "nextRetryAt": null
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:15:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:15:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 4,
+              "completedCount": 4
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": "2026-09-14T10:16:30.000000+08:00",
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": false,
+              "reasonCode": "NO_CURRENT_SIGNAL",
+              "actionableUntil": null,
+              "sourceAlert": null
+            }
+          ],
+          "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:15:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:15:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "10:20",
+      "observedAt": "2026-09-14T10:20:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 40,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:20:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:20:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:20:45.000000+08:00",
+        "nextRetryAt": null
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:20:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:20:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:20:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:20:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "10:25",
+      "observedAt": "2026-09-14T10:25:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 50,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:25:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:25:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:25:45.000000+08:00",
+        "nextRetryAt": null
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:25:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:25:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "ecabd6cf9ae2593a4fc8f0e1ab7981367b559ef1225e35ce32cf30b6d158d0d3",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:25:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:25:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "mixed",
+      "observedAt": "2026-09-14T10:30:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 66,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:30:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:30:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:30:45.000000+08:00",
+        "nextRetryAt": "2026-09-14T10:30:45.000000+08:00"
+      },
+      "counts": {
+        "actionable": 1,
+        "lowZoneWatch": 0,
+        "blocked": 0,
+        "risk": 1,
+        "stale": 1,
+        "normal": 0
+      },
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:30:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:30:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "e3e99c278376ffcd758f1fc52ee3661fb279e9dbc35913410b9054fa844eddb8",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:30:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:30:15.000000+08:00"
+          }
+        },
+        {
+          "symbol": "600000.SH",
+          "planFamily": "LEGACY_LOW_BUY",
+          "planVersionId": "41b2c912-31f5-42f8-90cf-cf5f4b07988e",
+          "planHash": "e925f681b06c73b73d5dbf17244ee8fdef8712758f3e00638f7731d7d3c5b68e",
+          "activationRevision": 1,
+          "availability": "UNAVAILABLE",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:600000.SH",
+            "status": "RECOVERING",
+            "reasonCode": "COVERAGE_INCOMPLETE",
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:30:00.000000+08:00"
+            },
+            "dataCutoff": null,
+            "nextRetryAt": "2026-09-14T10:30:45.000000+08:00",
+            "progress": {
+              "requiredCount": null,
+              "completedCount": null
+            },
+            "kind": "PLAN",
+            "symbol": "600000.SH",
+            "planFamily": "LEGACY_LOW_BUY",
+            "planVersionId": "41b2c912-31f5-42f8-90cf-cf5f4b07988e",
+            "planHash": "e925f681b06c73b73d5dbf17244ee8fdef8712758f3e00638f7731d7d3c5b68e",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": null,
+          "resultHash": null,
+          "explicitRuntime": null
+        }
+      ]
+    },
+    {
+      "checkpoint": "cached",
+      "observedAt": "2026-09-14T10:35:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 81,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:35:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:35:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:35:45.000000+08:00",
+        "nextRetryAt": "2026-09-14T10:35:45.000000+08:00"
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CACHED",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "RECOVERING",
+            "reasonCode": "COVERAGE_INCOMPLETE",
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:35:00.000000+08:00"
+            },
+            "dataCutoff": null,
+            "nextRetryAt": "2026-09-14T10:35:45.000000+08:00",
+            "progress": {
+              "requiredCount": null,
+              "completedCount": null
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "e3e99c278376ffcd758f1fc52ee3661fb279e9dbc35913410b9054fa844eddb8",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:30:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:30:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "afterCutoffRelease",
+      "observedAt": "2026-09-14T10:36:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 83,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:36:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:36:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:36:45.000000+08:00",
+        "nextRetryAt": "2026-09-14T10:36:45.000000+08:00"
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CACHED",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "WAITING",
+            "reasonCode": "AWAITING_FIRST_EVALUATION",
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:35:00.000000+08:00"
+            },
+            "dataCutoff": null,
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": null,
+              "completedCount": null
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "e3e99c278376ffcd758f1fc52ee3661fb279e9dbc35913410b9054fa844eddb8",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:30:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:30:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "recoveredAfterFiveMinuteDeadline",
+      "observedAt": "2026-09-14T10:40:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 96,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:40:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:40:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:40:45.000000+08:00",
+        "nextRetryAt": "2026-09-14T10:40:45.000000+08:00"
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:40:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:40:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "4a8e72c84ab73de759488a876b10ea2610638957c77858f1d7b30b885fdfed13",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:40:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:40:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "stalled",
+      "observedAt": "2026-09-14T10:41:01.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 96,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "BLOCKED",
+        "reasonCode": "COORDINATOR_STALLED",
+        "coordinator": {
+          "state": "STALLED",
+          "progressDueAt": "2026-09-14T10:41:00.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:40:45.000000+08:00",
+        "nextWakeAt": null,
+        "nextRetryAt": "2026-09-14T10:40:45.000000+08:00"
+      },
+      "counts": {
+        "actionable": 0,
+        "lowZoneWatch": 0,
+        "blocked": 0,
+        "risk": 0,
+        "stale": 1,
+        "normal": 0
+      },
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CACHED",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:40:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:40:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "4a8e72c84ab73de759488a876b10ea2610638957c77858f1d7b30b885fdfed13",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:40:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:40:15.000000+08:00"
+          }
+        },
+        {
+          "symbol": "600000.SH",
+          "planFamily": "LEGACY_LOW_BUY",
+          "planVersionId": "41b2c912-31f5-42f8-90cf-cf5f4b07988e",
+          "planHash": "e925f681b06c73b73d5dbf17244ee8fdef8712758f3e00638f7731d7d3c5b68e",
+          "activationRevision": 1,
+          "availability": "UNAVAILABLE",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:600000.SH",
+            "status": "RECOVERING",
+            "reasonCode": "COVERAGE_INCOMPLETE",
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:40:00.000000+08:00"
+            },
+            "dataCutoff": null,
+            "nextRetryAt": "2026-09-14T10:40:45.000000+08:00",
+            "progress": {
+              "requiredCount": null,
+              "completedCount": null
+            },
+            "kind": "PLAN",
+            "symbol": "600000.SH",
+            "planFamily": "LEGACY_LOW_BUY",
+            "planVersionId": "41b2c912-31f5-42f8-90cf-cf5f4b07988e",
+            "planHash": "e925f681b06c73b73d5dbf17244ee8fdef8712758f3e00638f7731d7d3c5b68e",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": null,
+          "resultHash": null,
+          "explicitRuntime": null
+        }
+      ]
+    },
+    {
+      "checkpoint": "later",
+      "observedAt": "2026-09-14T10:41:01.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 96,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "BLOCKED",
+        "reasonCode": "COORDINATOR_STALLED",
+        "coordinator": {
+          "state": "STALLED",
+          "progressDueAt": "2026-09-14T10:41:00.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:40:45.000000+08:00",
+        "nextWakeAt": null,
+        "nextRetryAt": "2026-09-14T10:40:45.000000+08:00"
+      },
+      "counts": {
+        "actionable": 0,
+        "lowZoneWatch": 0,
+        "blocked": 0,
+        "risk": 0,
+        "stale": 1,
+        "normal": 0
+      },
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CACHED",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:40:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:40:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "4a8e72c84ab73de759488a876b10ea2610638957c77858f1d7b30b885fdfed13",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:40:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:40:15.000000+08:00"
+          }
+        },
+        {
+          "symbol": "600000.SH",
+          "planFamily": "LEGACY_LOW_BUY",
+          "planVersionId": "41b2c912-31f5-42f8-90cf-cf5f4b07988e",
+          "planHash": "e925f681b06c73b73d5dbf17244ee8fdef8712758f3e00638f7731d7d3c5b68e",
+          "activationRevision": 1,
+          "availability": "UNAVAILABLE",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:600000.SH",
+            "status": "RECOVERING",
+            "reasonCode": "COVERAGE_INCOMPLETE",
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:40:00.000000+08:00"
+            },
+            "dataCutoff": null,
+            "nextRetryAt": "2026-09-14T10:40:45.000000+08:00",
+            "progress": {
+              "requiredCount": null,
+              "completedCount": null
+            },
+            "kind": "PLAN",
+            "symbol": "600000.SH",
+            "planFamily": "LEGACY_LOW_BUY",
+            "planVersionId": "41b2c912-31f5-42f8-90cf-cf5f4b07988e",
+            "planHash": "e925f681b06c73b73d5dbf17244ee8fdef8712758f3e00638f7731d7d3c5b68e",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": null,
+          "resultHash": null,
+          "explicitRuntime": null
+        }
+      ]
+    },
+    {
+      "checkpoint": "afterMaintenanceRelease",
+      "observedAt": "2026-09-14T10:41:01.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 96,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:41:12.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:41:01.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:41:12.000000+08:00",
+        "nextRetryAt": "2026-09-14T10:41:12.000001+08:00"
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CACHED",
+          "currentActionable": false,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "RECOVERING",
+            "reasonCode": "COVERAGE_INCOMPLETE",
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:40:00.000000+08:00"
+            },
+            "dataCutoff": null,
+            "nextRetryAt": "2026-09-14T10:41:12.000001+08:00",
+            "progress": {
+              "requiredCount": null,
+              "completedCount": null
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": true
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": false,
+              "reasonCode": "CACHED_RESULT",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "4a8e72c84ab73de759488a876b10ea2610638957c77858f1d7b30b885fdfed13",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:40:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:40:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "afterFirstResumedMinute",
+      "observedAt": "2026-09-14T10:41:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 98,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:41:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:41:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:41:45.000000+08:00",
+        "nextRetryAt": "2026-09-14T10:41:45.000000+08:00"
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:40:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:40:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "4a8e72c84ab73de759488a876b10ea2610638957c77858f1d7b30b885fdfed13",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:40:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:40:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "finalCurrent",
+      "observedAt": "2026-09-14T10:45:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 111,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:45:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:45:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:45:45.000000+08:00",
+        "nextRetryAt": "2026-09-14T10:45:45.000000+08:00"
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:45:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:45:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "3976f1dd9eb7eff9b7dd1e18fde1de35f6debc7b956f355ec70931240c8cc841",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:45:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:45:15.000000+08:00"
+          }
+        }
+      ]
+    },
+    {
+      "checkpoint": "finalRuntime",
+      "observedAt": "2026-09-14T10:45:15.000000+08:00",
+      "runtimeGeneration": "8a77414b-bff2-416f-8a03-9039cc70b2d8",
+      "sequence": 111,
+      "runtimeStatus": {
+        "lifecycle": "RUNNING",
+        "mode": "DEGRADED",
+        "reasonCode": "SCOPED_DEPENDENCY_FAILURE",
+        "coordinator": {
+          "state": "SCHEDULED",
+          "progressDueAt": "2026-09-14T10:45:45.000000+08:00"
+        },
+        "lastProgressAt": "2026-09-14T10:45:15.000000+08:00",
+        "nextWakeAt": "2026-09-14T10:45:45.000000+08:00",
+        "nextRetryAt": "2026-09-14T10:45:45.000000+08:00"
+      },
+      "counts": null,
+      "symbols": [
+        {
+          "symbol": "003043.SZ",
+          "planFamily": "EXPLICIT_RULES",
+          "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+          "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+          "activationRevision": 1,
+          "availability": "CURRENT",
+          "currentActionable": true,
+          "scope": {
+            "scopeKey": "plan:003043.SZ",
+            "status": "READY",
+            "reasonCode": null,
+            "requiredTarget": {
+              "kind": "INTRADAY",
+              "targetEnd": "2026-09-14T10:45:00.000000+08:00"
+            },
+            "dataCutoff": "2026-09-14T10:45:00.000000+08:00",
+            "nextRetryAt": null,
+            "progress": {
+              "requiredCount": 3,
+              "completedCount": 3
+            },
+            "kind": "PLAN",
+            "symbol": "003043.SZ",
+            "planFamily": "EXPLICIT_RULES",
+            "planVersionId": "4915f8e5-2b83-4e83-87c4-7f72ade6fb17",
+            "planHash": "cbb71570023277674140a16ea0ea772827a4371a08f7e7f8b4b2706fc30d2e06",
+            "activationRevision": 1,
+            "readOnly": false
+          },
+          "ruleEligibility": [
+            {
+              "ruleId": "buy-100",
+              "action": "BUY",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "e5928068-29c4-5554-9469-80e72628afdf",
+                "resultHash": "dd42449e7c5586bbed1f5b95ea950677ca0e26824b456d0f9492a2ebdaddbd99",
+                "evaluatedAt": "2026-09-14T10:10:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:10:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "sell-100",
+              "action": "SELL",
+              "currentActionable": false,
+              "reasonCode": "INTRADAY_EXPIRED",
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "00f68439-e072-5f51-8cd8-9559f9091e63",
+                "resultHash": "bdb3e6aa529e1711592aa2c2f8b9991cd557f4ecc5c0020417dcfd5251f76f26",
+                "evaluatedAt": "2026-09-14T10:15:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:15:00.000000+08:00"
+              }
+            },
+            {
+              "ruleId": "risk-950",
+              "action": "RISK_ALERT",
+              "currentActionable": true,
+              "reasonCode": null,
+              "actionableUntil": null,
+              "sourceAlert": {
+                "eventId": "d0277a64-c054-57d7-9dc3-7d79c89a4190",
+                "resultHash": "4186b620f5fe44808cb3d7e32001f602bc97e14dc0a5c6d2ad4fcb7965e08a32",
+                "evaluatedAt": "2026-09-14T10:20:15.000000+08:00",
+                "dataCutoff": "2026-09-14T10:20:00.000000+08:00"
+              }
+            }
+          ],
+          "resultHash": "3976f1dd9eb7eff9b7dd1e18fde1de35f6debc7b956f355ec70931240c8cc841",
+          "explicitRuntime": {
+            "status": "CURRENT",
+            "targetBucketEnd": "2026-09-14T10:45:00.000000+08:00",
+            "evaluatedAt": "2026-09-14T10:45:15.000000+08:00"
+          }
+        }
+      ]
+    }
+  ],
+  "rawBrowserErrors": {
+    "consoleErrors": [],
+    "consoleObservations": [],
+    "failedResponses": [],
+    "diagnosticErrors": [],
+    "pageErrors": [],
+    "external": []
+  },
+  "browserErrorClassification": {
+    "expectedResource503": 0,
+    "unexpectedConsole": []
+  },
+  "sockets": [
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=0&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=0&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=1&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=7&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=8&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=9&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=10&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=10&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=11&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=18&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=19&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=20&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=21&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=22&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=29&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=30&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=31&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=32&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=33&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=40&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=41&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=42&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=43&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=44&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=50&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=51&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=53&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=55&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=57&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=59&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=64&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=66&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=66&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=66&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=66&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=68&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=70&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=72&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=74&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=79&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=81&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=83&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=85&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=87&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=89&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=94&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=96&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=96&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=96&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=98&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=100&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=102&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=104&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=109&monitorContractVersion=2",
+    "ws://127.0.0.1:54132/ws/v1/monitor?after=111&monitorContractVersion=2"
+  ],
+  "finalIsolation": {
+    "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-gh8cpl9f",
+    "pid": 75156,
+    "resumed": false,
+    "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-gh8cpl9f\\monitor.sqlite3",
+    "config": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-gh8cpl9f\\config\\app.yaml",
+    "provider": "IN_PROCESS_FAKE",
+    "now": "2026-09-14T10:45:15+08:00",
+    "sdkCalls": [
+      "trade_cal",
+      "trade_cal",
+      "trade_cal",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "trade_cal",
+      "trade_cal",
+      "stk_limit",
+      "daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily",
+      "rt_min_daily",
+      "rt_min",
+      "rt_min_daily"
+    ],
+    "aiRequests": [
+      {
+        "path": "/chat/completions",
+        "model": "isolated-literal-v3"
+      }
+    ],
+    "deadlines": [
+      "2026-09-14T10:04:45+08:00",
+      "2026-09-14T10:05:45+08:00",
+      "2026-09-14T10:06:45+08:00",
+      "2026-09-14T10:07:45+08:00",
+      "2026-09-14T10:08:45+08:00",
+      "2026-09-14T10:09:45+08:00",
+      "2026-09-14T10:10:45+08:00",
+      "2026-09-14T10:11:45+08:00",
+      "2026-09-14T10:12:45+08:00",
+      "2026-09-14T10:13:45+08:00",
+      "2026-09-14T10:14:45+08:00",
+      "2026-09-14T10:15:45+08:00",
+      "2026-09-14T10:16:45+08:00",
+      "2026-09-14T10:17:45+08:00",
+      "2026-09-14T10:18:45+08:00",
+      "2026-09-14T10:19:45+08:00",
+      "2026-09-14T10:20:45+08:00",
+      "2026-09-14T10:21:45+08:00",
+      "2026-09-14T10:22:45+08:00",
+      "2026-09-14T10:23:45+08:00",
+      "2026-09-14T10:24:45+08:00",
+      "2026-09-14T10:25:45+08:00",
+      "2026-09-14T10:26:45+08:00",
+      "2026-09-14T10:27:45+08:00",
+      "2026-09-14T10:28:45+08:00",
+      "2026-09-14T10:29:45+08:00",
+      "2026-09-14T10:30:45+08:00",
+      "2026-09-14T10:31:45+08:00",
+      "2026-09-14T10:32:45+08:00",
+      "2026-09-14T10:33:45+08:00",
+      "2026-09-14T10:34:45+08:00",
+      "2026-09-14T10:35:45+08:00",
+      "2026-09-14T10:36:45+08:00",
+      "2026-09-14T10:37:45+08:00",
+      "2026-09-14T10:38:45+08:00",
+      "2026-09-14T10:39:45+08:00",
+      "2026-09-14T10:40:45+08:00",
+      "2026-09-14T10:41:12+08:00",
+      "2026-09-14T10:41:45+08:00",
+      "2026-09-14T10:42:45+08:00",
+      "2026-09-14T10:43:45+08:00",
+      "2026-09-14T10:44:45+08:00",
+      "2026-09-14T10:45:45+08:00"
+    ]
+  },
+  "oldServer": {
+    "isolation": {
+      "root": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-oxrblpk_",
+      "pid": 35468,
+      "resumed": false,
+      "database": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-oxrblpk_\\monitor.sqlite3",
+      "config": "C:\\Users\\xiedc\\AppData\\Local\\Temp\\tpm-r12-browser-oxrblpk_\\config\\app.yaml",
+      "provider": "IN_PROCESS_FAKE",
+      "now": "2026-09-14T10:04:15+08:00",
+      "sdkCalls": [
+        "trade_cal"
+      ],
+      "aiRequests": [],
+      "deadlines": [
+        "2026-09-14T10:05:12+08:00"
+      ]
+    },
+    "origin": "http://127.0.0.1:53558",
+    "upstream": "http://127.0.0.1:53473",
+    "forwarded": [
+      {
+        "method": "GET",
+        "path": "/api/v1/dashboard"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/ai-runtime"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/plan-versions"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/plan-versions/2d5ce8af-c766-49ab-ba8d-a1d5e920be40"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/plan-activation-states/003043.SZ"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/position-inventory"
+      }
+    ],
+    "oldHealthHeaders": {
+      "date": "Wed, 30 Sep 2026 04:36:14 GMT",
+      "server": "uvicorn",
+      "content-length": "1417",
+      "content-type": "application/json",
+      "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'",
+      "x-frame-options": "DENY",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "permissions-policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+      "x-request-id": "05381d6623f445548543531c0cb3d6c6"
+    },
+    "errors": [],
+    "external": []
+  }
+}
