@@ -243,7 +243,7 @@ test("shows the AI workbench before configuration responds and keeps early input
     const loadingStatus = page.locator('.provider-selector [role="status"]');
     await expect(loadingStatus).toContainText("正在读取 AI 配置，可先填写计划原文。");
     const input = page.getByLabel("粘贴中文计划原文");
-    const submit = page.getByRole("button", { name: "提交提取审核", exact: true });
+    const submit = page.getByRole("button", { name: "生成计划草稿", exact: true });
     await expect(input).toBeEnabled();
     await input.fill("配置加载期间填写的计划");
     await expect(submit).toBeDisabled();
@@ -353,7 +353,7 @@ test("requires explicit review, save, and backend-approved activation for an AI 
     "true",
   );
   await page.getByLabel("粘贴中文计划原文").fill("华亚智能交易计划");
-  await page.getByRole("button", { name: "提交提取审核" }).click();
+  await page.getByRole("button", { name: "生成计划草稿" }).click();
   await expect(page.getByText("结构化草稿已生成；仍需完成证据与重大问题审核。")).toBeVisible();
   await expect(page.getByTestId("enter-structured-review")).toBeVisible();
   await expect(page.locator("#ai-review-plan-name")).toHaveCount(0);
@@ -543,7 +543,7 @@ test("runs the configured AI and persisted plan workbench flow in isolated Chrom
 
   const source = "华亚智能：回踩 20.10 至 20.50 分批关注。";
   await page.getByLabel("粘贴中文计划原文").fill(source);
-  await page.getByRole("button", { name: "提交提取审核" }).click();
+  await page.getByRole("button", { name: "生成计划草稿" }).click();
   await expect(
     page.getByText("AI 输出未通过封闭契约校验，未保存为可执行规则。"),
   ).toBeVisible();

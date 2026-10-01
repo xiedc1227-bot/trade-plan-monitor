@@ -85,7 +85,7 @@ test("normal installed entry preserves reminder source through restart and resto
     await before.screenshot({ path: join(root, "normal-overview-no-plans.png"), fullPage: true });
     await before.goto(`${base}/plans`);
     await before.getByLabel("粘贴中文计划原文").fill(literal.sourceText);
-    await before.getByRole("button", { name: "提交提取审核" }).click();
+    await before.getByRole("button", { name: "生成计划草稿" }).click();
     await before.getByRole("button", { name: "保存并进入逐项复核" }).click();
     const labels = ["启用方式", "启用交易日", "成交量历史范围", "买入重复策略", "卖出重复策略", "风险重复策略", "买卖冲突策略", "风险冲突策略"];
     for (const [index, label] of labels.entries()) await before.getByLabel(label, { exact: true }).fill((Object.values(literal.humanTestSupplements) as string[])[index]!);

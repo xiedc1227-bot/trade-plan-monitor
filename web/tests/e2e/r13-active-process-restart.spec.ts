@@ -94,7 +94,7 @@ for (const transition of ['active', 'replace', 'disable', 'expire'] as const) {
       expect((await inventory()).status).toBe('UNKNOWN');
       const before = await open('/plans');
       await before.getByLabel('粘贴中文计划原文').fill(literal.sourceText);
-      await before.getByRole('button', {name: '提交提取审核'}).click();
+      await before.getByRole('button', {name: '生成计划草稿'}).click();
       await before.getByRole('button', {name: '保存并进入逐项复核'}).click();
       const labels = ['启用方式', '启用交易日', '成交量历史范围', '买入重复策略', '卖出重复策略', '风险重复策略', '买卖冲突策略', '风险冲突策略'];
       const values = Object.values(literal.humanTestSupplements) as string[];

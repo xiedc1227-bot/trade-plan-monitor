@@ -50,6 +50,8 @@
 
 ## 迭代与边界
 
+后续按钮文案：将原文编辑器的操作从“提交提取审核”改为“生成计划草稿”，直接说明点击后的结果。同步浏览器定位文字，提取、审核及启用行为保持不变。相关单元检查 37 项、计划浏览器检查 3 项（8.5s）、生产构建及 diff 检查通过。实际本地页面已确认新文案。截图：[清晰的计划生成操作](assets/interface-design/plans-button-copy.jpg)。
+
 后续框体对齐：宽屏工作区通过共享网格行，让监控面板从指数标题下方的指数框体顶部开始。这依据 [MDN subgrid 指南](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Subgrid)，避免文字换行时依赖固定偏移。窄屏保留监控状态优先排列。`interface-design.spec.ts` 两项检查在 4.8s 内通过，覆盖空/活动计划、320/768/1024/1440px、100%/200% 文字、宽屏框体顶部差小于 1px 及 WCAG A/AA 检查。`npm run build` 通过。更新截图：[框体对齐](assets/interface-design/dashboard-aligned.jpg)。
 
 后续指数栏滚动修正：移除不必要的 `overflow-x: auto`，该设置同时使垂直溢出变成 `auto`。四列/两列指数网格无需内部滚动容器，长标签与数值允许换行。新增浏览器回归检查 320px/1440px 下的焦点、持续按压反馈、无垂直滚动容器和正常指数切换。回归断言在原有垂直溢出设置下失败，修复后通过。总览与界面浏览器测试共 7 项在 8.4s 内通过，类型检查与生产构建通过。截图：[无内部滚动的指数栏](assets/interface-design/dashboard-selector-no-scroll.jpg)。

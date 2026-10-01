@@ -62,7 +62,7 @@ test("literal v3 ordinary UI reaches real SQLite and production scheduler", asyn
     });
     await page.goto(`${base}/plans`);
     await page.getByLabel("粘贴中文计划原文").fill(literal.sourceText);
-    await page.getByRole("button", { name: "提交提取审核" }).click();
+    await page.getByRole("button", { name: "生成计划草稿" }).click();
     await page.getByRole("button", { name: "保存并进入逐项复核" }).click();
     await expect(page.getByRole("heading", { name: "当前内容逐项复核" })).toBeVisible();
     const review = page.locator(".explicit-review");

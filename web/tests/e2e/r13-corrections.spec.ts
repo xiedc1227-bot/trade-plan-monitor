@@ -82,7 +82,7 @@ test("R13 substantive ordinary corrections require current review and remain edi
     expect((await inventory()).status).toBe('UNKNOWN');
     await page.goto(`${base}/plans`);
     await page.getByLabel('粘贴中文计划原文').fill(literal.sourceText);
-    await page.getByRole('button', {name: '提交提取审核'}).click();
+    await page.getByRole('button', {name: '生成计划草稿'}).click();
     await page.getByRole('button', {name: '保存并进入逐项复核'}).click();
     for (const [index, label] of ['启用方式', '启用交易日', '成交量历史范围', '买入重复策略', '卖出重复策略', '风险重复策略', '买卖冲突策略', '风险冲突策略'].entries()) {
       await page.getByLabel(label, {exact: true}).fill((Object.values(literal.humanTestSupplements) as string[])[index]!);

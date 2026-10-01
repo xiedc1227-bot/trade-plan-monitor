@@ -70,7 +70,7 @@ for (const { status, diagnosticStatus, queryFailure } of [
     });
     await page.goto(`${baseUrl}/plans`);
     await page.getByLabel("粘贴中文计划原文").fill("离线诊断契约测试：价格低于 60 元买入 100 股。");
-    await page.getByRole("button", { name: "提交提取审核" }).click();
+    await page.getByRole("button", { name: "生成计划草稿" }).click();
     if (queryFailure) {
       await expect(page.getByText(/无法确认 AI 提取状态/)).toBeVisible();
       await page.getByRole("button", { name: "重新查询提取状态", exact: true }).click();

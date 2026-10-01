@@ -103,7 +103,7 @@ function submitSource(): void {
       </p>
       <div class="source-editor__actions">
         <button class="source-editor__submit" type="submit" :disabled="!canSubmit">
-          提交提取审核
+          生成计划草稿
         </button>
         <button
           v-if="busy && cancellable"
