@@ -137,6 +137,7 @@ onBeforeUnmount(() => {
   <div class="backtest-data-view">
     <header class="backtest-data-view__hero">
       <div>
+        <p class="workspace-eyebrow">05 / DATA LIBRARY</p>
         <h1>历史数据管理</h1>
         <p>管理回测数据范围、查看服务端覆盖事实，并以显式授权启动联网同步。</p>
       </div>
@@ -218,15 +219,17 @@ onBeforeUnmount(() => {
   gap: var(--space-6);
   width: min(100%, 90rem);
   margin-inline: auto;
-  padding: var(--space-6);
+  padding: 0;
   color: var(--color-text-mineral);
 }
 
 .backtest-data-view__hero {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
+  padding-block: var(--space-4) var(--space-7);
+  border-block-end: var(--border-technical);
 }
 
 .backtest-data-view__hero h1,
@@ -237,8 +240,8 @@ onBeforeUnmount(() => {
 }
 
 .backtest-data-view__hero h1 {
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 1;
+  font-size: clamp(1.875rem, 3vw, 2.75rem);
+  line-height: 1.3;
 }
 
 .backtest-data-view__hero a,
@@ -248,6 +251,8 @@ onBeforeUnmount(() => {
   color: var(--color-text-mineral);
   background: var(--color-surface-raised);
   border: var(--border-technical);
+  border-radius: var(--radius-control);
+  text-decoration: none;
 }
 
 .backtest-data-view__boundary,
@@ -259,6 +264,8 @@ onBeforeUnmount(() => {
 }
 
 .backtest-data-view__boundary {
+  border-radius: var(--radius-control);
+  font-size: .8125rem;
   border-inline-start: 0.3rem solid var(--color-signal-watch-amber);
 }
 
@@ -281,7 +288,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 47.9375rem) {
   .backtest-data-view {
-    padding: var(--space-4);
+    padding: 0;
   }
 
   .backtest-data-view__hero {

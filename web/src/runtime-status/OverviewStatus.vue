@@ -67,7 +67,8 @@ const affected = computed(() => Object.entries(kindLabels).flatMap(([kind, label
 </script>
 
 <template>
-  <section class="runtime-panel overview-status" aria-label="监控状态">
+  <section class="runtime-panel overview-status" aria-label="监控状态" :data-mode="status.mode">
+    <p class="overview-status__eyebrow">MONITOR STATUS</p>
     <header class="runtime-heading">
       <h2>{{ live ? '' : '最近状态：' }}{{ modeLabels[status.mode] }}</h2>
       <RouterLink to="/system">查看系统详情</RouterLink>
@@ -86,7 +87,17 @@ const affected = computed(() => Object.entries(kindLabels).flatMap(([kind, label
 
 <style scoped>
 .overview-status h2, .overview-status p { margin: 0; }
-.overview-status { display: grid; gap: var(--space-2); }
-.overview-status ul { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-2); }
-.overview-status__dates { color: var(--color-text-muted); font-size: .875rem; }
+.overview-status { display: grid; gap: var(--space-4); border-block-start: 2px solid var(--color-signal-watch-amber); }
+.overview-status__eyebrow { display: flex; justify-content: space-between; color: var(--color-signal-watch-amber); font: .625rem var(--font-numeric); letter-spacing: .12em; }
+.overview-status .runtime-heading { align-items: center; gap: var(--space-2); }
+.overview-status .runtime-heading h2 { font-size: 1.75rem; }
+.overview-status .runtime-heading a { font-size: .75rem; min-height: 2.75rem; display: inline-flex; align-items: center; }
+.overview-status > p:not(.overview-status__eyebrow) { color: var(--color-text-muted); font-size: .8125rem; }
+.overview-status ul { list-style: none; padding: var(--space-4) 0 0; margin: 0; display: grid; gap: var(--space-4); border-block-start: var(--border-technical); }
+.overview-status li { font-size: .75rem; }
+.overview-status li strong { font-weight: 500; color: var(--color-text-mineral); }
+.overview-status__dates { color: var(--color-text-muted); font-size: .6875rem; margin-block-start: var(--space-2) !important; }
+@media (min-width: 40rem) and (max-width: 74.999rem) {
+  .overview-status ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 </style>

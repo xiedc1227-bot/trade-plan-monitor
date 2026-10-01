@@ -88,7 +88,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
       <div>
         <h2 id="run-filters-title">运行记录筛选</h2>
       </div>
-      <p>筛选、排序、页码与游标始终写入当前 URL。</p>
+      <p>组合筛选条件，找到需要核对的回测记录。</p>
     </header>
 
     <div
@@ -224,6 +224,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
   gap: var(--space-5);
   padding: var(--space-6);
   border: var(--border-technical);
+  border-radius: var(--radius-panel);
   background: var(--color-surface-graphite);
 }
 
@@ -245,6 +246,11 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
+}
+
+.run-filters__header p {
+  color: var(--color-text-muted);
+  font-size: .875rem;
 }
 
 .run-filters__field {

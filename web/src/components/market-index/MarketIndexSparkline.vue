@@ -184,7 +184,7 @@ function buildOption(
 </template>
 
 <style scoped>
-.market-index-sparkline { width: 100%; min-height: 18rem; }
+.market-index-sparkline { width: 100%; min-width: 0; min-height: 16rem; overflow: hidden; }
 
 @media (max-width: 39.999rem) {
   .market-index-sparkline { min-height: 14rem; }

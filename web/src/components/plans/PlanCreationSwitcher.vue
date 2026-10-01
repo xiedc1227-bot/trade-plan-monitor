@@ -114,14 +114,15 @@ function selectModeFromKeyboard(event: KeyboardEvent): void {
 }
 
 .creation-switcher__title {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .creation-switcher__description {
   max-width: 42rem;
   color: var(--color-text-muted);
   text-align: end;
+  font-size: .8125rem;
 }
 
 .creation-switcher__tabs {
@@ -131,6 +132,7 @@ function selectModeFromKeyboard(event: KeyboardEvent): void {
   padding: var(--space-2);
   background: var(--color-surface-graphite);
   border: var(--border-technical);
+  border-radius: var(--radius-panel);
 }
 
 .creation-switcher__tab {
@@ -158,7 +160,7 @@ function selectModeFromKeyboard(event: KeyboardEvent): void {
 
 .creation-switcher__tab[aria-selected="true"] {
   background: var(--color-surface-raised);
-  border-inline-start-color: var(--color-signal-info-cyan);
+  border-inline-start-color: var(--color-signal-watch-amber);
 }
 
 .creation-switcher__panel {

@@ -302,9 +302,9 @@ test("renders the authoritative dashboard and shared board-index summary at the 
     .filter({ hasText: name })
     .locator("strong")
     .evaluate((element) => getComputedStyle(element).color);
-  expect(await selectorColor("上证指数")).toBe("rgb(228, 93, 67)");
-  expect(await selectorColor("深证成指")).toBe("rgb(103, 183, 165)");
-  expect(await selectorColor("创业板指")).toBe("rgb(238, 241, 232)");
+  expect(await selectorColor("上证指数")).toBe("rgb(245, 139, 119)");
+  expect(await selectorColor("深证成指")).toBe("rgb(135, 198, 165)");
+  expect(await selectorColor("创业板指")).toBe("rgb(240, 240, 232)");
   const indexCards = page.getByTestId("market-index-trend-card");
   await expect(indexCards).toHaveCount(1);
   await expect(indexCards).toContainText("上证指数");
@@ -319,8 +319,8 @@ test("renders the authoritative dashboard and shared board-index summary at the 
   await expect(low).toHaveText("1229.90");
   await expect(high).toHaveAttribute("data-direction", "down");
   await expect(low).toHaveAttribute("data-direction", "down");
-  await expect(high).toHaveCSS("color", "rgb(103, 183, 165)");
-  await expect(low).toHaveCSS("color", "rgb(103, 183, 165)");
+  await expect(high).toHaveCSS("color", "rgb(135, 198, 165)");
+  await expect(low).toHaveCSS("color", "rgb(135, 198, 165)");
   await expect(page.getByTestId("market-index-sparkline")).toHaveCount(1);
   const turnoverCard = page.getByTestId("market-turnover-card");
   await expect(turnoverCard).toContainText("今日累计成交额");

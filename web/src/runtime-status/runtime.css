@@ -1,13 +1,21 @@
-.runtime-page { display: grid; gap: var(--space-4); min-width: 0; }
-.runtime-panel { padding: var(--space-4); background: var(--color-surface-graphite); border: var(--border-technical); min-width: 0; }
+.runtime-page { display: grid; gap: var(--space-6); min-width: 0; }
+.runtime-panel { padding: var(--space-6); background: var(--color-surface-graphite); border: var(--border-technical); border-radius: var(--radius-panel); min-width: 0; }
 .runtime-page h1, .runtime-panel h2 { margin-block: 0 var(--space-3); }
 .runtime-page p { line-height: 1.6; overflow-wrap: anywhere; }
 .runtime-page a { color: var(--color-signal-info-cyan); }
+.runtime-page a.action-link { color: var(--color-surface-ink); }
 .runtime-heading { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: space-between; }
-.runtime-facts, .runtime-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-3); }
+.runtime-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-3); }
+.runtime-counts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; padding-block: var(--space-3); border-block-end: var(--border-technical); }
+.runtime-counts > div { padding: var(--space-2) var(--space-6); border-inline-end: var(--border-technical); }
+.runtime-counts > div:first-child { padding-inline-start: 0; }
+.runtime-counts > div:last-child { border-inline-end: 0; }
+.runtime-counts dt { font-size: .75rem; }
+.runtime-counts [data-count="actionable"] dd { color: var(--color-signal-watch-amber); }
+.runtime-counts [data-count="risk"] dd { color: var(--color-signal-risk-vermilion); }
 .runtime-facts dt, .runtime-counts dt { color: var(--color-text-muted); }
 .runtime-facts dd, .runtime-counts dd { margin: var(--space-1) 0; overflow-wrap: anywhere; font-family: var(--font-numeric); }
-.runtime-counts dd { font-size: 1.5rem; }
+.runtime-counts dd { font-size: clamp(1.75rem, 2.5vw, 2.25rem); line-height: 1.35; }
 .runtime-scopes, .runtime-rules { list-style: none; padding: 0; display: grid; gap: var(--space-3); }
 .runtime-scopes li, .runtime-rules li { border-block-start: var(--border-technical); padding-block-start: var(--space-3); overflow-wrap: anywhere; }
 .runtime-rules [data-actionable="true"] { border-inline-start: .25rem solid var(--color-signal-risk-vermilion); padding-inline-start: var(--space-3); }
@@ -21,3 +29,13 @@
 .runtime-table table { border-collapse: collapse; width: 100%; }
 .runtime-table th, .runtime-table td { padding: var(--space-2); text-align: left; white-space: nowrap; border-block-end: var(--border-technical); }
 .runtime-page summary { cursor: pointer; padding-block: var(--space-3); }
+@media (min-width: 64rem) {
+  .runtime-scopes { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-6); }
+}
+@media (max-width: 47.999rem) {
+  .runtime-counts { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: var(--space-4); }
+  .runtime-counts > div { padding-inline: var(--space-3); }
+  .runtime-counts > div:nth-child(3n) { border-inline-end: 0; }
+  .runtime-counts > div:nth-child(4) { padding-inline-start: 0; }
+  .runtime-panel { padding: var(--space-5); }
+}

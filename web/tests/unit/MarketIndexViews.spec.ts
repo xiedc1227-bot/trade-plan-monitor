@@ -173,7 +173,7 @@ describe("market index monitor views", () => {
     expect(wrapper.findAll('[data-testid="market-index-selector"]')).toHaveLength(4);
     expect(wrapper.findAll('[data-testid="market-index-trend-card"]')).toHaveLength(1);
     expect(wrapper.findAll('[data-testid="market-index-sparkline"]')).toHaveLength(1);
-    expect(wrapper.get("#market-index-strip-title").text()).toBe("主要指数走势");
+    expect(wrapper.get("#market-index-strip-title").text()).toBe("主要指数走势 · 当日");
     expect(wrapper.text()).toContain("上证指数");
     expect(wrapper.text()).toContain("深证成指");
     expect(wrapper.text()).toContain("创业板指");

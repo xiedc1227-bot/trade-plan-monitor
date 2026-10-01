@@ -114,7 +114,7 @@ describe("DashboardRouteView", () => {
 
     expect(wrapper.text()).toContain("华兴源创");
     expect(wrapper.text()).toContain("低吸观察");
-    expect(wrapper.get("#market-index-strip-title").text()).toBe("主要指数走势");
+    expect(wrapper.get("#market-index-strip-title").text()).toBe("主要指数走势 · 当日");
     expect(wrapper.text()).toContain("科创50");
     expect(wrapper.text()).toContain("计划指数条件");
 

@@ -13,9 +13,9 @@ export interface MarketIndexChartPoint {
 export type MarketIndexDirection = "down" | "flat" | "up";
 
 const directionColors: Readonly<Record<MarketIndexDirection, string>> = Object.freeze({
-  down: "#67b7a5",
-  flat: "#eef1e8",
-  up: "#e45d43",
+  down: "#87c6a5",
+  flat: "#f0f0e8",
+  up: "#f58b77",
 });
 
 const openingBucketAt = /^(\d{4}-\d{2}-\d{2})T09:35:00(?:\.\d{1,6})?\+08:00$/;

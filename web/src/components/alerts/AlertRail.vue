@@ -26,6 +26,7 @@ defineProps<Props>();
   padding: var(--space-4);
   background: var(--color-surface-graphite);
   border: var(--border-technical);
+  border-radius: var(--radius-panel);
 }
 
 .alert-rail h2 {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import LegacyPlanInvalidationPanel from "../components/health/LegacyPlanInvalidationPanel.vue";
+import PageIntro from "../components/common/PageIntro.vue";
 import { useRuntimeContext } from "./context";
 import { displayTime } from "./presentation";
 import StatusBoard from "./StatusBoard.vue";
@@ -10,7 +11,7 @@ const { value: health, error, loading } = useRuntimeRead((signal) => api.getHeal
 
 <template>
   <section class="runtime-page">
-    <h1>系统健康</h1>
+    <PageIntro title="系统健康" eyebrow="04 / SYSTEM HEALTH" description="运行是否就绪，数据是否完整。逐项核对每个监控环节。" />
     <p v-if="error" role="status">{{ error }}</p>
     <p v-if="loading" role="status">正在读取系统资源。</p>
     <StatusBoard v-if="store.runtimeStatus" :status="store.runtimeStatus" expanded />

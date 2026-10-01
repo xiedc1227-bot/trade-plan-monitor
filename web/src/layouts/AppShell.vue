@@ -19,11 +19,11 @@ defineSlots<{
 }>();
 
 const navigationItems = [
-  { to: "/", label: "监控总览" },
-  { to: "/plans", label: "计划" },
-  { to: "/alerts", label: "提醒" },
-  { to: "/system", label: "系统" },
-  { to: "/backtests", label: "回测" },
+  { to: "/", label: "监控总览", index: "01" },
+  { to: "/plans", label: "计划", index: "02" },
+  { to: "/alerts", label: "提醒", index: "03" },
+  { to: "/system", label: "系统", index: "04" },
+  { to: "/backtests", label: "回测", index: "05" },
 ] as const;
 
 const backtestNavigationItems = [
@@ -81,7 +81,7 @@ async function handleMobileNavigation() {
 }
 
 watch(
-  () => route.path,
+  [() => route.path, () => route.meta.title],
   async () => {
     const activeGeneration = ++routeEffectGeneration;
     closeMobileNavigation();
@@ -115,7 +115,13 @@ onBeforeUnmount(() => {
     </a>
 
     <header class="app-shell__header">
-      <RouterLink class="app-shell__brand" to="/">交易计划监控</RouterLink>
+      <RouterLink class="app-shell__brand" to="/" aria-label="交易计划监控">
+        <svg class="app-shell__brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <path d="M6 31V19M16 31V9M26 31V15M36 31V3" stroke="currentColor" stroke-width="3" />
+          <path d="M2 24H39" stroke="currentColor" stroke-width="1" />
+        </svg>
+        <span><strong aria-hidden="true">PLAN / MONITOR</strong><span>交易计划监控</span></span>
+      </RouterLink>
 
       <nav class="app-shell__desktop-navigation" aria-label="主要导航">
         <ul class="app-shell__navigation-list">
@@ -131,6 +137,7 @@ onBeforeUnmount(() => {
               :to="item.to"
               :aria-current="mainNavigationAriaCurrent(item.to)"
             >
+              <span class="app-shell__navigation-index" aria-hidden="true">{{ item.index }}</span>
               {{ item.label }}
             </RouterLink>
           </li>
@@ -170,6 +177,7 @@ onBeforeUnmount(() => {
               :aria-current="mainNavigationAriaCurrent(item.to)"
               @click="handleMobileNavigation"
             >
+              <span class="app-shell__navigation-index" aria-hidden="true">{{ item.index }}</span>
               {{ item.label }}
             </RouterLink>
           </li>
@@ -210,11 +218,16 @@ onBeforeUnmount(() => {
         </span>
         <span>{{ connectionState.label }}</span>
       </slot>
+      <span class="app-shell__connection-context" aria-hidden="true">LOCAL WORKSPACE <span> / </span> UTC+08:00</span>
     </section>
 
     <main id="main-content" ref="mainContent" class="app-shell__main" tabindex="-1">
       <RouterView />
     </main>
+    <footer class="app-shell__footer">
+      <span>PLAN / MONITOR <span class="app-shell__footer-divider">—</span> 让每一步，有据可循。</span>
+      <span>交易计划 · 持续监控 · 人工决策</span>
+    </footer>
   </div>
 </template>
 
@@ -252,33 +265,48 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__header {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 6;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  min-height: 3.5rem;
-  padding-inline: 1rem;
-  background: var(--color-surface-graphite);
+  gap: var(--space-3);
+  min-height: 5rem;
+  padding-inline: max(var(--space-6), calc((100vw - 90rem) / 2));
+  background: var(--color-surface-ink);
   border-block-end: var(--border-technical);
 }
 
 .app-shell__brand,
 .app-shell__navigation-link {
-  color: var(--color-signal-info-cyan);
-  text-decoration-thickness: 0.1em;
-  text-underline-offset: 0.2em;
+  color: var(--color-text-muted);
+  text-decoration: none;
 }
 
 .app-shell__brand {
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-mineral);
+  min-width: 0;
 }
+
+.app-shell__brand-mark { flex-shrink: 0; width: clamp(1.5rem, 7vw, 2.25rem); height: clamp(1.5rem, 7vw, 2.25rem); color: var(--color-signal-watch-amber); }
+.app-shell__brand > span { display: grid; gap: .125rem; min-width: 0; }
+.app-shell__brand strong { font: 600 .8125rem var(--font-numeric); letter-spacing: .06em; overflow-wrap: anywhere; }
+.app-shell__brand > span > span { font-size: .6875rem; color: var(--color-text-muted); letter-spacing: .16em; }
+.app-shell__navigation-index { font: .625rem var(--font-numeric); color: var(--color-text-muted); }
 
 .app-shell__desktop-navigation {
   display: none;
+  min-width: 0;
 }
 
 .app-shell__navigation-list {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
   margin: 0;
@@ -287,17 +315,27 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__navigation-link {
-  display: inline-block;
-  padding: 0.65rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  transition: background-color var(--motion-fast), color var(--motion-fast);
 }
 
-.app-shell__navigation-link.router-link-active,
+.app-shell__navigation-link[aria-current],
 .app-shell__navigation-link--current {
-  font-weight: 700;
-  text-decoration-thickness: 0.2em;
+  color: var(--color-text-mineral);
+  background: var(--color-surface-raised);
 }
+
+.app-shell__navigation-link[aria-current] .app-shell__navigation-index,
+.app-shell__navigation-link--current .app-shell__navigation-index { color: var(--color-signal-watch-amber); }
+.app-shell__navigation-link:hover { color: var(--color-text-mineral); background: var(--color-surface-graphite); }
 
 .app-shell__mobile-toggle {
+  flex-shrink: 0;
   display: inline-flex;
   gap: 0.5rem;
   align-items: center;
@@ -323,7 +361,7 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   width: 100%;
   max-width: 100vw;
-  padding: 0.5rem 1rem;
+  padding: var(--space-2) max(var(--space-6), calc((100vw - 90rem) / 2));
   overflow-x: auto;
   background: var(--color-surface-graphite);
   border-block-end: var(--border-technical);
@@ -342,9 +380,11 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: var(--space-2) max(var(--space-6), calc((100vw - 90rem) / 2));
+  min-height: 2.75rem;
+  font-size: .75rem;
   color: var(--color-text-mineral);
-  background: var(--color-surface-raised);
+  background: var(--color-surface-graphite);
   border-block-end: var(--border-technical);
   border-inline-start: 0.25rem solid var(--color-signal-info-cyan);
 }
@@ -374,9 +414,23 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__main {
-  max-width: 90rem;
+  max-width: 93rem;
   margin-inline: auto;
-  padding: 1rem;
+  padding: var(--space-7) var(--space-6) var(--space-8);
+}
+
+.app-shell__connection-context { margin-inline-start: auto; color: var(--color-text-muted); font: .625rem var(--font-numeric); letter-spacing: .08em; white-space: nowrap; }
+.app-shell__connection-context > span { color: var(--color-signal-watch-amber); margin-inline: var(--space-3); }
+.app-shell__footer { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: space-between; max-width: 90rem; margin-inline: auto; padding: var(--space-6); border-block-start: var(--border-technical); color: var(--color-text-muted); font-size: .6875rem; letter-spacing: .04em; }
+.app-shell__footer-divider { color: var(--color-signal-watch-amber); margin-inline: var(--space-2); }
+.app-shell__main > :deep(*) { animation: workspace-enter var(--motion-enter) var(--ease-out) both; }
+@keyframes workspace-enter { from { transform: translateY(8px); } to { transform: translateY(0); } }
+@media (max-width: 39.999rem) {
+  .app-shell__header { padding-inline: var(--space-4); min-height: 4.5rem; }
+  .app-shell__main { padding: var(--space-6) var(--space-4) var(--space-7); }
+  .app-shell__connection-banner { padding-inline: var(--space-4); }
+  .app-shell__connection-context { display: none; }
+  .app-shell__footer { padding: var(--space-5) var(--space-4); }
 }
 
 .app-shell__brand:focus-visible,

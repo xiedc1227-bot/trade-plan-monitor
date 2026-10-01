@@ -54,8 +54,8 @@ function formatSessionChange(value: string | null | undefined): string {
 <template>
   <section class="index-strip" aria-labelledby="market-index-strip-title">
     <header class="index-strip__header">
-      <h2 id="market-index-strip-title">主要指数走势</h2>
-      <p>上证、深证、创业板、科创50 · 已完成五分钟数据 · 虚线为昨收</p>
+      <h2 id="market-index-strip-title">主要指数走势 · 当日</h2>
+      <p>已完成五分钟数据 · 虚线为昨收</p>
     </header>
     <div class="index-strip__surface">
       <div class="index-strip__selectors" role="group" aria-label="选择要查看的主要指数">
@@ -115,6 +115,9 @@ function formatSessionChange(value: string | null | undefined): string {
   justify-content: space-between;
 }
 
+.index-strip__header h2 { margin: 0; }
+.index-strip__header p { font-size: .6875rem; }
+
 .index-strip__header p {
   margin: 0;
   overflow-wrap: anywhere;
@@ -131,14 +134,14 @@ function formatSessionChange(value: string | null | undefined): string {
   overflow: hidden;
   background: var(--color-surface-graphite);
   border: var(--border-technical);
+  border-radius: var(--radius-panel);
 }
 
 .index-strip__selectors {
   display: grid;
-  grid-template-columns: repeat(4, minmax(8rem, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
   min-width: 0;
-  overflow-x: auto;
   background: var(--color-border-quiet);
   border-block-end: var(--border-technical);
 }
@@ -168,14 +171,19 @@ function formatSessionChange(value: string | null | undefined): string {
   position: relative;
   display: grid;
   gap: var(--space-1);
-  min-width: 8rem;
-  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+  overflow-wrap: anywhere;
   color: var(--color-text-mineral);
   text-align: start;
   cursor: pointer;
   background: var(--color-surface-graphite);
   border: 0;
+  border-radius: 0;
 }
+
+.index-strip__selector > span { font-size: .75rem; }
+.index-strip__selector:hover { background: var(--color-surface-raised); }
 
 .index-strip__selector::after {
   position: absolute;
@@ -191,13 +199,14 @@ function formatSessionChange(value: string | null | undefined): string {
 }
 
 .index-strip__selector[aria-pressed="true"]::after {
-  background: var(--color-signal-info-cyan);
+  background: var(--color-signal-watch-amber);
 }
 
 .index-strip__selector strong {
   color: var(--color-text-muted);
   font-family: var(--font-numeric);
-  font-size: 1.05rem;
+  font-size: 1.375rem;
+  font-weight: 500;
 }
 
 .index-strip__selector[data-direction="down"] strong {
@@ -219,8 +228,9 @@ function formatSessionChange(value: string | null | undefined): string {
 
 @media (max-width: 39.999rem) {
   .index-strip__selectors {
-    grid-template-columns: repeat(4, minmax(7.5rem, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .index-strip__selector { padding: var(--space-3) var(--space-4); }
 }
 
 @media (max-width: 69.999rem) {

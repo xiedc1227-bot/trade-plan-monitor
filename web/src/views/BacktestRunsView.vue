@@ -64,8 +64,9 @@ onBeforeUnmount(() => {
   <div class="backtest-runs-view">
     <header class="backtest-runs-view__hero">
       <div>
+        <p class="workspace-eyebrow">05 / RESEARCH LAB</p>
         <h1 ref="pageTitle" tabindex="-1">回测运行记录</h1>
-        <p>查看服务端已完整物化的研究运行；失败与取消诊断不属于运行结果。</p>
+        <p>用历史检验规则。查看已完成的回测结果，核对每一次研究运行。</p>
       </div>
       <nav aria-label="回测研究导航">
         <a href="/backtests/new">新建回测</a>
@@ -114,15 +115,17 @@ onBeforeUnmount(() => {
   gap: var(--space-6);
   width: min(100%, 90rem);
   margin-inline: auto;
-  padding: var(--space-6);
+  padding: 0;
   color: var(--color-text-mineral);
 }
 
 .backtest-runs-view__hero {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
+  padding-block: var(--space-4) var(--space-7);
+  border-block-end: var(--border-technical);
 }
 
 .backtest-runs-view__hero h1,
@@ -132,8 +135,8 @@ onBeforeUnmount(() => {
 }
 
 .backtest-runs-view__hero h1 {
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 1;
+  font-size: clamp(1.875rem, 3vw, 2.75rem);
+  line-height: 1.3;
 }
 
 .backtest-runs-view__hero nav {
@@ -148,6 +151,10 @@ onBeforeUnmount(() => {
   border: var(--border-technical);
   background: var(--color-surface-raised);
   color: var(--color-text-mineral);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-control);
 }
 
 .backtest-runs-view__boundary,
@@ -155,6 +162,8 @@ onBeforeUnmount(() => {
   padding: var(--space-4);
   border: var(--border-technical);
   background: var(--color-surface-graphite);
+  border-radius: var(--radius-control);
+  font-size: .8125rem;
 }
 
 .backtest-runs-view__boundary {
@@ -172,7 +181,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 47.9375rem) {
   .backtest-runs-view {
-    padding: var(--space-4);
+    padding: 0;
   }
 
   .backtest-runs-view__hero {

@@ -374,6 +374,7 @@ function toLocalInput(value: string | null): string {
   padding: var(--space-4);
   background: var(--color-surface-raised);
   border: var(--border-technical);
+  border-radius: var(--radius-panel);
 }
 
 .alert-history h2 {

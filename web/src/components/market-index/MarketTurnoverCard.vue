@@ -37,6 +37,7 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
 <template>
   <aside
     class="market-turnover-card"
+    :class="{ 'market-turnover-card--with-actions': $slots.actions }"
     data-testid="market-turnover-card"
     aria-labelledby="market-turnover-title"
   >
@@ -68,7 +69,7 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-5) var(--space-6);
   background: var(--color-surface-raised);
   border-inline-start: var(--border-technical);
 }
@@ -105,14 +106,17 @@ function formatAmount(value: string | null | undefined, options: { signed?: bool
 .market-turnover-card dd {
   color: var(--color-text-mineral);
   font-family: var(--font-numeric);
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 500;
 }
 
 .market-turnover-card__primary,
 .market-turnover-card__estimate dd {
-  font-size: 1.45rem;
+  font-size: 1.5rem;
 }
+
+.market-turnover-card h3 { font-size: .75rem; font-weight: 500; color: var(--color-text-muted); }
+.market-turnover-card dt { font-size: .6875rem; }
 
 .market-turnover-card__estimate {
   padding-block-start: var(--space-3);

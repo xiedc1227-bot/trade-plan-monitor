@@ -65,11 +65,11 @@ describe("market index chart options", () => {
   });
 
   it.each([
-    ["0.0123", "up", "#e45d43"],
-    ["-0.0123", "down", "#67b7a5"],
-    ["0", "flat", "#eef1e8"],
-    [null, "flat", "#eef1e8"],
-    ["invalid", "flat", "#eef1e8"],
+    ["0.0123", "up", "#f58b77"],
+    ["-0.0123", "down", "#87c6a5"],
+    ["0", "flat", "#f0f0e8"],
+    [null, "flat", "#f0f0e8"],
+    ["invalid", "flat", "#f0f0e8"],
   ] as const)("maps session change %s to %s and its market color", (ratio, direction, color) => {
     expect(marketIndexDirection(ratio)).toBe(direction);
     expect(marketIndexDirectionColor(ratio)).toBe(color);

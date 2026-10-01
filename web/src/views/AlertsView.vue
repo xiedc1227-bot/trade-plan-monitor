@@ -28,6 +28,7 @@ export interface AlertOperations {
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue";
 
 import AlertRail from "../components/alerts/AlertRail.vue";
+import PageIntro from "../components/common/PageIntro.vue";
 import AlertTable from "../components/alerts/AlertTable.vue";
 import type { MonitorEventEnvelope } from "../stores/monitor";
 
@@ -581,10 +582,7 @@ function isConflict(value: unknown): boolean {
 
 <template>
   <section class="alerts-view" aria-labelledby="alerts-title">
-    <header class="alerts-view__header">
-      <h1 id="alerts-title">文字提醒中心</h1>
-      <p>提醒、确认与人工成交是彼此独立的操作。</p>
-    </header>
+    <PageIntro title="文字提醒中心" title-id="alerts-title" eyebrow="03 / ALERT CENTER" description="关注需要行动的时刻。提醒、确认与人工成交是彼此独立的操作。" />
 
     <p v-if="error !== null" class="alerts-view__error" role="alert">{{ error }}</p>
     <p
@@ -622,19 +620,14 @@ function isConflict(value: unknown): boolean {
 <style scoped>
 .alerts-view {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-7);
 }
 
-.alerts-view__header,
 .alerts-view__error,
 .alerts-view__operation-status {
   padding: var(--space-4);
   background: var(--color-surface-graphite);
   border: var(--border-technical);
-}
-
-.alerts-view__header h1 {
-  margin-block: var(--space-1);
 }
 
 .alerts-view__error {
@@ -645,7 +638,7 @@ function isConflict(value: unknown): boolean {
 .alerts-view__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
-  gap: var(--space-4);
+  gap: var(--space-6);
   align-items: start;
 }
 

@@ -60,6 +60,7 @@ onBeforeUnmount(() => {
   <div class="backtest-new-view">
     <header class="backtest-new-view__hero">
       <div>
+        <p class="workspace-eyebrow">05 / NEW EXPERIMENT</p>
         <h1 ref="pageTitle" tabindex="-1">创建回测</h1>
         <p>选择不可变计划版本与已验证数据集，提交可复现的回测运行。</p>
       </div>
@@ -127,15 +128,17 @@ onBeforeUnmount(() => {
   gap: var(--space-6);
   width: min(100%, 90rem);
   margin-inline: auto;
-  padding: var(--space-6);
+  padding: 0;
   color: var(--color-text-mineral);
 }
 
 .backtest-new-view__hero {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
+  padding-block: var(--space-4) var(--space-7);
+  border-block-end: var(--border-technical);
 }
 
 .backtest-new-view__hero h1,
@@ -145,8 +148,8 @@ onBeforeUnmount(() => {
 }
 
 .backtest-new-view__hero h1 {
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 1;
+  font-size: clamp(1.875rem, 3vw, 2.75rem);
+  line-height: 1.3;
 }
 
 .backtest-new-view__hero a,
@@ -156,6 +159,8 @@ onBeforeUnmount(() => {
   border: var(--border-technical);
   background: var(--color-surface-raised);
   color: var(--color-text-mineral);
+  border-radius: var(--radius-control);
+  text-decoration: none;
 }
 
 .backtest-new-view__boundary,
@@ -166,6 +171,8 @@ onBeforeUnmount(() => {
 }
 
 .backtest-new-view__boundary {
+  border-radius: var(--radius-control);
+  font-size: .8125rem;
   border-inline-start: 0.3rem solid var(--color-signal-watch-amber);
 }
 
@@ -184,7 +191,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 47.9375rem) {
   .backtest-new-view {
-    padding: var(--space-4);
+    padding: 0;
   }
 
   .backtest-new-view__hero {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import PageIntro from "../components/common/PageIntro.vue";
 import { createPositionApi } from "../api/positions";
 import { createManualEventRiskApi } from "../api/manualEventRisk";
 import PositionLots from "../components/symbol/PositionLots.vue";
@@ -36,7 +37,7 @@ const asOfTradeDate = computed(() => currentDetail.value?.observedAt.slice(0, 10
 
 <template>
   <section class="runtime-page">
-    <h1>个股详情 · {{ symbol }}</h1>
+    <PageIntro :title="`个股详情 · ${symbol}`" eyebrow="01 / SYMBOL DETAIL" description="从当前判断到原始证据，逐项核对这份计划。" />
     <p v-if="loading" role="status">正在读取当前计划投影。</p>
     <p v-if="error" role="status">{{ error }}</p>
     <template v-if="currentDetail">

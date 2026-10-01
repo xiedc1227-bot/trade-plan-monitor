@@ -402,6 +402,7 @@ onBeforeUnmount(() => {
   <div class="run-detail-view">
     <header class="run-detail-view__hero">
       <div>
+        <p class="workspace-eyebrow">05 / EXPERIMENT RESULTS</p>
         <h1>回测结果</h1>
         <p>仅展示服务端权威任务状态与已物化历史模拟结果。</p>
       </div>
@@ -800,7 +801,7 @@ onBeforeUnmount(() => {
   width: min(100%, 90rem);
   gap: var(--space-6);
   margin-inline: auto;
-  padding: var(--space-6);
+  padding: 0;
   color: var(--color-text-mineral);
 }
 
@@ -810,6 +811,8 @@ onBeforeUnmount(() => {
   gap: var(--space-4);
   align-items: flex-start;
   justify-content: space-between;
+  padding-block: var(--space-4) var(--space-7);
+  border-block-end: var(--border-technical);
 }
 
 .run-detail-view__hero h1,
@@ -949,7 +952,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 47.9375rem) {
   .run-detail-view {
-    padding: var(--space-4);
+    padding: 0;
   }
 
   .run-detail-view__results-heading,

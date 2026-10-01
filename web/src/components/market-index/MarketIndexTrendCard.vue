@@ -142,13 +142,20 @@ function extrema(
       <div><dt>最低</dt><dd class="market-index-trend-card__low" :data-direction="lowDirection">{{ formatPoints(lowPoints) }}</dd></div>
       <div><dt>成交额</dt><dd>{{ turnover }}</dd></div>
     </dl>
-    <MarketIndexSparkline
-      :ariaLabel="chartLabel"
-      :bars="bars"
-      :display-name="identity.displayName"
-      :prior-close-points="summary?.priorClosePoints ?? null"
-      :session-change-ratio="summary?.sessionChangeRatio ?? null"
-    />
+    <div class="market-index-trend-card__plot">
+      <MarketIndexSparkline
+        :ariaLabel="chartLabel"
+        :bars="bars"
+        :display-name="identity.displayName"
+        :prior-close-points="summary?.priorClosePoints ?? null"
+        :session-change-ratio="summary?.sessionChangeRatio ?? null"
+      />
+      <div v-if="bars.length === 0" class="market-index-trend-card__plot-empty">
+        <span aria-hidden="true">— / —</span>
+        <p>{{ trend.status === 'LOADING' ? '正在加载当日走势' : '当日走势尚未就绪' }}</p>
+        <small>已存点位与数据截止时间见下方</small>
+      </div>
+    </div>
     <p
       v-if="summary?.health === 'BLOCKED' && summary.issues.includes('PROVIDER_UNAVAILABLE')"
       class="market-index-trend-card__status"
@@ -199,19 +206,15 @@ function extrema(
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-4) var(--space-6) var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-4);
   background: var(--color-surface-graphite);
-  border-inline-start: .25rem solid var(--color-signal-live-sea-glass);
 }
 
-.market-index-trend-card[data-health="BLOCKED"],
-.market-index-trend-card[data-health="GAPPED"] { border-inline-start-color: var(--color-signal-risk-vermilion); }
-.market-index-trend-card[data-health="STALE"] { border-inline-start-color: var(--color-signal-watch-amber); }
-.market-index-trend-card[data-health="CACHED"],
-.market-index-trend-card[data-health="NONE"] { border-inline-start-color: var(--color-border-quiet); }
 .market-index-trend-card > *, .market-index-trend-card__header > *, .market-index-trend-card__facts > div { min-width: 0; }
 .market-index-trend-card__header { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: baseline; justify-content: space-between; }
 .market-index-trend-card__header h3 { display: inline; margin-inline-end: var(--space-2); }
+.market-index-trend-card__header code { font-size: .6875rem; color: var(--color-text-muted); }
+.market-index-trend-card__health { font-size: .6875rem; }
 .market-index-trend-card__health { display: inline-flex; gap: var(--space-1); align-items: center; }
 .market-index-trend-card__health[data-health="LIVE"] { color: var(--color-signal-live-sea-glass); }
 .market-index-trend-card__health[data-health="BLOCKED"],
@@ -225,7 +228,7 @@ function extrema(
   animation: market-index-live-pulse 600ms ease-out 1;
 }
 .market-index-trend-card__header h3, .market-index-trend-card__header code, .market-index-trend-card__status, .market-index-trend-card__issues, .market-index-trend-card__facts dd { overflow-wrap: anywhere; }
-.market-index-trend-card__status, .market-index-trend-card__issues { margin: 0; color: var(--color-text-muted); }
+.market-index-trend-card__status, .market-index-trend-card__issues { margin: 0; color: var(--color-text-muted); font-size: .75rem; }
 .market-index-trend-card__market-facts,
 .market-index-trend-card__facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin: 0; }
 .market-index-trend-card__market-facts div,
@@ -234,7 +237,14 @@ function extrema(
 .market-index-trend-card__facts dt { color: var(--color-text-muted); }
 .market-index-trend-card__market-facts dd,
 .market-index-trend-card__facts dd { margin: 0; font-family: var(--font-numeric); }
-.market-index-trend-card__primary-fact dd { font-size: 1.2rem; font-weight: 700; }
+.market-index-trend-card__primary-fact dd { font-size: 1.75rem; font-weight: 500; letter-spacing: -.03em; }
+.market-index-trend-card__facts { padding-block-start: var(--space-3); border-block-start: var(--border-technical); font-size: .6875rem; }
+.market-index-trend-card__market-facts { font-size: .75rem; }
+.market-index-trend-card__plot { position: relative; min-width: 0; }
+.market-index-trend-card__plot-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); pointer-events: none; }
+.market-index-trend-card__plot-empty > span { color: var(--color-signal-watch-amber); font: 1.125rem var(--font-numeric); letter-spacing: .15em; }
+.market-index-trend-card__plot-empty p { margin: 0; padding: var(--space-1) var(--space-3); background: var(--color-surface-graphite); color: var(--color-text-muted); font-size: .8125rem; }
+.market-index-trend-card__plot-empty small { padding-inline: var(--space-3); color: var(--color-text-muted); background: var(--color-surface-graphite); font-size: .6875rem; }
 .market-index-trend-card__market-facts dd[data-direction="up"],
 .market-index-trend-card__change[data-direction="up"] { color: var(--color-signal-risk-vermilion); }
 .market-index-trend-card__market-facts dd[data-direction="down"],
