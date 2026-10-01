@@ -10,9 +10,9 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from scripts import r14_bounded_acceptance as bounded
-from scripts import r25_extraction_acceptance as r25
-from scripts import r27_ai_timeout_diagnostic as r27
+from scripts import ai_timeout_diagnostic as r27
+from scripts import bounded_live_acceptance as bounded
+from scripts import plan_extraction_acceptance as r25
 from tests.integration.test_explicit_plan_review_api import _draft_payload
 from tests.integration.test_source_treatment_review_api import (
     SOURCE as LITERAL_SOURCE,

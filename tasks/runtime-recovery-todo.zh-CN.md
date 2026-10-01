@@ -458,8 +458,8 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 - [x] RR020 — 启用完整路径并离线证明真实进程重启。强度：`high`；故障分析/评审：`xhigh`。依赖：C4。 仅按已批准 D1–D8 / A01–A13 完成；未批准 D9/A14 保持独立。
   - 验收：所有目标时段覆盖 A01–A14；在提交和投递窗口停止/终止/重启；迁移中断安全；不访问行情源，不发送真实通知。
-  - 文件：`src/trade_plan_monitor/web/monitor_composition.py`、NEW `tests/integration/test_anytime_runtime_recovery.py`、`web/tests/e2e/production-restart.spec.ts`、`web/tests/e2e/r13-active-process-restart.spec.ts`、NEW `web/tests/e2e/runtime-recovery.spec.ts`。
-  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`；`npm --prefix web run test:e2e -- production-restart.spec.ts r13-active-process-restart.spec.ts runtime-recovery.spec.ts`，使用隔离测试状态。
+  - 文件：`src/trade_plan_monitor/web/monitor_composition.py`、NEW `tests/integration/test_anytime_runtime_recovery.py`、`web/tests/e2e/production-restart.spec.ts`、`web/tests/e2e/active-plan-process-restart.spec.ts`、NEW `web/tests/e2e/runtime-recovery.spec.ts`。
+  - 验证：`.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`；`npm --prefix web run test:e2e -- production-restart.spec.ts active-plan-process-restart.spec.ts runtime-recovery.spec.ts`，使用隔离测试状态。
 - [x] RR021 — 同步运维与验证证据。强度：`high`。依赖：RR020。
   - 验收：重启/首次数据源验证/重新配置/回滚说明准确；仅记录实际执行的测试；中英文一致。
   - 文件：`docs/operations/live-certification.md`、`docs/operations/live-certification.zh-CN.md`、NEW 成对 `docs/verification/runtime-recovery-acceptance.md` / `runtime-recovery-acceptance.zh-CN.md`。

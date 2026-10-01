@@ -51,6 +51,8 @@
 
 ## 指南
 
+- [文件命名](guides/file-naming.zh-CN.md)（[英文](guides/file-naming.md)）——不同语言的命名约定、稳定历史标识及重命名验证。
+
 - [AI 模型选择](guides/ai-model-selection.zh-CN.md)（[英文](guides/ai-model-selection.md)）——为开发参考保留的历史任务与模型配置建议。
 
 ## 验证证据

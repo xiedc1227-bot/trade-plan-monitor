@@ -1,0 +1,49 @@
+Listing tests:
+  [chrome] › accessibility.spec.ts:95:1 › loads system health through the production /system route
+  [chrome] › accessibility.spec.ts:200:1 › has no WCAG 2.1 A/AA axe violations
+  [chrome] › accessibility.spec.ts:217:1 › fits 320, 768, 1024, and 1440 pixel layouts without horizontal overflow
+  [chrome] › accessibility.spec.ts:236:1 › keeps native keyboard order, visible focus, semantic state, and reduced motion
+  [chrome] › ai-diagnostic-contract.spec.ts:25:3 › preserves PROVIDER_ERROR after queued/running production DTOs (RECORDED, query recovery false)
+  [chrome] › ai-diagnostic-contract.spec.ts:25:3 › preserves INVALID_OUTPUT after queued/running production DTOs (WRITE_FAILED, query recovery false)
+  [chrome] › ai-diagnostic-contract.spec.ts:25:3 › preserves PROVIDER_ERROR after queued/running production DTOs (RECORDED, query recovery true)
+  [chrome] › alert-recovery.spec.ts:100:3 › shows a persisted alert without manual refresh after snapshot-required
+  [chrome] › alert-recovery.spec.ts:100:3 › shows a persisted alert without manual refresh after snapshot-then-alert
+  [chrome] › alerts.spec.ts:110:1 › queries, filters, expands evidence, and acknowledges without a position request
+  [chrome] › backtests.spec.ts:691:1 › covers the four backtest routes with keyboard flows and serious axe checks
+  [chrome] › backtests.spec.ts:760:1 › submits a complete new run and follows the authoritative job to its result
+  [chrome] › backtests.spec.ts:816:1 › keeps 320/768/1024/1440 layouts and 200 percent text inside route boundaries
+  [chrome] › backtests.spec.ts:865:1 › R13 records immediate and settled narrow backtest layout without changing its gate
+  [chrome] › backtests.spec.ts:911:1 › enforces request, DOM, polling, and pre-equity ECharts bounds
+  [chrome] › dashboard.spec.ts:252:1 › renders the authoritative dashboard and shared board-index summary at the root route
+  [chrome] › dashboard.spec.ts:357:1 › keeps the shared-index and per-plan dashboard boundary responsive and accessible
+  [chrome] › dashboard.spec.ts:404:1 › distinguishes typed unavailable monitoring from a real disconnected service
+  [chrome] › dashboard.spec.ts:467:1 › recovers a sequence gap with a fresh dashboard snapshot before replaying from its cursor
+  [chrome] › explicit-sqlite.spec.ts:39:1 › literal v3 ordinary UI reaches real SQLite and production scheduler
+  [chrome] › interface-design.spec.ts:38:1 › installed v2 overview keeps empty and active plans accessible at every design breakpoint
+  [chrome] › interface-design.spec.ts:80:1 › installed v2 mobile navigation, action focus, and reduced motion work together
+  [chrome] › interface-design.spec.ts:103:1 › index selectors have no internal scrollbar while focused or pressed
+  [chrome] › legacy-maintenance.spec.ts:69:1 › system page previews and separately confirms missing-heartbeat invalidation
+  [chrome] › plans.spec.ts:218:1 › shows the AI workbench before configuration responds and keeps early input
+  [chrome] › plans.spec.ts:266:1 › requires explicit review, save, and backend-approved activation for an AI result
+  [chrome] › plans.spec.ts:397:1 › runs the configured AI and persisted plan workbench flow in isolated Chromium
+  [chrome] › production-restart.spec.ts:68:3 › installed production restart › serves the packaged SPA and keeps typed availability across process restart
+  [chrome] › r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains active plan and durable reminder identity
+  [chrome] › r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains replace plan and durable reminder identity
+  [chrome] › r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains disable plan and durable reminder identity
+  [chrome] › r13-active-process-restart.spec.ts:11:3 › R13 real OS restart retains expire plan and durable reminder identity
+  [chrome] › r13-ai-faults.spec.ts:39:1 › R13 failed AI HTTP responses preserve the previously reviewed active version
+  [chrome] › r13-corrections.spec.ts:39:1 › R13 substantive ordinary corrections require current review and remain editable
+  [chrome] › r13-live-stream.spec.ts:39:1 › R13 real explicit reminders refresh automatically across browser disconnect
+  [chrome] › runtime-recovery.spec.ts:11:1 › normal installed entry preserves reminder source through restart and restores only a new target
+  [chrome] › runtime-status-old-server.spec.ts:55:1 › direct inventory command page sends zero protected POSTs to a real old backend
+  [chrome] › runtime-status-sqlite.spec.ts:43:1 › v2 UI uses real owned runtime and SQLite, preserves source dates and observes an actual stall
+  [chrome] › symbol-detail.spec.ts:174:1 › reads backend detail, bars, and events for an explicit Shanghai history range
+  [chrome] › symbol-detail.spec.ts:229:1 › keeps current-plan evidence visible when shared index history fails
+  [chrome] › symbol-detail.spec.ts:244:1 › keeps both sections explicit when the current plan has no index conditions
+  [chrome] › symbol-detail.spec.ts:282:1 › marks a mapped Schema v2 plan with zero index leaves as unused
+  [chrome] › symbol-detail.spec.ts:324:1 › scrolls to manual trade registration after asynchronous detail loading
+  [chrome] › symbol-detail.spec.ts:333:1 › keeps the separated detail sections responsive and accessible
+  [chrome] › symbol-detail.spec.ts:387:1 › keeps history range inputs visible and operable at 320px with 200 percent text
+  [chrome] › symbol-detail.spec.ts:418:1 › submits position commands for backend-only T+1 and maximum-policy decisions
+  [chrome] › symbol-detail.spec.ts:478:1 › confirms plan-scoped manual event risk through the normal symbol page
+Total: 47 tests in 19 files

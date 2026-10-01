@@ -13,7 +13,7 @@ import httpx
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
-from scripts.r14_bounded_acceptance import (
+from scripts.bounded_live_acceptance import (
     _MARKET_CAPS,
     Budget,
     BudgetDenied,
@@ -299,7 +299,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
     plans = PersistentPlanWebLifecycle(database_path=database, clock=clock.now)
     ai_budget = Budget(total=3, per_key={key: 1 for key in approved_sources()}, seconds=900)
     if r17_full_window:
-        from scripts.r17_bounded_acceptance import MARKET_CAPS
+        from scripts.afternoon_session_acceptance import MARKET_CAPS
     else:
         MARKET_CAPS = _MARKET_CAPS
     market_budget = Budget(total=60, per_key=MARKET_CAPS, seconds=900)
@@ -679,7 +679,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
 def test_launcher_denial_exits_with_sanitized_audit_and_restores_factory(
     tmp_path: Path, monkeypatch, cleanup_hangs: bool
 ) -> None:
-    import scripts.r14_bounded_acceptance as launcher
+    import scripts.bounded_live_acceptance as launcher
     import uvicorn
 
     import trade_plan_monitor.runtime.production as production
@@ -767,7 +767,7 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
     tmp_path: Path, monkeypatch, persistent_lag: bool
 ) -> None:
     """SIMULATED failed completions do not activate stock or erase index costs."""
-    from scripts.r17_bounded_acceptance import MARKET_CAPS
+    from scripts.afternoon_session_acceptance import MARKET_CAPS
 
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
@@ -929,8 +929,8 @@ def test_r17_missing_index_daily_cache_denies_extra_physical_starts(
     tmp_path: Path, monkeypatch
 ) -> None:
     """SIMULATED empty daily frames cannot convert a stale index into LIVE."""
-    from scripts.r14_bounded_acceptance import _session_budgets
-    from scripts.r17_bounded_acceptance import MARKET_CAPS
+    from scripts.afternoon_session_acceptance import MARKET_CAPS
+    from scripts.bounded_live_acceptance import _session_budgets
 
     import trade_plan_monitor.runtime.production as production
 

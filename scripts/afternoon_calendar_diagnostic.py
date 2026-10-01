@@ -7,7 +7,7 @@ import asyncio
 import json
 from datetime import date, datetime, time
 
-from scripts import r14_bounded_acceptance as bounded
+from scripts import bounded_live_acceptance as bounded
 
 PROPOSAL_ID = "R24-20260915-PM-CALENDAR-1"
 AUTHORIZATION = "R24_20260915_PM_0_AI_1_TRADE_CAL_IN_APP_20SEC"

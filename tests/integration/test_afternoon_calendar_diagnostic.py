@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from scripts import r24_calendar_diagnostic as r24
+from scripts import afternoon_calendar_diagnostic as r24
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 

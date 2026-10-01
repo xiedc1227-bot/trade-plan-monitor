@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from scripts.r14_bounded_acceptance import (
+from scripts.bounded_live_acceptance import (
     APPROVED_MODEL,
     AIBudgetTransport,
     Budget,
@@ -48,7 +48,7 @@ def test_market_guard_counts_attempts_and_rejects_other_symbols() -> None:
 
 
 def test_deadline_refusal_stops_before_sdk_and_counts_denial(monkeypatch) -> None:
-    import scripts.r14_bounded_acceptance as launcher
+    import scripts.bounded_live_acceptance as launcher
 
     ticks = [100.0]
     stopped: list[bool] = []
@@ -322,7 +322,7 @@ def test_simulated_r14_launcher_refuses_unwritable_diagnostics_before_ai(
 
 
 def test_isolated_app_constructs_without_database_or_network(tmp_path: Path) -> None:
-    from scripts.r14_bounded_acceptance import legacy_diagnostic_assets
+    from scripts.bounded_live_acceptance import legacy_diagnostic_assets
 
     from trade_plan_monitor.web.app import create_app
     from trade_plan_monitor.web.monitor_composition import create_monitor_composition_factory

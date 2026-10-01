@@ -19,9 +19,9 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import httpx
-from scripts import r14_bounded_acceptance as bounded
-from scripts import r29_v6_extraction_acceptance as r29
-from scripts import r30_ai_timeout_budget_acceptance as r30
+from scripts import ai_timeout_budget_acceptance as r30
+from scripts import bounded_live_acceptance as bounded
+from scripts import plan_extraction_v6_acceptance as r29
 
 from trade_plan_monitor.ai.models import PlanExtractionResult
 from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V6
@@ -967,7 +967,7 @@ async def _run_candidate(
 
 _WATCHDOG_BOOTSTRAP = (
     "import json,sys; "
-    "from scripts.r32_ai_transient_acceptance import _watchdog_child_main; "
+    "from scripts.ai_transient_acceptance import _watchdog_child_main; "
     "raise SystemExit(_watchdog_child_main(json.loads(sys.stdin.read())))"
 )
 

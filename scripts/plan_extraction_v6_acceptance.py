@@ -1,4 +1,4 @@
-"""R27 one-POST AI timeout diagnostic. Default invocation is offline-only."""
+"""R29 one-POST plan-extract-v6 acceptance candidate. Default invocation is offline-only."""
 
 from __future__ import annotations
 
@@ -16,12 +16,16 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import httpx
-from scripts import r14_bounded_acceptance as bounded
-from scripts import r25_extraction_acceptance as r25
+from scripts import ai_timeout_diagnostic as r27
+from scripts import bounded_live_acceptance as bounded
+from scripts import plan_extraction_acceptance as r25
 
 from trade_plan_monitor.ai.models import PlanExtractionResult
-from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V5
-from trade_plan_monitor.ai.provider import AIProviderTransientKind
+from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V6
+from trade_plan_monitor.ai.review import (
+    build_server_review_snapshot,
+    load_explicit_plan_draft_json,
+)
 from trade_plan_monitor.web.routers.plans import (
     PlanExtractionCommand,
     PlanExtractionOperationStatus,
@@ -30,11 +34,11 @@ from trade_plan_monitor.web.routers.plans import (
 )
 from trade_plan_monitor.web.schemas import MutationContext
 
-PROPOSAL_ID = "R27-20260916-AI-TIMEOUT-DIAGNOSTIC-1"
-AUTHORIZATION = "R27_20260916_LITERAL_ONE_AI_ZERO_MARKET_DIAGNOSTIC_V2"
-RUN_ID = "r27-20260916-a"
+PROPOSAL_ID = "R29-20260917-V6-LITERAL-ACCEPTANCE-1"
+AUTHORIZATION = "R29_20260917_LITERAL_ONE_AI_ZERO_MARKET_V6_ACCEPTANCE"
+RUN_ID = "r29-20260917-a"
 CASE_ID = "LITERAL"
-PROMPT_VERSION = PLAN_EXTRACTION_PROMPT_V5
+PROMPT_VERSION = PLAN_EXTRACTION_PROMPT_V6
 AI_OUTPUT_TOKENS = 8192
 AI_CAPS = {CASE_ID: 1}
 AI_TOTAL = 1
@@ -53,14 +57,21 @@ PROVIDER_TIMEOUT_SECONDS = 30
 TERMINAL_WAIT_SECONDS = 31
 CLEANUP_SECONDS = 15
 TOTAL_SECONDS = 45
-SESSION_ROOT = bounded._ROOT / "data/r27-ai-timeout-diagnostic"
-REVIEW_ROOT = bounded._ROOT / "data/r27-ai-timeout-review"
+SESSION_ROOT = bounded._ROOT / "data/r29-v6-extraction-acceptance"
+REVIEW_ROOT = bounded._ROOT / "data/r29-v6-extraction-review"
 EXTERNAL_DESTINATION = "https://api.deepseek.com/chat/completions"
 EXPECTED_SOURCE_HASH = "0b8b389b9b083adff268186c2d6ac8a2589b4ad02e0b4d3b5b8ca37ce1452191"
-EXPECTED_PROMPT_HASH = "660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89"
+EXPECTED_PROMPT_HASH = "7ea200c89eb3357659aa9ab96aa3cd97e9c685474bf2f996592f1460219d86ba"
+EXPECTED_PROMPT_UTF8_BYTES = 19_359
+EXPECTED_CONFIG_HASH = "89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428"
+V5_LITERAL_PROMPT_HASH = "660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89"
+OFFICIAL_DOCS_CHECKED_AT = "2026-09-16T11:09:28+08:00"
+CONSERVATIVE_PEAK_COST_USD = "0.05884032"
 EXPECTED_REVIEW_HASHES = {
-    "egress-review.md": "cb0217addc5efde66f5f1a50d6b1eceac2c6b09121a422d92bfe1e0712e23554",
-    "egress-review.zh-CN.md": "4f282bd6cd384ca24e351c3fd3eae03db23d678ffd349ddff1d386a1a249250b",
+    "egress-material.json": "e017fc3d453c943a020cb438644ae05e41f1738d8055ddd4d8c73404187b5bc1",
+    "egress-review.md": "aadffd35eda02ef3cfe238ed00abd5215fc8c0ade48f012dce19e22055d2b030",
+    "egress-review.zh-CN.md": "28e493b5a50f31ca20f3d8db88924b62e37f6cd6a2b37a33fcb85e87a69f38b8",
+    "manifest.json": "ef8d955294d7bac991f104604243887cb4a180968d3e209bec5c956c0f662240",
 }
 _TERMINAL_STATUSES = frozenset(
     status
@@ -71,27 +82,11 @@ _TERMINAL_STATUSES = frozenset(
         PlanExtractionOperationStatus.RUNNING,
     }
 )
-_SAFE_DIAGNOSTIC_FIELDS = (
-    "version",
-    "operationId",
-    "status",
-    "stage",
-    "reason",
-    "path",
-    "schemaErrorType",
-    "providerErrorCode",
-    "transientKind",
-    "timeoutKind",
-    "timeoutElapsedMs",
-    "finishReason",
-    "modelMatchesConfigured",
-    "attempts",
-)
-_SAFE_TRANSIENT_KINDS = frozenset(kind.value for kind in AIProviderTransientKind)
+_SAFE_DIAGNOSTIC_FIELDS = r27._SAFE_DIAGNOSTIC_FIELDS
 
 
 def _eligible(now: datetime) -> bool:
-    return now.date() == date(2026, 9, 16) and time(10, 0) <= now.time() <= time(12, 0)
+    return now.date() == date(2026, 9, 16) and time(13, 30) <= now.time() <= time(15, 0)
 
 
 def _request_body(prompt: str) -> dict[str, object]:
@@ -113,22 +108,56 @@ def _egress_review_material() -> dict[str, object]:
         "destination": EXTERNAL_DESTINATION,
         "recipient": "DeepSeek API service operated by DeepSeek",
         "method": "POST",
+        "headers": {
+            "Authorization": "<credential omitted; not part of approval material>",
+            "Content-Type": "application/json",
+        },
         "sourceClassification": "SYNTHETIC_VERSIONED_TEST_FIXTURE",
         "containsSyntheticHoldingLanguage": True,
         "containsRealAccountOrCredential": False,
-        "authorizationHeader": "<credential omitted; not part of approval material>",
-        "priorApprovalPackage": {
-            "englishSha256": "6b0d300b0404a24b690281f9336a013f430b72ec9371be069b82c66aab92833d",
-            "chineseSha256": "4d689c24721901e3de8ee38d1accdfdc6f3f54433c36c446a5dff11ce04a32d0",
-            "scope": "R25 exact LITERAL source and sole user prompt",
+        "limits": {
+            "physicalPosts": 1,
+            "retries": 0,
+            "marketCalls": 0,
+            "providerTimeoutSeconds": PROVIDER_TIMEOUT_SECONDS,
+            "totalSeconds": TOTAL_SECONDS,
+            "cleanupSecondsMaximum": CLEANUP_SECONDS,
+        },
+        "v5ToV6Change": {
+            "previousPromptVersion": "plan-extract-v5",
+            "previousLiteralPromptSha256": V5_LITERAL_PROMPT_HASH,
+            "candidatePromptVersion": PROMPT_VERSION,
+            "candidateLiteralPromptSha256": EXPECTED_PROMPT_HASH,
+            "summary": (
+                "v6 adds rules 12-14 for the exact origin/reference matrix, unique binding "
+                "identities, scalar type/value/unit checks, ALL/ANY structure bindings, and "
+                "reciprocal SOURCE mapping; the output schema is unchanged"
+            ),
+            "priorApprovalCoverage": "NO; v5 approval does not cover changed v6 prompt bytes",
+        },
+        "officialSnapshot": {
+            "checkedAt": OFFICIAL_DOCS_CHECKED_AT,
+            "requestAlias": bounded.APPROVED_MODEL,
+            "documentedModelVersion": "DeepSeek-V4-Pro-0813",
+            "peakCacheMissInputUsdPerMillion": "1.32",
+            "peakOutputUsdPerMillion": "3.96",
+            "conservativeInputTokenBound": 20_000,
+            "maximumOutputTokens": AI_OUTPUT_TOKENS,
+            "conservativePeakEstimateUsd": CONSERVATIVE_PEAK_COST_USD,
+            "actualBillingAndTaxes": "UNKNOWN",
+            "sources": [
+                "https://api-docs.deepseek.com/api/create-chat-completion/",
+                "https://api-docs.deepseek.com/quick_start/pricing/",
+            ],
         },
         "requests": {
             CASE_ID: {
-                "purpose": "one-shot timeout-phase diagnosis or literal extraction result",
+                "purpose": "one-shot real v6 literal extraction acceptance candidate",
                 "origin": "tests/fixtures/ai/explicit-plan-literal-source-v3.json#sourceText",
                 "sourceText": source,
                 "sourceSha256": sha256(source.encode("utf-8")).hexdigest(),
                 "promptSha256": sha256(prompt.encode("utf-8")).hexdigest(),
+                "promptUtf8Bytes": len(prompt.encode("utf-8")),
                 "body": _request_body(prompt),
             }
         },
@@ -137,60 +166,64 @@ def _egress_review_material() -> dict[str, object]:
 
 def _validate_material(material: dict[str, object]) -> bool:
     try:
-        approved_source, approved_prompt = bounded.approved_sources(
-            prompt_version=PROMPT_VERSION
-        )[CASE_ID]
+        source, prompt = bounded.approved_sources(prompt_version=PROMPT_VERSION)[CASE_ID]
         requests = material["requests"]
         request = requests[CASE_ID]
         body = request["body"]
-        source = request["sourceText"]
-        prompt = body["messages"][0]["content"]
+        candidate_source = request["sourceText"]
+        candidate_prompt = body["messages"][0]["content"]
         return bool(
             material["destination"] == EXTERNAL_DESTINATION
             and material["method"] == "POST"
             and tuple(requests) == (CASE_ID,)
-            and source.encode("utf-8") == approved_source.encode("utf-8")
-            and prompt.encode("utf-8") == approved_prompt.encode("utf-8")
-            and sha256(source.encode("utf-8")).hexdigest() == EXPECTED_SOURCE_HASH
-            and sha256(prompt.encode("utf-8")).hexdigest() == EXPECTED_PROMPT_HASH
+            and candidate_source.encode("utf-8") == source.encode("utf-8")
+            and candidate_prompt.encode("utf-8") == prompt.encode("utf-8")
+            and sha256(candidate_source.encode("utf-8")).hexdigest() == EXPECTED_SOURCE_HASH
+            and sha256(candidate_prompt.encode("utf-8")).hexdigest() == EXPECTED_PROMPT_HASH
+            and len(candidate_prompt.encode("utf-8")) == EXPECTED_PROMPT_UTF8_BYTES
             and request["sourceSha256"] == EXPECTED_SOURCE_HASH
             and request["promptSha256"] == EXPECTED_PROMPT_HASH
-            and body == _request_body(approved_prompt)
+            and request["promptUtf8Bytes"] == EXPECTED_PROMPT_UTF8_BYTES
+            and body == _request_body(prompt)
         )
-    except (AttributeError, KeyError, TypeError, UnicodeError):
+    except AttributeError, KeyError, TypeError, UnicodeError:
         return False
 
 
 def _render_review(material: dict[str, object], *, chinese: bool) -> str:
     request = material["requests"][CASE_ID]
     body = request["body"]
-    fixed_body = {key: value for key, value in body.items() if key != "messages"}
     prompt = body["messages"][0]["content"]
+    fixed_body = {key: value for key, value in body.items() if key != "messages"}
+    snapshot = material["officialSnapshot"]
+    change = material["v5ToV6Change"]
     if chinese:
-        title = "R27 精确外发审阅材料"
+        title = "R29 plan-extract-v6 精确外发审阅材料"
         intro = (
-            "本候选仅发送一次 R25 已精确批准的 LITERAL 原文与唯一 user 提示词；"
-            "两者逐字节不变。新目的仅为记录 v2 超时阶段或取得真实字面提取结果，"
-            "不会发起行情请求，也不构成完整业务验收。该请求可能再次产生费用。"
+            "本文件完整展示唯一拟外发的合成 LITERAL 原文、完整 v6 user 提示词及其余"
+            "固定请求字段。原文与提示词逐字保留且不翻译；凭据被排除。v6 改变了提示词"
+            "字节，因此此前 v5 的 R25/R27 批准不覆盖本候选。"
         )
+        change_label = "与 v5 的变化"
         source_label = "将外发的精确原文"
         prompt_label = "将外发的精确唯一 user 提示词"
         body_label = "不含消息内容的固定请求体字段"
-        approval = "批准来源：R25 精确外发审阅包及用户后续“继续下一步”指令"
-        once = "物理 POST 上限：一次；重试：零；行情调用：零"
+        cost = "保守单次峰值估算"
+        billing = "真实账单、缓存拆分、税费及账户调整未知"
     else:
-        title = "R27 exact egress review material"
+        title = "R29 plan-extract-v6 exact egress review material"
         intro = (
-            "This candidate sends once only the exact R25-approved LITERAL source and sole "
-            "user prompt; both are byte-identical. The new purpose is limited to recording a "
-            "v2 timeout phase or obtaining a real literal extraction result. It makes no market "
-            "request and is not full business acceptance. The request may incur another charge."
+            "This file shows the sole synthetic LITERAL source, complete v6 user prompt, and "
+            "all other fixed request fields proposed for egress. Source and prompt bytes are "
+            "exact and untranslated; credentials are excluded. Because v6 changes prompt "
+            "bytes, the earlier R25/R27 v5 approvals do not cover this candidate."
         )
+        change_label = "Change from v5"
         source_label = "Exact source text to be sent"
         prompt_label = "Exact sole user prompt to be sent"
-        body_label = "Fixed request body fields excluding message content"
-        approval = "Approval basis: R25 exact egress package and the user's follow-up instruction"
-        once = "Physical POST cap: once; retries: zero; market calls: zero"
+        body_label = "Fixed request-body fields excluding message content"
+        cost = "Conservative single-request peak estimate"
+        billing = "Actual billing, cache split, taxes, and account adjustments are unknown"
     return "\n".join(
         [
             f"# {title}",
@@ -200,11 +233,23 @@ def _render_review(material: dict[str, object], *, chinese: bool) -> str:
             f"- Recipient: `{material['recipient']}`",
             f"- Destination: `{material['destination']}`",
             f"- Method: `{material['method']}`",
-            f"- {approval}",
-            f"- {once}",
+            "- Authorization header: `<credential omitted; not part of approval material>`",
+            "- Content-Type: `application/json`",
+            "- Physical POST cap: `1`; retries: `0`; market calls (including trade_cal): `0`",
             f"- Source SHA-256: `{request['sourceSha256']}`",
             f"- Prompt SHA-256: `{request['promptSha256']}`",
-            f"- Authorization header: `{material['authorizationHeader']}`",
+            f"- Prompt UTF-8 bytes: `{request['promptUtf8Bytes']}`",
+            f"- {cost}: `USD {snapshot['conservativePeakEstimateUsd']}`; {billing}.",
+            f"- Official snapshot time: `{snapshot['checkedAt']}`",
+            "",
+            f"## {change_label}",
+            "",
+            "- `plan-extract-v5` LITERAL prompt SHA-256: "
+            f"`{change['previousLiteralPromptSha256']}`",
+            "- `plan-extract-v6` LITERAL prompt SHA-256: "
+            f"`{change['candidateLiteralPromptSha256']}`",
+            f"- {change['summary']}",
+            f"- Approval coverage: {change['priorApprovalCoverage']}",
             "",
             f"## {source_label}",
             "",
@@ -231,12 +276,33 @@ def _render_review(material: dict[str, object], *, chinese: bool) -> str:
 def _write_egress_review_package(root: Path = REVIEW_ROOT) -> tuple[Path, Path]:
     material = _egress_review_material()
     if not _validate_material(material):
-        raise ValueError("R27 egress material does not match the approved LITERAL contract")
+        raise ValueError("R29 egress material does not match the frozen v6 contract")
     root.mkdir(parents=True, exist_ok=True)
+    material_path = root / "egress-material.json"
     english = root / "egress-review.md"
     chinese = root / "egress-review.zh-CN.md"
+    material_path.write_text(
+        json.dumps(material, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     english.write_text(_render_review(material, chinese=False), encoding="utf-8", newline="\n")
     chinese.write_text(_render_review(material, chinese=True), encoding="utf-8", newline="\n")
+    components = {path.name: _file_sha256(path) for path in (material_path, english, chinese)}
+    package_digest = sha256()
+    for path in (material_path, english, chinese):
+        package_digest.update(path.read_bytes())
+    manifest = {
+        "proposalId": PROPOSAL_ID,
+        "components": components,
+        "packageSha256": package_digest.hexdigest(),
+        "packageOrder": [material_path.name, english.name, chinese.name],
+    }
+    (root / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     return english, chinese
 
 
@@ -273,40 +339,47 @@ def _git_state() -> tuple[bool, str | None]:
             capture_output=True,
             text=True,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return False, None
     return not status.stdout.strip(), head.stdout.strip() or None
 
 
-def _preflight() -> dict[str, object]:
+def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
     from trade_plan_monitor.config import load_application_config
 
-    config_path = bounded._ROOT / "config/app.yaml"
-    try:
-        configuration = load_application_config(config_path)
-        ai = configuration.ai
-        endpoint = urlsplit(str(ai.base_url))
-        key_present = bool(ai.api_key)
-        selected = bounded.APPROVED_MODEL in {
-            ai.model,
-            *(item.model for item in ai.additional_models),
-        }
-        ai_ready = bool(
-            key_present
-            and ai.profile.value == "DEEPSEEK"
-            and endpoint.scheme == "https"
-            and endpoint.hostname == "api.deepseek.com"
-            and endpoint.port in (None, 443)
-            and endpoint.path in ("", "/")
-            and not endpoint.query
-            and not endpoint.fragment
-            and selected
-        )
-    except Exception:
-        endpoint = None
-        key_present = False
-        selected = False
-        ai_ready = False
+    path = config_path or (bounded._ROOT / "config/app.yaml")
+    config_status = "MISSING"
+    endpoint = None
+    key_present = False
+    selected = False
+    config_hash_matches = False
+    ai_ready = False
+    if path.is_file():
+        try:
+            config_hash_matches = _file_sha256(path) == EXPECTED_CONFIG_HASH
+            configuration = load_application_config(path)
+            ai = configuration.ai
+            endpoint = urlsplit(str(ai.base_url))
+            key_present = bool(ai.api_key)
+            selected = bounded.APPROVED_MODEL in {
+                ai.model,
+                *(item.model for item in ai.additional_models),
+            }
+            config_status = "READY" if config_hash_matches else "HASH_MISMATCH"
+            ai_ready = bool(
+                config_hash_matches
+                and key_present
+                and ai.profile.value == "DEEPSEEK"
+                and endpoint.scheme == "https"
+                and endpoint.hostname == "api.deepseek.com"
+                and endpoint.port in (None, 443)
+                and endpoint.path in ("", "/")
+                and not endpoint.query
+                and not endpoint.fragment
+                and selected
+            )
+        except Exception:
+            config_status = "INVALID"
     now = datetime.now(bounded._SHANGHAI)
     clean, head = _git_state()
     material_matches = _validate_material(_egress_review_material())
@@ -314,12 +387,7 @@ def _preflight() -> dict[str, object]:
     unclaimed = not (SESSION_ROOT / "_session_claimed").exists()
     eligible = _eligible(now)
     ready = bool(
-        ai_ready
-        and material_matches
-        and package_matches
-        and unclaimed
-        and eligible
-        and clean
+        ai_ready and material_matches and package_matches and unclaimed and eligible and clean
     )
     return {
         "ready": ready,
@@ -331,11 +399,11 @@ def _preflight() -> dict[str, object]:
         "gitClean": clean,
         "gitHead": head,
         "freshClaimAvailable": unclaimed,
-        "extractionDiagnosticOnly": True,
-        "activationAllowed": False,
-        "humanReviewRequired": True,
+        "configSourceStatus": config_status,
+        "configSha256Matches": config_hash_matches,
+        "configCopiedIntoWorktree": False,
         "externalDestination": EXTERNAL_DESTINATION,
-        "materialMatchesApprovedLiteral": material_matches,
+        "materialMatchesFrozenV6": material_matches,
         "reviewPackageMatchesCandidate": package_matches,
         "sourceSha256": EXPECTED_SOURCE_HASH,
         "promptSha256": EXPECTED_PROMPT_HASH,
@@ -354,54 +422,23 @@ def _preflight() -> dict[str, object]:
             "totalSeconds": TOTAL_SECONDS,
             "cleanupSecondsMaximum": CLEANUP_SECONDS,
             "promptVersion": PROMPT_VERSION,
+            "promptUtf8Bytes": EXPECTED_PROMPT_UTF8_BYTES,
             "aiOutputTokensPerRequest": AI_OUTPUT_TOKENS,
         },
         "officialRouteRecheckRequiredBeforeExecute": True,
         "officialPriceRecheckRequiredBeforeExecute": True,
         "balanceOrModelListProbeAllowed": False,
+        "activationAllowed": False,
+        "humanReviewRequired": True,
     }
 
 
 def _read_diagnostic(path: Path, operation_id: UUID) -> dict[str, object] | None:
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return None
-    for line in reversed(lines):
-        try:
-            record = json.loads(line)
-        except (TypeError, ValueError):
-            continue
-        if record.get("operationId") == str(operation_id):
-            return record
-    return None
+    return r27._read_diagnostic(path, operation_id)
 
 
 def _safe_diagnostic(record: dict[str, object] | None) -> dict[str, object] | None:
-    if record is None:
-        return None
-    summary = {field: record.get(field) for field in _SAFE_DIAGNOSTIC_FIELDS}
-    transient_kind = record.get("transientKind")
-    safe_transient_kind = None
-    if record.get("version") == 3 and record.get("providerErrorCode") == "TRANSIENT":
-        safe_transient_kind = (
-            transient_kind if transient_kind in _SAFE_TRANSIENT_KINDS else "UNKNOWN"
-        )
-    summary["transientKind"] = safe_transient_kind
-    summary["usageAvailable"] = record.get("usage") is not None
-    return summary
-
-
-def _supported_diagnostic_record(record: dict[str, object]) -> bool:
-    version = record.get("version")
-    if version == 2:
-        return True
-    if version != 3:
-        return False
-    transient_kind = record.get("transientKind")
-    if record.get("providerErrorCode") == "TRANSIENT":
-        return transient_kind in _SAFE_TRANSIENT_KINDS
-    return transient_kind is None
+    return r27._safe_diagnostic(record)
 
 
 def _assess_terminal(
@@ -412,18 +449,19 @@ def _assess_terminal(
 ) -> tuple[dict[str, object], dict[str, object] | None]:
     record = _read_diagnostic(diagnostic_path, view.id)
     safe = _safe_diagnostic(record)
+    source_hash = sha256(source_text.encode("utf-8")).hexdigest()
     base: dict[str, object] = {
         "caseId": CASE_ID,
         "operationId": str(view.id),
         "status": view.status.value,
-        "sourceSha256": sha256(source_text.encode("utf-8")).hexdigest(),
+        "sourceSha256": source_hash,
         "accepted": False,
         "oracleStatus": "NOT_RUN",
         "diagnostic": safe,
     }
     if (
         record is None
-        or not _supported_diagnostic_record(record)
+        or not r27._supported_diagnostic_record(record)
         or record.get("operationId") != str(view.id)
         or view.diagnostic_status != "RECORDED"
     ):
@@ -438,15 +476,47 @@ def _assess_terminal(
             else "EXTRACTION_FAILED_DIAGNOSTIC_RECORDED"
         )
         return base, None
-    assessed, review = r25._assess_extraction(
-        case_id=CASE_ID,
-        source_text=source_text,
-        view=view,
-        diagnostic_path=diagnostic_path,
+    if (
+        view.source_text_sha256 != source_hash
+        or view.model != bounded.APPROVED_MODEL
+        or view.prompt_version != PROMPT_VERSION
+        or record.get("stage") != "completed"
+        or record.get("reason") != "NONE"
+        or record.get("finishReason") != "stop"
+        or record.get("modelMatchesConfigured") is not True
+        or view.draft_plan_json is None
+        or view.mapping is None
+    ):
+        base["reason"] = "MODEL_OR_COMPLETION_RECEIPT_REJECTED"
+        return base, None
+    try:
+        draft = load_explicit_plan_draft_json(view.draft_plan_json)
+        mapping = view.mapping.to_domain()
+        snapshot = build_server_review_snapshot(
+            source_text=source_text,
+            draft=draft,
+            mapping=mapping,
+        )
+        accepted = r25._literal_oracle_matches(
+            draft_data=draft.model_dump(mode="json"),
+            mapping=mapping,
+            source_text=source_text,
+        )
+    except IndexError, KeyError, TypeError, UnicodeError, ValueError:
+        accepted = False
+        snapshot = None
+    base["accepted"] = accepted
+    base["oracleStatus"] = "ACCEPTED" if accepted else "MISMATCH"
+    base["reason"] = "ORACLE_ACCEPTED" if accepted else "ORACLE_MISMATCH"
+    if snapshot is not None:
+        base["reviewIssueCodes"] = sorted({item.code for item in snapshot.required_issues})
+        base["canActivateBeforeHumanReview"] = snapshot.can_activate
+    if view.usage is not None:
+        base["usage"] = view.usage.model_dump(mode="json", by_alias=True)
+    return (
+        base,
+        view.model_dump(mode="json", by_alias=True) if accepted else None,
     )
-    assessed["diagnostic"] = safe
-    assessed["oracleStatus"] = "ACCEPTED" if assessed.get("accepted") is True else "MISMATCH"
-    return assessed, review
 
 
 async def _submit_and_wait(
@@ -507,24 +577,26 @@ class _IsolatedReviewStore:
         self.operation_ids.append(str(result.request_id))
 
 
+def _review_receipt_matches(
+    outcome: dict[str, object],
+    review: dict[str, object] | None,
+    operation_ids: list[str],
+) -> bool:
+    operation_id = outcome.get("operationId")
+    return bool(
+        outcome.get("accepted") is True
+        and review is not None
+        and isinstance(operation_id, str)
+        and operation_ids == [operation_id]
+    )
+
+
 def _claim_session(root: Path = SESSION_ROOT) -> Path:
     return bounded._claim_session(root, RUN_ID)
 
 
 def _database_counts(database: Path) -> dict[str, int]:
-    with sqlite3.connect(f"file:{database.as_posix()}?mode=ro", uri=True) as connection:
-        connection.execute("PRAGMA query_only=ON")
-        tables = [
-            row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            )
-            if row[0] not in {"alembic_version", "monitor_sequence", "sqlite_sequence"}
-        ]
-        return {
-            table: int(connection.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])
-            for table in tables
-        }
+    return r27._database_counts(database)
 
 
 async def _cleanup_with_hard_deadline(
@@ -553,6 +625,7 @@ async def _cleanup_with_hard_deadline(
 
 async def _run_candidate(
     *,
+    config_path: Path,
     session_root: Path = SESSION_ROOT,
     ai_inner_transport: httpx.AsyncBaseTransport | None = None,
 ) -> int:
@@ -583,6 +656,7 @@ async def _run_candidate(
         "humanReviewStatus": "REQUIRED_NOT_PERFORMED",
         "activationAllowed": False,
         "marketLifecycleStarted": False,
+        "configCopiedIntoWorktree": False,
     }
     ai_budget, market_budget = bounded._session_budgets(
         lambda: None,
@@ -607,27 +681,35 @@ async def _run_candidate(
         )
         await plans.start()
         ai = bounded._bounded_ai_factory(
-            bounded._ROOT / "config/app.yaml",
+            config_path,
             review_store,
             ai_budget,
             database=database,
             inner_transport=ai_inner_transport,
             prompt_version=PROMPT_VERSION,
             max_output_tokens=AI_OUTPUT_TOKENS,
+            max_prompt_utf8_bytes=EXPECTED_PROMPT_UTF8_BYTES,
         )
         startup = await ai.start()
         if startup.get("configured") is not True or startup.get("diagnosticAvailable") is not True:
             raise bounded.BudgetDenied
         provider_id = (await ai.get_configured_ai()).provider_id
         source = bounded.approved_sources(prompt_version=PROMPT_VERSION)[CASE_ID][0]
-        operation_deadline = min(hard_deadline, session_started + TERMINAL_WAIT_SECONDS)
         outcome, review = await _submit_and_wait(
             service=ai,
             provider_id=provider_id,
             source_text=source,
             diagnostic_path=diagnostics,
-            deadline=operation_deadline,
+            deadline=min(hard_deadline, session_started + TERMINAL_WAIT_SECONDS),
         )
+        if outcome.get("accepted") is True and not _review_receipt_matches(
+            outcome,
+            review,
+            review_store.operation_ids,
+        ):
+            outcome["accepted"] = False
+            outcome["reason"] = "REVIEW_RECEIPT_MISMATCH"
+            review = None
         audit["case"] = outcome
         audit["reviewSinkReceipts"] = len(review_store.operation_ids)
         bounded._write_json_atomic(
@@ -641,12 +723,10 @@ async def _run_candidate(
             },
         )
         if outcome.get("accepted") is True:
-            audit["status"] = "LITERAL_EXTRACTION_SUCCEEDED_REVIEW_REQUIRED"
+            audit["status"] = "LITERAL_V6_EXTRACTION_SUCCEEDED_REVIEW_REQUIRED"
             return_code = 0
-        elif outcome.get("reason") == "TIMEOUT_DIAGNOSTIC_RECORDED":
-            audit["status"] = "AI_TIMEOUT_DIAGNOSED"
         else:
-            audit["status"] = "AI_DIAGNOSTIC_FAILED"
+            audit["status"] = "AI_ACCEPTANCE_FAILED"
     except BaseException as error:
         audit["status"] = "FAILED"
         audit["errorType"] = type(error).__name__
@@ -662,7 +742,7 @@ async def _run_candidate(
         if database.exists():
             try:
                 counts = _database_counts(database)
-            except (OSError, sqlite3.Error):
+            except OSError, sqlite3.Error:
                 counts = {}
                 audit["status"] = "LOCAL_STATE_VERIFICATION_FAILED"
                 return_code = 1
@@ -688,13 +768,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--authorize", default="")
     parser.add_argument("--run-id", default="")
+    parser.add_argument("--config-path", type=Path)
     args = parser.parse_args(argv)
     if args.prepare_egress_review:
         _write_egress_review_package()
-    preflight = _preflight()
+    preflight = _preflight(config_path=args.config_path)
     if not args.execute:
         print(json.dumps(preflight, ensure_ascii=True, sort_keys=True))
         return 0
+    if args.config_path is None:
+        print(json.dumps({"status": "NOT_RUN_CONFIG_PATH_REQUIRED"}))
+        return 2
     if args.authorize != AUTHORIZATION or not preflight.get("ready"):
         print(json.dumps({"status": "NOT_RUN_AUTHORIZATION_OR_PREFLIGHT"}))
         return 2
@@ -702,7 +786,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"status": "NOT_RUN_INVALID_ID_OR_WINDOW"}))
         return 2
     try:
-        return asyncio.run(_run_candidate())
+        return asyncio.run(_run_candidate(config_path=args.config_path))
     except FileExistsError:
         print(json.dumps({"status": "NOT_RUN_SESSION_ALREADY_CLAIMED"}))
         return 2

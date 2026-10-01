@@ -18,7 +18,7 @@ test.beforeAll(async ({ request }) => {
     const port = address.port;
     await new Promise<void>((done) => listener.close(() => done()));
     base = `http://127.0.0.1:${port}`;
-    server = spawn(join(repo, ".venv/Scripts/python.exe"), ["-m", "tests.browser.r13_fault_server", "--port", String(port)], { cwd: repo, windowsHide: true });
+    server = spawn(join(repo, ".venv/Scripts/python.exe"), ["-m", "tests.browser.ai_fault_server", "--port", String(port)], { cwd: repo, windowsHide: true });
     server.stdout?.on("data", (value) => { serverLog += String(value); });
     server.stderr?.on("data", (value) => { serverLog += String(value); });
   await expect.poll(async () => {

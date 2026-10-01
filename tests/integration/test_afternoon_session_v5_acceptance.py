@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from scripts import r20_bounded_acceptance as r20
-from scripts import r23_bounded_acceptance as r23
+from scripts import afternoon_session_v5_acceptance as r23
+from scripts import morning_session_acceptance as r20
 
 from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V5
 

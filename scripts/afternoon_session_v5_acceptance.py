@@ -8,7 +8,7 @@ import json
 from datetime import date, datetime, time
 from hashlib import sha256
 
-from scripts import r14_bounded_acceptance as bounded
+from scripts import bounded_live_acceptance as bounded
 
 from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V5
 

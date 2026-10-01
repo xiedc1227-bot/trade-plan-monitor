@@ -9,9 +9,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
-from scripts import r14_bounded_acceptance as r14
-from scripts import r17_bounded_acceptance as r17
-from scripts import r18_bounded_acceptance as r18
+from scripts import afternoon_session_acceptance as r17
+from scripts import bounded_live_acceptance as r14
+from scripts import opening_session_restart_acceptance as r18
 
 
 def test_window_and_limits_are_bound_to_the_new_session() -> None:

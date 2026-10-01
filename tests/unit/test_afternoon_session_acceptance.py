@@ -7,8 +7,8 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from scripts import r14_bounded_acceptance as r14
-from scripts import r17_bounded_acceptance as r17
+from scripts import afternoon_session_acceptance as r17
+from scripts import bounded_live_acceptance as r14
 
 
 def test_distinct_date_run_id_and_endpoint_sum() -> None:

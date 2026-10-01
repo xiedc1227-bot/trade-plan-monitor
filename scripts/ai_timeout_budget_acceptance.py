@@ -1,4 +1,4 @@
-"""R29 one-POST plan-extract-v6 acceptance candidate. Default invocation is offline-only."""
+"""R30 one-POST v6 timeout-budget candidate. Default invocation is offline-only."""
 
 from __future__ import annotations
 
@@ -16,62 +16,50 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import httpx
-from scripts import r14_bounded_acceptance as bounded
-from scripts import r25_extraction_acceptance as r25
-from scripts import r27_ai_timeout_diagnostic as r27
+from scripts import bounded_live_acceptance as bounded
+from scripts import plan_extraction_v6_acceptance as r29
 
 from trade_plan_monitor.ai.models import PlanExtractionResult
 from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V6
-from trade_plan_monitor.ai.review import (
-    build_server_review_snapshot,
-    load_explicit_plan_draft_json,
-)
 from trade_plan_monitor.web.routers.plans import (
     PlanExtractionCommand,
     PlanExtractionOperationStatus,
     PlanExtractionService,
-    PlanExtractionView,
 )
 from trade_plan_monitor.web.schemas import MutationContext
 
-PROPOSAL_ID = "R29-20260917-V6-LITERAL-ACCEPTANCE-1"
-AUTHORIZATION = "R29_20260917_LITERAL_ONE_AI_ZERO_MARKET_V6_ACCEPTANCE"
-RUN_ID = "r29-20260917-a"
+PROPOSAL_ID = "R30-20260917-V6-LITERAL-TIMEOUT-BUDGET-1"
+AUTHORIZATION = "R30_20260917_LITERAL_ONE_AI_ZERO_MARKET_TIMEOUT_BUDGET_ACCEPTANCE"
+RUN_ID = "r30-20260917-a"
 CASE_ID = "LITERAL"
 PROMPT_VERSION = PLAN_EXTRACTION_PROMPT_V6
 AI_OUTPUT_TOKENS = 8192
 AI_CAPS = {CASE_ID: 1}
 AI_TOTAL = 1
-MARKET_CAPS = {
-    "trade_cal": 0,
-    "stk_limit": 0,
-    "daily": 0,
-    "rt_min_daily": 0,
-    "rt_min": 0,
-    "idx_mins": 0,
-    "rt_idx_min_daily": 0,
-    "index_daily": 0,
-}
+MARKET_CAPS = {key: 0 for key in r29.MARKET_CAPS}
 MARKET_TOTAL = 0
-PROVIDER_TIMEOUT_SECONDS = 30
-TERMINAL_WAIT_SECONDS = 31
+TRANSPORT_TIMEOUT_SECONDS = 30
+READ_TIMEOUT_SECONDS = 60
+PROVIDER_TIMEOUT_SECONDS = 65
+TERMINAL_WAIT_SECONDS = 66
 CLEANUP_SECONDS = 15
-TOTAL_SECONDS = 45
-SESSION_ROOT = bounded._ROOT / "data/r29-v6-extraction-acceptance"
-REVIEW_ROOT = bounded._ROOT / "data/r29-v6-extraction-review"
-EXTERNAL_DESTINATION = "https://api.deepseek.com/chat/completions"
-EXPECTED_SOURCE_HASH = "0b8b389b9b083adff268186c2d6ac8a2589b4ad02e0b4d3b5b8ca37ce1452191"
-EXPECTED_PROMPT_HASH = "7ea200c89eb3357659aa9ab96aa3cd97e9c685474bf2f996592f1460219d86ba"
-EXPECTED_PROMPT_UTF8_BYTES = 19_359
-EXPECTED_CONFIG_HASH = "89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428"
-V5_LITERAL_PROMPT_HASH = "660945f63c48c66c6b115e8bb29a0ccc76fde1df60aca17ba7c74bba2a06ef89"
-OFFICIAL_DOCS_CHECKED_AT = "2026-09-16T11:09:28+08:00"
-CONSERVATIVE_PEAK_COST_USD = "0.05884032"
+TOTAL_SECONDS = 81
+SESSION_ROOT = bounded._ROOT / "data/r30-ai-timeout-budget-acceptance"
+REVIEW_ROOT = bounded._ROOT / "data/r30-ai-timeout-budget-review"
+EXTERNAL_DESTINATION = r29.EXTERNAL_DESTINATION
+EXPECTED_SOURCE_HASH = r29.EXPECTED_SOURCE_HASH
+EXPECTED_PROMPT_HASH = r29.EXPECTED_PROMPT_HASH
+EXPECTED_PROMPT_UTF8_BYTES = r29.EXPECTED_PROMPT_UTF8_BYTES
+EXPECTED_CONFIG_HASH = r29.EXPECTED_CONFIG_HASH
+EXPECTED_REQUEST_BODY_HASH = "c2a60f45fc41784ada733d6f6e7267435597d59897f1333b31ff1f242048c10c"
+R29_PACKAGE_HASH = "328620ea1d51a7b5b15128ca5f1741825478e46ec1fd6eef0f4abd271c8579f9"
+OFFICIAL_DOCS_CHECKED_AT = "2026-09-17T09:43:04+08:00"
+CONSERVATIVE_PEAK_COST_USD = "0.01582704"
 EXPECTED_REVIEW_HASHES = {
-    "egress-material.json": "e017fc3d453c943a020cb438644ae05e41f1738d8055ddd4d8c73404187b5bc1",
-    "egress-review.md": "aadffd35eda02ef3cfe238ed00abd5215fc8c0ade48f012dce19e22055d2b030",
-    "egress-review.zh-CN.md": "28e493b5a50f31ca20f3d8db88924b62e37f6cd6a2b37a33fcb85e87a69f38b8",
-    "manifest.json": "ef8d955294d7bac991f104604243887cb4a180968d3e209bec5c956c0f662240",
+    "egress-material.json": "3fc51132f4ac639cda3f076c821c182385141b5a5ca656d35558c76822d2183a",
+    "egress-review.md": "9fc8143d6452029d9cd6e2dc122703081cc4a758177187803d83a0b3ba3b3d5f",
+    "egress-review.zh-CN.md": "b66c61c3ce42a5845119d16babfe38f9af6da74608fc484eddc931311f8292cc",
+    "manifest.json": "4a5277035418dfdcc237c51fd69281734354d78976e6d5b8ad9f4deb8ff181a3",
 }
 _TERMINAL_STATUSES = frozenset(
     status
@@ -82,27 +70,29 @@ _TERMINAL_STATUSES = frozenset(
         PlanExtractionOperationStatus.RUNNING,
     }
 )
-_SAFE_DIAGNOSTIC_FIELDS = r27._SAFE_DIAGNOSTIC_FIELDS
 
 
 def _eligible(now: datetime) -> bool:
-    return now.date() == date(2026, 9, 16) and time(13, 30) <= now.time() <= time(15, 0)
+    return now.date() == date(2026, 9, 17) and time(0, 0) <= now.time() <= time(23, 59, 59)
+
+
+def _canonical_json_hash(value: object) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return sha256(payload).hexdigest()
 
 
 def _request_body(prompt: str) -> dict[str, object]:
-    return {
-        "model": bounded.APPROVED_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": AI_OUTPUT_TOKENS,
-        "temperature": 0,
-        "thinking": {"type": "disabled"},
-        "response_format": {"type": "json_object"},
-        "stream": False,
-    }
+    return r29._request_body(prompt)
 
 
 def _egress_review_material() -> dict[str, object]:
     source, prompt = bounded.approved_sources(prompt_version=PROMPT_VERSION)[CASE_ID]
+    body = _request_body(prompt)
     return {
         "proposalId": PROPOSAL_ID,
         "destination": EXTERNAL_DESTINATION,
@@ -119,28 +109,51 @@ def _egress_review_material() -> dict[str, object]:
             "physicalPosts": 1,
             "retries": 0,
             "marketCalls": 0,
-            "providerTimeoutSeconds": PROVIDER_TIMEOUT_SECONDS,
+            "connectWritePoolTimeoutSeconds": TRANSPORT_TIMEOUT_SECONDS,
+            "readTimeoutSeconds": READ_TIMEOUT_SECONDS,
+            "providerOverallTimeoutSeconds": PROVIDER_TIMEOUT_SECONDS,
+            "terminalObservationSeconds": TERMINAL_WAIT_SECONDS,
             "totalSeconds": TOTAL_SECONDS,
             "cleanupSecondsMaximum": CLEANUP_SECONDS,
         },
-        "v5ToV6Change": {
-            "previousPromptVersion": "plan-extract-v5",
-            "previousLiteralPromptSha256": V5_LITERAL_PROMPT_HASH,
-            "candidatePromptVersion": PROMPT_VERSION,
-            "candidateLiteralPromptSha256": EXPECTED_PROMPT_HASH,
-            "summary": (
-                "v6 adds rules 12-14 for the exact origin/reference matrix, unique binding "
-                "identities, scalar type/value/unit checks, ALL/ANY structure bindings, and "
-                "reciprocal SOURCE mapping; the output schema is unchanged"
+        "controlledHypothesis": {
+            "statement": (
+                "R29 may have been locally truncated by its 30-second overall deadline; "
+                "R30 tests one longer bounded wait without claiming a remote-provider fix"
             ),
-            "priorApprovalCoverage": "NO; v5 approval does not cover changed v6 prompt bytes",
+            "evidence": {
+                "r27ValidatedResponseSeconds": "29.542",
+                "r29TimeoutKind": "OVERALL_DEADLINE",
+                "r29TimeoutElapsedMs": 30009,
+            },
+            "unknowns": [
+                "whether DeepSeek received, completed, or billed R29",
+                "whether R30 will return before either local deadline",
+                "actual generation throughput and response size",
+            ],
+        },
+        "comparisonWithR29": {
+            "r29PackageSha256": R29_PACKAGE_HASH,
+            "sourceBytesChanged": False,
+            "promptBytesChanged": False,
+            "requestBodyBytesChanged": False,
+            "requestBodyCanonicalSha256": EXPECTED_REQUEST_BODY_HASH,
+            "sentFieldsChanged": [],
+            "localOnlyChanges": [
+                "read timeout 30s -> 60s",
+                "provider overall deadline 30s -> 65s",
+                "terminal observation 31s -> 66s",
+                "candidate hard total 45s -> 81s",
+            ],
+            "unchangedLocalStages": "connect/write/pool remain 30 seconds",
         },
         "officialSnapshot": {
             "checkedAt": OFFICIAL_DOCS_CHECKED_AT,
             "requestAlias": bounded.APPROVED_MODEL,
-            "documentedModelVersion": "DeepSeek-V4-Pro-0813",
-            "peakCacheMissInputUsdPerMillion": "1.32",
-            "peakOutputUsdPerMillion": "3.96",
+            "documentedModelVersion": "DeepSeek-V4-Pro",
+            "cacheHitInputUsdPerMillion": "0.003625",
+            "cacheMissInputUsdPerMillion": "0.435",
+            "outputUsdPerMillion": "0.87",
             "conservativeInputTokenBound": 20_000,
             "maximumOutputTokens": AI_OUTPUT_TOKENS,
             "conservativePeakEstimateUsd": CONSERVATIVE_PEAK_COST_USD,
@@ -148,17 +161,20 @@ def _egress_review_material() -> dict[str, object]:
             "sources": [
                 "https://api-docs.deepseek.com/api/create-chat-completion/",
                 "https://api-docs.deepseek.com/quick_start/pricing/",
+                "https://www.python-httpx.org/advanced/timeouts/",
+                "https://docs.python.org/3/library/asyncio-task.html#timeouts",
             ],
         },
         "requests": {
             CASE_ID: {
-                "purpose": "one-shot real v6 literal extraction acceptance candidate",
+                "purpose": "one-shot real v6 extraction with an isolated client wait budget",
                 "origin": "tests/fixtures/ai/explicit-plan-literal-source-v3.json#sourceText",
                 "sourceText": source,
                 "sourceSha256": sha256(source.encode("utf-8")).hexdigest(),
                 "promptSha256": sha256(prompt.encode("utf-8")).hexdigest(),
                 "promptUtf8Bytes": len(prompt.encode("utf-8")),
-                "body": _request_body(prompt),
+                "bodyCanonicalSha256": _canonical_json_hash(body),
+                "body": body,
             }
         },
     }
@@ -170,6 +186,7 @@ def _validate_material(material: dict[str, object]) -> bool:
         requests = material["requests"]
         request = requests[CASE_ID]
         body = request["body"]
+        comparison = material["comparisonWithR29"]
         candidate_source = request["sourceText"]
         candidate_prompt = body["messages"][0]["content"]
         return bool(
@@ -184,9 +201,15 @@ def _validate_material(material: dict[str, object]) -> bool:
             and request["sourceSha256"] == EXPECTED_SOURCE_HASH
             and request["promptSha256"] == EXPECTED_PROMPT_HASH
             and request["promptUtf8Bytes"] == EXPECTED_PROMPT_UTF8_BYTES
+            and request["bodyCanonicalSha256"] == EXPECTED_REQUEST_BODY_HASH
+            and _canonical_json_hash(body) == EXPECTED_REQUEST_BODY_HASH
             and body == _request_body(prompt)
+            and comparison["sourceBytesChanged"] is False
+            and comparison["promptBytesChanged"] is False
+            and comparison["requestBodyBytesChanged"] is False
+            and comparison["sentFieldsChanged"] == []
         )
-    except AttributeError, KeyError, TypeError, UnicodeError:
+    except (AttributeError, KeyError, TypeError, UnicodeError):
         return False
 
 
@@ -196,60 +219,62 @@ def _render_review(material: dict[str, object], *, chinese: bool) -> str:
     prompt = body["messages"][0]["content"]
     fixed_body = {key: value for key, value in body.items() if key != "messages"}
     snapshot = material["officialSnapshot"]
-    change = material["v5ToV6Change"]
+    comparison = material["comparisonWithR29"]
     if chinese:
-        title = "R29 plan-extract-v6 精确外发审阅材料"
+        title = "R30 AI 超时预算候选精确外发审阅材料"
         intro = (
-            "本文件完整展示唯一拟外发的合成 LITERAL 原文、完整 v6 user 提示词及其余"
-            "固定请求字段。原文与提示词逐字保留且不翻译；凭据被排除。v6 改变了提示词"
-            "字节，因此此前 v5 的 R25/R27 批准不覆盖本候选。"
+            "本文件完整展示唯一拟外发的合成 LITERAL 原文、完整 v6 user 提示词及固定请求字段。"
+            "原文、提示词与发送请求体相对 R29 逐字节不变；唯一实验变量是本地客户端等待预算。"
         )
-        change_label = "与 v5 的变化"
+        hypothesis = (
+            "受控假设：R29 可能被本地 30 秒整体截止提前截断；R30 仅检验更长且有硬上限的等待，"
+            "不宣称远端问题已修复。"
+        )
         source_label = "将外发的精确原文"
         prompt_label = "将外发的精确唯一 user 提示词"
         body_label = "不含消息内容的固定请求体字段"
         cost = "保守单次峰值估算"
-        billing = "真实账单、缓存拆分、税费及账户调整未知"
+        billing = "真实用量、缓存拆分、税费及账户调整未知"
     else:
-        title = "R29 plan-extract-v6 exact egress review material"
+        title = "R30 AI timeout-budget exact egress review material"
         intro = (
             "This file shows the sole synthetic LITERAL source, complete v6 user prompt, and "
-            "all other fixed request fields proposed for egress. Source and prompt bytes are "
-            "exact and untranslated; credentials are excluded. Because v6 changes prompt "
-            "bytes, the earlier R25/R27 v5 approvals do not cover this candidate."
+            "fixed request fields proposed for egress. Source, prompt, and sent request-body "
+            "bytes are unchanged from R29; only local client wait budgets change."
         )
-        change_label = "Change from v5"
+        hypothesis = (
+            "Controlled hypothesis: R29 may have been cut off by its local 30-second overall "
+            "deadline. R30 tests one longer hard-bounded wait and does not claim a remote fix."
+        )
         source_label = "Exact source text to be sent"
         prompt_label = "Exact sole user prompt to be sent"
         body_label = "Fixed request-body fields excluding message content"
         cost = "Conservative single-request peak estimate"
-        billing = "Actual billing, cache split, taxes, and account adjustments are unknown"
+        billing = "Actual usage, cache split, taxes, and account adjustments are unknown"
     return "\n".join(
         [
             f"# {title}",
             "",
             intro,
             "",
+            hypothesis,
+            "",
             f"- Recipient: `{material['recipient']}`",
             f"- Destination: `{material['destination']}`",
             f"- Method: `{material['method']}`",
             "- Authorization header: `<credential omitted; not part of approval material>`",
-            "- Content-Type: `application/json`",
             "- Physical POST cap: `1`; retries: `0`; market calls (including trade_cal): `0`",
             f"- Source SHA-256: `{request['sourceSha256']}`",
             f"- Prompt SHA-256: `{request['promptSha256']}`",
-            f"- Prompt UTF-8 bytes: `{request['promptUtf8Bytes']}`",
+            f"- Request-body canonical SHA-256: `{request['bodyCanonicalSha256']}`",
+            f"- R29 package SHA-256 compared: `{comparison['r29PackageSha256']}`",
+            "- Sent-field difference from R29: `NONE`",
+            "- Local timeout difference: read `30s -> 60s`; overall `30s -> 65s`; "
+            "connect/write/pool remain `30s`",
+            "- Candidate hard total: `81s`, including terminal observation and at most "
+            "`15s` cleanup",
             f"- {cost}: `USD {snapshot['conservativePeakEstimateUsd']}`; {billing}.",
             f"- Official snapshot time: `{snapshot['checkedAt']}`",
-            "",
-            f"## {change_label}",
-            "",
-            "- `plan-extract-v5` LITERAL prompt SHA-256: "
-            f"`{change['previousLiteralPromptSha256']}`",
-            "- `plan-extract-v6` LITERAL prompt SHA-256: "
-            f"`{change['candidateLiteralPromptSha256']}`",
-            f"- {change['summary']}",
-            f"- Approval coverage: {change['priorApprovalCoverage']}",
             "",
             f"## {source_label}",
             "",
@@ -273,10 +298,18 @@ def _render_review(material: dict[str, object], *, chinese: bool) -> str:
     )
 
 
+def _file_sha256(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(65_536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _write_egress_review_package(root: Path = REVIEW_ROOT) -> tuple[Path, Path]:
     material = _egress_review_material()
     if not _validate_material(material):
-        raise ValueError("R29 egress material does not match the frozen v6 contract")
+        raise ValueError("R30 egress material does not match the frozen R29 request")
     root.mkdir(parents=True, exist_ok=True)
     material_path = root / "egress-material.json"
     english = root / "egress-review.md"
@@ -306,14 +339,6 @@ def _write_egress_review_package(root: Path = REVIEW_ROOT) -> tuple[Path, Path]:
     return english, chinese
 
 
-def _file_sha256(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(65_536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _review_package_matches() -> bool:
     return all(
         (REVIEW_ROOT / name).is_file()
@@ -339,7 +364,7 @@ def _git_state() -> tuple[bool, str | None]:
             capture_output=True,
             text=True,
         )
-    except OSError, subprocess.SubprocessError:
+    except (OSError, subprocess.SubprocessError):
         return False, None
     return not status.stdout.strip(), head.stdout.strip() or None
 
@@ -352,6 +377,7 @@ def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
     endpoint = None
     key_present = False
     selected = False
+    configured_timeout = None
     config_hash_matches = False
     ai_ready = False
     if path.is_file():
@@ -359,6 +385,7 @@ def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
             config_hash_matches = _file_sha256(path) == EXPECTED_CONFIG_HASH
             configuration = load_application_config(path)
             ai = configuration.ai
+            configured_timeout = ai.timeout_seconds
             endpoint = urlsplit(str(ai.base_url))
             key_present = bool(ai.api_key)
             selected = bounded.APPROVED_MODEL in {
@@ -403,22 +430,27 @@ def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
         "configSha256Matches": config_hash_matches,
         "configCopiedIntoWorktree": False,
         "externalDestination": EXTERNAL_DESTINATION,
-        "materialMatchesFrozenV6": material_matches,
+        "materialMatchesFrozenR29Request": material_matches,
         "reviewPackageMatchesCandidate": package_matches,
         "sourceSha256": EXPECTED_SOURCE_HASH,
         "promptSha256": EXPECTED_PROMPT_HASH,
+        "requestBodyCanonicalSha256": EXPECTED_REQUEST_BODY_HASH,
         "ai": {
             "host": None if endpoint is None else endpoint.hostname,
             "selectedModelConfigured": selected,
             "model": bounded.APPROVED_MODEL,
             "keyPresent": key_present,
+            "realConfigDefaultTimeoutSeconds": configured_timeout,
         },
         "limits": {
             "aiPhysicalAttempts": AI_TOTAL,
             "aiPerInputAttempts": AI_CAPS,
             "marketPhysicalAttempts": MARKET_TOTAL,
             "marketPerEndpointAttempts": MARKET_CAPS,
-            "providerTimeoutSeconds": PROVIDER_TIMEOUT_SECONDS,
+            "connectWritePoolTimeoutSeconds": TRANSPORT_TIMEOUT_SECONDS,
+            "readTimeoutSeconds": READ_TIMEOUT_SECONDS,
+            "providerOverallTimeoutSeconds": PROVIDER_TIMEOUT_SECONDS,
+            "terminalObservationSeconds": TERMINAL_WAIT_SECONDS,
             "totalSeconds": TOTAL_SECONDS,
             "cleanupSecondsMaximum": CLEANUP_SECONDS,
             "promptVersion": PROMPT_VERSION,
@@ -433,90 +465,8 @@ def _preflight(*, config_path: Path | None = None) -> dict[str, object]:
     }
 
 
-def _read_diagnostic(path: Path, operation_id: UUID) -> dict[str, object] | None:
-    return r27._read_diagnostic(path, operation_id)
-
-
-def _safe_diagnostic(record: dict[str, object] | None) -> dict[str, object] | None:
-    return r27._safe_diagnostic(record)
-
-
-def _assess_terminal(
-    *,
-    source_text: str,
-    view: PlanExtractionView,
-    diagnostic_path: Path,
-) -> tuple[dict[str, object], dict[str, object] | None]:
-    record = _read_diagnostic(diagnostic_path, view.id)
-    safe = _safe_diagnostic(record)
-    source_hash = sha256(source_text.encode("utf-8")).hexdigest()
-    base: dict[str, object] = {
-        "caseId": CASE_ID,
-        "operationId": str(view.id),
-        "status": view.status.value,
-        "sourceSha256": source_hash,
-        "accepted": False,
-        "oracleStatus": "NOT_RUN",
-        "diagnostic": safe,
-    }
-    if (
-        record is None
-        or not r27._supported_diagnostic_record(record)
-        or record.get("operationId") != str(view.id)
-        or view.diagnostic_status != "RECORDED"
-    ):
-        base["reason"] = "V2_DIAGNOSTIC_MISSING_OR_INVALID"
-        return base, None
-    if view.status is not PlanExtractionOperationStatus.SUCCEEDED:
-        base["reason"] = (
-            "TIMEOUT_DIAGNOSTIC_RECORDED"
-            if record.get("providerErrorCode") == "TIMEOUT"
-            and record.get("timeoutKind") is not None
-            and record.get("timeoutElapsedMs") is not None
-            else "EXTRACTION_FAILED_DIAGNOSTIC_RECORDED"
-        )
-        return base, None
-    if (
-        view.source_text_sha256 != source_hash
-        or view.model != bounded.APPROVED_MODEL
-        or view.prompt_version != PROMPT_VERSION
-        or record.get("stage") != "completed"
-        or record.get("reason") != "NONE"
-        or record.get("finishReason") != "stop"
-        or record.get("modelMatchesConfigured") is not True
-        or view.draft_plan_json is None
-        or view.mapping is None
-    ):
-        base["reason"] = "MODEL_OR_COMPLETION_RECEIPT_REJECTED"
-        return base, None
-    try:
-        draft = load_explicit_plan_draft_json(view.draft_plan_json)
-        mapping = view.mapping.to_domain()
-        snapshot = build_server_review_snapshot(
-            source_text=source_text,
-            draft=draft,
-            mapping=mapping,
-        )
-        accepted = r25._literal_oracle_matches(
-            draft_data=draft.model_dump(mode="json"),
-            mapping=mapping,
-            source_text=source_text,
-        )
-    except IndexError, KeyError, TypeError, UnicodeError, ValueError:
-        accepted = False
-        snapshot = None
-    base["accepted"] = accepted
-    base["oracleStatus"] = "ACCEPTED" if accepted else "MISMATCH"
-    base["reason"] = "ORACLE_ACCEPTED" if accepted else "ORACLE_MISMATCH"
-    if snapshot is not None:
-        base["reviewIssueCodes"] = sorted({item.code for item in snapshot.required_issues})
-        base["canActivateBeforeHumanReview"] = snapshot.can_activate
-    if view.usage is not None:
-        base["usage"] = view.usage.model_dump(mode="json", by_alias=True)
-    return (
-        base,
-        view.model_dump(mode="json", by_alias=True) if accepted else None,
-    )
+def _assess_terminal(*args: object, **kwargs: object):
+    return r29._assess_terminal(*args, **kwargs)
 
 
 async def _submit_and_wait(
@@ -577,26 +527,12 @@ class _IsolatedReviewStore:
         self.operation_ids.append(str(result.request_id))
 
 
-def _review_receipt_matches(
-    outcome: dict[str, object],
-    review: dict[str, object] | None,
-    operation_ids: list[str],
-) -> bool:
-    operation_id = outcome.get("operationId")
-    return bool(
-        outcome.get("accepted") is True
-        and review is not None
-        and isinstance(operation_id, str)
-        and operation_ids == [operation_id]
-    )
-
-
 def _claim_session(root: Path = SESSION_ROOT) -> Path:
     return bounded._claim_session(root, RUN_ID)
 
 
 def _database_counts(database: Path) -> dict[str, int]:
-    return r27._database_counts(database)
+    return r29._database_counts(database)
 
 
 async def _cleanup_with_hard_deadline(
@@ -657,6 +593,15 @@ async def _run_candidate(
         "activationAllowed": False,
         "marketLifecycleStarted": False,
         "configCopiedIntoWorktree": False,
+        "requestBodyCanonicalSha256": EXPECTED_REQUEST_BODY_HASH,
+        "timeoutBudget": {
+            "connectWritePoolSeconds": TRANSPORT_TIMEOUT_SECONDS,
+            "readSeconds": READ_TIMEOUT_SECONDS,
+            "providerOverallSeconds": PROVIDER_TIMEOUT_SECONDS,
+            "terminalObservationSeconds": TERMINAL_WAIT_SECONDS,
+            "hardTotalSeconds": TOTAL_SECONDS,
+            "cleanupSecondsMaximum": CLEANUP_SECONDS,
+        },
     }
     ai_budget, market_budget = bounded._session_budgets(
         lambda: None,
@@ -689,6 +634,9 @@ async def _run_candidate(
             prompt_version=PROMPT_VERSION,
             max_output_tokens=AI_OUTPUT_TOKENS,
             max_prompt_utf8_bytes=EXPECTED_PROMPT_UTF8_BYTES,
+            provider_timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
+            transport_timeout_seconds=TRANSPORT_TIMEOUT_SECONDS,
+            read_timeout_seconds=READ_TIMEOUT_SECONDS,
         )
         startup = await ai.start()
         if startup.get("configured") is not True or startup.get("diagnosticAvailable") is not True:
@@ -702,7 +650,7 @@ async def _run_candidate(
             diagnostic_path=diagnostics,
             deadline=min(hard_deadline, session_started + TERMINAL_WAIT_SECONDS),
         )
-        if outcome.get("accepted") is True and not _review_receipt_matches(
+        if outcome.get("accepted") is True and not r29._review_receipt_matches(
             outcome,
             review,
             review_store.operation_ids,
@@ -742,7 +690,7 @@ async def _run_candidate(
         if database.exists():
             try:
                 counts = _database_counts(database)
-            except OSError, sqlite3.Error:
+            except (OSError, sqlite3.Error):
                 counts = {}
                 audit["status"] = "LOCAL_STATE_VERIFICATION_FAILED"
                 return_code = 1

@@ -12,9 +12,9 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from scripts import r14_bounded_acceptance as bounded
-from scripts import r30_ai_timeout_budget_acceptance as r30
-from scripts import r32_ai_transient_acceptance as r32
+from scripts import ai_timeout_budget_acceptance as r30
+from scripts import ai_transient_acceptance as r32
+from scripts import bounded_live_acceptance as bounded
 from tests.integration.test_explicit_plan_review_api import _draft_payload
 from tests.integration.test_source_treatment_review_api import SOURCE as LITERAL_SOURCE
 from tests.integration.test_source_treatment_review_api import _literal_mapping

@@ -458,8 +458,8 @@ Current completion evidence: [original fourth-stage report](../docs/verification
 
 - [x] RR020 — Enable the complete path and prove real process restart offline. Effort: `high`; fault interpretation/review: `xhigh`. Dependencies: C4. Complete only for approved D1–D8 / A01–A13; unapproved D9/A14 remains separate.
   - Acceptance: A01–A14 across all target times; stop/kill/restart at commit and dispatch windows; migrations interrupted safely; no provider calls or real notifications.
-  - Files: `src/trade_plan_monitor/web/monitor_composition.py`, NEW `tests/integration/test_anytime_runtime_recovery.py`, `web/tests/e2e/production-restart.spec.ts`, `web/tests/e2e/r13-active-process-restart.spec.ts`, NEW `web/tests/e2e/runtime-recovery.spec.ts`.
-  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`; `npm --prefix web run test:e2e -- production-restart.spec.ts r13-active-process-restart.spec.ts runtime-recovery.spec.ts` with isolated test state.
+  - Files: `src/trade_plan_monitor/web/monitor_composition.py`, NEW `tests/integration/test_anytime_runtime_recovery.py`, `web/tests/e2e/production-restart.spec.ts`, `web/tests/e2e/active-plan-process-restart.spec.ts`, NEW `web/tests/e2e/runtime-recovery.spec.ts`.
+  - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`; `npm --prefix web run test:e2e -- production-restart.spec.ts active-plan-process-restart.spec.ts runtime-recovery.spec.ts` with isolated test state.
 - [x] RR021 — Synchronize operations and verification evidence. Effort: `high`. Dependencies: RR020.
   - Acceptance: restart/first-time source validation/reconfiguration/rollback instructions are accurate; record only actually executed tests; English/Chinese match.
   - Files: `docs/operations/live-certification.md`, `docs/operations/live-certification.zh-CN.md`, NEW paired `docs/verification/runtime-recovery-acceptance.md` / `runtime-recovery-acceptance.zh-CN.md`.

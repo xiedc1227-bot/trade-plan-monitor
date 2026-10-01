@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from scripts import r14_bounded_acceptance as bounded
-from scripts import r29_v6_extraction_acceptance as r29
+from scripts import bounded_live_acceptance as bounded
+from scripts import plan_extraction_v6_acceptance as r29
 from tests.integration.test_explicit_plan_review_api import _draft_payload
 from tests.integration.test_source_treatment_review_api import SOURCE as LITERAL_SOURCE
 from tests.integration.test_source_treatment_review_api import _literal_mapping

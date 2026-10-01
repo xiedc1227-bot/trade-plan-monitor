@@ -16,7 +16,7 @@ from time import monotonic
 from typing import Any
 from uuid import UUID, uuid4
 
-from scripts import r14_bounded_acceptance as bounded
+from scripts import bounded_live_acceptance as bounded
 
 from trade_plan_monitor.ai.models import PlanMapping, ServerReviewSnapshot
 from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V5

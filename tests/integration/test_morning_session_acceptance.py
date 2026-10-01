@@ -9,8 +9,8 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 import requests
-from scripts import r14_bounded_acceptance as bounded
-from scripts import r20_bounded_acceptance as r20
+from scripts import bounded_live_acceptance as bounded
+from scripts import morning_session_acceptance as r20
 
 from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V5
 
@@ -172,11 +172,14 @@ def test_launcher_calendar_failure_closes_and_writes_normal_audit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import uvicorn
+    from tests.integration.test_live_acceptance_offline_wiring import (
+        QuerySDK,
+        _write_end_label_stock_evidence,
+    )
     from tests.integration.test_live_pipeline_acceptance import (
         ControlledClock,
         _write_configuration_and_evidence,
     )
-    from tests.integration.test_r14_offline_wiring import QuerySDK, _write_end_label_stock_evidence
 
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition

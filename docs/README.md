@@ -51,6 +51,8 @@ This directory contains the project's design, specification, decision, operating
 
 ## Guides
 
+- [File naming](guides/file-naming.md) ([Chinese](guides/file-naming.zh-CN.md)) — language-specific conventions, stable historical identities, and rename verification.
+
 - [AI model selection](guides/ai-model-selection.md) ([Chinese](guides/ai-model-selection.zh-CN.md)) — historical task-to-model recommendations retained for development reference.
 
 ## Verification Evidence
