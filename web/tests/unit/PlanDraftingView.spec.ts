@@ -194,6 +194,48 @@ describe("PlanDraftingView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders the workbench while configuration is pending and preserves early input", async () => {
+    let resolveRuntime!: (value: ConfiguredAIRuntimeView) => void;
+    const getRuntime = vi.fn(() => new Promise<ConfiguredAIRuntimeView>((resolve) => {
+      resolveRuntime = resolve;
+    }));
+    const submitExtraction = vi.fn().mockResolvedValue(receipt);
+    const wrapper = mount(PlanDraftingView, {
+      props: {
+        api: apiWith({ getRuntime, submitExtraction, getExtraction: vi.fn().mockResolvedValue(invalidExtraction) }),
+        planApi: planApiWith(),
+        pollIntervalMs: 0,
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.get("#plan-workbench-title").text()).toBe("AI 计划提取审核");
+    expect(wrapper.text()).toContain("正在读取 AI 配置");
+    const input = wrapper.get<HTMLTextAreaElement>("#plan-source-text");
+    const inputElement = input.element;
+    expect(inputElement.disabled).toBe(false);
+    await input.setValue("先输入的计划原文");
+    expect(wrapper.get<HTMLButtonElement>(".source-editor__submit").element.disabled).toBe(true);
+    await wrapper.get('[data-testid="source-editor"]').trigger("submit");
+    expect(submitExtraction).not.toHaveBeenCalled();
+
+    resolveRuntime(runtime);
+    await flushPromises();
+    expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element).toBe(inputElement);
+    expect(inputElement.value).toBe("先输入的计划原文");
+    expect(wrapper.get<HTMLButtonElement>(".source-editor__submit").element.disabled).toBe(false);
+    expect(wrapper.get<HTMLSelectElement>("#ai-provider").element.value).toBe(PROVIDER_ID);
+    expect(submitExtraction).not.toHaveBeenCalled();
+    await wrapper.get('[data-testid="source-editor"]').trigger("submit");
+    await flushPromises();
+    expect(submitExtraction).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: PROVIDER_ID, sourceText: "先输入的计划原文", expectedRevision: 0 }),
+      expect.any(String),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    wrapper.unmount();
+  });
+
   it("defaults to the left-side AI workflow and preserves unfinished input", async () => {
     const wrapper = mount(PlanDraftingView, {
       props: {
@@ -233,6 +275,54 @@ describe("PlanDraftingView", () => {
     expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.value).toBe(
       "华亚智能交易计划",
     );
+    wrapper.unmount();
+  });
+
+  it("rechecks early input against the loaded provider limit without discarding it", async () => {
+    let resolveRuntime!: (value: ConfiguredAIRuntimeView) => void;
+    const submitExtraction = vi.fn();
+    const wrapper = mount(PlanDraftingView, {
+      props: {
+        api: apiWith({
+          getRuntime: () => new Promise((resolve) => { resolveRuntime = resolve; }),
+          submitExtraction,
+        }),
+        planApi: planApiWith(),
+      },
+    });
+    await wrapper.get<HTMLTextAreaElement>("#plan-source-text").setValue("预先填写的计划原文");
+    resolveRuntime({ ...runtime, maxInputChars: 5 });
+    await flushPromises();
+    expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.value).toBe("预先填写的计划原文");
+    expect(wrapper.get<HTMLButtonElement>(".source-editor__submit").element.disabled).toBe(true);
+    await wrapper.get('[data-testid="source-editor"]').trigger("submit");
+    expect(submitExtraction).not.toHaveBeenCalled();
+    await wrapper.get<HTMLTextAreaElement>("#plan-source-text").setValue("短计划");
+    expect(wrapper.get<HTMLButtonElement>(".source-editor__submit").element.disabled).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("retains early input and the workbench when configuration fails", async () => {
+    let rejectRuntime!: (reason: Error) => void;
+    const submitExtraction = vi.fn();
+    const wrapper = mount(PlanDraftingView, {
+      props: {
+        api: apiWith({
+          getRuntime: () => new Promise((_resolve, reject) => { rejectRuntime = reject; }),
+          submitExtraction,
+        }),
+        planApi: planApiWith(),
+      },
+    });
+    await wrapper.get<HTMLTextAreaElement>("#plan-source-text").setValue("不应丢失的计划原文");
+    rejectRuntime(new Error("TOKEN=secret"));
+    await flushPromises();
+    expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.value).toBe("不应丢失的计划原文");
+    expect(wrapper.get('[role="alert"]').text()).toContain("AI 配置加载失败");
+    expect(wrapper.text()).not.toContain("TOKEN=secret");
+    expect(wrapper.get<HTMLButtonElement>(".source-editor__submit").element.disabled).toBe(true);
+    await wrapper.get('[data-testid="source-editor"]').trigger("submit");
+    expect(submitExtraction).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
@@ -401,7 +491,9 @@ describe("PlanDraftingView", () => {
 
     expect(wrapper.get('[role="alert"]').text()).toContain("AI 配置加载失败");
     expect(wrapper.text()).not.toContain("TOKEN=secret");
-    expect(wrapper.find("#plan-source-text").exists()).toBe(false);
+    expect(wrapper.get("#plan-workbench-title").text()).toBe("AI 计划提取审核");
+    expect(wrapper.get<HTMLTextAreaElement>("#plan-source-text").element.disabled).toBe(true);
+    expect(wrapper.get<HTMLButtonElement>(".source-editor__submit").element.disabled).toBe(true);
     wrapper.unmount();
   });
 

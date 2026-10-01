@@ -5,6 +5,7 @@ import type { ConfiguredAIRuntimeView } from "../../api/generated";
 
 interface Props {
   disabled?: boolean;
+  loading?: boolean;
   providers: readonly ConfiguredAIRuntimeView[];
   selectedProviderId: string | null;
 }
@@ -15,6 +16,7 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   disabled: false,
+  loading: false,
 });
 const emit = defineEmits<Emits>();
 
@@ -44,11 +46,11 @@ function handleSelect(event: Event): void {
     <select
       id="ai-provider"
       class="provider-selector__control"
-      :disabled="disabled || providers.length === 0"
+      :disabled="disabled || loading || providers.length === 0"
       :value="selectedProviderId ?? ''"
       @change="handleSelect"
     >
-      <option v-if="providers.length === 0" value="">尚无可用供应商</option>
+      <option v-if="providers.length === 0" value="">{{ loading ? "正在读取 AI 配置" : "尚无可用供应商" }}</option>
       <option
         v-for="provider in providers"
         :key="provider.providerId"
@@ -59,6 +61,10 @@ function handleSelect(event: Event): void {
         }}
       </option>
     </select>
+
+    <p v-if="loading" class="provider-selector__hint" role="status">
+      正在读取 AI 配置，可先填写计划原文。
+    </p>
 
     <dl v-if="selectedProvider" class="provider-selector__facts">
       <div>
@@ -95,6 +101,7 @@ function handleSelect(event: Event): void {
   background: var(--color-surface-graphite);
   border: var(--border-technical);
   border-block-start: 0.25rem solid var(--color-signal-info-cyan);
+  border-radius: var(--radius-panel);
 }
 
 .provider-selector__heading {

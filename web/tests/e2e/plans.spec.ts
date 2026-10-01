@@ -215,6 +215,54 @@ test.afterAll(async () => {
   await server.close();
 });
 
+test("shows the AI workbench before configuration responds and keeps early input", async ({ page }) => {
+  let releaseRuntime!: () => void;
+  const runtimeGate = new Promise<void>((resolve) => { releaseRuntime = resolve; });
+  const mutationRequests: string[] = [];
+  await page.route(`${baseUrl}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() !== "GET") mutationRequests.push(path);
+    let body: unknown;
+    if (path === "/api/v1/ai-runtime") {
+      await runtimeGate;
+      body = runtime;
+    } else if (path === "/api/v1/dashboard") body = dashboard;
+    else if (path === "/api/v1/plan-versions") {
+      body = { items: [], limit: 100, offset: 0, total: 0 };
+    } else {
+      await route.fulfill({ status: 500, body: "unexpected request" });
+      return;
+    }
+    await route.fulfill({ body: JSON.stringify(body), contentType: "application/json" });
+  });
+  try {
+    await page.setViewportSize({ width: 1440, height: 1050 });
+    await page.goto(`${baseUrl}/plans`);
+    await expect(page.getByRole("heading", { name: "AI 计划提取审核", exact: true })).toBeVisible();
+    const loadingStatus = page.locator('.provider-selector [role="status"]');
+    await expect(loadingStatus).toContainText("正在读取 AI 配置，可先填写计划原文。");
+    const input = page.getByLabel("粘贴中文计划原文");
+    const submit = page.getByRole("button", { name: "提交提取审核", exact: true });
+    await expect(input).toBeEnabled();
+    await input.fill("配置加载期间填写的计划");
+    await expect(submit).toBeDisabled();
+    await page.locator(".plan-workbench").screenshot({ path: join(process.cwd(), "../docs/verification/assets/interface-design/plans-config-loading.jpg") });
+    await page.setViewportSize({ width: 320, height: 900 });
+    await expect(input).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(mutationRequests).toEqual([]);
+    releaseRuntime();
+    await expect(loadingStatus).toHaveCount(0);
+    await expect(input).toHaveValue("配置加载期间填写的计划");
+    await expect(submit).toBeEnabled();
+    await expect(page.getByLabel("已配置供应商")).toHaveValue(PROVIDER_ID);
+    expect(mutationRequests).toEqual([]);
+  } finally {
+    releaseRuntime();
+  }
+});
+
 test("requires explicit review, save, and backend-approved activation for an AI result", async ({
   page,
 }) => {

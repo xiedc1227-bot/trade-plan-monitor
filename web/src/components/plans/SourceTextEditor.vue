@@ -6,6 +6,7 @@ interface Props {
   cancellable?: boolean;
   disabled?: boolean;
   maxChars?: number;
+  submitDisabled?: boolean;
 }
 
 interface Emits {
@@ -18,6 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   cancellable: false,
   disabled: false,
   maxChars: 200_000,
+  submitDisabled: false,
 });
 const emit = defineEmits<Emits>();
 const sourceText = defineModel<string>({ required: true });
@@ -33,6 +35,7 @@ const canSubmit = computed(
   () =>
     !props.busy &&
     !props.disabled &&
+    !props.submitDisabled &&
     !sourceLimitExceeded.value &&
     sourceText.value.trim().length > 0 &&
     sourceCharacterCount.value <= props.maxChars,
@@ -96,7 +99,7 @@ function submitSource(): void {
         原文只作为不可信纯文本发送和展示；AI 提取不会启用计划或参与实时判断。
       </p>
       <p v-if="sourceLimitExceeded" class="source-editor__input-error" role="alert">
-        原文不能超过 {{ maxChars }} 个字符；本次输入未应用。
+        原文不能超过 {{ maxChars }} 个字符；{{ sourceInputRejected ? "本次输入未应用。" : "请缩短原文后再提交。" }}
       </p>
       <div class="source-editor__actions">
         <button class="source-editor__submit" type="submit" :disabled="!canSubmit">
@@ -124,6 +127,7 @@ function submitSource(): void {
   background: var(--color-surface-graphite);
   border: var(--border-technical);
   border-block-start: 0.25rem solid var(--color-signal-watch-amber);
+  border-radius: var(--radius-panel);
 }
 
 .source-editor__heading,

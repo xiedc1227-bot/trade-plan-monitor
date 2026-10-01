@@ -16,6 +16,7 @@ interface Props {
   initialProviderId?: string | null;
   initialSourceText?: string;
   providers: readonly ConfiguredAIRuntimeView[];
+  runtimeLoading?: boolean;
   submitting?: boolean;
 }
 
@@ -29,6 +30,7 @@ const props = withDefaults(defineProps<Props>(), {
   extraction: null,
   initialProviderId: null,
   initialSourceText: "",
+  runtimeLoading: false,
   submitting: false,
 });
 const emit = defineEmits<Emits>();
@@ -147,6 +149,7 @@ function initialProviderId(
 function submitExtraction(): void {
   const provider = selectedProvider.value;
   if (
+    props.runtimeLoading ||
     extractionBusy.value ||
     provider === undefined ||
     !provider.enabled ||
@@ -208,7 +211,8 @@ function resolveIssue(issue: DraftReviewIssue): void {
 
     <div class="plan-workbench__grid">
       <AIProviderSelector
-        :disabled="extractionBusy"
+        :disabled="extractionBusy || runtimeLoading"
+        :loading="runtimeLoading"
         :providers="providers"
         :selected-provider-id="selectedProviderId"
         @select="selectedProviderId = $event"
@@ -218,7 +222,8 @@ function resolveIssue(issue: DraftReviewIssue): void {
         v-model="sourceText"
         :busy="extractionBusy"
         :cancellable="extraction?.status === 'QUEUED' || extraction?.status === 'RUNNING'"
-        :disabled="!providerEnabled || extractionBusy"
+        :disabled="extractionBusy || (!providerEnabled && !runtimeLoading)"
+        :submit-disabled="!providerEnabled || runtimeLoading"
         :max-chars="providerInputLimit"
         @cancel="stopWaiting"
         @submit="submitExtraction"
@@ -283,8 +288,8 @@ function resolveIssue(issue: DraftReviewIssue): void {
 }
 
 .plan-workbench__title {
-  font-size: clamp(1.5rem, 3vw, 2.5rem);
-  line-height: 1.1;
+  font-size: 1.125rem;
+  line-height: 1.4;
 }
 
 .plan-workbench__boundary {
@@ -292,11 +297,14 @@ function resolveIssue(issue: DraftReviewIssue): void {
   color: var(--color-signal-risk-vermilion);
   font-family: var(--font-numeric);
   border: 0.0625rem solid var(--color-signal-risk-vermilion);
+  border-radius: var(--radius-control);
+  font-size: .6875rem;
 }
 
 .plan-workbench__intro,
 .plan-workbench__empty {
   color: var(--color-text-muted);
+  font-size: .8125rem;
 }
 
 .plan-workbench__grid {
