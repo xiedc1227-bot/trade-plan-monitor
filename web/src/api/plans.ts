@@ -302,10 +302,11 @@ function isPlanVersionPage(
 function isPlanVersionSummary(value: unknown): value is PlanVersionSummary {
   return (
     isRecord(value) &&
-    hasExactKeys(value, [
+    hasOnlyKeys(value, [
       "canActivate",
       "createdAt",
       "id",
+      "obsoleteReason",
       "planHash",
       "planId",
       "revision",
@@ -313,6 +314,9 @@ function isPlanVersionSummary(value: unknown): value is PlanVersionSummary {
       "symbol",
       "version",
     ]) &&
+    hasRequiredKeys(value, ["canActivate", "createdAt", "id", "planHash", "planId", "revision", "status", "symbol", "version"]) &&
+    isOptionalObsoleteReason(value.obsoleteReason) &&
+    (value.obsoleteReason !== "DAILY_DRAFT_OBSOLETE" || value.canActivate === false) &&
     typeof value.canActivate === "boolean" &&
     isShanghaiDateTime(value.createdAt) &&
     isUuid(value.id) &&
@@ -322,7 +326,7 @@ function isPlanVersionSummary(value: unknown): value is PlanVersionSummary {
     (value.status === "DRAFT" ||
       value.status === "ACTIVE" ||
       value.status === "SUPERSEDED") &&
-    (value.status !== "ACTIVE" || value.canActivate) &&
+    (value.status !== "ACTIVE" || value.canActivate || value.obsoleteReason === "DAILY_DRAFT_OBSOLETE") &&
     isShareSymbol(value.symbol) &&
     isPositiveInteger(value.version)
   );
@@ -335,9 +339,12 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
       "canActivate",
       "contentHash",
       "createdAt",
+      "dailyIssues",
+      "dailyMapping",
       "executionReadiness",
       "id",
       "mapping",
+      "obsoleteReason",
       "planHash",
       "planId",
       "planJson",
@@ -370,6 +377,10 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
       "version",
     ]) ||
     typeof value.canActivate !== "boolean" ||
+    !isOptionalObsoleteReason(value.obsoleteReason) ||
+    !(value.dailyMapping === undefined || value.dailyMapping === null || isRecord(value.dailyMapping)) ||
+    !(value.dailyIssues === undefined || (Array.isArray(value.dailyIssues) &&
+      value.dailyIssues.length <= 512 && value.dailyIssues.every(isDailyReviewIssue))) ||
     !isShanghaiDateTime(value.createdAt) ||
     !isUuid(value.id) ||
     !isSha256(value.planHash) ||
@@ -411,7 +422,39 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
   const canActivate =
     !reviewIssues.some((issue) => issue.resolved !== true) &&
     !validationIssues.some((issue) => issue.activationBlocking);
-  return value.canActivate === canActivate && (value.status !== "ACTIVE" || canActivate);
+  const obsoleteIssue = Array.isArray(value.dailyIssues) &&
+    value.dailyIssues.some((issue) => isRecord(issue) && issue.code === "DAILY_DRAFT_OBSOLETE");
+  if (value.obsoleteReason === "DAILY_DRAFT_OBSOLETE") {
+    return value.canActivate === false && obsoleteIssue;
+  }
+  let document: unknown;
+  try {
+    document = JSON.parse(value.planJson);
+  } catch {
+    document = null;
+  }
+  if (isRecord(document) && document.schema_version === 4) {
+    if (document.execution_mode !== "DAILY_CLOSE_PLAN" || document.execution_version !== "daily-close-v1" ||
+      document.plan_id !== value.planId || document.version !== value.version || document.symbol !== value.symbol ||
+      !isRecord(value.dailyMapping) || value.dailyMapping.mapping_version !== "daily-mapping-v1" ||
+      value.dailyMapping.candidate_content_hash !== value.contentHash ||
+      !isSha256(value.contentHash) || !isSha256(value.sourceHash) || !isSha256(value.reviewEvidenceHash) ||
+      !isNonnegativeInteger(value.reviewRevision) || !Array.isArray(value.dailyIssues)) return false;
+    const dailyCanActivate = canActivate && value.dailyIssues.length === 0 && isUuid(value.reviewId);
+    return !obsoleteIssue && value.canActivate === dailyCanActivate &&
+      (value.status !== "ACTIVE" || dailyCanActivate);
+  }
+  return !obsoleteIssue && value.canActivate === canActivate && (value.status !== "ACTIVE" || canActivate);
+}
+
+function isOptionalObsoleteReason(value: unknown): boolean {
+  return value === undefined || value === null || value === "DAILY_DRAFT_OBSOLETE";
+}
+
+function isDailyReviewIssue(value: unknown): boolean {
+  return isRecord(value) && hasExactKeys(value, ["code", "issue_id", "path", "reason"]) &&
+    isValidationCode(value.code) && isBoundedText(value.issue_id, 128) &&
+    isPlanPath(value.path) && isBoundedText(value.reason, 512);
 }
 
 function isExplicitPlanRuntime(value: unknown, symbol: string): value is ExplicitPlanRuntimeView {

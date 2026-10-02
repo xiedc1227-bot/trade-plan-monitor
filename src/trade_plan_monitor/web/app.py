@@ -44,6 +44,7 @@ from trade_plan_monitor.web.routers.backtest_exports import router as backtest_e
 from trade_plan_monitor.web.routers.backtest_jobs import router as backtest_jobs_router
 from trade_plan_monitor.web.routers.backtest_results import router as backtest_results_router
 from trade_plan_monitor.web.routers.backtest_runs import router as backtest_runs_router
+from trade_plan_monitor.web.routers.daily_plans import router as daily_plans_router
 from trade_plan_monitor.web.routers.dashboard import MonitorReadService
 from trade_plan_monitor.web.routers.dashboard import router as dashboard_router
 from trade_plan_monitor.web.routers.health import router as health_router
@@ -255,8 +256,7 @@ def create_app(
     if monitor_contract_version == 2 and (
         getattr(read_service, "monitor_contract_version", None) != 2
         and not (
-            read_service is None
-            and getattr(runtime_factory, "monitor_contract_version", None) == 2
+            read_service is None and getattr(runtime_factory, "monitor_contract_version", None) == 2
         )
     ):
         raise ValueError("monitor contract 2 requires an authoritative v2 read service")
@@ -328,6 +328,7 @@ def create_app(
             retained = APIRouter()
             retained.routes.extend(route for route in source.routes if route.path not in replaced)
             app.include_router(retained)
+    app.include_router(daily_plans_router)
     app.include_router(system_router)
     app.include_router(ai_router)
     app.include_router(positions_router)

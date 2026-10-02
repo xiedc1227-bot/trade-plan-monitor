@@ -14,7 +14,7 @@ from trade_plan_monitor.state.database import create_sqlite_engine, upgrade_data
 from trade_plan_monitor.state.models import AuditLog, Base, MonitorEvent
 
 PREVIOUS_REVISION = "0019_alert_delivery_eligibility"
-LATEST_REVISION = "0023_index_permission_scopes"
+LATEST_REVISION = "0024_daily_plan"
 EXPECTED_INDEXES = {
     "audit_log": ("ix_audit_log_entity", ["entity_type", "entity_id"]),
     "monitor_event": ("ix_monitor_event_aggregate_sequence", ["aggregate_id", "sequence"]),
@@ -95,12 +95,14 @@ def _assert_history_indexes(engine: Engine) -> None:
 def test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row(populated_database):
     engine = populated_database
     before = _stored_rows(engine)
+    assert "daily_plan_record" not in before
+    after_upgrade = before | {"daily_plan_record": []}
     indexes_before = {table: inspect(engine).get_indexes(table) for table in EXPECTED_INDEXES}
 
     for _ in range(2):
         upgrade_database(engine)
         _assert_history_indexes(engine)
-        assert _stored_rows(engine) == before
+        assert _stored_rows(engine) == after_upgrade
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
@@ -119,7 +121,7 @@ def test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row(popula
 
     upgrade_database(engine)
     _assert_history_indexes(engine)
-    assert _stored_rows(engine) == before
+    assert _stored_rows(engine) == after_upgrade
 
 
 @pytest.mark.parametrize(

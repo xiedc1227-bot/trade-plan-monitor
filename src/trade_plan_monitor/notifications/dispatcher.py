@@ -23,6 +23,7 @@ from trade_plan_monitor.notifications.channels import (
     NotificationChannel,
     NotificationEvent,
 )
+from trade_plan_monitor.notifications.daily_models import ObsoleteDailyAlertEvent
 from trade_plan_monitor.notifications.outbox import AlertOutbox, OutboxError
 from trade_plan_monitor.state.models import ActivePlan as ActivePlanRow
 from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
@@ -420,6 +421,8 @@ class NotificationDispatcher:
         return loaded
 
     def _event_is_delivery_allowed(self, event: NotificationEvent, now: datetime) -> bool:
+        if isinstance(event, ObsoleteDailyAlertEvent):
+            return False
         if self._admission is not None:
             try:
                 allowed = self._admission(event, now)

@@ -85,6 +85,7 @@ EXPECTED_APP_TABLES = frozenset(
         "alert_event",
         "audit_log",
         "daily_bar",
+        "daily_plan_record",
         "daily_price_limit",
         "delivery_attempt",
         "evaluation_ledger",
@@ -2267,7 +2268,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0023_index_permission_scopes"
+        assert first_revision == second_revision == "0024_daily_plan"
     finally:
         engine.dispose()
 
@@ -2295,7 +2296,7 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0023_index_permission_scopes"
+                == "0024_daily_plan"
             )
     finally:
         engine.dispose()
@@ -2570,7 +2571,7 @@ def test_plan_web_state_migration_refuses_lossy_downgrade_atomically(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0023_index_permission_scopes"
+                == "0024_daily_plan"
             )
             assert (
                 connection.exec_driver_sql(
@@ -2607,7 +2608,7 @@ def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) 
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0023_index_permission_scopes"
+                == "0024_daily_plan"
             )
     finally:
         engine.dispose()
@@ -2660,7 +2661,7 @@ def test_monitor_event_migration_renames_high_water_and_backfills_alerts(
         }
         assert row.occurred_at == _FIXED_NOW.isoformat()
         assert high_water == 42
-        assert revision == "0023_index_permission_scopes"
+        assert revision == "0024_daily_plan"
     finally:
         engine.dispose()
 
@@ -2752,7 +2753,7 @@ def test_market_index_event_constraint_migration_preserves_the_existing_ledger(
             _FIXED_NOW.isoformat(),
         )
         assert high_water_after == 7
-        assert revision == "0023_index_permission_scopes"
+        assert revision == "0024_daily_plan"
         assert inspector.get_foreign_keys("monitor_event") == foreign_keys_before
         indexes_after = inspector.get_indexes("monitor_event")
         history_index = next(
@@ -2795,7 +2796,7 @@ def test_market_index_event_constraint_migration_refuses_lossy_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0023_index_permission_scopes"
+                == "0024_daily_plan"
             )
             assert connection.exec_driver_sql("SELECT id, sequence FROM monitor_event").one() == (
                 event_id,
@@ -3131,7 +3132,7 @@ def test_monitor_event_migration_refuses_lossy_non_alert_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0023_index_permission_scopes"
+                == "0024_daily_plan"
             )
     finally:
         engine.dispose()
@@ -3183,7 +3184,7 @@ def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
             "c" * 64,
             evaluated_at,
         )
-        assert revision == "0023_index_permission_scopes"
+        assert revision == "0024_daily_plan"
     finally:
         engine.dispose()
 
@@ -3256,7 +3257,7 @@ def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0023_index_permission_scopes"
+                == "0024_daily_plan"
             )
             assert connection.exec_driver_sql(
                 "SELECT evaluation_kind, target_value FROM evaluation_ledger"
@@ -3310,7 +3311,7 @@ def test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_n
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0023_index_permission_scopes"
+                == "0024_daily_plan"
             )
             assert (
                 connection.exec_driver_sql(
@@ -3461,7 +3462,7 @@ def test_explicit_review_migration_refuses_to_discard_bound_review_evidence(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0023_index_permission_scopes"
+                == "0024_daily_plan"
             )
     finally:
         engine.dispose()

@@ -183,6 +183,7 @@ class MonitorWebComposition:
         alert_service: object | None = None,
         market_index_read_service: object | None = None,
         legacy_maintenance_factory: Callable[[], SqlAlchemyUnitOfWork] | None = None,
+        daily_reevaluate=None,
     ) -> None:
         self._validate_runtime(runtime)
         if runtime_factory is not None and not callable(runtime_factory):
@@ -202,6 +203,7 @@ class MonitorWebComposition:
         self._alert_service = alert_service
         self._market_index_read_service = market_index_read_service
         self._legacy_maintenance_factory = legacy_maintenance_factory
+        self._daily_reevaluate = daily_reevaluate
         self._maintenance_lock = asyncio.Lock()
         self._runner_task: asyncio.Task[None] | None = None
         self._start_lock = asyncio.Lock()
@@ -215,6 +217,10 @@ class MonitorWebComposition:
         self._restart_pending = False
         self._restart_attempts = 0
         self._configuration_restart_required = False
+
+    async def reevaluate_daily(self, version_id):
+        if self._daily_reevaluate is not None:
+            return await self._daily_reevaluate(version_id)
 
     @property
     def read_service(self) -> object:
@@ -1420,7 +1426,9 @@ def create_monitor_composition(
             dependencies=dependencies,
             block_reason=block_reason,
             standby_reason=_runtime_standby_reason(
-                plans=plans, pipeline=pipeline, observed_at=clock.now(),
+                plans=plans,
+                pipeline=pipeline,
+                observed_at=clock.now(),
             ),
         )
 
@@ -1429,9 +1437,13 @@ def create_monitor_composition(
         from trade_plan_monitor.web.runtime_status_websocket import RuntimeStatusEventStream
 
         read_service = RuntimeStatusReadService(
-            session_factory, read_authority, clock=clock.now,
+            session_factory,
+            read_authority,
+            clock=clock.now,
             legacy_read_service=PersistentMonitorReadService(
-                unit_of_work_factory, health_binding, clock=clock.now,
+                unit_of_work_factory,
+                health_binding,
+                clock=clock.now,
             ),
         )
         stream = RuntimeStatusEventStream(
@@ -1542,6 +1554,14 @@ def create_monitor_composition(
             load_or_create_cursor_key(database_path.with_suffix(".cursor.key"))
         ),
     )
+
+    async def daily_reevaluate(version_id):
+        owner = composition._runtime
+        state = runtime_states.get(owner.runtime_generation)
+        if state is None or state._pipeline is None:
+            return None
+        return await state._pipeline.daily_evaluations.reevaluate_version(version_id)
+
     composition = MonitorWebComposition(
         runtime=runtime,
         runtime_factory=runtime_factory,
@@ -1561,6 +1581,7 @@ def create_monitor_composition(
         ),
         market_index_read_service=market_index_read_service,
         legacy_maintenance_factory=unit_of_work_factory,
+        daily_reevaluate=daily_reevaluate,
     )
     health_binding.bind(composition.health)
     return composition

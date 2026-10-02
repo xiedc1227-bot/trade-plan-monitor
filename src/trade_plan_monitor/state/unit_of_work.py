@@ -13,6 +13,7 @@ from trade_plan_monitor.notifications.outbox import (
     DEFAULT_REPLAY_RETENTION,
     AlertOutbox,
 )
+from trade_plan_monitor.state.daily_repository import DailyRepository
 from trade_plan_monitor.state.events import MonitorEventLog
 from trade_plan_monitor.state.explicit_rules import ExplicitDecisionRepository
 from trade_plan_monitor.state.legacy_plan_invalidation import (
@@ -41,6 +42,9 @@ class UnitOfWork(Protocol):
 
     @property
     def plans(self) -> PlanRepository: ...
+
+    @property
+    def daily(self) -> DailyRepository: ...
 
     @property
     def idempotency(self) -> IdempotencyRepository: ...
@@ -120,6 +124,7 @@ class SqlAlchemyUnitOfWork:
         self._replay_retention = replay_retention
         self._session: Session | None = None
         self._plans: PlanRepository | None = None
+        self._daily: DailyRepository | None = None
         self._idempotency: IdempotencyRepository | None = None
         self._positions: PositionRepository | None = None
         self._episodes: EpisodeRepository | None = None
@@ -139,6 +144,12 @@ class SqlAlchemyUnitOfWork:
         if self._plans is None:
             raise RuntimeError("Unit of work is not active")
         return self._plans
+
+    @property
+    def daily(self) -> DailyRepository:
+        if self._daily is None:
+            raise RuntimeError("Unit of work is not active")
+        return self._daily
 
     @property
     def idempotency(self) -> IdempotencyRepository:
@@ -249,6 +260,7 @@ class SqlAlchemyUnitOfWork:
             raise RuntimeError("Unit of work cannot be re-entered")
         self._session = self._session_factory()
         self._session.begin()
+        self._daily = DailyRepository(self._session, clock=self._clock, id_factory=self._id_factory)
         self._events = MonitorEventLog(
             self._session,
             clock=self._clock,
@@ -321,6 +333,7 @@ class SqlAlchemyUnitOfWork:
             session.close()
             self._session = None
             self._plans = None
+            self._daily = None
             self._idempotency = None
             self._positions = None
             self._episodes = None

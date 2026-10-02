@@ -396,6 +396,12 @@
                 },
                 {
                   "$ref": "#/components/schemas/ExplicitAlertView"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyAlertCenterView"
+                },
+                {
+                  "$ref": "#/components/schemas/ObsoleteDailyAlertView"
                 }
               ]
             },
@@ -424,7 +430,8 @@
                 "enum": [
                   "BUY",
                   "SELL",
-                  "RISK_ALERT"
+                  "RISK_ALERT",
+                  "RISK_EXIT"
                 ],
                 "type": "string"
               },
@@ -5043,6 +5050,107 @@
         "title": "Board",
         "type": "string"
       },
+      "CertifiedDailyBar": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment_as_of": {
+            "format": "date",
+            "title": "Adjustment As Of",
+            "type": "string"
+          },
+          "available_at": {
+            "format": "date-time",
+            "title": "Available At",
+            "type": "string"
+          },
+          "bar_id": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Bar Id",
+            "type": "string"
+          },
+          "basis_id": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Basis Id",
+            "type": "string"
+          },
+          "close": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Close",
+            "type": "string"
+          },
+          "high": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "High",
+            "type": "string"
+          },
+          "low": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Low",
+            "type": "string"
+          },
+          "official": {
+            "const": true,
+            "title": "Official",
+            "type": "boolean"
+          },
+          "open": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Open",
+            "type": "string"
+          },
+          "price_basis": {
+            "const": "QFQ",
+            "default": "QFQ",
+            "title": "Price Basis",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          },
+          "volume_shares": {
+            "minimum": 0.0,
+            "title": "Volume Shares",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bar_id",
+          "symbol",
+          "trade_date",
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume_shares",
+          "official",
+          "provider",
+          "basis_id",
+          "adjustment_as_of",
+          "received_at",
+          "available_at"
+        ],
+        "title": "CertifiedDailyBar",
+        "type": "object"
+      },
       "ClauseDisposition": {
         "enum": [
           "MAPPED",
@@ -5223,6 +5331,2982 @@
         ],
         "title": "ConnectionStatus",
         "type": "string"
+      },
+      "DailyAlertCenterView": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledgedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledgedat"
+          },
+          "activationRevision": {
+            "minimum": 1.0,
+            "title": "Activationrevision",
+            "type": "integer"
+          },
+          "causeId": {
+            "title": "Causeid",
+            "type": "string"
+          },
+          "confirmedTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedtradedate"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "currentActionable": {
+            "title": "Currentactionable",
+            "type": "boolean"
+          },
+          "dedupKey": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Dedupkey",
+            "type": "string"
+          },
+          "evaluatedAt": {
+            "format": "date-time",
+            "title": "Evaluatedat",
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 50,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "executionDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executiondate"
+          },
+          "messageText": {
+            "title": "Messagetext",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nextStep": {
+            "enum": [
+              "CONFIRM_SIMULATED_TRADE",
+              "REVIEW_RISK_EXIT"
+            ],
+            "title": "Nextstep",
+            "type": "string"
+          },
+          "payloadSchemaVersion": {
+            "const": "daily-simulation-alert-v1",
+            "default": "daily-simulation-alert-v1",
+            "title": "Payloadschemaversion",
+            "type": "string"
+          },
+          "planHash": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planId": {
+            "title": "Planid",
+            "type": "string"
+          },
+          "planVersion": {
+            "exclusiveMinimum": 0.0,
+            "title": "Planversion",
+            "type": "integer"
+          },
+          "planVersionId": {
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "reviewId": {
+            "title": "Reviewid",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "riskScope": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskscope"
+          },
+          "sequence": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "severity": {
+            "enum": [
+              "ACTION",
+              "RISK"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "signalType": {
+            "enum": [
+              "BUY",
+              "SELL",
+              "RISK_EXIT"
+            ],
+            "title": "Signaltype",
+            "type": "string"
+          },
+          "simulatedQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Simulatedqty",
+            "type": "integer"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tradingDate": {
+            "format": "date",
+            "title": "Tradingdate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId",
+          "dedupKey",
+          "planId",
+          "planVersion",
+          "planHash",
+          "planVersionId",
+          "reviewId",
+          "activationRevision",
+          "symbol",
+          "name",
+          "signalType",
+          "severity",
+          "tradingDate",
+          "evaluatedAt",
+          "causeId",
+          "confirmedTradeDate",
+          "executionDate",
+          "quantity",
+          "simulatedQty",
+          "riskScope",
+          "evidence",
+          "nextStep",
+          "sequence",
+          "messageText",
+          "createdAt",
+          "revision",
+          "currentActionable"
+        ],
+        "title": "DailyAlertCenterView",
+        "type": "object"
+      },
+      "DailyAll": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "ALL": "#/components/schemas/DailyAll",
+                  "ANY": "#/components/schemas/DailyAny",
+                  "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                  "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                  "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                  "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                  "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                  "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                  "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DailyPriceCompare"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyPriceInRange"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyVolumeRatio"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyCandleRatio"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyIndicatorCompare"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyCloseSequence"
+                },
+                {
+                  "$ref": "#/components/schemas/ReviewedDailyFact"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyAll"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyAny"
+                }
+              ]
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "type": {
+            "const": "ALL",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "conditions"
+        ],
+        "title": "DailyAll",
+        "type": "object"
+      },
+      "DailyAny": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "ALL": "#/components/schemas/DailyAll",
+                  "ANY": "#/components/schemas/DailyAny",
+                  "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                  "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                  "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                  "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                  "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                  "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                  "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DailyPriceCompare"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyPriceInRange"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyVolumeRatio"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyCandleRatio"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyIndicatorCompare"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyCloseSequence"
+                },
+                {
+                  "$ref": "#/components/schemas/ReviewedDailyFact"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyAll"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyAny"
+                }
+              ]
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "type": {
+            "const": "ANY",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "conditions"
+        ],
+        "title": "DailyAny",
+        "type": "object"
+      },
+      "DailyCandleRatio": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "enum": [
+              "LT",
+              "LTE",
+              "EQ",
+              "GTE",
+              "GT"
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "component": {
+            "enum": [
+              "LOWER_WICK",
+              "UPPER_WICK",
+              "BODY"
+            ],
+            "title": "Component",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ratio",
+            "type": "string"
+          },
+          "type": {
+            "const": "DAILY_CANDLE_RATIO",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "offset",
+          "component",
+          "comparator",
+          "ratio"
+        ],
+        "title": "DailyCandleRatio",
+        "type": "object"
+      },
+      "DailyClause": {
+        "additionalProperties": false,
+        "properties": {
+          "clause_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Clause Id",
+            "type": "string"
+          },
+          "disposition": {
+            "enum": [
+              "POLICY",
+              "INVENTORY_ASSERTION",
+              "BACKGROUND",
+              "UNRESOLVED",
+              "UNSUPPORTED"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "excerpt": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "exclusions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DailySourceExclusion"
+            },
+            "maxItems": 50,
+            "title": "Exclusions",
+            "type": "array"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 512,
+            "title": "Paths",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "remainders": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DailyTechnicalRemainder"
+            },
+            "maxItems": 51,
+            "title": "Remainders",
+            "type": "array"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clause_id",
+          "start",
+          "end",
+          "excerpt",
+          "disposition",
+          "paths",
+          "reason"
+        ],
+        "title": "DailyClause",
+        "type": "object"
+      },
+      "DailyCloseSequence": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LT",
+                  "LTE",
+                  "EQ",
+                  "GTE",
+                  "GT"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparator"
+          },
+          "mode": {
+            "enum": [
+              "PAIRWISE_NONDECREASING",
+              "COMPARE_REFERENCE"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "DYNAMIC": "#/components/schemas/DynamicDailyReference",
+                    "FIXED": "#/components/schemas/FixedDailyReference"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/FixedDailyReference"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DynamicDailyReference"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "sessions": {
+            "maximum": 500.0,
+            "minimum": 2.0,
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "type": {
+            "const": "DAILY_CLOSE_SEQUENCE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "offset",
+          "sessions",
+          "mode",
+          "comparator",
+          "reference"
+        ],
+        "title": "DailyCloseSequence",
+        "type": "object"
+      },
+      "DailyConditionEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "bar_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Bar Ids",
+            "type": "array"
+          },
+          "basis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Id"
+          },
+          "children": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DailyConditionEvidence"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "condition": {
+            "discriminator": {
+              "mapping": {
+                "ALL": "#/components/schemas/DailyAll",
+                "ANY": "#/components/schemas/DailyAny",
+                "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DailyPriceCompare"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriceInRange"
+              },
+              {
+                "$ref": "#/components/schemas/DailyVolumeRatio"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCandleRatio"
+              },
+              {
+                "$ref": "#/components/schemas/DailyIndicatorCompare"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewedDailyFact"
+              },
+              {
+                "$ref": "#/components/schemas/DailyAll"
+              },
+              {
+                "$ref": "#/components/schemas/DailyAny"
+              }
+            ],
+            "title": "Condition"
+          },
+          "fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fact Ids",
+            "type": "array"
+          },
+          "operands": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Operands",
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "session_dates": {
+            "default": [],
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Session Dates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "condition"
+        ],
+        "title": "DailyConditionEvidence",
+        "type": "object"
+      },
+      "DailyEditorSchemaView": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateSchema": {
+            "additionalProperties": true,
+            "title": "Candidateschema",
+            "type": "object"
+          },
+          "operationSchemas": {
+            "additionalProperties": true,
+            "title": "Operationschemas",
+            "type": "object"
+          },
+          "schemaVersion": {
+            "const": 4,
+            "default": 4,
+            "title": "Schemaversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "candidateSchema",
+          "operationSchemas"
+        ],
+        "title": "DailyEditorSchemaView",
+        "type": "object"
+      },
+      "DailyEvaluationApiView": {
+        "additionalProperties": false,
+        "properties": {
+          "activationRevision": {
+            "minimum": 0.0,
+            "title": "Activationrevision",
+            "type": "integer"
+          },
+          "contentHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "dailyEvidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailySeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dataBlockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Datablockers",
+            "type": "array"
+          },
+          "evaluatedAt": {
+            "format": "date-time",
+            "title": "Evaluatedat",
+            "type": "string"
+          },
+          "factRevisions": {
+            "items": {
+              "$ref": "#/components/schemas/DailyFactRevision"
+            },
+            "title": "Factrevisions",
+            "type": "array"
+          },
+          "inventory": {
+            "$ref": "#/components/schemas/DailyInventoryApiView"
+          },
+          "nextAction": {
+            "enum": [
+              "REVIEW_RISK_EXIT",
+              "CONFIRM_SIMULATED_TRADE",
+              "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION"
+            ],
+            "title": "Nextaction",
+            "type": "string"
+          },
+          "officialTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Officialtradedate"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyExecutionQuote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewId": {
+            "title": "Reviewid",
+            "type": "string"
+          },
+          "riskAction": {
+            "$ref": "#/components/schemas/DailyRiskActionApiView"
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/DailyRiskApiView"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/DailySignalApiView"
+            },
+            "title": "Signals",
+            "type": "array"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "planVersionId",
+          "planHash",
+          "contentHash",
+          "reviewId",
+          "activationRevision",
+          "evaluatedAt",
+          "officialTradeDate",
+          "inventory",
+          "factRevisions",
+          "signals",
+          "risks",
+          "riskAction",
+          "dataBlockers",
+          "dailyEvidence",
+          "quote",
+          "nextAction"
+        ],
+        "title": "DailyEvaluationApiView",
+        "type": "object"
+      },
+      "DailyExecutionQuote": {
+        "additionalProperties": false,
+        "properties": {
+          "available_at": {
+            "format": "date-time",
+            "title": "Available At",
+            "type": "string"
+          },
+          "evaluated_at": {
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          },
+          "liquidity_available": {
+            "title": "Liquidity Available",
+            "type": "boolean"
+          },
+          "price_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Price Fen",
+            "type": "integer"
+          },
+          "quote_at": {
+            "format": "date-time",
+            "title": "Quote At",
+            "type": "string"
+          },
+          "special_state_verified": {
+            "title": "Special State Verified",
+            "type": "boolean"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tradable": {
+            "title": "Tradable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "symbol",
+          "price_fen",
+          "quote_at",
+          "available_at",
+          "evaluated_at",
+          "tradable",
+          "special_state_verified",
+          "liquidity_available"
+        ],
+        "title": "DailyExecutionQuote",
+        "type": "object"
+      },
+      "DailyFactCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "evidence": {
+            "maxLength": 2000,
+            "minLength": 20,
+            "title": "Evidence",
+            "type": "string"
+          },
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "factId": {
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Factid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "PRICE_STRUCTURE",
+              "VOLUME_OR_CANDLE",
+              "TECHNICAL",
+              "TRADE_VIABILITY",
+              "SIGNAL_INVALIDATION",
+              "INDEPENDENT_EVENT",
+              "SEVERE_STRUCTURE",
+              "SEVERE_DETERIORATION",
+              "TRADABILITY",
+              "FULL_SESSION_SUSPENSION"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "officialEvidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyOfficialEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "signalId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signalid"
+          },
+          "tradeDate": {
+            "format": "date",
+            "title": "Tradedate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "contentHash",
+          "factId",
+          "kind",
+          "tradeDate",
+          "evidence",
+          "expectedRevision"
+        ],
+        "title": "DailyFactCommand",
+        "type": "object"
+      },
+      "DailyFactRevision": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "revision"
+        ],
+        "title": "DailyFactRevision",
+        "type": "object"
+      },
+      "DailyFieldBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "clause_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Clause Ids",
+            "type": "array"
+          },
+          "origin": {
+            "enum": [
+              "SOURCE",
+              "HUMAN_SUPPLEMENT",
+              "PRODUCT_CONTRACT"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "supplement_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplement Id"
+          },
+          "unit": {
+            "enum": [
+              "JSON",
+              "FEN_FROM_YUAN",
+              "SHARES",
+              "RATIO",
+              "TEXT",
+              "STRUCTURE"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "required": [
+          "path",
+          "value",
+          "origin",
+          "unit",
+          "clause_ids",
+          "supplement_id"
+        ],
+        "title": "DailyFieldBinding",
+        "type": "object"
+      },
+      "DailyIndicatorCompare": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "enum": [
+              "LT",
+              "LTE",
+              "EQ",
+              "GTE",
+              "GT"
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "formula_version": {
+            "const": "daily-ta-v2",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "indicator": {
+            "enum": [
+              "MA20",
+              "MA60",
+              "MACD_DIF",
+              "MACD_DEA",
+              "MACD_HIST",
+              "RSI14",
+              "ATR14",
+              "BOLL_LOWER",
+              "BOLL_MIDDLE",
+              "BOLL_UPPER",
+              "BOLL_BANDWIDTH"
+            ],
+            "title": "Indicator",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Parameters",
+            "type": "object"
+          },
+          "reference": {
+            "discriminator": {
+              "mapping": {
+                "DYNAMIC": "#/components/schemas/DynamicDailyReference",
+                "FIXED": "#/components/schemas/FixedDailyReference"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FixedDailyReference"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicDailyReference"
+              }
+            ],
+            "title": "Reference"
+          },
+          "type": {
+            "const": "DAILY_INDICATOR_COMPARE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "indicator",
+          "formula_version",
+          "parameters",
+          "offset",
+          "comparator",
+          "reference"
+        ],
+        "title": "DailyIndicatorCompare",
+        "type": "object"
+      },
+      "DailyInventoryApiView": {
+        "additionalProperties": false,
+        "properties": {
+          "coreQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coreqty"
+          },
+          "known": {
+            "title": "Known",
+            "type": "boolean"
+          },
+          "revision": {
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sellableCore": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sellablecore"
+          },
+          "sellableTactical": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sellabletactical"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tacticalQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tacticalqty"
+          },
+          "totalQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalqty"
+          }
+        },
+        "required": [
+          "symbol",
+          "revision",
+          "known",
+          "totalQty",
+          "coreQty",
+          "tacticalQty",
+          "sellableCore",
+          "sellableTactical"
+        ],
+        "title": "DailyInventoryApiView",
+        "type": "object"
+      },
+      "DailyInventoryResource": {
+        "additionalProperties": false,
+        "properties": {
+          "evaluatedAt": {
+            "format": "date-time",
+            "title": "Evaluatedat",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyInventoryApiView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "CURRENT",
+              "UNSUPPORTED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "evaluatedAt",
+          "status",
+          "snapshot"
+        ],
+        "title": "DailyInventoryResource",
+        "type": "object"
+      },
+      "DailyMapping": {
+        "additionalProperties": false,
+        "properties": {
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/DailyFieldBinding"
+            },
+            "maxItems": 2000,
+            "title": "Bindings",
+            "type": "array"
+          },
+          "candidate_content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Content Hash",
+            "type": "string"
+          },
+          "clauses": {
+            "items": {
+              "$ref": "#/components/schemas/DailyClause"
+            },
+            "maxItems": 512,
+            "title": "Clauses",
+            "type": "array"
+          },
+          "mapping_version": {
+            "const": "daily-mapping-v1",
+            "title": "Mapping Version",
+            "type": "string"
+          },
+          "supplements": {
+            "items": {
+              "$ref": "#/components/schemas/DailySupplement"
+            },
+            "maxItems": 2000,
+            "title": "Supplements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mapping_version",
+          "candidate_content_hash",
+          "clauses",
+          "bindings",
+          "supplements"
+        ],
+        "title": "DailyMapping",
+        "type": "object"
+      },
+      "DailyMutationReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "recordedAt": {
+            "format": "date-time",
+            "title": "Recordedat",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "recordedAt"
+        ],
+        "title": "DailyMutationReceipt",
+        "type": "object"
+      },
+      "DailyObsoleteRiskApiView": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmedTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedtradedate"
+          },
+          "kind": {
+            "enum": [
+              "ORDINARY_TECHNICAL",
+              "SEVERE_TECHNICAL"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "riskId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskid"
+          },
+          "scopeEvidence": {
+            "maxLength": 2000,
+            "title": "Scopeevidence",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "CLEAR",
+              "PENDING",
+              "OBSERVATION",
+              "CONFIRMED",
+              "FULFILLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "riskId",
+          "kind",
+          "status",
+          "confirmedTradeDate",
+          "scopeEvidence"
+        ],
+        "title": "DailyObsoleteRiskApiView",
+        "type": "object"
+      },
+      "DailyOfficialEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "applicableAssertion": {
+            "maxLength": 2000,
+            "minLength": 20,
+            "title": "Applicableassertion",
+            "type": "string"
+          },
+          "documentTitle": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Documenttitle",
+            "type": "string"
+          },
+          "documentUrl": {
+            "maxLength": 2000,
+            "pattern": "^https://[^\\s]+$",
+            "title": "Documenturl",
+            "type": "string"
+          },
+          "issuer": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Issuer",
+            "type": "string"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "title": "Publishedat",
+            "type": "string"
+          },
+          "verifiedAt": {
+            "format": "date-time",
+            "title": "Verifiedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer",
+          "documentTitle",
+          "documentUrl",
+          "publishedAt",
+          "verifiedAt",
+          "applicableAssertion"
+        ],
+        "title": "DailyOfficialEvidence",
+        "type": "object"
+      },
+      "DailyPositionCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "coreQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Coreqty",
+            "type": "integer"
+          },
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tacticalQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Tacticalqty",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "symbol",
+          "coreQty",
+          "tacticalQty",
+          "expectedRevision"
+        ],
+        "title": "DailyPositionCommand",
+        "type": "object"
+      },
+      "DailyPriceCompare": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "enum": [
+              "LT",
+              "LTE",
+              "EQ",
+              "GTE",
+              "GT"
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "field": {
+            "enum": [
+              "open",
+              "high",
+              "low",
+              "close"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "reference": {
+            "discriminator": {
+              "mapping": {
+                "DYNAMIC": "#/components/schemas/DynamicDailyReference",
+                "FIXED": "#/components/schemas/FixedDailyReference"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FixedDailyReference"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicDailyReference"
+              }
+            ],
+            "title": "Reference"
+          },
+          "type": {
+            "const": "DAILY_PRICE_COMPARE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "field",
+          "offset",
+          "comparator",
+          "reference"
+        ],
+        "title": "DailyPriceCompare",
+        "type": "object"
+      },
+      "DailyPriceInRange": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "enum": [
+              "open",
+              "high",
+              "low",
+              "close"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "range": {
+            "$ref": "#/components/schemas/DailyZone"
+          },
+          "type": {
+            "const": "DAILY_PRICE_IN_RANGE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "field",
+          "offset",
+          "range"
+        ],
+        "title": "DailyPriceInRange",
+        "type": "object"
+      },
+      "DailyReviewIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "path",
+          "code",
+          "reason"
+        ],
+        "title": "DailyReviewIssue",
+        "type": "object"
+      },
+      "DailyReviewPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateJson": {
+            "maxLength": 262144,
+            "minLength": 2,
+            "title": "Candidatejson",
+            "type": "string"
+          },
+          "review": {
+            "$ref": "#/components/schemas/DailyReviewSnapshot"
+          },
+          "supplementRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Supplementrevision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "candidateJson",
+          "review",
+          "supplementRevision"
+        ],
+        "title": "DailyReviewPreview",
+        "type": "object"
+      },
+      "DailyReviewPreviewCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateJson": {
+            "maxLength": 262144,
+            "minLength": 2,
+            "title": "Candidatejson",
+            "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyMapping"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopeSelections": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DailySourceExclusion"
+            },
+            "maxItems": 512,
+            "title": "Scopeselections",
+            "type": "array"
+          },
+          "sourceText": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Sourcetext",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidateJson",
+          "sourceText"
+        ],
+        "title": "DailyReviewPreviewCommand",
+        "type": "object"
+      },
+      "DailyReviewSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "evidence_hash": {
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/DailyReviewIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/DailyMapping"
+          },
+          "source_hash": {
+            "title": "Source Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_hash",
+          "source_hash",
+          "evidence_hash",
+          "mapping",
+          "issues"
+        ],
+        "title": "DailyReviewSnapshot",
+        "type": "object"
+      },
+      "DailyRiskActionApiView": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ORDINARY_TECHNICAL",
+                  "SEVERE_TECHNICAL"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "causeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causeid"
+          },
+          "causeRevision": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causerevision"
+          },
+          "coreQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coreqty"
+          },
+          "status": {
+            "enum": [
+              "WAITING",
+              "NONE",
+              "RISK_EXIT"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tacticalQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tacticalqty"
+          },
+          "targetCoreQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetcoreqty"
+          },
+          "targetTacticalQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targettacticalqty"
+          },
+          "unavailableCoreQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailablecoreqty"
+          },
+          "unavailableTacticalQty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailabletacticalqty"
+          }
+        },
+        "required": [
+          "status",
+          "coreQty",
+          "tacticalQty",
+          "unavailableCoreQty",
+          "unavailableTacticalQty",
+          "blockers"
+        ],
+        "title": "DailyRiskActionApiView",
+        "type": "object"
+      },
+      "DailyRiskApiView": {
+        "additionalProperties": false,
+        "properties": {
+          "basisId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basisid"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "breachTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breachtradedate"
+          },
+          "causeCutoverAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causecutoverat"
+          },
+          "causeCutoverDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causecutoverdate"
+          },
+          "confirmedTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedtradedate"
+          },
+          "consumedEvidenceIds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Consumedevidenceids",
+            "type": "array"
+          },
+          "earliestExecutionDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliestexecutiondate"
+          },
+          "evidenceIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidenceids",
+            "type": "array"
+          },
+          "fulfilledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fulfilledat"
+          },
+          "involvesCore": {
+            "title": "Involvescore",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "ORDINARY_TECHNICAL",
+              "SEVERE_TECHNICAL"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "priority": {
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "reassessmentId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reassessmentid"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "riskComparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LT",
+                  "LTE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskcomparison"
+          },
+          "riskId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskid"
+          },
+          "riskLineFen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risklinefen"
+          },
+          "scopeEvidence": {
+            "title": "Scopeevidence",
+            "type": "string"
+          },
+          "secondCloseDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondclosedate"
+          },
+          "status": {
+            "enum": [
+              "CLEAR",
+              "PENDING",
+              "OBSERVATION",
+              "CONFIRMED",
+              "FULFILLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "suspensionConfirmationPolicy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "RESUME_FIRST_CLOSE",
+                  "RESTART_ADJACENT_PAIR"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspensionconfirmationpolicy"
+          },
+          "targetCoreQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Targetcoreqty",
+            "type": "integer"
+          },
+          "targetTacticalQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Targettacticalqty",
+            "type": "integer"
+          },
+          "verifiedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verifiedat"
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "priority",
+          "targetCoreQty",
+          "targetTacticalQty",
+          "involvesCore",
+          "scopeEvidence",
+          "evidenceIds",
+          "earliestExecutionDate",
+          "blockers"
+        ],
+        "title": "DailyRiskApiView",
+        "type": "object"
+      },
+      "DailyRiskReassessmentCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "involvesCore": {
+            "title": "Involvescore",
+            "type": "boolean"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "removalEvidence": {
+            "$ref": "#/components/schemas/DailyOfficialEvidence"
+          },
+          "riskId": {
+            "title": "Riskid",
+            "type": "string"
+          },
+          "scopeEvidence": {
+            "maxLength": 2000,
+            "minLength": 20,
+            "title": "Scopeevidence",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "targetCoreQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Targetcoreqty",
+            "type": "integer"
+          },
+          "targetTacticalQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Targettacticalqty",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "symbol",
+          "riskId",
+          "planVersionId",
+          "contentHash",
+          "expectedRevision",
+          "removalEvidence",
+          "targetCoreQty",
+          "targetTacticalQty",
+          "involvesCore",
+          "scopeEvidence"
+        ],
+        "title": "DailyRiskReassessmentCommand",
+        "type": "object"
+      },
+      "DailySeries": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment_as_of": {
+            "format": "date",
+            "title": "Adjustment As Of",
+            "type": "string"
+          },
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/CertifiedDailyBar"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Bars",
+            "type": "array"
+          },
+          "basis_id": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Basis Id",
+            "type": "string"
+          },
+          "cutoff": {
+            "format": "date-time",
+            "title": "Cutoff",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "quote_comparable": {
+            "const": true,
+            "title": "Quote Comparable",
+            "type": "boolean"
+          },
+          "session_dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Session Dates",
+            "type": "array"
+          },
+          "suspended_dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "title": "Suspended Dates",
+            "type": "array"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "bars",
+          "basis_id",
+          "adjustment_as_of",
+          "provider",
+          "quote_comparable",
+          "session_dates",
+          "suspended_dates",
+          "cutoff"
+        ],
+        "title": "DailySeries",
+        "type": "object"
+      },
+      "DailySignalApiView": {
+        "additionalProperties": false,
+        "properties": {
+          "basisId": {
+            "title": "Basisid",
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "bucket": {
+            "const": "TACTICAL",
+            "title": "Bucket",
+            "type": "string"
+          },
+          "confirmedTradeDate": {
+            "format": "date",
+            "title": "Confirmedtradedate",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/DailyConditionEvidence"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "evidenceFingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidencefingerprint",
+            "type": "string"
+          },
+          "executableQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Executableqty",
+            "type": "integer"
+          },
+          "executionDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executiondate"
+          },
+          "lineage": {
+            "title": "Lineage",
+            "type": "string"
+          },
+          "planVersionId": {
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "plannedQty": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Plannedqty",
+            "type": "integer"
+          },
+          "resetTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resettradedate"
+          },
+          "reviewId": {
+            "title": "Reviewid",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "riskInvalidated": {
+            "default": false,
+            "title": "Riskinvalidated",
+            "type": "boolean"
+          },
+          "ruleId": {
+            "title": "Ruleid",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "signalId": {
+            "title": "Signalid",
+            "type": "string"
+          },
+          "simulatedQty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Simulatedqty",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "CONFIRMED",
+              "READY",
+              "EXPIRED",
+              "INVALIDATED",
+              "SIMULATED"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signalId",
+          "ruleId",
+          "side",
+          "bucket",
+          "lineage",
+          "state",
+          "plannedQty",
+          "simulatedQty",
+          "confirmedTradeDate",
+          "executionDate",
+          "evidenceFingerprint",
+          "evidence",
+          "planVersionId",
+          "reviewId",
+          "basisId",
+          "executableQty",
+          "blockers"
+        ],
+        "title": "DailySignalApiView",
+        "type": "object"
+      },
+      "DailySimulationCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "causeId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Causeid",
+            "type": "string"
+          },
+          "expectedCauseRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedcauserevision",
+            "type": "integer"
+          },
+          "expectedInventoryRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedinventoryrevision",
+            "type": "integer"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "causeId",
+          "expectedCauseRevision",
+          "expectedInventoryRevision",
+          "quantity"
+        ],
+        "title": "DailySimulationCommand",
+        "type": "object"
+      },
+      "DailySimulationReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "inventory": {
+            "$ref": "#/components/schemas/DailyInventoryApiView"
+          },
+          "inventoryRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Inventoryrevision",
+            "type": "integer"
+          },
+          "priceFen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Pricefen",
+            "type": "integer"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "side": {
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "signalId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signalid"
+          },
+          "simulatedAt": {
+            "format": "date-time",
+            "title": "Simulatedat",
+            "type": "string"
+          },
+          "simulationId": {
+            "title": "Simulationid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "simulationId",
+          "side",
+          "quantity",
+          "priceFen",
+          "simulatedAt",
+          "inventoryRevision",
+          "inventory",
+          "signalId"
+        ],
+        "title": "DailySimulationReceipt",
+        "type": "object"
+      },
+      "DailySourceExclusion": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "excerpt": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "origin": {
+            "default": "REGISTERED_FRAGMENT",
+            "enum": [
+              "REGISTERED_FRAGMENT",
+              "HUMAN_SCOPE_SELECTION"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "reason": {
+            "const": "FUNDAMENTALS_REVIEWED_AT_PLAN_GENERATION",
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash",
+            "type": "string"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_hash",
+          "start",
+          "end",
+          "excerpt",
+          "reason"
+        ],
+        "title": "DailySourceExclusion",
+        "type": "object"
+      },
+      "DailyStateView": {
+        "additionalProperties": false,
+        "properties": {
+          "evaluatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluatedat"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "risks": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DailyObsoleteRiskApiView"
+            },
+            "maxItems": 2,
+            "title": "Risks",
+            "type": "array"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyEvaluationApiView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "CURRENT",
+              "AWAITING_EVALUATION",
+              "INACTIVE",
+              "UNSUPPORTED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "evaluatedAt",
+          "status",
+          "snapshot"
+        ],
+        "title": "DailyStateView",
+        "type": "object"
+      },
+      "DailySupplement": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Content Hash",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "supplement_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Supplement Id",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "required": [
+          "supplement_id",
+          "candidate_content_hash",
+          "path",
+          "value",
+          "reason"
+        ],
+        "title": "DailySupplement",
+        "type": "object"
+      },
+      "DailySupplementCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateJson": {
+            "maxLength": 262144,
+            "minLength": 2,
+            "title": "Candidatejson",
+            "type": "string"
+          },
+          "contentHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "supplements": {
+            "items": {
+              "$ref": "#/components/schemas/DailySupplement"
+            },
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Supplements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "candidateJson",
+          "contentHash",
+          "supplements",
+          "expectedRevision"
+        ],
+        "title": "DailySupplementCommand",
+        "type": "object"
+      },
+      "DailyTechnicalRemainder": {
+        "additionalProperties": false,
+        "properties": {
+          "disposition": {
+            "enum": [
+              "POLICY",
+              "UNRESOLVED",
+              "UNSUPPORTED"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "excerpt": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 512,
+            "title": "Paths",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "excerpt",
+          "disposition",
+          "paths",
+          "reason"
+        ],
+        "title": "DailyTechnicalRemainder",
+        "type": "object"
+      },
+      "DailyVolumeRatio": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline": {
+            "enum": [
+              "PREVIOUS",
+              "MEAN"
+            ],
+            "title": "Baseline",
+            "type": "string"
+          },
+          "comparator": {
+            "enum": [
+              "LT",
+              "LTE",
+              "EQ",
+              "GTE",
+              "GT"
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ratio",
+            "type": "string"
+          },
+          "type": {
+            "const": "DAILY_VOLUME_RATIO",
+            "title": "Type",
+            "type": "string"
+          },
+          "window": {
+            "maximum": 499.0,
+            "minimum": 1.0,
+            "title": "Window",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "offset",
+          "baseline",
+          "window",
+          "comparator",
+          "ratio"
+        ],
+        "title": "DailyVolumeRatio",
+        "type": "object"
+      },
+      "DailyZone": {
+        "additionalProperties": false,
+        "properties": {
+          "high_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "High Fen",
+            "type": "integer"
+          },
+          "include_high": {
+            "title": "Include High",
+            "type": "boolean"
+          },
+          "include_low": {
+            "title": "Include Low",
+            "type": "boolean"
+          },
+          "low_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Low Fen",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "low_fen",
+          "high_fen",
+          "include_low",
+          "include_high"
+        ],
+        "title": "DailyZone",
+        "type": "object"
       },
       "DashboardCounts": {
         "additionalProperties": false,
@@ -5774,6 +8858,60 @@
         "title": "DraftReviewIssue",
         "type": "object"
       },
+      "DynamicDailyReference": {
+        "additionalProperties": false,
+        "properties": {
+          "formula_version": {
+            "const": "daily-ta-v2",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "indicator": {
+            "enum": [
+              "MA20",
+              "MA60",
+              "MACD_DIF",
+              "MACD_DEA",
+              "MACD_HIST",
+              "RSI14",
+              "ATR14",
+              "BOLL_LOWER",
+              "BOLL_MIDDLE",
+              "BOLL_UPPER",
+              "BOLL_BANDWIDTH"
+            ],
+            "title": "Indicator",
+            "type": "string"
+          },
+          "mode": {
+            "const": "DYNAMIC",
+            "title": "Mode",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Parameters",
+            "type": "object"
+          }
+        },
+        "required": [
+          "mode",
+          "indicator",
+          "formula_version",
+          "parameters",
+          "offset"
+        ],
+        "title": "DynamicDailyReference",
+        "type": "object"
+      },
       "EpisodeStatus": {
         "description": "Pure low-zone episode lifecycle used by the decision boundary.",
         "enum": [
@@ -6160,7 +9298,8 @@
             "enum": [
               "BUY",
               "SELL",
-              "RISK_ALERT"
+              "RISK_ALERT",
+              "RISK_EXIT"
             ],
             "title": "Signaltype",
             "type": "string"
@@ -6661,6 +9800,49 @@
         "title": "FieldEvidence",
         "type": "object"
       },
+      "FixedDailyReference": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "mode": {
+            "const": "FIXED",
+            "title": "Mode",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "FEN",
+              "INDICATOR"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "value",
+          "unit",
+          "as_of",
+          "source"
+        ],
+        "title": "FixedDailyReference",
+        "type": "object"
+      },
       "IndexConditionEvidenceView": {
         "additionalProperties": false,
         "description": "Exact server projection of one plan path's index interpretation.",
@@ -6965,6 +10147,7 @@
         "title": "InventorySourceTreatmentView",
         "type": "object"
       },
+      "JsonValue": {},
       "LegacyPlanInvalidateCommand": {
         "additionalProperties": false,
         "properties": {
@@ -7733,6 +10916,138 @@
         "title": "NextStepView",
         "type": "object"
       },
+      "ObsoleteDailyAlertView": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledgedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledgedat"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "currentActionable": {
+            "const": false,
+            "default": false,
+            "title": "Currentactionable",
+            "type": "boolean"
+          },
+          "dedupKey": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Dedupkey",
+            "type": "string"
+          },
+          "evaluatedAt": {
+            "format": "date-time",
+            "title": "Evaluatedat",
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "messageText": {
+            "maxLength": 10000,
+            "title": "Messagetext",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payloadSchemaVersion": {
+            "const": "daily-plan-alert-v1",
+            "default": "daily-plan-alert-v1",
+            "title": "Payloadschemaversion",
+            "type": "string"
+          },
+          "planHash": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planId": {
+            "title": "Planid",
+            "type": "string"
+          },
+          "planVersion": {
+            "exclusiveMinimum": 0.0,
+            "title": "Planversion",
+            "type": "integer"
+          },
+          "reason": {
+            "const": "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED",
+            "default": "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED",
+            "title": "Reason",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sequence": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "signalType": {
+            "enum": [
+              "BUY",
+              "SELL",
+              "RISK_EXIT"
+            ],
+            "title": "Signaltype",
+            "type": "string"
+          },
+          "status": {
+            "const": "UNSUPPORTED",
+            "default": "UNSUPPORTED",
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tradingDate": {
+            "format": "date",
+            "title": "Tradingdate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId",
+          "sequence",
+          "dedupKey",
+          "planId",
+          "planVersion",
+          "planHash",
+          "symbol",
+          "name",
+          "signalType",
+          "tradingDate",
+          "evaluatedAt",
+          "messageText",
+          "createdAt",
+          "acknowledgedAt",
+          "revision"
+        ],
+        "title": "ObsoleteDailyAlertView",
+        "type": "object"
+      },
       "OfficialCloseDiagnosticIdentityView": {
         "additionalProperties": false,
         "properties": {
@@ -7843,6 +11158,20 @@
             "title": "Planversionid",
             "type": "string"
           },
+          "reviewEvidenceHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewevidencehash"
+          },
           "reviewId": {
             "anyOf": [
               {
@@ -7854,6 +11183,33 @@
               }
             ],
             "title": "Reviewid"
+          },
+          "reviewRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewrevision"
+          },
+          "sourceHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcehash"
           }
         },
         "required": [
@@ -7907,6 +11263,16 @@
               }
             ],
             "title": "Baseplanversionid"
+          },
+          "dailyMapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyMapping"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "expectedRevision": {
             "maximum": 9007199254740991.0,
@@ -7985,6 +11351,15 @@
             "minLength": 1,
             "title": "Sourcetext",
             "type": "string"
+          },
+          "targetContract": {
+            "default": "CONFIGURED",
+            "enum": [
+              "CONFIGURED",
+              "DAILY_CLOSE_PLAN"
+            ],
+            "title": "Targetcontract",
+            "type": "string"
           }
         },
         "required": [
@@ -8031,6 +11406,16 @@
               }
             ],
             "title": "Completedat"
+          },
+          "dailyMapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyMapping"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "diagnosticStatus": {
             "anyOf": [
@@ -8534,6 +11919,18 @@
             "title": "Id",
             "type": "string"
           },
+          "obsoleteReason": {
+            "anyOf": [
+              {
+                "const": "DAILY_DRAFT_OBSOLETE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obsoletereason"
+          },
           "planHash": {
             "maxLength": 64,
             "minLength": 64,
@@ -8609,6 +12006,25 @@
             "title": "Createdat",
             "type": "string"
           },
+          "dailyIssues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DailyReviewIssue"
+            },
+            "maxItems": 512,
+            "title": "Dailyissues",
+            "type": "array"
+          },
+          "dailyMapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyMapping"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "executionReadiness": {
             "anyOf": [
               {
@@ -8635,6 +12051,18 @@
                 "type": "null"
               }
             ]
+          },
+          "obsoleteReason": {
+            "anyOf": [
+              {
+                "const": "DAILY_DRAFT_OBSOLETE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obsoletereason"
           },
           "planHash": {
             "maxLength": 64,
@@ -9718,6 +13146,54 @@
         ],
         "title": "ReviewResolutionKind",
         "type": "string"
+      },
+      "ReviewedDailyFact": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_requirement": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Evidence Requirement",
+            "type": "string"
+          },
+          "fact_kind": {
+            "enum": [
+              "PRICE_STRUCTURE",
+              "VOLUME_OR_CANDLE",
+              "TECHNICAL",
+              "TRADE_VIABILITY",
+              "SIGNAL_INVALIDATION",
+              "INDEPENDENT_EVENT",
+              "SEVERE_STRUCTURE",
+              "SEVERE_DETERIORATION",
+              "TRADABILITY",
+              "FULL_SESSION_SUSPENSION"
+            ],
+            "title": "Fact Kind",
+            "type": "string"
+          },
+          "type": {
+            "const": "REVIEWED_FACT",
+            "title": "Type",
+            "type": "string"
+          },
+          "validity_scope": {
+            "enum": [
+              "TRADE_DATE",
+              "SIGNAL"
+            ],
+            "title": "Validity Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "fact_kind",
+          "evidence_requirement",
+          "validity_scope"
+        ],
+        "title": "ReviewedDailyFact",
+        "type": "object"
       },
       "RiskStatus": {
         "description": "Pure official-close risk lifecycle used by the decision boundary.",
@@ -12183,6 +15659,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/ExplicitAlertView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DailyAlertCenterView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ObsoleteDailyAlertView"
                     }
                   ],
                   "title": "Response Acknowledge Alert Api V1 Alert Acknowledgements Post"
@@ -12342,7 +15824,8 @@
                   "enum": [
                     "BUY",
                     "SELL",
-                    "RISK_ALERT"
+                    "RISK_ALERT",
+                    "RISK_EXIT"
                   ],
                   "type": "string"
                 },
@@ -15624,6 +19107,1363 @@
         "summary": "Get Backtest Market Index Series",
         "tags": [
           "backtest-results"
+        ]
+      }
+    },
+    "/api/v1/daily-plan-editor-schema": {
+      "get": {
+        "operationId": "editor_schema_api_v1_daily_plan_editor_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyEditorSchemaView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Editor Schema",
+        "tags": [
+          "daily-plans"
+        ]
+      }
+    },
+    "/api/v1/daily-plan-facts": {
+      "post": {
+        "operationId": "facts_api_v1_daily_plan_facts_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyFactCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMutationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Facts",
+        "tags": [
+          "daily-plans"
+        ]
+      }
+    },
+    "/api/v1/daily-plan-review-previews": {
+      "post": {
+        "operationId": "preview_api_v1_daily_plan_review_previews_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyReviewPreviewCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyReviewPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Preview",
+        "tags": [
+          "daily-plans"
+        ]
+      }
+    },
+    "/api/v1/daily-plan-review-supplements": {
+      "post": {
+        "operationId": "supplements_api_v1_daily_plan_review_supplements_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailySupplementCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMutationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Supplements",
+        "tags": [
+          "daily-plans"
+        ]
+      }
+    },
+    "/api/v1/daily-plan-runtime/{symbol}": {
+      "get": {
+        "operationId": "runtime_api_v1_daily_plan_runtime__symbol__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyStateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Runtime",
+        "tags": [
+          "daily-plans"
+        ]
+      }
+    },
+    "/api/v1/daily-position-confirmations": {
+      "post": {
+        "operationId": "positions_api_v1_daily_position_confirmations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyPositionCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMutationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Positions",
+        "tags": [
+          "daily-plans"
+        ]
+      }
+    },
+    "/api/v1/daily-position-inventory": {
+      "get": {
+        "operationId": "inventory_api_v1_daily_position_inventory_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{6}\\.(SH|SZ|BJ)$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asOfTradeDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Asoftradedate",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyInventoryResource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inventory",
+        "tags": [
+          "daily-plans"
+        ]
+      }
+    },
+    "/api/v1/daily-risk-reassessments": {
+      "post": {
+        "operationId": "reassessments_api_v1_daily_risk_reassessments_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyRiskReassessmentCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMutationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Reassessments",
+        "tags": [
+          "daily-plans"
+        ]
+      }
+    },
+    "/api/v1/daily-simulated-trades": {
+      "post": {
+        "operationId": "simulations_api_v1_daily_simulated_trades_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailySimulationCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailySimulationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Simulations",
+        "tags": [
+          "daily-plans"
         ]
       }
     },

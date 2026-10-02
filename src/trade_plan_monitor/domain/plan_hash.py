@@ -3,8 +3,20 @@
 import json
 from hashlib import sha256
 
+from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
 from trade_plan_monitor.domain.plan_codec import dump_plan_json
 from trade_plan_monitor.domain.plan_models import ExecutableTradePlan, ExplicitTradePlan
+
+
+def daily_plan_content_sha256(plan: DailyTradePlan) -> str:
+    """Bind every Schema 4 semantic field under its own review domain."""
+    if not isinstance(plan, DailyTradePlan):
+        raise TypeError("plan must be a DailyTradePlan")
+    content = plan.model_dump(mode="json", exclude={"plan_id", "version", "name", "metadata"})
+    canonical = json.dumps(
+        content, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+    )
+    return sha256(b"daily-plan-review-content-v1\x00" + canonical.encode("utf-8")).hexdigest()
 
 
 def plan_sha256(plan: ExecutableTradePlan) -> str:

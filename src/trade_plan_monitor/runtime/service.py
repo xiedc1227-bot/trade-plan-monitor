@@ -32,6 +32,7 @@ from trade_plan_monitor.decision.models import (
     RiskTransitionIntent,
     SignalType,
 )
+from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import (
@@ -71,6 +72,7 @@ from trade_plan_monitor.market_index.requirements import iter_plan_index_conditi
 from trade_plan_monitor.notifications.identity import alert_dedup_key
 from trade_plan_monitor.notifications.models import AlertEvent, build_alert_payload
 from trade_plan_monitor.runtime.clock import Clock, SystemClock, _canonical_shanghai
+from trade_plan_monitor.runtime.daily_service import DailyRuntimeEvaluationService
 from trade_plan_monitor.runtime.explicit_service import (
     ExplicitRuntimeCycleResult,
     ExplicitRuntimeEvaluationService,
@@ -139,15 +141,20 @@ _OFFICIAL_RISK_SIGNAL_TYPES = frozenset(
         SignalType.RISK_EXIT_PENDING_SETTLEMENT,
     }
 )
-_RETRYABLE_PROVIDER_ERRORS = frozenset({
-    RequestControlErrorCode.TRANSIENT,
-    RequestControlErrorCode.TIMEOUT,
-    RequestControlErrorCode.RATE_LIMITED,
-    RequestControlErrorCode.BLOCKED_PERMISSION,
-})
-_MARKET_CURSOR_PRESERVING_MAINTENANCE = frozenset({
-    DeadlineKind.INDEX_PERMISSION, DeadlineKind.STOCK_RECOVERY,
-})
+_RETRYABLE_PROVIDER_ERRORS = frozenset(
+    {
+        RequestControlErrorCode.TRANSIENT,
+        RequestControlErrorCode.TIMEOUT,
+        RequestControlErrorCode.RATE_LIMITED,
+        RequestControlErrorCode.BLOCKED_PERMISSION,
+    }
+)
+_MARKET_CURSOR_PRESERVING_MAINTENANCE = frozenset(
+    {
+        DeadlineKind.INDEX_PERMISSION,
+        DeadlineKind.STOCK_RECOVERY,
+    }
+)
 
 FetchMinutes = Callable[[str, datetime], Awaitable[list[MinuteBar] | tuple[MinuteBar, ...]]]
 FetchOfficialDaily = Callable[
@@ -157,7 +164,8 @@ FetchOfficialDaily = Callable[
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 ContextBuilder = Callable[[TradePlan, "IntradayMarketFacts"], EvaluationContext]
 OfficialContextBuilder = Callable[
-    [TradePlan, "OfficialCloseMarketFacts"], EvaluationContext | HistoricalOfficialContext,
+    [TradePlan, "OfficialCloseMarketFacts"],
+    EvaluationContext | HistoricalOfficialContext,
 ]
 OfficialObservedAt = Callable[[datetime], datetime]
 Evaluator = Callable[[EvaluationContext], EvaluationResult]
@@ -2728,6 +2736,7 @@ class RuntimeDeadlineCoordinator:
         symbol_service: SymbolService,
         evaluation_service: RuntimeEvaluationService,
         explicit_evaluation_service: ExplicitRuntimeEvaluationService | None = None,
+        daily_evaluation_service: DailyRuntimeEvaluationService | None = None,
     ) -> None:
         if not isinstance(clock, Clock):
             raise TypeError("clock must implement Clock")
@@ -2749,6 +2758,7 @@ class RuntimeDeadlineCoordinator:
         self._symbol_service = symbol_service
         self._evaluation_service = evaluation_service
         self._explicit_evaluation_service = explicit_evaluation_service
+        self._daily_evaluation_service = daily_evaluation_service
 
     async def run_deadline(
         self,
@@ -2764,18 +2774,29 @@ class RuntimeDeadlineCoordinator:
         plans = self._validated_active_plans(self._active_plans())
         legacy_plans = tuple(plan for plan in plans if isinstance(plan, TradePlan))
         explicit_plans = tuple(plan for plan in plans if isinstance(plan, ExplicitTradePlan))
+        daily_plans = tuple(plan for plan in plans if isinstance(plan, DailyTradePlan))
+        if daily_plans and self._daily_evaluation_service is None:
+            raise RuntimeError("daily plan runtime is not composed")
         if explicit_plans and self._explicit_evaluation_service is None:
             raise RuntimeError("explicit plan runtime is not composed")
         observed_at = max(_canonical_shanghai(self._clock.now()), deadline.due_at)
         if deadline.kind is DeadlineKind.OFFICIAL_CLOSE:
             if deadline.close_attempt is None:  # protected by MarketDeadline validation
                 raise ValueError("official-close deadline requires close_attempt")
-            return await self._evaluation_service.run_official_close_batch(
+            legacy_results = await self._evaluation_service.run_official_close_batch(
                 plans=legacy_plans,
                 trade_date=deadline.trade_date,
                 evaluated_at=observed_at,
                 close_attempt=deadline.close_attempt,
             )
+            daily_results = []
+            for plan in daily_plans:
+                daily_results.append(
+                    await self._daily_evaluation_service.run_target(
+                        plan=plan, evaluated_at=observed_at, official_trade_date=deadline.trade_date
+                    )
+                )
+            return (*legacy_results, *daily_results)
 
         bar_end = deadline.bar_end
         if bar_end is None:  # protected by MarketDeadline validation
@@ -2784,9 +2805,15 @@ class RuntimeDeadlineCoordinator:
         restore_states = self._evaluation_service.load_persisted_symbol_health(symbols)
         self._symbol_service.restore_health(symbols=symbols, states=restore_states)
         activation_revisions = {state.symbol: state.activation_revision for state in restore_states}
-        candidates = tuple(PlanCycleIdentity.capture(
-            plan, activation_revision=activation_revisions[plan.symbol], target=bar_end,
-        ) for plan in plans)
+        candidates = tuple(
+            PlanCycleIdentity.capture(
+                plan,
+                activation_revision=activation_revisions[plan.symbol],
+                target=bar_end,
+            )
+            for plan in plans
+            if not isinstance(plan, DailyTradePlan)
+        )
         market_index_batch = None
         if legacy_plans and five_minute_bucket_end(bar_end) == bar_end:
             market_index_batch = await self._evaluation_service.prepare_intraday_market_indexes(
@@ -2800,6 +2827,18 @@ class RuntimeDeadlineCoordinator:
             symbols=symbols,
         )
         observed_at = batch.observed_at
+        daily_results = []
+        if five_minute_bucket_end(bar_end) == bar_end:
+            for plan in daily_plans:
+                context = next((c for c in batch.contexts if c.symbol == plan.symbol), None)
+                minutes = (
+                    () if context is None or context.five_minute_bar is None else context.minutes
+                )
+                daily_results.append(
+                    await self._daily_evaluation_service.run_target(
+                        plan=plan, evaluated_at=observed_at, minutes=minutes
+                    )
+                )
         if five_minute_bucket_end(bar_end) != bar_end:
             await self._evaluation_service.persist_symbol_health_batch(
                 tuple(context.health for context in batch.contexts),
@@ -2827,21 +2866,19 @@ class RuntimeDeadlineCoordinator:
             },
         )
         due_plans = tuple(plan for plan in plans if plan.symbol in complete_contexts)
-        due_identities = tuple(identity for identity in candidates
-                               if identity.symbol in complete_contexts)
-        if not due_plans:
-            return ()
-        due_legacy_plans = tuple(
-            plan for plan in due_plans if isinstance(plan, TradePlan)
+        due_identities = tuple(
+            identity for identity in candidates if identity.symbol in complete_contexts
         )
+        if not due_plans:
+            return tuple(daily_results)
+        due_legacy_plans = tuple(plan for plan in due_plans if isinstance(plan, TradePlan))
         due_explicit_plans = tuple(
             plan for plan in due_plans if isinstance(plan, ExplicitTradePlan)
         )
         await self._evaluation_service.persist_symbol_health_batch(
             tuple(complete_contexts[plan.symbol].health for plan in due_explicit_plans),
             activation_revisions={
-                plan.symbol: activation_revisions[plan.symbol]
-                for plan in due_explicit_plans
+                plan.symbol: activation_revisions[plan.symbol] for plan in due_explicit_plans
             },
         )
         minutes_by_symbol = {
@@ -2849,17 +2886,16 @@ class RuntimeDeadlineCoordinator:
         }
         legacy_outcomes = await self._evaluation_service.run_intraday_outcomes_from_minutes(
             plans=due_legacy_plans,
-            identities=tuple(identity for identity in due_identities
-                             if identity.consumer_kind == "LEGACY"),
+            identities=tuple(
+                identity for identity in due_identities if identity.consumer_kind == "LEGACY"
+            ),
             bucket_end=bar_end,
             evaluated_at=observed_at,
             minutes_by_symbol={
-                plan.symbol: minutes_by_symbol[plan.symbol]
-                for plan in due_legacy_plans
+                plan.symbol: minutes_by_symbol[plan.symbol] for plan in due_legacy_plans
             },
             health_by_symbol={
-                plan.symbol: complete_contexts[plan.symbol].health
-                for plan in due_legacy_plans
+                plan.symbol: complete_contexts[plan.symbol].health for plan in due_legacy_plans
             },
             market_index_batch=market_index_batch,
         )
@@ -2868,9 +2904,11 @@ class RuntimeDeadlineCoordinator:
             raise RuntimeError("explicit plan runtime is not composed")
         explicit_outcomes = []
         if explicit_service is not None:
-            for plan, identity in zip(due_explicit_plans, (
-                identity for identity in due_identities if identity.consumer_kind == "EXPLICIT"
-            ), strict=True):
+            for plan, identity in zip(
+                due_explicit_plans,
+                (identity for identity in due_identities if identity.consumer_kind == "EXPLICIT"),
+                strict=True,
+            ):
                 result = await explicit_service.run_intraday_associated_and_publish(
                     plan=plan,
                     target_bucket_end=bar_end,
@@ -2882,14 +2920,18 @@ class RuntimeDeadlineCoordinator:
                     if isinstance(result, _PrecommitStale)
                     else PlanCycleOutcome(identity=identity, result=result)
                 )
-        return _account_plan_outcomes(
-            due_identities, (*legacy_outcomes, *explicit_outcomes),
+        return (
+            *_account_plan_outcomes(
+                due_identities,
+                (*legacy_outcomes, *explicit_outcomes),
+            ),
+            *daily_results,
         )
 
     @staticmethod
     def _validated_active_plans(value: object) -> tuple[ExecutableTradePlan, ...]:
         if type(value) is not tuple or any(
-            not isinstance(plan, (TradePlan, ExplicitTradePlan)) for plan in value
+            not isinstance(plan, (TradePlan, ExplicitTradePlan, DailyTradePlan)) for plan in value
         ):
             raise TypeError("active_plans must return executable trade plans")
         if len(value) > 10:

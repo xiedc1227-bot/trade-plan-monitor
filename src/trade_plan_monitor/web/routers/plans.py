@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Path, Query, Request, status
 from pydantic import Field, field_validator, model_validator
 
+from trade_plan_monitor.ai.daily_review import DailyMapping, DailyReviewIssue, build_daily_review
 from trade_plan_monitor.ai.models import (
     AIUsageSnapshot,
     BindingKind,
@@ -32,6 +33,12 @@ from trade_plan_monitor.ai.review import (
     explicit_draft_content_sha256,
     explicit_draft_sha256,
     load_explicit_plan_draft_json,
+)
+from trade_plan_monitor.domain.daily_plan_validation import (
+    DailyPlanDraft,
+    daily_draft_json,
+    daily_draft_sha256,
+    load_daily_draft_json,
 )
 from trade_plan_monitor.domain.plan_codec import (
     MAX_PLAN_DOCUMENT_BYTES,
@@ -161,12 +168,19 @@ class PlanVersionSummary(ApiValue):
     plan_hash: Sha256Hex
     status: PlanVersionStatus
     can_activate: bool = Field(strict=True)
+    obsolete_reason: Literal["DAILY_DRAFT_OBSOLETE"] | None = None
     revision: NonNegativeSafeInteger
     created_at: ShanghaiDatetime
 
     @model_validator(mode="after")
     def validate_active_state(self) -> Self:
-        if self.status is PlanVersionStatus.ACTIVE and not self.can_activate:
+        if self.obsolete_reason is not None and self.can_activate:
+            raise ValueError("obsolete daily version cannot grant activation")
+        if (
+            self.status is PlanVersionStatus.ACTIVE
+            and not self.can_activate
+            and self.obsolete_reason is None
+        ):
             raise ValueError("an active version cannot contain an activation blocker")
         return self
 
@@ -194,6 +208,8 @@ class PlanVersionView(PlanVersionSummary):
         max_length=512,
     )
     execution_readiness: Literal["NOT_EVALUATED"] | None = None
+    daily_mapping: DailyMapping | None = None
+    daily_issues: tuple[DailyReviewIssue, ...] = Field(default=(), max_length=512)
 
     @field_validator("source_text")
     @classmethod
@@ -202,7 +218,47 @@ class PlanVersionView(PlanVersionSummary):
 
     @model_validator(mode="after")
     def validate_canonical_plan_and_activation_state(self) -> Self:
+        if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in self.daily_issues):
+            import json
+            from hashlib import sha256
+
+            from trade_plan_monitor.domain.daily_plan_validation import obsolete_daily_document
+            raw = json.loads(self.plan_json)
+            if (
+                not obsolete_daily_document(raw)
+                or self.obsolete_reason != "DAILY_DRAFT_OBSOLETE"
+                or self.can_activate
+                or self.plan_hash != sha256(self.plan_json.encode()).hexdigest()
+                or (self.plan_id, self.version, self.symbol)
+                != (raw["plan_id"], raw["version"], raw["symbol"])
+            ):
+                raise ValueError("obsolete daily document must remain preserved and blocked")
+            return self
+        if self.obsolete_reason is not None:
+            raise ValueError("obsolete reason requires an identified unpublished daily document")
         plan = _load_reviewable_plan(self.plan_json)
+        if isinstance(plan, DailyPlanDraft):
+            if self.daily_mapping is None:
+                raise ValueError("daily candidate requires current source mapping")
+            snapshot = build_daily_review(plan, self.daily_mapping, self.source_text)
+            if (
+                self.plan_json != daily_draft_json(plan)
+                or self.plan_hash != daily_draft_sha256(plan)
+                or (self.plan_id, self.version, self.symbol)
+                != (plan.plan_id, plan.version, plan.symbol)
+                or (self.content_hash, self.source_hash, self.review_evidence_hash)
+                != (snapshot.content_hash, snapshot.source_hash, snapshot.evidence_hash)
+                or self.daily_issues != snapshot.issues
+                or self.review_revision is None
+                or self.can_activate
+                != (
+                    not snapshot.issues
+                    and plan.to_executable() is not None
+                    and self.review_id is not None
+                )
+            ):
+                raise ValueError("daily current review state is inconsistent")
+            return self
         canonical = (
             dump_explicit_plan_draft_json(plan)
             if isinstance(plan, ExplicitPlanDraft)
@@ -305,6 +361,7 @@ class PlanDraftCommand(ApiValue):
     )
     expected_revision: NonNegativeSafeInteger
     mapping: PlanMappingView | None = None
+    daily_mapping: DailyMapping | None = None
 
     @field_validator("plan_json")
     @classmethod
@@ -341,6 +398,7 @@ class PlanExtractionCommand(ApiValue):
     provider_id: UUID = Field(strict=False)
     source_text: ExtractionSourceText
     expected_revision: NonNegativeSafeInteger
+    target_contract: Literal["CONFIGURED", "DAILY_CLOSE_PLAN"] = "CONFIGURED"
 
     @field_validator("source_text")
     @classmethod
@@ -352,6 +410,9 @@ class PlanActivationCommand(ApiValue):
     plan_version_id: UUID = Field(strict=False)
     review_id: UUID | None = Field(default=None, strict=False)
     content_hash: Sha256Hex | None = None
+    source_hash: Sha256Hex | None = None
+    review_evidence_hash: Sha256Hex | None = None
+    review_revision: NonNegativeSafeInteger | None = None
     expected_revision: ActivationExpectedRevision
 
 
@@ -528,6 +589,7 @@ class PlanExtractionView(ApiValue):
     ) = None
     draft_plan_json: PlanDocument | None = None
     mapping: PlanMappingView | None = None
+    daily_mapping: DailyMapping | None = None
     evidence: tuple[FieldEvidence, ...] = Field(default=(), max_length=10_000)
     assumptions: tuple[ExtractionIssue, ...] = Field(default=(), max_length=256)
     warnings: tuple[ExtractionIssue, ...] = Field(default=(), max_length=256)
@@ -571,6 +633,18 @@ class PlanExtractionView(ApiValue):
                 raise ValueError("successful extraction requires complete review data")
             plan_json = cast(str, self.draft_plan_json)
             plan = _load_reviewable_plan(plan_json)
+            if self.prompt_version == "plan-extract-v7":
+                if (
+                    not isinstance(plan, DailyPlanDraft)
+                    or self.daily_mapping is None
+                    or self.daily_mapping.supplements
+                    or self.mapping is not None
+                    or self.evidence
+                    or self.unmapped_text
+                    or daily_draft_json(plan) != plan_json
+                ):
+                    raise ValueError("daily extraction requires source-only Schema 4 mapping")
+                return self
             canonical = (
                 dump_explicit_plan_draft_json(plan)
                 if isinstance(plan, ExplicitPlanDraft)
@@ -1032,6 +1106,10 @@ def _valid_utf8_text(value: str, *, max_bytes: int | None = None) -> str:
 
 def _load_reviewable_plan(document: str) -> ExecutableTradePlan | ExplicitPlanDraft:
     try:
+        return load_daily_draft_json(document)
+    except ValueError:
+        pass
+    try:
         return load_explicit_plan_draft_json(document)
     except ValueError:
         return load_plan_json(document)
@@ -1047,7 +1125,11 @@ def _validate_web_plan(
 
 def _matches_plan(result: PlanVersionView, plan: ExecutableTradePlan) -> bool:
     expected_hash = (
-        explicit_draft_sha256(plan) if isinstance(plan, ExplicitPlanDraft) else plan_sha256(plan)
+        daily_draft_sha256(plan)
+        if isinstance(plan, DailyPlanDraft)
+        else explicit_draft_sha256(plan)
+        if isinstance(plan, ExplicitPlanDraft)
+        else plan_sha256(plan)
     )
     return (
         result.plan_id == plan.plan_id

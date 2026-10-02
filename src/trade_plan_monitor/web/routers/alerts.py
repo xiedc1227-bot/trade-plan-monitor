@@ -23,6 +23,7 @@ from trade_plan_monitor.decision.models import (
 from trade_plan_monitor.domain.plan_models import PositionBucket
 from trade_plan_monitor.market_data.aggregation import expected_five_minute_ends
 from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
+from trade_plan_monitor.notifications.daily_models import DailyAlertEvent, ObsoleteDailyAlertEvent
 from trade_plan_monitor.notifications.models import (
     AlertEvent,
     AlertPriceZone,
@@ -58,7 +59,7 @@ _MAX_EXPECTED_REVISION = 9_223_372_036_854_775_806
 OffsetQuery = Annotated[int, Query(ge=0, le=_MAX_ROWS)]
 LimitQuery = Annotated[int, Query(ge=1, le=_MAX_LIMIT)]
 SymbolFilter = Annotated[AShareSymbol | None, Query()]
-PublicAlertSignalType = ActionableSignalType | Literal["BUY", "SELL", "RISK_ALERT"]
+PublicAlertSignalType = ActionableSignalType | Literal["BUY", "SELL", "RISK_ALERT", "RISK_EXIT"]
 SignalTypeFilter = Annotated[PublicAlertSignalType | None, Query(alias="signalType")]
 AcknowledgedFilter = Annotated[bool | None, Query()]
 StartAtFilter = Annotated[ShanghaiDatetime | None, Query(alias="startAt")]
@@ -113,7 +114,7 @@ class AlertPriceZoneView(ApiValue):
 class AlertRecord(ApiValue):
     """Internal service result retaining the canonical persisted alert event."""
 
-    event: AlertEvent | ExplicitAlertEvent
+    event: AlertEvent | ExplicitAlertEvent | DailyAlertEvent | ObsoleteDailyAlertEvent
     revision: NonNegativeRevision
     current_actionable: bool = Field(strict=True)
     position_prefill: PositionPrefillView | None = None
@@ -270,7 +271,7 @@ class ExplicitAlertView(ApiValue):
     activation_revision: NonNegativeRevision
     symbol: AShareSymbol
     name: str = Field(strict=True, min_length=1, max_length=100)
-    signal_type: Literal["BUY", "SELL", "RISK_ALERT"]
+    signal_type: Literal["BUY", "SELL", "RISK_ALERT", "RISK_EXIT"]
     severity: Literal[AlertSeverity.ACTION, AlertSeverity.RISK]
     trading_date: Annotated[date, Field(strict=True)]
     cause_id: str = Field(strict=True, min_length=1, max_length=128)
@@ -311,8 +312,20 @@ class ExplicitAlertView(ApiValue):
         return self
 
 
+class DailyAlertCenterView(DailyAlertEvent, ApiValue):
+    revision: NonNegativeRevision
+    current_actionable: bool = Field(strict=True)
+
+
+class ObsoleteDailyAlertView(ObsoleteDailyAlertEvent, ApiValue):
+    revision: NonNegativeRevision
+    current_actionable: Literal[False] = False
+
+
 class AlertPage(ApiValue):
-    items: tuple[AlertView | ExplicitAlertView, ...] = Field(default=(), max_length=_MAX_LIMIT)
+    items: tuple[
+        AlertView | ExplicitAlertView | DailyAlertCenterView | ObsoleteDailyAlertView, ...
+    ] = Field(default=(), max_length=_MAX_LIMIT)
     symbol: AShareSymbol | None = None
     signal_type: PublicAlertSignalType | None = None
     acknowledged: bool | None = Field(default=None, strict=True)
@@ -521,8 +534,16 @@ def _explicit_evidence_view(
     )
 
 
-def _alert_view(record: AlertRecord) -> AlertView | ExplicitAlertView:
+def _alert_view(
+    record: AlertRecord,
+) -> AlertView | ExplicitAlertView | DailyAlertCenterView | ObsoleteDailyAlertView:
     event = record.event
+    if isinstance(event, ObsoleteDailyAlertEvent):
+        return ObsoleteDailyAlertView(**event.model_dump(mode="python"), revision=record.revision,
+            current_actionable=False)
+    if isinstance(event, DailyAlertEvent):
+        return DailyAlertCenterView(**event.model_dump(mode="python"), revision=record.revision,
+            current_actionable=record.current_actionable)
     if isinstance(event, ExplicitAlertEvent):
         return ExplicitAlertView(
             payload_schema_version=event.payload_schema_version,
@@ -744,13 +765,13 @@ async def list_alerts(
 
 @router.post(
     "/alert-acknowledgements",
-    response_model=AlertView | ExplicitAlertView,
+    response_model=AlertView | ExplicitAlertView | DailyAlertCenterView | ObsoleteDailyAlertView,
 )
 async def acknowledge_alert(
     command: AlertAcknowledgementCommand,
     context: MutationContextDependency,
     service: AlertServiceDependency,
-) -> AlertView | ExplicitAlertView:
+) -> AlertView | ExplicitAlertView | DailyAlertCenterView | ObsoleteDailyAlertView:
     if command.expected_revision not in {0, 1}:
         raise ApiError(ApiErrorCode.CONFLICT)
     result = validate_api_response(

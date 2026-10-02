@@ -240,6 +240,44 @@ async def extract_plan(
             reason="JSON_OTHER",
         )
 
+    from trade_plan_monitor.ai.daily_extraction import DailyExtractionOutput, DailyExtractionResult
+
+    if isinstance(output, DailyExtractionOutput):
+        try:
+            snapshot = output.review(source_text)
+        except TypeError, ValueError, RecursionError:
+            return _failure_result(
+                request_id=request_id,
+                config=config,
+                source_text_sha256=source_text_sha256,
+                status=PlanExtractionStatus.INVALID_OUTPUT,
+                issue_code="AI_FIELD_EVIDENCE_INVALID",
+                issue_path="mapping",
+                issue_message="Daily source mapping is invalid.",
+                raw=raw,
+                stage="mapping",
+                reason="MAPPING",
+            )
+        return DailyExtractionResult(
+            request_id=request_id,
+            provider_id=raw.provider_id,
+            model=config.model,
+            prompt_version=config.prompt_version,
+            source_text_sha256=source_text_sha256,
+            draft=output.draft,
+            daily_mapping=snapshot.mapping,
+            assumptions=output.assumptions,
+            warnings=output.warnings,
+            validation_issues=tuple(
+                _blocking_warning(i.code, i.path, i.reason) for i in snapshot.issues
+            ),
+            usage=_usage_snapshot(raw),
+            diagnostic=_diagnostic(
+                stage="completed", reason="NONE", raw=raw, configured_model=config.model
+            ),
+            status=PlanExtractionStatus.SUCCEEDED,
+        )
+
     if isinstance(output, PlanExtractionOutputV4):
         try:
             mapping = output.to_mapping()
@@ -409,6 +447,10 @@ def _parse_untrusted_output(
         allow_nan=False,
         separators=(",", ":"),
     )
+    if prompt_version == "plan-extract-v7":
+        from trade_plan_monitor.ai.daily_extraction import DailyExtractionOutput
+
+        return DailyExtractionOutput.model_validate_json(normalized)
     model = (
         PlanExtractionOutputV4
         if prompt_version

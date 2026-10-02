@@ -19,6 +19,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from trade_plan_monitor.ai.daily_review import DailyMapping, DailyReviewIssue
 from trade_plan_monitor.ai.models import (
     ExplicitPlanDraft,
     PlanExtractionReview,
@@ -35,6 +36,7 @@ from trade_plan_monitor.ai.review import (
     load_explicit_plan_draft_json,
 )
 from trade_plan_monitor.ai.source_processing import upgrade_source_mapping
+from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import ExecutableTradePlan, ExplicitTradePlan, TradePlan
@@ -288,6 +290,8 @@ class PlanVersionDetailsRecord(PlanVersionRecord):
     resolutions: tuple[ReviewResolution, ...] = ()
     review_id: str | None = None
     review_revision: int = 0
+    daily_mapping: DailyMapping | None = None
+    daily_issues: tuple[DailyReviewIssue, ...] = ()
 
 
 class PlanExtractionReviewRecord(BaseModel):
@@ -1104,7 +1108,7 @@ class PlanRepository:
         expected_revision: int,
         validation: PlanValidationResult,
     ) -> ActivePlanRecord:
-        if not isinstance(plan, TradePlan | ExplicitTradePlan):
+        if not isinstance(plan, TradePlan | ExplicitTradePlan | DailyTradePlan):
             raise TypeError("plan must be an executable trade plan")
         if type(expected_revision) is not int or expected_revision < 0:
             raise ValueError("expected_revision must be a non-negative integer")
@@ -3527,6 +3531,10 @@ def _plan_version_details_record(
     provenance: PlanReviewProvenance,
     extraction: StoredPlanExtractionReview | None,
 ) -> PlanVersionDetailsRecord:
+    if json.loads(version.payload_json).get("schema_version") == 4:
+        from trade_plan_monitor.state.daily_review_store import daily_version_details
+
+        return daily_version_details(version, source, review, provenance)
     record: PlanVersionDetailsRecord | None = None
     try:
         if provenance.content_hash is not None:

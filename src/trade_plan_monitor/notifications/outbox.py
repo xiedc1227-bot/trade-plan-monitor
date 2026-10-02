@@ -22,6 +22,12 @@ from trade_plan_monitor.domain.plan_models import (
     ExecutableTradePlan,
     activation_is_eligible_on,
 )
+from trade_plan_monitor.notifications.daily_models import (
+    DailyAlertEvent,
+    DailyAlertPayload,
+    ObsoleteDailyAlertEvent,
+    render_daily_alert,
+)
 from trade_plan_monitor.notifications.models import (
     AlertEvent,
     AlertPayload,
@@ -272,6 +278,46 @@ class AlertOutbox:
             acknowledged_at=None,
         )
 
+    def enqueue_daily(self, payload: DailyAlertPayload) -> DailyAlertEvent:
+        """Reuse the durable event sequence, delivery attempts and outbox transaction."""
+        if type(payload) is not DailyAlertPayload:
+            raise TypeError("payload must be a DailyAlertPayload")
+        self._events.lock_for_append()
+        existing = self._session.scalar(
+            select(AlertEventRow).where(AlertEventRow.dedup_key == payload.dedup_key)
+        )
+        if existing is not None:
+            event = _event_from_row(existing)
+            if type(event) is not DailyAlertEvent or event.cause_id != payload.cause_id:
+                raise AlertIdentityConflictError("daily event identity reused")
+            return event
+        now = self._now()
+        if now < payload.evaluated_at:
+            raise ValueError("outbox clock precedes daily evaluation")
+        event = self._events.append(
+            MonitorEventDraft(
+                event_id=payload.event_id,
+                event_type=MonitorEventType.ALERT_CREATED,
+                aggregate_id=str(payload.event_id),
+                payload=MonitorEventPayload(
+                    entity_id=str(payload.event_id), symbol=payload.symbol, revision=0
+                ),
+                occurred_at=now,
+            )
+        )
+        row = AlertEventRow(
+            id=str(payload.event_id),
+            sequence=event.sequence,
+            dedup_key=payload.dedup_key,
+            payload_json=_payload_json(payload),
+            message_text=render_daily_alert(payload),
+            created_at=now.isoformat(),
+            acknowledged_at=None,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return _event_from_row(row)
+
     def enqueue_recoverable(
         self, payload: AlertPayload | ExplicitAlertPayload,
     ) -> AlertEvent | ExplicitAlertEvent:
@@ -320,10 +366,15 @@ class AlertOutbox:
     ) -> bool:
         """Return whether a retained alert still belongs to the current active plan."""
 
-        if type(event) not in {AlertEvent, ExplicitAlertEvent}:
+        if type(event) is ObsoleteDailyAlertEvent:
+            return False
+        if type(event) not in {AlertEvent, ExplicitAlertEvent, DailyAlertEvent}:
             raise TypeError("event must be a supported alert event")
         if isinstance(market_date, datetime) or not isinstance(market_date, date):
             raise TypeError("market_date must be a date")
+        if type(event) is DailyAlertEvent:
+            from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
+            return daily_delivery_allowed(self._session, event, self._now())
         plan = self._active_plan_for_event(event)
         return plan is not None and activation_is_eligible_on(plan.activation, market_date)
 
@@ -335,7 +386,9 @@ class AlertOutbox:
     ) -> bool:
         """Allow current alerts plus target-date-valid cross-day risk recovery."""
 
-        if type(event) not in {AlertEvent, ExplicitAlertEvent}:
+        if type(event) is ObsoleteDailyAlertEvent:
+            return False
+        if type(event) not in {AlertEvent, ExplicitAlertEvent, DailyAlertEvent}:
             raise TypeError("event must be a supported alert event")
         if isinstance(market_date, datetime) or not isinstance(market_date, date):
             raise TypeError("market_date must be a date")
@@ -345,6 +398,10 @@ class AlertOutbox:
         plan = self._active_plan_for_event(event)
         if plan is None:
             return False
+        if type(event) is DailyAlertEvent:
+            from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
+
+            return daily_delivery_allowed(self._session, event, self._now())
         if activation_is_eligible_on(plan.activation, market_date):
             return True
         return (
@@ -633,6 +690,7 @@ _ACTIONABLE_SIGNAL_TYPES = {
     "BUY",
     "SELL",
     "RISK_ALERT",
+    "RISK_EXIT",
 }
 
 
@@ -738,13 +796,30 @@ def _event_from_row(row: AlertEventRow) -> AlertEvent | ExplicitAlertEvent:
         if not isinstance(raw_payload, Mapping):
             raise ValueError("alert payload must be an object")
         is_explicit = raw_payload.get("payload_schema_version") == "explicit-rule-alert-v1"
+        if raw_payload.get("payload_schema_version") == "daily-plan-alert-v1":
+            if row.id != raw_payload.get("event_id") or row.dedup_key != raw_payload.get(
+                "dedup_key"
+            ):
+                raise ValueError("obsolete daily identity differs from its stored row")
+            fields = ("event_id", "dedup_key", "plan_id", "plan_version", "plan_hash", "symbol",
+                      "name", "signal_type", "trading_date", "evaluated_at")
+            return ObsoleteDailyAlertEvent.model_validate_json(json.dumps({
+                **{key: raw_payload[key] for key in fields}, "sequence": row.sequence,
+                "message_text": row.message_text, "created_at": row.created_at,
+                "acknowledged_at": row.acknowledged_at,
+            }))
+        is_daily = raw_payload.get("payload_schema_version") == "daily-simulation-alert-v1"
         payload = (
-            ExplicitAlertPayload.model_validate_json(row.payload_json)
+            DailyAlertPayload.model_validate_json(row.payload_json)
+            if is_daily
+            else ExplicitAlertPayload.model_validate_json(row.payload_json)
             if is_explicit
             else AlertPayload.model_validate_json(row.payload_json)
         )
         identity_matches = row.id == str(payload.event_id) and row.dedup_key == payload.dedup_key
-        event_type = ExplicitAlertEvent if is_explicit else AlertEvent
+        event_type = (
+            DailyAlertEvent if is_daily else ExplicitAlertEvent if is_explicit else AlertEvent
+        )
         event = event_type.model_validate(
             {
                 **payload.model_dump(mode="python", round_trip=True),

@@ -46,6 +46,15 @@ APPROVED_PATHS = {
     "/api/v1/backtest-runs/{run_id}/fills",
     "/api/v1/backtest-runs/{run_id}/market-index-series",
     "/api/v1/dashboard",
+    "/api/v1/daily-simulated-trades",
+    "/api/v1/daily-plan-editor-schema",
+    "/api/v1/daily-plan-facts",
+    "/api/v1/daily-plan-review-previews",
+    "/api/v1/daily-plan-review-supplements",
+    "/api/v1/daily-plan-runtime/{symbol}",
+    "/api/v1/daily-position-confirmations",
+    "/api/v1/daily-position-inventory",
+    "/api/v1/daily-risk-reassessments",
     "/api/v1/diagnostic-evaluations",
     "/api/v1/explicit-plan-runtime/{symbol}",
     "/api/v1/health",
@@ -181,6 +190,7 @@ def test_plan_contract_exposes_server_versioning_and_lightweight_summaries() -> 
     }
     summary_fields = set(schemas["PlanVersionSummary"]["properties"])
     assert summary_fields == {
+        "obsoleteReason",
         "canActivate",
         "createdAt",
         "id",

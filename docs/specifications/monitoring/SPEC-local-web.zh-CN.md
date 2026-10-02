@@ -158,7 +158,9 @@ web/src/
 
 ### T041 冻结 OpenAPI 与前端类型边界
 
-OpenAPI 快照 SHA-256：`3fd053faa64ab4613b810df68b7e375dacdc701e87e640908aafa87516f7dd93`
+OpenAPI 快照 SHA-256：`fd241fa2d7d804ca66ed8277014720795b47044fb143e3076146a5b8a81e80f5`
+
+监控契约 `2` 快照（`openapi.runtime-status.json`）SHA-256：`6216e2992e10532d3d83989ab1a3cebf61d78e2b36deb7bb3d728a190a709f99`。当前指纹包含 DP-WEB01；较早日期检查点中的路径数量仍是历史记录。
 
 R17 契约修复（2026-09-14）：将后端已有的 `PlanExtractionView.diagnosticStatus` 同步到此快照及前端生成契约。该字段可省略/为 null，仅接受 `RECORDED` 或 `WRITE_FAILED`；它表示诊断持久化状态，不表示提取成功。浏览器必须接受生产 QUEUED/RUNNING/终态 DTO，包括含 0–10,000 项字段映射的 v4 部分审核草稿，并保留激活阻断。轮询失败时保留已受理操作，提供仅 GET 的查询恢复，不再次发起提取 POST。本次用户要求的修复不新增 API 路径或供应商调用；证据与验证见 `../../verification/R17-contract-diagnostics-remediation.zh-CN.md`。
 
@@ -579,3 +581,25 @@ R12 完成普通用户的 v4 AI 提取、不可变 Schema-v3 保存、八项政�
 `GET /api/v1/health` 仅在活动计划缺少心跳时显示 `BLOCKED` 和 `blockReason=LEGACY_PLANS_REQUIRE_REVIEW`。系统页面使用 `GET /api/v1/system/legacy-plan-invalidation` 展示最多 10 个准确的 `{symbol, planVersionId, revision}` 身份及小写 SHA-256 `fingerprint`；其他情况下返回 `available=false`、`plans=[]`、`fingerprint=null`。经过独立的勾选和确认后，`POST /api/v1/system/legacy-plan-invalidation` 接收 `{fingerprint, confirmation:"INVALIDATE_LEGACY_PLANS"}`，返回 `{symbols, restartRequired:true}`。缺少确认返回 `422`，证据变化返回 `409`。POST 仅可在自有监控代际受阻且没有调度任务时执行；该状态下普通 HTTP 写入返回 `409`。既有本地同源 HTTP 防护继续生效。响应不包含凭证或原始存储错误。操作人须先重启工具再创建新计划；该操作绝不修改持仓或已确认成交。当前 OpenAPI 文档含 51 条路径，包括这条新增的实时路径。`GET /api/v1/health` 还提供有界的 `recoveryIssues`，分别包含受影响标的、稳定原因码及 `nextRetryAt`；系统页面将它们与传输新鲜度分别展示。未配置 Tushare 与股票语义证据不可用分别使用安全原因码 `TUSHARE_NOT_CONFIGURED` 和 `STOCK_SEMANTICS_UNAVAILABLE`；降级的运行时报告稳定的 `degradedReason` 和下次重试时间。
 
 按 D5 受控重启，运行中相关配置漂移后，`GET /api/v1/health` 也可显示 `BLOCKED` 和 `blockReason=NEEDS_RESTART`。此状态下全部普通 HTTP 写入，包括旧计划维护 POST，均返回 `409`。该原因要求安全停止、人工修正配置并启动新进程，不授权进程内替换数据源。120 小时准入使用的 `last_alive_at` 是本地合法软件所有者的持久心跳，与协调器进展及 WebSocket 健康信号分开。
+
+## DP-WEB01 日线计划接口与人工审核边界
+
+2026-10-02 已授权的 Schema 4 清理遵循 [SPEC-daily-plan](SPEC-daily-plan.zh-CN.md)，尤其 D06–D11。本快照仍恰有60条REST路径：原51条加9个日线资源，合计45条实时路径和15条回测路径。模拟交易路径替代未发布的执行报告路径，不保留券商端点或别名。此前路径数和验证记录描述各自日期检查点。Schema 4仍不得进入旧回测执行。
+
+| 端点 | 契约边界 |
+|---|---|
+| `GET /api/v1/daily-plan-editor-schema` | 读取Schema 4候选及 `FACT`、`POSITION`、`SIMULATION`、`REASSESSMENT` 命令schema。软件固定100股单位、1 fen和下一交易所交易日结算；不含可配置券商递增或券商规则证据。 |
+| `POST /api/v1/daily-plan-review-previews` | 验证当前 `candidateJson`、`sourceText`、可选mapping及精确基本面 `scopeSelections`；恢复匹配的已登记补充，返回 `supplementRevision` 和服务端审核，但不授予人工批准。 |
+| `POST /api/v1/daily-plan-review-supplements` | 登记绑定精确候选 `contentHash` 和 `expectedRevision` 的人工补充；补充后须重新获得当前审核。 |
+| `POST /api/v1/daily-plan-facts` | 登记绑定精确 `planVersionId`、`contentHash`、交易日或signal及 `expectedRevision` 的技术/运行证据；官方证据包含发布与核验时间。 |
+| `GET /api/v1/daily-plan-runtime/{symbol}` | 读取权威信号、技术风险、聚合模拟库存、证据和阻塞原因；明确区分不可用、未激活和不支持的开发数据。 |
+| `GET /api/v1/daily-position-inventory` | 按 `symbol` 和 `asOfTradeDate` 读取日线聚合模拟数量、可卖量及独立修订；不含lot、订单或客户端分配。 |
+| `POST /api/v1/daily-position-confirmations` | 以 `{symbol,coreQty,tacticalQty,expectedRevision}` 初始化隔离日线库存。数量非负且为100整数倍，单字段及合计均须JavaScript安全；初始化不得覆盖交易或重置信号消费。 |
+| `POST /api/v1/daily-simulated-trades` | 以 `{planVersionId,causeId,expectedCauseRevision,expectedInventoryRevision,quantity}` 加 `Idempotency-Key` 明确确认。仅当前提供的完整数量可以原子成功。服务端派生方向、类别扣账、价格和时间；同key重试返回回执，部分量、过期或重复消费不产生变更。 |
+| `POST /api/v1/daily-risk-reassessments` | 以当前风险、计划内容和 `expectedRevision` 登记已核验解除证据及审核范围/目标，保留审计与已消费原因历史。 |
+
+日线提取、草稿保存、审核确认及激活复用 `/api/v1/plan-extractions`、`/api/v1/plan-drafts`、`/api/v1/plan-review-confirmations` 和 `/api/v1/plan-activations`。激活绑定精确version/content/source/evidence/review revision。原文或参数改变须重新审核，preview不能批准候选。可识别的旧Schema 4计划，包括此前ACTIVE券商契约，保持只读，返回 `obsoleteReason=DAILY_DRAFT_OBSOLETE` 和 `canActivate=false`；持久绑定及原始字节不变，production跳过它们且不影响其他标的和旧schema。
+
+日线POSITION/SIMULATION记录与真实持仓表及回测组合隔离。技术事实、聚合初始化、明确模拟和重审立即刷新真实production runtime。事务及提醒发送时重新校验当前事实、库存、原因、审核、激活、报价及日历修订。提醒、已阅、重试和调度绝不交易。普通信号一次消费完整数量；到期或失效权限不能在风险完成后复活。锁定技术风险在激活到期后仍保留退出范围，直至完成或重审。T+1依据模拟取得日期及认证交易所交易日计算。
+
+当前提醒使用 `daily-simulation-alert-v1` 载荷及哈希身份。原 `daily-plan-alert-v1` 记录在共享提醒列表/读取/已阅中保留原文、身份和时间，作为类型明确的 `UNSUPPORTED` 历史；绝不发送或转换成模拟成功。旧日线REPORT、券商POSITION及不兼容head同样返回有界不支持诊断，不展示券商字段或授予执行权。基本面保留为排除背景，技术余文仍须保留。日线/QFQ/日历/预热证据不足须明确可见；它阻止普通权限，但不抹除锁定风险义务。离线测试不代表真实供应商认证或批准历史原始计划。

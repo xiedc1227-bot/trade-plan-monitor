@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 import type {
   ActivePlanView,
@@ -12,6 +13,8 @@ import { createPlanApi } from "../../src/api/plans";
 
 const VERSION_ID = "00000000-0000-4000-8000-000000000402";
 const TIME = "2026-09-03T10:00:00.000000+08:00";
+const dailyVersion: PlanVersionView = JSON.parse(readFileSync("tests/unit/fixtures/daily-unreviewed-version.json", "utf8"));
+const reviewedDailyVersion: PlanVersionView = JSON.parse(readFileSync("tests/unit/fixtures/daily-reviewed-version.json", "utf8"));
 
 const version: PlanVersionView = {
   canActivate: true,
@@ -69,6 +72,83 @@ const summary: PlanVersionSummary = {
 };
 
 describe("plan API", () => {
+  it("reads the actual saved daily API response before human review", async () => {
+    const api = createPlanApi(vi.fn(async () => jsonResponse(dailyVersion)) as typeof fetch);
+    await expect(api.getPlanVersion(dailyVersion.id)).resolves.toEqual(dailyVersion);
+    expect(dailyVersion.canActivate).toBe(false);
+    expect(dailyVersion.reviewId).toBeNull();
+  });
+
+  it("reads the same actual daily version after its public human review confirmation", async () => {
+    const api = createPlanApi(vi.fn(async () => jsonResponse(reviewedDailyVersion)) as typeof fetch);
+    await expect(api.getPlanVersion(reviewedDailyVersion.id)).resolves.toEqual(reviewedDailyVersion);
+    expect(reviewedDailyVersion.canActivate).toBe(true);
+    expect(reviewedDailyVersion.id).toBe(dailyVersion.id);
+    expect(reviewedDailyVersion.reviewId).not.toBeNull();
+  });
+
+  it.each([
+    { canActivate: true, reviewId: null },
+    { canActivate: true, dailyMapping: null, reviewId: VERSION_ID },
+    { canActivate: true, reviewEvidenceHash: null, reviewId: VERSION_ID },
+    { canActivate: true, reviewRevision: null, reviewId: VERSION_ID },
+    { canActivate: true, contentHash: "b".repeat(64), reviewId: VERSION_ID },
+    { canActivate: false, dailyMapping: null },
+    { canActivate: false, status: "ACTIVE", reviewId: null },
+  ])("rejects a daily activation claim without its current review binding %j", async (patch) => {
+    const api = createPlanApi(vi.fn(async () => jsonResponse({ ...dailyVersion, ...patch })) as typeof fetch);
+    await expect(api.getPlanVersion(dailyVersion.id)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("accepts current nullable daily diagnostics on ordinary version reads", async () => {
+    const detail = { ...version, obsoleteReason: null, dailyMapping: null, dailyIssues: [] };
+    const item = { ...summary, obsoleteReason: null };
+    const api = createPlanApi(vi.fn(async (input: RequestInfo | URL) =>
+      jsonResponse(String(input).includes("?")
+        ? { items: [item], limit: 20, offset: 0, total: 1 }
+        : detail),
+    ) as typeof fetch);
+
+    await expect(api.listPlanVersions({ limit: 20, offset: 0 })).resolves.toMatchObject({ items: [item] });
+    await expect(api.getPlanVersion(VERSION_ID)).resolves.toEqual(detail);
+  });
+
+  it("reads a recognized obsolete ACTIVE daily version without granting activation", async () => {
+    const issue = {
+      code: "DAILY_DRAFT_OBSOLETE", issue_id: "obsolete-daily", path: "trading_rules",
+      reason: "Re-extract preserved source and review a new draft",
+    };
+    const detail = {
+      ...version, canActivate: false, status: "ACTIVE", obsoleteReason: "DAILY_DRAFT_OBSOLETE",
+      planJson: JSON.stringify({ schema_version: 4, plan_id: version.planId, version: version.version,
+        symbol: version.symbol, trading_rules: { buy_min_qty: 100 } }),
+      dailyMapping: null, dailyIssues: [issue],
+      validationIssues: [{ activationBlocking: true, code: issue.code, message: issue.reason,
+        path: issue.path, severity: "WARNING" }],
+    };
+    const item = { ...summary, canActivate: false, status: "ACTIVE", obsoleteReason: "DAILY_DRAFT_OBSOLETE" };
+    const api = createPlanApi(vi.fn(async (input: RequestInfo | URL) =>
+      jsonResponse(String(input).includes("?")
+        ? { items: [item], limit: 20, offset: 0, total: 1 }
+        : detail),
+    ) as typeof fetch);
+
+    await expect(api.listPlanVersions({ limit: 20, offset: 0 })).resolves.toMatchObject({ items: [item] });
+    await expect(api.getPlanVersion(VERSION_ID)).resolves.toEqual(detail);
+  });
+
+  it.each([
+    { obsoleteReason: "UNRECOGNIZED" },
+    { obsoleteReason: "DAILY_DRAFT_OBSOLETE", canActivate: true },
+    { obsoleteReason: "DAILY_DRAFT_OBSOLETE", canActivate: false, dailyIssues: [] },
+    { obsoleteReason: null, canActivate: false, status: "ACTIVE" },
+    { obsoleteReason: null, dailyIssues: [{ code: "DAILY_DRAFT_OBSOLETE", issue_id: "old", path: "trading_rules", reason: "old" }] },
+    { obsoleteReason: null, unknownDailyAuthority: true },
+  ])("rejects forged or inconsistent daily read diagnostics %j", async (patch) => {
+    const api = createPlanApi(vi.fn(async () => jsonResponse({ ...version, ...patch })) as typeof fetch);
+    await expect(api.getPlanVersion(VERSION_ID)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
   it("queries versions, details, and the durable activation state", async () => {
     const requests: Array<{ init: RequestInit | undefined; url: string }> = [];
     const fetchImplementation = vi.fn(

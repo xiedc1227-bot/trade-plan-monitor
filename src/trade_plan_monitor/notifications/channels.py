@@ -21,9 +21,10 @@ from pydantic import (
     model_validator,
 )
 
+from trade_plan_monitor.notifications.daily_models import DailyAlertEvent
 from trade_plan_monitor.notifications.models import AlertEvent, ExplicitAlertEvent
 
-NotificationEvent = AlertEvent | ExplicitAlertEvent
+NotificationEvent = AlertEvent | ExplicitAlertEvent | DailyAlertEvent
 
 WebhookHost = Annotated[
     str,
@@ -276,15 +277,13 @@ class WebhookChannel:
 
 
 def _webhook_payload(event: NotificationEvent) -> dict[str, object]:
-    signal_type = (
-        event.signal_type.value if type(event) is AlertEvent else event.signal_type
-    )
+    signal_type = event.signal_type.value if type(event) is AlertEvent else event.signal_type
     return {
         "createdAt": event.created_at.isoformat(),
         "eventId": str(event.event_id),
         "messageText": event.message_text,
         "sequence": event.sequence,
-        "severity": event.severity.value,
+        "severity": event.severity.value if hasattr(event.severity, "value") else event.severity,
         "signalType": signal_type,
         "symbol": event.symbol,
     }
@@ -346,7 +345,7 @@ def _failed(
 
 
 def _require_event(event: NotificationEvent) -> None:
-    if type(event) not in {AlertEvent, ExplicitAlertEvent}:
+    if type(event) not in {AlertEvent, ExplicitAlertEvent, DailyAlertEvent}:
         raise TypeError("event must be a supported notification event")
 
 

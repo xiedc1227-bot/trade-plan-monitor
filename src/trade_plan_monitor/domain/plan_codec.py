@@ -10,6 +10,7 @@ from typing import Literal
 import yaml
 from pydantic import ValidationError
 
+from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
 from trade_plan_monitor.domain.plan_models import ExecutableTradePlan, ExplicitTradePlan, TradePlan
 
 MAX_PLAN_DOCUMENT_BYTES = 256 * 1024
@@ -177,7 +178,7 @@ def _validate_plan_data(raw_plan: object) -> ExecutableTradePlan:
         )
     _validate_data_tree(raw_plan)
     schema_version = raw_plan.get("schema_version", 1)
-    if schema_version not in {1, 2, 3}:
+    if schema_version not in {1, 2, 3, 4}:
         raise PlanDocumentError(
             "UNSUPPORTED_PLAN_VERSION",
             "Plan document uses an unsupported schema version.",
@@ -188,6 +189,12 @@ def _validate_plan_data(raw_plan: object) -> ExecutableTradePlan:
             "Plan document uses an unsupported execution version.",
         )
     try:
+        if schema_version == 4:
+            if raw_plan.get("execution_version") != "daily-close-v1":
+                raise PlanDocumentError(
+                    "UNSUPPORTED_EXECUTION_VERSION", "Unsupported daily execution version."
+                )
+            return DailyTradePlan.model_validate(raw_plan)
         if schema_version == 3:
             return ExplicitTradePlan.model_validate(raw_plan)
         return TradePlan.model_validate(raw_plan)
@@ -238,7 +245,7 @@ def load_plan_yaml(document: str | bytes) -> ExecutableTradePlan:
 
 
 def _plan_json_data(plan: ExecutableTradePlan) -> dict[str, object]:
-    if not isinstance(plan, TradePlan | ExplicitTradePlan):
+    if not isinstance(plan, TradePlan | ExplicitTradePlan | DailyTradePlan):
         raise TypeError("plan must be an executable trade plan")
     data = plan.model_dump(mode="json")
     if plan.schema_version == 1:

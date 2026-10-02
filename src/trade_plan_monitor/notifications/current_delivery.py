@@ -85,8 +85,21 @@ class CurrentDeliveryAdmission:
         if type(generation) is not UUID:
             return False
         with self._sessions.begin() as session:
+            from trade_plan_monitor.notifications.daily_models import (
+                DailyAlertEvent,
+                ObsoleteDailyAlertEvent,
+            )
+
+            if type(event) is ObsoleteDailyAlertEvent:
+                return False
+            if type(event) is DailyAlertEvent:
+                from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
+
+                return daily_delivery_allowed(session, event, observed)
             outbox = AlertOutbox(
-                session, clock=lambda: observed, id_factory=lambda: str(event.event_id),
+                session,
+                clock=lambda: observed,
+                id_factory=lambda: str(event.event_id),
             )
             if outbox.get(event.event_id) != event:
                 return False
@@ -98,17 +111,33 @@ class CurrentDeliveryAdmission:
                 return False
             if type(event) is ExplicitAlertEvent and event.signal_type == "RISK_ALERT":
                 return self._explicit_risk(
-                    session, repository, receipt.revision, event, observed, generation,
+                    session,
+                    repository,
+                    receipt.revision,
+                    event,
+                    observed,
+                    generation,
                 )
             if type(event) is ExplicitAlertEvent:
                 return self._explicit_actionable(
-                    session, repository, receipt, event, observed,
+                    session,
+                    repository,
+                    receipt,
+                    event,
+                    observed,
                 )
             if type(event) is not ExplicitAlertEvent and event.signal_type in {
-                "RISK_BREACH", "RISK_EXIT_READY", "RISK_EXIT_PENDING_SETTLEMENT",
+                "RISK_BREACH",
+                "RISK_EXIT_READY",
+                "RISK_EXIT_PENDING_SETTLEMENT",
             }:
                 return self._legacy_risk(
-                    session, repository, receipt.revision, event, observed, generation,
+                    session,
+                    repository,
+                    receipt.revision,
+                    event,
+                    observed,
+                    generation,
                 )
             if type(event) is not ExplicitAlertEvent:
                 return self._legacy_actionable(session, repository, receipt, event, observed)

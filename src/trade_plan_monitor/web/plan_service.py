@@ -33,6 +33,12 @@ from trade_plan_monitor.ai.review import (
     load_explicit_plan_draft_json,
     reconcile_plan_mapping,
 )
+from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
+from trade_plan_monitor.domain.daily_plan_validation import (
+    DailyPlanDraft,
+    daily_draft_sha256,
+    load_daily_draft_json,
+)
 from trade_plan_monitor.domain.plan_codec import load_plan_json, load_plan_yaml
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import ExplicitTradePlan, TradePlan
@@ -44,6 +50,7 @@ from trade_plan_monitor.domain.plan_validation import (
     ValidationSeverity,
     validate_trade_plan,
 )
+from trade_plan_monitor.state.daily_review_store import confirm_daily_review, save_daily_draft
 from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
@@ -204,6 +211,27 @@ class PersistentPlanWebLifecycle:
     async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None:
         return await self._run(self._get_plan_activation_state_sync, symbol=symbol)
 
+    async def mutate_daily(self, *, operation, command, context):
+        from trade_plan_monitor.web.daily_service import mutate_daily
+
+        return await self._run_mutation(
+            partial(mutate_daily, self),
+            operation="DAILY_" + operation,
+            command=command,
+            context=context,
+            operation_name=operation,
+        )
+
+    async def read_daily(self, *, symbol, trade_date):
+        from trade_plan_monitor.web.daily_service import read_daily
+
+        return await self._run(partial(read_daily, self), symbol=symbol, trade_date=trade_date)
+
+    async def read_daily_supplements(self, *, candidate_json):
+        from trade_plan_monitor.web.daily_service import read_daily_supplements
+
+        return await self._run(partial(read_daily_supplements, self), candidate_json=candidate_json)
+
     async def get_explicit_plan_runtime(self, *, symbol: str) -> ExplicitPlanRuntimeView | None:
         return await self._run(self._get_explicit_plan_runtime_sync, symbol=symbol)
 
@@ -241,6 +269,11 @@ class PersistentPlanWebLifecycle:
     async def record_plan_extraction(self, result: PlanExtractionResult) -> None:
         """Persist a successful extraction's server-owned activation review facts."""
 
+        from trade_plan_monitor.ai.daily_extraction import DailyExtractionResult
+
+        if isinstance(result, DailyExtractionResult):
+            await self._run(self._record_daily_extraction_sync, result=result)
+            return
         review = build_plan_extraction_review(result)
         await self._run(
             self._record_plan_extraction_sync,
@@ -259,7 +292,7 @@ class PersistentPlanWebLifecycle:
             if command.format is PlanDocumentFormat.JSON
             else load_plan_yaml(command.document)
         )
-        if isinstance(plan, ExplicitTradePlan):
+        if isinstance(plan, ExplicitTradePlan | DailyTradePlan):
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
         _require_web_safe_plan(plan)
         if plan.symbol != command.symbol:
@@ -534,6 +567,36 @@ class PersistentPlanWebLifecycle:
                 if next_version > MAX_SAFE_INTEGER:
                     raise PlanSaveBlockedError("Plan version sequence is exhausted")
                 plan = plan.model_copy(update={"version": next_version})
+            if isinstance(plan, DailyPlanDraft):
+                if (
+                    not isinstance(command, PlanDraftCommand)
+                    or command.daily_mapping is None
+                    or command.mapping is not None
+                ):
+                    raise PlanSaveBlockedError("Daily draft requires its exact daily source map")
+                activation = work.plans.get_activation_state(plan.symbol)
+                current_revision = 0 if activation is None else activation.revision
+                if command.expected_revision != current_revision:
+                    raise RevisionConflictError(current_revision)
+                # Candidates are review-only: saving an edit cannot silently replace
+                # the active version or inherit an older version's review binding.
+                try:
+                    identity = save_daily_draft(
+                        work,
+                        plan,
+                        mapping=command.daily_mapping,
+                        source_text=source_text,
+                        clock=self._clock,
+                        extraction_id=None
+                        if command.extraction_id is None
+                        else str(command.extraction_id),
+                    )
+                except ValueError as error:
+                    raise PlanSaveBlockedError("Daily source mapping is invalid") from error
+                result = _plan_version_view(work.plans.get_version_details(identity))
+                complete_replay(work, context=context, request_hash=request_hash, response=result)
+                work.commit()
+                return result
             (
                 review_issues,
                 review_origin,
@@ -588,6 +651,13 @@ class PersistentPlanWebLifecycle:
             )
             work.commit()
 
+    def _record_daily_extraction_sync(self, *, result):
+        from trade_plan_monitor.state.daily_review_store import record_daily_extraction
+
+        with self._unit_of_work() as work:
+            record_daily_extraction(work, result, clock=self._clock)
+            work.commit()
+
     def _confirm_plan_review_sync(
         self,
         *,
@@ -604,6 +674,27 @@ class PersistentPlanWebLifecycle:
             )
             if replay is not None:
                 return replay
+            details = work.plans.get_version_details(str(command.plan_version_id))
+            if details is not None and details.daily_mapping is not None:
+                try:
+                    record = confirm_daily_review(work, command, clock=self._clock)
+                except ValueError as error:
+                    raise PlanSaveBlockedError(
+                        "Daily review has unresolved or stale evidence"
+                    ) from error
+                result = PlanReviewConfirmationView(
+                    plan_version_id=UUID(record.id),
+                    review_id=UUID(record.review_id),
+                    content_hash=record.content_hash,
+                    source_hash=record.source_hash,
+                    review_evidence_hash=record.review_evidence_hash,
+                    revision=record.review_revision,
+                    confirmed_at=_shanghai_datetime(record.review_confirmed_at),
+                    can_activate=True,
+                )
+                complete_replay(work, context=context, request_hash=request_hash, response=result)
+                work.commit()
+                return result
             try:
                 record = work.plans.confirm_explicit_review(
                     plan_version_id=str(command.plan_version_id),
@@ -647,7 +738,46 @@ class PersistentPlanWebLifecycle:
             details = work.plans.get_version_details(str(command.plan_version_id))
             if details is None:
                 raise PlanVersionNotFoundError("Plan version was not found")
+            if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues):
+                raise PlanActivationBlockedError(
+                    "DAILY_DRAFT_OBSOLETE: re-extract preserved source and review a new draft"
+                )
             stored_plan = _load_reviewable_plan(details.payload_json)
+            if isinstance(stored_plan, DailyPlanDraft):
+                if (
+                    command.review_id is None
+                    or details.review_id != str(command.review_id)
+                    or details.review_confirmed_at is None
+                    or (
+                        command.content_hash,
+                        command.source_hash,
+                        command.review_evidence_hash,
+                        command.review_revision,
+                    )
+                    != (
+                        details.content_hash,
+                        details.source_hash,
+                        details.review_evidence_hash,
+                        details.review_revision,
+                    )
+                    or details.daily_issues
+                    or PlanVersionStatus(details.status) is not PlanVersionStatus.DRAFT
+                ):
+                    raise PlanActivationBlockedError(
+                        "Daily activation requires exact current review binding"
+                    )
+                executable = stored_plan.to_executable()
+                if executable is None:
+                    raise PlanActivationBlockedError("Daily candidate is incomplete")
+                work.plans.activate(
+                    executable,
+                    expected_revision=command.expected_revision,
+                    validation=PlanValidationResult(issues=()),
+                )
+                result = _active_plan_view(work.plans.get_activation_state(executable.symbol))
+                complete_replay(work, context=context, request_hash=request_hash, response=result)
+                work.commit()
+                return result
             if isinstance(stored_plan, ExplicitPlanDraft):
                 if (
                     command.review_id is None
@@ -764,6 +894,9 @@ def _plan_version_summary(record: object) -> PlanVersionSummary:
         plan_hash=details.plan_hash,
         status=PlanVersionStatus(details.status),
         can_activate=can_activate,
+        obsolete_reason="DAILY_DRAFT_OBSOLETE"
+        if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues)
+        else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
     )
@@ -971,12 +1104,25 @@ def _plan_version_view(record: object) -> PlanVersionView:
         review_issues=details.review_issues,
         validation_issues=validation.issues,
         can_activate=can_activate,
+        obsolete_reason="DAILY_DRAFT_OBSOLETE"
+        if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues)
+        else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
         content_hash=details.content_hash,
-        source_hash=(details.source_hash if isinstance(plan, ExplicitPlanDraft) else None),
+        source_hash=(
+            details.source_hash
+            if isinstance(plan, ExplicitPlanDraft | DailyPlanDraft)
+            or details.daily_mapping is not None
+            else None
+        ),
         review_evidence_hash=details.review_evidence_hash,
-        review_revision=(details.review_revision if isinstance(plan, ExplicitPlanDraft) else None),
+        review_revision=(
+            details.review_revision
+            if isinstance(plan, ExplicitPlanDraft | DailyPlanDraft)
+            or details.daily_mapping is not None
+            else None
+        ),
         review_id=(None if details.review_id is None else UUID(details.review_id)),
         mapping=(None if details.mapping is None else PlanMappingView.from_domain(details.mapping)),
         required_review_issues=tuple(
@@ -987,13 +1133,40 @@ def _plan_version_view(record: object) -> PlanVersionView:
             RequiredReviewIssueView.from_domain(issue) for issue in unresolved
         ),
         execution_readiness=("NOT_EVALUATED" if isinstance(plan, ExplicitPlanDraft) else None),
+        daily_mapping=details.daily_mapping,
+        daily_issues=details.daily_issues,
     )
 
 
 def _validated_plan_state(
     details: _PlanVersionDetails,
 ) -> tuple[TradePlan | ExplicitPlanDraft, PlanValidationResult, bool]:
+    if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues):
+        validation = PlanValidationResult(issues=tuple(ValidationIssue(
+            code=i.code, path=i.path, severity=ValidationSeverity.WARNING,
+            message=i.reason, activation_blocking=True) for i in details.daily_issues))
+        return None, validation, False
     plan = _validated_persisted_plan(details)
+    if isinstance(plan, DailyPlanDraft):
+        validation = PlanValidationResult(
+            issues=tuple(
+                ValidationIssue(
+                    code=i.code,
+                    path=i.path,
+                    severity=ValidationSeverity.WARNING,
+                    message=i.reason,
+                    activation_blocking=True,
+                )
+                for i in details.daily_issues
+            )
+        )
+        return (
+            plan,
+            validation,
+            plan.to_executable() is not None
+            and not details.daily_issues
+            and details.review_id is not None,
+        )
     if isinstance(plan, ExplicitPlanDraft):
         resolved = {item.issue_id for item in details.resolutions}
         unresolved = tuple(
@@ -1065,9 +1238,13 @@ def _validated_persisted_plan(
 ) -> TradePlan | ExplicitPlanDraft:
     try:
         plan = (
-            load_explicit_plan_draft_json(record.payload_json)
-            if record.content_hash is not None
-            else load_plan_json(record.payload_json)
+            load_daily_draft_json(record.payload_json)
+            if record.daily_mapping is not None
+            else (
+                load_explicit_plan_draft_json(record.payload_json)
+                if record.content_hash is not None
+                else load_plan_json(record.payload_json)
+            )
         )
     except TypeError, ValueError:
         raise RuntimeError("persisted plan state is invalid") from None
@@ -1076,7 +1253,9 @@ def _validated_persisted_plan(
         or plan.version != record.version
         or plan.symbol != record.symbol
         or (
-            explicit_draft_sha256(plan)
+            daily_draft_sha256(plan)
+            if isinstance(plan, DailyPlanDraft)
+            else explicit_draft_sha256(plan)
             if isinstance(plan, ExplicitPlanDraft)
             else plan_sha256(plan)
         )
@@ -1103,6 +1282,10 @@ def _require_web_safe_plan(plan: TradePlan | ExplicitPlanDraft) -> None:
 
 
 def _load_reviewable_plan(document: str) -> TradePlan | ExplicitPlanDraft:
+    try:
+        return load_daily_draft_json(document)
+    except ValueError:
+        pass
     try:
         return load_explicit_plan_draft_json(document)
     except ValueError:

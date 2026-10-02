@@ -19,6 +19,7 @@ from pydantic import (
     model_validator,
 )
 
+from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
 from trade_plan_monitor.market_index.identity import (
     ReferenceMarketBinding,
     validate_reference_market_binding,
@@ -162,6 +163,18 @@ ActivationPolicy = Annotated[
 def activation_is_eligible_on(activation: ActivationPolicy, market_date: date) -> bool:
     """Return whether an activation policy authorizes one market date."""
 
+    from trade_plan_monitor.domain.daily_plan_models import (
+        DailyDayActivation,
+        DailyManualActivation,
+        DailyRangeActivation,
+    )
+
+    if isinstance(activation, DailyManualActivation | DailyDayActivation | DailyRangeActivation):
+        if activation.mode == "MANUAL":
+            return True
+        if activation.mode == "TRADING_DAY":
+            return activation.trading_day == market_date
+        return activation.start_date <= market_date <= activation.end_date
     if not isinstance(activation, ManualActivation | TradingDayActivation | DateRangeActivation):
         raise TypeError("activation must be an ActivationPolicy")
     if isinstance(market_date, datetime) or not isinstance(market_date, date):
@@ -825,7 +838,7 @@ class TradePlan(_DomainValue):
         return self
 
 
-ExecutableTradePlan = TradePlan | ExplicitTradePlan
+ExecutableTradePlan = TradePlan | ExplicitTradePlan | DailyTradePlan
 
 
 __all__ = [

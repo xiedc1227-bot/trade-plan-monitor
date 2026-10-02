@@ -159,6 +159,11 @@ def build_plan_extraction_prompt(
 ) -> str:
     """Return the stable prompt with user text isolated as untrusted JSON data."""
 
+    if prompt_version == "plan-extract-v7":
+        from trade_plan_monitor.ai.daily_extraction import build_daily_prompt
+
+        return build_daily_prompt(source_text)
+
     if prompt_version not in _OUTPUT_SCHEMAS:
         raise ValueError(f"unsupported prompt version: {prompt_version}")
     if not isinstance(source_text, str):

@@ -6,6 +6,7 @@ import type {
   DecisionEvidenceView,
 } from "../../api/generated";
 import type { PublicAlertSignalType, PublicAlertView } from "../../api/alerts";
+import { isDailySimulationAlert, isObsoleteDailyReminder } from "../../api/alerts";
 import type { AlertQuery } from "../../views/AlertsView.vue";
 import { formatDisplayDateTime, formatDisplayFactValue } from "../../formatters/dateTime";
 
@@ -114,7 +115,7 @@ function toggleEvidence(eventId: string): void {
 }
 
 function chartHref(alert: PublicAlertView): string {
-  const at = isExplicitAlert(alert) ? alert.targetBucketEnd : alert.marketDataAt ?? alert.evaluatedAt;
+  const at = isExplicitAlert(alert) ? alert.targetBucketEnd : isDailySimulationAlert(alert) || isObsoleteDailyReminder(alert) ? alert.evaluatedAt : alert.marketDataAt ?? alert.evaluatedAt;
   return `/stocks/${encodeURIComponent(alert.symbol)}?at=${encodeURIComponent(at)}`;
 }
 
@@ -156,6 +157,7 @@ function isExplicitAlert(item: PublicAlertView): item is Extract<PublicAlertView
 }
 
 function canRegisterTrade(item: PublicAlertView): boolean {
+  if (isDailySimulationAlert(item) || isObsoleteDailyReminder(item)) return false;
   if (!item.currentActionable) return false;
   if (isExplicitAlert(item)) return item.signalType === "BUY" || item.signalType === "SELL";
   return [
@@ -197,6 +199,7 @@ function toLocalInput(value: string | null): string {
           <option value="BUY">普通计划买入</option>
           <option value="SELL">普通计划卖出</option>
           <option value="RISK_ALERT">普通计划风险提醒</option>
+          <option value="RISK_EXIT">日线技术风险减仓</option>
         </select>
       </label>
       <label>
@@ -239,7 +242,8 @@ function toLocalInput(value: string | null): string {
             <tr :data-alert-id="item.eventId">
               <td>
                 <strong>{{ item.name }} · {{ item.symbol }}</strong>
-                <span class="alert-history__signal">{{ item.signalType }} · {{ item.severity }}</span>
+                <span class="alert-history__signal">{{ item.signalType }} · {{ 'severity' in item ? item.severity : '历史诊断' }}</span>
+                <span v-if="isObsoleteDailyReminder(item)" class="alert-history__historical">旧日线记录 · 不支持模拟</span>
                 <span v-if="!item.currentActionable" class="alert-history__historical">
                   历史提醒 · 当前不可操作
                 </span>
@@ -278,6 +282,11 @@ function toLocalInput(value: string | null): string {
                   </span>
                 </button>
                 <a
+                  v-if="isDailySimulationAlert(item)"
+                  data-daily-plan
+                  :href="`/daily-plans/${encodeURIComponent(item.planVersionId)}`"
+                >查看日线计划（模拟须核验当前状态）</a>
+                <a
                   v-if="canRegisterTrade(item)"
                   data-trade-registration
                   :href="`/stocks/${encodeURIComponent(item.symbol)}#trade-registration`"
@@ -286,7 +295,17 @@ function toLocalInput(value: string | null): string {
             </tr>
             <tr v-if="expandedIds.has(item.eventId)" :id="`alert-evidence-${item.eventId}`">
               <td colspan="3">
-                <section v-if="isExplicitAlert(item)" :aria-label="`${item.name}提醒证据`">
+                <section v-if="isObsoleteDailyReminder(item)" :aria-label="`${item.name}历史日线提醒`">
+                  <p>旧日线提醒仅供历史诊断，不能发送或确认模拟交易。</p>
+                  <p>{{ item.reason }}</p>
+                </section>
+                <section v-else-if="isDailySimulationAlert(item)" :aria-label="`${item.name}日线提醒证据`">
+                  <h3>日线模拟候选提醒</h3>
+                  <p>正式收盘确认：{{ item.confirmedTradeDate ?? '待核验' }}；执行交易日：{{ item.executionDate ?? '待核验' }}。</p>
+                  <p>生成提醒时数量：{{ item.quantity ?? '待核验' }}股；当时已模拟：{{ item.simulatedQty }}股。</p>
+                  <p>查看当前日线状态并单独确认模拟交易；确认已查看不会改变模拟仓位。</p>
+                </section>
+                <section v-else-if="isExplicitAlert(item)" :aria-label="`${item.name}提醒证据`">
                   <h3>当前规则证据</h3>
                   <p>规则 {{ item.ruleId }} · 目标完成K线 {{ formatDisplayDateTime(item.targetBucketEnd) }}</p>
                   <p>数量：{{ item.quantity === null ? "无（纯风险提醒）" : `${item.quantity} 股` }}</p>

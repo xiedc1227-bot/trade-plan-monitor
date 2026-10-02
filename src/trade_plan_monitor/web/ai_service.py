@@ -269,6 +269,7 @@ class ConfiguredAIWebLifecycle:
             self._run_extraction(
                 operation_id=operation_id,
                 source_text=command.source_text,
+                target_contract=command.target_contract,
             )
         )
         self._tasks.add(task)
@@ -282,7 +283,9 @@ class ConfiguredAIWebLifecycle:
             return None
         return self._operations.get(identity)
 
-    async def _run_extraction(self, *, operation_id: UUID, source_text: str) -> None:
+    async def _run_extraction(
+        self, *, operation_id: UUID, source_text: str, target_contract="CONFIGURED"
+    ) -> None:
         queued = self._operations[operation_id]
         try:
             async with self._extraction_slots:
@@ -298,7 +301,9 @@ class ConfiguredAIWebLifecycle:
                 result = await extract_plan(
                     request_id=operation_id,
                     source_text=source_text,
-                    config=binding.config,
+                    config=binding.config
+                    if target_contract == "CONFIGURED"
+                    else binding.config.model_copy(update={"prompt_version": "plan-extract-v7"}),
                     provider=binding.provider,
                 )
                 completed_at = _now()
@@ -460,6 +465,29 @@ def _completed_extraction_view(
             completion_tokens=result.usage.completion_tokens,
             total_tokens=result.usage.total_tokens,
         )
+    from trade_plan_monitor.ai.daily_extraction import DailyExtractionResult
+
+    if isinstance(result, DailyExtractionResult):
+        from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+
+        return PlanExtractionView(
+            id=result.request_id,
+            provider_id=result.provider_id,
+            status=status,
+            submitted_at=submitted_at,
+            started_at=started_at,
+            completed_at=completed_at,
+            source_text_sha256=result.source_text_sha256,
+            model=result.model,
+            prompt_version=result.prompt_version,
+            draft_plan_json=daily_draft_json(result.draft),
+            daily_mapping=result.daily_mapping,
+            assumptions=result.assumptions,
+            warnings=result.warnings,
+            validation_issues=result.validation_issues,
+            usage=usage,
+            diagnostic_status=diagnostic_status,
+        )
     return PlanExtractionView(
         id=result.request_id,
         provider_id=result.provider_id,
@@ -487,6 +515,12 @@ def _completed_extraction_view(
 
 
 def _extraction_request_hash(command: PlanExtractionCommand) -> str:
+    # Preserve existing CONFIGURED request identity; only the explicit new mode
+    # extends its own idempotency domain.
+    if command.target_contract == "DAILY_CLOSE_PLAN":
+        from trade_plan_monitor.domain.daily_hash import daily_hash
+
+        return daily_hash("daily-plan-extraction-request-v1", command.model_dump(mode="json"))
     payload = json.dumps(
         {
             "expectedRevision": command.expected_revision,

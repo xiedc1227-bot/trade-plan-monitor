@@ -1,0 +1,430 @@
+"""Server-derived source fidelity and explicit human policy supplements for Schema 4."""
+
+import re
+from decimal import Decimal
+from hashlib import sha256
+from typing import Literal
+
+from pydantic import Field, JsonValue
+
+from trade_plan_monitor.ai.review import server_source_clauses
+from trade_plan_monitor.domain.daily_hash import daily_hash
+from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier, Text
+from trade_plan_monitor.domain.daily_plan_validation import (
+    daily_draft_content_sha256,
+    daily_draft_issues,
+)
+from trade_plan_monitor.domain.daily_scope import (
+    EXCLUSION_REASON,
+    excluded_spans,
+    require_inventory_assertion,
+    require_nontechnical_exclusion,
+    scope_hash,
+)
+
+Digest = str
+
+
+class DailySourceExclusion(DailyValue):
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    start: int = Field(strict=True, ge=0)
+    end: int = Field(strict=True, gt=0)
+    excerpt: str = Field(min_length=1, max_length=512)
+    reason: Literal["FUNDAMENTALS_REVIEWED_AT_PLAN_GENERATION"]
+    origin: Literal["REGISTERED_FRAGMENT", "HUMAN_SCOPE_SELECTION"] = "REGISTERED_FRAGMENT"
+
+
+class DailyTechnicalRemainder(DailyValue):
+    start: int = Field(strict=True, ge=0)
+    end: int = Field(strict=True, gt=0)
+    excerpt: str = Field(min_length=1, max_length=512)
+    disposition: Literal["POLICY", "UNRESOLVED", "UNSUPPORTED"]
+    paths: tuple[str, ...] = Field(max_length=512)
+    reason: Text
+
+
+class DailyClause(DailyValue):
+    clause_id: Identifier
+    start: int = Field(strict=True, ge=0)
+    end: int = Field(strict=True, gt=0)
+    excerpt: str = Field(min_length=1, max_length=512)
+    disposition: Literal["POLICY", "INVENTORY_ASSERTION", "BACKGROUND", "UNRESOLVED", "UNSUPPORTED"]
+    paths: tuple[str, ...] = Field(max_length=512)
+    reason: Text
+    exclusions: tuple[DailySourceExclusion, ...] = Field(default=(), max_length=50)
+    remainders: tuple[DailyTechnicalRemainder, ...] = Field(default=(), max_length=51)
+
+
+def daily_source_clauses(source, selections=()):
+    """Preserve legacy clauses and partition only finite registered exclusion spans."""
+    clauses = server_source_clauses(source)
+    for selection in selections:
+        if (
+            selection.source_hash != scope_hash(source)
+            or selection.excerpt != source[selection.start : selection.end]
+            or not any(c.start <= selection.start < selection.end <= c.end for c in clauses)
+        ):
+            raise ValueError("human scope exclusion differs from exact source clause/span")
+        require_nontechnical_exclusion(selection.excerpt)
+    result = []
+    for clause in clauses:
+        selected = tuple(s for s in selections if clause.start <= s.start < s.end <= clause.end)
+        registered = tuple(
+            (start, end)
+            for start, end in excluded_spans(source, clause)
+            if not any(s.start <= start and end <= s.end for s in selected)
+        )
+        exclusions = tuple(
+            sorted(
+                (
+                    *selected,
+                    *(
+                        DailySourceExclusion(
+                            source_hash=scope_hash(source),
+                            start=start,
+                            end=end,
+                            excerpt=source[start:end],
+                            reason=EXCLUSION_REASON,
+                        )
+                        for start, end in registered
+                    ),
+                ),
+                key=lambda s: s.start,
+            )
+        )
+        spans = tuple((s.start, s.end) for s in exclusions)
+        if any(left[1] > right[0] for left, right in zip(spans, spans[1:], strict=False)):
+            raise ValueError("source exclusion spans overlap")
+        cursor = clause.start
+        remainder = []
+        for start, end in (*spans, (clause.end, clause.end)):
+            # Keep connectors and punctuation visible; punctuation alone is not policy.
+            text = source[cursor:start]
+            if text.strip(" 。；，,;、.!?！？\n\r\t"):
+                remainder.append(
+                    DailyTechnicalRemainder(
+                        start=cursor,
+                        end=start,
+                        excerpt=text,
+                        disposition="UNRESOLVED",
+                        paths=(),
+                        reason="Review this technical remainder and its exact policy paths.",
+                    )
+                )
+            cursor = end
+        whole_background = bool(exclusions) and not remainder
+        result.append(
+            DailyClause(
+                clause_id=clause.clause_id,
+                start=clause.start,
+                end=clause.end,
+                excerpt=clause.excerpt,
+                disposition="BACKGROUND" if whole_background else "UNRESOLVED",
+                paths=(),
+                reason=EXCLUSION_REASON
+                if whole_background
+                else "Define material technical source policy.",
+                exclusions=exclusions,
+                remainders=tuple(remainder) if exclusions else (),
+            )
+        )
+    return tuple(result)
+
+
+def normalize_daily_exclusions(clauses, source):
+    """Server-own excluded spans; preserve explicit technical remainder review."""
+    canonical = daily_source_clauses(source)
+    result = []
+    for original, treatment in zip(clauses, canonical, strict=True):
+        if not treatment.exclusions:
+            result.append(original)
+        elif original.exclusions:
+            result.append(original)  # build_daily_review validates exact coverage below.
+        elif treatment.remainders:
+            result.append(
+                original.model_copy(
+                    update={
+                        "exclusions": treatment.exclusions,
+                        "remainders": treatment.remainders,
+                        "disposition": "UNRESOLVED",
+                        "paths": (),
+                    }
+                )
+            )
+        else:
+            result.append(treatment)
+    return tuple(result)
+
+
+class DailySupplement(DailyValue):
+    supplement_id: Identifier
+    candidate_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    path: str = Field(min_length=1, max_length=512)
+    value: JsonValue
+    reason: Text
+
+
+class DailyFieldBinding(DailyValue):
+    path: str = Field(min_length=1, max_length=512)
+    value: JsonValue
+    origin: Literal["SOURCE", "HUMAN_SUPPLEMENT", "PRODUCT_CONTRACT"]
+    unit: Literal["JSON", "FEN_FROM_YUAN", "SHARES", "RATIO", "TEXT", "STRUCTURE"]
+    clause_ids: tuple[Identifier, ...] = Field(max_length=50)
+    supplement_id: Identifier | None
+
+
+class DailyMapping(DailyValue):
+    mapping_version: Literal["daily-mapping-v1"]
+    candidate_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    clauses: tuple[DailyClause, ...] = Field(max_length=512)
+    bindings: tuple[DailyFieldBinding, ...] = Field(max_length=2000)
+    supplements: tuple[DailySupplement, ...] = Field(max_length=2000)
+
+
+class DailyReviewIssue(DailyValue):
+    issue_id: str
+    path: str
+    code: str
+    reason: str
+
+
+class DailyReviewSnapshot(DailyValue):
+    content_hash: str
+    source_hash: str
+    evidence_hash: str
+    mapping: DailyMapping
+    issues: tuple[DailyReviewIssue, ...]
+
+
+def semantic_values(draft):
+    """All non-null policy leaves and ALL/ANY structure; identity/display are separate."""
+    data = draft.executable_payload()
+    for key in ("plan_id", "version", "name", "metadata"):
+        data.pop(key)
+    values = {}
+
+    def visit(value, path):
+        if isinstance(value, dict):
+            if value.get("type") in {"ALL", "ANY"}:
+                values[path] = value["type"]
+            for key, child in value.items():
+                visit(child, path + "." + key if path else key)
+        elif isinstance(value, list):
+            if not value:
+                values[path] = []
+            for index, child in enumerate(value):
+                visit(child, f"{path}[{index}]")
+        elif value is not None:
+            values[path] = value
+
+    visit(data, "")
+    return values
+
+
+_CONTRACT_VALUES = {
+    "trading_rules.settlement": "NEXT_EXCHANGE_SESSION",
+    "trading_rules.tick_size_fen": 1,
+    "trading_rules.special_state_restrictions": "BLOCK_UNVERIFIED",
+    "schema_version": 4,
+    "execution_mode": "DAILY_CLOSE_PLAN",
+    "execution_version": "daily-close-v1",
+    "monitoring.timeframe": "DAILY",
+    "monitoring.indicator_formula_version": "daily-ta-v2",
+    "monitoring.price_basis": "QFQ",
+    "monitoring.source_requirement": "ONE_VERIFIED_PROVIDER",
+    "monitoring.comparability_requirement": "CURRENT_QUOTE_BASIS",
+    "execution_policy.confirmation": "OFFICIAL_DAILY_CLOSE",
+    "execution_policy.ordinary_window": "NEXT_EXCHANGE_SESSION_ONLY",
+    "execution_policy.same_signal": "ONE_PLANNED_QUANTITY",
+    "execution_policy.risk_priority": "SEVERE_THEN_ORDINARY",
+    "execution_policy.ordinary_conflict": "BLOCK_BOTH",
+}
+
+
+def daily_contract_bindings(draft):
+    values = semantic_values(draft)
+    return tuple(
+        DailyFieldBinding(
+            path=path,
+            value=value,
+            origin="PRODUCT_CONTRACT",
+            unit="JSON",
+            clause_ids=(),
+            supplement_id=None,
+        )
+        for path, value in _CONTRACT_VALUES.items()
+        if values.get(path) == value
+    )
+
+
+def build_daily_review(draft, mapping, source_text):
+    mapping = DailyMapping.model_validate(mapping.model_dump())
+    # These fixed software values need no source or human broker-rule evidence.
+    existing_paths = {binding.path for binding in mapping.bindings}
+    product_rules = tuple(
+        binding for binding in daily_contract_bindings(draft)
+        if binding.path.startswith("trading_rules.") and binding.path not in existing_paths
+    )
+    mapping = mapping.model_copy(update={"bindings": (*mapping.bindings, *product_rules)})
+    digest = daily_draft_content_sha256(draft)
+    if mapping.candidate_content_hash != digest:
+        raise ValueError("mapping candidate content changed")
+    expected = server_source_clauses(source_text)
+    if tuple((c.clause_id, c.start, c.end, c.excerpt) for c in mapping.clauses) != tuple(
+        (c.clause_id, c.start, c.end, c.excerpt) for c in expected
+    ):
+        raise ValueError("source clauses do not match exact Unicode spans")
+    values = semantic_values(draft)
+    selections = tuple(
+        s for c in mapping.clauses for s in c.exclusions if s.origin == "HUMAN_SCOPE_SELECTION"
+    )
+    for selection in selections:
+        if (
+            selection.source_hash != scope_hash(source_text)
+            or selection.excerpt != source_text[selection.start : selection.end]
+        ):
+            raise ValueError("human scope exclusion differs from exact source span")
+        require_nontechnical_exclusion(selection.excerpt)
+    canonical_treatments = {c.clause_id: c for c in daily_source_clauses(source_text, selections)}
+    for clause in mapping.clauses:
+        canonical = canonical_treatments[clause.clause_id]
+        if clause.exclusions != canonical.exclusions:
+            raise ValueError("exact fundamental source exclusion is required")
+        if canonical.exclusions:
+            expected_spans = tuple((r.start, r.end, r.excerpt) for r in canonical.remainders)
+            actual_spans = tuple((r.start, r.end, r.excerpt) for r in clause.remainders)
+            if expected_spans != actual_spans:
+                raise ValueError("technical remainder coverage differs from source")
+            if not canonical.remainders:
+                if (
+                    clause.disposition != "BACKGROUND"
+                    or clause.paths
+                    or clause.reason != EXCLUSION_REASON
+                ):
+                    raise ValueError("excluded source cannot bind executable policy")
+            elif clause.disposition == "BACKGROUND" or set(clause.paths) != {
+                path for remainder in clause.remainders for path in remainder.paths
+            }:
+                raise ValueError("mixed technical remainder must retain its scoped paths")
+        elif clause.disposition == "BACKGROUND":
+            raise ValueError("BACKGROUND requires a registered exact scope exclusion")
+        elif clause.remainders:
+            raise ValueError("technical remainder requires exact exclusion coverage")
+    clauses = {c.clause_id: c for c in mapping.clauses}
+    supplements = {s.supplement_id: s for s in mapping.supplements}
+    if len(supplements) != len(mapping.supplements):
+        raise ValueError("duplicate supplement")
+    bound = set()
+    used = set()
+    for binding in mapping.bindings:
+        if binding.path in bound or binding.path not in values:
+            raise ValueError("duplicate or unknown binding path")
+        actual = values[binding.path]
+        if type(actual) is not type(binding.value) or actual != binding.value:
+            raise ValueError("binding value differs from current candidate")
+        if binding.origin == "PRODUCT_CONTRACT":
+            if (
+                binding.clause_ids
+                or binding.supplement_id
+                or _CONTRACT_VALUES.get(binding.path) != actual
+            ):
+                raise ValueError("trading policy cannot be inferred from product contract")
+        elif binding.origin == "HUMAN_SUPPLEMENT":
+            supplement = supplements.get(binding.supplement_id)
+            if (
+                binding.clause_ids
+                or supplement is None
+                or supplement.candidate_content_hash != digest
+            ):
+                raise ValueError("human supplement is missing or belongs to another candidate")
+            if (
+                supplement.path != binding.path
+                or type(supplement.value) is not type(actual)
+                or supplement.value != actual
+            ):
+                raise ValueError("supplement differs from scoped candidate policy")
+            used.add(supplement.supplement_id)
+        else:
+            if binding.supplement_id or not binding.clause_ids:
+                raise ValueError("source binding requires source clauses")
+            excerpts = []
+            for identity in binding.clause_ids:
+                clause = clauses.get(identity)
+                if (
+                    clause is None
+                    or clause.disposition != "POLICY"
+                    or binding.path not in clause.paths
+                ):
+                    raise ValueError("source binding is absent from its exact clause")
+                if clause.exclusions:
+                    excerpts.extend(
+                        r.excerpt
+                        for r in clause.remainders
+                        if binding.path in r.paths and r.disposition == "POLICY"
+                    )
+                else:
+                    excerpts.append(clause.excerpt)
+            excerpt = " ".join(excerpts)
+            if binding.unit == "FEN_FROM_YUAN":
+                if type(actual) is not int or not any(
+                    Decimal(x) * 100 == actual
+                    for x in re.findall(r"(?<![\d.])\d+(?:\.\d+)?(?![\d.])", excerpt)
+                ):
+                    raise ValueError("source price does not match exact yuan amount")
+            elif isinstance(actual, bool | list) or str(actual) not in excerpt:
+                raise ValueError("source value requires an explicit scoped human definition")
+        bound.add(binding.path)
+    if used != set(supplements):
+        raise ValueError("orphan human supplement")
+    issues = list(daily_draft_issues(draft))
+    for path in values.keys() - bound:
+        issues.append(
+            {
+                "path": path,
+                "code": "DAILY_SOURCE_BINDING_REQUIRED",
+                "reason": "Bind this exact policy value to source or a scoped human supplement.",
+            }
+        )
+    for clause in mapping.clauses:
+        if any(path not in values for path in clause.paths):
+            raise ValueError("source clause has unknown candidate path")
+        if any(r.disposition != "POLICY" or not r.paths for r in clause.remainders):
+            issues.append(
+                {
+                    "path": "source." + clause.clause_id,
+                    "code": "DAILY_SOURCE_CLAUSE_REQUIRED",
+                    "reason": "Define each remaining technical source span and its scoped paths.",
+                }
+            )
+        if clause.disposition in {"UNRESOLVED", "UNSUPPORTED"} or (
+            clause.disposition == "POLICY" and not clause.paths
+        ):
+            issues.append(
+                {
+                    "path": "source." + clause.clause_id,
+                    "code": "DAILY_SOURCE_CLAUSE_REQUIRED",
+                    "reason": clause.reason,
+                }
+            )
+        elif clause.disposition == "INVENTORY_ASSERTION":
+            require_inventory_assertion(clause.excerpt)
+            # Such assertions never attest holdings or authorize a trade. Require a
+            # scoped treatment rather than a generic ignore/acknowledgement label.
+            if (
+                clause.paths
+                or len(clause.reason) < 20
+                or any(
+                    x in clause.reason.casefold() for x in ("ignore", "acknowledge", "忽略", "已阅")
+                )
+            ):
+                raise ValueError("source treatment must explain the concrete non-policy assertion")
+    return DailyReviewSnapshot(
+        content_hash=digest,
+        source_hash=sha256(source_text.encode()).hexdigest(),
+        evidence_hash=daily_hash("daily-plan-review-evidence-v1", mapping.model_dump(mode="json")),
+        mapping=mapping,
+        issues=tuple(
+            DailyReviewIssue(issue_id=daily_hash("daily-plan-review-issue-v1", issue), **issue)
+            for issue in issues
+        ),
+    )

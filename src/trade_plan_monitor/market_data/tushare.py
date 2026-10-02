@@ -782,6 +782,40 @@ class TushareMarketDataProvider:
 
         return self._daily_bars(symbol, start, end, strict_response=False)
 
+    def daily_adjustment_factors(self, symbol: str, start: date, end: date):
+        """Normalize same-provider factors with receipt proof; no raw-price fallback."""
+        symbol = self._validated_symbol(symbol)
+        self._validated_date_range(start, end)
+        frame = self._fetch_frame(
+            "adj_factor",
+            fields="ts_code,trade_date,adj_factor",
+            ts_code=symbol,
+            start_date=self._date_argument(start),
+            end_date=self._date_argument(end),
+        )
+        self._require_columns(frame, "adj_factor", {"ts_code", "trade_date", "adj_factor"})
+        if len(frame) > 1000:
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "adj_factor")
+        factors = {}
+        for row in frame.to_dict(orient="records"):
+            try:
+                day = self._source_date(row["trade_date"])
+                factor = Decimal(str(row["adj_factor"]))
+                if (
+                    row["ts_code"] != symbol
+                    or not start <= day <= end
+                    or day in factors
+                    or not factor.is_finite()
+                    or factor <= 0
+                ):
+                    raise ValueError("invalid adjustment factor")
+                factors[day] = factor
+            except _ROW_ERRORS:
+                raise TushareProviderError(
+                    TushareErrorCode.INVALID_RESPONSE, "adj_factor"
+                ) from None
+        return factors, self._received_at()
+
     def historical_daily_bars(
         self,
         symbol: str,

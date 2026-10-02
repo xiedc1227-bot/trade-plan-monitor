@@ -21,6 +21,7 @@ defineSlots<{
 const navigationItems = [
   { to: "/", label: "监控总览", index: "01" },
   { to: "/plans", label: "计划", index: "02" },
+  { to: "/daily-plans", label: "日线计划", index: "06" },
   { to: "/alerts", label: "提醒", index: "03" },
   { to: "/system", label: "系统", index: "04" },
   { to: "/backtests", label: "回测", index: "05" },

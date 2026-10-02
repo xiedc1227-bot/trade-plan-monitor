@@ -51,6 +51,11 @@ describe("production extraction diagnostic contract", () => {
     await expect(api.getExtraction(body.id)).resolves.toEqual(body);
     expect(body.validationIssues.some((issue: { activationBlocking: boolean }) => issue.activationBlocking)).toBe(true);
   });
+  it("does not route a non-null daily mapping through the frozen five-minute editor", async () => {
+    const body = { ...extraction("INVALID_OUTPUT", null), dailyMapping: { mapping_version: "daily-mapping-v1" } };
+    const api = createAIPlanApi(vi.fn(async () => json(body)) as typeof fetch);
+    await expect(api.getExtraction(operationId)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
 
   it.each([
     ["QUEUED", null], ["RUNNING", null], ["INVALID_OUTPUT", null],

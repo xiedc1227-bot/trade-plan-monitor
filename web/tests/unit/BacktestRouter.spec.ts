@@ -36,14 +36,15 @@ function routeAt(path: string): RouteRecordRaw {
 }
 
 describe("backtest production routes", () => {
-  it("keeps the exact ten-route production surface", () => {
-    expect(routes).toHaveLength(10);
+  it("keeps the approved legacy and additive daily production surface", () => {
+    expect(routes).toHaveLength(11);
     expect(routes.map((route) => route.path)).toEqual([
+      "/daily-plans/:versionId?",
       ...historicalPaths,
       ...backtestPaths,
     ]);
 
-    for (const path of ["/", "/stocks/:symbol", "/plans", "/plans/:id", "/alerts", "/system"]) {
+    for (const path of ["/daily-plans/:versionId?", "/", "/stocks/:symbol", "/plans", "/plans/:id", "/alerts", "/system"]) {
       expect(typeof routeAt(path).component).toBe("function");
     }
   });

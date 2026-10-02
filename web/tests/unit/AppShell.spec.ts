@@ -26,6 +26,7 @@ import AppShell from "../../src/layouts/AppShell.vue";
 import { routes } from "../../src/router";
 
 const expectedPaths = [
+  "/daily-plans/:versionId?",
   "/",
   "/stocks/:symbol",
   "/plans",

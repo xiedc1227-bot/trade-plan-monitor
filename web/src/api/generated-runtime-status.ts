@@ -76,10 +76,10 @@ export type AlertAcknowledgementCommand = {
 export type AlertPage = {
   acknowledged?: (boolean) | (null);
   endAt?: (string) | (null);
-  items?: Array<(components["schemas"]["AlertView"]) | (components["schemas"]["ExplicitAlertView"])>;
+  items?: Array<(components["schemas"]["AlertView"]) | (components["schemas"]["ExplicitAlertView"]) | (components["schemas"]["DailyAlertCenterView"]) | (components["schemas"]["ObsoleteDailyAlertView"])>;
   limit: number;
   offset: number;
-  signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY" | "SELL" | "RISK_ALERT") | (null);
+  signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY" | "SELL" | "RISK_ALERT" | "RISK_EXIT") | (null);
   startAt?: (string) | (null);
   symbol?: (string) | (null);
   total: number;
@@ -786,6 +786,24 @@ export type CalendarScopeView = {
   status: "WAITING" | "RECOVERING" | "READY" | "BLOCKED";
 };
 
+export type CertifiedDailyBar = {
+  adjustment_as_of: string;
+  available_at: string;
+  bar_id: string;
+  basis_id: string;
+  close: string;
+  high: string;
+  low: string;
+  official: true;
+  open: string;
+  price_basis?: "QFQ";
+  provider: string;
+  received_at: string;
+  symbol: string;
+  trade_date: string;
+  volume_shares: number;
+};
+
 export type ClauseDisposition = "MAPPED" | "UNRESOLVED" | "UNSUPPORTED";
 
 export type ConditionOutcome = "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
@@ -818,6 +836,439 @@ export type ConfiguredAIRuntimeView = {
 export type CoordinatorStatusView = {
   progressDueAt: (string) | (null);
   state: "STARTING" | "SCHEDULED" | "WORKING" | "STALLED" | "STOPPED";
+};
+
+export type DailyAlertCenterView = {
+  acknowledgedAt?: (string) | (null);
+  activationRevision: number;
+  causeId: string;
+  confirmedTradeDate: (string) | (null);
+  createdAt: string;
+  currentActionable: boolean;
+  dedupKey: string;
+  evaluatedAt: string;
+  eventId: string;
+  evidence: Array<{
+      [key: string]: unknown;
+    }>;
+  executionDate: (string) | (null);
+  messageText: string;
+  name: string;
+  nextStep: "CONFIRM_SIMULATED_TRADE" | "REVIEW_RISK_EXIT";
+  payloadSchemaVersion?: "daily-simulation-alert-v1";
+  planHash: string;
+  planId: string;
+  planVersion: number;
+  planVersionId: string;
+  quantity: (number) | (null);
+  reviewId: string;
+  revision: number;
+  riskScope: ({
+    [key: string]: unknown;
+  }) | (null);
+  sequence: number;
+  severity: "ACTION" | "RISK";
+  signalType: "BUY" | "SELL" | "RISK_EXIT";
+  simulatedQty: number;
+  symbol: string;
+  tradingDate: string;
+};
+
+export type DailyAll = {
+  conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["DailyAll"]) | (components["schemas"]["DailyAny"])>;
+  type: "ALL";
+};
+
+export type DailyAny = {
+  conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["DailyAll"]) | (components["schemas"]["DailyAny"])>;
+  type: "ANY";
+};
+
+export type DailyCandleRatio = {
+  comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
+  component: "LOWER_WICK" | "UPPER_WICK" | "BODY";
+  offset: number;
+  ratio: string;
+  type: "DAILY_CANDLE_RATIO";
+};
+
+export type DailyClause = {
+  clause_id: string;
+  disposition: "POLICY" | "INVENTORY_ASSERTION" | "BACKGROUND" | "UNRESOLVED" | "UNSUPPORTED";
+  end: number;
+  excerpt: string;
+  exclusions?: Array<components["schemas"]["DailySourceExclusion"]>;
+  paths: Array<string>;
+  reason: string;
+  remainders?: Array<components["schemas"]["DailyTechnicalRemainder"]>;
+  start: number;
+};
+
+export type DailyCloseSequence = {
+  comparator: ("LT" | "LTE" | "EQ" | "GTE" | "GT") | (null);
+  mode: "PAIRWISE_NONDECREASING" | "COMPARE_REFERENCE";
+  offset: number;
+  reference: ((components["schemas"]["FixedDailyReference"]) | (components["schemas"]["DynamicDailyReference"])) | (null);
+  sessions: number;
+  type: "DAILY_CLOSE_SEQUENCE";
+};
+
+export type DailyConditionEvidence = {
+  bar_ids?: Array<string>;
+  basis_id?: (string) | (null);
+  children?: Array<components["schemas"]["DailyConditionEvidence"]>;
+  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["DailyAll"]) | (components["schemas"]["DailyAny"]);
+  fact_ids?: Array<string>;
+  operands?: Array<string>;
+  outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  reason?: (string) | (null);
+  session_dates?: Array<string>;
+};
+
+export type DailyEditorSchemaView = {
+  candidateSchema: {
+    [key: string]: unknown;
+  };
+  operationSchemas: {
+    [key: string]: unknown;
+  };
+  schemaVersion?: 4;
+};
+
+export type DailyEvaluationApiView = {
+  activationRevision: number;
+  contentHash: string;
+  dailyEvidence: (components["schemas"]["DailySeries"]) | (null);
+  dataBlockers: Array<string>;
+  evaluatedAt: string;
+  factRevisions: Array<components["schemas"]["DailyFactRevision"]>;
+  inventory: components["schemas"]["DailyInventoryApiView"];
+  nextAction: "REVIEW_RISK_EXIT" | "CONFIRM_SIMULATED_TRADE" | "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION";
+  officialTradeDate: (string) | (null);
+  planHash: string;
+  planVersionId: string;
+  quote: (components["schemas"]["DailyExecutionQuote"]) | (null);
+  reviewId: string;
+  riskAction: components["schemas"]["DailyRiskActionApiView"];
+  risks: Array<components["schemas"]["DailyRiskApiView"]>;
+  signals: Array<components["schemas"]["DailySignalApiView"]>;
+  symbol: string;
+};
+
+export type DailyExecutionQuote = {
+  available_at: string;
+  evaluated_at: string;
+  liquidity_available: boolean;
+  price_fen: number;
+  quote_at: string;
+  special_state_verified: boolean;
+  symbol: string;
+  tradable: boolean;
+};
+
+export type DailyFactCommand = {
+  contentHash: string;
+  evidence: string;
+  expectedRevision: number;
+  factId: string;
+  kind: "PRICE_STRUCTURE" | "VOLUME_OR_CANDLE" | "TECHNICAL" | "TRADE_VIABILITY" | "SIGNAL_INVALIDATION" | "INDEPENDENT_EVENT" | "SEVERE_STRUCTURE" | "SEVERE_DETERIORATION" | "TRADABILITY" | "FULL_SESSION_SUSPENSION";
+  officialEvidence?: (components["schemas"]["DailyOfficialEvidence"]) | (null);
+  planVersionId: string;
+  signalId?: (string) | (null);
+  tradeDate: string;
+};
+
+export type DailyFactRevision = {
+  id: string;
+  revision: number;
+};
+
+export type DailyFieldBinding = {
+  clause_ids: Array<string>;
+  origin: "SOURCE" | "HUMAN_SUPPLEMENT" | "PRODUCT_CONTRACT";
+  path: string;
+  supplement_id: (string) | (null);
+  unit: "JSON" | "FEN_FROM_YUAN" | "SHARES" | "RATIO" | "TEXT" | "STRUCTURE";
+  value: components["schemas"]["JsonValue"];
+};
+
+export type DailyIndicatorCompare = {
+  comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
+  formula_version: "daily-ta-v2";
+  indicator: "MA20" | "MA60" | "MACD_DIF" | "MACD_DEA" | "MACD_HIST" | "RSI14" | "ATR14" | "BOLL_LOWER" | "BOLL_MIDDLE" | "BOLL_UPPER" | "BOLL_BANDWIDTH";
+  offset: number;
+  parameters: {
+    [key: string]: number;
+  };
+  reference: (components["schemas"]["FixedDailyReference"]) | (components["schemas"]["DynamicDailyReference"]);
+  type: "DAILY_INDICATOR_COMPARE";
+};
+
+export type DailyInventoryApiView = {
+  coreQty: (number) | (null);
+  known: boolean;
+  revision: number;
+  sellableCore: (number) | (null);
+  sellableTactical: (number) | (null);
+  symbol: string;
+  tacticalQty: (number) | (null);
+  totalQty: (number) | (null);
+};
+
+export type DailyInventoryResource = {
+  evaluatedAt: string;
+  reason?: (string) | (null);
+  snapshot: (components["schemas"]["DailyInventoryApiView"]) | (null);
+  status: "CURRENT" | "UNSUPPORTED";
+  symbol: string;
+};
+
+export type DailyMapping = {
+  bindings: Array<components["schemas"]["DailyFieldBinding"]>;
+  candidate_content_hash: string;
+  clauses: Array<components["schemas"]["DailyClause"]>;
+  mapping_version: "daily-mapping-v1";
+  supplements: Array<components["schemas"]["DailySupplement"]>;
+};
+
+export type DailyMutationReceipt = {
+  id: string;
+  recordedAt: string;
+  revision: number;
+};
+
+export type DailyObsoleteRiskApiView = {
+  confirmedTradeDate: (string) | (null);
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  riskId: (string) | (null);
+  scopeEvidence: string;
+  status: "CLEAR" | "PENDING" | "OBSERVATION" | "CONFIRMED" | "FULFILLED";
+};
+
+export type DailyOfficialEvidence = {
+  applicableAssertion: string;
+  documentTitle: string;
+  documentUrl: string;
+  issuer: string;
+  publishedAt: string;
+  verifiedAt: string;
+};
+
+export type DailyPositionCommand = {
+  coreQty: number;
+  expectedRevision: number;
+  symbol: string;
+  tacticalQty: number;
+};
+
+export type DailyPriceCompare = {
+  comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
+  field: "open" | "high" | "low" | "close";
+  offset: number;
+  reference: (components["schemas"]["FixedDailyReference"]) | (components["schemas"]["DynamicDailyReference"]);
+  type: "DAILY_PRICE_COMPARE";
+};
+
+export type DailyPriceInRange = {
+  field: "open" | "high" | "low" | "close";
+  offset: number;
+  range: components["schemas"]["DailyZone"];
+  type: "DAILY_PRICE_IN_RANGE";
+};
+
+export type DailyReviewIssue = {
+  code: string;
+  issue_id: string;
+  path: string;
+  reason: string;
+};
+
+export type DailyReviewPreview = {
+  candidateJson: string;
+  review: components["schemas"]["DailyReviewSnapshot"];
+  supplementRevision: number;
+};
+
+export type DailyReviewPreviewCommand = {
+  candidateJson: string;
+  mapping?: (components["schemas"]["DailyMapping"]) | (null);
+  scopeSelections?: Array<components["schemas"]["DailySourceExclusion"]>;
+  sourceText: string;
+};
+
+export type DailyReviewSnapshot = {
+  content_hash: string;
+  evidence_hash: string;
+  issues: Array<components["schemas"]["DailyReviewIssue"]>;
+  mapping: components["schemas"]["DailyMapping"];
+  source_hash: string;
+};
+
+export type DailyRiskActionApiView = {
+  blockers: Array<string>;
+  branch?: ("ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL") | (null);
+  causeId?: (string) | (null);
+  causeRevision?: (number) | (null);
+  coreQty: (number) | (null);
+  status: "WAITING" | "NONE" | "RISK_EXIT";
+  tacticalQty: (number) | (null);
+  targetCoreQty?: (number) | (null);
+  targetTacticalQty?: (number) | (null);
+  unavailableCoreQty: (number) | (null);
+  unavailableTacticalQty: (number) | (null);
+};
+
+export type DailyRiskApiView = {
+  basisId?: (string) | (null);
+  blockers: Array<string>;
+  breachTradeDate?: (string) | (null);
+  causeCutoverAt?: (string) | (null);
+  causeCutoverDate?: (string) | (null);
+  confirmedTradeDate?: (string) | (null);
+  consumedEvidenceIds?: Array<string>;
+  earliestExecutionDate: (string) | (null);
+  evidenceIds: Array<string>;
+  fulfilledAt?: (string) | (null);
+  involvesCore: boolean;
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  priority: number;
+  reassessmentId?: (string) | (null);
+  revision?: (number) | (null);
+  riskComparison?: ("LT" | "LTE") | (null);
+  riskId?: (string) | (null);
+  riskLineFen?: (number) | (null);
+  scopeEvidence: string;
+  secondCloseDate?: (string) | (null);
+  status: "CLEAR" | "PENDING" | "OBSERVATION" | "CONFIRMED" | "FULFILLED";
+  suspensionConfirmationPolicy?: ("RESUME_FIRST_CLOSE" | "RESTART_ADJACENT_PAIR") | (null);
+  targetCoreQty: number;
+  targetTacticalQty: number;
+  verifiedAt?: (string) | (null);
+};
+
+export type DailyRiskReassessmentCommand = {
+  contentHash: string;
+  expectedRevision: number;
+  involvesCore: boolean;
+  planVersionId: string;
+  removalEvidence: components["schemas"]["DailyOfficialEvidence"];
+  riskId: string;
+  scopeEvidence: string;
+  symbol: string;
+  targetCoreQty: number;
+  targetTacticalQty: number;
+};
+
+export type DailySeries = {
+  adjustment_as_of: string;
+  bars: Array<components["schemas"]["CertifiedDailyBar"]>;
+  basis_id: string;
+  cutoff: string;
+  provider: string;
+  quote_comparable: true;
+  session_dates: Array<string>;
+  suspended_dates: Array<string>;
+  symbol: string;
+};
+
+export type DailySignalApiView = {
+  basisId: string;
+  blockers: Array<string>;
+  bucket: "TACTICAL";
+  confirmedTradeDate: string;
+  evidence: Array<components["schemas"]["DailyConditionEvidence"]>;
+  evidenceFingerprint: string;
+  executableQty: number;
+  executionDate: (string) | (null);
+  lineage: string;
+  planVersionId: string;
+  plannedQty: number;
+  resetTradeDate?: (string) | (null);
+  reviewId: string;
+  revision?: (number) | (null);
+  riskInvalidated?: boolean;
+  ruleId: string;
+  side: "BUY" | "SELL";
+  signalId: string;
+  simulatedQty: number;
+  state: "CONFIRMED" | "READY" | "EXPIRED" | "INVALIDATED" | "SIMULATED";
+};
+
+export type DailySimulationCommand = {
+  causeId: string;
+  expectedCauseRevision: number;
+  expectedInventoryRevision: number;
+  planVersionId: string;
+  quantity: number;
+};
+
+export type DailySimulationReceipt = {
+  inventory: components["schemas"]["DailyInventoryApiView"];
+  inventoryRevision: number;
+  priceFen: number;
+  quantity: number;
+  side: "BUY" | "SELL";
+  signalId: (string) | (null);
+  simulatedAt: string;
+  simulationId: string;
+};
+
+export type DailySourceExclusion = {
+  end: number;
+  excerpt: string;
+  origin?: "REGISTERED_FRAGMENT" | "HUMAN_SCOPE_SELECTION";
+  reason: "FUNDAMENTALS_REVIEWED_AT_PLAN_GENERATION";
+  source_hash: string;
+  start: number;
+};
+
+export type DailyStateView = {
+  evaluatedAt: (string) | (null);
+  reason?: (string) | (null);
+  risks?: Array<components["schemas"]["DailyObsoleteRiskApiView"]>;
+  snapshot: (components["schemas"]["DailyEvaluationApiView"]) | (null);
+  status: "CURRENT" | "AWAITING_EVALUATION" | "INACTIVE" | "UNSUPPORTED";
+  symbol: string;
+};
+
+export type DailySupplement = {
+  candidate_content_hash: string;
+  path: string;
+  reason: string;
+  supplement_id: string;
+  value: components["schemas"]["JsonValue"];
+};
+
+export type DailySupplementCommand = {
+  candidateJson: string;
+  contentHash: string;
+  expectedRevision: number;
+  supplements: Array<components["schemas"]["DailySupplement"]>;
+};
+
+export type DailyTechnicalRemainder = {
+  disposition: "POLICY" | "UNRESOLVED" | "UNSUPPORTED";
+  end: number;
+  excerpt: string;
+  paths: Array<string>;
+  reason: string;
+  start: number;
+};
+
+export type DailyVolumeRatio = {
+  baseline: "PREVIOUS" | "MEAN";
+  comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
+  offset: number;
+  ratio: string;
+  type: "DAILY_VOLUME_RATIO";
+  window: number;
+};
+
+export type DailyZone = {
+  high_fen: number;
+  include_high: boolean;
+  include_low: boolean;
+  low_fen: number;
 };
 
 export type DashboardCounts = {
@@ -892,6 +1343,16 @@ export type DraftReviewIssue = {
   resolved?: boolean;
 };
 
+export type DynamicDailyReference = {
+  formula_version: "daily-ta-v2";
+  indicator: "MA20" | "MA60" | "MACD_DIF" | "MACD_DEA" | "MACD_HIST" | "RSI14" | "ATR14" | "BOLL_LOWER" | "BOLL_MIDDLE" | "BOLL_UPPER" | "BOLL_BANDWIDTH";
+  mode: "DYNAMIC";
+  offset: number;
+  parameters: {
+    [key: string]: number;
+  };
+};
+
 export type EpisodeStatus = "ACTIVE" | "ALERTED" | "CLOSED";
 
 export type ErrorDetail = {
@@ -954,7 +1415,7 @@ export type ExplicitAlertView = {
   safetyEvidence: (components["schemas"]["ExplicitConditionEvidenceView"]) | (null);
   sequence: number;
   severity: "ACTION" | "RISK";
-  signalType: "BUY" | "SELL" | "RISK_ALERT";
+  signalType: "BUY" | "SELL" | "RISK_ALERT" | "RISK_EXIT";
   symbol: string;
   targetBucketEnd: string;
   tradingDate: string;
@@ -1043,6 +1504,14 @@ export type FieldEvidence = {
   start?: (number) | (null);
 };
 
+export type FixedDailyReference = {
+  as_of: string;
+  mode: "FIXED";
+  source: string;
+  unit: "FEN" | "INDICATOR";
+  value: string;
+};
+
 export type IndexConditionEvidenceView = {
   actualValue: (string) | (null);
   comparisonValue: (string) | (null);
@@ -1106,6 +1575,8 @@ export type InventorySourceTreatmentView = {
   totalQuantity: number;
   treatmentId: string;
 };
+
+export type JsonValue = unknown;
 
 export type LegacyPlanEntryView = {
   actionableUntil: (string) | (null);
@@ -1246,6 +1717,28 @@ export type NextStepView = {
   requiredInputs?: Array<components["schemas"]["MissingInputCode"]>;
 };
 
+export type ObsoleteDailyAlertView = {
+  acknowledgedAt: (string) | (null);
+  createdAt: string;
+  currentActionable?: false;
+  dedupKey: string;
+  evaluatedAt: string;
+  eventId: string;
+  messageText: string;
+  name: string;
+  payloadSchemaVersion?: "daily-plan-alert-v1";
+  planHash: string;
+  planId: string;
+  planVersion: number;
+  reason?: "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED";
+  revision: number;
+  sequence: number;
+  signalType: "BUY" | "SELL" | "RISK_EXIT";
+  status?: "UNSUPPORTED";
+  symbol: string;
+  tradingDate: string;
+};
+
 export type OfficialCloseDiagnosticIdentityView = {
   formulaVersion: "ta-v1";
   kind: "OFFICIAL_CLOSE";
@@ -1272,7 +1765,10 @@ export type PlanActivationCommand = {
   contentHash?: (string) | (null);
   expectedRevision: number;
   planVersionId: string;
+  reviewEvidenceHash?: (string) | (null);
   reviewId?: (string) | (null);
+  reviewRevision?: (number) | (null);
+  sourceHash?: (string) | (null);
 };
 
 export type PlanDeactivationCommand = {
@@ -1284,6 +1780,7 @@ export type PlanDocumentFormat = "JSON" | "YAML";
 
 export type PlanDraftCommand = {
   basePlanVersionId?: (string) | (null);
+  dailyMapping?: (components["schemas"]["DailyMapping"]) | (null);
   expectedRevision: number;
   extractionId?: (string) | (null);
   mapping?: (components["schemas"]["PlanMappingView"]) | (null);
@@ -1296,6 +1793,7 @@ export type PlanExtractionCommand = {
   expectedRevision: number;
   providerId: string;
   sourceText: string;
+  targetContract?: "CONFIGURED" | "DAILY_CLOSE_PLAN";
 };
 
 export type PlanExtractionOperationStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "INVALID_OUTPUT" | "PROVIDER_ERROR" | "CANCELLED";
@@ -1303,6 +1801,7 @@ export type PlanExtractionOperationStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" |
 export type PlanExtractionView = {
   assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
   completedAt?: (string) | (null);
+  dailyMapping?: (components["schemas"]["DailyMapping"]) | (null);
   diagnosticStatus?: ("RECORDED" | "WRITE_FAILED") | (null);
   draftPlanJson?: (string) | (null);
   evidence?: Array<components["schemas"]["FieldEvidence"]>;
@@ -1394,6 +1893,7 @@ export type PlanVersionSummary = {
   canActivate: boolean;
   createdAt: string;
   id: string;
+  obsoleteReason?: ("DAILY_DRAFT_OBSOLETE") | (null);
   planHash: string;
   planId: string;
   revision: number;
@@ -1406,9 +1906,12 @@ export type PlanVersionView = {
   canActivate: boolean;
   contentHash?: (string) | (null);
   createdAt: string;
+  dailyIssues?: Array<components["schemas"]["DailyReviewIssue"]>;
+  dailyMapping?: (components["schemas"]["DailyMapping"]) | (null);
   executionReadiness?: ("NOT_EVALUATED") | (null);
   id: string;
   mapping?: (components["schemas"]["PlanMappingView"]) | (null);
+  obsoleteReason?: ("DAILY_DRAFT_OBSOLETE") | (null);
   planHash: string;
   planId: string;
   planJson: string;
@@ -1589,6 +2092,13 @@ export type ReturnWindow = "FIVE_MINUTE_BUCKETS" | "OFFICIAL_OPEN_DAYS";
 export type ReviewIssueKind = "ASSUMPTION" | "WARNING" | "UNMAPPED_TEXT" | "MISSING_EVIDENCE";
 
 export type ReviewResolutionKind = "CONFIRM_MAPPING" | "CONFIRM_POLICY" | "CONFIRM_SOURCE_TREATMENT" | "REPLACED_BY_REVIEWED_CONTENT";
+
+export type ReviewedDailyFact = {
+  evidence_requirement: string;
+  fact_kind: "PRICE_STRUCTURE" | "VOLUME_OR_CANDLE" | "TECHNICAL" | "TRADE_VIABILITY" | "SIGNAL_INVALIDATION" | "INDEPENDENT_EVENT" | "SEVERE_STRUCTURE" | "SEVERE_DETERIORATION" | "TRADABILITY" | "FULL_SESSION_SUSPENSION";
+  type: "REVIEWED_FACT";
+  validity_scope: "TRADE_DATE" | "SIGNAL";
+};
 
 export type RiskStatus = "CLEAR" | "BREACHED_PENDING_CONFIRMATION" | "EXIT_PENDING_SETTLEMENT";
 
@@ -2002,11 +2512,53 @@ export interface components {
     BindingUnit: BindingUnit;
     Board: Board;
     CalendarScopeView: CalendarScopeView;
+    CertifiedDailyBar: CertifiedDailyBar;
     ClauseDisposition: ClauseDisposition;
     ConditionOutcome: ConditionOutcome;
     ConfiguredAIProviderRuntimeView: ConfiguredAIProviderRuntimeView;
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
     CoordinatorStatusView: CoordinatorStatusView;
+    DailyAlertCenterView: DailyAlertCenterView;
+    DailyAll: DailyAll;
+    DailyAny: DailyAny;
+    DailyCandleRatio: DailyCandleRatio;
+    DailyClause: DailyClause;
+    DailyCloseSequence: DailyCloseSequence;
+    DailyConditionEvidence: DailyConditionEvidence;
+    DailyEditorSchemaView: DailyEditorSchemaView;
+    DailyEvaluationApiView: DailyEvaluationApiView;
+    DailyExecutionQuote: DailyExecutionQuote;
+    DailyFactCommand: DailyFactCommand;
+    DailyFactRevision: DailyFactRevision;
+    DailyFieldBinding: DailyFieldBinding;
+    DailyIndicatorCompare: DailyIndicatorCompare;
+    DailyInventoryApiView: DailyInventoryApiView;
+    DailyInventoryResource: DailyInventoryResource;
+    DailyMapping: DailyMapping;
+    DailyMutationReceipt: DailyMutationReceipt;
+    DailyObsoleteRiskApiView: DailyObsoleteRiskApiView;
+    DailyOfficialEvidence: DailyOfficialEvidence;
+    DailyPositionCommand: DailyPositionCommand;
+    DailyPriceCompare: DailyPriceCompare;
+    DailyPriceInRange: DailyPriceInRange;
+    DailyReviewIssue: DailyReviewIssue;
+    DailyReviewPreview: DailyReviewPreview;
+    DailyReviewPreviewCommand: DailyReviewPreviewCommand;
+    DailyReviewSnapshot: DailyReviewSnapshot;
+    DailyRiskActionApiView: DailyRiskActionApiView;
+    DailyRiskApiView: DailyRiskApiView;
+    DailyRiskReassessmentCommand: DailyRiskReassessmentCommand;
+    DailySeries: DailySeries;
+    DailySignalApiView: DailySignalApiView;
+    DailySimulationCommand: DailySimulationCommand;
+    DailySimulationReceipt: DailySimulationReceipt;
+    DailySourceExclusion: DailySourceExclusion;
+    DailyStateView: DailyStateView;
+    DailySupplement: DailySupplement;
+    DailySupplementCommand: DailySupplementCommand;
+    DailyTechnicalRemainder: DailyTechnicalRemainder;
+    DailyVolumeRatio: DailyVolumeRatio;
+    DailyZone: DailyZone;
     DashboardCounts: DashboardCounts;
     DataHealthStatus: DataHealthStatus;
     DataHealthView: DataHealthView;
@@ -2017,6 +2569,7 @@ export interface components {
     DiagnosticEvaluationCommand: DiagnosticEvaluationCommand;
     DiagnosticEvaluationView: DiagnosticEvaluationView;
     DraftReviewIssue: DraftReviewIssue;
+    DynamicDailyReference: DynamicDailyReference;
     EpisodeStatus: EpisodeStatus;
     ErrorDetail: ErrorDetail;
     ErrorPayload: ErrorPayload;
@@ -2036,12 +2589,14 @@ export interface components {
     ExtractionIssue: ExtractionIssue;
     FieldBindingView: FieldBindingView;
     FieldEvidence: FieldEvidence;
+    FixedDailyReference: FixedDailyReference;
     IndexConditionEvidenceView: IndexConditionEvidenceView;
     IndexConditionProgressView: IndexConditionProgressView;
     IndexScopeView: IndexScopeView;
     IntradayDiagnosticIdentityView: IntradayDiagnosticIdentityView;
     IntradayTargetView: IntradayTargetView;
     InventorySourceTreatmentView: InventorySourceTreatmentView;
+    JsonValue: JsonValue;
     LegacyPlanEntryView: LegacyPlanEntryView;
     LegacyPlanInvalidateCommand: LegacyPlanInvalidateCommand;
     LegacyPlanInvalidateResult: LegacyPlanInvalidateResult;
@@ -2065,6 +2620,7 @@ export interface components {
     MissingInputCode: MissingInputCode;
     NextStepCode: NextStepCode;
     NextStepView: NextStepView;
+    ObsoleteDailyAlertView: ObsoleteDailyAlertView;
     OfficialCloseDiagnosticIdentityView: OfficialCloseDiagnosticIdentityView;
     OfficialCloseTargetView: OfficialCloseTargetView;
     OperationKind: OperationKind;
@@ -2107,6 +2663,7 @@ export interface components {
     ReturnWindow: ReturnWindow;
     ReviewIssueKind: ReviewIssueKind;
     ReviewResolutionKind: ReviewResolutionKind;
+    ReviewedDailyFact: ReviewedDailyFact;
     RiskStatus: RiskStatus;
     RuleEligibilityView: RuleEligibilityView;
     RuntimeDashboardResponse: RuntimeDashboardResponse;
@@ -2635,7 +3192,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": (components["schemas"]["AlertView"]) | (components["schemas"]["ExplicitAlertView"]);
+            "application/json": (components["schemas"]["AlertView"]) | (components["schemas"]["ExplicitAlertView"]) | (components["schemas"]["DailyAlertCenterView"]) | (components["schemas"]["ObsoleteDailyAlertView"]);
           };
         };
         "400": {
@@ -2704,7 +3261,7 @@ export interface paths {
           endAt?: (string) | (null);
           limit?: number;
           offset?: number;
-          signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY" | "SELL" | "RISK_ALERT") | (null);
+          signalType?: (components["schemas"]["ActionableSignalType"]) | ("BUY" | "SELL" | "RISK_ALERT" | "RISK_EXIT") | (null);
           startAt?: (string) | (null);
           symbol?: (string) | (null);
         };
@@ -4050,6 +4607,704 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["BacktestMarketIndexSeriesView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-plan-editor-schema": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyEditorSchemaView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-plan-facts": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailyFactCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyMutationReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-plan-review-previews": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailyReviewPreviewCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyReviewPreview"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-plan-review-supplements": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailySupplementCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyMutationReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-plan-runtime/{symbol}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          symbol: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyStateView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-position-confirmations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailyPositionCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyMutationReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-position-inventory": {
+    get: {
+      parameters: {
+        query: {
+          asOfTradeDate: string;
+          symbol: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyInventoryResource"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-risk-reassessments": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailyRiskReassessmentCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyMutationReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/daily-simulated-trades": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailySimulationCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailySimulationReceipt"];
           };
         };
         "400": {

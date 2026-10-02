@@ -18,6 +18,13 @@ from sqlalchemy.orm import Session
 
 from trade_plan_monitor.ai.review import load_explicit_plan_draft_json
 from trade_plan_monitor.config import TushareConfiguration
+from trade_plan_monitor.domain.daily_plan_models import (
+    DailyEnabledRule,
+    DailyResetPolicy,
+    DailyTradePlan,
+    required_daily_observations,
+)
+from trade_plan_monitor.domain.daily_plan_validation import obsolete_daily_document
 from trade_plan_monitor.domain.plan_codec import PlanDocumentError, dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import (
@@ -38,6 +45,12 @@ from trade_plan_monitor.market_data.aggregation import (
     aggregate_five_minute_bar,
     expected_five_minute_ends,
     five_minute_bucket_end,
+)
+from trade_plan_monitor.market_data.daily_data import (
+    DailyAdmissionError,
+    DailyExecutionQuote,
+    DailySeries,
+    admit_qfq_daily,
 )
 from trade_plan_monitor.market_data.models import MinuteBar, TradingDay
 from trade_plan_monitor.market_data.sdk_call_boundary import (
@@ -67,6 +80,10 @@ from trade_plan_monitor.market_index.tushare import (
 )
 from trade_plan_monitor.runtime.clock import Clock, _canonical_shanghai
 from trade_plan_monitor.runtime.close_recovery_evidence import _calendar_open_on
+from trade_plan_monitor.runtime.daily_service import (
+    DailyRuntimeEvaluationService,
+    DailyRuntimeInputs,
+)
 from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
 from trade_plan_monitor.runtime.health import RecoveryIssueSnapshot, SymbolHealthTracker
 from trade_plan_monitor.runtime.historical_close_context import (
@@ -156,6 +173,8 @@ from trade_plan_monitor.state.recovery_read_session import require_owned_recover
 from trade_plan_monitor.state.repositories import MarketHistoryRepository, MarketReferenceRepository
 
 _REFERENCE_DAYS = 366
+_DAILY_HISTORY_LIMIT = 500
+_DAILY_CALENDAR_MAX_DAYS = 3000
 _INDEX_PERMISSION_GUARD = (
     timedelta(seconds=2 * LIVE_TUSHARE_TIMEOUT_SECONDS) + LIVE_TUSHARE_MIN_INTERVAL
 )
@@ -254,7 +273,7 @@ class _StockMinuteConsumer:
     symbol: str
     plan_version_id: str
     plan_hash: str
-    family: Literal["LEGACY", "EXPLICIT_RULES"]
+    family: Literal["LEGACY", "EXPLICIT_RULES", "DAILY_CLOSE_PLAN"]
     activation_revision: int
     activated_at: datetime
     request_date: date
@@ -348,7 +367,7 @@ class PlanReferenceDependency:
     """The complete plan hash binds its requirements to its actual active revision."""
 
     symbol: str
-    family: Literal["LEGACY", "EXPLICIT_RULES"]
+    family: Literal["LEGACY", "EXPLICIT_RULES", "DAILY_CLOSE_PLAN"]
     plan_hash: str
     plan_version_id: str
     activation_revision: int
@@ -576,15 +595,18 @@ class ProductionMonitorPipeline:
         self._running_deadline = False
         self._gap_repair_due_at: datetime | None = None
         self._historical_reader = (
-            None if recovery_session_factory is None
+            None
+            if recovery_session_factory is None
             else LegacyHistoricalCloseReader(recovery_session_factory)
         )
         self._permission_session_factory = (
             permission_session_factory
-            if permission_session_factory is not None else recovery_session_factory
+            if permission_session_factory is not None
+            else recovery_session_factory
         )
         self._permission_demand_reader = (
-            None if self._permission_session_factory is None
+            None
+            if self._permission_session_factory is None
             else LegacyHistoricalCloseReader(self._permission_session_factory)
         )
         self._daily_bar_demand_cursors: dict[str, DemandCursor] = {}
@@ -689,7 +711,9 @@ class ProductionMonitorPipeline:
             progress_unit=self._status_progress_unit if enable_runtime_status else None,
         )
         self.historical_evaluations = (
-            None if self._historical_reader is None else RuntimeEvaluationService(
+            None
+            if self._historical_reader is None
+            else RuntimeEvaluationService(
                 fetch_minutes=self._reject_refetch,
                 fetch_official_daily=self.fetch_official_daily,
                 official_observed_at=lambda requested: max(requested, clock.now()),
@@ -727,7 +751,16 @@ class ProductionMonitorPipeline:
             symbol_service=self.symbols,
             evaluation_service=self.evaluations,
             explicit_evaluation_service=self.explicit_evaluations,
+            daily_evaluation_service=DailyRuntimeEvaluationService(
+                unit_of_work_factory,
+                prepare_inputs=self.prepare_daily_inputs,
+                committed_event_publisher=publisher,
+                clock=clock.now,
+                commit_admission=self._decision_commit_current,
+            ),
         )
+        self.daily_evaluations = self.coordinator._daily_evaluation_service
+        self._daily_basis_cache = {}
         self.recovery = RecoveryService(
             provider=self.provider,
             request_controller=request_controller,
@@ -737,12 +770,18 @@ class ProductionMonitorPipeline:
             realtime_pending=self._realtime_pending,
         )
         self._status_progress_coverage_installed = (
-            enable_runtime_status and self._runtime_status_sessions is not None
+            enable_runtime_status
+            and self._runtime_status_sessions is not None
             and progress_owner is not None
-            and all(callable(getattr(progress_owner, method, None)) for method in (
-                "begin_progress_step", "begin_progress_step_at",
-                "complete_progress_step", "progress_monotonic_now",
-            ))
+            and all(
+                callable(getattr(progress_owner, method, None))
+                for method in (
+                    "begin_progress_step",
+                    "begin_progress_step_at",
+                    "complete_progress_step",
+                    "progress_monotonic_now",
+                )
+            )
         )
 
     def _observe_status_commit(self, plan, result, consumed_inputs) -> None:
@@ -812,9 +851,11 @@ class ProductionMonitorPipeline:
         from trade_plan_monitor.notifications.current_delivery import _current_bucket
         from trade_plan_monitor.runtime.status_authority import PlanReadAuthority
         from trade_plan_monitor.state.models import ActivePlan, PendingOfficialClose, PlanVersion
+
         scopes = []
-        schedule = {item.requirement.scope_key: item
-                    for item in self._stock_recovery_schedule.snapshot()}
+        schedule = {
+            item.requirement.scope_key: item for item in self._stock_recovery_schedule.snapshot()
+        }
         now = self._clock.now()
         with self._runtime_status_sessions() as session, session.begin():
             rows = session.scalars(select(ActivePlan).order_by(ActivePlan.symbol).limit(11)).all()
@@ -824,27 +865,36 @@ class ProductionMonitorPipeline:
                 version = session.get(PlanVersion, row.plan_version_id)
                 if version is None:
                     raise RuntimeError("Active runtime plan is unavailable")
+                if obsolete_daily_document(version.payload_json):
+                    continue
                 plan = _load_active_plan(version.payload_json)
+                if isinstance(plan, DailyTradePlan):
+                    # Schema 4 has its own typed daily-runtime read contract.
+                    continue
                 explicit = type(plan) is ExplicitTradePlan
                 target_end = _current_bucket(session, plan, now)
                 target = (
                     None if target_end is None else IntradayEvaluationTarget(bucket_end=target_end)
                 )
                 proof = self._runtime_status_proofs.get(row.symbol)
-                pending = session.scalar(select(PendingOfficialClose).where(
-                    PendingOfficialClose.symbol == row.symbol))
+                pending = session.scalar(
+                    select(PendingOfficialClose).where(PendingOfficialClose.symbol == row.symbol)
+                )
                 if pending is not None:
                     target = OfficialCloseEvaluationTarget(trade_date=pending.trade_date)
                 elif (
-                    not explicit and proof is not None
+                    not explicit
+                    and proof is not None
                     and isinstance(proof.target, OfficialCloseEvaluationTarget)
                     and proof.runtime_generation == self._runtime_generation
                     and proof.configuration_revision == self._recovery_configuration_revision
-                    and proof.symbol == row.symbol and proof.plan_family == "LEGACY_LOW_BUY"
+                    and proof.symbol == row.symbol
+                    and proof.plan_family == "LEGACY_LOW_BUY"
                     and proof.plan_version_id == row.plan_version_id
                     and proof.plan_hash == version.plan_hash
                     and proof.activation_revision == row.revision
-                    and target_end is not None and target_end.time() == time(15)
+                    and target_end is not None
+                    and target_end.time() == time(15)
                     and proof.target.trade_date == target_end.date()
                 ):
                     # A real committed close clears its pending row. Its owned
@@ -862,8 +912,11 @@ class ProductionMonitorPipeline:
                     reason, blocked, proof = "SEMANTICS_INCOMPATIBLE", True, None
                 elif not self._generation_current() or self._admission_revoked():
                     reason, blocked, proof = "GENERATION_CHANGED", True, None
-                elif (not explicit and plan_index_fact_requests(plan)
-                      and not self._index_certification_current()):
+                elif (
+                    not explicit
+                    and plan_index_fact_requests(plan)
+                    and not self._index_certification_current()
+                ):
                     reason, blocked, proof = "SEMANTICS_INCOMPATIBLE", True, None
                 elif pending is not None or row.symbol in self._historical_blocked:
                     reason, recovery, proof = "CLOSE_PENDING", True, None
@@ -871,21 +924,38 @@ class ProductionMonitorPipeline:
                     reason, blocked, proof = "PERMISSION_DENIED", True, None
                 elif demand is not None and (demand.missing_ends or demand.missing_aggregates):
                     reason, recovery, proof = "COVERAGE_INCOMPLETE", True, None
-                scopes.append(PlanReadAuthority(symbol=row.symbol,
-                    plan_version_id=row.plan_version_id, plan_hash=version.plan_hash,
-                    activation_revision=row.revision,
-                    plan_family="EXPLICIT_RULES" if explicit else "LEGACY_LOW_BUY",
-                    target=target, completion=proof,
-                    evaluation_due=(target_end is not None and now.date() == target_end.date()
-                        and time(9, 35) <= now.time() < time(15)
-                        and not time(11, 30) <= now.time() < time(13)),
-                    pending_reason=reason, recovery_pending=recovery, blocked=blocked,
-                    next_retry_at=None if step is None else step.next_retry_at))
-        token = (self._runtime_generation, self._runtime_status_revision,
-                 self._recovery_authority_epoch(), self._calendar_epoch,
-                 self._configuration_current(), self._generation_current(),
-                 self._admission_revoked(), self._reference_key,
-                 self.runtime_status_dependencies_snapshot())
+                scopes.append(
+                    PlanReadAuthority(
+                        symbol=row.symbol,
+                        plan_version_id=row.plan_version_id,
+                        plan_hash=version.plan_hash,
+                        activation_revision=row.revision,
+                        plan_family="EXPLICIT_RULES" if explicit else "LEGACY_LOW_BUY",
+                        target=target,
+                        completion=proof,
+                        evaluation_due=(
+                            target_end is not None
+                            and now.date() == target_end.date()
+                            and time(9, 35) <= now.time() < time(15)
+                            and not time(11, 30) <= now.time() < time(13)
+                        ),
+                        pending_reason=reason,
+                        recovery_pending=recovery,
+                        blocked=blocked,
+                        next_retry_at=None if step is None else step.next_retry_at,
+                    )
+                )
+        token = (
+            self._runtime_generation,
+            self._runtime_status_revision,
+            self._recovery_authority_epoch(),
+            self._calendar_epoch,
+            self._configuration_current(),
+            self._generation_current(),
+            self._admission_revoked(),
+            self._reference_key,
+            self.runtime_status_dependencies_snapshot(),
+        )
         return token, self._recovery_configuration_revision, tuple(scopes)
 
     def runtime_status_dependencies_snapshot(self):
@@ -1128,7 +1198,11 @@ class ProductionMonitorPipeline:
             raise ValueError("production supports at most ten active plans")
         return tuple(
             sorted(
-                (_load_active_plan(record.payload_json) for record in records),
+                (
+                    _load_active_plan(record.payload_json)
+                    for record in records
+                    if not obsolete_daily_document(record.payload_json)
+                ),
                 key=lambda plan: plan.symbol,
             )
         )
@@ -1142,11 +1216,15 @@ class ProductionMonitorPipeline:
         effective_date = self._clock.now().date() if market_date is None else market_date
         if isinstance(effective_date, datetime) or not isinstance(effective_date, date):
             raise TypeError("market_date must be a date")
-        return tuple(
-            plan
-            for plan in self._persisted_active_plans()
-            if activation_is_eligible_on(plan.activation, effective_date)
-        )
+        plans = self._persisted_active_plans()
+        with self._work() as work:
+            return tuple(
+                plan
+                for plan in plans
+                if activation_is_eligible_on(plan.activation, effective_date)
+                or _daily_risk_monitoring_required(work.daily.session, plan, self._clock.now())
+            )
+
 
     def active_symbols(self) -> tuple[str, ...]:
         return tuple(plan.symbol for plan in self.active_plans())
@@ -1236,7 +1314,9 @@ class ProductionMonitorPipeline:
                 if len(records) > 10:
                     raise ValueError("production supports at most ten active plans")
                 active_plans = tuple(
-                    _load_active_plan(record.payload_json) for record in records
+                    _load_active_plan(record.payload_json)
+                    for record in records
+                    if not obsolete_daily_document(record.payload_json)
                 )
             return self._permission_evidence_from_repositories(
                 now, work.references, work.history, active_plans, include_history=include_history,
@@ -1623,25 +1703,43 @@ class ProductionMonitorPipeline:
         )
 
     def _stock_minute_consumers_in_session(
-        self, session: Session, now: datetime,
+        self,
+        session: Session,
+        now: datetime,
     ) -> tuple[tuple[_StockMinuteConsumer, ...], tuple[ExecutableTradePlan, ...]]:
         """Check bounded current three-table identity without historical audit scans."""
-        versions = session.execute(select(
-            PlanVersion.id, PlanVersion.plan_id, PlanVersion.version, PlanVersion.symbol,
-            PlanVersion.plan_hash, func.substr(PlanVersion.payload_json, 1, 1_048_577),
-        ).where(PlanVersion.status == PlanVersionStatus.ACTIVE)
-            .order_by(PlanVersion.symbol).limit(11)).all()
+        versions = session.execute(
+            select(
+                PlanVersion.id,
+                PlanVersion.plan_id,
+                PlanVersion.version,
+                PlanVersion.symbol,
+                PlanVersion.plan_hash,
+                func.substr(PlanVersion.payload_json, 1, 1_048_577),
+            )
+            .where(PlanVersion.status == PlanVersionStatus.ACTIVE)
+            .order_by(PlanVersion.symbol)
+            .limit(11)
+        ).all()
         if len(versions) > 10:
             raise ValueError("production supports at most ten active plans")
         if any(len(row[5]) > 1_048_576 for row in versions):
             raise ValueError("active plan payload exceeds the recovery read limit")
         symbols = tuple(row.symbol for row in versions)
-        active = {row.symbol: row for row in session.scalars(
-            select(ActivePlan).where(ActivePlan.symbol.in_(symbols)).limit(11),
-        )}
-        states = {row.symbol: row for row in session.scalars(
-            select(PlanActivationState).where(PlanActivationState.symbol.in_(symbols)).limit(11),
-        )}
+        active = {
+            row.symbol: row
+            for row in session.scalars(
+                select(ActivePlan).where(ActivePlan.symbol.in_(symbols)).limit(11),
+            )
+        }
+        states = {
+            row.symbol: row
+            for row in session.scalars(
+                select(PlanActivationState)
+                .where(PlanActivationState.symbol.in_(symbols))
+                .limit(11),
+            )
+        }
         consumers, plans = [], []
         for version in versions:
             try:
@@ -1658,7 +1756,8 @@ class ProductionMonitorPipeline:
                 and type(state.revision) is int
                 and current.revision == state.revision > 0
                 and current.activated_at == state.changed_at
-                and version.plan_id == plan.plan_id and version.version == plan.version
+                and version.plan_id == plan.plan_id
+                and version.version == plan.version
                 and version.plan_hash == plan_sha256(plan)
                 and version[5] == dump_plan_json(plan)
             ):
@@ -1671,13 +1770,27 @@ class ProductionMonitorPipeline:
                 continue
             plans.append(plan)
             explicit = isinstance(plan, ExplicitTradePlan)
-            service = self.explicit_evaluations if explicit else self.evaluations
-            if service is not None and activation_is_eligible_on(plan.activation, now.date()):
-                consumers.append(_StockMinuteConsumer(
-                    plan.symbol, version.id, version.plan_hash,
-                    "EXPLICIT_RULES" if explicit else "LEGACY", current.revision,
-                    activated_at, now.date(),
-                ))
+            daily = isinstance(plan, DailyTradePlan)
+            service = (
+                self.daily_evaluations
+                if daily
+                else self.explicit_evaluations
+                if explicit
+                else self.evaluations
+            )
+            if service is not None and (activation_is_eligible_on(plan.activation, now.date())
+                or _daily_risk_monitoring_required(session, plan, now)):
+                consumers.append(
+                    _StockMinuteConsumer(
+                        plan.symbol,
+                        version.id,
+                        version.plan_hash,
+                        "DAILY_CLOSE_PLAN" if daily else "EXPLICIT_RULES" if explicit else "LEGACY",
+                        current.revision,
+                        activated_at,
+                        now.date(),
+                    )
+                )
         return tuple(consumers), tuple(plans)
 
     def _stock_minute_evidence_in_session(
@@ -2111,7 +2224,11 @@ class ProductionMonitorPipeline:
                 raise ValueError("production supports at most ten active plans")
             if any(len(document) > 1_048_576 for document in documents):
                 raise ValueError("active plan payload exceeds the recovery read limit")
-            plans = tuple(_load_active_plan(document) for document in documents)
+            plans = tuple(
+                _load_active_plan(document)
+                for document in documents
+                if not obsolete_daily_document(document)
+            )
             evidence = self._permission_evidence_from_repositories(
                 now, MarketReferenceRepository(session), MarketHistoryRepository(session),
                 plans, include_history=True,
@@ -3200,16 +3317,42 @@ class ProductionMonitorPipeline:
         start = trade_date - timedelta(days=_REFERENCE_DAYS)
         end = trade_date + timedelta(days=32)
         for exchange in sorted({"SSE", *(plan.market for plan in plans)}):
+            daily_exchange = any(
+                isinstance(plan, DailyTradePlan) and plan.market == exchange for plan in plans
+            )
+            calendar_start = (
+                trade_date - timedelta(days=750)
+                if daily_exchange
+                else start
+            )
             with self._status_progress_unit(timeout_seconds=90):
                 days = await self._request(
                     TushareOperation.TRADING_CALENDAR,
-                    lambda exchange=exchange: self.provider.trading_calendar_for_exchange(
-                        exchange, start, end
+                    lambda exchange=exchange, calendar_start=calendar_start: (
+                        self.provider.trading_calendar_for_exchange(exchange, calendar_start, end)
                     ),
                     f"calendar:{exchange}:{trade_date}",
                 )
                 if not any(day.cal_date == trade_date for day in days):
                     raise ReferenceDataUnavailableError("current trading calendar is unavailable")
+                calendar_lookback = 750
+                while (
+                    daily_exchange
+                    and sum(day.is_open and day.cal_date < trade_date for day in days)
+                    < _DAILY_HISTORY_LIMIT
+                    and calendar_lookback < _DAILY_CALENDAR_MAX_DAYS
+                ):
+                    calendar_lookback = min(calendar_lookback * 2, _DAILY_CALENDAR_MAX_DAYS)
+                    calendar_start = trade_date - timedelta(days=calendar_lookback)
+                    days = await self._request(
+                        TushareOperation.TRADING_CALENDAR,
+                        lambda exchange=exchange, calendar_start=calendar_start: (
+                            self.provider.trading_calendar_for_exchange(
+                                exchange, calendar_start, end
+                            )
+                        ),
+                        f"daily-calendar-warmup:{exchange}:{trade_date}:{calendar_lookback}",
+                    )
                 self._commit_trading_days(
                     days, trade_date=trade_date, captured_key=captured_key,
                 )
@@ -3259,7 +3402,8 @@ class ProductionMonitorPipeline:
                 self._calendar_epoch += 1
                 self._calendar_revoked.set()
         with self._work() as work:
-            work.references.upsert_trading_days(days)
+            for offset in range(0, len(days), 1000):
+                work.references.upsert_trading_days(days[offset:offset + 1000])
             self._assert_reference_generation(trade_date, captured_key)
             work.commit()
         if sse_days:
@@ -3282,7 +3426,9 @@ class ProductionMonitorPipeline:
             raise ReferenceDependenciesChangedError
 
     def _reference_dependency_key(
-        self, trade_date: date, plans: tuple[ExecutableTradePlan, ...],
+        self,
+        trade_date: date,
+        plans: tuple[ExecutableTradePlan, ...],
     ) -> ReferenceDependencyKey:
         """Read activation and immutable version together; never trust symbol alone.
 
@@ -3298,25 +3444,36 @@ class ProductionMonitorPipeline:
                     version = work.plans.get_version(plan.plan_id, plan.version)
                     plan_hash = plan_sha256(plan)
                     if (
-                        active is None or version is None
+                        active is None
+                        or version is None
                         or active.plan_version_id != version.id
                         or version.plan_hash != plan_hash
                     ):
                         raise ReferenceDependenciesChangedError
-                    dependencies.append(PlanReferenceDependency(
-                        symbol=plan.symbol,
-                        family=(
-                            "EXPLICIT_RULES" if isinstance(plan, ExplicitTradePlan) else "LEGACY"
-                        ),
-                        plan_hash=plan_hash, plan_version_id=active.plan_version_id,
-                        activation_revision=active.revision, activated_at=active.activated_at,
-                    ))
+                    dependencies.append(
+                        PlanReferenceDependency(
+                            symbol=plan.symbol,
+                            family=(
+                                "DAILY_CLOSE_PLAN"
+                                if isinstance(plan, DailyTradePlan)
+                                else "EXPLICIT_RULES"
+                                if isinstance(plan, ExplicitTradePlan)
+                                else "LEGACY"
+                            ),
+                            plan_hash=plan_hash,
+                            plan_version_id=active.plan_version_id,
+                            activation_revision=active.revision,
+                            activated_at=active.activated_at,
+                        )
+                    )
         semantics = (
             self._load_semantic_binding("STOCK")
-            if getattr(self, "_stock_semantics", None) is not None else None
+            if getattr(self, "_stock_semantics", None) is not None
+            else None
         )
         return ReferenceDependencyKey(
-            trade_date, tuple(sorted(dependencies, key=lambda item: item.symbol)),
+            trade_date,
+            tuple(sorted(dependencies, key=lambda item: item.symbol)),
             semantics.semantic_revision if semantics is not None else None,
         )
 
@@ -3643,6 +3800,7 @@ class ProductionMonitorPipeline:
                 symbols=symbols, states=self.evaluations.load_persisted_symbol_health(symbols)
             )
             self.restore_index_recoveries()
+        await self._recover_daily_closes(trade_date)
         if self._historical_reader is None:
             await self._recover_pending_close_batches(trade_date)
         else:
@@ -3700,7 +3858,8 @@ class ProductionMonitorPipeline:
             and version.plan_id == plan.plan_id and version.version == plan.version
             and version.plan_hash == plan_sha256(plan)
             and version.payload_json == dump_plan_json(plan)
-            and activation_is_eligible_on(plan.activation, observed_at.date())
+            and (activation_is_eligible_on(plan.activation, observed_at.date())
+                or _daily_risk_monitoring_required(work.daily.session, plan, observed_at))
         ):
             return None
         return (plan.plan_id, plan.version, version.id, version.plan_hash,
@@ -4003,10 +4162,26 @@ class ProductionMonitorPipeline:
             for symbol, reason in sorted(self._historical_blocked.items())
         )
 
+    async def _recover_daily_closes(self, startup_date: date) -> None:
+        for plan in self._persisted_active_plans():
+            if isinstance(plan, DailyTradePlan):
+                with self._work() as work:
+                    required = activation_is_eligible_on(
+                        plan.activation, startup_date
+                    ) or _daily_risk_monitoring_required(
+                        work.daily.session, plan, self._clock.now()
+                    )
+                if not required:
+                    continue
+                await self.daily_evaluations.run_target(
+                    plan=plan, evaluated_at=self._clock.now(), official_trade_date=None,
+                    minutes=(),
+                )
+
     async def _recover_pending_close_batches(self, startup_date: date) -> None:
         grouped: dict[date, list[TradePlan]] = {}
         for plan in self._persisted_active_plans():
-            if isinstance(plan, ExplicitTradePlan):
+            if isinstance(plan, (ExplicitTradePlan, DailyTradePlan)):
                 continue
             pending_date = self.evaluations.pending_close_date(plan.symbol)
             if pending_date is None:
@@ -4042,6 +4217,189 @@ class ProductionMonitorPipeline:
             lambda: self.provider.daily_bars(symbol, trade_date, trade_date),
             work_key=f"official:{symbol}:{trade_date}:{attempt}",
             priority=RequestPriority.MARKET_DEADLINE,
+        )
+
+    async def prepare_daily_inputs(self, plan, evaluated_at, official_trade_date, minutes):
+        """Real same-provider adapter; offline tests inject the SDK, not another runtime."""
+        blockers = []
+        observed = max(evaluated_at, self._clock.now())
+        with self._work() as work:
+            from trade_plan_monitor.state.daily_accounting import DailyAccounting
+
+            unsupported = DailyAccounting(work.daily).legacy_reason(plan.symbol)
+            if unsupported:
+                return DailyRuntimeInputs(evaluated_at=observed, official_trade_date=None,
+                    series=None, session_dates=(), suspended_dates=(), quote=None,
+                    data_blockers=(unsupported,))
+            days = work.references.list_trading_days(
+                plan.market,
+                observed.date() - timedelta(days=_DAILY_CALENDAR_MAX_DAYS),
+                observed.date() + timedelta(days=32),
+            )
+            session_dates = tuple(d.cal_date for d in days if d.is_open)
+            head = work.daily.get("evaluation-head-" + plan.symbol)
+            active = work.plans.get_active(plan.symbol)
+            daily_facts = work.daily.list(symbol=plan.symbol, kind="FACT")
+            usable_facts = tuple(
+                row["payload"]
+                for row in daily_facts
+                if active is not None
+                and row["payload"]["plan_version_id"] == active.plan_version_id
+                and datetime.fromisoformat(row["payload"]["available_at"]) <= observed
+                and datetime.fromisoformat(row["payload"]["verified_at"]) <= observed
+            )
+            suspended = tuple(
+                sorted(
+                    {
+                        date.fromisoformat(f["trade_date"])
+                        for f in usable_facts
+                        if f["kind"] == "FULL_SESSION_SUSPENSION" and f.get("verified") is True
+                    }
+                )
+            )
+        series = None
+        stored = None if head is None else head["payload"].get("daily_evidence")
+        if stored is not None:
+            series = DailySeries.model_validate(stored)
+        latest_completed = next((day for day in reversed(session_dates)
+            if datetime.combine(day, time(15), observed.tzinfo) <= observed), None)
+        if official_trade_date is None and latest_completed is not None and (
+            series is None or series.bars[-1].trade_date < latest_completed
+        ):
+            official_trade_date = latest_completed
+        if official_trade_date is not None:
+            try:
+                historical_sessions = tuple(
+                    day for day in session_dates if day <= official_trade_date
+                )
+                start = (
+                    historical_sessions[-_DAILY_HISTORY_LIMIT]
+                    if len(historical_sessions) >= _DAILY_HISTORY_LIMIT
+                    else historical_sessions[0] if historical_sessions
+                    else official_trade_date - timedelta(days=_DAILY_CALENDAR_MAX_DAYS)
+                )
+                conditions = [
+                    condition
+                    for rule in plan.ordinary_rules if isinstance(rule, DailyEnabledRule)
+                    for condition in (rule.price_structure, rule.volume_or_candle, rule.technical,
+                                      *rule.prerequisites,
+                                      *((rule.independent_signal.reset_condition,)
+                                        if isinstance(rule.independent_signal, DailyResetPolicy)
+                                        else ()))
+                ]
+                required = max(
+                    (required_daily_observations(c, plan.monitoring.macd_min_observations)
+                     for c in conditions), default=0,
+                )
+                if len(historical_sessions) < required:
+                    blockers.append("DAILY_WARMUP_SESSION_COVERAGE_INSUFFICIENT")
+                raw = tuple(
+                    await self._controller.execute(
+                        TushareOperation.DAILY_BARS,
+                        lambda: self.provider.historical_daily_bars(
+                            plan.symbol, start, official_trade_date
+                        ),
+                        work_key=f"daily-qfq-bars:{plan.symbol}:{official_trade_date}",
+                        priority=RequestPriority.MARKET_DEADLINE,
+                    )
+                )[-_DAILY_HISTORY_LIMIT:]
+                factors, receipt = await self._controller.execute(
+                    TushareOperation.DAILY_BARS,
+                    lambda: self.provider.daily_adjustment_factors(
+                        plan.symbol, start, observed.date()
+                    ),
+                    work_key=f"daily-qfq-factors:{plan.symbol}:{official_trade_date}",
+                    priority=RequestPriority.MARKET_DEADLINE,
+                )
+                observed = max(observed, receipt, self._clock.now())
+                series = admit_qfq_daily(
+                    raw_bars=raw,
+                    factors=factors,
+                    adjustment_as_of=observed.date(),
+                    quote_basis_factor=factors.get(observed.date()),
+                    provider="Tushare",
+                    session_dates=tuple(
+                        day for day in session_dates
+                        if raw and raw[0].trade_date <= day <= raw[-1].trade_date
+                    ),
+                    suspended_dates=tuple(
+                        day for day in suspended
+                        if raw and raw[0].trade_date <= day <= raw[-1].trade_date
+                    ),
+                    cutoff=observed,
+                )
+            except DailyAdmissionError as error:
+                blockers.append(error.code)
+                series = None
+            except Exception:
+                blockers.append("DAILY_QFQ_PROVIDER_UNAVAILABLE")
+                series = None
+        elif series is not None:
+            key = (plan.symbol, observed.date())
+            try:
+                cached = self._daily_basis_cache.get(key)
+                if cached is None:
+                    cached = await self._controller.execute(
+                        TushareOperation.DAILY_BARS,
+                        lambda: self.provider.daily_adjustment_factors(
+                            plan.symbol, series.adjustment_as_of, observed.date()
+                        ),
+                        work_key=f"daily-quote-basis:{plan.symbol}:{observed.date()}",
+                        priority=RequestPriority.MARKET_DEADLINE,
+                    )
+                    self._daily_basis_cache[key] = cached
+                factors, receipt = cached
+                observed = max(observed, receipt, self._clock.now())
+                if factors.get(observed.date()) is None or factors.get(
+                    observed.date()
+                ) != factors.get(series.adjustment_as_of):
+                    series = None
+                    blockers.append("CURRENT_QUOTE_BASIS_UNVERIFIED")
+            except Exception:
+                series = None
+                blockers.append("CURRENT_QUOTE_BASIS_UNVERIFIED")
+        else:
+            blockers.append("PRICE_BASIS_UNVERIFIED")
+        quote = None
+        trading_fact = next(
+            (
+                f
+                for f in usable_facts
+                if f["kind"] == "TRADABILITY"
+                and f.get("trade_date") == str(observed.date())
+                and f.get("verified") is True
+            ),
+            None,
+        )
+        if minutes:
+            latest = minutes[-1]
+            if (
+                latest.symbol == plan.symbol
+                and latest.bar_end.date() == observed.date()
+                and latest.received_at <= observed
+            ):
+                try:
+                    quote = DailyExecutionQuote(
+                        symbol=plan.symbol,
+                        price_fen=latest.close_fen,
+                        quote_at=latest.bar_end,
+                        available_at=latest.received_at,
+                        evaluated_at=observed,
+                        tradable=self.is_open_on(observed.date()) is True
+                        and observed.date() not in suspended,
+                        special_state_verified=trading_fact is not None,
+                        liquidity_available=latest.volume_shares > 0 and trading_fact is not None,
+                    )
+                except ValueError:
+                    blockers.append("EXECUTION_QUOTE_UNVERIFIED")
+        return DailyRuntimeInputs(
+            evaluated_at=observed,
+            official_trade_date=official_trade_date,
+            series=series,
+            session_dates=session_dates,
+            suspended_dates=suspended,
+            quote=quote,
+            data_blockers=tuple(blockers),
         )
 
     @staticmethod
@@ -4236,3 +4594,15 @@ class ProductionMonitorPipeline:
                 evaluated_at=observed_at,
                 close_attempt=deadline.close_attempt,
             )
+
+
+def _daily_risk_monitoring_required(session, plan, now):
+    """Only daily locked risk survives activation expiry; old schema policy is unchanged."""
+    if not isinstance(plan, DailyTradePlan):
+        return False
+    from trade_plan_monitor.state.daily_accounting import DailyAccounting
+    from trade_plan_monitor.state.daily_repository import DailyRepository
+
+    return DailyAccounting(
+        DailyRepository(session, clock=lambda: now, id_factory=lambda: "unused")
+    ).has_latched_risk(plan.symbol)

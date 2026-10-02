@@ -1503,6 +1503,7 @@ def test_plan_versions_are_paginated_and_details_revalidate_canonical_identity()
         "canActivate",
         "createdAt",
         "id",
+        "obsoleteReason",
         "planHash",
         "planId",
         "revision",
@@ -1510,8 +1511,10 @@ def test_plan_versions_are_paginated_and_details_revalidate_canonical_identity()
         "symbol",
         "version",
     }
+    assert page.json()["items"][0]["obsoleteReason"] is None
     assert page.json()["limit"] == 20
     assert detail.status_code == 200
+    assert detail.json()["obsoleteReason"] is None
     assert detail.json()["planJson"].startswith('{"activation"')
     _assert_error_envelope(missing, status=404, code="NOT_FOUND")
     assert service.calls == [

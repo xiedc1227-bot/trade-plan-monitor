@@ -4,6 +4,8 @@ import type {
   AlertPage,
   AlertView,
   ExplicitAlertView,
+  DailyAlertCenterView,
+  ObsoleteDailyAlertView,
   EvidenceFactView,
   NextStepView,
   PositionPrefillView,
@@ -19,7 +21,7 @@ import { resolveApiFetch } from "./context";
 
 type AlertListQuery = paths["/api/v1/alerts"]["get"]["parameters"]["query"];
 export type PublicAlertSignalType = Exclude<AlertPage["signalType"], null | undefined>;
-export type PublicAlertView = AlertView | ExplicitAlertView;
+export type PublicAlertView = AlertView | ExplicitAlertView | DailyAlertCenterView | ObsoleteDailyAlertView;
 
 export type AlertListRequest = AlertListQuery & {
   readonly acknowledged: boolean | null;
@@ -294,14 +296,70 @@ function matchesQuery(item: PublicAlertView, request: AlertListRequest): boolean
 }
 
 function isAlert(value: unknown): value is PublicAlertView {
-  return isLegacyAlert(value) || isExplicitAlert(value);
+  return isLegacyAlert(value) || isExplicitAlert(value) || isCurrentDailyAlert(value) || isObsoleteDailyAlert(value);
 }
 
 function isPublicSignal(value: PublicAlertSignalType): boolean {
+  if (value === "RISK_EXIT") return true;
   if (value === "BUY" || value === "SELL" || value === "RISK_ALERT") {
     return explicitSignals.has(value);
   }
   return actionableSignals.has(value);
+}
+
+export function isDailySimulationAlert(item: PublicAlertView): item is DailyAlertCenterView {
+  return "payloadSchemaVersion" in item && item.payloadSchemaVersion === "daily-simulation-alert-v1";
+}
+
+export function isObsoleteDailyReminder(item: PublicAlertView): item is ObsoleteDailyAlertView {
+  return "payloadSchemaVersion" in item && item.payloadSchemaVersion === "daily-plan-alert-v1";
+}
+
+const dailyIdentityKeys = ["acknowledgedAt", "createdAt", "currentActionable", "dedupKey", "evaluatedAt", "eventId", "messageText", "name",
+  "payloadSchemaVersion", "planHash", "planId", "planVersion", "revision", "sequence", "signalType", "symbol", "tradingDate"];
+
+function isDailyRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validDailyIdentity(value: Record<string, unknown>): boolean {
+  return hasKeys(value, dailyIdentityKeys.filter(key => key !== "acknowledgedAt")) &&
+    isUuid(value.eventId) && isPositiveInteger(value.sequence) && isSha256(value.dedupKey) &&
+    isBoundedText(value.planId, 128) && isPositiveInteger(value.planVersion) && isSha256(value.planHash) &&
+    isShareSymbol(value.symbol) && isBoundedText(value.name, 100) && isBoundedText(value.messageText, 16_384) &&
+    isCalendarDate(value.tradingDate) && isShanghaiDateTime(value.evaluatedAt) && isShanghaiDateTime(value.createdAt) &&
+    (value.signalType === "BUY" || value.signalType === "SELL" || value.signalType === "RISK_EXIT") &&
+    (value.acknowledgedAt === undefined || value.acknowledgedAt === null || isShanghaiDateTime(value.acknowledgedAt)) &&
+    value.revision === (value.acknowledgedAt === undefined || value.acknowledgedAt === null ? 0 : 1);
+}
+
+function isWholeQuantity(value: unknown): value is number {
+  return isIntegerBetween(value, 0, Number.MAX_SAFE_INTEGER) && value % 100 === 0;
+}
+
+function isObsoleteDailyAlert(value: unknown): value is ObsoleteDailyAlertView {
+  return isDailyRecord(value) && validDailyIdentity(value) &&
+    hasOnlyKeys(value, [...dailyIdentityKeys, "status", "reason"]) &&
+    value.payloadSchemaVersion === "daily-plan-alert-v1" && value.currentActionable === false &&
+    value.status === "UNSUPPORTED" && value.reason === "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED" &&
+    (value.acknowledgedAt === null || isShanghaiDateTime(value.acknowledgedAt));
+}
+
+function isCurrentDailyAlert(value: unknown): value is DailyAlertCenterView {
+  const fields = ["activationRevision", "causeId", "confirmedTradeDate", "evidence", "executionDate", "nextStep", "planVersionId",
+    "quantity", "reviewId", "riskScope", "severity", "simulatedQty"];
+  if (!isDailyRecord(value) || !validDailyIdentity(value) || !hasOnlyKeys(value, [...dailyIdentityKeys, ...fields]) || !hasKeys(value, fields) ||
+    value.payloadSchemaVersion !== "daily-simulation-alert-v1" || typeof value.currentActionable !== "boolean" ||
+    !isIntegerBetween(value.activationRevision, 1, MAX_SAFE_REVISION) || !isBoundedText(value.causeId, 128) ||
+    !isBoundedText(value.planVersionId, 128) || !isBoundedText(value.reviewId, 128) ||
+    !(value.confirmedTradeDate === null || isCalendarDate(value.confirmedTradeDate)) ||
+    !(value.executionDate === null || isCalendarDate(value.executionDate)) ||
+    !(value.quantity === null || isWholeQuantity(value.quantity)) || !isWholeQuantity(value.simulatedQty) ||
+    !(value.riskScope === null || isDailyRecord(value.riskScope)) ||
+    !Array.isArray(value.evidence) || value.evidence.length > 50 || !value.evidence.every(isDailyRecord)) return false;
+  if (value.signalType === "RISK_EXIT") return value.severity === "RISK" && value.nextStep === "REVIEW_RISK_EXIT";
+  return value.severity === "ACTION" && value.nextStep === "CONFIRM_SIMULATED_TRADE" && isBoardLot(value.quantity) &&
+    (value.simulatedQty === 0 || value.simulatedQty === value.quantity) && (!value.currentActionable || value.simulatedQty === 0);
 }
 
 function isLegacyAlert(value: unknown): value is AlertView {

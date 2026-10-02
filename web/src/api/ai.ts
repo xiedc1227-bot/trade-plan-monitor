@@ -210,6 +210,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       "assumptions",
       "completedAt",
       "diagnosticStatus",
+      "dailyMapping",
       "draftPlanJson",
       "evidence",
       "id",
@@ -226,6 +227,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       "validationIssues",
       "warnings",
     ]) ||
+    value.dailyMapping != null ||
     !isUuid(value.id) ||
     !isUuid(value.providerId) ||
     typeof value.status !== "string" ||
