@@ -1,6 +1,6 @@
 # Spec: executable-plan-extension (R08 / F06)
 
-> Canonical English; `SPEC-executable-plan-extension.zh-CN.md` is the equivalent Chinese review copy. Date: 2026-09-12. **R09–R11 are implemented for isolated trusted input; public schema-v3 save and review are available, while import and activation remain disabled pending R12.**
+> Canonical English; `SPEC-executable-plan-extension.zh-CN.md` is the equivalent Chinese review copy. Date: 2026-09-12. **R09–R12 are implemented: public Schema-v3 save, review and activation are available with exact current review binding. Import remains restricted to the existing legacy document boundary. This specification governs Schema3; Schema4 daily simulation uses SPEC-daily-plan.**
 
 ## E01. Scope and authority
 

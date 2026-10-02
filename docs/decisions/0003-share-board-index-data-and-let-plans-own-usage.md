@@ -6,7 +6,7 @@
 - Date: `2026-09-02`
 - Initiative: `market-index-context`
 - Modules: `index-identity`, `index-data`, `plan-index-conditions`, `monitor-index-view`, `backtest-index-data`, `backtest-index-view`
-- Approved design: [`PROPOSAL-market-index-context.md`](../proposals/PROPOSAL-market-index-context.md)
+- Approved design: [`PROPOSAL-market-index-context.md`](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/030075c4946bf34833a0155fde6b4deda3c79055/docs/proposals/PROPOSAL-market-index-context.md)
 
 ## Context
 

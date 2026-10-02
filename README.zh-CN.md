@@ -12,7 +12,7 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 基本面由用户在生成交易计划时审核，排除在日线监控之外。基本面与公告原文作为非监控背景保留展示。已知精确原文片段采用服务器范围排除；其他措辞可通过明确的原文片段范围标注交由人工审核。混合句保留技术剩余片段及实际参数路径。这种有限处理不能证明任意自然语言分类正确。未发布的旧三分支 Schema 4 草稿仍可读取，但必须重新提取和审核。现有 Schema 1/2/3、prompt v1–v6 和指数行为保持不变。
 
-详见[日线规范](docs/specifications/monitoring/SPEC-daily-plan.zh-CN.md)及[模拟清理任务](tasks/2026-10-02-daily-plan-simulation-cleanup.zh-CN.md)。[2026-10-01验证记录](docs/verification/2026-10-01-daily-plan.zh-CN.md)仅记录原范围，其全量数字不代表本次清理验收。新鲜独立审查已关闭全部实质问题，当前离线覆盖门禁已完成。[最终验证](docs/verification/2026-10-02-daily-simulation-cleanup.zh-CN.md)分别记录首次全量、严格纯测试修正、通过的最终复跑及未变容量证据。离线夹具不代表真实供应商认证或批准历史交易计划。
+详见[日线规格](docs/specifications/monitoring/SPEC-daily-plan.zh-CN.md)、[统一完成记录](tasks/daily-plan-todo.zh-CN.md)和[最终验证](docs/verification/2026-10-02-daily-simulation-cleanup.zh-CN.md)。当前离线覆盖门禁及独立审核已完成；报告分别记录首次全量、严格测试修正、最终复跑和未变化的容量证据。2026-10-01报告仅证明此前范围。离线夹具不认证当前实时行情，也不批准历史来源计划。
 
 ## 运行恢复修订
 
@@ -22,7 +22,7 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 ## 产品状态
 
-`T001`～`T059` 与 `BT001`～`BT050` 已实现并验收。安装式命令可在精确回环地址提供构建后的 Vue SPA、REST API 和 WebSocket 路由。当前实时生产证据已认证股票 profile 的 `SourceTimeLabel=END`，以及当前范围内四个板块指数 `000001.SH`、`399001.SZ`、`399006.SZ` 和 `000688.SH` 的 `SourceTimeLabel=END`。北证50（`899050.BJ`）仍是已知 identity，但为 `DEFERRED`：在没有北交所股票进入范围时，既不认证也不请求。WEBF05 使用惰性的真实监控组合：打开并迁移共用 monitor SQLite，暴露后端 `RuntimeHealthSnapshot`，并管理已提交事件流。只有必需的已认证 profile 缺失、过期、被篡改、端点/schema/范围不匹配，或以其他方式未就绪时，启动才会在任何密钥或供应商请求前诚实报告只读 `DEGRADED` 和 `nextPollAt=null`，且不创建调度运行任务。没有权威持久投影的总览和股票读取返回严格类型化的 HTTP `200` unavailable 联合；仍未组合的实时指数读取，以及真正的服务、存储、迁移、损坏及组合故障仍返回 `SERVICE_UNAVAILABLE`。不再使用通用生命周期占位组合，也不伪造空判断状态。`/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
+`T001`～`T059` 与 `BT001`～`BT050` 的历史发布候选已实现并验收。安装式命令在精确回环地址提供 Vue SPA、REST API 和 WebSocket。LPC历史证据观察到股票及四个范围内指数 `000001.SH`、`399001.SZ`、`399006.SZ`、`000688.SH` 的 `SourceTimeLabel=END`；这些观察不等于当前实时可用性。北证50（`899050.BJ`）保持已知 identity，未纳入交易范围时为 `DEFERRED`。WEBF05的持久监控组合保留共享SQLite和已提交事件流；当前正常入口遵循监控协议 `2`，分别呈现依赖可用性、恢复进展和逐计划资格，兼容数据源语义不因旧认证年龄门禁而失效。缺失权威持久投影时，旧版dashboard/stock端点仍返回类型化 HTTP `200` unavailable 联合；真实服务、存储、迁移、损坏及组合故障不能伪装成正常结果。不再使用通用生命周期占位组合，也不伪造空判断状态。`/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
 
 WEBF06 将 `/` 接到既有以后端为权威来源的总览快照：它展示股票判断和共用板块指数事实，并与计划专属指数进度分开；在快照存在前保持诚实的加载状态。它不增加浏览器交易规则或供应商请求。
 
@@ -39,7 +39,7 @@ WEBF13 在历史上完成生产路由与新建回测的验收缺口。曾经的�
 操作。直接凭证配置、独立股票/指数命令、可用开市窗口和证据格式
 详见[真实认证运维指南](docs/operations/live-certification.zh-CN.md)。
 
-本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；这些结论适用于该历史发布候选。可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。当前仓库级门禁和 LPC012 状态以[实时生产链路验收报告](docs/verification/live-production-chain-acceptance.zh-CN.md)为权威记录，不由这份历史 T059 证据断言。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
+本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；这些结论适用于该历史发布候选。可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。LPC012的历史门禁见[实时生产链路验收报告](docs/verification/live-production-chain-acceptance.zh-CN.md)；后续运行恢复及日线门禁见[当前文档索引](docs/README.zh-CN.md)，不由历史T059证据断言。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
 
 已批准的板块指数扩展现已在监控与回测中实现。`board-index-map-v1` 根据每个已校验的 A 股代码推导固定板块参考；相同指数和截止时间共用不可变数据快照，每个 Schema v2 计划只独立计算自身指数条件。界面把共用指数事实与计划条件结果分区展示，历史 Schema v1 计划和结果保持不变。
 

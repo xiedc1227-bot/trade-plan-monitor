@@ -1,6 +1,6 @@
 # 日线计划离线验证 — 2026-10-01
 
-> 2026-10-02范围已变更：用户授权删除日线券商订单/部分/未知跟踪，改为显式原子整手模拟。本文件记录此前范围，其完成/测试结论不批准新清理。请依据[当前清理契约/任务](../../tasks/2026-10-02-daily-plan-simulation-cleanup.zh-CN.md)及修订后的canonical规格继续。以下历史证据保留。
+> 2026-10-02范围已变更：用户授权删除日线券商订单/部分/未知跟踪，改为显式原子整手模拟。本文件记录此前范围，其完成/测试结论不批准新清理。请依据[当前清理契约/任务](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/030075c4946bf34833a0155fde6b4deda3c79055/tasks/2026-10-02-daily-plan-simulation-cleanup.zh-CN.md)及修订后的canonical规格继续。以下历史证据保留。
 
 英文规范为权威输入；本文是 `2026-10-01-daily-plan.md` 的中文审阅副本。[SPEC-daily-plan](../specifications/monitoring/SPEC-daily-plan.zh-CN.md)。[任务清单](../../tasks/daily-plan-todo.zh-CN.md)。
 

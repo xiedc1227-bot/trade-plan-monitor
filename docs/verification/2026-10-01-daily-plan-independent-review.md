@@ -1,6 +1,6 @@
 # Independent review: daily-plan
 
-> Scope changed2026-10-02: the user authorized removal of daily broker order/partial/unknown tracking in favor of explicit atomic whole-lot simulation. This document records the prior scope; its completion/test conclusions do not approve the new cleanup. Follow the [current cleanup contract/tasks](../../tasks/2026-10-02-daily-plan-simulation-cleanup.md) and revised canonical specification. Preserve the historical evidence below.
+> Scope changed2026-10-02: the user authorized removal of daily broker order/partial/unknown tracking in favor of explicit atomic whole-lot simulation. This document records the prior scope; its completion/test conclusions do not approve the new cleanup. Follow the [current cleanup contract/tasks](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/030075c4946bf34833a0155fde6b4deda3c79055/tasks/2026-10-02-daily-plan-simulation-cleanup.md) and revised canonical specification. Preserve the historical evidence below.
 
 Canonical English; paired user review copy: `2026-10-01-daily-plan-independent-review.zh-CN.md`.
 

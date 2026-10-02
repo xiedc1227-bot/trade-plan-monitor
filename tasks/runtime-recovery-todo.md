@@ -457,13 +457,13 @@ Current completion evidence: [original fourth-stage report](../docs/verification
 ## Integration and handoff
 
 - [x] RR020 — Enable the complete path and prove real process restart offline. Effort: `high`; fault interpretation/review: `xhigh`. Dependencies: C4. Complete only for approved D1–D8 / A01–A13; unapproved D9/A14 remains separate.
-  - Acceptance: A01–A14 across all target times; stop/kill/restart at commit and dispatch windows; migrations interrupted safely; no provider calls or real notifications.
+  - Acceptance: approved A01–A13 across all target times; stop/kill/restart at commit and dispatch windows; migrations interrupted safely; no provider calls or real notifications.
   - Files: `src/trade_plan_monitor/web/monitor_composition.py`, NEW `tests/integration/test_anytime_runtime_recovery.py`, `web/tests/e2e/production-restart.spec.ts`, `web/tests/e2e/active-plan-process-restart.spec.ts`, NEW `web/tests/e2e/runtime-recovery.spec.ts`.
   - Verify: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_anytime_runtime_recovery.py -q`; `npm --prefix web run test:e2e -- production-restart.spec.ts active-plan-process-restart.spec.ts runtime-recovery.spec.ts` with isolated test state.
 - [x] RR021 — Synchronize operations and verification evidence. Effort: `high`. Dependencies: RR020.
   - Acceptance: restart/first-time source validation/reconfiguration/rollback instructions are accurate; record only actually executed tests; English/Chinese match.
   - Files: `docs/operations/live-certification.md`, `docs/operations/live-certification.zh-CN.md`, NEW paired `docs/verification/runtime-recovery-acceptance.md` / `runtime-recovery-acceptance.zh-CN.md`.
-  - Verify: compare IDs/commands/thresholds/fields in both languages; trace every A01–A14 result to evidence.
+  - Verify: compare IDs/commands/thresholds/fields in both languages; trace every approved A01–A13 result to evidence; A14 remains separately unreviewed.
 - [x] RR022 — Run full offline gates and final adversarial review. Effort: `xhigh`. Dependencies: RR021.
   - Acceptance: all proposal section 7 gates pass, current unrelated changes preserved, no unresolved material finding, no secret or relaxed test in diff; list any live-only limits honestly.
   - Files: paired acceptance report and this paired task list (4 files); do not hide fixes in this review task, return them to a bounded implementation task.

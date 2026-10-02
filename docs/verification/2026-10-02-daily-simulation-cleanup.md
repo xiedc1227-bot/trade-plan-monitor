@@ -4,7 +4,7 @@ Canonical English; paired user review copy: `2026-10-02-daily-simulation-cleanup
 
 ## V01. Scope and authority
 
-The user explicitly authorized removal of the daily monitor's broker order execution tracking. Monitoring does not submit orders. A reminder does not change positions. A separate explicit simulation either applies the entire current authorized quantity or changes nothing. The current contract is [Daily simulation cleanup](../../tasks/2026-10-02-daily-plan-simulation-cleanup.md), with [SPEC-daily-plan](../specifications/monitoring/SPEC-daily-plan.md) DP-A01–DP-A20 retained.
+The user explicitly authorized removal of the daily monitor's broker order execution tracking. Monitoring does not submit orders. A reminder does not change positions. A separate explicit simulation either applies the entire current authorized quantity or changes nothing. The current contract is [Daily simulation cleanup](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/030075c4946bf34833a0155fde6b4deda3c79055/tasks/2026-10-02-daily-plan-simulation-cleanup.md), with [SPEC-daily-plan](../specifications/monitoring/SPEC-daily-plan.md) DP-A01–DP-A20 retained.
 
 The prior [2026-10-01 verification](2026-10-01-daily-plan.md) and [independent review](2026-10-01-daily-plan-independent-review.md) describe the superseded scope. Their 6065-pass result is historical evidence and is not a result for this cleanup.
 

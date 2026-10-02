@@ -2,6 +2,8 @@
 
 > Canonical English task list. The Chinese review copy is `todo.zh-CN.md`; IDs, files, commands, and acceptance criteria stay aligned.
 
+> Status: IDX001–IDX012 and WEBF13 complete. This table records historical acceptance scope; its42-path count and commands are not the current complete contract. See the [documentation index](../docs/README.md) for current daily and runtime contracts.
+
 ## Foundation
 
 - [x] `IDX001` — Implement closed board-index identity mapping.
@@ -62,7 +64,7 @@
 
 - [x] `IDX012` — Finish paired README/API/test report and run all offline gates.
   - Acceptance: bilingual parity, documented provider limitation, complete file/test/risk report, clean secret scan, all required gates green.
-  - Verify: full commands in `tasks/plan.md`, `git diff --check`, `git status --short`.
+  - Verify: full commands in [project README](../README.md), `git diff --check`, `git status --short`.
   - Files: `README.md`, `README.zh-CN.md`, `docs/README*`, paired verification report, `openapi.json`, generated TypeScript.
 
 ## WEBF13 Route and Journey Closure

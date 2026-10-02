@@ -1,6 +1,6 @@
 # Tasks: daily-plan
 
-Canonical English; paired copy: `daily-plan-todo.zh-CN.md`. Date:2026-10-02. Current scope is monitoring plus explicit whole-lot simulation. Prior2026-10-01 completion is historical; the affected rows below are now complete. [Specification](../docs/specifications/monitoring/SPEC-daily-plan.md), [plan](daily-plan-plan.md), [cleanup tasks](2026-10-02-daily-plan-simulation-cleanup.md). Stable DPT IDs remain; split mechanical generated changes separately.
+Canonical English; paired copy: `daily-plan-todo.zh-CN.md`. Status: implementation, independent review and publication complete on2026-10-02. This single record retains DPT, DSC and C1–C4 completion. The [specification](../docs/specifications/monitoring/SPEC-daily-plan.md) defines current behavior; [final verification](../docs/verification/2026-10-02-daily-simulation-cleanup.md) records executed gates.
 
 ## T01. Ordered implementation slices
 
@@ -32,7 +32,9 @@ Canonical English; paired copy: `daily-plan-todo.zh-CN.md`. Date:2026-10-02. Cur
 
 ## T03. Handoff and boundaries
 
-User authorization already covers removing the former daily-only report/order/partial/unknown/allocation tests and implementation, not shared legacy abilities or unrelated tests. Retain technical-risk PENDING, fundamental exclusions, T+1/CORE/max300, source fidelity and500/3033 recovery. No new migration framework, brokerage ledger, real-position sync, auto-trade, live/production data operation, commit/push/deploy. Exact current contract is D08/D09 plus DSC01–DSC06. Old development evidence stays preserved and clearly unsupported; it is not a migration project.
+The current daily chain is monitoring plus explicit whole-lot simulation. Reminders and acknowledgment do not mutate holdings; initialization and trades use fixed100-share units, with simulation inventory isolated from shared real/legacy holdings. Retain technical-risk `PENDING`, T+1, CORE protection, plan `max_qty`, source review and500/3033 recovery. Broker reports, partial/unknown orders, reservations and client-allocation APIs are absent. Fundamentals do not enter monitoring; new broad-market index logic is deferred, while existing Schema1/2/3 and index behavior remain. Obsolete development data is explicitly unsupported and never converted into simulated success.
+
+Implementation commit `a8ec8e6a2862fca275a8eac5bad0e768e86ce08c` and documentation commit `030075c4946bf34833a0155fde6b4deda3c79055` were pushed to GitHub. Former execution plans, pause/resume instructions and cleanup handoff are consolidated here; their historical text remains available at that documentation commit. No live-provider, production-database or deployment operation was performed in this task.
 
 ## T04. Retained earlier scope checklist
 
@@ -41,3 +43,16 @@ The2026-10-01 fundamental-scope revision is retained: exactly two technical bran
 ## T05. Current evidence checkpoint
 
 Implementation and DSC01–DSC06/DPT09/C4 are complete. Fresh Astra/high review closed C1–C7 after independent backend and actual frontend-parser rechecks. The [current verification](../docs/verification/2026-10-02-daily-simulation-cleanup.md) records the first full run’s outdated test expectation, its strict correction, the passing final non-capacity recheck, retained passing capacity evidence and final frontend gates. Historical6065 backend/828 frontend results and F1–F11 closure remain in [2026-10-01 verification](../docs/verification/2026-10-01-daily-plan.md) and [review](../docs/verification/2026-10-01-daily-plan-independent-review.md). New DP-A11/12/18/20 use whole-lot simulation evidence, not the removed40+60/UNKNOWN behavior. Overlapping counts are not added or presented as a single full green run.
+
+## T06. Consolidated cleanup task record
+
+| State / ID | Completed boundary |
+|---|---|
+| [x] DSC01 | Fixed whole-lot contract and v7 source treatment; broker-rule configuration removed. |
+| [x] DSC02 | Isolated simulation holdings and atomic trades; idempotency, T+1 and explicit obsolete-data rejection. |
+| [x] DSC03 | Ordinary signal and two technical risk branches; deduplication, transaction fences and recovery. |
+| [x] DSC04 | Minimal initialization/simulation APIs, generated contracts, review/activation and UI. |
+| [x] DSC05 | Offline backend, frontend, actual-browser and compatibility regression evidence. |
+| [x] DSC06 | Fresh-scope independent review, fixes/recheck and paired acceptance record. |
+
+Complete API fields, errors, storage and compatibility boundaries are maintained in `SPEC-daily-plan` D08/D09; acceptance criteria are DP-A01–DP-A20. This table does not create a second contract.

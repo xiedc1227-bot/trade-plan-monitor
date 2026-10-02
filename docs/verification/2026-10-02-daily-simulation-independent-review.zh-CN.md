@@ -6,7 +6,7 @@
 
 **最终独立结论：本次冻结改动的已审范围内无剩余实质问题；C1–C7 全部 CLOSED。** 首轮结论为 Request changes。下文保留每项原始反例；只有独立重读源码并定向验证后才关闭问题。协调员的独立验证门禁现已按 R05 的两轮覆盖证据满足；不表述为单次全量全绿。
 
-本次以[清理契约](../../tasks/2026-10-02-daily-plan-simulation-cleanup.zh-CN.md)和 [SPEC-daily-plan](../specifications/monitoring/SPEC-daily-plan.zh-CN.md)为准。审查日线券商执行跟踪是否真正删除，并替换为用户明确操作、原子提交、100股整数倍的完整模拟交易；同时检查技术风险、当前权限、库存隔离、旧数据诊断和共享旧能力的保留。[2026-10-01审查](2026-10-01-daily-plan-independent-review.zh-CN.md)仅为旧范围的历史证据，其中协调员运行的6065项测试不是本轮门禁。
+本次以[清理契约](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/030075c4946bf34833a0155fde6b4deda3c79055/tasks/2026-10-02-daily-plan-simulation-cleanup.zh-CN.md)和 [SPEC-daily-plan](../specifications/monitoring/SPEC-daily-plan.zh-CN.md)为准。审查日线券商执行跟踪是否真正删除，并替换为用户明确操作、原子提交、100股整数倍的完整模拟交易；同时检查技术风险、当前权限、库存隔离、旧数据诊断和共享旧能力的保留。[2026-10-01审查](2026-10-01-daily-plan-independent-review.zh-CN.md)仅为旧范围的历史证据，其中协调员运行的6065项测试不是本轮门禁。
 
 本审查员只读源码和测试。离线反例使用临时 SQLite 和假 SDK。未使用实时行情、AI、通知发送、生产数据库、提交、推送或部署。新的完整后端测试由协调员负责。
 

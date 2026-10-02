@@ -1,10 +1,10 @@
 # 规格：daily-plan
 
-英文版本为 canonical；本 `SPEC-daily-plan.zh-CN.md` 是语义等价的中文审阅副本。日期：2026-10-02。设计基线：`b2572b6`。用户已授权设计后实施；能力设计通过不等于批准内容不完整的实际计划。模块边界见[能力地图](../../architecture/CAPABILITY-MAP-daily-plan.zh-CN.md)。
+英文版本为 canonical；本 `SPEC-daily-plan.zh-CN.md` 是语义等价的中文审阅副本。日期：2026-10-02。设计基线：`b2572b6`。状态：监控与显式整手模拟已完成实现及当前离线验收；能力通过不等于批准内容不完整的实际计划。模块边界见[能力地图](../../architecture/CAPABILITY-MAP-daily-plan.zh-CN.md)。
 
 ## D01. 目标、证据与边界
 
-**2026-10-02 已授权范围纠正：** 本产品监测计划，并支持用户显式触发模拟交易，不跟踪券商委托或真实券商成交。本修订取代此前日线专用部分成交/订单/占额要求。[清理契约及任务](../../../tasks/2026-10-02-daily-plan-simulation-cleanup.zh-CN.md) 是当前实现交接；2026-10-01 报告保留为当时范围的历史证据。
+**2026-10-02 已授权范围纠正：** 本产品监测计划，并支持用户显式触发模拟交易，不跟踪券商委托或真实券商成交。本修订取代此前日线专用部分成交/订单/占额要求。[统一完成记录](../../../tasks/daily-plan-todo.zh-CN.md) 保存稳定DPT/DSC编号；2026-10-01 报告保留为当时范围的历史证据。
 
 实现完整、确定性的日线链路：自然语言原文 → 忠实部分候选 → 确定性校验 → 人工内容审核 → 不可变最终计划 → 绑定审核的显式启用 → 日线确认 → 下一时段执行提醒 → 用户显式确认 → 一次原子全量模拟交易。提醒、已读、刷新和调度回调绝不改变持仓，只有用户模拟命令改变持仓。不提交/撤销真实券商委托，不收集券商成交报告。
 
@@ -190,7 +190,7 @@ UI保留严重结构+量价恶化、可交易/停牌证据、现有来源/审核
 
 ## D13. 实现检查与待补内容
 
-采用Python3.14、既有严格/冻结Pydantic值、4空格和snake_case；Vue保持Composition API/TypeScript。风格示例：`capacity = plan.position.max_qty - inventory.total_qty`；提交单事务前验证完整模拟量，不静默缩量。源文件位于 `src/trade_plan_monitor/{domain,decision,market_data,state,runtime,ai,web}`；UI在 `web/src`；测试使用现有 `tests/unit`、`tests/integration`、`web/tests`。[任务计划](../../../tasks/daily-plan-plan.zh-CN.md)列出定向/全量命令。
+采用Python3.14、既有严格/冻结Pydantic值、4空格和snake_case；Vue保持Composition API/TypeScript。风格示例：`capacity = plan.position.max_qty - inventory.total_qty`；提交单事务前验证完整模拟量，不静默缩量。源文件位于 `src/trade_plan_monitor/{domain,decision,market_data,state,runtime,ai,web}`；UI在 `web/src`；测试使用现有 `tests/unit`、`tests/integration`、`web/tests`。常用验证命令见[项目README](../../../README.zh-CN.md)，实际执行命令和结果见[最终验证](../../verification/2026-10-02-daily-simulation-cleanup.zh-CN.md)。
 
 历史计划不能直接启用。仍待逐计划补充：普通结构/量价/技术的精确定义、39.67/41.96固定/动态性质、端点/等于规则、独立信号重置、已接受CORE划分、有效期、各风险分支CORE范围/保留目标、`suspension_confirmation_policy`及以上其他明确列出的缺失策略值。用户可给具体数值规则或限定范围的人工证据标准；系统不能替其选择交易意图。框架和审核UI可在缺这些值时先完成。实际QFQ数据/provider能力需有离线适配证明；实时数据无法提供时显示具体不可用状态，不声称技术监控已运行。本次不是实时provider认证。
 

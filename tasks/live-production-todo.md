@@ -2,6 +2,8 @@
 
 > Canonical English task list. The Chinese review copy is `live-production-todo.zh-CN.md`; IDs, commands, files, and acceptance criteria stay aligned.
 
+> Status: LPC001–LPC012 complete. Certification observations, validity windows and test counts are historical evidence. Current runtime recovery supersedes the old age gate; see the [documentation index](../docs/README.md).
+
 ## P0 Contract
 
 - [x] `LPC001` — Register the new capability map and non-overlapping `LPC` namespace.
@@ -58,5 +60,5 @@
   - Verify: production-composition pytest and installed loopback Chrome journey.
 - [x] `LPC012` — Complete bilingual acceptance report and all gates.
   - Acceptance: exact commands/results/files/risks recorded; all required offline gates and secret scan pass; live results are not overstated.
-  - Verify: commands in `tasks/live-production-plan.md`, parity audit, `git diff --check`, and `git status --short`.
+  - Verify: commands in [project README](../README.md), parity audit, `git diff --check`, and `git status --short`.
   - Evidence: the performance root cause was `EvaluationContext.current_bucket_minutes` scanning all day minutes for every evaluation. Profiling the first symbol recorded `833,504,828` calls, `35.57s` cumulative attribute time, and `7,493,472` `five_minute_bucket_end` calls. The repair reads the last five values directly from validated ordered complete five-minute buckets; the regression is old `105` calls versus new `<=2`. The exact capacity node passes as `1 passed, 1 warning in 1443.66s`, proving ten symbols each `<=120s` and the resource ceilings. A later 100,000-fill export tail failure was repaired without changing the `5 MiB/s` floor: the `(run_id, fill_id)` verification index removes SQLite's temporary sort and the same read snapshot no longer repeats an already-proven timestamp/domain check. The unchanged node then measured `7.485 MiB/s` minimum throughput, `299.645 MiB` database plus WAL, and `36,864` bytes export-memory growth. The final complete unexcluded repository gate passes as `2326 passed, 1 skipped, 1 warning in 2761.04s`; bilingual evidence, focused live-chain gates, browser E2E, static checks, and the secret scan are also green.

@@ -4,7 +4,7 @@
 
 ## V01. 范围与授权
 
-用户已明确授权删除日线监测中的券商订单执行跟踪。监测不会下单，提醒不会改变仓位。单独的显式模拟操作要么完成当前授权的整笔数量，要么不改变任何记录。当前契约为[日线模拟清理](../../tasks/2026-10-02-daily-plan-simulation-cleanup.zh-CN.md)，并保留 [SPEC-daily-plan](../specifications/monitoring/SPEC-daily-plan.zh-CN.md) 的 DP-A01–DP-A20。
+用户已明确授权删除日线监测中的券商订单执行跟踪。监测不会下单，提醒不会改变仓位。单独的显式模拟操作要么完成当前授权的整笔数量，要么不改变任何记录。当前契约为[日线模拟清理](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/030075c4946bf34833a0155fde6b4deda3c79055/tasks/2026-10-02-daily-plan-simulation-cleanup.zh-CN.md)，并保留 [SPEC-daily-plan](../specifications/monitoring/SPEC-daily-plan.zh-CN.md) 的 DP-A01–DP-A20。
 
 此前的 [2026-10-01 验证报告](2026-10-01-daily-plan.zh-CN.md)和[独立审查](2026-10-01-daily-plan-independent-review.zh-CN.md)记录的是已被替代的范围。6065 项通过仅作为历史证据，不是本次清理的结果。
 

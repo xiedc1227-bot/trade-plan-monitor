@@ -1,6 +1,6 @@
 # 规格：executable-plan-extension（R08 / F06）
 
-> `SPEC-executable-plan-extension.md` 是英文正式版；本文为语义等价的中文审阅副本。日期：2026-09-12。**R09–R11 已面向隔离可信输入实现；公开 Schema v3 保存与复核现已可用，而导入和启用在 R12 完成前仍关闭。**
+> `SPEC-executable-plan-extension.md` 是英文正式版；本文为语义等价的中文审阅副本。日期：2026-09-12。**R09–R12 已实现：公开 Schema v3 保存、复核及启用可用，启用绑定精确当前复核。导入仍限于既有旧版文档边界。本规格管理 Schema3；Schema4 日线模拟以 SPEC-daily-plan 为准。**
 
 ## E01. 范围与依据
 

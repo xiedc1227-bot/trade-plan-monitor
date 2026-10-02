@@ -2,6 +2,8 @@
 
 > 中文审阅任务清单。英文权威版为 `todo.md`；ID、文件、命令和验收标准必须一致。
 
+> 状态：IDX001–IDX012及WEBF13已完成。本表记录历史验收范围；42路径及当时命令不是当前全量契约。当前日线与运行协议见[文档索引](../docs/README.zh-CN.md)。
+
 ## 基础
 
 - [x] `IDX001`——实现封闭板块指数身份映射。
@@ -62,7 +64,7 @@
 
 - [x] `IDX012`——完成配对 README/API/测试报告并运行全部离线门禁。
   - 验收：双语一致、记录供应商限制、完整文件/测试/风险报告、密钥扫描干净、全部必需门禁通过。
-  - 验证：`tasks/plan.md` 中全部命令、`git diff --check`、`git status --short`。
+  - 验证：[项目README](../README.zh-CN.md) 中全部命令、`git diff --check`、`git status --short`。
   - 文件：`README.md`、`README.zh-CN.md`、`docs/README*`、配对验证报告、`openapi.json`、生成 TypeScript。
 
 ## WEBF13 路由与旅程收口

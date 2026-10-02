@@ -14,7 +14,7 @@ Daily ordinary instructions use an official completed close and one next-exchang
 
 Fundamentals are reviewed by the user when generating the trading plan and are excluded from daily monitoring. Original fundamental/announcement text stays visible as non-monitoring background. Known exact source fragments receive server-owned exclusions; other wording has an explicit source-span scope-selection action for human review. Mixed sentences retain their technical remainder and actual parameter paths. This finite treatment does not prove arbitrary natural-language classification. Incompatible unpublished three-branch Schema 4 drafts remain readable but require new extraction and review. Existing Schema 1/2/3, prompt v1–v6 and index behavior remain unchanged.
 
-See the [daily specification](docs/specifications/monitoring/SPEC-daily-plan.md) and [simulation cleanup tasks](tasks/2026-10-02-daily-plan-simulation-cleanup.md). The [2026-10-01 verification](docs/verification/2026-10-01-daily-plan.md) records the former scope only; its full-run numbers do not certify this cleanup. Fresh independent review closed all material findings; the current offline coverage gate is complete. The [final verification](docs/verification/2026-10-02-daily-simulation-cleanup.md) records the first full run, strict test-only correction, passing final recheck and unchanged capacity evidence separately. Offline fixtures do not certify live providers or approve the historical trading plan.
+See the [daily specification](docs/specifications/monitoring/SPEC-daily-plan.md), [consolidated completion record](tasks/daily-plan-todo.md) and [final verification](docs/verification/2026-10-02-daily-simulation-cleanup.md). Current offline coverage and independent review are complete; the report separately records the first full run, strict test correction, final recheck and unchanged capacity evidence. The2026-10-01 report proves only the former scope. Offline fixtures do not certify current live providers or approve the historical source plan.
 
 ## Runtime recovery revision
 
@@ -24,20 +24,7 @@ The product-status entries below retain the earlier T/WEBF implementation histor
 
 ## Product Status
 
-Tasks `T001` through `T059` and `BT001` through `BT050` are implemented and accepted. The packaged
-command can serve the built Vue SPA, REST API, and WebSocket routes on exact loopback. The current
-live-production evidence certifies the stock profile with `SourceTimeLabel=END` and the four
-in-scope board indexes `000001.SH`, `399001.SZ`, `399006.SZ`, and `000688.SH` with
-`SourceTimeLabel=END`. BSE 50 (`899050.BJ`) remains a known identity but is `DEFERRED`: it is neither
-certified nor requested while no BSE stocks are in scope. WEBF05 uses a lazy real monitoring
-composition: it opens and migrates the shared monitor SQLite, exposes backend
-`RuntimeHealthSnapshot`, and owns the committed event stream. Startup honestly reports read-only
-`DEGRADED` with `nextPollAt=null` before any token or provider request and creates no scheduler run
-task only when the required certified profile is missing, expired, tampered, endpoint/schema/scope
-mismatched, or otherwise not ready. Dashboard and symbol reads without an authoritative persisted projection
-return the strict typed HTTP `200` unavailable union; the still-uncomposed live-index read and
-genuine service, storage, migration, corruption, and composition faults remain
-`SERVICE_UNAVAILABLE`.
+Historical release candidates for `T001` through `T059` and `BT001` through `BT050` are implemented and accepted. The packaged command serves the Vue SPA, REST API and WebSocket on exact loopback. Historical LPC evidence observed `SourceTimeLabel=END` for stock and the four in-scope indexes `000001.SH`, `399001.SZ`, `399006.SZ` and `000688.SH`; those observations do not certify current live availability. BSE50 (`899050.BJ`) remains a known identity and `DEFERRED` while outside the trading scope. WEBF05 persistent monitoring composition retains the shared SQLite and committed event stream. The current normal entry uses monitor contract `2`, separating dependency availability, recovery progress and per-plan eligibility; compatible provider semantics do not expire under the former certification-age gate. Legacy dashboard/stock endpoints still return a typed HTTP `200` unavailable union when authoritative persisted projections are missing; genuine service, storage, migration, corruption and composition faults must not appear as normal results.
 No generic lifecycle placeholder or fabricated empty decision state is used. Its `/plans` workflow is usable: startup loads the
 project AI configuration once and injects one backend-authoritative persistent plan service over
 `data/monitor.sqlite3`. Plan save, query, JSON/YAML import, activation, and deactivation therefore
@@ -96,10 +83,10 @@ The local backtest implementation provides isolated `sync`, `verify`, `run`, `li
 commands, and its BT050 production-fake acceptance is complete.
 T059 completed final user acceptance on 2026-09-01, and C24 is complete at 4 of 4 for that release
 candidate.
-The optional AI live probe remains `NOT_RUN_UNAUTHORIZED`. The current repository-wide gate and
-LPC012 status are recorded authoritatively by
-[the live-production-chain acceptance report](docs/verification/live-production-chain-acceptance.md),
-not by this historical T059 evidence. See [the bilingual T059 evidence](docs/verification/release-acceptance.md).
+The optional AI live probe remains `NOT_RUN_UNAUTHORIZED`. Historical LPC012 gates are recorded in
+[the live-production-chain acceptance report](docs/verification/live-production-chain-acceptance.md).
+Later runtime-recovery and daily gates are linked from the [current documentation index](docs/README.md),
+not certified by historical T059 evidence. See [the bilingual T059 evidence](docs/verification/release-acceptance.md).
 Historical sync
 availability and the accepted visible-block T058 result do not imply current live Tushare
 readiness.

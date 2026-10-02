@@ -2,6 +2,8 @@
 
 > 中文审阅任务清单。英文权威版为 `live-production-todo.md`；ID、命令、文件和验收标准必须一致。
 
+> 状态：LPC001–LPC012已完成。认证观察、有效期及测试数量是当时证据；当前运行恢复替代旧年龄门禁，详见[文档索引](../docs/README.zh-CN.md)。
+
 ## P0 契约
 
 - [x] `LPC001`——登记新能力地图和不重叠的 `LPC` 命名空间。
@@ -58,5 +60,5 @@
   - 验证：生产组合 pytest 与安装式回环 Chrome 旅程。
 - [x] `LPC012`——完成双语验收报告与全部门禁。
   - 验收：记录精确命令/结果/文件/风险；全部必需离线门禁和密钥扫描通过；不夸大真实结果。
-  - 验证：`tasks/live-production-plan.md` 中命令、双语一致性审计、`git diff --check` 和 `git status --short`。
+  - 验证：[项目README](../README.zh-CN.md) 中命令、双语一致性审计、`git diff --check` 和 `git status --short`。
   - 证据：性能根因为 `EvaluationContext.current_bucket_minutes` 每次判断扫描全日分钟。首只股票的 profiling 记录 `833,504,828` 次调用、属性累计 `35.57s` 和 `7,493,472` 次 `five_minute_bucket_end` 调用。修复从已校验的有序完整五分钟桶直接读取末五条；回归为旧 `105` 次、新 `<=2`。精确容量节点以 `1 passed, 1 warning in 1443.66s` 通过，证明十只股票每只 `<=120s` 及资源上限。之后出现的 100,000 条 fill 导出尾部失败在不修改 `5 MiB/s` 下限的前提下修复：`(run_id, fill_id)` 校验索引消除 SQLite 临时排序，同一读取快照不再重复已经证明的时间戳/domain 检查。保持原门槛的节点随后测得最小吞吐 `7.485 MiB/s`、数据库加 WAL `299.645 MiB`、导出内存增量 `36,864` bytes。最终完整无排除仓库门禁以 `2326 passed, 1 skipped, 1 warning in 2761.04s` 通过；双语证据、live-chain 聚焦门禁、浏览器 E2E、静态检查和密钥扫描也全部为绿色。

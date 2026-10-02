@@ -1,6 +1,6 @@
 # R08: source mapping, implementation slices and review oracles
 
-Date: 2026-09-12. Canonical English; `R08-mapping.zh-CN.md` is the equivalent Chinese review copy. Baseline: `main/beff0410150813e64a242a3821a299090d963e9b`. **R08-A design complete; R09–R12 implementation pending.**
+Date: 2026-09-12. Canonical English; `R08-mapping.zh-CN.md` is the equivalent Chinese review copy. Baseline: `main/beff0410150813e64a242a3821a299090d963e9b`. **Historical R08 design and source mapping. R09–R12 were subsequently implemented; current Schema3 capability is recorded in SPEC-executable-plan-extension E10 and R13 acceptance/addendum. Slice descriptions below are not pending execution instructions.**
 
 ## M01. Immutable source and status vocabulary
 
@@ -173,4 +173,4 @@ Important coupling: current context requires official history and computes indic
 
 ## M09. R08 completion boundary
 
-R08 delivers bilingual design, exact mapping and implementation constraints. No v3 code, migration, real plan, holding or provider operation is performed. Missing source choices are faithfully represented as pending; no indispensable global business answer is required to finish this design. R09–R12 remain implementation work, R13 offline independent acceptance, and R14 separately authorized real evidence. Successor creation belongs exclusively to the coordinating task; this R08 task creates none.
+R08 delivers bilingual design, exact mapping and implementation constraints. No v3 code, migration, real plan, holding or provider operation is performed. Missing source choices are faithfully represented as pending; no indispensable global business answer is required to finish this design. At the R08 checkpoint, R09–R12 were implementation work, R13 was offline independent acceptance, and R14 was separately authorized real evidence. Those historical phases subsequently ran; consult the current specification and dated acceptance records rather than treating this original checkpoint as pending work.

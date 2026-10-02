@@ -6,7 +6,7 @@
 - 日期：`2026-09-02`
 - 项目：`market-index-context`
 - 模块：`index-identity`、`index-data`、`plan-index-conditions`、`monitor-index-view`、`backtest-index-data`、`backtest-index-view`
-- 已批准设计：[`PROPOSAL-market-index-context.zh-CN.md`](../proposals/PROPOSAL-market-index-context.zh-CN.md)
+- 已批准设计：[`PROPOSAL-market-index-context.zh-CN.md`](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/030075c4946bf34833a0155fde6b4deda3c79055/docs/proposals/PROPOSAL-market-index-context.zh-CN.md)
 
 ## 背景
 
