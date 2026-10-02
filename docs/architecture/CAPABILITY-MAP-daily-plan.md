@@ -1,0 +1,15 @@
+# Capability map: daily-plan
+
+Canonical English; `CAPABILITY-MAP-daily-plan.zh-CN.md` is the Chinese review copy. Date:2026-10-02. The user authorized the simulation-only cleanup; implementation follows this paired design without another approval request. No actual source plan is approved or activated.
+
+| Module ID | Responsibility and contract section | Depends on |
+|---|---|---|
+| `daily-plan-contract` | Unpublished Schema4 finite conditions, whole100-share simulation and compatibility boundaries; D01–D05 of [specification](../specifications/monitoring/SPEC-daily-plan.md). | Existing `plan-domain`, `market-data` |
+| `daily-plan-monitor` | Durable confirmation/window, ordinary/severe technical risk, reminders and user-triggered atomic simulated trades; isolated minimal daily simulated position/T+1; D06–D10. | `daily-plan-contract`, existing `strategy-state`, `monitor-runtime`, `notification-outbox` |
+| `daily-plan-review` | V7 faithful candidates, source mapping, human review/activation, technical/operational evidence and a separate explicit simulation action; D11–D13. | `daily-plan-contract`, `daily-plan-monitor`, existing `ai-plan-drafting`, `local-web` |
+
+Build order: `daily-plan-contract` → `daily-plan-monitor` → `daily-plan-review`. Stable module IDs are unchanged. Review can display an incomplete candidate, but activation support requires the full production chain. Existing generic daily records and unit of work host minimal simulation state; no new brokerage service, order entity or migration framework. Simulated trades never write shared real/legacy position tables. Interfaces belong to provider sections in the specification. [Plan](../../tasks/daily-plan-plan.md), [tasks](../../tasks/daily-plan-todo.md) and [cleanup handoff](../../tasks/2026-10-02-daily-plan-simulation-cleanup.md) define the current work.
+
+Delete this initiative's daily broker reports, external IDs, partial execution, PENDING/CANCELLED/UNKNOWN order tracking, reservations and client inventory allocations throughout API/domain/state/runtime/UI/tests. A label-only or hidden-form change is insufficient. Reminder delivery remains nonmutating; explicit eligible user simulation is one complete100-share-multiple transaction. Preserve deduplication, T+1, CORE protection, max quantity, distinct risk causes, official-close recovery and QFQ/calendar safeguards.
+
+The original `../docs/TradingAgents/reports/新提示词.txt` remains unchanged. Fundamentals/announcement review occurs only at plan generation and remains visible non-monitoring background; never return as a technical fact or execution blocker. Tradability/suspension remain operational. Index behavior, old Schema1/2/3, prompt v1–v6, ta-v1 and shared legacy inventory APIs remain unchanged. Unpublished Schema4/v7 may tighten in place; obsolete development evidence stays preserved and explicitly unsupported, never converted into simulated success. Use offline fixtures/temporary databases. No broker integration, automatic trading, live provider call, production database read/rewrite, commit, push or deployment. The2026-10-01 verification is historical and does not approve the new scope.
