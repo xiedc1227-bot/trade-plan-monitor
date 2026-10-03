@@ -1,10 +1,10 @@
-# 规格：source-treatment-review（R11 混合原文闭环）
-
-`SPEC-source-treatment-review.md` 为英文正式版；本文为等价中文副本。日期：2026-09-12。按授权修正 R08 C01/C02/C09/C10 与 E04/E07；参见 ADR 0006。
+# 规格：source-treatment-review
 
 ## S01. 目标与兼容性
 
-完成既有原文 → 部分草稿 → 当前内容复核流程，支持混合的交易、持仓和产品边界语句。`plan-extract-v1/v2/v3/v4` 输出图、模板和冻结摘要保持不变。新 API 保存使用 `plan-mapping-v2`，包含服务端推导的 `source_processing` 快照（`source-processing-v1`）。v4 提取仍返回 `plan-mapping-v1`；这是服务端复核扩展，不是赋予模型输出新的权限。历史 v1 复核快照保留原解释及证据哈希。
+[单一交易计划流程](SPEC-unified-plan.zh-CN.md) 管理当前 Schema 5 / `plan-extract-v8` 原文审核路径。完整原文范围、未解决语义、人工补充及准确原文/内容/修订绑定保持可见。基本面仅是生成时审核背景，不是运行或模拟阻断。原文定义的交易与纯提醒句必须保留独立语义；库存文字绝不初始化持仓。
+
+下文有限 `plan-mapping-v2`、`source-processing-v1` 和 `plan-review-evidence-v2` 处理用于冻结历史审核解码，不恢复提示词 v1–v7 或真实持仓写入接口。历史 v1 快照/哈希保持原有解释；准确的存储推导必须可验证。
 
 ## S02. 有限处理契约
 
@@ -14,13 +14,11 @@
 
 每个处理记录含精确区段、类型、受支持契约 ID 和确定性 treatment ID。保存/读取/复核时，持久化列表必须等于服务端重新推导的结果。任意 ID、错误数量/symbol/可卖语义、否定、附加条件、不完整子句对、缺失记录和篡改区段都会拒绝或保留必需未解析问题。完整匹配防止交易条件夹带在持仓/产品子句中。包含保留语族 `当前持仓`、`均为测试日前`、`提醒及确认收到提醒` 或 `未登记成交时` 的无法识别子句，即使被提供商局部映射到计划字段，仍保持 `UNRESOLVED_MIXED_SOURCE`。这是有限语法，不是通用中文语义分类器。其余子句保留原有字段/结构映射和语义检查。没有 IGNORE 或通用 ACK 桶。
 
-## S03. 内容复核与运行时就绪
+## S03. 内容审核与独立库存
 
-原文数量为 `0..9007199254740991` 内的精确整数，不按整手取整；超限值保持未解析，不带着精度损失进入 Web 边界。该边界不豁免独立登记接口自己的规则。
+原文数量保持为 `0..9007199254740991` 内的精确整数，不取整，也不丢失 Web 精度。两种有限处理都要求 `CONFIRM_SOURCE_TREATMENT`，通过 `binding_path=source_processing.treatments[index]` 绑定准确服务端必需问题/快照。确认库存断言仅确认原文及其独立库存边界，不证明账本真实。
 
-两类记录均要求 `CONFIRM_SOURCE_TREATMENT`，通过 `binding_path=source_processing.treatments[index]` 绑定服务端必审问题及精确快照。对持仓，它确认提取出的声明及独立登记路径，**不确认账本真实完整**。可见指引要求选择 as-of 日期、登记/指定完整账本，再调用 `POST /api/v1/position-inventory-confirmations`。日期、激活、重复、冲突及成交量历史政策继续由人工明确选择。仅原文缺失选择时不得取得 reviewId。
-
-所有当前映射、处理记录和补充政策完成审核后，完整草稿取得有效 reviewId，内容 `canActivate=true`。公开激活接口仍受 R12 表单能力门禁拒绝。`executionReadiness=NOT_EVALUATED` 明确独立存在：消费者查询 `GET /api/v1/position-inventory?symbol=...&asOfTradeDate=...`；未独立确认时是 UNKNOWN/null，仅阻断依赖库存的 BUY/SELL。纯 RISK_ALERT 不要求库存。实际持仓变化不会让内容复核失效；运行时每次求值消费当前账本 revision/cutoff。登记、重试或新 key 再确认不得把同一期初余额重复计入。
+只有针对保存版本解决全部必需遗漏、绑定及受支持人工补充后，当前审核才能完成。提取、保存、审核和已读不启用计划，也不创建库存。启用必须明确操作并单独验证。当前模拟库存通过 `/api/v1/simulation-position-confirmations` 初始化，通过 `/api/v1/simulation-position-inventory` 查询，通过符合资格的 `/api/v1/simulated-trades` 命令变更。冻结真实持仓读取与研究记录保持分离。纯提醒规则不要求模拟库存权威。
 
 ## S04. 持久化、API 与身份
 
@@ -28,16 +26,6 @@
 
 V2 `REPLACED_BY_REVIEWED_CONTENT` 要求保存新的受支持版本，不能用作当前快照的已读确认。孤立补录不能消除未解析来源问题。提交的无效映射返回 422；存储证据损坏沿用不泄露内部信息的 500 `INTERNAL_ERROR`。来源映射确认仍是人工语义判断，并非自动证明任意原文就代表所提交的交易规则。
 
-## S05. 验收原文与验证
+## S05. 验收
 
-新 fixture 保存协调任务提供的逐字中文原文及换行。唯一替换是 `测试股票` → `003043.SZ`，在原文旁明确记录。此前 `_ORIGINAL_SOURCE` 是派生简写 fixture，不是这份逐字原文；保留其历史测试并更正描述。
-
-验证仅原文缺选择；当前内容审核完成与公开激活拒绝；独立库存 UNKNOWN → 已知100及幂等重试/再确认；未知库存下纯风险；提醒/已读不改变持仓；附加条件/否定/错值/遗漏子句/处理记录/伪造契约及旧复核。保留此前 69 项聚焦测试与冻结 golden 检查。使用 `.venv/Scripts/python.exe -m pytest` 执行新增目标文件及既有 AI、计划 API、持仓和显式运行时组，不跑长容量套件。对变更文件运行 `.venv/Scripts/python.exe -m ruff check`，并运行 `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`。
-
-## S06. 实施顺序与边界
-
-1. 类型化服务端处理和有限识别；聚焦对抗单元测试。
-2. 版本化问题/哈希、持久化/API 集成及精确完整原文验收。
-3. 相关兼容/运行时回归、生成 API 契约、双语报告与交接。
-
-遵循既有 Python 四空格/snake_case 和严格 Pydantic 边界模型。领域识别放在 `ai/`，传输放在 `web/`，持久化解决记录校验放在 `state/`；不增加依赖。仅使用合成数据与临时 SQLite。禁止真实 AI/行情/网络/通知/交易/生产数据、push、R12 任务或表单。只暂存本次修正，保留用户既有 hunk。
+保留准确 Unicode 范围、原文字面值、仅原文遗漏、混合支持/不支持句、否定/附加条件拒绝、伪造或缺失处理、孤立补充、陈旧哈希及未解决语义映射的确定性回归。人工审核不自动证明任意自然语言语义。当前正式审核/启用及库存 API 与冻结解码测试独立验证；提醒/已读保持持仓不变。使用临时 SQLite 与 HTTP mock transport，不调用真实供应商。最新已执行范围见[本地验收](../../verification/2026-10-03-unified-plan.zh-CN.md)。

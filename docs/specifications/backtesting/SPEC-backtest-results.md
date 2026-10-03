@@ -126,7 +126,3 @@ Cover staged invisibility, 1,000-row read-snapshot verification and short-writer
 ## Open Questions
 
 Destructive deletion of a completed run and server-side comparison exports remain deferred. Per-run JSON/CSV export, paginated details, and client-side comparison of explicitly selected summaries are sufficient for the first release.
-
-## Review Status
-
-The six-module capability map, bounded-retention direction, and this detailed specification were approved by the user on 2026-08-26. Compatibility clarifications for unverifiable legacy completed rows, application-owned pin idempotency, incremental export, and the 32 KiB publication gate were then added bilingually. On 2026-08-26, the user confirmed those corrections together with the single `Asia/Shanghai`/`+08:00` persistence/publication contract and the remaining corrected specification set. Section 15 of the bilingual implementation plan was approved on 2026-08-26. That approval authorizes only generating the bilingual `BT009`–`BT050` task list. The generated task list still requires separate explicit approval; migration, implementation, commit, push, dependency installation, and any network access remain unauthorized. Existing `BT007` storage/reporting logic is the baseline; completed-only new publication, public pagination, atomic job completion, pin API, and resource evidence remain open.

@@ -1,6 +1,6 @@
 # R13 requirements, scenarios and original findings
 
-Date: 2026-09-13. Baseline `fa316833e8c5d4b427acef4f8500d1e9714a2dd1` plus the protected working tree. Canonical English; paired Chinese review copy: `R13-matrix.zh-CN.md`. Overall verdict: **NOT PASSED**; see [report](../docs/verification/R13-business-acceptance.md).
+Date: 2026-09-13. Baseline `fa316833e8c5d4b427acef4f8500d1e9714a2dd1` plus the protected working tree. Canonical English; paired Chinese review copy: `R13-matrix.zh-CN.md`. Overall verdict: **NOT PASSED**; see [report](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/R13-business-acceptance.md).
 
 ## M01. Evidence levels and requirement matrix
 

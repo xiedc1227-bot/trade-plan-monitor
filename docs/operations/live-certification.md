@@ -17,29 +17,20 @@ permission does not replace the separately named “Index realtime minutes” pe
 
 ## Required Data Permissions
 
-The implementation calls exactly the following nine Tushare endpoints. The account audit on
-2026-09-08 used the configured token and the configured `https://api.quicksync.cn` endpoint; no
-credential value was printed or recorded.
+The implementation uses the following nine Tushare endpoints. Required permissions are function-specific; inspect current certified profiles and runtime evidence to determine actual account readiness. Never print or record credentials.
 
-| Official data/permission name | Endpoints used | Function dependency | Account status |
+| Official data/permission name | Endpoints used | Function dependency | Availability check |
 |---|---|---|---|
-| Trading calendar | `trade_cal` | Open-day validation for live monitoring and backtest synchronization | `READY` |
-| Daily price limits | `stk_limit` | Stock limit-up/limit-down state and backtest synchronization | `READY` |
-| A-share daily bars | `daily` | Official stock daily reference and backtest synchronization | `READY` |
-| Historical stock minutes | `stk_mins` | Historical stock-minute synchronization for backtests | `READY` (241 rows observed) |
-| A-share realtime minutes | `rt_min`, `rt_min_daily` | Live stock monitoring and current-day cumulative recovery | `READY` |
-| Index daily bars | `index_daily` | Official board-index daily reference | `READY` |
-| Historical index minutes | `idx_mins` | Historical warm-up for board-index monitoring | `READY` (49 five-minute rows observed) |
-| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring and turnover | `READY` for SSE Composite, Shenzhen Component, Shenzhen A-share, ChiNext, and STAR 50; BSE 50 is `DEFERRED` |
+| Trading calendar | `trade_cal` | Open-day validation for live monitoring and backtest synchronization | Current profile/runtime evidence |
+| Daily price limits | `stk_limit` | Stock limit-up/limit-down state and backtest synchronization | Current profile/runtime evidence |
+| A-share daily bars | `daily` | Official stock daily reference and backtest synchronization | Current profile/runtime evidence |
+| Historical stock minutes | `stk_mins` | Historical stock-minute synchronization for backtests | Current profile/runtime evidence |
+| A-share realtime minutes | `rt_min`, `rt_min_daily` | Live stock monitoring and current-day cumulative recovery | Current profile/runtime evidence |
+| Index daily bars | `index_daily` | Official board-index daily reference | Current profile/runtime evidence |
+| Historical index minutes | `idx_mins` | Historical warm-up for board-index monitoring | Current profile/runtime evidence |
+| Index realtime minutes | `rt_idx_min_daily` | Current-day board-index monitoring and turnover | Current profile/runtime evidence |
 
-No previously certified permission remains blocked after Index realtime minutes was activated and probed on
-2026-09-08. The separately authorized 2026-09-11 renewal also certified the `399107.SZ`
-turnover benchmark. Enabling A-share realtime minutes alone would not have granted it. `rt_min_daily` is
-included with A-share realtime-minute access; the implementation does not need a separate
-permission for that endpoint. The 2026-09-08 probe historically observed no BSE 50 realtime rows;
-the current product scope now defers BSE 50 entirely. Future certification profiles retain its
-known identity as `DEFERRED` and call none of `idx_mins`, `rt_idx_min_daily`, or `index_daily` for
-`899050.BJ`.
+A-share realtime minutes and Index realtime minutes are separate permissions. `rt_min_daily` belongs to A-share realtime-minute access. `899050.BJ` remains `DEFERRED`; no `idx_mins`, `rt_idx_min_daily` or `index_daily` request is made for it while BSE stocks remain outside scope.
 
 The current code does not call auction, realtime daily-bar, ETF, industry-classification realtime,
 Level-2, or tick-by-tick endpoints. Those permissions are not required for the current feature set.
@@ -100,26 +91,6 @@ Stock certification is intentionally unavailable in the morning. A continuous ea
 sequence beginning at `09:30` cannot distinguish start-labelled minutes from an independent
 `09:30` opening snapshot followed by end-labelled minutes. The afternoon window can prove the
 `11:30` and `13:01` boundaries; without both boundaries the stock label remains `UNVERIFIED`.
-
-## Current Renewal Evidence
-
-The 2026-09-11 board-index renewal observed at `10:20:44.522358+08` certified
-`000001.SH`, `399001.SZ`, `399107.SZ`, `399006.SZ`, and `000688.SH` as `READY` with
-`SourceTimeLabel=END`, valid through `2026-09-18 10:20:44.522358+08`. `899050.BJ` remains
-`DEFERRED` and made no provider request.
-
-The earlier 2026-09-08 stock `START` conclusion was an insufficient early-market inference. On
-2026-09-09, two 13:10 attempts and bounded retries correctly reported
-`current_day_minutes=ERROR/UNVERIFIED` under the old label logic. Each redacted diagnostic had
-139 rows from `09:30` through `13:18`, included `11:30`, and excluded `13:00`. The strict corrected
-stock run observed at `14:48:40.405317+08` certified all five capabilities `READY` with
-`SourceTimeLabel=END`, valid through `2026-09-16 14:48:40.405317+08`; it proves a standalone
-`09:30` snapshot followed by end-labeled minutes.
-
-Both renewals used `config/app.yaml`. The configured `connect_ip` continued to work without a
-temporary per-run proxy change. A 2026-09-09 13:27 installed-production attempt was rejected
-before network because its scheduled-close window was ineligible; it is not production-chain
-acceptance evidence.
 
 ## Evidence and Failure Semantics
 

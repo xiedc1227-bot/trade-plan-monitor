@@ -12,17 +12,17 @@
 
 | 业务步骤 | 当前状态 | 完成证据 / RR 对应 |
 |---|---|---|
-| 1. 历史状态恢复 | 已在批准的有界离线范围完成：原三进程遗漏收盘接续，结合按因果顺序的历史证据、持仓、启用、崩溃及最终回归检查。损坏/不完整/超预算证明仍阻断受影响计划，五天准入仍前置 | [最终证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；历史报告保留限定范围。RR007–RR010、C2、A13。不声称无限历史或真实行情源验收 |
-| 2. 提醒安全 | 离线完成：原子初始 HOLD，重新读取已提交身份/风险/持仓/目标/恢复屏障后准入，抑制过时提醒，相同且适用退出仅保留最新，保留不确定发送。两类计划及提交/发送终止矩阵仍覆盖 | [最终证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；仅临时 SQLite 与模拟渠道。RR011–RR013 |
-| 3. 实际启停集成 | 已在批准离线范围完成：八 scope 权限恢复、独立重试时钟、同代次有界修复、配置/身份围栏、所有者存活及排空/终止/重启矩阵。最终完整回归保留原阈值 | [S3 证据](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)及[最终证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；RR004–RR006、RR010、RR014、C1/C3。安全停止 → 人工编辑 → 新进程 |
-| 4a. 状态接口和页面（原第四步） | 正常生产入口已接通监控协议 `2` 和匹配安装资源。冻结 `d4db557b` 上最终 Chrome 全套 18 个规格共 43 项全部通过，单 worker、零 retries、9.0 分钟 | 保留历史 [S4 证据](../docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)；[最终集成证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md) 替代其旧默认版本描述。RR002、RR015–RR019、C4 |
-| 4b. 重启/故障验收及文档（原第四步） | 离线完成：正常入口时段/进程矩阵、原崩溃/迁移/失效检查、第 7 节全部门禁（含重型回测验收）、源码/证据审查及成对文档 | 已批准 D1–D8 / A01–A13。[最终报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；RR020–RR022。D9/A14 API 未批准，C5 用户证据审核及部署保持独立 |
+| 1. 历史状态恢复 | 已在批准的有界离线范围完成：原三进程遗漏收盘接续，结合按因果顺序的历史证据、持仓、启用、崩溃及最终回归检查。损坏/不完整/超预算证明仍阻断受影响计划，五天准入仍前置 | [最终证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；历史报告保留限定范围。RR007–RR010、C2、A13。不声称无限历史或真实行情源验收 |
+| 2. 提醒安全 | 离线完成：原子初始 HOLD，重新读取已提交身份/风险/持仓/目标/恢复屏障后准入，抑制过时提醒，相同且适用退出仅保留最新，保留不确定发送。两类计划及提交/发送终止矩阵仍覆盖 | [最终证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；仅临时 SQLite 与模拟渠道。RR011–RR013 |
+| 3. 实际启停集成 | 已在批准离线范围完成：八 scope 权限恢复、独立重试时钟、同代次有界修复、配置/身份围栏、所有者存活及排空/终止/重启矩阵。最终完整回归保留原阈值 | [S3 证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)及[最终证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；RR004–RR006、RR010、RR014、C1/C3。安全停止 → 人工编辑 → 新进程 |
+| 4a. 状态接口和页面（原第四步） | 正常生产入口已接通监控协议 `2` 和匹配安装资源。冻结 `d4db557b` 上最终 Chrome 全套 18 个规格共 43 项全部通过，单 worker、零 retries、9.0 分钟 | 保留历史 [S4 证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)；[最终集成证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md) 替代其旧默认版本描述。RR002、RR015–RR019、C4 |
+| 4b. 重启/故障验收及文档（原第四步） | 离线完成：正常入口时段/进程矩阵、原崩溃/迁移/失效检查、第 7 节全部门禁（含重型回测验收）、源码/证据审查及成对文档 | 已批准 D1–D8 / A01–A13。[最终报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；RR020–RR022。D9/A14 API 未批准，C5 用户证据审核及部署保持独立 |
 
-阶段顺序仍为 1 → 2 → 3 → 4；4a、4b 均归于第四步。离线组装/重启测试基础提前到成果 1，依赖重试测试随成果 3 执行，不等到最终验收才首次运行。RR002 评审通过后，可并行准备独立的状态/客户端工作，但不能据此宣称完成。原任务依赖仍是验收/默认启用门禁，不禁止提前测试注入式集成。当前最终集成记录为[原第四步收尾报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)，仅在记录了实际证据的项目上替代历史待办状态。D9/A14 仍为 API 未批准的独立后续工作。
+阶段顺序仍为 1 → 2 → 3 → 4；4a、4b 均归于第四步。离线组装/重启测试基础提前到成果 1，依赖重试测试随成果 3 执行，不等到最终验收才首次运行。RR002 评审通过后，可并行准备独立的状态/客户端工作，但不能据此宣称完成。原任务依赖仍是验收/默认启用门禁，不禁止提前测试注入式集成。当前最终集成记录为[原第四步收尾报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)，仅在记录了实际证据的项目上替代历史待办状态。D9/A14 仍为 API 未批准的独立后续工作。
 
 ### 业务第 3 步离线测试顺序 — 2026-09-24
 
-下表保留计划验收顺序与命令。截至 2026-09-27，S3-01–S3-09 已在批准的离线生命周期范围内完成，依据为[完成索引与故障矩阵](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)、固定 HEAD 全量回归及独立源码/矩阵批准；最终四份文档一致性已通过。缺失行为采用失败先行测试、临时 SQLite 及模拟行情源/渠道边界。已批准的 `INDEX_MINUTES` 决策仍为 D4/D6；真实端点认证尚未执行。C1/C3 依据组合门禁关闭，不凭单个切片，也不代表第四步页面/协议或第五步发布验收完成。
+下表保留计划验收顺序与命令。截至 2026-09-27，S3-01–S3-09 已在批准的离线生命周期范围内完成，依据为[完成索引与故障矩阵](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)、固定 HEAD 全量回归及独立源码/矩阵批准；最终四份文档一致性已通过。缺失行为采用失败先行测试、临时 SQLite 及模拟行情源/渠道边界。已批准的 `INDEX_MINUTES` 决策仍为 D4/D6；真实端点认证尚未执行。C1/C3 依据组合门禁关闭，不凭单个切片，也不代表第四步页面/协议或第五步发布验收完成。
 
 | 顺序 / 门槛 | 前置条件 | 最小验收 | 专项与相邻回归 |
 |---|---|---|---|
@@ -159,9 +159,9 @@ DAILY_LIMITS 配对记录中的 **138 项相关离线测试通过**、全量 Ruf
 
 ### 业务第 3 步在 e35f344 的最终离线门禁 — 同步于 2026-09-27
 
-UPD-S5 已在 `53b731271b4b3a10a8558da993ecd000f03c1d58` 完成：独立 startup/permission 时钟、30/60/120/300 秒 startup 下限、不开放业务准入的八 scope DEGRADED 维护、仅相关 operation 可延长下限，以及 source drift 后等待显式 stop。实际调度权限 stop/drain 现覆盖 RUNNING 和 DEGRADED。最终作者/独立组合专项分别通过 **82 tests, 1 warning in 16.64s / 16.52s**。证据：[DEGRADED](../docs/verification/2026-09-27-c1-permission-degraded.zh-CN.md) 及[权限停机](../docs/verification/2026-09-27-s3-scheduled-permission-shutdown.zh-CN.md)。
+UPD-S5 已在 `53b731271b4b3a10a8558da993ecd000f03c1d58` 完成：独立 startup/permission 时钟、30/60/120/300 秒 startup 下限、不开放业务准入的八 scope DEGRADED 维护、仅相关 operation 可延长下限，以及 source drift 后等待显式 stop。实际调度权限 stop/drain 现覆盖 RUNNING 和 DEGRADED。最终作者/独立组合专项分别通过 **82 tests, 1 warning in 16.64s / 16.52s**。证据：[DEGRADED](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-27-c1-permission-degraded.zh-CN.md) 及[权限停机](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-27-s3-scheduled-permission-shutdown.zh-CN.md)。
 
-随后 `53b7312` 全量运行失败：**16 failed, 5695 passed, 1 skipped, 4 deselected, 1 warning in 1087.48s**。经评审的仅测试夹具校正已提交为 `2dc2919`（24 用例）和 `e35f344`（41 用例）；作者和独立结果保留于[最终门禁报告](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)。这些校正不含生产源码变更或降低业务断言。历史失败汇总仍保留为失败证据。
+随后 `53b7312` 全量运行失败：**16 failed, 5695 passed, 1 skipped, 4 deselected, 1 warning in 1087.48s**。经评审的仅测试夹具校正已提交为 `2dc2919`（24 用例）和 `e35f344`（41 用例）；作者和独立结果保留于[最终门禁报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)。这些校正不含生产源码变更或降低业务断言。历史失败汇总仍保留为失败证据。
 
 协调者在 `e35f3442b874d0766229b5a511fba38e89b02fed` 冻结源码/测试；收集报告 **5712/5716 tests, 4 deselected, 2.12s**。完整 S3-09 回归通过：**5711 passed, 1 skipped, 4 deselected, 1 warning in 1074.18s (17:54)**，exit code 0。全量 Ruff 和 diff 检查在运行前后均通过；运行后 `git diff --name-only -- src tests` 为空，HEAD 不变。运行期间仅这四份文档路径改变；后续仅文档提交并非被测源码/测试 HEAD。Astra 已批准源码/矩阵及业务第三步/C1/C3 限定关闭，无 P1/P2；最终四份文档一致性为 **PASSED**。Windows/POSIX skip、四项 live deselection、S3-09 重型回测排除及既有 Starlette/httpx warning 均保留于报告。C2、旧 RR 勾选项、第四步/C4 和第五步/C5 保持不变；专项保持 IN PROGRESS。未执行真实服务、真实通知、用户数据库迁移、推送或部署。
 
@@ -229,7 +229,7 @@ UPD-S5 已在 `53b731271b4b3a10a8558da993ecd000f03c1d58` 完成：独立 startup
 
 ### 五天范围修订 — 2026-09-23
 
-- [x] **V1d — 完成批准 D8/A13 离线实现。** 精确 120 小时准入、持久 30 秒合法所有者心跳、幂等全计划作废、缺心跳预览/指纹/独立确认、持仓/历史保留、作废/发送抑制及回滚/终止/重启测试均通过最终完整门禁。损坏/未来存活记录保持阻断并调查。无法分类旧提醒保留脱敏审计、不编造回执；清理失败记录 `ALERT_SWEEP_FAILED`、保留游标并重试，不停止存活记录。旧额外提醒复核流程/Web 维护状态建议不属于已批准 D8/A13 或 RS04 契约，未实现，也不加入本次改造。[证据与限制](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。未对用户数据库执行批量作废。
+- [x] **V1d — 完成批准 D8/A13 离线实现。** 精确 120 小时准入、持久 30 秒合法所有者心跳、幂等全计划作废、缺心跳预览/指纹/独立确认、持仓/历史保留、作废/发送抑制及回滚/终止/重启测试均通过最终完整门禁。损坏/未来存活记录保持阻断并调查。无法分类旧提醒保留脱敏审计、不编造回执；清理失败记录 `ALERT_SWEEP_FAILED`、保留游标并重试，不停止存活记录。旧额外提醒复核流程/Web 维护状态建议不属于已批准 D8/A13 或 RS04 契约，未实现，也不加入本次改造。[证据与限制](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。未对用户数据库执行批量作废。
 - [ ] **V2a — 评审 D9/A14 提醒页操作契约。** 保持风险与卖出信号独立；区分确认已读、未卖出及登记实际卖出数量。复用带幂等和审计的持仓扣减边界，再测试过时提醒、部分卖出及重复确认。五天准入决策后实现，不改变评估规则。
 
 ### 已完成的限定成果：一次可证明的遗漏收盘
@@ -342,7 +342,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ## 规格门禁
 
-当前完成证据：[原第四步收尾报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。以下 RR 勾选仅指已批准 D1–D8 / A01–A13 的离线交付；原 A14 验收文字保留为尚未批准 D9 API 的后续事项。此前带日期的待办状态描述当时检查点。C5 仍为用户证据审核，不是尚未完成的实现。
+当前完成证据：[原第四步收尾报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。以下 RR 勾选仅指已批准 D1–D8 / A01–A13 的离线交付；原 A14 验收文字保留为尚未批准 D9 API 的后续事项。此前带日期的待办状态描述当时检查点。C5 仍为用户证据审核，不是尚未完成的实现。
 
 
 - [x] RR001 — 确定语义和恢复规格。强度：`xhigh`。依赖：提案/职责图批准。
@@ -356,7 +356,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ### 检查点 C0 — 契约已批准
 
-- [x] 已按批准 D1–D8 / A01–A13 契约和既有独立设计/源码批准完成 RR001–RR002 评审，并核对双语一致与最终集成证据。不推断 D9/A14 已获批准。[最终证据](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。
+- [x] 已按批准 D1–D8 / A01–A13 契约和既有独立设计/源码批准完成 RR001–RR002 评审，并核对双语一致与最终集成证据。不推断 D9/A14 已获批准。[最终证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。
 
 ## 行情源与恢复基础
 
@@ -379,7 +379,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ### 检查点 C1 — 行情源恢复
 
-- [x] A01、A02、A04、A05 在批准的第三步离线范围内通过；串行请求/冷却上限不变；迁移和新记录完整性已由 `xhigh` 评审。[最终证据](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)；源码/矩阵关闭获批，最终四份文档一致性已通过。
+- [x] A01、A02、A04、A05 在批准的第三步离线范围内通过；串行请求/冷却上限不变；迁移和新记录完整性已由 `xhigh` 评审。[最终证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)；源码/矩阵关闭获批，最终四份文档一致性已通过。
 
 ## 交易时段与业务状态恢复
 
@@ -402,7 +402,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ### 检查点 C2 — 恢复目标正确
 
-- [x] A03、A06、A07、A09、A10 在批准的有界离线范围通过。既有独立评审、实际按因果顺序的收盘/持仓/启用证据及最终完整回归已汇总至[最终报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；未知或超预算证明仍阻断。
+- [x] A03、A06、A07、A09、A10 在批准的有界离线范围通过。既有独立评审、实际按因果顺序的收盘/持仓/启用证据及最终完整回归已汇总至[最终报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；未知或超预算证明仍阻断。
 
 ## 通知安全与生命周期
 
@@ -425,7 +425,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ### 检查点 C3 — 安全自主运行
 
-- [x] A04、A08–A11 在批准的第三步离线范围内通过；提交/崩溃/发送窗口、代次变化和物理工作线程清理已获 `xhigh` 评审批准。[最终证据](../docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)；最终四份文档一致性已通过。保留该历史 S3 批准；当前 C2/C4 及原第四步完成证据见[最终报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。C5 保持用户证据审核。
+- [x] A04、A08–A11 在批准的第三步离线范围内通过；提交/崩溃/发送窗口、代次变化和物理工作线程清理已获 `xhigh` 评审批准。[最终证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-27-s3-final-offline-gate.zh-CN.md)；最终四份文档一致性已通过。保留该历史 S3 批准；当前 C2/C4 及原第四步完成证据见[最终报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。C5 保持用户证据审核。
 
 ## 状态与用户可见恢复
 
@@ -452,7 +452,7 @@ RR009 的下一增量在自行管理的单个 SQLite 快照内读取一个批次
 
 ### 检查点 C4 — 端到端状态契约
 
-- [x] A06、A11、A12 及类型/契约门禁在批准的第四步离线范围通过；`xhigh` 源码、真实 Chrome 及双语证据评审批准。冻结 HEAD `0f1df66` 的最终全量回归通过。[最终证据](../docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)。保留该历史 S4 批准；RR020 及正常生产默认路径现已连同原第四步门禁完成，见[最终报告](../docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。C5 保持用户证据审核。
+- [x] A06、A11、A12 及类型/契约门禁在批准的第四步离线范围通过；`xhigh` 源码、真实 Chrome 及双语证据评审批准。冻结 HEAD `0f1df66` 的最终全量回归通过。[最终证据](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-s4-offline-status-gate.zh-CN.md)。保留该历史 S4 批准；RR020 及正常生产默认路径现已连同原第四步门禁完成，见[最终报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。C5 保持用户证据审核。
 
 ## 集成与交付
 

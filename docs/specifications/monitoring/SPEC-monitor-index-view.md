@@ -104,7 +104,3 @@ Route views remain composition surfaces. Readonly generated types flow down thro
 - Ask first: add an endpoint/field/event, browser store, chart calculation, or new display conclusion.
 - Never: let Vue map symbols, compute indicators/conditions, infer trade effects, hide failed indices, or expose secrets.
 - The user can trace displayed plan impact to an exact path and snapshot while a plan with no index leaf remains behaviorally unchanged.
-
-## Review Status
-
-Approved for implementation and offline browser/API verification on `2026-09-02`. WEBF11 extends that offline boundary for this session and reuses T039/T043/T044 without changing the API contract; WEBF12 completes the offline dashboard/detail presentation boundary without changing the API contract. Real provider calls remain unauthorized.

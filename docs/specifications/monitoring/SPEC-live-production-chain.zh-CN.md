@@ -6,7 +6,7 @@
 
 让安装式本地 Web 应用如实接通生产监控 runtime：类型化正常投影未就绪、可跨重启的持久投影、经认证的股票与板块指数获取、每个 deadline 单批次判断，以及绝不根据传输失败推断领域 readiness 的浏览器状态机。
 
-本规格实施 `CAPABILITY-MAP-live-production-chain.md` 中登记的 P0 模块，并保留此次修复以外全部既有实时、AI、板块指数和回测行为。
+模块边界维护于 `docs/architecture/CAPABILITY-MAP.md`。本契约负责持久投影、供应商准入与有界采集；`SPEC-unified-plan.md` 负责当前计划操作并取代已退役实时类型/命令。
 
 ## 命令
 
@@ -143,13 +143,3 @@ Playwright 使用已安装 Google Chrome channel（`channel: "chrome"`）、单 
 - 类型化 unavailable 状态下 Vue 不打开 Socket，且 Chrome 验收保持干净。
 - 非图表路由请求中不存在 ECharts 代码。
 - 全部必需离线闸门通过；只有密钥与市场窗口前置条件满足时才记录真实证据。
-
-## 审核状态
-
-用户通过明确请求批准实施。2026-09-07，用户针对这款个人工具取消 OS 凭据存储与仅子进程注入
-边界，允许把凭证直接保存到被忽略的本地应用配置中；市场窗口与七天新鲜度闸门继续保留。经授权的
-2026-09-08 开市过早股票运行报告 `SourceTimeLabel=START`，但该推断缺少午后边界，现已被严格的
-2026-09-09 股票续期取代；新续期以 `SourceTimeLabel=END` 认证全部五项能力。2026-09-09 的独立指数
-续期也以 `SourceTimeLabel=END` 认证当前交易范围内全部四个指数。历史 `899050.BJ=ERROR` 观测继续
-作为不可变证据保留，当前 profile 则把北证50记录为 `DEFERRED`，并取消对它的认证调用。自然计划的
-17:00 官方收盘周期及重启产生的独立安装式生产证据已为当前范围关闭 LPC006～LPC008。

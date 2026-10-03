@@ -1,6 +1,8 @@
 # 任务：daily-plan
 
-英文版本为 canonical；中文审阅副本为 `daily-plan-todo.zh-CN.md`。状态：2026-10-02 已完成实现、独立审核及发布。本文件统一保留 DPT、DSC 和 C1–C4 的完成记录；当前行为以[规格](../docs/specifications/monitoring/SPEC-daily-plan.zh-CN.md)为准，测试以[最终验证](../docs/verification/2026-10-02-daily-simulation-cleanup.zh-CN.md)为准。
+> 历史独立日线实现记录。2026-10-02 起由[单一交易计划流程](../docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md)替代。其测试与完成陈述仅证明所记载的旧范围，不能证明当前单一计划流程。保留历史证据；不得据此要求独立日线产品。
+
+英文版本为 canonical；中文审阅副本为 `daily-plan-todo.zh-CN.md`。状态：2026-10-02 已完成实现、独立审核及发布。本文件统一保留 DPT、DSC 和 C1–C4 的完成记录；当前行为以[规格](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/specifications/monitoring/SPEC-daily-plan.zh-CN.md)为准，测试以[最终验证](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-10-02-daily-simulation-cleanup.zh-CN.md)为准。
 
 ## T01. 实施顺序
 
@@ -42,7 +44,7 @@
 
 ## T05. 当前证据检查点
 
-实施及DSC01–DSC06/DPT09/C4已完成。新鲜Astra/high审查经独立后端及真实前端解析复验后关闭C1–C7。[当前验证](../docs/verification/2026-10-02-daily-simulation-cleanup.zh-CN.md)记录首次全量中的旧测试期望、严格修正、通过的最终非容量复跑、保留的容量通过证据及最终前端门禁。历史6065后端/828前端及F1–F11关闭保留于[2026-10-01验证](../docs/verification/2026-10-01-daily-plan.md)和[审核](../docs/verification/2026-10-01-daily-plan-independent-review.md)。新DP-A11/12/18/20使用整手模拟证据，不引用已删40+60/UNKNOWN行为。重叠数量不相加，也不表述为单次全量全绿。
+实施及DSC01–DSC06/DPT09/C4已完成。新鲜Astra/high审查经独立后端及真实前端解析复验后关闭C1–C7。[当前验证](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-10-02-daily-simulation-cleanup.zh-CN.md)记录首次全量中的旧测试期望、严格修正、通过的最终非容量复跑、保留的容量通过证据及最终前端门禁。历史6065后端/828前端及F1–F11关闭保留于[2026-10-01验证](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-10-01-daily-plan.md)和[审核](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-10-01-daily-plan-independent-review.md)。新DP-A11/12/18/20使用整手模拟证据，不引用已删40+60/UNKNOWN行为。重叠数量不相加，也不表述为单次全量全绿。
 
 ## T06. 合并后的清理任务记录
 

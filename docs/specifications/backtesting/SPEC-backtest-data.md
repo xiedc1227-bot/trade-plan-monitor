@@ -110,7 +110,3 @@ Default tests use fixtures and make zero network calls. Unit and integration cov
 ## Open Questions
 
 BSE history remains blocked pending a separately approved calendar contract. Corporate-action adjustment, user-defined dataset labels, dataset deletion, and unreferenced market-history GC are deferred beyond the first Web release.
-
-## Review Status
-
-The six-module capability map, this module's direction, and this detailed specification were approved by the user on 2026-08-26. The user explicitly confirmed the single `Asia/Shanghai`/`+08:00` backtest time contract and the remaining corrected API/engine/results/jobs consistency clauses on 2026-08-26. Section 15 of the bilingual implementation plan was approved on 2026-08-26. That approval authorizes only generating the bilingual `BT009`–`BT050` task list. The generated task list still requires separate explicit approval; implementation, commit, push, dependency installation, and any network access remain unauthorized. Existing `BT001`–`BT004` code and tests are the baseline; broader multi-day, cancellation, recovery, and resource evidence remains open until explicitly accepted.

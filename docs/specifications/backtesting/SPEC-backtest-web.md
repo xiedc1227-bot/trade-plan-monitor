@@ -172,7 +172,3 @@ Browser tests cover the complete fake-provider data-sync → verify → submit �
 ## Open Questions
 
 No blocking question remains for the first workbench proposal. Runtime internationalization, multi-run comparison, portfolio/shared-cash backtests, parameter optimization, WebSocket progress, browser/OS notifications, a cross-route Pinia store, and empirical performance budgets remain separate future capabilities or implementation-plan decisions as applicable.
-
-## Review Status
-
-The six-module map, Chinese first-release UI, four-route workbench, polling, single-plan/single-symbol direction, and this detailed component/state/accessibility specification were approved by the user on 2026-08-26. The user also confirmed the single `Asia/Shanghai`/`+08:00` time contract and the remaining corrected API/engine/results/jobs consistency clauses on 2026-08-26; the Web guard/display clauses inherit that accepted decision. The current implementation uses the frozen 42-path contract and all 10 production routes resolve to real views. WEBF13 changes neither the API nor generated contracts, and its paired offline route/journey acceptance evidence passed on 2026-09-04. Commit, push, dependency installation, and network access remain separately authorized actions.

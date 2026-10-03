@@ -1,106 +1,43 @@
 # Trade Plan Monitor
 
+Current local verification: [One Plan Workflow acceptance](docs/verification/2026-10-03-unified-plan.md). Live-provider readiness and deployment are separate verification work.
+
+> Current plan workflow: [One Trade Plan Workflow](docs/specifications/monitoring/SPEC-unified-plan.md). Use /plans to paste source, extract one draft, edit/review, explicitly activate, monitor condition periods and explicitly simulate whole trades. There is no separate daily-plan product. Fundamentals are reviewed only when generating the plan; reminders and acknowledgement never change holdings. See the current verification report for executed evidence and scope limits.
+
 Trade Plan Monitor is a local-first, AI-assisted monitor for deterministic A-share trade
 plans. It turns reviewed plans and normalized market data into explainable reminders; it does
 not place orders.
 
 [简体中文](README.zh-CN.md)
 
-## Daily plans
+## Trade plans
 
-Open `/daily-plans` in the local Web interface to extract a `plan-extract-v7` candidate, complete its technical parameters, register separate human policy supplements, save, review and explicitly activate Schema 4. Missing strategy definitions remain visible and prevent activation; the historical source is not an approved executable plan. Source or parameter edits require a fresh current review.
+Open `/plans` in the local Web interface to extract one `plan-extract-v8` candidate, edit its source-defined conditions and parameters, register explicit human supplements, save, review and activate. Missing strategy definitions remain visible and prevent activation. Source or parameter edits require a fresh review bound to the exact saved version. There is no plan-family selector or separate daily-plan workspace.
 
-Daily ordinary instructions use an official completed close and one next-exchange-session window. Initialize aggregate CORE/TACTICAL simulation holdings, then explicitly confirm the entire currently offered trade in fixed 100-share units. The server applies current quote, tradability, certified calendar, T+1, CORE protection and maximum holdings, and records one atomic `daily-simulation-v1` receipt. Reminders and acknowledgements never trade. Two technical risk branches preserve confirmed exit obligations after ordinary expiry; full simulation or explicit reassessment resolves the relevant cause. Daily simulation inventory is isolated from shared real holdings and from backtest portfolios. Broker reports, partial fills, pending/unknown orders, external order IDs and client allocations are outside this daily capability.
+Each condition declares its required evidence period. A rule confirmed by an official daily close uses the next exchange session; a completed five-minute confirmation uses the current session. A condition tree can combine both periods with one evidence cutoff. Optional price zones, allocation metadata and technical risk branches follow the source rather than being required template fields. Initialize separate CORE/TACTICAL simulation holdings, then explicitly confirm the entire currently offered trade in fixed 100-share units. The server rechecks the current quote, calendar, T+1, CORE protection, maximum holdings, review, cause and revisions in one transaction. Reminders and acknowledgements never trade. Confirmed technical risk obligations retain their source-defined timing and reviewed removal. Simulation inventory is isolated from registered historical real holdings and from backtest portfolios; broker reports and partial or unknown orders are outside this workflow.
 
-Fundamentals are reviewed by the user when generating the trading plan and are excluded from daily monitoring. Original fundamental/announcement text stays visible as non-monitoring background. Known exact source fragments receive server-owned exclusions; other wording has an explicit source-span scope-selection action for human review. Mixed sentences retain their technical remainder and actual parameter paths. This finite treatment does not prove arbitrary natural-language classification. Incompatible unpublished three-branch Schema 4 drafts remain readable but require new extraction and review. Existing Schema 1/2/3, prompt v1–v6 and index behavior remain unchanged.
+Fundamentals are reviewed by the user when generating the plan and are excluded from runtime and simulation gates. Original fundamental/announcement text stays visible as review-bound background; mixed sentences retain their technical remainder and parameter bindings. This finite source treatment does not prove arbitrary natural-language classification. Schema 1–4 bytes, hashes and historical evidence remain readable without conversion; old active plans require a newly reviewed current version. Existing historical index research and backtests remain isolated.
 
-See the [daily specification](docs/specifications/monitoring/SPEC-daily-plan.md), [consolidated completion record](tasks/daily-plan-todo.md) and [final verification](docs/verification/2026-10-02-daily-simulation-cleanup.md). Current offline coverage and independent review are complete; the report separately records the first full run, strict test correction, final recheck and unchanged capacity evidence. The2026-10-01 report proves only the former scope. Offline fixtures do not certify current live providers or approve the historical source plan.
+See the [current specification](docs/specifications/monitoring/SPEC-unified-plan.md) and [latest local acceptance](docs/verification/2026-10-03-unified-plan.md). Deterministic offline checks do not certify current live providers or approve a user’s source plan.
 
 ## Runtime recovery revision
 
-The normal installed Web entry and packaged frontend now use monitor contract `2`. Compatible provider semantics remain valid across time; current dependency availability, recovery progress and per-plan data eligibility are checked separately. After a safe stop, restart resumes durable work without replaying completed decisions or interpreting reminders as trades. Configuration changes use safe stop → edit → new process. See the [operating guide](docs/operations/live-certification.md#runtime-recovery-and-normal-restart) and [final acceptance record](docs/verification/2026-09-30-runtime-recovery-final-gate.md) for exact evidence and limits. Direct legacy alert-linked actual sale registration remains a separate follow-up; the daily whole-trade simulation is a separate isolated capability.
+The normal installed Web entry and packaged frontend now use monitor contract `2`. Compatible provider semantics remain valid across time; current dependency availability, recovery progress and per-plan data eligibility are checked separately. After a safe stop, restart resumes durable work without replaying completed decisions or interpreting reminders as trades. Configuration changes use safe stop → edit → new process. See the [operating guide](docs/operations/live-certification.md#runtime-recovery-and-normal-restart) and [final acceptance record](docs/verification/2026-10-03-unified-plan.md) for exact evidence and limits. Current plan operations use explicit whole-trade simulation with an isolated inventory; real-fill registration is absent from the current API and interface.
 
 The product-status entries below retain the earlier T/WEBF implementation history. Their old startup age gate and v1 status descriptions are superseded by this revision.
 
 ## Product Status
 
-Historical release candidates for `T001` through `T059` and `BT001` through `BT050` are implemented and accepted. The packaged command serves the Vue SPA, REST API and WebSocket on exact loopback. Historical LPC evidence observed `SourceTimeLabel=END` for stock and the four in-scope indexes `000001.SH`, `399001.SZ`, `399006.SZ` and `000688.SH`; those observations do not certify current live availability. BSE50 (`899050.BJ`) remains a known identity and `DEFERRED` while outside the trading scope. WEBF05 persistent monitoring composition retains the shared SQLite and committed event stream. The current normal entry uses monitor contract `2`, separating dependency availability, recovery progress and per-plan eligibility; compatible provider semantics do not expire under the former certification-age gate. Legacy dashboard/stock endpoints still return a typed HTTP `200` unavailable union when authoritative persisted projections are missing; genuine service, storage, migration, corruption and composition faults must not appear as normal results.
-No generic lifecycle placeholder or fabricated empty decision state is used. Its `/plans` workflow is usable: startup loads the
-project AI configuration once and injects one backend-authoritative persistent plan service over
-`data/monitor.sqlite3`. Plan save, query, JSON/YAML import, activation, and deactivation therefore
-survive Web process restarts; extraction runs only after the user submits plan text. A successful AI
-result enters the shared structured editor only through an explicit review action; saving creates an
-inactive draft, and activation still requires a separate user confirmation plus backend approval.
-WEBF06 connects `/` to the existing backend-authoritative dashboard snapshot: it renders stock
-decisions and shared board-index facts separately from plan-specific index progress, and retains an
-honest loading state until a snapshot exists. It adds no browser-side trading rules or provider call.
-WEBF09 connects the stock-detail position panel to the existing position REST contract and a
-persistent service over the shared monitor database. The backend alone applies active-plan maximums,
-stored-calendar T+1, remaining quantity, board-lot, and revision rules; the browser performs input
-shape checks and explicit confirmation but never predicts whether a position command is eligible.
-WEBF10 connects `/alerts` to the existing alert REST contract and the shared persistent outbox.
-Filtering, canonical evidence, and acknowledgement revisions stay backend-authoritative;
-acknowledgement is idempotent and audited but never records a fill or changes a position.
-WEBF11 hardens the existing T039/T043/T044 monitor stream: reconnects resume from the SQLite
-global cursor, and any event gap or `snapshot.required` frame causes a fresh
-backend-authoritative dashboard snapshot before reconnecting with that snapshot's `sequence`.
-Only a strictly matching heartbeat can reset liveness and permit `LIVE`; duplicate or stale frames
-cannot conceal a timeout. The additive `0008_market_index_monitor_event` migration only permits the
-already approved `market.index.updated` event in the existing ledger CHECK constraint; it preserves
-all existing rows, sequences, and identities and never rewrites frozen `0006_monitor_event`.
-The default production composition now returns the ADR 0004 typed unavailable response when no
-authoritative dashboard projection exists; WEBF11 never fabricates recovery data. This adds no
-OpenAPI path, changes no Schema v1 data, historical backtest result, or established hash, and does
-not claim strategy-event-cursor resume for backtesting.
+The installed command serves the Vue SPA, REST and WebSocket on loopback. The backend owns persisted plan/review state, monitored evidence, recovery progress and atomic isolated simulation; the browser renders its projections. `/plans` provides the current source-to-activation workflow, `/alerts` provides audited idempotent acknowledgement, and `/system` explains runtime progress and unavailable dependencies. Missing projections are typed unavailable responses; genuine storage/service faults remain errors.
 
-WEBF12 completes the presentation boundary for shared index data and current-plan conditions.
-The dashboard shows one backend-authoritative shared-index strip and keeps each watchlist row's
-plan-specific progress separate. The symbol route uses the backend detail `referenceMarket` identity
-to load the existing market-index bars for the selected stock-history range at `FIVE_MINUTE`, with
-cancellation and stale-generation protection. Shared reference facts/history and current-plan
-identity/progress/evidence are explicitly separated, with loading, failure, health, cutoff, and
-cached context visible. Vue performs no mapping or outcome calculation; strict transport validation
-rejects malformed identity/evidence before rendering. This adds no REST/OpenAPI/generated-TypeScript
-change and changes no Schema v1 data, historical backtest result, established hash, token, or provider
-request boundary.
+The dashboard retains shared index charts and turnover facts separately from plan decisions. Frozen index-condition plans and isolated backtesting retain their original research interpretation; current plan unification introduces no new index judgment. Historical provider observations are not current readiness. `899050.BJ` remains a known `DEFERRED` identity outside current trading scope.
 
-WEBF13 historically closed the production-route and new-backtest acceptance gap. The five former placeholders
-`/`, `/stocks/:symbol`, `/plans/:id`, `/alerts`, and `/system` now have explicit lazy-SFC and
-real-browser regression evidence within the exact 10-route map. A deterministic Chromium journey
-also submits the generated run command, follows the authoritative `runId`/`jobId` through polling,
-removes `jobId` only after `COMPLETED`, and then renders the materialized result. Its 42-path
-contract (27 live plus 15 backtest) remains historical evidence; ADR 0004 later changed the
-existing monitoring response unions and generated TypeScript without adding a path. No Schema v1,
-historical result, established hash, token, or provider boundary changes. See the
-[WEBF13 acceptance report](docs/verification/webf13-acceptance.md).
-
-The deterministic test suite does not use live Tushare, AI, Webhook, or other external services.
-Live provider checks remain separately authorized operations. Direct credential configuration,
-separate stock/index commands, eligible market windows, and the evidence format are documented in the
-[live-certification operations guide](docs/operations/live-certification.md).
-
-The local backtest implementation provides isolated `sync`, `verify`, `run`, `list`, and `prune`
-commands, and its BT050 production-fake acceptance is complete.
-T059 completed final user acceptance on 2026-09-01, and C24 is complete at 4 of 4 for that release
-candidate.
-The optional AI live probe remains `NOT_RUN_UNAUTHORIZED`. Historical LPC012 gates are recorded in
-[the live-production-chain acceptance report](docs/verification/live-production-chain-acceptance.md).
-Later runtime-recovery and daily gates are linked from the [current documentation index](docs/README.md),
-not certified by historical T059 evidence. See [the bilingual T059 evidence](docs/verification/release-acceptance.md).
-Historical sync
-availability and the accepted visible-block T058 result do not imply current live Tushare
-readiness.
-
-The approved board-index extension is implemented for monitoring and backtesting. Version
-`board-index-map-v1` derives one fixed board reference from each validated A-share symbol;
-immutable data snapshots are shared by index and cutoff, while each Schema v2 plan independently
-evaluates only its own index conditions. The UI separates shared index facts from plan-specific
-condition outcomes, and historical Schema v1 plans/results remain unchanged.
+Backtest `sync`, `verify`, `run`, `list` and `prune` use isolated market/result databases. The [backtest acceptance contract](docs/verification/backtest-acceptance.md) preserves fixed regression budgets. Default automated tests use deterministic providers; live Tushare, AI and Webhook operations require their own authorization. Configuration, certification and safe restart are described in the [operations guide](docs/operations/live-certification.md).
 
 ## Safety Boundaries
 
 - The live system is monitoring and reminder software, not a broker, order router, or investment
-  adviser. Every actionable reminder carries the literal `仅提醒，不会自动下单。`; isolated offline `BACKTEST` creates clearly labeled research fills, and the separate `daily-simulation-v1` capability records only explicit user-confirmed whole simulated trades in isolated daily inventory.
+  adviser. Every actionable reminder carries the literal `仅提醒，不会自动下单。`; isolated offline `BACKTEST` creates clearly labeled research fills, and the current plan workflow records only explicit user-confirmed whole simulated trades in isolated simulation inventory (retaining the established `daily-simulation-v1` receipt format).
 - Plans are typed, reviewed, versioned, and immutable after activation. AI output remains an
   untrusted draft until deterministic validation and user review succeed; extraction and draft
   save never activate it automatically.
@@ -572,23 +509,9 @@ example.
 
 ## Documentation
 
-Unsuffixed documents are canonical English inputs for agents and implementation workflows. The
-matching `.zh-CN.md` files are Chinese review copies and must remain semantically equivalent in
-the same change. The complete categorized inventory is in [docs/README.md](docs/README.md), with
-the [Chinese index](docs/README.zh-CN.md) alongside it.
+English documents are canonical implementation inputs and matching `.zh-CN.md` files are Chinese review copies. Keep both semantically equivalent in the same change.
 
-| Contract | English | Chinese |
-|---|---|---|
-| Capability map | [CAPABILITY-MAP.md](docs/architecture/CAPABILITY-MAP.md) | [CAPABILITY-MAP.zh-CN.md](docs/architecture/CAPABILITY-MAP.zh-CN.md) |
-| Plan domain | [SPEC-plan-domain.md](docs/specifications/monitoring/SPEC-plan-domain.md) | [SPEC-plan-domain.zh-CN.md](docs/specifications/monitoring/SPEC-plan-domain.zh-CN.md) |
-| AI drafting | [SPEC-ai-plan-drafting.md](docs/specifications/monitoring/SPEC-ai-plan-drafting.md) | [SPEC-ai-plan-drafting.zh-CN.md](docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md) |
-| Market data | [SPEC-market-data.md](docs/specifications/monitoring/SPEC-market-data.md) | [SPEC-market-data.zh-CN.md](docs/specifications/monitoring/SPEC-market-data.zh-CN.md) |
-| Historical backtest | [SPEC-backtest.md](docs/specifications/backtesting/SPEC-backtest.md) | [SPEC-backtest.zh-CN.md](docs/specifications/backtesting/SPEC-backtest.zh-CN.md) |
-| Strategy state | [SPEC-strategy-state.md](docs/specifications/monitoring/SPEC-strategy-state.md) | [SPEC-strategy-state.zh-CN.md](docs/specifications/monitoring/SPEC-strategy-state.zh-CN.md) |
-| Decision engine | [SPEC-decision-engine.md](docs/specifications/monitoring/SPEC-decision-engine.md) | [SPEC-decision-engine.zh-CN.md](docs/specifications/monitoring/SPEC-decision-engine.zh-CN.md) |
-| Notification outbox | [SPEC-notification-outbox.md](docs/specifications/monitoring/SPEC-notification-outbox.md) | [SPEC-notification-outbox.zh-CN.md](docs/specifications/monitoring/SPEC-notification-outbox.zh-CN.md) |
-| Monitor runtime | [SPEC-monitor-runtime.md](docs/specifications/monitoring/SPEC-monitor-runtime.md) | [SPEC-monitor-runtime.zh-CN.md](docs/specifications/monitoring/SPEC-monitor-runtime.zh-CN.md) |
-| Local Web | [SPEC-local-web.md](docs/specifications/monitoring/SPEC-local-web.md) | [SPEC-local-web.zh-CN.md](docs/specifications/monitoring/SPEC-local-web.zh-CN.md) |
+Start with the [documentation index](docs/README.md) ([中文](docs/README.zh-CN.md)), [current plan specification](docs/specifications/monitoring/SPEC-unified-plan.md), [capability map](docs/architecture/CAPABILITY-MAP.md), and [operating guide](docs/operations/live-certification.md). Frozen plan/replay contracts are explicitly scoped to compatibility; completed process reports and obsolete attachments are not retained as development entry points.
 
 ## Development Workflow
 

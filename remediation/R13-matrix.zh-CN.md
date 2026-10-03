@@ -1,6 +1,6 @@
 # R13 需求、场景与原始问题矩阵
 
-日期：2026-09-13。基线 `fa316833e8c5d4b427acef4f8500d1e9714a2dd1` 加受保护工作区。英文为规范输入；`R13-matrix.zh-CN.md` 为中文审阅副本。总体结论：**不通过**，见[报告](../docs/verification/R13-business-acceptance.zh-CN.md)。
+日期：2026-09-13。基线 `fa316833e8c5d4b427acef4f8500d1e9714a2dd1` 加受保护工作区。英文为规范输入；`R13-matrix.zh-CN.md` 为中文审阅副本。总体结论：**不通过**，见[报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/R13-business-acceptance.zh-CN.md)。
 
 ## M01. 证据层级与需求矩阵
 

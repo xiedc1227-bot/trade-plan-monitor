@@ -1,6 +1,8 @@
 # Tasks: daily-plan
 
-Canonical English; paired copy: `daily-plan-todo.zh-CN.md`. Status: implementation, independent review and publication complete on2026-10-02. This single record retains DPT, DSC and C1–C4 completion. The [specification](../docs/specifications/monitoring/SPEC-daily-plan.md) defines current behavior; [final verification](../docs/verification/2026-10-02-daily-simulation-cleanup.md) records executed gates.
+> Historical separate-daily implementation record. Superseded on 2026-10-02 by [One Trade Plan Workflow](../docs/specifications/monitoring/SPEC-unified-plan.md). Its tests and completion statements certify only the recorded old scope, not the current one-plan workflow. Preserve historical evidence; do not use this document to require a separate daily product.
+
+Canonical English; paired copy: `daily-plan-todo.zh-CN.md`. Status: implementation, independent review and publication complete on2026-10-02. This single record retains DPT, DSC and C1–C4 completion. The [specification](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/specifications/monitoring/SPEC-daily-plan.md) defines current behavior; [final verification](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-10-02-daily-simulation-cleanup.md) records executed gates.
 
 ## T01. Ordered implementation slices
 
@@ -42,7 +44,7 @@ The2026-10-01 fundamental-scope revision is retained: exactly two technical bran
 
 ## T05. Current evidence checkpoint
 
-Implementation and DSC01–DSC06/DPT09/C4 are complete. Fresh Astra/high review closed C1–C7 after independent backend and actual frontend-parser rechecks. The [current verification](../docs/verification/2026-10-02-daily-simulation-cleanup.md) records the first full run’s outdated test expectation, its strict correction, the passing final non-capacity recheck, retained passing capacity evidence and final frontend gates. Historical6065 backend/828 frontend results and F1–F11 closure remain in [2026-10-01 verification](../docs/verification/2026-10-01-daily-plan.md) and [review](../docs/verification/2026-10-01-daily-plan-independent-review.md). New DP-A11/12/18/20 use whole-lot simulation evidence, not the removed40+60/UNKNOWN behavior. Overlapping counts are not added or presented as a single full green run.
+Implementation and DSC01–DSC06/DPT09/C4 are complete. Fresh Astra/high review closed C1–C7 after independent backend and actual frontend-parser rechecks. The [current verification](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-10-02-daily-simulation-cleanup.md) records the first full run’s outdated test expectation, its strict correction, the passing final non-capacity recheck, retained passing capacity evidence and final frontend gates. Historical6065 backend/828 frontend results and F1–F11 closure remain in [2026-10-01 verification](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-10-01-daily-plan.md) and [review](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/2026-10-01-daily-plan-independent-review.md). New DP-A11/12/18/20 use whole-lot simulation evidence, not the removed40+60/UNKNOWN behavior. Overlapping counts are not added or presented as a single full green run.
 
 ## T06. Consolidated cleanup task record
 

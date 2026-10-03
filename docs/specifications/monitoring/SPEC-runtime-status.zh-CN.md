@@ -1,14 +1,12 @@
 # 规格：runtime-status
 
-> RR002 契约已于 2026-09-27 通过第四步隔离实施评审，源自已批准提案 D7，并受 D1–D6 约束。Astra 设计与独立 Sol 评审已批准完整契约；这不关闭 C0/C4，也不启用生产默认路径。英文正本为 `SPEC-runtime-status.md`，本文件为中文审核副本。
-> 2026-09-30 正常入口集成：`create_production_app` 与正常安装构建现选择版本 `2`；`create_app` 和显式 v1 夹具保留版本 `1` 兼容性。生命周期在启动前校验实际 v2 读取服务。本次仅启用已批准契约，不改变 RS IDs 或线上字段语义。最终验收见[原第四步报告](../../verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；此前明确启用边界保留为历史记录。
-> 依赖 [provider-contract](SPEC-provider-contract.zh-CN.md) 和 [runtime-recovery](SPEC-runtime-recovery.zh-CN.md)。任务与验收 ID 引用 `tasks/runtime-recovery-todo.md` 和 `tasks/runtime-recovery-plan.md`。
+监控协议 `2` 是安装默认值。[单一交易计划流程](SPEC-unified-plan.zh-CN.md) 负责当前 `CONDITION_PLAN` 行为；下文 `LEGACY_LOW_BUY` 与 `EXPLICIT_RULES` DTO 是冻结历史兼容投影。依赖 [provider-contract](SPEC-provider-contract.zh-CN.md) 与 [runtime-recovery](SPEC-runtime-recovery.zh-CN.md)。
 
 ## RS01 目标与不变量
 
-即使所有计划都没有当前判断，也要公开权威恢复状态。隔离不可用计划及依赖，支持 `TradePlan` 和 `ExplicitTradePlan`，区分传输通畅、协调器真实进展与可操作数据。本契约改变展示和协议兼容性，不改变求值规则、不可变结果字节/哈希、启用身份、提醒投递资格或提供方准入。
+即使所有计划都没有当前判断，也要公开权威恢复状态。隔离不可用计划及依赖，支持当前 `CONDITION_PLAN` 及冻结历史投影，区分传输通畅、协调器真实进展与可操作数据。本契约改变展示和协议兼容性，不改变求值规则、不可变结果字节/哈希、启用身份、提醒投递资格或提供方准入。
 
-版本 2 替换旧的全局 `status`/`readOnly` 关系与精确心跳结构，不是可选字段扩展。`monitorContractVersion=2` 是监控展示协议版本；`/api/v1`、`/ws/v1/monitor`、持久事件 `schemaVersion=1`、计划 Schema 版本及执行版本各自保持独立含义。v2 应用只提供一个监控版本。现有生产行为保持不变，直至 RR020 及其前置门禁通过。
+版本 2 替换旧的全局 `status`/`readOnly` 关系与精确心跳结构，不是可选字段扩展。`monitorContractVersion=2` 是监控展示协议版本；`/api/v1`、`/ws/v1/monitor`、持久事件 `schemaVersion=1`、计划 Schema 版本及执行版本各自保持独立含义。v2 应用只提供一个监控版本。
 
 ## RS02 版本协商与路由清单
 
@@ -16,15 +14,12 @@
 
 | 范围 | `/api/v1` 下的既有路径 |
 |---|---|
-| 变更的监控读取 | `GET /health`、`GET /health/symbols/{symbol}`、`GET /dashboard`、`GET /symbols`、`GET /symbols/{symbol}`、`GET /explicit-plan-runtime/{symbol}` |
+| 变更的监控读取 | `GET /health`、`GET /health/symbols/{symbol}`、`GET /dashboard`、`GET /symbols`、`GET /symbols/{symbol}` |
 | 活动计划变更 | `POST /plan-activations`、`POST /plan-deactivations` |
-| 监控库存变更 | `POST /position-lots`、`POST /position-lot-closures`、`POST /position-inventory-closures`、`POST /position-inventory-confirmations` |
-| 监控确认与诊断 | `POST /manual-event-risk-confirmations`、`POST /alert-acknowledgements`、`POST /diagnostic-evaluations` |
+| 监控确认与诊断 | `POST /alert-acknowledgements`、`POST /diagnostic-evaluations` |
 | 已审核的旧计划维护 | `POST /system/legacy-plan-invalidation`；其只读 GET 预览保留既有契约 |
 
-2026-09-27 评审：经 Astra 设计和独立 Sol 评审，完整 RS01–RS09 契约已冻结，可在第四步隔离环境实施。旧计划维护 POST 改变活动身份，因此必须使用同一版本保护。保护在阻断写入/业务校验和服务调用之前执行，同时保留既有 Origin 与请求体大小安全边界。RR002 已通过评审；接通实现与 C4 验收仍是独立门禁。
-
-第四步使用显式应用级 `monitor_contract_version=2` 注入，默认值为 `1`。每个应用实例仅提供一种监控协议，v2 实例要求注入权威状态/读取服务。其 `runtime-status-preview` 前端构建为独立 `dist-runtime-status` 资源，绝不复制到已安装 Python `web/dist`。资源 manifest 声明固定监控版本；应用组装拒绝不兼容资源。没有清单的既有资源只可由旧 v1 路径接受；v2 必须提供清单。默认应用/构建路径在 RR020 前保持 v1。此临时实施隔离不是公开的双版本 API，也不是生产发布。前置门禁通过后，由 RR020 负责默认切换及移除临时 v1 兼容接线。
+安装式 `create_production_app` 与正常打包构建选择 `monitor_contract_version=2`。`create_app` 保留显式 v1 兼容夹具。每个实例只提供一种协议；v2 要求权威读取器及匹配的 `monitor-contract.json` 资源清单。隔离预览与旧版测试资源不是可选产品协议。
 
 计划替换通过启用后继不可变版本完成；不存在可凭空新增的删除/替换端点。草稿保存/导入、提取/复核、AI 配置、独立回测、历史行情/事件和其他未变读取保留既有契约。未来改变活动监控状态的路由须审核是否纳入此保护。版本一致不能替代 Origin、幂等、乐观修订或业务校验，也不授权交易。
 
@@ -69,7 +64,7 @@
 
 `STALLED` 表示已安装的单调进展期限超时；要求 `mode=BLOCKED`、`reasonCode=COORDINATOR_STALLED`、所有计划 `readOnly=true`，且没有当前盘中可操作展示。旧唤醒/期限可以保留逾期时间供诊断。只有真实完成协调步骤或受监督替换才能恢复进展。`STOPPED` 要求 `progressDueAt=null`、`nextWakeAt=null`、`nextRetryAt=null`，以及 `mode=BLOCKED`/`reasonCode=RUNTIME_STOPPED`。资源启动/停止失败根据情况使用 `RUNTIME_STARTING`/`RUNTIME_STOPPING` 或 `RUNTIME_FAULT`，不得伪装为依赖重试。
 
-## RS04 范围就绪状态与两类计划
+## RS04 限定范围就绪度与计划版本
 
 每个范围都包含且仅包含公共字段 `scopeKey`、`kind`、`status`、`reasonCode`、`requiredTarget`、`dataCutoff`、`nextRetryAt`、`progress`。`scopeKey` 是服务端生成的非敏感标识，长度 1–128，字符集为 `[A-Za-z0-9._:-]`；对该依赖/启用身份稳定，不得使用原始端点、凭证、异常或不断变化的分钟目标。`kind` 为 `PLAN | INDEX | PROVIDER | CALENDAR`。计划条目额外要求 `symbol`、`planFamily`、`planVersionId`、`planHash`、`activationRevision`、`readOnly`；指数条目额外要求 `indexCode`；提供方和日历条目没有其他字段。身份字段保留既有规范格式及 JavaScript 安全修订范围。
 
@@ -325,8 +320,6 @@ Cache-Control: no-store
 | A12 / RR017–RR018 | 新旧客户端/服务端矩阵、直接进入命令页面连接旧服务端且 POST 调用为零、重复/缺失版本及游标、安全不匹配错误、缺少投影、序号缺口、generation 替换、时钟回拨及缓存资源刷新。 |
 | D5 / RR016、RR018 | 缓存/首结果/旧启用投影不能仅靠状态变成当前；显式过期 BUY/当前风险混合、无事件的精确纯时间到期、错误浏览器墙钟、R1 到 R2 重复抑制风险来源、风险状态例外及恢复屏障在展示层保持。 |
 
-RR015–RR019 必须分有界批次更新后端模型/保护、OpenAPI、生成类型、严格运行时解析器、共用受保护命令适配器、监控 store/stream 和 UI。通过生成器更新产物，禁止手改生成类型。受保护路由不增加 REST 路径。后端与带哈希前端资源作为同一本地版本发布，HTML 入口不得陈旧，不得存在混合版本默认路径。RR020 仅在 C0–C4 前置条件满足后启用替代路径；真实迁移、真实提供方验收及部署继续单独授权。
+当前 `ConditionPlanEntryView` 公开 `planFamily=CONDITION_PLAN`、`availability=CURRENT|CACHED` 与 `planRuntime`。代码、计划哈希、版本和启用修订须与活动计划准确匹配。`currentActionable=true` 要求 `CURRENT` 且 `scope.readOnly=false`。已提交完成证明绑定 generation/configuration、最新已完成目标、日历及所有已消费原文/事实/状态依赖。GET 不调用供应商、不写业务数据，只重新校验本地权威事实；权威缺失或变更时，判断保持缓存和只读。仅含审核事实的确认仍使用声明周期选择目标。
 
-第四步隔离期间，从显式 v2 应用生成 `openapi.runtime-status.json` 和 `web/src/api/generated-runtime-status.ts`；默认 `openapi.json` 与 `web/src/api/generated.ts` 继续绑定 v1。每份产物都有独立生成/检查门禁。预览资源清单为 `monitor-contract.json`，内容精确为 `{"monitorContractVersion":2}`。通过 import 复用既有数值/证据结构，v2 封闭根对象/解析器及预览入口与旧客户端适配器保持独立。运行时解析器不接受 v1/v2 联合。离线浏览器 fixture 必须绑定临时数据库、假 SDK/传输/渠道、可控时钟及真实拥有的运行时/读取/传输边界；仅静态截图或模拟 JSON 不能关闭 C4。提议中的 D9 卖出登记能力与 RR020 完整重启/发布矩阵仍在第四步范围外。
-
-已完成的 RR002 评审确定精确协商/请求头保护清单、状态联合、范围 `readOnly`、计划类型投影及消息示例。实施须满足这些已审核选择；契约评审本身不关闭集成检查点。
+后端 OpenAPI 与前端类型一起生成；各监控版本具有各自严格解析器/检查门禁。匹配的后端与带哈希前端资源须一起部署。离线验收使用真实组合、临时数据库、假 SDK/渠道及受控时钟，覆盖协商、重启与完成证明失效。截图不能单独证明权威性。真实供应商验收、用户数据库迁移及部署仍是独立操作。

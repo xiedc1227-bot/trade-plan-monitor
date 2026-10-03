@@ -2,7 +2,8 @@
 
 Canonical English; the matching `.zh-CN.md` is the Chinese review copy.
 
-- Status: Accepted implementation guidance under the R11 corrective authorization
+- Status: Accepted; frozen review compatibility rationale
+- Current scope: `SPEC-unified-plan.md` owns new extraction/review and simulated inventory; this ADR preserves exact historical treatment identities.
 - Date: 2026-09-12
 - Supersedes: ADR 0005 only for new server review mapping/evidence versions
 

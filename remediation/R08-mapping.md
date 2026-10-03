@@ -8,7 +8,7 @@ The acceptance artifacts remain unchanged at `C:/Users/xiedc/.codex/visualizatio
 
 > The synthetic plan uses `003043.SZ` as its test identifier. Prices and quantities are acceptance-only synthetic values. The target is preserved in full: existing 100 shares sellable that day; maximum 300; buy 100 when a completed five-minute close is in inclusive [9.80,10.00] AND its volume is at least 1.5 times the arithmetic mean of the preceding five completed five-minute bars; sell 100 for a completed close in inclusive [10.80,11.00]; risk alert below 9.50 on a completed five-minute close; alerts and acknowledgements never change actual positions.
 
-`baseline.md` and R00–R07 handoffs are historical evidence, not a new R08 execution pass. The design authority is [SPEC-executable-plan-extension](../docs/specifications/monitoring/SPEC-executable-plan-extension.md) E01–E10 and [ADR 0005](../docs/decisions/0005-version-explicit-plan-rules.md).
+`baseline.md` and R00–R07 handoffs are historical evidence, not a new R08 execution pass. The design authority is [SPEC-executable-plan-extension](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/specifications/monitoring/SPEC-executable-plan-extension.md) E01–E10 and [ADR 0005](../docs/decisions/0005-version-explicit-plan-rules.md).
 
 - `SUPPORTED_COMPONENT`: current code has the stated bounded behavior; this does not mean the whole v3 source plan runs.
 - `IMPLEMENTATION_REQUIRED`: expressible by R08, requires the named later slice.

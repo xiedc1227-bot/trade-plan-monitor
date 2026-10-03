@@ -10,7 +10,7 @@ Expose additive, typed, loopback-only FastAPI resources for backtest datasets, p
 
 `backtest-api` is the contract-first adapter over `backtest-data`, `backtest-jobs`, `backtest-results`, immutable `plan-domain` versions, and the shared `local-web` error/origin/OpenAPI boundary. It does not implement strategy rules, SQL repositories, worker loops, provider mapping, result formatting in Vue, a new authentication system, or a new WebSocket.
 
-The original approved baseline had 24 live-monitor paths and this specification proposed 13 backtest resource paths, for 37 paths after its initial implementation. Two later additive board-index backtest resources raised the backtest total to 15, while live resources grew to 27. The current frozen OpenAPI therefore has exactly 42 paths (27 live plus 15 backtest), and `openapi.json` and `web/src/api/generated.ts` are generated together. WEBF13 consumes that current contract without changing any path, field, status, or schema.
+The historical API grew through additive backtest/index resources. Current total paths and response schemas are authoritative in `openapi.json` and `openapi.runtime-status.json`, generated together with their TypeScript artifacts. Backtest API boundaries remain independent from the current Schema 5 plan workflow; historical path counts are not current acceptance criteria.
 
 ## Commands
 
@@ -224,7 +224,3 @@ OpenAPI tests fix exactly 42 paths, regenerate TypeScript, and reject schema/sta
 ## Open Questions
 
 No blocking question remains for the first contract proposal. WebSocket job events, remote authentication, destructive run deletion, debug-trace exposure, portfolio runs, server-side comparison, and empirical performance budgets are deferred and require separate approval or an approved implementation plan as applicable.
-
-## Review Status
-
-The user confirmed the six-module map, additive local REST direction, and this detailed specification set on 2026-08-26. A bilingual consistency pass then corrected `BacktestRunCommand.planVersionId` to the existing RFC 4122 UUID/string identity, added the backtest-only `FenText` decision projection without changing the original live baseline, closed job discriminator invariants, and clarified application-owned cancellation/pin idempotency. The resulting implementation and later board-index additions now form the frozen 42-path contract. WEBF13 uses that contract unchanged; its acceptance report must record only actually run offline evidence. Commit, push, dependency installation, and network access remain separately authorized actions.

@@ -1,6 +1,6 @@
 # R13 独立复验矩阵
 
-日期2026-09-13；基准 `main/cc328adb4f79b9673705cb67e67520da2dfd667b` 加受保护工作树。英文稿为规范输入，本文件为中文对照。因 N05，完整离线验收 **NOT PASSED**。[报告](../docs/verification/R13-reacceptance.zh-CN.md)。
+日期2026-09-13；基准 `main/cc328adb4f79b9673705cb67e67520da2dfd667b` 加受保护工作树。英文稿为规范输入，本文件为中文对照。因 N05，完整离线验收 **NOT PASSED**。[报告](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/R13-reacceptance.zh-CN.md)。
 
 ## M01. 证据规则
 

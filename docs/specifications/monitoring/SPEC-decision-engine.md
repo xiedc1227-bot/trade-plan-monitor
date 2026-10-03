@@ -38,9 +38,11 @@ tests/replay/
 └── test_decision_replay.py
 ```
 
-## R08 Version Scope
+## Frozen replay scope
 
-The singular result, priority, episode, CORE/TACTICAL and official-close rules below remain the `LEGACY_LOW_BUY` contract. [SPEC-executable-plan-extension](SPEC-executable-plan-extension.md) E03–E08 defines the planned `explicit-rules-v1` sibling: exact preceding-bar mean, completed-close range/strict-below conditions, BUY/SELL quantities, pure risk, explicit repeat/conflict policies, multiple versioned intents and consumed-state revision fences. It inherits none of the legacy strategy restrictions unless declared in its own supported reviewed contract. R09–R12 must implement and verify the new consumers before capability activation; this amendment does not make the new strategy runnable. Historical result and backtest boundaries follow [ADR 0005](../../decisions/0005-version-explicit-plan-rules.md).
+The singular result, episode, CORE/TACTICAL, low-zone and official-close rules below describe frozen `LEGACY_LOW_BUY` research/compatibility behavior. The consolidated [frozen plan reference](SPEC-plan-domain.md) preserves Schema 1–3 model and exact explicit-rule arithmetic/result identities; Schema 4 readers preserve their original stored meaning. Existing result hashes and backtest inputs follow [ADR 0005](../../decisions/0005-version-explicit-plan-rules.md).
+
+Current Schema 5 conditions, confirmations, reminder-only rules and isolated simulation follow [One Trade Plan Workflow](SPEC-unified-plan.md). Old strategy requirements cannot become defaults or extra blockers for a current plan. No frozen format may activate or simulate through current services.
 
 ## Public Contract
 

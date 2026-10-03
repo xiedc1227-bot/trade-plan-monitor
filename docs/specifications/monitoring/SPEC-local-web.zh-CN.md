@@ -1,232 +1,46 @@
-# 规格：local-web（本地 Web 应用）
+# 规格：local-web
 
-> 中文审阅版。英文权威版为 `SPEC-local-web.md`；两份文档必须保持语义一致。
-> 2026-09-30 正常入口集成：`create_production_app` 和正常打包前端选择监控协议 `2`，包含匹配的 `monitor-contract.json`。默认生成器检查规范 v2 与明确的 v1 兼容产物；历史旧版夹具使用隔离资源。下方旧明确启用/默认 `1` 段落描述当时实现边界。当前证据及完成状态见[原第四步收尾报告](../../verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)；不新增线上字段契约或部署权限。
-> RR002 修订：下述监控契约 v2 边界已于 2026-09-27 通过 Astra 设计和独立 Sol 评审，可在第四步隔离环境实施。契约批准不代表集成完成或默认启用；在所述替换门禁通过之前，原 T035–WEBF14 边界继续作为实施历史保留。
+## 当前范围
 
-## 目标
+安装式 `trade-plan-monitor web` 命令绑定 `127.0.0.1`，提供匹配的监控协议 `2` 资源、REST 和 WebSocket。[单一交易计划流程](SPEC-unified-plan.zh-CN.md) 负责 Schema 5 提取、审核、启用和隔离整单模拟。API 读取不可变启动 AI 配置；没有密钥/配置写入或连接测试接口、真实成交登记接口、基本面/事件风险写入接口或独立日线计划工作台。
 
-提供唯一的本地操作界面，用于监控最多 10 只股票、使用配置文件指定的 AI 提取粘贴的自然语言交易计划、审核提取规则、启用不可变计划版本、查看实时证据与图表、维护人工持仓、阅读文本提醒，以及诊断系统健康状态。
+## 路由与权威
 
-FastAPI 负责 REST 和 WebSocket 契约，并在 `127.0.0.1` 提供 Vue 3 单页应用。所有交易条件以后端为唯一权威来源；前端只管理展示状态和用户明确发出的命令。
+`/`、`/stocks/:symbol`、`/plans`、`/plans/:id`、`/alerts` 和 `/system` 提供监控、原文审核、提醒及诊断。`/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId` 提供独立历史研究。Vue 展示生成的后端契约，绝不计算资格，也不根据提醒改变库存。冻结计划版本仍是可读的研究/审计输入，不能作为当前计划启用。
 
-## 技术栈
+正常缺少投影返回类型化 HTTP `200` unavailable 响应；真实存储/组合故障保留脱敏错误。运行进展、数据资格与传输存活分离。监控版本保护、逐计划只读状态、完成证明新鲜度、不匹配/刷新行为及严格 v2 心跳解析由 [runtime-status](SPEC-runtime-status.zh-CN.md) 管理。当前保护清单列于该文档，不能恢复已删除的旧命令路径。
 
-后端版本系列：
+状态变更服务保留幂等、乐观修订及准确原文/审核/启用绑定。API 配置只读，从 `config/app.yaml` 加载一次；密钥绝不进入响应、前端状态、导出、日志或错误。明确模拟交易在当前个股事务内重新校验数量、T+1、CORE、容量、报价及修订。请求处理器不执行研究工作槽/供应商工作。
 
-- Python 3.14.x（`>=3.14,<3.15`）、FastAPI、Uvicorn、Pydantic 2
-- 根据 OpenAPI 生成前端类型
-- 生产模式下同源提供静态资源
+## 生成契约与构建
 
-前端版本系列：
-
-- Vue 3，使用组合式 API 和 `<script setup lang="ts">`
-- TypeScript、Vite、Vue Router、Pinia
-- Apache ECharts
-- Vitest、Vue Test Utils、Playwright、axe-core
-
-搭建项目时从官方发布版本中选择具体补丁版本，并固定到锁文件。
-
-## 命令
+`openapi.json` 与 `web/src/api/generated.ts` 从 `create_app` 兼容组装生成。`openapi.runtime-status.json` 与 `web/src/api/generated-runtime-status.ts` 描述安装式 v2 组装。不得手抄或手改生成 Schema；当前批准指纹位于 `SPEC-unified-plan.md`，机器契约是路径清单的权威来源。
 
 ```powershell
-# 后端 API 契约
-python -m pytest tests/integration/test_web_api.py -q
-python -m pytest tests/integration/test_openapi_snapshot.py -q
 python scripts/generate_frontend_types.py --check
-python -m trade_plan_monitor web --host 127.0.0.1 --port 8765
-
-# 前端
-Set-Location web
-npm run test -- --run
-npm run type-check
-npm run build
-npm run test:e2e
+npm --prefix web run type-check
+npm --prefix web run test -- --run
+npm --prefix web run build
+npm --prefix web run test:e2e
 ```
 
-## 项目结构
+正常构建复制匹配资源及 `monitor-contract.json` 到 Python 包。`build:runtime-status-preview` 保持隔离；`build:legacy-test` 用于显式兼容夹具。清单/协议不匹配时组装失败。后端/前端须匹配发布，详见[操作指南](../../operations/live-certification.zh-CN.md)。
 
-```text
-src/trade_plan_monitor/web/
-├── app.py
-├── lifespan.py
-├── errors.py
-├── schemas.py
-├── websocket.py
-├── origin_guard.py
-└── routers/
-    ├── dashboard.py
-    ├── symbols.py
-    ├── plans.py
-    ├── ai.py
-    ├── positions.py
-    ├── alerts.py
-    ├── market_indexes.py
-    └── health.py
-web/src/
-├── api/
-├── assets/
-├── components/{common,dashboard,symbol,market-index,plans,ai,alerts,health}/
-├── composables/
-├── layouts/
-├── stores/
-├── views/
-├── App.vue
-├── main.ts
-└── router.ts
-```
-
-## REST 契约
-
-基础路径：`/api/v1`。JSON 字段使用 camelCase，枚举值使用 `UPPER_SNAKE`，列表资源均须分页。所有错误使用统一格式：
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Plan cannot be activated",
-    "details": [],
-    "requestId": "..."
-  }
-}
-```
-
-### RR002 运行状态与监控契约升级
-
-[SPEC-runtime-status](SPEC-runtime-status.zh-CN.md) RS01–RS09 定义拟议的 `monitorContractVersion=2`，替换 T035/T036/T043/T044、WEBF05/WEBF06/WEBF11 和已批准的回测扩展边界中监控可用性段落的旧全局健康/只读、全股票投影及心跳存活假设。替换仅在 RR015–RR020 和 C0–C4 通过后生效；本修订不改变运行中的默认路径，也不追溯声称这些任务已完成。
-
-第四步仅通过显式 `monitor_contract_version=2` 注入实现和验证 v2 实例；默认仍为 `1`。`runtime-status-preview` 前端写入隔离的 `dist-runtime-status` 资源，不复制到已安装 Python `web/dist`。固定版本的资源清单必须与所选应用协议一致；只有旧 v1 路径可接受没有清单的既有资源。v2 清单为 `monitor-contract.json`，内容精确为 `{"monitorContractVersion":2}`。v2 生成/检查 `openapi.runtime-status.json` 和 `web/src/api/generated-runtime-status.ts`，默认 `openapi.json`/`web/src/api/generated.ts` 继续为 v1。每个实例及客户端解析器处理一种协议。前置门禁通过后，由 RR020 负责默认启用和移除临时兼容接线；该隔离不授权发布。
-
-- 版本一致要求 RS02 枚举的变更监控读取及影响监控的命令恰好携带一个 `X-Monitor-Contract-Version: 2` 请求头，不对所有 `/api/v1` 变更实施统一规则。缺失/不兼容版本在投影/命令执行前返回既有 `409 CONFLICT` 信封及 `MONITOR_CONTRACT_MISMATCH`。响应声明版本且不缓存。兼容健康读取不依赖已有当前判断。独立研究/草稿/AI 契约保留既有范围。
-- 每个受保护 POST 之前，共用适配器验证一次只读 v2 健康/总览预检，包括直接进入命令页面和结果不确定后的重试。预检失败/不匹配不发送 POST；仅检查响应版本无法阻止旧后端执行未协商命令。显式投影在不可变结果之外公开后端负责的 `ruleEligibility` 和 `actionableRuleIds`；行级布尔值表示至少一条规则有效，不能因风险规则仍有效而使过期 BUY 可操作。
-- 既有 `POST /system/legacy-plan-invalidation` 改变活动身份，因此受版本保护；其 GET 预览保留既有契约。既有 `NEEDS_RESTART` 与 `LEGACY_PLANS_REQUIRE_REVIEW` 继续作为明确固定状态原因。配置维护可以检测漂移，但不能安装变更的配置或凭证；仍要求安全停止、人工修改及新进程启动。
-- 后端 `actionableUntil` 沿用既有投递分类：true 盘中提醒具有既有到期期限，true 状态风险提醒为 null，但仍需当前状态证明。客户端只以保守单调期限撤销展示并刷新，不能提升结果或使全部风险提醒在 90 秒后过期。显式 `sourceAlert` 保留已证明的原事件/结果哈希和日期，即使后续当前证据抑制了重复风险意图。状态读取不能修改投递 receipt。
-- v2 总览始终返回权威 `runtimeStatus`、generation 和已提交序号，包括空状态/尚无首个判断。每个活动计划都有类型化当前/缓存/不可用条目；单个条目的 `WAITING`、`RECOVERING` 或 `BLOCKED` 不能隐藏健康兄弟。`LEGACY_LOW_BUY` 读取 `TradePlan` 判断；`EXPLICIT_RULES` 从独立仓库读取 `ExplicitTradePlan` 已持久化规则结果。不得为显式计划合成旧判断。
-- 移除旧全局 `readOnly` 和聚合 `connectionStatus` 权限捷径。资源生命周期、协调器进展、聚合运行模式、范围求值就绪及当前信号有效性是独立事实。仅 PLAN 范围公开精确定义的诊断 `readOnly`，它既不是命令授权，也不是提醒资格。既有 90 秒盘中新鲜度、官方收盘/风险状态例外、启用/generation 保护和 D5 恢复屏障继续具有权威性。
-- 仅在验证 v2 快照后连接 `/ws/v1/monitor?after=<sequence>&monitorContractVersion=2`。缺失/不兼容 socket 版本在回放前以 `1008`/`MONITOR_CONTRACT_MISMATCH` 拒绝。已提交事件保留 `schemaVersion=1` 及既有序号/payload/哈希规则；控制帧使用 RS07 精确 v2 结构。协调器阻断或停滞时心跳仍可证明传输活动，但不能更新 `lastProgressAt`、授权判断或代替快照。普通模式变化不重连；generation/游标变化保留权威快照恢复。
-- 真实所有者使用当前步骤 token 与单调期限记录进展；REST/socket/D8 存活活动不能捏造进展。缺少进展权威时安全失败。每个已接受的新心跳刷新仍有效的状态风险资格；精确服务端期限只使对应条目/规则失效。请求/generation/序号/启用防护拒绝迟到快照。封闭根对象、范围证据、时钟回拨与来源不变量见 RS03–RS07。
-- `/` 和 `/system` 独立于传输展示待机、真实恢复工作及范围重试/操作原因，保留缓存截止及风险日期。兼容客户端在协议不匹配时进入 `RELOAD_REQUIRED`，清除可操作展示并停止不兼容重连循环；即使旧缓存 UI 无法渲染新刷新文案，旧客户端的受保护命令也会被拒绝。后端、生成契约及带哈希前端资源一起发布。本修订不授权真实迁移或部署。
-
-### T035 应用与错误边界
+## 应用与错误边界
 
 - `create_app(...)` 只构造 FastAPI 适配器。导入和构造不会加载配置、打开 SQLite、调用供应商、创建任务或绑定网络套接字；不存在通过模块级应用实例启动的隐藏工作。
 - 明确注入的运行时工厂只在 FastAPI lifespan 启动时调用。lifespan 恰好持有一个运行时实例，等待 `start()`，接受有效的 `DEGRADED` 只读启动，通过依赖注入提供当前活跃实例，并在清除实例前始终等待 `stop()`。缺少工厂时启动会封闭失败。
 - 每个请求都会生成新的 32 字符小写十六进制 request ID。忽略调用方提供的 ID；经过校验的同一值同时出现在 `X-Request-ID` 响应头和错误正文的 `requestId` 中。
-- `ApiError`、请求校验错误、HTTP 错误和未预期异常都映射到上述唯一 envelope。对外顶层消息从固定错误码中选择。校验详情最多 100 项；每个 location 最多包含 16 个有界部分，只暴露脱敏 code 以及 `Field required` 或 `Invalid value`。拒绝的输入、Pydantic context、异常 cause、密钥值和供应商/存储原始响应体绝不序列化。
-- 共享错误 Schema 严格、冻结、兼容 camelCase，并对 `model_copy(update=...)` 重新校验。T035 不增加监控总览、股票、健康、计划、持仓、提醒、WebSocket、Origin/安全响应头、静态文件或网络监听行为；这些仍属于 T036 及后续任务。
+- `ApiError`、请求校验错误、HTTP 错误和未预期异常都映射到唯一 `ErrorResponse` envelope。对外顶层消息从固定错误码中选择。校验详情最多 100 项；每个 location 最多包含 16 个有界部分，只暴露脱敏 code 以及 `Field required` 或 `Invalid value`。拒绝的输入、Pydantic context、异常 cause、密钥值和供应商/存储原始响应体绝不序列化。
+- 共享错误 Schema 严格、冻结、兼容 camelCase，并对 `model_copy(update=...)` 重新校验。
 
-### T036 监控只读边界
+## Origin、传输限制与静态资源
 
-- `create_app(read_service=...)` 接收一个明确注入的 `MonitorReadService`，但不构造该服务或启动 I/O。T036 的七个路由都是该服务之上的异步传输适配器；缺少服务时返回 `SERVICE_UNAVAILABLE`。每个服务结果都必须在序列化前通过封闭、不可变的响应模型重新校验；非法内部结果只进入通用错误边界，且不暴露被拒绝的值。
-- T036 在 `/api/v1` 下实现 `GET /dashboard`、`GET /symbols`、`GET /symbols/{symbol}`、`GET /symbols/{symbol}/bars`、`GET /symbols/{symbol}/events`、`GET /health` 和 `GET /health/symbols/{symbol}`。它不实现 T037+ 命令、提醒中心查询、计划/AI 资源、WebSocket 传输、Origin/安全响应头、静态资源提供或生产组合。
-- 列表分页使用 `offset`（默认 `0`，范围 `0..10000`）和 `limit`（默认 `20`，范围 `1..100`），并返回精确的 `items`、`offset`、`limit` 和 `total`。股票总数最多 10，K 线/事件总数最多 10,000。K 线与事件读取必须显式提供 `Asia/Shanghai` 闭区间时间戳 `startAt` 和 `endAt`；范围反转时返回 `BAD_REQUEST`。K 线读取还接受 `interval=ONE_MINUTE|FIVE_MINUTES`。响应中的分页、范围、周期和股票 identity 必须与请求一致。股票格式非法时返回请求校验失败；格式合法但不存在时返回 `NOT_FOUND`。
-- 监控总览返回已提交且 JavaScript 安全的 `sequence`、可空 UUIDv4 `runtimeGeneration`、信封级 `observedAt`、连接状态、六项已批准统计和最多 10 个相互隔离的股票摘要；不再暴露冗余的总览级 `dataAgeSeconds`。每个摘要包含一个权威确定性判断投影，其中保留 `symbol`、`resultHash`、精确计划 identity、判断/行情时间、单只股票数据年龄、价格、区间、信号、仓位、阶段/风险状态、强类型证据和下一步。适配器绝不判断条件、修改优先级、重算判断哈希或读取第二套报价流。跨股票 identity、矛盾风险状态、与仓位批次/T+1 可用量不一致以及不一致年龄都封闭失败。
-- K 线响应保留规范化整数分 OHLC、股数、精确元成交额、回执时间和聚合公式 provenance。事件响应保留股票、序号、稳定事件 ID/类型、时间戳、可选信号/结果哈希和有界的服务端纯文本。所有 JSON 字段名均为 camelCase，所有枚举值均为 `UPPER_SNAKE`。
-- 运行时健康只暴露稳定的生命周期/资源/能力状态、重试/冷却/轮询时间、有序缺口、有界执行器计数、数据库/WAL/检查点/备份事实及投递计数。股票健康暴露精确的数据年龄/完整性/新鲜度/缺口事实。`LIVE` 必须具有新鲜、完整且带最新时间戳的数据；断连、陈旧、有缺口、阻断或其他矛盾数据都不能标为实时或可执行。任何响应 Schema 都不包含密钥、授权详情、供应商原始响应体或存储原始错误字段。
-
-### T037 计划与 AI 操作边界
-
-- `create_app(plan_service=..., ai_service=...)` 接收明确注入的 `PlanOperationService` 和 `AIOperationService` 适配器，但不构造服务，也不启动数据库、供应商、任务或网络工作。缺少服务时以 `SERVICE_UNAVAILABLE` 封闭失败。应用服务负责原子完成幂等占用/回放、乐观修订检查、持久化和审计写入；HTTP 层把经过校验的 `Idempotency-Key` 与服务端生成的 `requestId` 组成一个 `MutationContext` 传入。
-- T037 实现 `GET /plan-versions`、`GET /plan-versions/{id}`、`GET /plan-activation-states/{symbol}`、`GET /plan-extractions/{id}`、`GET /ai-providers`、`POST /plan-drafts`、`POST /plan-imports`、`POST /plan-extractions`、`POST /plan-activations`、`POST /plan-deactivations`、`POST /ai-providers`、`PATCH /ai-providers/{id}`、`POST /ai-provider-secrets` 和 `POST /ai-provider-tests`。它不实现 T038 持仓/提醒/诊断资源、WebSocket 发布、Origin/安全响应头、静态资源提供或任何 T024 判断行为。
-- 计划版本集合项是有界的轻量摘要，包含精确的计划/版本/股票/hash identity、`canActivate`、状态、修订和创建时间；它们不包含可能很大的计划文档、原文和问题数组。`GET /plan-versions/{id}` 暴露完整版本，包括一个规范、有界的 `planJson` 文档、保留的有界 `sourceText`、审核问题和确定性校验问题。`GET /plan-activation-states/{symbol}` 暴露以后端为权威来源、可空的活动 `planVersionId`、单调递增的启用状态 `revision` 和变更时间；停用后仍可查询非活动状态。服务输出会被重新校验，并且必须匹配请求草稿/导入的 identity 与 provenance。`planJson` 保持为规范 `plan-domain` JSON 文档；外围 API 字段仍使用 camelCase。当 `offset` 超过 `total` 时，空分页仍然合法。
-- 草稿保存接收 `planJson`、`sourceText`、`reviewIssues`、`expectedRevision`、可选的 `basePlanVersionId` 和可选的 AI `extractionId`。存在基版本 identity 时，应用服务会验证提交的 `plan_id` 与 `symbol` 是否匹配不可变基版本，并在同一个串行化幂等事务中为该 `plan_id` 分配下一版本；浏览器绝不分配这个后继版本，且不会覆盖任何既有版本。导入接收 `format=JSON|YAML`、明确的目标 `symbol`、安全有界的 `document` 和 `expectedRevision`；后端解析必须先证明文档股票与命令一致，revision 才能授权持久化。每个计划版本和返回的 revision 均受 JavaScript 安全整数上限约束。启用命令把 `expectedRevision` 上限设为该值减二，停用命令设为该值减一，从而保证每次递增都可精确表示，并让 revision 耗尽只能终止于非活动状态而不会卡住活动计划；不安全文档和已耗尽的后继版本序列会在提交前被拒绝，且不改变领域 Schema 或既有行。启用是针对不可变 `planVersionId` 的独立命令；停用是独立的股票命令。任何未解决的假设、警告、缺失证据、重大遗漏或阻断启用的校验问题都会使 `canActivate=false`，应用服务必须以冲突拒绝启用。
-- 每次生产提取成功后，必须先持久化一份服务端权威审核快照，把 `extractionId`、供应商/模型/prompt identity、精确原文 hash、规范草稿 hash 以及必需审核项 identity 绑定起来，之后操作才能进入 `SUCCEEDED`。V4/V5 还持久保存类型化部分草稿、双向 `plan-mapping-v1`、语义 `contentHash` 和 `reviewEvidenceHash`。`POST /api/v1/plan-review-confirmations` 只接受绑定到该精确当前快照和乐观复核 revision 的解决记录；遗漏项保持未解决，编辑会创建新的不可变版本并拒绝旧哈希。提取/复核持久化重试具备幂等性，重启/重放不能仅从客户端拥有的问题列表恢复资格。
-- 计划提取和 AI 供应商测试只接受有界提交命令，并返回带强类型 `QUEUED` 回执的 `202`。路由只等待服务的持久提交边界；既不调用供应商，也不创建或运行提取工作，并且绝不启用计划。提取状态封闭为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`INVALID_OUTPUT`、`PROVIDER_ERROR` 和 `CANCELLED`；成功结果保留恰好一个阻断启用的 `AI_EVIDENCE_REVIEW_REQUIRED`，并且只暴露规范草稿 JSON、有界证据/问题、确定性校验结果、脱敏用量、hash 和时间戳。供应商/模型原始响应体和授权材料没有任何响应字段。
-- AI 供应商创建/更新使用完整的不含密钥配置。`PATCH` 是带修订保护的完整替换，其正文 `providerId` 必须与路径一致。API 通过具体 `AIProviderConfig` 的 class-local 脱敏校验器重新校验配置，包括 HTTPS/回环 URL 策略和资源限制。密钥替换接收现有 class-local `SecretWrite` 值，但响应只包含等价于 `SecretStatus` 的已配置状态、来源、固定掩码和代数元数据。服务返回的配置必须与提交的规范化配置一致；额外密钥或供应商原始字段会封闭失败。
-- 每个 T037 状态变更端点都要求 1～128 个白名单字符组成的 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同意图回放其规范响应。应用服务必须原子完成这些检查与审计写入；路由绝不重建仓储、校验或决策引擎行为。
-- 生产 Web 组合在 FastAPI lifespan 启动时，从 `config/app.yaml` 精确加载一个 AI 传输配置及其主模型和最多九个 `additional_models`，并启动一个持久计划服务。计划服务默认打开并迁移 `data/monitor.sqlite3`，持久化计划文档、原文、服务端权威提取审核快照、逐版本审核 provenance、启用状态、审计、事件和幂等响应，同时作为默认回测计划快照读取器。因此，计划保存、查询、JSON/YAML 导入、启用和停用结果在独立 Web 进程重启后仍然保留。新增审核绑定迁移会保留既有活动指针；迁移前的非活动版本标为 `LEGACY_PENDING`，在未来的明确审核流程替换该历史状态前不得重新启用。AI 生命周期只读取直接共享的 `ai.api_key`，然后构造一个供应商客户端，并在关闭前复用不可变模型绑定。`GET /ai-runtime` 返回主供应商 ID、显示名、Base URL、模型、启用/已配置状态、输入/输出上限、固定修订号 `0`，以及可选且有界、字段同样不含密钥的 `alternativeProviders` 摘要；没有密钥值或 Authorization 字段。通用供应商变更路由仍是注入式适配器契约，但配置驱动的生产服务对创建、更新、密钥替换和供应商测试统一返回 `METHOD_NOT_ALLOWED`。修改 `config/app.yaml` 后必须重启 Web。
-
-### T038 持仓、提醒与诊断边界
-
-只有同一不可变计划版本仍处于活动状态，且其激活策略允许当前上海市场日期时，`currentActionable` 才为 true。已过期、已停用或已轮换的提醒继续作为可查询的历史证据，但暴露 `currentActionable=false`、不提供持仓预填，并显示明确的历史标记。
-
-- `create_app(position_service=..., alert_service=...)` 接收明确注入的 `PositionOperationService` 和 `AlertOperationService` 适配器，但不构造仓储、不打开 SQLite、不判断计划，也不启动工作。缺少服务时以 `SERVICE_UNAVAILABLE` 封闭失败。应用服务负责原子幂等、乐观修订检查、计划所属最大仓位策略、T+1/日历策略、持久化和审计写入。
-- T038 实现 `GET /position-lots`、`POST /position-lots`、`POST /position-lot-closures`、`GET /alerts`、`POST /alert-acknowledgements` 和 `POST /diagnostic-evaluations`。它不实现 T039 WebSocket 发布/回放、T040 Origin/安全/静态资源提供、生产服务组合，也不修改任何 T024 判断优先级、hash 或回放行为。
-- 持仓分页要求一个精确股票和显式 `asOfTradeDate`，回显请求的分页/筛选 identity，并且只暴露有界的人工批次事实与 T+1 可卖投影。人工建仓要求显式的 100 股整手数量、仓位桶、买入交易日、整数分成本、可选关联提醒和 `expectedRevision=0`；新批次从修订 `0` 开始。减仓既可使用旧有的批次专用命令，也可使用新增的统一库存减记命令；后者针对一个 `LOT` 或 `OPENING_BALANCE` 来源、数量、交易日和预期修订。批次的持久修订为 `(quantity - remainingQuantity) / 100`，因此每减少一手就前进一步，且无需新增存储列。减仓响应将精确应用数量和交易日绑定到操作前/后的剩余数量及结果来源，且不能报告买入或结算当日及更早日期的成功减仓。应用服务必须在同一原子事务提交库存 revision、确认投影、审计及事件前，拒绝剩余数量、交易日历 T+1、结算和过期修订冲突。
-- 提醒分页使用有界 `offset`/`limit`，并可按股票、可操作信号类型、确认状态和成对的上海时区闭区间时间筛选。分页回显这些筛选条件，拒绝重复事件 ID 或序号，并重新校验每个完整规范 `AlertEvent`，包括去重 identity、严重级别、相关区间、下一步、证据/节点/事实/数值预算、确定性渲染结果和确认时间戳。持仓预填是不提交的值，其股票、数量、仓位桶、目标批次和事件 identity 必须与提醒精确一致；它绝不调用持仓服务。
-- 提醒确认是独立的幂等审计命令。提醒修订就是持久确认状态：未确认时为 `0`，确认后为 `1`。首次确认要求修订 `0` 并返回 `1`；对已确认修订 `1` 再次确认是仍保持 `1` 的 no-op；其他过期修订均冲突。响应必须标识请求事件并包含确认时间。该路由不能创建、关闭或以其他方式修改持仓；提醒确认继续与投递成功和成交相互独立。
-- 诊断命令必须且只能指定一个规范 `INTRADAY` 五分钟交易时段边界，或一个 `OFFICIAL_CLOSE` 交易日期。服务返回一个规范且自校验的 `EvaluationResult`；适配器在投影权威判断前重新校验其 `resultHash`、内嵌 evaluation identity 和完整结果。该内嵌 identity 的 `planHash`、股票、kind、强类型目标和 `formulaVersion` 必须同时匹配结果与请求，并携带精确来源修订。严格响应要求 `stateMutationApplied=false`、`alertEnqueued=false` 和 `positionChanged=false`；唯一允许的写入是可选诊断审计。路由既不调用也不重新实现决策引擎。
-- 每个 T038 POST 都要求有界 `Idempotency-Key` 和 `expectedRevision`。重复的执行中意图映射为 409；同一键配合不同请求 hash 映射为 422；已完成的相同命令回放其规范响应。服务响应的分页、筛选、identity、目标、修订、严重级别、证据分区和持仓形态会在序列化前重新校验；额外供应商/存储/密钥字段在通用错误边界后封闭失败。
-
-### T040 本地 Origin 与静态构建边界
-
-- `create_app(bind_host="127.0.0.1", bind_port=8765, static_directory=...)` 在不绑定套接字的情况下校验监听 identity。唯一允许的主机字面量是 `127.0.0.1`，端口范围限制为 `1..65535`；预留的 `web` CLI 会拒绝通配、局域网、别名和越界值，并给出明确的禁止公开暴露警告。该命令保持无动作，直到 T052 负责生产组合。
+- `create_app(bind_host="127.0.0.1", bind_port=8765, static_directory=...)` 在不绑定套接字的情况下校验监听 identity。唯一允许的主机字面量是 `127.0.0.1`，端口范围限制为 `1..65535`；安装式 `web` CLI 会拒绝通配、局域网、别名和越界值，并给出明确的禁止公开暴露警告。安装命令使用生产组合。
 - HTTP 或 WebSocket 存在 `Origin` 请求头时，它必须是唯一且精确配置的 `http://127.0.0.1:<port>` Origin；重复、非法、外部、HTTPS、别名或错误端口值均封闭失败。HTTP 以固定 `FORBIDDEN` envelope 和 403 状态拒绝；WebSocket 则在接受前以关闭码 1008 拒绝。缺少 `Origin` 时仍允许非浏览器回环客户端；生产环境不存在 CORS，并移除下游任何 `Access-Control-*` 响应头。
 - 每个 HTTP 响应都带固定 CSP、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`，以及关闭摄像头/地理位置/麦克风/支付/USB 的 `Permissions-Policy`。共享错误构造器也会为用户中间件之外生成的未预期 500 响应增加这些响应头。被拒绝的 Origin、正文和异常详情绝不回显。
 - 原始 HTTP 请求体按 `Content-Length` 和实际流式分块同时限制为精确 4 MiB（`4194304` 字节）；第一个越界字节返回固定的 413 `PAYLOAD_TOO_LARGE` envelope。该传输预算可容纳既有 200,000 字符 AI 来源文本在最坏 JSON 转义下的大小。既有计划 JSON/YAML 导入和字段级文本上限仍更严格且为权威限制；安全 YAML 加载保持不变。
-- 静态服务只接受一个明确注入且已存在的目录，其解析后的本地 `index.html` 必须是普通文件。提供既有文件时不会跟随逃逸 symlink。不存在且无扩展名的 GET/HEAD 路径，以及明确接受 `text/html` 的不存在导航路径会回退到 `index.html`，包括 `/stocks/003043.SZ` 等股票路由；即使构建目录包含 `404.html`，缺失的类资源路径仍使用固定 404 envelope。`/api/v1` 和 `/ws/v1` 在静态路由匹配阶段被排除，因此静态内容不能覆盖 API/WebSocket 路径或改变其方法语义。T040 不执行默认构建发现，也不创建 SPA 入口；T041 提供 `web/index.html`，T052 负责已安装生产资源的发现与组合。
-
-### T041 冻结 OpenAPI 与前端类型边界
-
-OpenAPI 快照 SHA-256：`fd241fa2d7d804ca66ed8277014720795b47044fb143e3076146a5b8a81e80f5`
-
-监控契约 `2` 快照（`openapi.runtime-status.json`）SHA-256：`6216e2992e10532d3d83989ab1a3cebf61d78e2b36deb7bb3d728a190a709f99`。当前指纹包含 DP-WEB01；较早日期检查点中的路径数量仍是历史记录。
-
-R17 契约修复（2026-09-14）：将后端已有的 `PlanExtractionView.diagnosticStatus` 同步到此快照及前端生成契约。该字段可省略/为 null，仅接受 `RECORDED` 或 `WRITE_FAILED`；它表示诊断持久化状态，不表示提取成功。浏览器必须接受生产 QUEUED/RUNNING/终态 DTO，包括含 0–10,000 项字段映射的 v4 部分审核草稿，并保留激活阻断。轮询失败时保留已受理操作，提供仅 GET 的查询恢复，不再次发起提取 POST。本次用户要求的修复不新增 API 路径或供应商调用；证据与验证见 `../../verification/R17-contract-diagnostics-remediation.zh-CN.md`。
-
-- 无副作用的 `create_app()` 是 OpenAPI 的唯一来源。其文档精确包含 48 个已批准 REST 路径：33 个实时路径，包含只读 `GET /ai-runtime`、`GET /market-indexes/{indexCode}/bars`、`GET /plan-activation-states/{symbol}`、`GET /plan-capabilities`、`GET /position-inventory`、按计划范围的 `GET /manual-event-risk`，以及显式命令 `POST /position-inventory-confirmations`、`POST /position-inventory-closures` 和 `POST /manual-event-risk-confirmations`；其余精确 15 个路径为回测资源，其中包括参考市场覆盖和冻结指数序列读取。文档用 `ErrorResponse` 记录每个稳定公开错误状态；FastAPI 默认的 `HTTPValidationError`/`ValidationError` Schema 被排除，因为运行时校验已经使用有界且不泄密的统一 envelope。
-- `scripts/generate_frontend_types.py` 把 `openapi.json` 序列化为排序、缩进的 UTF-8，使用 LF 换行并以一个换行结束。它从同一文档派生 TypeScript 组件 Schema、路径方法、分组参数、请求体、响应状态、媒体类型、引用、联合、交叉、数组、对象、枚举和字面量；绝不手工复制 API 字段。
-- `python scripts/generate_frontend_types.py --check` 是只读检查，只要任一已提交生成文件存在逐字节差异就失败。生成过程遇到不支持或悬空的 Schema 引用、参数位置、Schema 类型或非法 TypeScript 标识符时会封闭失败，而不是静默弱化契约。
-- `web/index.html` 是稳定的 Vite 应用文档，包含一个 `#app` 根节点和一个外部模块入口，不含违反 T040 CSP 的内联脚本或样式。Vite 现在执行会生成 `dist/index.html` 的文档式应用构建；T042 仍负责首个应用外壳、路由和组件挂载，T052 仍负责已安装资源发现及生产组合。
-
-### T042 无障碍 Vue 应用外壳边界
-
-- `main.ts` 只在 `#app` 存在时挂载根 `App.vue`，为该生产根安装唯一应用路由，并保留工具链测试使用的强类型未挂载组件工厂。导入模块不会创建 API 客户端、store、Socket、定时器或领域状态。
-- 生产路由精确声明十条路径。`/`、`/stocks/:symbol`、`/plans`、`/plans/:id`、`/alerts`、`/system` 和四条 `/backtests...` 路径均为延迟加载的真实监控、工作台、诊断或研究视图。WEBF13 在下文固定当前准确路由集合及曾经占位路由的历史。路由层不包含领域规则或可变共享行情状态。
-- `AppShell` 只负责 landmark、桌面端与移动端导航、路由出口、一个强类型可选 `connectionBanner` 插槽，以及一个局部移动菜单布尔值。只有提供插槽时才渲染横幅包装器，并使用礼貌级状态语义；连接与健康状态所有权仍位于外壳之外。
-- 跳转链接把焦点移到持久的 `#main-content` landmark。导航使用原生链接和原生菜单按钮，具备清晰焦点、`aria-controls` 与 `aria-expanded`；Escape 把焦点恢复到菜单按钮，而移动端链接导航会关闭隐藏菜单并把焦点移到主内容。
-- 桌面导航在 `48rem` 替代移动端 disclosure。外壳动态效果仅限展示 CSS，`prefers-reduced-motion: reduce` 分支把动画/过渡时长缩短到 `0.01ms`。T043 设计变量、API 客户端、Pinia/store 与恢复行为，T044 流生命周期，后续业务视图、T052 已安装组合、T041 生成契约和 T024 判断语义均保持不变。
-
-### T043 前端状态基础边界
-
-- `App.vue` 加载一份全局变量表。石墨/墨色表面、矿物色文字、琥珀观察、海玻璃绿实时、朱红风险、青色信息、清晰焦点、间距和数字字体变量是语义输入，而非业务判断；`AppShell` 使用这些变量，但不增加领域视图或只依赖颜色的状态。
-- 同源 API 客户端当前只负责 `GET /api/v1/dashboard`。它使用生成的 `DashboardResponse` 和 `ErrorResponse` 契约，在 JSON 解析前最多读取 4 MiB 原始响应字节，拒绝未声明字段或敏感字段，校验封闭 camelCase 领域值及精确的上海时区/Gregorian 微秒关系，并且只抛出固定、不会泄密的客户端错误。它不持有响应式或共享状态。
-- setup 风格 Pinia store 把冻结的股票快照规范化为有序 ID 和 ID 映射。组件只取得只读状态与 computed 选择器；只有 `applySnapshot`、`applyEvent` 和 `requestSnapshotRecovery` 可以修改 store。语义连接对象始终同时提供代码、中文标签和文本标记，因此状态不只依赖颜色。
-- 快照不能让当前序号倒退。精确的下一事件会推进游标并记录冻结的失效提示；重复和更旧事件会被拒绝，而格式错误事件、序号缺口、服务端恢复请求以及 JavaScript 安全整数序号耗尽会在不消费游标的情况下创建明确快照恢复意图。
-- T043 只校验封闭的已提交事件信封并记录恢复意图。它不会创建 `WebSocket`、心跳、重连定时器、退避策略、回放请求或快照获取协调器；全部流生命周期行为仍属于 T044。生成的 OpenAPI/TypeScript 工件、后续业务视图、T052 已安装组合及 T024 判断语义保持不变。
-
-只读资源：
-
-```text
-GET /dashboard
-GET /symbols
-GET /symbols/{symbol}
-GET /symbols/{symbol}/bars
-GET /symbols/{symbol}/events
-GET /market-indexes/{indexCode}/bars
-GET /plan-versions
-GET /plan-versions/{id}
-GET /plan-activation-states/{symbol}
-GET /plan-extractions/{id}
-GET /ai-runtime
-GET /ai-providers
-GET /alerts
-GET /position-lots
-GET /health
-GET /health/symbols/{symbol}
-```
-
-写入资源：
-
-```text
-POST  /plan-drafts                 创建或编辑结构化草稿
-POST  /plan-imports                将安全的 YAML/JSON 导入为草稿
-POST  /plan-extractions            提交自然语言 AI 提取，返回 202 和任务 ID
-POST  /plan-activations            启用一个已验证的不可变版本
-POST  /plan-deactivations          停用某只股票的当前计划
-POST  /ai-providers                创建不含密钥的供应商配置
-PATCH /ai-providers/{id}           更新不含密钥的配置和修订号
-POST  /ai-provider-secrets         写入或替换密钥，禁止读取
-POST  /ai-provider-tests           创建有界的连接测试任务
-POST  /position-lots               记录人工成交
-POST  /position-lot-closures       记录人工减仓
-POST  /alert-acknowledgements      确认一条提醒
-POST  /diagnostic-evaluations      请求不改变状态的人工诊断评估
-```
-
-所有改变状态的请求都必须包含 `Idempotency-Key`；可变资源必须包含 `expectedRevision`。重复的执行中意图返回 409；使用相同幂等键但请求哈希不同则返回 422。计划提取和供应商测试均为有界异步任务，返回 202 后不得继续占用请求处理器执行。
-
-OpenAPI 作为规范快照纳入版本控制并用于生成 TypeScript 组件与路径类型；`--check` 会拒绝 API 或生成文件漂移，且不得在前端手工复制契约。
+- 静态服务只接受一个明确注入且已存在的目录，其解析后的本地 `index.html` 必须是普通文件。提供既有文件时不会跟随逃逸 symlink。不存在且无扩展名的 GET/HEAD 路径，以及明确接受 `text/html` 的不存在导航路径会回退到 `index.html`，包括 `/stocks/003043.SZ` 等股票路由；即使构建目录包含 `404.html`，缺失的类资源路径仍使用固定 404 envelope。`/api/v1` 和 `/ws/v1` 在静态路由匹配阶段被排除，因此静态内容不能覆盖 API/WebSocket 路径或改变其方法语义。安装资源由 `create_production_app` 组装；静态服务本身不发现构建。
 
 ## WebSocket 契约
 
@@ -265,7 +79,7 @@ OpenAPI 作为规范快照纳入版本控制并用于生成 TypeScript 组件与
 }
 ```
 
-载荷是有界失效提示，包含 `entityId`，以及仅在适用时出现的 `symbol`、位于 `0..2^63-1` 的 `revision`、大写 `status` 或小写 SHA-256 `resultHash`；客户端重新读取权威 REST 状态，不能把事件当成状态替代。负责组装总览快照的注入式 `MonitorReadService` 必须在同一个工作单元内读取状态和 `monitor_sequence`，因此返回的 `sequence` 是该快照的准确高水位。T039 强制该传输契约和带序号事件流；默认生产读取服务组合仍明确延后到 T052，且不得用独立采样的序号代替。
+载荷是有界失效提示，包含 `entityId`，以及仅在适用时出现的 `symbol`、位于 `0..2^63-1` 的 `revision`、大写 `status` 或小写 SHA-256 `resultHash`；客户端重新读取权威 REST 状态，不能把事件当成状态替代。负责组装总览快照的注入式 `MonitorReadService` 必须在同一个工作单元内读取状态和 `monitor_sequence`，因此返回的 `sequence` 是该快照的准确高水位。不得用独立采样的序号代替该事务快照。
 
 Schema 版本 1 封闭每种事件的非空载荷字段集合及 identity 规则：快照使用 `entityId`、`symbol` 和 `resultHash`；股票健康使用 `entityId`、`symbol`、`revision` 和 `status`；两者都要求 `aggregateId == entityId == symbol`。提醒创建/确认使用 `entityId`、`symbol` 和 `revision`；两者都要求规范 UUID `aggregateId == entityId`，创建还要求 `eventId == aggregateId` 且 revision 为 `0`，确认要求 revision 为 `1`。提取使用 `entityId`、`revision` 和 `status`；激活使用计划版本 `entityId`、`symbol` 和正数 `revision`，且 `aggregateId == symbol`；停用使用 `entityId`、`symbol` 和正数 `revision`，且三个 identity 相等。持仓使用 `entityId`、`symbol` 和 `OPEN`/`CLOSED` `status`；AI 供应商使用 `entityId` 和 `revision`；系统健康使用 `entityId` 和 `status`；板块指数失效通知精确使用 `entityId`、正数 `revision` 和 `status`。这些实体自有类型要求 `aggregateId == entityId`。持久化前会拒绝缺少必需字段或包含任何不适用非空字段的事件。
 
@@ -273,333 +87,10 @@ Schema 版本 1 封闭每种事件的非空载荷字段集合及 identity 规则
 
 `heartbeat` 和 `snapshot.required` 是传输控制帧，不是已提交业务事件，也不占用持久序号。心跳间隔为 20 秒，并携带与当前 lifecycle identity 配对的精确可空 `runtimeGeneration`。缺失、重复、非规范、负数或大于 JavaScript 安全整数上限（`2^53-1`）的 `after` 游标以关闭码 `1008` 拒绝。未来游标、保留范围内的序号缺口、回放窗口过期或无法安全表示的持久高水位都不会发送不安全数字；不可信的 `monitor_sequence` 必须以 `1011` 安全失败。内存发布只在精确校验已提交事件后用于唤醒；重连和进程重启从 SQLite 回放。客户端使用带上限的指数退避和抖动重连。断连或陈旧数据必须明确标注，绝不能展示为实时数据。
 
-T044 浏览器生命周期由 `AppShell` 挂载通过单个 `useMonitorStream` 实例拥有；Socket、定时器和可变行情状态都不是全局对象。它先使用 20 秒 Abort deadline 获取 `GET /api/v1/dashboard`，原子应用该权威快照，然后才使用 `after=<snapshot.sequence>` 打开同源 `ws:`/`wss:` 端点。有序已提交事件只是失效提示，会触发重新获取权威快照；缺口、格式错误帧、游标或 runtime generation 不匹配及 `snapshot.required` 也会执行相同恢复，且不会把陈旧数据展示为实时。Socket 建连 deadline 为 20 秒。由于服务端每 20 秒发送一次心跳，已打开连接只有在漏掉两次心跳间隔（40 秒）后才视为静默，从而避免相同 deadline 竞态。只有心跳游标和 `runtimeGeneration` 都与已应用快照精确匹配，且权威总览状态为 `CONNECTED` 时才进入 `LIVE`；否则横幅保持 `STALE`。实际重连和每次 false-to-true 传输转换都必须先获取新的 REST 快照，即使服务端时钟回退也不能直接恢复存活状态。
+## 浏览器生命周期与验收
 
-历史说明：WEBF13 曾临时通过有界 Health fallback 解释精确的 Dashboard `503 SERVICE_UNAVAILABLE`。该临时方案及其证据已由 `SPEC-live-production-chain` 与 ADR 0004 取代：正常投影缺失现在是类型化 Dashboard `200` 响应，Vue 不再执行 Health fallback，并且只有经过校验的快照才能打开 WebSocket。
+在打开绑定序号的连接前，加载并原子应用权威 REST 总览快照。监控协议 `2` 负责准确心跳/状态形状：心跳仅证明传输，不能证明协调器进展或当前判断。错误帧、序号缺口、generation 替换及 `snapshot.required` 从 REST 重新开始。卸载/恢复取消自有读取、连接和定时器；陈旧响应不能覆盖新 generation。缓存/断线数据保持标注及只读。版本不匹配进入终止性 `RELOAD_REQUIRED` 并阻止受保护命令。
 
-重连的指数基数依次为 1、2、4、8、16 秒，之后最多为 30 秒；先限制该基数再应用 `0.8..1.2` 抖动，最终延迟绝不超过 30 秒。明确恢复会中止当前快照、关闭活动 Socket、清除全部存活/重试 deadline，并从 REST 重新开始。卸载执行相同清理，但不会重连。外壳向强类型连接横幅插槽暴露只读语义状态，并提供包含文字标记和标签的默认礼貌级状态，因此颜色绝不是唯一提示。该生命周期不包含领域规则、API 字段复制、业务视图、持久浏览器状态、T052 资源发现或 T024 判断行为。
+使用 Composition API、类型化生成 DTO、无障碍语义控件、键盘/焦点反馈及颜色旁的文字标签。真实呈现加载、不可用、部分、缓存及错误状态。当前外壳/视觉方向位于 `SPEC-interface-design.md`；回测边界位于 `../backtesting/` 下的 `SPEC-backtest-api.md` 和 `SPEC-backtest-web.md`。
 
-### T045 AI 计划工作台边界
-
-T045 `PlanWorkbench` 只通过强类型 props/emits 组合 setup 风格 Vue 组件。`AIProviderSelector` 展示只读的主 `ConfiguredAIRuntimeView` 及其 `alternativeProviders`：显示名、模型、安全 Base URL、输入上限、启用状态和密钥是否已加载。页面没有密钥输入、供应商创建/修改、连接测试或浏览器持久化功能。页面明确提示用户修改 `config/app.yaml` 后重启 Web。
-
-`PlanDraftingView` 与 `usePlanDrafting` 负责同源 API 流程。挂载时读取 `GET /api/v1/ai-runtime`；提交时生成一个幂等 Key，调用 `POST /api/v1/plan-extractions`，把 `QUEUED` 回执显示为当前任务，然后轮询 `GET /api/v1/plan-extractions/{operationId}`，直到进入封闭的终态。局部同时只运行一组提交/轮询。卸载会中止请求和计时器。“停止等待”只停止浏览器轮询，并明确说明服务端已经接收的任务可能继续；它不会谎称服务端任务已取消。错误使用固定中文文本，不包含供应商、密钥或传输原始详情。
-
-`SourceTextEditor` 拥有一个局部纯文本模型。上限来自选中的运行配置，按与 Python 一致的 Unicode code point 计数，在第一个被拒绝的 code point 处停止扫描，并原子拒绝超限编辑而不截断。`ExtractionEvidence` 只通过已转义的 Vue 文本插值渲染经过校验的证据、假设、警告、遗漏、校验问题、用量和有界状态。成功的规范草稿保持待审核，直到用户明确选择 `进入结构化审核`；该交接没有持久化或启用副作用，并在原文快照过期时被丢弃。任何提取响应本身都不能保存或启用计划。T046 继续负责结构化编辑、后端校验、持久化、差异和启用。
-
-### T046 结构化计划编辑与激活边界
-
-T046 `PlansView` 只通过生成的命令/视图契约组合路由局部版本选择、`StructuredPlanEditor` 和 `ActivationDiffDialog`。它读取有界的轻量版本摘要，并只按需获取所选版本及必需的活动版本详情。九个分区编辑器保留未知顶层计划内容，生成不求值条件的人类可读预览，并发出带修订保护的草稿/导入/导出意图。JSON/YAML 解析、规范化、确定性校验、后继版本分配、交易规则、持久化和传输仍由后端或后续组合负责。活动版本绝不通过 props 改写；编辑只发出绑定 `basePlanVersionId` 的新草稿命令，dirty 局部内容在修订冲突、重复选择和分页移除版本时继续保留，直到用户明确重新载入或放弃。
-
-`ExtractedPlanReview` 只在用户明确交接后复用 `StructuredPlanEditor`。它把有界提取问题映射为 `DraftReviewIssue` 确认 identity，保留精确的已提交原文，携带来源 `extractionId`，并且只在用户明确保存时发出不带 `basePlanVersionId` 的根 `PlanDraftCommand`。调用 `POST /plan-drafts` 前，`usePlans` 获取目标股票的权威启用 revision；浏览器对已规范化草稿的解析仅限于该读取所需的路由 identity。后端重新解析并校验完整计划，依据已持久化提取快照解析确认结果、比较精确规范内容 hash、持久化审核 provenance，并返回唯一权威的 `canActivate`。编辑后的 AI 草稿只能作为确认已重置的明确待审核版本保存；保存绝不会创建启用命令，已保存版本只有在独立的差异与确认流程成功后才能启用。
-
-导入文档及最终紧凑草稿/导出文档使用有界单遍检查和原子拒绝限制为 256 KiB UTF-8。导入命令携带用户选择或后端提供的目标 `symbol`；浏览器不会解析文档来推断它，并且只有取得该股票的权威启用 revision 后才提交。pretty-print 的局部编辑缓冲使用独立 4 MiB 安全上限，避免合法紧凑计划仅因缩进膨胀而被拒绝。服务端和导入文本只作为已转义内容渲染；任何原始文本都不进入 `v-html`、日志、URL、持久浏览器状态或可变共享状态。网络错误、无效响应或任意 5xx 结果都会为重试保留精确语义意图及幂等键，因为变更可能已经提交；确定性的 4xx 拒绝则使用固定安全文案并清除该键。
-
-存在未解决重大审核项、激活阻断校验项、dirty 编辑、busy 状态、缺失计划状态、跨股票 identity、缺失活动版本内容或修订漂移时，激活都会封闭失败。前后差异对话框使用真实模态边界，具备初始焦点、原生焦点约束、Escape/取消处理和焦点恢复。候选/当前计划的哈希、文档、状态、股票、修订及预期活动状态修订发生任何变化都会撤销确认；父级权威状态失配会关闭对话框，且不会静默重开。激活和停用保持为两个独立明确命令。T041 工件会从这份已接受的后端契约重新生成；T047+ 业务视图、无关 API/store 组合、T052 已安装组合和 T024 判断语义保持不变。
-
-### WEBF04 回测计划版本选择与冻结边界
-
-`/backtests/new` 只通过 `useBacktestPlanVersions` 与 `BacktestPlanVersionSelector` 列出后端权威的 `canActivate=true` 计划版本分页。浏览器展示不可变摘要 identity、把分页留在服务端，并且只提交用户准确选择的 `planVersionId`；它不推断资格、不要求版本已经启用、不缓存 `planJson`，也不自动提交。后端重新校验所选版本，并在返回已接受回执前把其规范快照及哈希持久化到耐久回测任务输入。后续计划保存会创建其他不可变版本，不能改变该任务、旧结果或既有哈希。同一幂等键重放复用已持久化绑定，不会再次读取实时计划状态。本切片不修改任何 Schema v1 文档、历史结果或既有哈希公式，并直接复用已生成的 OpenAPI 计划分页及运行命令契约，不增加平行 API。
-
-### T047 多股票总览边界
-
-整个 Web UI 中，所有用户可见的带偏移日期时间统一使用 `YYYY-MM-DD HH:mm:ss`。该展示规则覆盖状态条、表格、时间线、图表坐标轴、图表 tooltip 和图表无障碍文本；它保留权威来源的钟面时间，不通过主机或浏览器时区转换。API 与 URL 值、排序/筛选输入以及机器可读 `<time datetime>` 属性继续保留原始带偏移 ISO 8601 值；纯日期和紧凑的当日坐标轴分别继续使用 `YYYY-MM-DD` 与 `HH:mm`。
-
-T047 `DashboardView` 从只读规范化 `SymbolSummaryView` 快照组合带标签工具栏、无障碍原生监控表格、条件计数展示和强类型可执行提醒栏插槽。它最多展示由 store 强制保证的十只股票，并显示权威价格、区间、已满足/总条件数、信号、持仓数量、风险距离、精确行情时间、数据健康、连接和年龄。搜索在展示匹配前限制为 128 个 Unicode 码点；筛选和排序只作用于复制的展示数组，使可空值始终排在最后，并且绝不修改输入快照。
-
-Vue 不计算条件 DSL、指标、区间、信号优先级、风险状态、新鲜度或服务端计数。只有已连接、健康为 `LIVE` 且新鲜的行才在展示层视为实时；其他每种合法健康组合都在陈旧/降级筛选中明确可见，且不能改变或隐藏健康同伴。加载和有界转义错误可以与缓存行并存，而零行快照不可用时不会误报成业务监控列表为空。原生链接和带标签控件均可通过键盘访问，所有颜色状态都带语义文字。API/WebSocket/Pinia 路由组合、图表与证据（`T048`）、已安装组合（`T052`）、T041 生成契约和 T024 判断语义保持不变。
-
-### T048 个股图表与证据边界
-
-T048 严格从只读 `SymbolDetailResponse`、`BarView` 和 `SymbolEventView` 输入组合 `SymbolDetailView`、`PriceChart`、`EpisodeTimeline` 与 `useChartSeries`。composable 复制并排序后端 OHLC、展平权威证据层级、只映射白名单内的服务端价格/指标事实、在缺少图表坐标时仍保留提醒，并发布一个 shallow 不可变序列。它不计算指标、条件、区间、信号优先级、风险、新鲜度或任何交易规则。
-
-指标点只使用同一证据节点中的 sibling `DATE` 或 `DATETIME` 证据事实。`DATE` 只能锚定该日期的最后一根 K 线；缺少日期、来源时间戳或同日 K 线时，`time` 和/或 `plotTime` 保持不可用；图表数值非有限或发生 underflow 时则不绘制，但不会丢弃表格事实。无障碍替代内容逐字保留后端精确 Decimal 文本，绝不以 ECharts 舍入后的显示数据替换。由于公共契约没有提供低点时间戳，`episodeLowFen` 保持为发生时间未知的水平数值。Vue 文本插值使事件/错误/证据文本保持惰性，陈旧或降级状态在明确警告下仍保留可见事实，并且只有 `PriceChart` 管理 ECharts 初始化、缩放处理、区间 emits、释放和非 HTML tooltip。API/store/router 组合、人工持仓命令（`T049`）、后续业务视图、已安装组合（`T052`）、生成契约和 T024 判断语义保持不变。
-
-### T050 文字提醒中心边界
-
-`AlertsView` 只拥有路由局部查询意图、权威分页替换、有界实时失效事件去重，以及一个注入式幂等确认操作。`AlertTable` 管理带标签筛选、原生分页、安全的服务端正文、完整的 matched/satisfied/unmet/blocker 证据展开、事件 identity、图表时间链接，以及明确的“确认不等于成交”文案。`AlertRail` 只报告同步状态，不复制提醒实体，也不把 WebSocket 失效提示当作提醒正文。
-
-每个成功列表结果都必须回显请求分页与筛选，事件 ID 和序号不得重复，并且每行都必须符合股票、信号、确认状态及创建时间闭区间筛选。已提交的 `alert.created` 或 `alert.acknowledged` 失效提示只有在更新的权威分页成功后才标记为已同步；失败保持可重试，pending 与已记忆 identity 都有界。陈旧列表 generation 不能覆盖更新的查询或确认状态。
-
-确认操作在传输前预留有界容量，只发送一条绑定 revision 的幂等命令，绝不把确认回执直接写入展示分页，并且始终通过权威读取核对。有效、无效、冲突和不确定结果都保留固定的密钥安全文案，直至任一后续权威分页证明已确认、未确认或仍不确定。持久礼貌级状态和焦点 fallback 在筛选移除行后继续存在。确认绝不调用持仓操作，也不改变展示的持仓事实。API client/store/router 生产组合、系统健康（`T051`）、已安装资源（`T052`）、生成契约和 T024 判断语义保持不变。
-
-### T051 系统健康与无障碍边界
-
-`SystemView` 是基于可选生成 `RuntimeHealthResponse` 的薄只读组合表面。它区分加载、不可用、失败和安全缓存状态，不渲染原始传输/供应商错误，并且只发出明确的刷新或股票选择意图。`MarketStatusStrip` 展示后端生成的生命周期、观察时间、成对的已完成分钟/判断时间戳与年龄、轮询、重试和冷却事实。`HealthMatrix` 展示供应商能力/延迟、有界缺口、执行器利用率、数据库/WAL/检查点/备份及投递状态。每个供应商/资源状态都拥有自己的文字、形状和 `data-status`；稳定诊断代码通过白名单展示，其他值一律掩码。
-
-该切片不调用 API、不写 Pinia、不组合 router、不计算供应商/规则或新鲜度，也不处理密钥。原生控件、带标签表格和滚动区域、持久清晰焦点、礼貌级状态、减少动态效果，以及 320/768/1024/1440 像素布局，均由单元测试和真实 Chromium/axe WCAG 2.1 A/AA 门禁验证。已安装资源发现仍属于 T052；完整浏览器流程仍属于 T055；生成契约和 T024 判断语义保持不变。
-
-### T052 安装式生产启动与资源边界
-
-- 安装后的 `trade-plan-monitor` 控制台入口解析到 `trade_plan_monitor.cli:console_main`。CLI 导入和解析器构造继续保持无副作用；`web` 分支只有在精确回环主机和有界端口解析成功后，才惰性创建一个生产应用上下文并导入/运行 Uvicorn。
-- Vite 继续以 `web/index.html` 为文档输入，并继续生成 `web/dist/index.html`。仅构建时启用的插件会用同一份完整 distribution 替换被忽略的 `src/trade_plan_monitor/web/dist` 暂存目录；setuptools 只打包其中的 `index.html` 和本地 `assets/*`。两个生成目录都不纳入版本控制。
-- 生产资源发现通过 `importlib.resources` 在整个服务生命周期内访问 `trade_plan_monitor.web/dist`。它绝不搜索当前工作目录、仓库根目录、`web/dist` 或其他源码树 fallback。缺少目录、`index.html`、`assets/` 或实际资源时，会在 Uvicorn 启动前只以 `WEB_ASSETS_UNAVAILABLE` 和固定文案 `Installed Web assets are unavailable.` 失败；绝不暴露路径、资源异常、context 或 cause。
-- `create_production_app(...)` 通过既有 `create_app(...)` 组合发现的 distribution，因此冻结的 44 个 REST 路径（29 个实时路径加 15 个回测路径）、`/ws/v1/monitor`、Origin/正文/安全响应头策略以及 SPA 排除与 fallback 语义仍由一个应用管理。资源上下文保持到服务 runner 退出，随后 FastAPI lifespan 执行其自有关闭，并释放可能解压的资源。
-- T052 负责打包启动、资源生命周期、配置驱动的 AI 生命周期和持久计划生命周期。启动顺序是监控运行时、AI、计划、回测，关闭严格反向执行。监控运行时的接线由下方 WEBF05 定义；T052 不构造或替代通用 `_ReadOnlyPackagedLifecycle`。没有显式注入计划服务时，计划启动会打开并迁移 `data/monitor.sqlite3`，在计划 DDL 前拒绝既有回测/行情数据库，把同一个服务注入所有计划路由，并把同一实例提供给默认回测组合。计划关闭只在回测关闭后释放其自有引擎。AI 启动时只读取一次 `config/app.yaml` 并只使用其中的直接 `ai.api_key`。YAML 非法会导致启动失败；凭证缺失或为空时，以 `configured=false` 启动，因此页面不能提交提取。明确注入的测试/应用服务继续保持权威。不增加 CDN、远程运行资源、备用监听器或开发目录 fallback。
-
-### WEBF05 真实生产监控组合边界
-
-- 当没有显式运行时/应用服务时，`create_production_app(...)` 使用惰性的 `create_monitor_composition_factory(config_path, database_path)`。工厂只在 FastAPI lifespan 内调用；它打开并迁移生产计划生命周期使用的同一个 monitor SQLite，构造真实的 `RuntimeLifecycleService`，暴露以后端为权威来源的 `RuntimeHealthSnapshot`，并管理基于数据库的 `CommittedMonitorEventStream`。明确注入的运行时和应用服务继续保持权威，并阻止默认组合构造。
-- 默认组合加载并校验统一且被忽略的 `config/app.yaml`，随后在构造带凭证的 provider client 或发出 provider 请求前检查获批的真实证据。新鲜 profile 是必要条件，但本身不能让生产变为可执行：composition 必须校验并消费它，绑定对应 provider 与 scheduler，并保留每个指数的失败。在这些检查通过前，它报告 `DEGRADED`、`readOnly=true` 和 `nextPollAt=null`，且不创建调度运行任务。当前股票 profile 以 `SourceTimeLabel=END` 全部 `READY`；独立续期的指数 profile 以 `SourceTimeLabel=END` 将四个可见指数及隐藏成交额基准 `399107.SZ` 全部记录为 `READY`。已知 `899050.BJ` identity 为 `DEFERRED`，不能进入请求控制器。这是诚实的运行时健康结果，不是合成的成功快照或通用占位组合；失败仍通过后端健康契约可见。
-- 真实组合不会捏造缺失的权威投影。ADR 0004 以严格类型化 HTTP `200` unavailable 联合取代总览与股票生命周期缺失原先的通用 `SERVICE_UNAVAILABLE` 行为；真正故障及仍未组合的实时指数读取继续封闭失败。WebSocket 事件流同样只以已提交的数据库事件为依据，不生成伪造行。持仓可用性由 WEBF09 单独定义，提醒中心可用性由 WEBF10 单独定义。Vue 不能通过规则、新鲜度、资格或健康判断升级这些响应。
-- 本边界不修改任何 Schema v1 数据、历史回测结果、既有 hash、OpenAPI 路径、生成 TypeScript 契约或 T024 判断语义。非法配置、存储、组合、过期 profile 或必需指数错误不得被静默转换成健康响应；未满足的实时前置条件会按生产链路契约产生有界 `DEGRADED` 状态或隔离的依赖路径失败。
-
-### WEBF06 监控总览路由边界
-
-- `/` 惰性加载 `DashboardRouteView`，它是既有 `monitor` Pinia store 与 `DashboardView` 之上的薄组合表面。store 只由权威 `GET /api/v1/dashboard` 快照生命周期填充；该路由绝不调用供应商、判断条件、映射板块、计算新鲜度或写入判断。
-- 路由把不可变的后端 `connectionStatus`、统计、股票摘要、共用 `marketIndexes`、后端计算的可空 `marketTurnover` 以及每只股票计划专属的 `referenceMarket.conditionProgress` 直接传给展示组件。信封级 `observedAt` 继续作为走势图查询边界，但不作为展示文案。应用外壳是全局实时传输状态的唯一展示入口，因此总览不再渲染重复的独立连接状态条；它仍将 `connectionStatus` 传给指数组件，用于局部实时、缓存和阻断健康判断。指数健康通过文字、符号、状态色以及支持减少动画的一次性新快照脉冲表达。因此界面始终分开共用板块指数事实与单计划结果，且不暗示统一市场结论。成交额使用 `000001.SH + 399107.SZ`；线性全天预估有明确标注，且绝不进入计划判断。
-- 路由保留后端认证的官方收盘 `RISK_BREACH` 及其真实 `STALE` 判断健康。只有后端在校验匹配的 15:00 官方 K 线、跌破日期、完整必需数据、风险状态、下一步及已满足的 `OFFICIAL_CLOSE_BELOW_LEVEL` 证据后，才能准入这个狭窄的可执行例外。Vue 既不抑制该信号，也不把它改标为 `LIVE`；其他所有可执行判断在健康不是 `LIVE` 时仍然非法。
-- 在权威快照存在前，路由展示既有加载状态而不是空自选表。选择已渲染股票只会向 `/stocks/:symbol` 发出路由导航意图；它不会修改监控状态，也不会构造详情响应。
-- 本边界不新增 REST 路径、Schema 迁移、Schema v1 数据变更、历史回测结果变更或判断 hash 变更。它只增加向后兼容的可空 `marketTurnover` OpenAPI 字段及对应生成 TypeScript 类型。它不暴露 token，也不执行真实供应商请求。
-
-### WEBF09 个股持仓批次生产边界
-
-- 默认监控组合在与运行时相同的 SQLite 工作单元工厂上注入一个 `PersistentPositionOperationService`。它实现既有 T038 `GET /api/v1/position-lots`、`POST /api/v1/position-lots` 和 `POST /api/v1/position-lot-closures` 契约；不改变 REST 路径、字段、OpenAPI 快照或生成 TypeScript 契约。
-- 后端是持仓策略的唯一权威。读取返回包含未平与已耗尽批次的有界稳定分页，并且只根据已存交易所日历派生 `sellableQuantity`。已知休市日权威投影为可卖数量零并拒绝减仓；日历行缺失时返回 `SERVICE_UNAVAILABLE`，而不是伪造零。建仓解析该股票的已启用不可变计划，并执行其整手大小和最大数量；减仓执行已存开市交易日、T+1、剩余数量、整手及乐观 revision。幂等占用/完成、批次变更、审计日志和已提交事件处于同一事务。
-- `/stocks/:symbol` 通过严格的生成类型适配器，按后端详情快照的精确观察交易日加载权威批次分页。Vue 只负责输入形状检查、显式确认、请求/revision 绑定、陈旧 generation 防护、安全错误文案、焦点恢复和回执到分页核对。变更拥有的刷新会使更早的待完成路由读取失效；同一语义命令的不确定重试会保留幂等键，直至权威核对或确定性拒绝，编辑命令则创建新意图。Vue 绝不判断最大持仓、剩余数量、可卖性、交易日历或 T+1 资格；即使展示的 `sellableQuantity=0` 或分页已达到计划上限，也不会阻止把请求提交给后端。
-- 本切片不读取 token 或请求供应商，也不改变 Schema v1 行、迁移、历史回测结果、既有 hash、判断优先级或提醒确认行为。计划或日历缺失/不一致时，通过后端错误边界封闭失败。
-
-### WEBF10 提醒中心生产边界
-
-- 默认监控组合在与运行时相同的 SQLite 工作单元工厂上注入一个 `PersistentAlertOperationService`。它实现既有 T038 `GET /api/v1/alerts` 和 `POST /api/v1/alert-acknowledgements` 契约。诊断操作在其自身生产权威存在前继续明确不可用；接通提醒读取不能暗中启用判断工作。
-- `GET /api/v1/alerts` 按已提交提醒序列顺序返回稳定、有界分页，并且只应用可选股票代码、可操作信号类型、确认状态和成对且包含边界的上海时间筛选。持久化行在投影前会重建为完整规范 `AlertEvent` 值。服务只为已经携带后端所写买入或减仓意图的信号推导身份完全匹配、不会提交的持仓预填；它绝不查询或变更持仓批次。
-- 确认操作锁定并重新校验持久 revision，只允许 `0` 推进到 `1`，并且只把 revision `1` 接受为已经确认的空操作。幂等认领/完成、确认时间、提醒审计和已提交 `alert.acknowledged` 事件共用一个事务。过期 revision 返回冲突，缺失提醒返回未找到，已完成的相同意图重放其规范结果且不会再次产生确认事件。
-- `/alerts` 是真实惰性路由。`AlertsRouteView` 执行首次权威读取、注入严格提醒 API 操作，并且只把最新已校验监控事件作为失效提示传递。`AlertsView` 继续只用已校验权威分页替换内容；严格适配器校验筛选回显、成员归属、身份、时间戳、revision、证据预算，以及信号/严重度/下一步/预填关系。服务端消息作为转义文本渲染，确认后始终执行权威重读。任何提醒路径都不提交成交，也不调用持仓端点。
-- 本切片不增加 REST 路径或字段，因此 42 路径 OpenAPI 快照和生成 TypeScript 契约在重新生成检查后保持逐字节一致。它不改变 Schema v1 数据或迁移、历史回测结果、既有 hash、判断规则或供应商边界，也不读取 token 或执行供应商请求。
-
-### WEBF14 人工事件风险确认边界
-
-- 默认监控组合在运行时 SQLite 工作单元工厂上注入一个 `PersistentManualEventRiskOperationService`。它暴露 `GET /api/v1/manual-event-risk` 和 `POST /api/v1/manual-event-risk-confirmations`；生成的 OpenAPI 与 TypeScript 契约承载三态权威结果，而不是可空布尔值捷径。
-- `/stocks/:symbol` 把 `ManualEventRiskPanel` 组合为独立局部界面。它展示权威状态、计划版本范围、到期时间，以及缺少确认、计划变更或已到期时的明确未知原因。浏览器只校验传输形状，要求带标签的选择和到期日期，通过原生对话框获得明确确认，并将新幂等键和当前展示的 revision 绑定到新的语义命令。它绝不把未知转换为无风险，也不从浏览器数据推导事件风险。
-- 后端解析当前已启用不可变计划，并在每次确认中记录当前内容哈希。只有后端决定范围、到期、revision 冲突、幂等重放和审计持久化。面板不调用供应商、不读取 token、不提交交易，也不替代官方收盘风险确认行为。
-
-### WEBF11 可按游标恢复的监控事件流边界
-
-- WEBF11 复用既有 T039 已提交监控事件账本、T043 传输契约和 T044 `useMonitorStream` 生命周期；不创建并行事件日志、游标、快照组装器或浏览器状态权威副本。后端仍是唯一业务权威来源，现有 SQLite `monitor_event`/`monitor_sequence` 仍是回放来源和全局高水位域。
-- 初次启动、实际重连、false-to-true 传输转换和明确恢复都会先获取后端权威总览快照并原子应用，然后打开 `/ws/v1/monitor?after=<snapshot.sequence>`。SQLite 回放仍是来源。事件序号缺口、心跳游标/runtime generation 不匹配、格式错误帧或 `snapshot.required` 都会中止当前流并重复 REST 快照流程；服务端发现未来/过期/范围缺口时通过 `snapshot.required` 报告。非法 `after` 以关闭码 `1008` 拒绝，不可信或 JavaScript 不安全的持久高水位以 `1011` 安全失败；两者都不能被当作浏览器可恢复的数据。每个恢复 Socket 都使用已应用的权威安全 `sequence`，绝不使用浏览器自行猜测的游标。服务端在发送分页前校验完整回放范围，因此页内缺口不能掩盖后续缺口。
-- 存活判定必须严格：只有游标和 `runtimeGeneration` 都与已应用权威快照精确匹配、且权威总览状态为 `CONNECTED` 的心跳，才能重置存活 deadline 并进入 `LIVE`。重复、旧、乱序、格式错误、generation 不匹配或游标不匹配帧不能重置存活，也不能掩盖两次心跳间隔的超时；断连或陈旧数据继续明确标注。
-- 追加的 `0008_market_index_monitor_event` 迁移沿既有监控事件迁移链执行。它预检 `event_type`，复制现有七列，并在替换原表前校验行数，再使用允许 `market.index.updated` 的 CHECK 约束。若存在任何既有板块指数事件行，必须在 DDL 前拒绝降级；所有既有行、全局序号和事件 identity 保持不变，冻结的 `0006_monitor_event` 绝不被重写。
-- WEBF11 在当时没有改变 REST 路径或字段：其 OpenAPI 快照保持精确 42 路径且生成 TypeScript 不变。ADR 0004 后续在不新增路径的情况下增加类型化监控响应联合；缺少权威总览投影时现在返回该类型化 HTTP `200` 响应。WEBF11 绝不伪造快照。Schema v1 数据、历史回测结果、既有 hash、判断规则、token 处理和供应商请求边界保持不变；回测回放期间的策略事件 cursor resume 仍单独延后。
-
-### WEBF12 共用指数与当前计划展示边界
-
-- 总览在“参考板块指数：共用数据”条带中只展示一次以后端为权威来源的共用指数快照，而自选表每一行只展示该股票当前计划的 `conditionProgress`。因此多个计划可以共用同一份指数事实，但不会合并或暗示它们的结果。
-- 个股路由使用详情响应中的后端 `referenceMarket` identity，按所选股票历史范围调用既有板块指数 K 线接口，并使用 `interval=FIVE_MINUTE`。Vue 只负责请求生命周期、取消和陈旧 generation 防护；它不映射股票、连接事实、计算指标或推导条件结果。
-- 个股详情把共用参考事实和历史放在“参考指数数据”分区，把当前计划 identity、条件进度和准确的 `indexConditionEvidence.planPath` 结果放在独立的“计划指数条件”分区。计划 identity、快照/截止时间、健康、加载、故障和缓存上下文都保持可见；没有指数条件的计划明确显示“计划未使用”。股票和指数历史保持分开，且每份历史都有可访问的文本表格替代。
-- 严格传输校验会在渲染前拒绝格式错误的参考/证据 identity、排序和进度数据。WEBF12 不改变 REST 路径或字段、OpenAPI 快照、生成 TypeScript、Schema v1 数据、历史回测结果或既有 hash；不读取 token，也不执行真实 DeepSeek、Tushare 或其他供应商请求。
-
-### WEBF13 真实生产路由与新建回测旅程边界
-
-- 曾经的占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现在各自解析到真实的惰性 SFC Route View。它们连同既有 `/plans` 路由以及四条有序回测路由（`/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId`）使生产 Router 精确包含 10 条路由。静态回测子路由继续位于动态 `:runId` 路由之前。
-- 单次新建回测的浏览器旅程必须精确为：选择后端列出的不可变计划版本和已校验数据集，提交一个明确的幂等命令，导航至 `/backtests/:runId?jobId=<jobId>`，轮询匹配的持久化任务，仅在 `COMPLETED` 后通过规范替换移除 `jobId`，再读取 materialized 结果。失败或取消的任务保留其任务 identity 以供诊断，绝不伪造结果。
-- 后端继续是计划资格与快照、数据集覆盖、运行 identity、任务状态、完成和 materialized 结果可用性的唯一权威。Vue 只负责生成契约校验、有界请求/重试生命周期、URL 导航、展示和无障碍；它不推断资格、进度完成或结果内容。
-- 历史 WEBF13 可用性横幅证据使用过临时 Health fallback。`SPEC-live-production-chain` 与 ADR 0004 已用以后端为权威来源的类型化投影可用性取代它；WEBF13 不声称当前可用性验收。
-- WEBF13 不改变 REST 路径、OpenAPI 字段、生成 TypeScript 类型、Schema、哈希、供应商边界、token 处理或历史结果。其验证报告只记录实际运行的证据，绝不改写历史验收制品。
-
-### 已批准的回测扩展边界
-
-六模块回测方向和本边界已于 2026-08-26 获批。用户也确认了 [`backtest-api`](../backtesting/SPEC-backtest-api.zh-CN.md) 并批准 [`backtest-web`](../backtesting/SPEC-backtest-web.zh-CN.md)。用户已于 2026-08-26 确认修正后的 `planVersionId`、金额投影、结果/任务一致性、版本化兼容及统一中国时间条款。以下数值约束当前生成契约和继续分别受闸门约束的后续 Router 工作：
-
-- 当前冻结契约精确为 50 条 REST 路径：35 条实时路径（包含 v4 当前快照计划复核确认、只读 AI 运行配置、板块指数历史、权威计划启用状态、显式计划能力、与活动版本绑定的 `GET /explicit-plan-runtime/{symbol}` 规则结果读模型、权威持仓库存读取/确认/减记以及按计划范围的人工事件风险读取/确认）加精确 15 条回测资源路径，OpenAPI 快照、哈希、生成 TypeScript 和运行时保护已同步更新；
-- 生产 Router 精确包含十条路径，且全部接入真实或惰性加载视图；两个静态回测子路由继续排在动态路由之前；
-- WEBF10 在不增加路由的前提下，把最后一条历史 `/alerts` 占位路由接入其业务视图；
-- 全部 15 条回测路径、四条路由、生成类型、运行时保护、URL 日期时间/日期筛选和机器可读 Web 值都继承已批准的规范 `Asia/Shanghai` 契约：日期时间输入使用 `+08:00` 和 0～6 位小数秒，日期输入使用规范 `YYYY-MM-DD`，适用的日期时间输出/存储固定六位，并拒绝 `Z`、无偏移、超精度、其他偏移或非法日历值；
-- 首个版本对持久化任务采用有界 REST 轮询，不增加回测 WebSocket 事件；
-- `create_production_app(...)` 使用 WEBF05 惰性的真实监控组合：实时前置条件缺失、过期、无效或尚未被安装式 composition 消费时，后端健康诚实保持为 `DEGRADED`/只读，没有权威投影的总览/股票读取返回 ADR 0004 类型化 unavailable 响应。失败指数不能因其他指数就绪而被升级，并且只影响其依赖路径。真正的组合或存储故障继续为 `SERVICE_UNAVAILABLE`。其默认持久计划服务可用于计划保存、查询、导入、启用、停用及回测计划快照。仅注册其他 Router Protocol 不等于产品可用组合。
-
-## 信息架构
-
-### `/` — 监控总览
-
-- 由应用外壳统一展示一个实时传输状态，总览不再重复连接状态条；仅在诊断确有意义的位置保留单只股票连接状态和数据年龄。
-- 可执行、低吸观察、阻断、风险、陈旧和正常状态的数量统计。
-- 最多 10 只股票的紧凑可排序自选表：价格、区间、条件进度、信号、持仓、风险距离、行情时间及健康状态。
-- 搜索与筛选，以及独立的可执行提醒栏。
-
-### `/stocks/:symbol` — 个股详情
-
-- K 线图展示低吸区、压力区、风险线、指标、当前阶段低点和提醒标记。
-- 数据源时间与年龄、计划版本、持仓批次、T+1 状态和当前决策。
-- 含数值证据及阻断原因的条件清单。
-- 阶段与风险时间线、指标表格、提醒和数据供应商诊断。
-- 为图表信息提供无障碍表格替代视图。
-
-### `/plans` 和 `/plans/:id` — 计划工作台
-
-- 版本列表，以及已启用或草稿状态。
-- 自然语言原文编辑器。
-- AI 供应商选择和提取进度。
-- 并排展示原文证据、结构化字段、假设、警告、遗漏和验证问题。
-- 分区结构化编辑器和人类可读的可执行预览。
-- 版本差异，以及明确的启用或停用确认。
-- YAML/JSON 导入与导出。
-
-### `/alerts` — 提醒中心
-
-- 分页显示文本交易提醒和健康提醒。
-- 按股票、类型、时间及确认状态筛选。
-- 展开查看证据、阻断条件、事件 ID 和图表时间链接。
-- 已过期或已轮换的提醒继续作为历史证据显示，并明确标记为当前不可操作。
-- 确认文案必须明确说明“确认提醒不代表成交”。
-
-### `/system` — 系统健康
-
-- Tushare 能力、延迟、冷却、下次轮询、缺口、线程池、数据库和 WAL、备份及投递健康状态。
-- 此页面不修改 AI 配置。`/plans` 只显示安全的只读运行摘要，项目配置文件始终是权威来源。
-
-### `/backtests`、`/backtests/new`、`/backtests/data` 和 `/backtests/:runId` — 回测研究
-
-- 浏览有界的已完成运行摘要并打开一个不可变结果。
-- 提交前选择一个经审核计划版本、一只股票、一个冻结数据集、显式现金/持仓输入和成交假设。
-- 检查历史覆盖、提交经授权同步或离线校验，并跟踪一个持久化任务而不阻塞 HTTP 请求。
-- 审阅精确指标、假设、带完整表格替代的每日权益、分页成交/详情、导出、置顶状态、进度、取消、过期和失败状态。
-- 历史研究继续与实时监控、提醒、通知投递、券商操作和 `T058` 证据隔离。
-
-## Vue 组件地图
-
-路由视图只负责组合页面。
-
-| 组件 | 职责 | 输入 | 输出 |
-|---|---|---|---|
-| `AppShell` | 导航、连接横幅和路由出口 | 连接与健康状态 | 导航 |
-| `MarketStatusStrip` | 行情、供应商和轮询健康状态 | 系统健康状态 | 打开系统页 |
-| `WatchlistToolbar` | 搜索、筛选、排序和视图模式 | 用户偏好 | 强类型变更事件 |
-| `WatchlistTable` / `WatchlistRow` | 渲染规范化股票摘要 | 股票摘要 | 选择股票 |
-| `ConditionProgress` | 展示成立、部分成立和阻断证据 | 条件状态 | 无 |
-| `AlertRail` / `AlertTable` | 最近及历史提醒 | 提醒摘要或分页数据 | 选择或确认 |
-| `PriceChart` | ECharts K 线、区间和标记 | 不可变图表序列 | 区间变更 |
-| `EpisodeTimeline` | 阶段与风险状态转换 | 时间线事件 | 选择时间 |
-| `PositionLots` | 局部批次表单、T+1 展示和显式确认 | 权威分页/预填/操作网关 | 已确认的增加或关闭命令 |
-| `PlanWorkbench` | 编排提取与证据审核 | 草稿与提取结果 | 提取或审核意图 |
-| `SourceTextEditor` | 纯文本计划输入 | 原文 | 更新文本 |
-| `AIProviderSelector` | 显示或选择配置文件中的供应商 | 安全运行摘要 | 选择 |
-| `ExtractionEvidence` | 展示证据、不确定性和遗漏 | 提取结果 | 解决问题 |
-| `ExtractedPlanReview` | 把 AI 结果显式交接到结构化审核 | 提取结果/原文/已解决问题 | 根草稿保存意图 |
-| `StructuredPlanEditor` | 分区编辑强类型草稿 | 计划草稿与问题 | 更新草稿 |
-| `ActivationDiffDialog` | 确认不可变版本切换 | 变更前后内容与问题 | 确认或取消 |
-| `HealthMatrix` | 供应商及股票健康矩阵 | 健康数据行 | 选择股票 |
-
-`monitor` Pinia store 管理规范化快照和事件状态，通过只读视图及明确的 `applySnapshot`、`applyEvent` 和恢复操作修改。路由内计划与持仓表单保持局部状态。`useMonitorStream`、`useSymbolFilters`、`useChartSeries` 和 `usePositions` 封装生命周期或派生逻辑。ECharts 实例和大型不可变序列使用 shallow ref。组件使用强类型 props 和 emits，绝不直接修改共享记录。
-
-`SymbolDetailView` 只是 T049 的组合表面。`PositionLots` 管理带标签的原生控件、由提醒拥有的预填字段、确认对话框状态和焦点恢复。`usePositions` 接受 maybe-reactive 股票/日期/分页/预填输入和注入的普通函数操作网关；它暴露 shallow-readonly 权威状态及显式变更方法。提醒可以预填表单但不能提交，提醒确认不能创建或减少批次，每条新语义命令都绑定已复核批次 revision 和新的幂等键；相同命令的不确定重试会复用该键，直至权威核对或确定性拒绝。只有建仓/减仓回执与随后刷新的权威分页一致时才报告成功。冲突刷新使用原始变更上下文，generation 闸门阻止较旧响应覆盖较新分页，不完整分页不能用于推断任何持仓策略限制。浏览器只能实施输入形状、正数 100 股整手数量、确认和响应 identity；它绝不根据最大持仓、剩余数量、后端 `sellableQuantity`、交易日历或 T+1 资格阻止命令。T050 提醒视图、安装后资源发现和 T024 判断行为均不属于该边界；WEBF09 提供生产 API/router 组合。
-
-## 视觉与无障碍方向
-
-采用“工业信号控制台”风格：石墨与墨色表面、细密技术网格、矿物白文字、黄铜或琥珀色观察状态、低饱和海玻璃绿实时状态、只用于真实风险的朱红色，以及少量青色信息强调。数字使用等宽表格字体并对齐小数点。避免紫色渐变、过量玻璃卡片、超大 KPI 卡片和装饰性股票图片。
-
-- 以 WCAG 2.1 AA 对比度为目标。
-- 不只依赖红绿颜色表达状态，同时使用标签、图标和形状。
-- 支持完整键盘导航、清晰焦点、跳转到主内容，以及有标签的表单、对话框和表格。
-- 普通状态使用礼貌级 `aria-live`；只有时效性可执行提醒或风险提醒使用强提示。
-- 尊重减少动态效果设置。
-- 适配 320、768、1024 和 1440 像素宽度。
-- 禁止使用未净化的 `v-html`；计划和 AI 文本必须作为经过转义的纯文本显示。
-
-## 本地安全边界
-
-- 生产命令只绑定 `127.0.0.1`；远程/局域网模式、主机别名、端口转发和公开暴露均不在范围内。
-- 单页应用、API 和 WebSocket 同源；生产环境关闭 CORS，并拒绝异常 HTTP 或 WebSocket Origin。
-- MVP 不实现登录或身份认证。文档必须明确禁止端口转发或公开暴露。
-- 设置 CSP、禁止嵌入、内容类型、Referrer 和 Permissions 等安全响应头。
-- 原始请求体限制为 4 MiB，既有字段/导入限制保持更严格，YAML 必须安全加载。
-- AI 基础 URL 只允许 HTTPS，但允许用户自建本地模型使用明确的回环地址例外；拒绝重定向和内嵌凭证。
-- 密钥只写，并从响应、前端状态、导出、日志和错误中脱敏。
-- 所有计划、供应商、持仓、提醒确认和启用变更都必须写入审计记录。
-
-## 代码风格
-
-```vue
-<script setup lang="ts">
-interface Props {
-  extraction: PlanExtraction
-}
-
-interface Emits {
-  resolveIssue: [issueId: string]
-}
-
-defineProps<Props>()
-const emit = defineEmits<Emits>()
-</script>
-
-<template>
-  <button type="button" @click="emit('resolveIssue', extraction.id)">
-    标记为已处理
-  </button>
-</template>
-```
-
-统一使用 `<script setup lang="ts">`、PascalCase 单文件组件、script/template/scoped-style 顺序、功能目录、纯计算派生状态；watcher 只用于带清理逻辑的副作用。
-
-## 测试策略
-
-- 后端契约测试覆盖所有端点、schema、错误格式、分页、幂等、乐观冲突、Origin 防护、密钥脱敏和 OpenAPI 快照。
-- WebSocket 测试覆盖快照一致性、顺序、回放、序号缺口、重连和重启。
-- Vue 单元测试覆盖 store、计划工作台、AI 提取审核、启用闸门、自选表、详情、提醒、设置、加载、错误、空状态及键盘交互。
-- 图表映射测试及无障碍表格替代视图测试。
-- Playwright 端到端流程：使用项目测试配置中的模拟 AI 供应商启动、粘贴计划、提取、显式进入结构化审核、解决警告、保存、单独确认后端允许的启用、回放行情、接收一条提醒、确认提醒，并验证持仓未变化。
-- 使用 axe 执行无障碍自动化测试，并补充键盘和人工检查。
-- 在桌面、平板和移动端宽度下进行浏览器验证。
-
-## 边界
-
-- 始终：可执行规则和验证以后端为权威来源。
-- 始终：如实展示数据新鲜度和连接状态。
-- 始终：启用计划和修改持仓必须显式确认。
-- 需先确认：增加身份认证、远程访问、操作系统级浏览器通知或新的外部消息渠道。
-- 禁止：暴露密钥、在 Vue 中复制规则逻辑，或把提醒确认当作成交。
-- 禁止：把 AI 或用户文本作为原始 HTML 渲染。
-- 禁止：让提取请求直接启用计划。
-
-## 验收标准
-
-- 一个本地 URL 支持从粘贴文本计划、审核到启用计划的完整流程。
-- 监控总览和详情页独立展示全部 10 只股票，并在不刷新整页的情况下更新。
-- 浏览器断连后从一致快照恢复，且绝不把陈旧数据显示为实时。
-- Web 使用项目配置加载的 AI 供应商，不显示修改控件，也绝不接收密钥值或其文件/键引用。
-- 存在重大遗漏或验证错误时，计划不得启用。
-- 一个确定性买入事件只生成一条带证据和免责声明的文本提醒。
-- 界面满足键盘操作、对比度、响应式、减少动态效果和非纯颜色表达等要求。
-- 正常启动路径不监听回环地址以外的网络接口。
-
-## 待确认问题
-
-- 无阻断问题。操作系统级浏览器通知和指定聊天平台保留为未来可选渠道。
-
-## 审核状态
-
-WEBF11 已获准在本会话实施并进行离线验证。它复用 T039/T043/T044 游标恢复，仅增加安全的 `0008_market_index_monitor_event` 迁移边界；不声称回测策略事件 cursor resume 已完成。WEBF12 已获准在本会话实施并进行离线验证；它完成总览/详情的共用指数与当前计划展示边界，不改变 REST/OpenAPI/生成 TypeScript 契约。WEBF13 记录当前真实路由和新建回测旅程边界，不改变冻结契约；其配对离线验收证据已于 2026-09-04 通过。
-
-基础 `local-web` 规格和已完成的 `T035`～`T056` 实施历史继续保持此前批准状态。R09 增加显式计划能力投影、权威持仓库存读取/确认传输和持久化 BUY 提醒投影。R10 增加隔离可信的普通 `SELL` 与纯五分钟 `RISK_ALERT` 执行、抑制前完整冲突处理、多意图原子 outbox 投影，以及统一批次/期初余额库存减记。R11 增加 v4 部分草稿保存/读取与精确当前快照复核确认，当时继续为 R12 阻断导入和公开启用。
-
-R12 完成普通用户的 v4 AI 提取、不可变 Schema-v3 保存、八项政策补充、当前问题复核、激活、独立按日期库存登记、提醒确认、实际库存减记及停用流程。提取响应校验器还接受后端带映射的 `plan-extract-v4`、`plan-extract-v5` 和 `plan-extract-v6` 结果；成功响应缺少必要映射时仍拒绝。补充保留耐久 `USER_SUPPLEMENT` 绑定并要求重新取得服务端审核；原文字段修改绝不会成为原文证据。只有已存在的技术性 `CONTRACT` 版本绑定随服务端分配的后继版本更新。库存可直接在 v3 工作台操作，仍独立于提醒和提醒确认。活动版本绑定的运行时读模型公开已持久化的逐规则条件证据，包括实际成交量、历史均量和阈值，不会捏造 legacy 判断投影。
-
-完整 Chromium 流程已在独立临时 SQLite 数据库、真实应用服务和调度器、受控时钟，以及 AI HTTP/行情 SDK 边界假提供方上通过。仅预置交易日历和历史行情；计划、复核、激活、库存、提醒确认、减记和停用均通过普通界面操作。已验证能力为 `publicActivationAvailable=true`、`isolatedTrustedReviewOnly=false`、`pendingRequirements=[]`；精确当前 `reviewId`、`contentHash` 和激活 `expectedRevision` 校验仍为强制要求。这是本地集成证据，不代表真实外部提供方验证。该检查点的 OpenAPI 契约包含 50 条路径：35 条实时路径和 15 条回测路径。提交、推送、依赖安装和联网访问继续需要分别授权。
-
-## 准入受阻时的旧计划维护
-
-`GET /api/v1/health` 仅在活动计划缺少心跳时显示 `BLOCKED` 和 `blockReason=LEGACY_PLANS_REQUIRE_REVIEW`。系统页面使用 `GET /api/v1/system/legacy-plan-invalidation` 展示最多 10 个准确的 `{symbol, planVersionId, revision}` 身份及小写 SHA-256 `fingerprint`；其他情况下返回 `available=false`、`plans=[]`、`fingerprint=null`。经过独立的勾选和确认后，`POST /api/v1/system/legacy-plan-invalidation` 接收 `{fingerprint, confirmation:"INVALIDATE_LEGACY_PLANS"}`，返回 `{symbols, restartRequired:true}`。缺少确认返回 `422`，证据变化返回 `409`。POST 仅可在自有监控代际受阻且没有调度任务时执行；该状态下普通 HTTP 写入返回 `409`。既有本地同源 HTTP 防护继续生效。响应不包含凭证或原始存储错误。操作人须先重启工具再创建新计划；该操作绝不修改持仓或已确认成交。当前 OpenAPI 文档含 51 条路径，包括这条新增的实时路径。`GET /api/v1/health` 还提供有界的 `recoveryIssues`，分别包含受影响标的、稳定原因码及 `nextRetryAt`；系统页面将它们与传输新鲜度分别展示。未配置 Tushare 与股票语义证据不可用分别使用安全原因码 `TUSHARE_NOT_CONFIGURED` 和 `STOCK_SEMANTICS_UNAVAILABLE`；降级的运行时报告稳定的 `degradedReason` 和下次重试时间。
-
-按 D5 受控重启，运行中相关配置漂移后，`GET /api/v1/health` 也可显示 `BLOCKED` 和 `blockReason=NEEDS_RESTART`。此状态下全部普通 HTTP 写入，包括旧计划维护 POST，均返回 `409`。该原因要求安全停止、人工修正配置并启动新进程，不授权进程内替换数据源。120 小时准入使用的 `last_alive_at` 是本地合法软件所有者的持久心跳，与协调器进展及 WebSocket 健康信号分开。
-
-## DP-WEB01 日线计划接口与人工审核边界
-
-2026-10-02 已授权的 Schema 4 清理遵循 [SPEC-daily-plan](SPEC-daily-plan.zh-CN.md)，尤其 D06–D11。本快照仍恰有60条REST路径：原51条加9个日线资源，合计45条实时路径和15条回测路径。模拟交易路径替代未发布的执行报告路径，不保留券商端点或别名。此前路径数和验证记录描述各自日期检查点。Schema 4仍不得进入旧回测执行。
-
-| 端点 | 契约边界 |
-|---|---|
-| `GET /api/v1/daily-plan-editor-schema` | 读取Schema 4候选及 `FACT`、`POSITION`、`SIMULATION`、`REASSESSMENT` 命令schema。软件固定100股单位、1 fen和下一交易所交易日结算；不含可配置券商递增或券商规则证据。 |
-| `POST /api/v1/daily-plan-review-previews` | 验证当前 `candidateJson`、`sourceText`、可选mapping及精确基本面 `scopeSelections`；恢复匹配的已登记补充，返回 `supplementRevision` 和服务端审核，但不授予人工批准。 |
-| `POST /api/v1/daily-plan-review-supplements` | 登记绑定精确候选 `contentHash` 和 `expectedRevision` 的人工补充；补充后须重新获得当前审核。 |
-| `POST /api/v1/daily-plan-facts` | 登记绑定精确 `planVersionId`、`contentHash`、交易日或signal及 `expectedRevision` 的技术/运行证据；官方证据包含发布与核验时间。 |
-| `GET /api/v1/daily-plan-runtime/{symbol}` | 读取权威信号、技术风险、聚合模拟库存、证据和阻塞原因；明确区分不可用、未激活和不支持的开发数据。 |
-| `GET /api/v1/daily-position-inventory` | 按 `symbol` 和 `asOfTradeDate` 读取日线聚合模拟数量、可卖量及独立修订；不含lot、订单或客户端分配。 |
-| `POST /api/v1/daily-position-confirmations` | 以 `{symbol,coreQty,tacticalQty,expectedRevision}` 初始化隔离日线库存。数量非负且为100整数倍，单字段及合计均须JavaScript安全；初始化不得覆盖交易或重置信号消费。 |
-| `POST /api/v1/daily-simulated-trades` | 以 `{planVersionId,causeId,expectedCauseRevision,expectedInventoryRevision,quantity}` 加 `Idempotency-Key` 明确确认。仅当前提供的完整数量可以原子成功。服务端派生方向、类别扣账、价格和时间；同key重试返回回执，部分量、过期或重复消费不产生变更。 |
-| `POST /api/v1/daily-risk-reassessments` | 以当前风险、计划内容和 `expectedRevision` 登记已核验解除证据及审核范围/目标，保留审计与已消费原因历史。 |
-
-日线提取、草稿保存、审核确认及激活复用 `/api/v1/plan-extractions`、`/api/v1/plan-drafts`、`/api/v1/plan-review-confirmations` 和 `/api/v1/plan-activations`。激活绑定精确version/content/source/evidence/review revision。原文或参数改变须重新审核，preview不能批准候选。可识别的旧Schema 4计划，包括此前ACTIVE券商契约，保持只读，返回 `obsoleteReason=DAILY_DRAFT_OBSOLETE` 和 `canActivate=false`；持久绑定及原始字节不变，production跳过它们且不影响其他标的和旧schema。
-
-日线POSITION/SIMULATION记录与真实持仓表及回测组合隔离。技术事实、聚合初始化、明确模拟和重审立即刷新真实production runtime。事务及提醒发送时重新校验当前事实、库存、原因、审核、激活、报价及日历修订。提醒、已阅、重试和调度绝不交易。普通信号一次消费完整数量；到期或失效权限不能在风险完成后复活。锁定技术风险在激活到期后仍保留退出范围，直至完成或重审。T+1依据模拟取得日期及认证交易所交易日计算。
-
-当前提醒使用 `daily-simulation-alert-v1` 载荷及哈希身份。原 `daily-plan-alert-v1` 记录在共享提醒列表/读取/已阅中保留原文、身份和时间，作为类型明确的 `UNSUPPORTED` 历史；绝不发送或转换成模拟成功。旧日线REPORT、券商POSITION及不兼容head同样返回有界不支持诊断，不展示券商字段或授予执行权。基本面保留为排除背景，技术余文仍须保留。日线/QFQ/日历/预热证据不足须明确可见；它阻止普通权限，但不抹除锁定风险义务。离线测试不代表真实供应商认证或批准历史原始计划。
+验证须使用临时数据库和确定性供应商，覆盖正式 API、生产组合、当前提取/审核/启用、隔离模拟、已读零库存变更、重启及新旧协议不匹配。[最新本地验收](../../verification/2026-10-03-unified-plan.zh-CN.md) 记录已执行覆盖与限制。真实供应商验收、用户数据库迁移及部署是独立操作。

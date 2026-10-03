@@ -115,7 +115,3 @@ The existing `ALL`/`ANY` three-valued rules combine stock and index children wit
 - Ask first: add a condition, role, range, path grammar, schema version, or formula.
 - Never: mutate v1, invent an AI rule, let the browser evaluate, or add a hidden global gate.
 - Every index-caused decision effect is traceable to one stored plan path and exact snapshot/formula hashes.
-
-## Review Status
-
-Approved for implementation and offline verification on `2026-09-02`; no commit, push, deployment, dependency installation, or real provider request is authorized.

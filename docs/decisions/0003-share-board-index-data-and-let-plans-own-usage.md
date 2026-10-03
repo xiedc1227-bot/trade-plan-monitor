@@ -72,9 +72,3 @@ Shared snapshots are immutable and content-addressed. Logs, errors, APIs, report
 Changing the responsibility boundary so the tool again controls trades would require a superseding ADR, a new plan-schema version, API and evidence changes, and a migration that preserves existing plan and result hashes. Changing a board binding requires a new mapping version and new plan versions; an active plan cannot change silently.
 
 Schema v1 plans remain readable and executable with `referenceMarket=null`. Schema v2 drafts add the automatic binding and only the index conditions present in the source plan or explicitly reviewed by the user. Historical results are not rewritten with later index data or conclusions.
-
-## Review Status
-
-The user explicitly approved the complete bilingual board-index proposal on `2026-09-02`, including D1–D5 and assumptions A1–A8. This ADR is therefore `Accepted` with decision date `2026-09-02`.
-
-A later request on `2026-09-02` authorized paired module specifications, code/schema/API/document changes, and offline verification. Commit, push, dependency installation, deployment, and real provider network calls remain unauthorized.

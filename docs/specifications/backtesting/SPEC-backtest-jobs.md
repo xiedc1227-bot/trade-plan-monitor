@@ -127,7 +127,3 @@ Use deterministic fake operations and clocks. Cover twenty concurrent identical 
 ## Confirmed First-Release Decisions
 
 The confirmed first-release decisions are: keep `DATASET_VERIFY` asynchronous; use one in-process coordinator, one single-thread operation executor, one single-thread repository executor, and one durable operation slot; allow at most three total worker-claim generations; and recover strategy replay from the frozen beginning. Subprocess isolation, event-cursor resume, and logical automatic retries are deferred.
-
-## Review Status
-
-The six-module capability map, persistent bounded job layer, REST polling, one active slot, result-database placement, this detailed specification, and its numeric lease/recovery/queue limits were approved by the user on 2026-08-26. The application-owned cancellation idempotency operation and 14-day canonical-response replay clarification was then added bilingually. On 2026-08-26, the user confirmed that correction together with the single `Asia/Shanghai`/`+08:00` persisted/public job-time contract and the remaining corrected specification set. Section 15 of the bilingual implementation plan was approved on 2026-08-26. That approval authorizes only generating the bilingual `BT009`–`BT050` task list. The generated task list still requires separate explicit approval; schema changes, worker implementation, commit, push, dependency installation, and any network access remain unauthorized.

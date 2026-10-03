@@ -98,7 +98,3 @@ def validate_reference_market_binding(symbol: str, binding: ReferenceMarketBindi
 - 非法输入在 I/O 前失败，不能静默选择基准。
 - 保存的绑定可重新计算、不可变，并且参与哈希。
 - 本模块不存在行业指数或统一市场结论。
-
-## 审核状态
-
-双语板块指数提案和 ADR 0003 已于 `2026-09-02` 获批。当前用户请求授权本规格、实施和离线验证，但不授权提交、推送、安装依赖、部署或真实供应商网络访问。

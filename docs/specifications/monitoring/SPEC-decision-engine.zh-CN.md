@@ -38,9 +38,11 @@ tests/replay/
 └── test_decision_replay.py
 ```
 
-## R08 版本范围
+## 冻结重放范围
 
-下述单结果、优先级、episode、CORE/TACTICAL 及官方收盘规则继续属于 `LEGACY_LOW_BUY` 契约。[SPEC-executable-plan-extension](SPEC-executable-plan-extension.zh-CN.md) E03–E08 定义待实现的平行 `explicit-rules-v1`：精确前序均量、完成收盘区间/严格低于条件、BUY/SELL 数量、纯风险、明确重复/冲突政策、多版本化意图及被消费状态 revision 保护。除非在自身受支持且已审核的契约中声明，否则不继承旧策略限制。R09–R12 必须先实现并验证新消费者才能激活能力；本修订不代表新策略可以运行。历史结果和回测边界遵守 [ADR 0005](../../decisions/0005-version-explicit-plan-rules.zh-CN.md)。
+下文单结果、episode、CORE/TACTICAL、低位及正式收盘规则描述冻结 `LEGACY_LOW_BUY` 研究/兼容行为。归并后的[冻结计划参考](SPEC-plan-domain.zh-CN.md) 保留 Schema 1–3 模型及准确显式规则算术/结果身份；Schema 4 读取器保留原存储含义。既有结果哈希和回测输入遵循 [ADR 0005](../../decisions/0005-version-explicit-plan-rules.zh-CN.md)。
+
+当前 Schema 5 条件、确认、纯提醒规则及隔离模拟遵循[单一交易计划流程](SPEC-unified-plan.zh-CN.md)。旧策略要求不能成为当前计划的默认值或额外阻断。任何冻结格式都不能通过当前服务启用或模拟。
 
 ## 公共契约
 

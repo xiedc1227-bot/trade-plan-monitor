@@ -98,7 +98,3 @@ The input must first match the existing canonical stock pattern `^[0-9]{6}\.(SH|
 - Invalid input fails before I/O and cannot silently select a benchmark.
 - Stored bindings are recomputable, immutable, and hash-sensitive.
 - No industry index or universal market conclusion exists in this module.
-
-## Review Status
-
-The bilingual board-index proposal and ADR 0003 were approved on `2026-09-02`. The current user request authorizes this specification, implementation, and offline verification, but not commit, push, dependency installation, deployment, or real provider network access.

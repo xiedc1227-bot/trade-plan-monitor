@@ -111,7 +111,3 @@ Retain the exact one-symbol/one-day regression of 49 decisions and one daily-equ
 ## Open Questions
 
 Structured event-risk records, corporate actions, volume participation, market impact, portfolio/shared-cash execution, optimizer/batch comparison, and strategy event cursors remain deferred. The current explicit event-risk boolean and deterministic replay-from-start recovery remain the first-release contract.
-
-## Review Status
-
-The six-module capability map, single-plan/single-symbol direction, and this detailed specification were approved by the user on 2026-08-26. The Web-required/CLI-nullable `plan_version_id: UUID | None` clarification was then added bilingually to align this engine contract with the corrected API and existing CLI. On 2026-08-26, the user confirmed that identity correction together with the single `Asia/Shanghai`/`+08:00` time contract and the remaining corrected specification set. Section 15 of the bilingual implementation plan was approved on 2026-08-26. That approval authorizes only generating the bilingual `BT009`–`BT050` task list. The generated task list still requires separate explicit approval; implementation, commit, push, dependency installation, and any network access remain unauthorized. Existing `BT005`–`BT006` logic is the baseline; initial-lot input, multi-day actionable journeys, cancellation, zero-side-effect proof, and resource evidence remain open.

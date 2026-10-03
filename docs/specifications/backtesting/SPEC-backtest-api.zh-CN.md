@@ -10,7 +10,7 @@
 
 `backtest-api` 是 `backtest-data`、`backtest-jobs`、`backtest-results`、不可变 `plan-domain` 版本和共享 `local-web` 错误/Origin/OpenAPI 边界之上的契约优先适配器。它不实现策略规则、SQL Repository、Worker 循环、供应商映射、Vue 结果格式化、新认证系统或新 WebSocket。
 
-原始获批基线包含 24 条实时监控路径，本规格提出新增 13 条回测资源路径，初始实现后合计为 37 条。随后两条增量板块指数回测资源把回测总数提高到 15 条，同时实时资源增长到 27 条。当前冻结的 OpenAPI 因此精确包含 42 条路径（27 条实时加 15 条回测），并且 `openapi.json` 和 `web/src/api/generated.ts` 一起生成。WEBF13 只消费当前契约，不改变任何路径、字段、状态或 Schema。
+历史 API 通过增量回测/指数资源扩展。当前总路径与响应 Schema 以 `openapi.json` 和 `openapi.runtime-status.json` 为权威，并与 TypeScript 产物一起生成。回测 API 边界独立于当前 Schema 5 计划流程；历史路径数量不是当前验收标准。
 
 ## 命令
 
@@ -224,7 +224,3 @@ OpenAPI 测试固定精确 42 条路径，重新生成 TypeScript 并拒绝 Sche
 ## 开放问题
 
 首个契约提案没有阻断问题。WebSocket 任务事件、远程认证、破坏性运行删除、Debug Trace 公开、组合运行、服务端比较和经验性能预算继续延期，并根据适用情况要求单独批准或获批准的实现计划。
-
-## 审核状态
-
-用户于 2026-08-26 确认六模块地图、增量本地 REST 方向和本详细规格集合。随后通过双语一致性审计把 `BacktestRunCommand.planVersionId` 修正为现有 RFC 4122 UUID/string identity；增加仅供回测使用的 `FenText` 判断投影且不改变原始实时基线；闭合任务判别不变量；并明确应用负责的取消/置顶幂等。由此产生的实现和后续板块指数增量现构成冻结的 42 路径契约。WEBF13 不改变该契约；其验收报告只能记录实际运行的离线证据。提交、推送、依赖安装和联网访问继续需要分别授权。

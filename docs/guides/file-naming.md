@@ -22,7 +22,7 @@ Use names that describe the file's responsibility. Apply this policy to maintain
 
 Preserve tool-owned names such as `README.md`, `pyproject.toml`, `package.json`, `__init__.py`, `__main__.py`, `conftest.py` and dotted Vite configuration filenames. Preserve established `SPEC-`, `CAPABILITY-MAP-` and `PROPOSAL-` document roles, numbered ADRs and migration revisions, date-based verification records, ticker identifiers and semantic fixture versions.
 
-Historical task plans, acceptance reports, recorded commands and frozen evidence may retain `R13` and similar IDs. These are record identities, not templates for new executable names. Preserve `remediation/evidence/`, existing `docs/verification/assets/` and recorded runtime data byte-for-byte during naming migrations; do not rewrite historical executions as though they used a new command.
+Historical task plans, acceptance reports, recorded commands and frozen evidence may retain `R13` and similar IDs. These are record identities, not templates for new executable names. Preserve retained evidence and recorded runtime data byte-for-byte during naming migrations; do not rewrite historical executions as though they used a new command. Document cleanup follows the separate retention policy in `docs/README.md`.
 
 ## Rename procedure
 
@@ -31,7 +31,3 @@ Historical task plans, acceptance reports, recorded commands and frozen evidence
 3. Move the existing file and update imports, subprocess module arguments, current operational commands and documentation in both languages. Preserve pending edits.
 4. Record old-to-new paths in a migration map, including the new command for historical executable paths. Do not add duplicate compatibility test files that would run twice.
 5. Compare test discovery, check imports and run affected offline tests. Preserve authorization IDs, budgets, schema versions and live-provider opt-in boundaries.
-
-## Current migration
-
-The 2026-10-01 audit checked all 1,448 tracked filenames and renamed 38 maintained executable files. See the complete [path map](../verification/assets/file-naming/renames.json) and [verification report](../verification/2026-10-01-file-naming.md). For example, run `python -m scripts.bounded_live_acceptance` instead of the former `scripts.r14_bounded_acceptance` entry. Default offline behavior and existing execution authorization requirements are unchanged.

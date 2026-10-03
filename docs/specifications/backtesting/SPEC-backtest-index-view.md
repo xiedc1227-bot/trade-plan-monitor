@@ -86,7 +86,3 @@ Route views remain thin. Generated readonly records flow through typed props; ta
 - Ask first: add API fields/endpoints, report/export domains, browser calculations, or an overall classification.
 - Never: rewrite historical results, infer a market label, calculate policy in Vue, expose local/provider secrets, or reconstruct expired evidence.
 - Monitoring and backtest show identical mapping, cutoff, formula, snapshot, and path evidence for identical inputs.
-
-## Review Status
-
-Approved for implementation and offline API/Vue/Playwright verification on `2026-09-02`; commit, push, deployment, dependency installation, and real provider access remain unauthorized.

@@ -2,7 +2,7 @@
 
 Canonical English; the matching `.zh-CN.md` is the Chinese review copy.
 
-- Status: Accepted for isolated implementation; production dispatch remains gated
+- Status: Accepted; production composition uses current delivery admission
 - Date: 2026-09-21
 - Related: `SPEC-runtime-recovery`, RR011–RR013
 
@@ -22,4 +22,4 @@ Classify by signal, not severity. Actionable intraday alerts expire at original 
 
 Rejected: rewriting canonical payloads; reusing acknowledgement or channel failure as suppression; applying a blanket 90-second expiry to risk; backfilling all history inside schema upgrade; treating persisted ELIGIBLE as a permanent permit.
 
-Acceptance for this increment is temporary-database migration/interruption/rollback, bounded initialization, immutable alert bytes, source expiry, corrupt-evidence rejection, concurrent revision fencing and atomic audit. This is not full RR011–RR013 acceptance: evaluator integration, durable current-authority reconstruction and final dispatch admission remain open. Nonempty downgrade refuses to discard metadata, including terminal audit state; use forward recovery or a compatible backup without overwriting newer business records. Live migration and deployment require separate approval.
+Acceptance for this increment is temporary-database migration/interruption/rollback, bounded initialization, immutable alert bytes, source expiry, corrupt-evidence rejection, concurrent revision fencing and atomic audit. Current integration and executed evidence are maintained in `SPEC-runtime-recovery.md` and the latest acceptance report. Nonempty downgrade refuses to discard metadata, including terminal audit state; use forward recovery or a compatible backup without overwriting newer business records. Live migration and deployment require separate approval.

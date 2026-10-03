@@ -2,7 +2,8 @@
 
 > Canonical English; `0005-version-explicit-plan-rules.zh-CN.md` is the equivalent Chinese review copy.
 
-- Status: `Accepted; R09-R11 implemented, R12 pending`
+- Status: `Accepted`
+- Current scope: frozen compatibility rationale; new live operations follow `SPEC-unified-plan.md`.
 - Review-version amendment: [ADR 0006](0006-review-mixed-source-with-bounded-treatments.md) supersedes only new server mapping/evidence versions; historical v1 snapshots and all prompt contracts remain frozen.
 - Date: `2026-09-12`
 - Initiative: `F06 / R08–R12`
@@ -16,7 +17,7 @@ R03 protects prompts at import-time using generated-schema digests. R04/R05 bind
 
 ## Decision
 
-1. Add Schema 3 / `EXPLICIT_RULES` / `explicit-rules-v1` as a bounded sibling model, with the fields and semantics in [the extension specification](../specifications/monitoring/SPEC-executable-plan-extension.md). Leave the legacy `TradePlan`, its condition union and prompt-visible model graph intact. Reuse scalar types, price arithmetic, three-valued evaluation helpers, calendar/data validation and transaction participants; add typed dispatch at consumers. Do not expand the old condition union and then repair its golden hashes.
+1. Add Schema 3 / `EXPLICIT_RULES` / `explicit-rules-v1` as a bounded sibling model, with the fields and semantics in [the extension specification](../specifications/monitoring/SPEC-plan-domain.md). Leave the legacy `TradePlan`, its condition union and prompt-visible model graph intact. Reuse scalar types, price arithmetic, three-valued evaluation helpers, calendar/data validation and transaction participants; add typed dispatch at consumers. Do not expand the old condition union and then repair its golden hashes.
 2. Preserve Schema 1/2 canonical JSON/YAML round-trips and SHA-256. Their derived read/display mode is `LEGACY_LOW_BUY`; do not inject that field into stored bytes. Current repaired low-buy execution has the implementation label `legacy-low-buy-r06` in new run/audit metadata. Historical executions with no recorded execution version remain `UNRECORDED` in external provenance; do not backfill a claim about the algorithm that originally ran.
 3. V3 exact plan hashes use the same canonical-document SHA-256 convention. V3-only semantic `contentHash` uses the `plan-review-content-v1` domain and excludes exactly the four E07 metadata/identity fields. It supplements, not replaces, sourceHash, exact planHash, reviewEvidenceHash, immutable planVersionId and active revision. R04/R05/R07 historical bindings remain unchanged. Identical saves may retain semantic review only with validated same-source/evidence lineage and a server binding to the new version; edits to trading meaning always reset it.
 4. Add `ExplicitEvaluationResult` and v3 alert payloads as separate tagged variants. Retain `decision-result-v1` and old alert/dedup bytes. New results use `decision-result-v2`, explicit execution version and consumed state revisions; new alerts use `explicit-rule-alert-v1`. Reuse existing result store, outbox and event log through version dispatch, with additive migration where key/CHECK/payload constraints require it. Do not force general SELL into `PRESSURE_REDUCE_READY` or five-minute risk into `RISK_BREACH`.
@@ -79,7 +80,3 @@ R09 requires more than its two original M slices: compatibility, codecs, complet
 ## Configuration and Reversal
 
 No real configuration, provider default, plan, holding, database or credential changes in R08. New technical version names are design decisions within the approved scope; concrete trading-policy choices remain unresolved until explicit source/user evidence exists. Rollback is removal of these documentation amendments before implementation, or the non-destructive version/capability strategy above after implementation.
-
-## Review Status
-
-Design reviewed against current local code and the unchanged F06/S01–S09 source oracles. Accepted as implementation guidance under the user's R08 authorization; this is not acceptance of new running capability, actual-plan activation, real-model quality, or real alert delivery. Coordination owns the next task and the separate R01 outbox regression repair.

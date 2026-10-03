@@ -99,8 +99,3 @@ Provider name, raw response ordering, cache hits, plan ids, operational timings,
 - Ask first: verify/enable a provider, change formulas, health semantics, hash domains, or cache identity.
 - Never: produce a universal market conclusion, hidden trade gate, industry index, synthetic index, unfinished bucket, future fact, or token-bearing diagnostic.
 - One `(indexCode, cutoff, requestSet)` yields one byte-stable snapshot; monitoring and replay use these same models, formulas, and hashes.
-
-## Review Status
-
-Approved for implementation and offline verification by the user's `2026-09-02` request. Real provider capability remains deliberately unverified and outside this authorization.
-The user's `2026-09-14` request separately authorizes bounded transient index recovery and its dashboard status; it does not change provider capability certification or trading-decision rules.

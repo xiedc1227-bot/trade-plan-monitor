@@ -8,7 +8,7 @@
 
 > The synthetic plan uses `003043.SZ` as its test identifier. Prices and quantities are acceptance-only synthetic values. The target is preserved in full: existing 100 shares sellable that day; maximum 300; buy 100 when a completed five-minute close is in inclusive [9.80,10.00] AND its volume is at least 1.5 times the arithmetic mean of the preceding five completed five-minute bars; sell 100 for a completed close in inclusive [10.80,11.00]; risk alert below 9.50 on a completed five-minute close; alerts and acknowledgements never change actual positions.
 
-`baseline.md` 和 R00–R07 交接是历史证据，不是 R08 新执行通过。设计依据为 [SPEC-executable-plan-extension](../docs/specifications/monitoring/SPEC-executable-plan-extension.zh-CN.md) E01–E10 和 [ADR 0005](../docs/decisions/0005-version-explicit-plan-rules.zh-CN.md)。
+`baseline.md` 和 R00–R07 交接是历史证据，不是 R08 新执行通过。设计依据为 [SPEC-executable-plan-extension](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/specifications/monitoring/SPEC-executable-plan-extension.zh-CN.md) E01–E10 和 [ADR 0005](../docs/decisions/0005-version-explicit-plan-rules.zh-CN.md)。
 
 - `SUPPORTED_COMPONENT`：当前代码具有所述有限行为，不代表整个 v3 原文计划已经运行。
 - `IMPLEMENTATION_REQUIRED`：R08 可以表达，仍需指定后续切片实现。

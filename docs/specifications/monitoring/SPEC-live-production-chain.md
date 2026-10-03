@@ -6,7 +6,7 @@
 
 Make the installed local Web application truthfully usable with the production monitoring runtime: typed normal projection unavailability, restart-safe persistent projections, certified stock and board-index acquisition, one-batch deadline evaluation, and a browser state machine that never infers domain readiness from a transport failure.
 
-This specification implements the P0 modules registered in `CAPABILITY-MAP-live-production-chain.md`. It preserves all prior live, AI, board-index, and backtest behavior outside this repair.
+Module boundaries are maintained in `docs/architecture/CAPABILITY-MAP.md`. This contract owns persistent projections, provider admission and bounded acquisition; `SPEC-unified-plan.md` owns current plan operations and supersedes retired live families/commands.
 
 ## Commands
 
@@ -141,7 +141,3 @@ Playwright uses the installed Google Chrome channel (`channel: "chrome"`), one w
 - Vue opens no socket for typed unavailable state and Chrome acceptance is clean.
 - ECharts code is absent from non-chart route requests.
 - All required offline gates pass; live evidence is recorded only when its secret and market-window preconditions are satisfied.
-
-## Review Status
-
-Approved for implementation by the user's explicit request. On 2026-09-07 the user removed the OS credential-store and child-only injection boundary for this personal tool; credentials may be stored directly in ignored local application configuration. The market-window and seven-day freshness gates remain. The authorized 2026-09-08 early-market stock run reported `SourceTimeLabel=START`, but that inference lacked an afternoon boundary and is superseded by the strict 2026-09-09 stock renewal, which certified all five capabilities with `SourceTimeLabel=END`. The 2026-09-09 independent index renewal also certified `SourceTimeLabel=END` and all four indexes in the current trading scope. The historical `899050.BJ=ERROR` observation remains immutable evidence, while the current profile records BSE 50 as `DEFERRED` and eliminates certification calls for it. Separate installed-production evidence from the naturally scheduled 17:00 official-close cycle and restart closes LPC006 through LPC008 for the current scope.

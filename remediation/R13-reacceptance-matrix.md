@@ -1,6 +1,6 @@
 # R13 independent reacceptance matrix
 
-Date2026-09-13; baseline `main/cc328adb4f79b9673705cb67e67520da2dfd667b` plus protected working tree. Canonical English; paired Chinese review copy: `R13-reacceptance-matrix.zh-CN.md`. Complete offline acceptance **NOT PASSED** because of N05. [Report](../docs/verification/R13-reacceptance.md).
+Date2026-09-13; baseline `main/cc328adb4f79b9673705cb67e67520da2dfd667b` plus protected working tree. Canonical English; paired Chinese review copy: `R13-reacceptance-matrix.zh-CN.md`. Complete offline acceptance **NOT PASSED** because of N05. [Report](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/880c76fecfbf002bbc1b73d717c54d542429e7e8/docs/verification/R13-reacceptance.md).
 
 ## M01. Evidence rules
 

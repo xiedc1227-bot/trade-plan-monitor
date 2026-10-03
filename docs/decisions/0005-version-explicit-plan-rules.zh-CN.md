@@ -2,7 +2,8 @@
 
 > `0005-version-explicit-plan-rules.md` 是英文正式版；本文为语义等价的中文审阅副本。
 
-- 状态：`已接受；R09-R11 已实施，R12 待完成`
+- 状态：`Accepted`
+- 当前范围：冻结兼容设计依据；新实时操作遵循 `SPEC-unified-plan.md`。
 - 复核版本修订：[ADR 0006](0006-review-mixed-source-with-bounded-treatments.zh-CN.md) 只取代新服务端映射/证据版本；历史 v1 快照及全部提示词契约继续冻结。
 - 日期：`2026-09-12`
 - 工作项：`F06 / R08–R12`
@@ -16,7 +17,7 @@ R03 在 import 时以生成 Schema 摘要保护提示词。R04/R05 把审核绑�
 
 ## 决策
 
-1. 按[扩展规格](../specifications/monitoring/SPEC-executable-plan-extension.zh-CN.md)新增有界的平行模型 Schema 3 / `EXPLICIT_RULES` / `explicit-rules-v1`。保留旧 `TradePlan`、条件联合和提示词可见模型图。复用标量类型、价格算术、三值求值辅助、日历/数据校验和事务参与者，在消费者处增加类型化分派。不得先扩展旧条件联合再修黄金哈希。
+1. 按[扩展规格](../specifications/monitoring/SPEC-plan-domain.zh-CN.md)新增有界的平行模型 Schema 3 / `EXPLICIT_RULES` / `explicit-rules-v1`。保留旧 `TradePlan`、条件联合和提示词可见模型图。复用标量类型、价格算术、三值求值辅助、日历/数据校验和事务参与者，在消费者处增加类型化分派。不得先扩展旧条件联合再修黄金哈希。
 2. 保留 Schema 1/2 规范 JSON/YAML 往返及 SHA-256。派生读取/展示模式为 `LEGACY_LOW_BUY`，不向存储字节注入此字段。当前修复后低吸实现使用 `legacy-low-buy-r06` 标签，写入新的运行/审计元数据。未记录执行版本的历史执行，其外部来源标识保持 `UNRECORDED`；不能回填对原运行算法的断言。
 3. v3 精确计划哈希沿用规范文档 SHA-256。仅 v3 的语义 `contentHash` 使用 `plan-review-content-v1` 域，只排除 E07 的四个元数据/身份字段。它补充而非取代 sourceHash、精确 planHash、reviewEvidenceHash、不可变 planVersionId 和 active revision。R04/R05/R07 历史绑定不变。相同内容重存，仅在相同原文/证据来源链经校验且服务端绑定到新版本时才能保留语义审核；交易含义编辑总是重置。
 4. `ExplicitEvaluationResult` 和 v3 提醒 payload 使用独立判别分支。保留 `decision-result-v1` 和旧提醒/去重字节。新结果使用 `decision-result-v2`、明确执行版本及已消费状态 revision；新提醒使用 `explicit-rule-alert-v1`。通过版本分派复用既有结果存储、outbox 和事件日志；键/CHECK/payload 约束需要时进行追加迁移。不得把普通 SELL 塞进 `PRESSURE_REDUCE_READY`，或把五分钟风险塞进 `RISK_BREACH`。
@@ -79,7 +80,3 @@ R09 需要超出原两个 M 子任务的工作：兼容、编解码、完整持�
 ## 配置与回退
 
 R08 不改变真实配置、供应商默认、计划、持仓、数据库或凭据。技术版本名是授权范围内的设计决策；具体交易政策仍待明确原文/用户证据确认。实施前可撤销这些文档修订；实施后按上述不丢数据的版本/能力策略回退。
-
-## 审阅状态
-
-设计已对照当前本地代码及未改动 F06/S01–S09 原文预期审阅，依据用户 R08 授权接受为实施指南。这不代表新运行能力、实际计划激活、真实模型质量或真实提醒送达已验收。下一任务和独立 R01 outbox 回归修复均由协调会话负责。

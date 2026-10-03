@@ -1,51 +1,40 @@
 # 交易计划监控系统（Trade Plan Monitor）
 
+当前本地验证：[单一计划流程验收](docs/verification/2026-10-03-unified-plan.zh-CN.md)。真实供应商就绪度与部署是单独验证工作。
+
+> 当前计划流程：[单一交易计划流程](docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md)。在 /plans 粘贴原文、提取单一草稿、修改/审核、明确启用、按条件周期监测并明确模拟完整交易。不存在独立日线计划产品。基本面只在生成计划时审核；提醒和已读绝不改变持仓。已执行证据与范围限制见当前验证报告。
+
 Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交易计划的监控工具。它把经审核的计划和规范化行情转化为可解释提醒，不会自动下单。
 
 [English](README.md)
 
-## 日线计划
+## 交易计划
 
-在本地 Web 界面打开 `/daily-plans`，提取 `plan-extract-v7` 候选，补齐技术参数，单独登记人工策略补充，保存、审核并明确启用 Schema 4。缺失的策略定义会保持可见并阻止启用；历史原文不是已批准的可执行计划。原文或参数修改后必须重新完成当前审核。
+在本地 Web 界面打开 `/plans`，提取单一 `plan-extract-v8` 候选，修改原文定义的条件和参数，登记明确的人工补充，保存、审核并启用。缺失的策略定义保持可见并阻止启用。修改原文或参数后，必须重新审核并绑定准确的保存版本。没有计划类型选择器或独立日线计划工作台。
 
-日线普通指令依据正式完整收盘确认，执行窗口只有下一个交易所交易日。先初始化聚合 CORE/TACTICAL 模拟持仓，再明确确认当前提供的完整交易，数量固定为100股整数倍。服务端校验当前报价、可交易状态、认证日历、T+1、CORE保护及最大持仓，并原子记录一份 `daily-simulation-v1` 回执。提醒和已阅绝不交易。两个技术风险分支在普通指令到期后仍保持已确认退出义务；完整模拟或明确重审解除对应原因。日线模拟库存与共享真实持仓及回测组合隔离。此日线能力不包含券商报告、部分成交、挂单或未知订单、外部订单ID和客户端分配。
+各条件声明所需证据周期。正式日线收盘确认的规则使用下一个交易所交易日，完整五分钟确认使用当前交易日；同一条件树可以组合两个周期，并使用同一个证据截止时间。可选价格区间、仓位分配元数据和技术风险分支依据原文，不强制补齐模板字段。先初始化独立 CORE/TACTICAL 模拟持仓，再明确确认当前提供的完整交易，数量固定为100股整数倍。服务端在同一事务中重新校验当前报价、日历、T+1、CORE保护、最大持仓、审核、原因和版本。提醒和已阅绝不交易。已确认技术风险义务保留原文规定的时序和经审核的解除方式。模拟库存与历史登记真实持仓及回测组合隔离；券商报告、部分成交和未知订单不属于此流程。
 
-基本面由用户在生成交易计划时审核，排除在日线监控之外。基本面与公告原文作为非监控背景保留展示。已知精确原文片段采用服务器范围排除；其他措辞可通过明确的原文片段范围标注交由人工审核。混合句保留技术剩余片段及实际参数路径。这种有限处理不能证明任意自然语言分类正确。未发布的旧三分支 Schema 4 草稿仍可读取，但必须重新提取和审核。现有 Schema 1/2/3、prompt v1–v6 和指数行为保持不变。
+基本面由用户在生成计划时审核，不进入运行或模拟门禁。基本面与公告原文作为绑定审核的背景保留展示；混合句保留技术剩余片段及参数绑定。这种有限原文处理不能证明任意自然语言分类正确。Schema 1–4 原始字节、哈希和历史证据仍可读取，不进行转换；旧启用计划必须创建重新审核的当前版本。历史指数研究与回测保持隔离。
 
-详见[日线规格](docs/specifications/monitoring/SPEC-daily-plan.zh-CN.md)、[统一完成记录](tasks/daily-plan-todo.zh-CN.md)和[最终验证](docs/verification/2026-10-02-daily-simulation-cleanup.zh-CN.md)。当前离线覆盖门禁及独立审核已完成；报告分别记录首次全量、严格测试修正、最终复跑和未变化的容量证据。2026-10-01报告仅证明此前范围。离线夹具不认证当前实时行情，也不批准历史来源计划。
+详见[当前规格](docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md)及[最新本地验收](docs/verification/2026-10-03-unified-plan.zh-CN.md)。确定性离线检查不认证当前实时供应商，也不批准用户的来源计划。
 
 ## 运行恢复修订
 
-正常安装式 Web 入口及打包前端现使用监控协议 `2`。兼容的行情源语义不因时间经过而失效；当前依赖可用性、恢复进展及逐计划数据资格分别核验。安全停止后，重启接续持久工作，不重放已完成判断，也不将提醒视为成交。配置变更采用安全停止 → 编辑 → 新进程。准确证据和限制见[操作指南](docs/operations/live-certification.zh-CN.md#运行恢复与正常重启)及[最终验收记录](docs/verification/2026-09-30-runtime-recovery-final-gate.zh-CN.md)。旧提醒直接关联的实际卖出登记仍是独立后续需求；日线整单模拟是另一项隔离能力。
+正常安装式 Web 入口及打包前端现使用监控协议 `2`。兼容的行情源语义不因时间经过而失效；当前依赖可用性、恢复进展及逐计划数据资格分别核验。安全停止后，重启接续持久工作，不重放已完成判断，也不将提醒视为成交。配置变更采用安全停止 → 编辑 → 新进程。准确证据和限制见[操作指南](docs/operations/live-certification.zh-CN.md#运行恢复与正常重启)及[最终验收记录](docs/verification/2026-10-03-unified-plan.zh-CN.md)。当前计划操作使用独立库存上的明确整单模拟；当前 API 和界面不再提供真实成交登记。
 
-下方产品状态条目保留早期 T/WEBF 实现历史。其中旧启动年龄门禁及 v1 状态描述已由本修订取代。
+
 
 ## 产品状态
 
-`T001`～`T059` 与 `BT001`～`BT050` 的历史发布候选已实现并验收。安装式命令在精确回环地址提供 Vue SPA、REST API 和 WebSocket。LPC历史证据观察到股票及四个范围内指数 `000001.SH`、`399001.SZ`、`399006.SZ`、`000688.SH` 的 `SourceTimeLabel=END`；这些观察不等于当前实时可用性。北证50（`899050.BJ`）保持已知 identity，未纳入交易范围时为 `DEFERRED`。WEBF05的持久监控组合保留共享SQLite和已提交事件流；当前正常入口遵循监控协议 `2`，分别呈现依赖可用性、恢复进展和逐计划资格，兼容数据源语义不因旧认证年龄门禁而失效。缺失权威持久投影时，旧版dashboard/stock端点仍返回类型化 HTTP `200` unavailable 联合；真实服务、存储、迁移、损坏及组合故障不能伪装成正常结果。不再使用通用生命周期占位组合，也不伪造空判断状态。`/plans` 流程已经可用：启动时只加载一次项目 AI 配置，并在 `data/monitor.sqlite3` 上注入一个以后端为权威来源的持久计划服务。计划保存、查询、JSON/YAML 导入、启用和停用因此可跨 Web 进程重启保留；只有用户提交计划原文后才执行提取。成功的 AI 结果只有经用户明确进入审核才会进入共用结构化编辑器；保存只创建未启用草稿，启用仍需用户单独确认并由后端允许。
+安装式命令在回环地址提供 Vue SPA、REST 和 WebSocket。后端负责持久计划/审核状态、监测证据、恢复进展和原子隔离模拟；浏览器展示后端投影。`/plans` 提供当前原文到启用流程，`/alerts` 提供受审计幂等已读，`/system` 解释运行进展与不可用依赖。缺少投影是类型化不可用响应；真实存储/服务故障仍是错误。
 
-WEBF06 将 `/` 接到既有以后端为权威来源的总览快照：它展示股票判断和共用板块指数事实，并与计划专属指数进度分开；在快照存在前保持诚实的加载状态。它不增加浏览器交易规则或供应商请求。
+总览保留共用指数图表与成交额事实，并与计划判断分离。冻结指数条件计划与隔离回测保留原有研究解释；当前计划统一不新增指数判断。历史供应商观察不等于当前就绪度。`899050.BJ` 保留为已知 `DEFERRED` 身份，不属于当前交易范围。
 
-WEBF09 把个股详情持仓面板接到既有持仓 REST 契约，以及共用 monitor 数据库上的持久服务。只有后端执行已启用计划最大持仓、已存日历 T+1、剩余数量、整手和 revision 规则；浏览器只做输入形状检查和显式确认，绝不预测持仓命令是否符合资格。
-
-WEBF10 把 `/alerts` 接到既有提醒 REST 契约和共用持久出站箱。筛选、规范证据和确认 revision 均由后端权威判断；确认操作幂等且受审计，但绝不记录成交或变更持仓。
-WEBF11 加固既有 T039/T043/T044 监控事件流：普通断线重连直接使用已应用状态的 SQLite 全局游标恢复；只有事件缺口或 `snapshot.required` 帧才会先重新获取以后端为权威来源的总览快照，再使用该快照的 `sequence` 重连。只有严格匹配的心跳才能重置存活状态并允许进入 `LIVE`；重复或旧帧不能掩盖超时。追加的 `0008_market_index_monitor_event` 迁移只扩展既有事件账本 CHECK 约束，使已批准的 `market.index.updated` 真正可落库；保留所有既有行、序号和 identity，绝不重写冻结的 `0006_monitor_event`。默认生产组合缺少权威总览投影时现在返回 ADR 0004 类型化 unavailable 响应；WEBF11 绝不伪造恢复数据。本变更不增加 OpenAPI 路径，不改变 Schema v1 数据、历史回测结果或既有 hash，也不声称回测策略事件 cursor resume 已完成。
-
-WEBF12 完成共用指数数据与当前计划条件的展示边界。总览只显示一条以后端为权威来源的共用指数条带，并把自选表每行的计划专属进度分开。个股路由依据后端详情 `referenceMarket` identity，按所选股票历史范围以 `FIVE_MINUTE` 加载既有板块指数 K 线，并具备取消和陈旧 generation 防护。共用参考事实/历史与当前计划 identity/进度/证据明确分区，加载、故障、健康、截止时间和缓存上下文保持可见。Vue 不做映射或结果计算；严格传输校验会在渲染前拒绝错误 identity/证据。本次不增加 REST/OpenAPI/生成 TypeScript 变更，不改变 Schema v1 数据、历史回测结果、既有 hash、token 或供应商请求边界。
-
-WEBF13 在历史上完成生产路由与新建回测的验收缺口。曾经的五条占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 现已在精确 10 路由地图中具备惰性 SFC 与真实浏览器回归证据。确定性 Chromium 旅程还会提交生成的运行命令，沿后端权威 `runId`/`jobId` 轮询，仅在 `COMPLETED` 后移除 `jobId`，再渲染 materialized 结果。其 42 条路径契约（27 条实时加 15 条回测）继续作为历史证据；ADR 0004 后续改变既有监控响应联合与生成 TypeScript，但没有增加路径。Schema v1、历史结果、既有哈希、token 或供应商边界保持不变。详见 [WEBF13 验收报告](docs/verification/webf13-acceptance.zh-CN.md)。
-
-确定性测试套件不调用真实 Tushare、AI、Webhook 或其他外部服务。真实供应商检查仍是需要单独授权的
-操作。直接凭证配置、独立股票/指数命令、可用开市窗口和证据格式
-详见[真实认证运维指南](docs/operations/live-certification.zh-CN.md)。
-
-本地回测实现提供隔离的 `sync`、`verify`、`run`、`list` 和 `prune` 命令，其 BT050 production-fake 验收已完成。T059 已于 2026-09-01 完成最终验收，C24 已完成 4/4 项；这些结论适用于该历史发布候选。可选 AI live 探测继续为 `NOT_RUN_UNAUTHORIZED`。LPC012的历史门禁见[实时生产链路验收报告](docs/verification/live-production-chain-acceptance.zh-CN.md)；后续运行恢复及日线门禁见[当前文档索引](docs/README.zh-CN.md)，不由历史T059证据断言。详见[双语 T059 证据](docs/verification/release-acceptance.zh-CN.md)。历史同步可用和已验收的 T058 visible-block 结果都不代表当前真实 Tushare readiness。
-
-已批准的板块指数扩展现已在监控与回测中实现。`board-index-map-v1` 根据每个已校验的 A 股代码推导固定板块参考；相同指数和截止时间共用不可变数据快照，每个 Schema v2 计划只独立计算自身指数条件。界面把共用指数事实与计划条件结果分区展示，历史 Schema v1 计划和结果保持不变。
+回测 `sync`、`verify`、`run`、`list` 和 `prune` 使用隔离行情/结果库。[回测验收契约](docs/verification/backtest-acceptance.zh-CN.md) 保留固定回归预算。默认自动测试使用确定性供应商；真实 Tushare、AI 和 Webhook 操作需要各自授权。配置、认证及安全重启见[操作指南](docs/operations/live-certification.zh-CN.md)。
 
 ## 安全边界
 
-- 实时系统是监控和提醒软件，不是券商、订单路由或投资顾问。每条可操作提醒都包含“仅提醒，不会自动下单”；隔离的离线 `BACKTEST` 生成明确标注的研究成交；独立的 `daily-simulation-v1` 能力只在日线隔离库存中记录用户明确确认的整单模拟交易。
+- 实时系统是监控和提醒软件，不是券商、订单路由或投资顾问。每条可操作提醒都包含“仅提醒，不会自动下单”；隔离的离线 `BACKTEST` 生成明确标注的研究成交；当前计划流程只在隔离模拟库存中记录用户明确确认的整单模拟交易（保留已有 `daily-simulation-v1` 回执格式）。
 - 计划必须类型化、经审核、版本化，并在激活后保持不可变。AI 输出在确定性校验和用户审核通过前始终是不可信草稿；提取和草稿保存都不会自动启用它。
 - 价格按整数“分”保存，数量按整数“股”保存，A 股时间戳必须是带 `Asia/Shanghai` 时区的值。
 - 行情缺失、过期、无权限或来源语义未验证时安全阻断。
@@ -429,20 +418,9 @@ trade-plan-monitor/
 
 ## 文档
 
-无语言后缀的文档是供智能体和实施流程使用的英文权威输入；同名 `.zh-CN.md` 文件是中文审阅副本，必须在同一次变更中保持语义等价。完整分类清单见 [docs/README.zh-CN.md](docs/README.zh-CN.md)，其[英文索引](docs/README.md)位于同一目录。
+英文文档是实施流程的权威输入，同名 `.zh-CN.md` 是中文审阅副本。两种语言须在同一次变更中保持语义等价。
 
-| 契约 | 英文 | 中文 |
-|---|---|---|
-| 能力地图 | [CAPABILITY-MAP.md](docs/architecture/CAPABILITY-MAP.md) | [CAPABILITY-MAP.zh-CN.md](docs/architecture/CAPABILITY-MAP.zh-CN.md) |
-| 计划领域 | [SPEC-plan-domain.md](docs/specifications/monitoring/SPEC-plan-domain.md) | [SPEC-plan-domain.zh-CN.md](docs/specifications/monitoring/SPEC-plan-domain.zh-CN.md) |
-| AI 草稿 | [SPEC-ai-plan-drafting.md](docs/specifications/monitoring/SPEC-ai-plan-drafting.md) | [SPEC-ai-plan-drafting.zh-CN.md](docs/specifications/monitoring/SPEC-ai-plan-drafting.zh-CN.md) |
-| 行情数据 | [SPEC-market-data.md](docs/specifications/monitoring/SPEC-market-data.md) | [SPEC-market-data.zh-CN.md](docs/specifications/monitoring/SPEC-market-data.zh-CN.md) |
-| 历史回测 | [SPEC-backtest.md](docs/specifications/backtesting/SPEC-backtest.md) | [SPEC-backtest.zh-CN.md](docs/specifications/backtesting/SPEC-backtest.zh-CN.md) |
-| 策略状态 | [SPEC-strategy-state.md](docs/specifications/monitoring/SPEC-strategy-state.md) | [SPEC-strategy-state.zh-CN.md](docs/specifications/monitoring/SPEC-strategy-state.zh-CN.md) |
-| 决策引擎 | [SPEC-decision-engine.md](docs/specifications/monitoring/SPEC-decision-engine.md) | [SPEC-decision-engine.zh-CN.md](docs/specifications/monitoring/SPEC-decision-engine.zh-CN.md) |
-| 通知 Outbox | [SPEC-notification-outbox.md](docs/specifications/monitoring/SPEC-notification-outbox.md) | [SPEC-notification-outbox.zh-CN.md](docs/specifications/monitoring/SPEC-notification-outbox.zh-CN.md) |
-| 监控运行时 | [SPEC-monitor-runtime.md](docs/specifications/monitoring/SPEC-monitor-runtime.md) | [SPEC-monitor-runtime.zh-CN.md](docs/specifications/monitoring/SPEC-monitor-runtime.zh-CN.md) |
-| 本地 Web | [SPEC-local-web.md](docs/specifications/monitoring/SPEC-local-web.md) | [SPEC-local-web.zh-CN.md](docs/specifications/monitoring/SPEC-local-web.zh-CN.md) |
+从[文档索引](docs/README.zh-CN.md)（[English](docs/README.md)）、[当前计划规格](docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md)、[能力地图](docs/architecture/CAPABILITY-MAP.zh-CN.md) 和[操作指南](docs/operations/live-certification.zh-CN.md) 开始。冻结计划/重放契约明确限定兼容用途；已完成过程报告及旧附件不作为开发入口保留。
 
 ## 开发流程
 

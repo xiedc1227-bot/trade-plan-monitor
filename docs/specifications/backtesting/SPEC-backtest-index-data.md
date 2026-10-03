@@ -88,7 +88,3 @@ Coverage uses the selected stock's frozen certified open-day calendar. It requir
 - Ask first: enable a real provider, change dataset/run domains, historical timestamp semantics, mapping, or formula.
 - Never: rewrite history, use future/unfinished data, synthesize an index, mix industry data, or call a provider during replay.
 - Identical live/replay inputs produce identical snapshot and condition evidence bytes; no-condition plans retain original behavior.
-
-## Review Status
-
-Approved for implementation and offline verification on `2026-09-02`. Real historical index-provider capability remains an explicit unverified risk.

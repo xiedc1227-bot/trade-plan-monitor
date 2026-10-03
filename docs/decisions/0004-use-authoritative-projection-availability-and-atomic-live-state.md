@@ -50,7 +50,3 @@ Rejected because network latency would hold database locks and a late failure co
 ## Configuration and Reversal
 
 As revised by the user on 2026-09-07 for this personal tool, provider credentials may be stored directly in the Git-ignored `config/app.yaml` and read by the selected process. The former Windows credential-store and one-shot child-process boundary is removed. Reversal restores code and a verified pre-migration database backup; it does not rewrite Schema v1 rows or invent reverse data transformations.
-
-## Review Status
-
-Accepted by the user's explicit 2026-09-05 production-repair authorization and revised by the user's explicit 2026-09-07 direct-configuration decision. No live readiness is accepted without fresh capability-specific evidence.
