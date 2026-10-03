@@ -50,7 +50,7 @@ const fieldDefinitions = [
   { id: "buy-slippage-bps", field: "buySlippageBps", label: "买入滑点（bps）", help: "0 到 10000 的规范十进制字符串", inputmode: "decimal" },
   { id: "sell-slippage-bps", field: "sellSlippageBps", label: "卖出滑点（bps）", help: "0 到 10000 的规范十进制字符串", inputmode: "decimal" },
 ] as const satisfies readonly {
-  readonly field: Exclude<BacktestRunDraftField, "eventRiskAssumption" | "planVersionId">;
+  readonly field: Exclude<BacktestRunDraftField, "eventRiskAssumption" | "planVersionId" | "researchInputJson">;
   readonly help: string;
   readonly id: string;
   readonly inputmode: "decimal" | "numeric" | "text";
@@ -82,6 +82,7 @@ function errorTargetId(field: string): string {
   const definition = fieldDefinitions.find((candidate) => candidate.field === field);
   if (definition !== undefined) return definition.id;
   if (field === "eventRiskAssumption") return "event-risk-assumption";
+  if (field === "researchInputJson") return "research-input-json";
   if (field === "initialLots") return "initial-lots-title";
 
   const lotField =
@@ -188,6 +189,15 @@ function focusErrorField(field: string, event: MouseEvent): void {
         <p id="event-risk-assumption-help" class="run-form__help">显式选择生成契约枚举</p>
       </div>
 
+      <div class="run-form__field">
+        <label for="research-input-json">统一计划研究输入 JSON</label>
+        <textarea id="research-input-json" :value="draft.researchInputJson" rows="10"
+          :disabled="editingDisabled()" aria-describedby="research-input-help"
+          :aria-invalid="errors.researchInputJson ? 'true' : undefined"
+          @input="emit('updateField', 'researchInputJson', inputValue($event))" />
+        <p id="research-input-help" class="run-form__help">当前统一计划必填，旧计划留空。明确研究起点、库存是否已知和审核声明。operations 为空时只生成信号和提醒，库存不变；模拟操作必须逐笔明确列出。研究费用与现金估值独立于监测回执。</p>
+        <p v-if="errors.researchInputJson" role="alert">{{ errors.researchInputJson }}</p>
+      </div>
       <BacktestInitialLotsEditor
         :disabled="editingDisabled()"
         :errors="errors"

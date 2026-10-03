@@ -12,12 +12,12 @@ import { GridComponent, TooltipComponent } from "echarts/components";
 import { init, use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 
-import type { BacktestEquityPointView } from "../../api/generated";
+import type { BacktestEquityPointView, ResearchEquityView } from "../../api/generated";
 import { formatFenAsYuan, parseFenText } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
-  items: DeepReadonly<BacktestEquityPointView[]>;
+  items: DeepReadonly<(BacktestEquityPointView | ResearchEquityView)[]>;
 }
 
 interface ChartInstance {
@@ -30,7 +30,7 @@ const MAX_SAFE_FEN = 9_007_199_254_740_991n;
 const props = defineProps<Props>();
 const chartHost = useTemplateRef<HTMLDivElement>("chartHost");
 const chart = shallowRef<ChartInstance | null>(null);
-const visibleItems = shallowRef<readonly DeepReadonly<BacktestEquityPointView>[]>([]);
+const visibleItems = shallowRef<readonly DeepReadonly<BacktestEquityPointView | ResearchEquityView>[]>([]);
 const loadState = shallowRef<"LOADING" | "READY" | "FAILED">("LOADING");
 
 let mounted = false;
@@ -106,7 +106,8 @@ function resizeChart(): void {
   chart.value?.resize();
 }
 
-function safeChartYuan(value: string): number | null {
+function safeChartYuan(value: string | null): number | null {
+  if (value === null) return null;
   const fen = parseFenText(value);
   if (fen === null || fen < -MAX_SAFE_FEN || fen > MAX_SAFE_FEN) return null;
   return Number.parseFloat(formatFenAsYuan(fen));

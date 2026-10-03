@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, type DeepReadonly } from "vue";
 
-import type { BacktestEquityPointView } from "../../api/generated";
+import type { BacktestEquityPointView, ResearchEquityView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
-  items: DeepReadonly<BacktestEquityPointView[]>;
+  items: DeepReadonly<(BacktestEquityPointView | ResearchEquityView)[]>;
 }
 
 const props = defineProps<Props>();
@@ -49,16 +49,16 @@ const visibleItems = computed(() => props.items.slice(0, 2_000));
             <time :datetime="item.markedAt">{{ formatDisplayDateTime(item.markedAt) }}</time>
           </td>
           <td>{{ item.snapshotId }}</td>
-          <td>{{ item.symbol }}</td>
-          <td>{{ formatFenAsYuan(item.equityFen) }}</td>
-          <td>{{ formatFenAsYuan(item.cashFen) }}</td>
-          <td>{{ formatFenAsYuan(item.marketValueFen) }}</td>
+          <td>{{ 'symbol' in item ? item.symbol : '研究估值' }}</td>
+          <td>{{ item.equityFen === null ? '不可用' : formatFenAsYuan(item.equityFen) }}</td>
+          <td>{{ item.cashFen === null ? '不可用' : formatFenAsYuan(item.cashFen) }}</td>
+          <td>{{ item.marketValueFen === null ? '不可用' : formatFenAsYuan(item.marketValueFen) }}</td>
           <td>{{ item.positionQuantity }}</td>
-          <td>{{ formatFenAsYuan(item.markPriceFen) }}</td>
-          <td>{{ formatFenAsYuan(item.costBasisFen) }}</td>
-          <td>{{ formatFenAsYuan(item.realizedPnlFen) }}</td>
-          <td>{{ formatFenAsYuan(item.unrealizedPnlFen) }}</td>
-          <td>{{ formatFenAsYuan(item.totalCostFen) }}</td>
+          <td>{{ item.markPriceFen === null ? '不可用' : formatFenAsYuan(item.markPriceFen) }}</td>
+          <td>{{ 'costBasisFen' in item ? formatFenAsYuan(item.costBasisFen) : '—' }}</td>
+          <td>{{ 'realizedPnlFen' in item ? formatFenAsYuan(item.realizedPnlFen) : '—' }}</td>
+          <td>{{ 'unrealizedPnlFen' in item ? formatFenAsYuan(item.unrealizedPnlFen) : '—' }}</td>
+          <td>{{ 'totalCostFen' in item ? formatFenAsYuan(item.totalCostFen) : '—' }}</td>
         </tr>
       </tbody>
     </table>

@@ -1512,7 +1512,7 @@ describe("backtest API runs results and export", () => {
     const decisionItem = decision.items[0];
     expect(decisionItem?.kind).toBe("DECISION");
     expect(outcome.items[0]?.kind).toBe("EXECUTION_OUTCOME");
-    if (decisionItem?.kind !== "DECISION") throw new Error("expected decision detail");
+    if (decisionItem?.kind !== "DECISION" || !("decision" in decisionItem)) throw new Error("expected legacy decision detail");
     expect(Object.isFrozen(decisionItem.decision.evidence)).toBe(true);
   });
 

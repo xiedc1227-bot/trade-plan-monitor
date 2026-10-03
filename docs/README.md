@@ -36,6 +36,7 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 
 ## Backtesting specifications
 
+- [Unified Plan Historical Replay](specifications/backtesting/SPEC-unified-replay.md) ([中文](specifications/backtesting/SPEC-unified-replay.zh-CN.md))
 - [backtest-api](specifications/backtesting/SPEC-backtest-api.md) ([中文](specifications/backtesting/SPEC-backtest-api.zh-CN.md))
 - [backtest-data](specifications/backtesting/SPEC-backtest-data.md) ([中文](specifications/backtesting/SPEC-backtest-data.zh-CN.md))
 - [backtest-engine](specifications/backtesting/SPEC-backtest-engine.md) ([中文](specifications/backtesting/SPEC-backtest-engine.zh-CN.md))
@@ -59,6 +60,7 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 ## Operations and conventions
 
 - [Tushare Live Certification](operations/live-certification.md) ([中文](operations/live-certification.zh-CN.md))
+- [Current Plan Replay Guide](operations/unified-replay.md) ([中文](operations/unified-replay.zh-CN.md))
 
 ## Guides
 
@@ -66,6 +68,7 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 
 ## Necessary acceptance evidence
 
+- [Unified Replay Verification](verification/2026-10-03-unified-replay.md) ([中文](verification/2026-10-03-unified-replay.zh-CN.md))
 - [One Plan Workflow Verification](verification/2026-10-03-unified-plan.md) ([中文](verification/2026-10-03-unified-plan.zh-CN.md))
 - [Backtest production-fake acceptance](verification/backtest-acceptance.md) ([中文](verification/backtest-acceptance.zh-CN.md))
 

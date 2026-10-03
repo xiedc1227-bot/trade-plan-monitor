@@ -23,15 +23,18 @@ from trade_plan_monitor.backtest.dataset import (
 )
 from trade_plan_monitor.backtest.index_data import build_backtest_index_requirement
 from trade_plan_monitor.backtest.models import ExecutionConfig, PositionLot
-from trade_plan_monitor.domain.plan_hash import plan_sha256
+from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
+from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.plan_models import PositionBucket, TradePlan
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_index.canonical import FORMULA_DEFINITION_HASH
 from trade_plan_monitor.market_index.identity import ReferenceMarketBinding
 
 RUN_FORMULA_V1 = "backtest-run-v1"
 RUN_FORMULA_V2 = "backtest-run-v2"
 RUN_FORMULA_V3 = "backtest-run-v3"
+RUN_FORMULA_V4 = "backtest-run-v4"
 RUN_INPUT_SCHEMA_VERSION = "backtest-run-input-v1"
 FIVE_MINUTE_CONTEXT_BARS = 512
 DAILY_CONTEXT_BARS = 499
@@ -39,7 +42,9 @@ CALENDAR_CONTEXT_DAYS = 512
 MAX_INITIAL_LOTS = 200
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
-_RunFormulaVersion = Literal["backtest-run-v1", "backtest-run-v2", "backtest-run-v3"]
+_RunFormulaVersion = Literal[
+    "backtest-run-v1", "backtest-run-v2", "backtest-run-v3", "backtest-run-v4"
+]
 _Sha256Hex = Annotated[
     str,
     StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$"),
@@ -85,7 +90,7 @@ class BacktestRunInput(_RunInputValue):
 
     schema_version: Literal["backtest-run-input-v1"] = RUN_INPUT_SCHEMA_VERSION
     run_formula_version: _RunFormulaVersion
-    plan_snapshot: TradePlan
+    plan_snapshot: TradePlan | UnifiedTradePlan
     plan_sha256: _Sha256Hex
     plan_version_id: UUID | None = None
     dataset_hash: _Sha256Hex
@@ -100,6 +105,9 @@ class BacktestRunInput(_RunInputValue):
     context_bounds: _BacktestContextBounds = Field(default_factory=_BacktestContextBounds)
     execution_config: ExecutionConfig
     manual_event_risk: bool
+    research_input: UnifiedResearchInput | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
     reference_market_binding: ReferenceMarketBinding | None = Field(
         default=None,
         exclude_if=lambda value: value is None,
@@ -121,16 +129,17 @@ class BacktestRunInput(_RunInputValue):
     def create(
         cls,
         *,
-        plan: TradePlan,
+        plan: TradePlan | UnifiedTradePlan,
         manifest: DatasetManifest,
         initial_cash_fen: int,
         initial_lots: tuple[BacktestInitialLotInput, ...],
         execution_config: ExecutionConfig,
         manual_event_risk: bool,
         plan_version_id: UUID | None = None,
+        research_input: UnifiedResearchInput | None = None,
     ) -> Self:
-        if not isinstance(plan, TradePlan):
-            raise TypeError("plan must be a TradePlan")
+        if not isinstance(plan, TradePlan | UnifiedTradePlan):
+            raise TypeError("plan must be a TradePlan or UnifiedTradePlan")
         if not isinstance(manifest, DatasetManifest):
             raise TypeError("manifest must be a DatasetManifest")
         if type(initial_lots) is not tuple or any(
@@ -143,6 +152,17 @@ class BacktestRunInput(_RunInputValue):
             raise TypeError("manual_event_risk must be an explicit bool")
         if plan_version_id is not None and not isinstance(plan_version_id, UUID):
             raise TypeError("plan_version_id must be a UUID or None")
+        if isinstance(plan, UnifiedTradePlan):
+            plan = UnifiedTradePlan.model_validate(plan.model_dump(mode="python"))
+            return cls(run_formula_version=RUN_FORMULA_V4, plan_snapshot=plan,
+                plan_sha256=plan_sha256(plan), plan_version_id=plan_version_id,
+                dataset_hash=manifest.dataset_hash, start=manifest.scope.start,
+                end=manifest.scope.end, initial_cash_fen=initial_cash_fen,
+                initial_lots=initial_lots, indicator_formula_version="daily-ta-v2",
+                execution_config=execution_config, manual_event_risk=manual_event_risk,
+                research_input=research_input)
+        if research_input is not None:
+            raise ValueError("RESEARCH_INPUT_FORBIDDEN")
         requirement = build_backtest_index_requirement(plan)
         formula_version = (
             RUN_FORMULA_V3
@@ -207,6 +227,39 @@ class BacktestRunInput(_RunInputValue):
 
     @model_validator(mode="after")
     def validate_canonical_input(self) -> Self:
+        current = isinstance(self.plan_snapshot, UnifiedTradePlan)
+        if current:
+            if self.research_input is None:
+                raise ValueError("RESEARCH_INPUT_REQUIRED")
+            if self.run_formula_version != RUN_FORMULA_V4:
+                raise ValueError("CURRENT_PLAN_REQUIRES_V4")
+            if self.manual_event_risk:
+                raise ValueError("MANUAL_EVENT_RISK_UNSUPPORTED")
+            if self.research_input.review.content_hash != daily_plan_content_sha256(
+                self.plan_snapshot
+            ):
+                raise ValueError("RESEARCH_REVIEW_BINDING_MISMATCH")
+            if not self.start <= self.research_input.started_at.date() <= self.end:
+                raise ValueError("RESEARCH_START_OUTSIDE_RUN")
+            if any(o.at.date() > self.end for o in self.research_input.operations):
+                raise ValueError("RESEARCH_OPERATION_OUTSIDE_RUN")
+            if not self.research_input.inventory_known and self.initial_lots:
+                raise ValueError("UNKNOWN_INVENTORY_FORBIDS_LOTS")
+            if any((p.dataset_hash, p.symbol) != (self.dataset_hash, self.plan_snapshot.symbol)
+                for p in self.research_input.adjustment_proofs):
+                raise ValueError("RESEARCH_ADJUSTMENT_BINDING_MISMATCH")
+            if self.indicator_formula_version != "daily-ta-v2":
+                raise ValueError("indicator formula version must match the plan snapshot")
+            self._validate_common_lots(current=True)
+            if self.plan_sha256 != plan_sha256(self.plan_snapshot):
+                raise ValueError("plan_sha256 must match the canonical plan snapshot")
+            if any(value is not None for value in (self.reference_market_binding,
+                self.market_index_data_hash, self.index_requirement_hash,
+                self.formula_definition_hash)):
+                raise ValueError("CURRENT_PLAN_FORBIDS_INDEX_IDENTITY")
+            return self
+        if self.research_input is not None:
+            raise ValueError("RESEARCH_INPUT_FORBIDDEN")
         validation = validate_trade_plan(
             self.plan_snapshot,
             available_market_evidence=ALL_MARKET_EVIDENCE,
@@ -247,6 +300,10 @@ class BacktestRunInput(_RunInputValue):
                 raise ValueError("run formula_definition_hash must match approved formulas")
         elif any(value is not None for value in index_fields):
             raise ValueError("stock-only run formulas forbid index hash identity")
+        self._validate_common_lots(current=False)
+        return self
+
+    def _validate_common_lots(self, *, current: bool) -> None:
         if self.start > self.end:
             raise ValueError("dataset start cannot be after end")
 
@@ -263,9 +320,9 @@ class BacktestRunInput(_RunInputValue):
             ),
         }
         position = self.plan_snapshot.position
-        if bucket_quantities["CORE"] > position.core_target_qty:
+        if (not current and bucket_quantities["CORE"] > position.core_target_qty):
             raise ValueError("initial CORE quantity exceeds the reviewed plan cap")
-        if bucket_quantities["TACTICAL"] > position.tactical_target_qty:
+        if (not current and bucket_quantities["TACTICAL"] > position.tactical_target_qty):
             raise ValueError("initial TACTICAL quantity exceeds the reviewed plan cap")
         if sum(bucket_quantities.values()) > position.max_qty:
             raise ValueError("initial total quantity exceeds the reviewed plan maximum")
@@ -273,7 +330,6 @@ class BacktestRunInput(_RunInputValue):
             MAX_SAFE_INTEGER
         ):
             raise ValueError("initial cash and lot costs must fit one JavaScript safe integer")
-        return self
 
     @property
     def run_id(self) -> str:
@@ -303,9 +359,21 @@ class BacktestRunInput(_RunInputValue):
                     "formula_definition_hash": self.formula_definition_hash,
                 }
             )
+        if self.run_formula_version == RUN_FORMULA_V4:
+            preimage["research_input"] = self.research_input
         return sha256(
             (self.run_formula_version + "\0" + canonical_json(preimage)).encode("utf-8")
         ).hexdigest()
+
+    @property
+    def authority_id(self) -> str:
+        """Research authority never depends on future market facts or operations."""
+        if self.research_input is None:
+            return self.run_id
+        return sha256(("unified-research-authority-v1\0" + canonical_json({
+            "plan_hash": self.plan_sha256,
+            "started_at": self.research_input.started_at,
+        })).encode("utf-8")).hexdigest()
 
     def derive_position_lots(self) -> tuple[PositionLot, ...]:
         """Derive internal lot identities only after the versioned run hash exists."""
@@ -334,6 +402,7 @@ __all__ = [
     "RUN_FORMULA_V1",
     "RUN_FORMULA_V2",
     "RUN_FORMULA_V3",
+    "RUN_FORMULA_V4",
     "RUN_INPUT_SCHEMA_VERSION",
     "BacktestInitialLotInput",
     "BacktestRunInput",

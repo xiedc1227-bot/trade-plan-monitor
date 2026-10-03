@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
@@ -25,6 +26,11 @@ from pydantic import (
 
 from trade_plan_monitor.backtest.canonical import canonical_decimal
 from trade_plan_monitor.backtest.models import ExecutionStatus, UnfilledReason
+from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
+from trade_plan_monitor.backtest.research_report import (
+    ResearchDecisionEvent,
+    ResearchOperationOutcome,
+)
 from trade_plan_monitor.backtest.time import (
     format_shanghai_datetime,
     parse_shanghai_datetime,
@@ -380,6 +386,20 @@ class BacktestRunCommand(_BacktestApiInput):
     ]
     execution_config: BacktestExecutionConfigInput
     event_risk_assumption: Literal["NO_EVENT_RISK", "MANUAL_EVENT_RISK"]
+    research_input: UnifiedResearchInput | None = None
+
+    @field_validator("research_input", mode="before")
+    @classmethod
+    def parse_research(cls, value):
+        if value is None or isinstance(value, UnifiedResearchInput):
+            return value
+        return UnifiedResearchInput.model_validate_json(json.dumps(value))
+
+    def canonical_payload(self):
+        payload = super().canonical_payload()
+        if self.research_input is None:
+            payload.pop("researchInput", None)
+        return payload
 
     @field_validator("initial_lots", mode="before")
     @classmethod
@@ -416,8 +436,8 @@ class BacktestRunCommand(_BacktestApiInput):
         self,
         *,
         dataset_start: date,
-        core_target_qty: int,
-        tactical_target_qty: int,
+        core_target_qty: int | None,
+        tactical_target_qty: int | None,
         max_qty: int,
     ) -> Self:
         """Apply authoritative dataset and reviewed-plan constraints before hashing."""
@@ -432,15 +452,16 @@ class BacktestRunCommand(_BacktestApiInput):
         if any(
             type(value) is not int or value < 0 or value > MAX_SAFE_INTEGER or value % 100 != 0
             for value in caps.values()
+            if value is not None
         ):
             raise ValueError("position caps must be non-negative safe board-lot integers")
         if any(lot.acquired_trade_date > dataset_start for lot in self.initial_lots):
             raise ValueError("initial-lot acquired trade date cannot be after dataset start")
         core_qty = sum(lot.quantity for lot in self.initial_lots if lot.bucket == "CORE")
         tactical_qty = sum(lot.quantity for lot in self.initial_lots if lot.bucket == "TACTICAL")
-        if core_qty > core_target_qty:
+        if core_target_qty is not None and core_qty > core_target_qty:
             raise ValueError("initial CORE quantity exceeds the reviewed plan cap")
-        if tactical_qty > tactical_target_qty:
+        if tactical_target_qty is not None and tactical_qty > tactical_target_qty:
             raise ValueError("initial TACTICAL quantity exceeds the reviewed plan cap")
         if core_qty + tactical_qty > max_qty:
             raise ValueError("initial total quantity exceeds the reviewed plan maximum")
@@ -950,6 +971,19 @@ class BacktestMetricsView(_BacktestApiInput):
         return self
 
 
+class ResearchMetricsView(_BacktestApiInput):
+    schema_version: Literal["explicit-simulation-metrics-v1"]
+    initial_cash_fen: PositiveFenText
+    initial_equity_fen: PositiveFenText | None
+    final_cash_fen: NonNegativeFenText | None
+    final_equity_fen: NonNegativeFenText | None
+    total_return: DecimalText | None
+    total_cost_fen: NonNegativeFenText
+    trade_count: JavaScriptSafeInteger
+    blocked_count: JavaScriptSafeInteger
+    valuation_valid: bool
+
+
 class BacktestExecutionConfigView(_BacktestApiInput):
     """Exact execution assumptions with FenText money and DecimalText rates."""
 
@@ -1294,7 +1328,7 @@ class BacktestRunSummaryView(_BacktestApiInput):
     pinned: bool = Field(strict=True)
     revision: JavaScriptSafeInteger
     fill_count: JavaScriptSafeInteger
-    metrics: BacktestMetricsView
+    metrics: BacktestMetricsView | ResearchMetricsView
     availability: BacktestResultAvailabilityView
 
     @model_validator(mode="after")
@@ -1742,10 +1776,47 @@ class BacktestExecutionOutcomeView(_BacktestDetailBase):
         return self
 
 
-type BacktestDetailView = Annotated[
-    BacktestDecisionView | BacktestSignalView | BacktestExecutionOutcomeView,
-    Field(discriminator="kind"),
-]
+class ResearchDecisionView(_BacktestDetailBase):
+    kind: Literal["DECISION"]
+    research_decision: ResearchDecisionEvent
+
+    @field_validator("research_decision", mode="before")
+    @classmethod
+    def parse_evidence(cls, value):
+        if isinstance(value, ResearchDecisionEvent):
+            return value
+        return ResearchDecisionEvent.model_validate_json(json.dumps(value))
+
+    @model_validator(mode="after")
+    def bounded(self):
+        _require_max_item_bytes(self)
+        return self
+
+
+class ResearchOperationView(_BacktestDetailBase):
+    kind: Literal["EXECUTION_OUTCOME"]
+    research_operation: ResearchOperationOutcome
+
+    @field_validator("research_operation", mode="before")
+    @classmethod
+    def parse_evidence(cls, value):
+        if isinstance(value, ResearchOperationOutcome):
+            return value
+        return ResearchOperationOutcome.model_validate_json(json.dumps(value))
+
+    @model_validator(mode="after")
+    def bounded(self):
+        _require_max_item_bytes(self)
+        return self
+
+
+type BacktestDetailView = (
+    BacktestDecisionView
+    | BacktestSignalView
+    | BacktestExecutionOutcomeView
+    | ResearchDecisionView
+    | ResearchOperationView
+)
 
 
 class BacktestEquityPointView(_BacktestApiInput):
@@ -1805,9 +1876,31 @@ def _require_ordered_unique_positions(
         raise ValueError(f"{resource} page must use canonical {direction} order")
 
 
+class ResearchEquityView(_BacktestApiInput):
+    schema_version: Literal["unified-research-equity-v1"]
+    snapshot_id: Sha256Hex
+    run_id: Sha256Hex
+    marked_at: ShanghaiDatetime
+    mark_price_fen: PositiveFenText | None
+    cash_fen: NonNegativeFenText | None
+    position_quantity: JavaScriptSafeInteger | None
+    market_value_fen: NonNegativeFenText | None
+    equity_fen: NonNegativeFenText | None
+    valuation_valid: bool
+    blockers: tuple[str, ...]
+
+    @field_validator("blockers", mode="before")
+    @classmethod
+    def array(cls, value):
+        return tuple(value)
+
+
 class BacktestEquitySeries(_BacktestApiInput):
     availability: BacktestArtifactAvailability
-    items: Annotated[tuple[BacktestEquityPointView, ...], Field(max_length=MAX_EQUITY_POINTS)]
+    items: Annotated[
+        tuple[BacktestEquityPointView | ResearchEquityView, ...],
+        Field(max_length=MAX_EQUITY_POINTS),
+    ]
 
     @field_validator("items", mode="before")
     @classmethod

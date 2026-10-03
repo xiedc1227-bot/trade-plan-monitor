@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import researchDecision from "../fixtures/unified-replay-decision.json" with { type: "json" };
 
 import { expect, test } from "./fixtures";
 import type { Browser, Page, Route, TestInfo } from "@playwright/test";
@@ -752,6 +753,29 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   );
   await expectNoSeriousAxeViolations(page);
 
+  expectChromeProject(testInfo);
+  expectCleanAudit(audit);
+  await page.close();
+});
+
+test("current research input and actual typed decision bytes work in the existing pages", async ({ browser }, testInfo) => {
+  const { audit, page } = await openPage(browser);
+  await openRoute(page, ROUTES[1]);
+  await fillValidRunCommand(page);
+  const researchInput = { schema_version: "unified-research-input-v1", started_at: "2026-08-24T09:00:00+08:00",
+    inventory_known: true, operations: [], review: {content_hash: "a".repeat(64), confirmed: true,
+      reviewed_at: "2026-10-03T12:00:00+08:00", evidence: "Synthetic reviewed research fixture"} };
+  await page.getByLabel("统一计划研究输入 JSON").fill(JSON.stringify(researchInput));
+  await page.getByTestId("submit-backtest-run").click();
+  await expect(page).toHaveURL(`${baseUrl}/backtests/${RUN_ID}?tab=summary`, {timeout: 7000});
+  expect(audit.runSubmissions[0]?.body).toMatchObject({researchInput});
+  await page.route(`${baseUrl}/api/v1/backtest-runs/${RUN_ID}/details?**`, async (route) => {
+    await fulfillJson(route, { ...decisionDetails, items: [{...researchDecision, runId: RUN_ID}] });
+  });
+  await page.goto(`${baseUrl}/backtests/${RUN_ID}?tab=details&kind=DECISION`);
+  await expect(page.getByTestId("backtest-detail-row")).toContainText("计划 100 股 / 可执行 100 股");
+  await expect(page.getByTestId("backtest-detail-row")).toContainText("数据阻断");
+  await expectNoSeriousAxeViolations(page);
   expectChromeProject(testInfo);
   expectCleanAudit(audit);
   await page.close();

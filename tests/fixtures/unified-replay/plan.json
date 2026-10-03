@@ -1,0 +1,66 @@
+{
+  "schema_version": 5,
+  "execution_mode": "CONDITION_PLAN",
+  "execution_version": "condition-plan-v1",
+  "plan_id": "synthetic-daily",
+  "version": 1,
+  "symbol": "600000.SH",
+  "name": "Synthetic reviewed plan",
+  "market": "SSE",
+  "metadata": {
+    "report_at": null,
+    "reference_price_fen": null
+  },
+  "activation": {
+    "mode": "MANUAL"
+  },
+  "levels": null,
+  "position": {
+    "max_qty": 1000,
+    "core_target_qty": null,
+    "tactical_target_qty": null,
+    "allocation_provenance": null,
+    "allocation_evidence": null
+  },
+  "trading_rules": {
+    "settlement": "NEXT_EXCHANGE_SESSION",
+    "tick_size_fen": 1,
+    "special_state_restrictions": "BLOCK_UNVERIFIED"
+  },
+  "monitoring": null,
+  "ordinary_rules": [
+    {
+      "status": "ENABLED",
+      "side": "BUY",
+      "rule_id": "low-buy",
+      "quantity": 100,
+      "bucket": "TACTICAL",
+      "condition": {
+        "type": "MINUTE_CLOSE_BELOW",
+        "timeframe_minutes": 5,
+        "price_fen": 6500
+      },
+      "confirmation": {
+        "kind": "COMPLETED_BAR_CLOSE",
+        "timeframe_minutes": 5
+      },
+      "execution_window": "CURRENT_SESSION",
+      "zone": null,
+      "validity": {
+        "mode": "PLAN_ACTIVE"
+      },
+      "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+      "independent_signal": {
+        "mode": "REVIEWED_INDEPENDENT_EVENT",
+        "evidence_requirement": "New structure linked to prior signal"
+      }
+    }
+  ],
+  "risk_branches": [],
+  "execution_policy": {
+    "same_signal": "ONE_PLANNED_QUANTITY",
+    "risk_priority": "SEVERE_THEN_ORDINARY",
+    "ordinary_conflict": "BLOCK_BOTH"
+  },
+  "alert_rules": []
+}

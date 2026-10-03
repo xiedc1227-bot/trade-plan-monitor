@@ -49,6 +49,8 @@ from trade_plan_monitor.backtest.models import (
     PositionLot,
     PositionSnapshot,
 )
+from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
+from trade_plan_monitor.backtest.research_report import UnifiedReplayReport
 from trade_plan_monitor.backtest.run_input import (
     CALENDAR_CONTEXT_DAYS,
     DAILY_CONTEXT_BARS,
@@ -85,6 +87,7 @@ from trade_plan_monitor.domain.plan_validation import (
     ALL_MARKET_EVIDENCE,
     validate_trade_plan,
 )
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_data.aggregation import (
     FiveMinuteBar,
     aggregate_five_minute_bar,
@@ -373,7 +376,7 @@ class OfflineBacktestRunner:
     def run(
         self,
         *,
-        plan: TradePlan,
+        plan: TradePlan | UnifiedTradePlan,
         dataset_hash: str,
         initial_cash_fen: int,
         execution_config: ExecutionConfig,
@@ -381,17 +384,21 @@ class OfflineBacktestRunner:
         plan_version_id: UUID | None = None,
         initial_lots: tuple[BacktestInitialLotInput, ...] = (),
         cancellation_token: CancellationToken | None = None,
-    ) -> BacktestRunReport | BacktestCancellationResult:
+        research_input: UnifiedResearchInput | None = None,
+    ) -> BacktestRunReport | UnifiedReplayReport | BacktestCancellationResult:
         """Run a finite offline replay; no provider, scheduler, or notification is reachable."""
 
-        self._validate_request(
-            plan=plan,
-            initial_cash_fen=initial_cash_fen,
-            execution_config=execution_config,
-            manual_event_risk=manual_event_risk,
-            plan_version_id=plan_version_id,
-            initial_lots=initial_lots,
-        )
+        if not isinstance(plan, UnifiedTradePlan):
+            if research_input is not None:
+                raise ValueError("RESEARCH_INPUT_FORBIDDEN")
+            self._validate_request(
+                plan=plan,
+                initial_cash_fen=initial_cash_fen,
+                execution_config=execution_config,
+                manual_event_risk=manual_event_risk,
+                plan_version_id=plan_version_id,
+                initial_lots=initial_lots,
+            )
         validate_operation_controls(cancellation_token, None)
         try:
             check_cancelled(cancellation_token, "RUN_DAY_TRANSITION")
@@ -403,6 +410,20 @@ class OfflineBacktestRunner:
             else:
                 reader_context = self._dataset_source.open_frozen_dataset(dataset_hash)
             with reader_context as reader:
+                if isinstance(plan, UnifiedTradePlan):
+                    from trade_plan_monitor.backtest.research_runner import replay_current
+
+                    return replay_current(
+                        reader,
+                        plan=plan,
+                        initial_cash_fen=initial_cash_fen,
+                        initial_lots=initial_lots,
+                        execution_config=execution_config,
+                        manual_event_risk=manual_event_risk,
+                        plan_version_id=plan_version_id,
+                        research_input=research_input,
+                        cancellation_token=cancellation_token,
+                    )
                 return self._run_from_reader(
                     reader=reader,
                     plan=plan,

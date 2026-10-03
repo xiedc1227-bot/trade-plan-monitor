@@ -318,6 +318,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_backtest_storage_arguments(run_parser)
     run_parser.add_argument("--dataset", required=True, help="verified dataset SHA-256")
     run_parser.add_argument("--plan", type=Path, required=True, help="reviewed YAML/JSON plan")
+    run_parser.add_argument("--research-input", type=Path,
+        help="explicit frozen Schema 5 research input JSON file (required for current plans)")
     run_parser.add_argument(
         "--initial-cash-yuan",
         type=_decimal,
@@ -424,6 +426,8 @@ def main(
                 buy_slippage_bps=arguments.buy_slippage_bps,
                 sell_slippage_bps=arguments.sell_slippage_bps,
                 manual_event_risk=arguments.manual_event_risk,
+                **({"research_input_path": arguments.research_input}
+                   if arguments.research_input is not None else {}),
             )
         elif operation == "list":
             result = service.list_runs(limit=arguments.limit, offset=arguments.offset)

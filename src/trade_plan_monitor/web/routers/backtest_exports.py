@@ -27,8 +27,10 @@ _EXPORT_MEDIA_TYPES = {
     "FILLS_CSV": "text/csv; charset=utf-8",
 }
 _EXPORT_SCHEMA_VERSIONS = {
-    "SUMMARY_JSON": frozenset({"backtest-report-summary-v2", "backtest-report-summary-v3"}),
-    "FILLS_CSV": frozenset({"backtest-simulated-fills-v2"}),
+    "SUMMARY_JSON": frozenset({
+        "backtest-report-summary-v2", "backtest-report-summary-v3", "backtest-report-summary-v4"
+    }),
+    "FILLS_CSV": frozenset({"backtest-simulated-fills-v2", "explicit-simulation-valuation-v1"}),
 }
 _EXPORT_FILENAME_SUFFIXES = {
     "SUMMARY_JSON": "summary.json",

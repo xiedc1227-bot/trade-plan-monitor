@@ -74,8 +74,41 @@ function optional(value: string | number | null): string | number {
       </thead>
       <tbody>
         <template v-for="item in visibleItems" :key="item.detailId">
+          <tr v-if="'researchDecision' in item" data-testid="backtest-detail-row">
+            <td>{{ formatDisplayDateTime(item.eventAt) }}</td>
+            <td colspan="8">
+              <p>评估时信号 {{ item.researchDecision.signals.length }}；提醒 {{ item.researchDecision.alerts.length }}；操作后库存 {{ item.researchDecision.inventory_after.total_qty ?? '未知' }}</p>
+              <p>数据阻断：{{ item.researchDecision.blockers.join('、') || '无' }}</p>
+              <ul>
+                <li v-for="signal in item.researchDecision.signals" :key="signal.signal_id">
+                  规则 {{ signal.rule_id }} · {{ signal.state }}；计划 {{ signal.planned_qty }} 股 / 可执行 {{ signal.executable_qty }} 股；窗口 {{ signal.execution_window }} / {{ signal.execution_date }}；阻断 {{ signal.blockers.join('、') || '无' }}
+                </li>
+                <li v-for="alert in item.researchDecision.alerts" :key="alert.rule_id">
+                  提醒 {{ alert.rule_id }}：{{ alert.outcome }} · 确认时间 {{ alert.confirmed_at ?? '未确认' }}；提醒不改变库存
+                </li>
+                <li v-for="risk in item.researchDecision.risks" :key="risk.kind">
+                  风险 {{ risk.kind }}：{{ risk.status }} · 最早执行 {{ risk.earliest_execution_date ?? '未确认' }}
+                </li>
+              </ul>
+              <p>操作后状态：</p>
+              <ul>
+                <li v-for="signal in item.researchDecision.resulting_signals" :key="signal.signal_id">规则 {{ signal.rule_id }}：{{ signal.state }}；可执行 {{ signal.executable_qty }} 股</li>
+                <li v-for="risk in item.researchDecision.resulting_risks" :key="risk.kind">风险 {{ risk.kind }}：{{ risk.status }}</li>
+              </ul>
+              <details><summary>条件证据、执行窗口与风险状态</summary><pre>{{ JSON.stringify(item.researchDecision, null, 2) }}</pre></details>
+            </td>
+          </tr>
+          <tr v-else-if="'researchOperation' in item" data-testid="backtest-detail-row">
+            <td>{{ formatDisplayDateTime(item.eventAt) }}</td>
+            <td colspan="7">
+              <p>明确操作 {{ item.researchOperation.operation_id }}：{{ item.researchOperation.status === 'APPLIED' ? '已应用' : item.researchOperation.status === 'BLOCKED' ? '已阻断' : '已重放' }}；完整数量 {{ item.researchOperation.quantity ?? '—' }}</p>
+              <p>阻断：{{ item.researchOperation.blockers.join('、') || '无' }}</p>
+              <p v-if="item.researchOperation.valuation">独立研究估值：{{ item.researchOperation.valuation.status }} {{ item.researchOperation.valuation.blockers.join('、') }}</p>
+              <details><summary>监测回执与独立估值明细</summary><pre>{{ JSON.stringify(item.researchOperation, null, 2) }}</pre></details>
+            </td>
+          </tr>
           <tr
-            v-if="item.kind === 'DECISION'"
+            v-else-if="item.kind === 'DECISION'"
             data-testid="backtest-detail-row"
           >
             <td><time :datetime="item.eventAt">{{ formatDisplayDateTime(item.eventAt) }}</time></td>

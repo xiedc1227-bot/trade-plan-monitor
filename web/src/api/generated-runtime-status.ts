@@ -301,7 +301,7 @@ export type BacktestDetailPage = {
   nextCursor: (string) | (null);
 };
 
-export type BacktestDetailView = (components["schemas"]["BacktestDecisionView"]) | (components["schemas"]["BacktestSignalView"]) | (components["schemas"]["BacktestExecutionOutcomeView"]);
+export type BacktestDetailView = (components["schemas"]["BacktestDecisionView"]) | (components["schemas"]["BacktestSignalView"]) | (components["schemas"]["BacktestExecutionOutcomeView"]) | (components["schemas"]["ResearchDecisionView"]) | (components["schemas"]["ResearchOperationView"]);
 
 export type BacktestEquityPointView = {
   cashFen: string;
@@ -321,7 +321,7 @@ export type BacktestEquityPointView = {
 
 export type BacktestEquitySeries = {
   availability: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
-  items: Array<components["schemas"]["BacktestEquityPointView"]>;
+  items: Array<(components["schemas"]["BacktestEquityPointView"]) | (components["schemas"]["ResearchEquityView"])>;
 };
 
 export type BacktestEvidenceFactView = {
@@ -625,6 +625,7 @@ export type BacktestRunCommand = {
   initialCashFen: number;
   initialLots: Array<components["schemas"]["BacktestInitialLotInput"]>;
   planVersionId: string;
+  researchInput?: (components["schemas"]["UnifiedResearchInput"]) | (null);
 };
 
 export type BacktestRunCoverageView = {
@@ -676,7 +677,7 @@ export type BacktestRunSummaryView = {
   eventEnd: string;
   eventStart: string;
   fillCount: number;
-  metrics: components["schemas"]["BacktestMetricsView"];
+  metrics: (components["schemas"]["BacktestMetricsView"]) | (components["schemas"]["ResearchMetricsView"]);
   pinned: boolean;
   planHash: string;
   planVersionId: (string) | (null);
@@ -699,7 +700,7 @@ export type BacktestRunView = {
   formulaVersions: components["schemas"]["BacktestFormulaVersionsView"];
   initialCashFen: string;
   limitations: Array<string>;
-  metrics: components["schemas"]["BacktestMetricsView"];
+  metrics: (components["schemas"]["BacktestMetricsView"]) | (components["schemas"]["ResearchMetricsView"]);
   pinned: boolean;
   planHash: string;
   planVersionId: (string) | (null);
@@ -1030,6 +1031,17 @@ export type DailyInventoryResource = {
   symbol: string;
 };
 
+export type DailyInventoryView = {
+  core_qty: (number) | (null);
+  known: boolean;
+  revision: number;
+  sellable_core: (number) | (null);
+  sellable_tactical: (number) | (null);
+  symbol: string;
+  tactical_qty: (number) | (null);
+  total_qty: (number) | (null);
+};
+
 export type DailyMapping = {
   bindings: Array<components["schemas"]["DailyFieldBinding"]>;
   candidate_content_hash: string;
@@ -1059,6 +1071,15 @@ export type DailyOfficialEvidence = {
   issuer: string;
   publishedAt: string;
   verifiedAt: string;
+};
+
+export type DailyOfficialProof = {
+  applicable_assertion: string;
+  document_title: string;
+  document_url: string;
+  issuer: string;
+  published_at: string;
+  verified_at: string;
 };
 
 export type DailyPositionCommand = {
@@ -1109,6 +1130,20 @@ export type DailyReviewSnapshot = {
   issues: Array<components["schemas"]["DailyReviewIssue"]>;
   mapping: components["schemas"]["DailyMapping"];
   source_hash: string;
+};
+
+export type DailyRiskAction = {
+  blockers: Array<string>;
+  branch?: ("ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL") | (null);
+  cause_id?: (string) | (null);
+  cause_revision?: (number) | (null);
+  core_qty: (number) | (null);
+  status: "WAITING" | "NONE" | "RISK_EXIT";
+  tactical_qty: (number) | (null);
+  target_core_qty?: (number) | (null);
+  target_tactical_qty?: (number) | (null);
+  unavailable_core_qty: (number) | (null);
+  unavailable_tactical_qty: (number) | (null);
 };
 
 export type DailyRiskActionApiView = {
@@ -1167,6 +1202,35 @@ export type DailyRiskReassessmentCommand = {
   targetTacticalQty: number;
 };
 
+export type DailyRiskState = {
+  basis_id?: (string) | (null);
+  blockers: Array<string>;
+  breach_trade_date?: (string) | (null);
+  cause_cutover_at?: (string) | (null);
+  cause_cutover_date?: (string) | (null);
+  confirmed_trade_date?: (string) | (null);
+  consumed_evidence_ids?: Array<string>;
+  earliest_execution_date: (string) | (null);
+  evidence_ids: Array<string>;
+  fulfilled_at?: (string) | (null);
+  involves_core: boolean;
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  priority: number;
+  reassessment_id?: (string) | (null);
+  revision?: (number) | (null);
+  risk_comparison?: ("LT" | "LTE") | (null);
+  risk_id?: (string) | (null);
+  risk_line_fen?: (number) | (null);
+  scope_evidence: string;
+  second_close_date?: (string) | (null);
+  status: "CLEAR" | "PENDING" | "OBSERVATION" | "CONFIRMED" | "FULFILLED";
+  suspension_confirmation_policy?: ("RESUME_FIRST_CLOSE" | "RESTART_ADJACENT_PAIR") | (null);
+  target_core_qty: number;
+  target_tactical_qty: number;
+  technical_evidence?: Array<components["schemas"]["UnifiedConditionEvidence"]>;
+  verified_at?: (string) | (null);
+};
+
 export type DailyRuleReminderState = {
   alert_kind: "RISK_ALERT";
   cause_id: (string) | (null);
@@ -1215,6 +1279,32 @@ export type DailySignalApiView = {
   side: "BUY" | "SELL";
   signalId: string;
   simulatedQty: number;
+  state: "CONFIRMED" | "READY" | "EXPIRED" | "INVALIDATED" | "SIMULATED";
+};
+
+export type DailySignalState = {
+  basis_id: string;
+  blockers: Array<string>;
+  bucket: "TACTICAL";
+  confirmation_kind?: "OFFICIAL_DAILY_CLOSE" | "COMPLETED_BAR_CLOSE";
+  confirmed_at?: (string) | (null);
+  confirmed_trade_date: string;
+  evidence: Array<(components["schemas"]["DailyConditionEvidence"]) | (components["schemas"]["UnifiedConditionEvidence"])>;
+  evidence_fingerprint: string;
+  executable_qty: number;
+  execution_date: (string) | (null);
+  execution_window?: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
+  lineage: string;
+  plan_version_id: string;
+  planned_qty: number;
+  reset_trade_date?: (string) | (null);
+  review_id: string;
+  revision?: (number) | (null);
+  risk_invalidated?: boolean;
+  rule_id: string;
+  side: "BUY" | "SELL";
+  signal_id: string;
+  simulated_qty: number;
   state: "CONFIRMED" | "READY" | "EXPIRED" | "INVALIDATED" | "SIMULATED";
 };
 
@@ -2084,6 +2174,201 @@ export type RequiredReviewIssueView = {
   reason: string;
 };
 
+export type ResearchAdjustmentProof = {
+  adjustment_as_of: string;
+  available_at: string;
+  dataset_hash: string;
+  evidence: string;
+  factors: Array<components["schemas"]["ResearchFactor"]>;
+  proof_id: string;
+  provider: "TUSHARE";
+  quote_basis_factor: (number) | (string);
+  received_at: string;
+  symbol: string;
+};
+
+export type ResearchConditionEvidence = {
+  bar_ids?: Array<string>;
+  basis_id?: (string) | (null);
+  children?: Array<components["schemas"]["ResearchConditionEvidence"]>;
+  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
+  fact_ids?: Array<string>;
+  operands?: Array<string>;
+  outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  reason?: (string) | (null);
+  session_dates?: Array<string>;
+};
+
+export type ResearchDeactivate = {
+  at: string;
+  kind: "DEACTIVATE";
+  operation_id: string;
+  order: number;
+};
+
+export type ResearchDecisionEvent = {
+  alerts: Array<components["schemas"]["ResearchReminder"]>;
+  at: string;
+  blockers: Array<string>;
+  conditions: Array<components["schemas"]["ResearchRuleEvidence"]>;
+  evaluation_id: (string) | (null);
+  event_id: string;
+  inventory_after: components["schemas"]["DailyInventoryView"];
+  inventory_before: components["schemas"]["DailyInventoryView"];
+  minute_target: (string) | (null);
+  official_trade_date: (string) | (null);
+  resulting_risks: Array<components["schemas"]["DailyRiskState"]>;
+  resulting_signals: Array<components["schemas"]["DailySignalState"]>;
+  risk_action: components["schemas"]["DailyRiskAction"];
+  risks: Array<components["schemas"]["DailyRiskState"]>;
+  schema_version?: "unified-research-decision-v1";
+  signals: Array<components["schemas"]["DailySignalState"]>;
+};
+
+export type ResearchDecisionView = {
+  detailId: string;
+  eventAt: string;
+  kind: "DECISION";
+  researchDecision: components["schemas"]["ResearchDecisionEvent"];
+  runId: string;
+};
+
+export type ResearchEquityView = {
+  blockers: Array<string>;
+  cashFen: (string) | (null);
+  equityFen: (string) | (null);
+  markPriceFen: (string) | (null);
+  markedAt: string;
+  marketValueFen: (string) | (null);
+  positionQuantity: (number) | (null);
+  runId: string;
+  schemaVersion: "unified-research-equity-v1";
+  snapshotId: string;
+  valuationValid: boolean;
+};
+
+export type ResearchFact = {
+  at: string;
+  evidence: string;
+  fact_id: string;
+  fact_kind: "PRICE_STRUCTURE" | "VOLUME_OR_CANDLE" | "TECHNICAL" | "TRADE_VIABILITY" | "SIGNAL_INVALIDATION" | "INDEPENDENT_EVENT" | "SEVERE_STRUCTURE" | "SEVERE_DETERIORATION" | "TRADABILITY" | "FULL_SESSION_SUSPENSION";
+  kind: "FACT";
+  occurrence?: (number) | (null);
+  official_evidence?: (components["schemas"]["DailyOfficialProof"]) | (null);
+  operation_id: string;
+  order: number;
+  rule_id?: (string) | (null);
+  satisfied: boolean;
+  trade_date: string;
+};
+
+export type ResearchFactor = {
+  factor: (number) | (string);
+  trade_date: string;
+};
+
+export type ResearchMetricsView = {
+  blockedCount: number;
+  finalCashFen: (string) | (null);
+  finalEquityFen: (string) | (null);
+  initialCashFen: string;
+  initialEquityFen: (string) | (null);
+  schemaVersion: "explicit-simulation-metrics-v1";
+  totalCostFen: string;
+  totalReturn: (string) | (null);
+  tradeCount: number;
+  valuationValid: boolean;
+};
+
+export type ResearchOperationOutcome = {
+  at: string;
+  blockers: Array<string>;
+  cause_id?: (string) | (null);
+  inventory_after: components["schemas"]["DailyInventoryView"];
+  inventory_before: components["schemas"]["DailyInventoryView"];
+  kind: "FACT" | "DEACTIVATE" | "REPLACE" | "SIMULATE" | "REASSESS";
+  monitor_price_fen?: (number) | (null);
+  operation_id: string;
+  quantity?: (number) | (null);
+  schema_version?: "unified-research-operation-v1";
+  side?: ("BUY" | "SELL") | (null);
+  simulation_id?: (string) | (null);
+  status: "APPLIED" | "BLOCKED" | "REPLAYED";
+  valuation?: (components["schemas"]["ResearchOperationValuation"]) | (null);
+};
+
+export type ResearchOperationValuation = {
+  blockers: Array<string>;
+  cash_after_fen: (number) | (null);
+  cash_delta_fen: number;
+  fees_fen: number;
+  notional_fen: number;
+  research_price_fen: number;
+  schema_version?: "explicit-simulation-valuation-v1";
+  status: "PROJECTED" | "BLOCKED";
+};
+
+export type ResearchOperationView = {
+  detailId: string;
+  eventAt: string;
+  kind: "EXECUTION_OUTCOME";
+  researchOperation: components["schemas"]["ResearchOperationOutcome"];
+  runId: string;
+};
+
+export type ResearchReassessment = {
+  at: string;
+  kind: "REASSESS";
+  operation_id: string;
+  order: number;
+  removal_evidence: string;
+  risk_kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+};
+
+export type ResearchReminder = {
+  alert_kind: "RISK_ALERT";
+  cause_id: (string) | (null);
+  confirmation_kind: "OFFICIAL_DAILY_CLOSE" | "COMPLETED_BAR_CLOSE";
+  confirmed_at: (string) | (null);
+  confirmed_trade_date: (string) | (null);
+  evidence: Array<components["schemas"]["ResearchConditionEvidence"]>;
+  outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  rule_id: string;
+};
+
+export type ResearchReplace = {
+  at: string;
+  kind: "REPLACE";
+  operation_id: string;
+  order: number;
+  replacement_plan_hash: string;
+  replacement_review: components["schemas"]["ResearchReview"];
+  replacement_version_id: string;
+};
+
+export type ResearchReview = {
+  confirmed: true;
+  content_hash: string;
+  evidence: string;
+  reviewed_at: string;
+};
+
+export type ResearchRuleEvidence = {
+  evidence: components["schemas"]["ResearchConditionEvidence"];
+  rule_id: string;
+};
+
+export type ResearchSimulation = {
+  at: string;
+  kind: "SIMULATE";
+  occurrence?: (number) | (null);
+  operation_id: string;
+  order: number;
+  quantity: number;
+  risk_kind?: ("ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL") | (null);
+  rule_id?: (string) | (null);
+};
+
 export type ReturnIndicatorFactView = {
   formulaDefinitionHash: string;
   formulaId: "RETURN";
@@ -2332,6 +2617,13 @@ export type SymbolReferenceMarketView = {
   snapshotHash: (string) | (null);
 };
 
+export type TradingDay = {
+  cal_date: string;
+  exchange: "SSE" | "SZSE" | "BSE";
+  is_open: boolean;
+  previous_trade_date: string;
+};
+
 export type UnavailablePlanEntryView = {
   activationRevision: number;
   availability: "UNAVAILABLE";
@@ -2369,6 +2661,16 @@ export type UnifiedConditionEvidence = {
   outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
   reason?: (string) | (null);
   session_dates?: Array<unknown>;
+};
+
+export type UnifiedResearchInput = {
+  adjustment_proofs?: Array<components["schemas"]["ResearchAdjustmentProof"]>;
+  calendar_extension?: Array<components["schemas"]["TradingDay"]>;
+  inventory_known: boolean;
+  operations?: Array<(components["schemas"]["ResearchFact"]) | (components["schemas"]["ResearchDeactivate"]) | (components["schemas"]["ResearchReplace"]) | (components["schemas"]["ResearchSimulation"]) | (components["schemas"]["ResearchReassessment"])>;
+  review: components["schemas"]["ResearchReview"];
+  schema_version?: "unified-research-input-v1";
+  started_at: string;
 };
 
 export type UnmappedText = {
@@ -2532,10 +2834,12 @@ export interface components {
     DailyIndicatorCompare: DailyIndicatorCompare;
     DailyInventoryApiView: DailyInventoryApiView;
     DailyInventoryResource: DailyInventoryResource;
+    DailyInventoryView: DailyInventoryView;
     DailyMapping: DailyMapping;
     DailyMutationReceipt: DailyMutationReceipt;
     DailyObsoleteRiskApiView: DailyObsoleteRiskApiView;
     DailyOfficialEvidence: DailyOfficialEvidence;
+    DailyOfficialProof: DailyOfficialProof;
     DailyPositionCommand: DailyPositionCommand;
     DailyPriceCompare: DailyPriceCompare;
     DailyPriceInRange: DailyPriceInRange;
@@ -2543,12 +2847,15 @@ export interface components {
     DailyReviewPreview: DailyReviewPreview;
     DailyReviewPreviewCommand: DailyReviewPreviewCommand;
     DailyReviewSnapshot: DailyReviewSnapshot;
+    DailyRiskAction: DailyRiskAction;
     DailyRiskActionApiView: DailyRiskActionApiView;
     DailyRiskApiView: DailyRiskApiView;
     DailyRiskReassessmentCommand: DailyRiskReassessmentCommand;
+    DailyRiskState: DailyRiskState;
     DailyRuleReminderState: DailyRuleReminderState;
     DailySeries: DailySeries;
     DailySignalApiView: DailySignalApiView;
+    DailySignalState: DailySignalState;
     DailySimulationCommand: DailySimulationCommand;
     DailySimulationReceipt: DailySimulationReceipt;
     DailySourceExclusion: DailySourceExclusion;
@@ -2655,6 +2962,24 @@ export interface components {
     ProviderHealthView: ProviderHealthView;
     ProviderScopeView: ProviderScopeView;
     RequiredReviewIssueView: RequiredReviewIssueView;
+    ResearchAdjustmentProof: ResearchAdjustmentProof;
+    ResearchConditionEvidence: ResearchConditionEvidence;
+    ResearchDeactivate: ResearchDeactivate;
+    ResearchDecisionEvent: ResearchDecisionEvent;
+    ResearchDecisionView: ResearchDecisionView;
+    ResearchEquityView: ResearchEquityView;
+    ResearchFact: ResearchFact;
+    ResearchFactor: ResearchFactor;
+    ResearchMetricsView: ResearchMetricsView;
+    ResearchOperationOutcome: ResearchOperationOutcome;
+    ResearchOperationValuation: ResearchOperationValuation;
+    ResearchOperationView: ResearchOperationView;
+    ResearchReassessment: ResearchReassessment;
+    ResearchReminder: ResearchReminder;
+    ResearchReplace: ResearchReplace;
+    ResearchReview: ResearchReview;
+    ResearchRuleEvidence: ResearchRuleEvidence;
+    ResearchSimulation: ResearchSimulation;
     ReturnIndicatorFactView: ReturnIndicatorFactView;
     ReturnWindow: ReturnWindow;
     ReviewIssueKind: ReviewIssueKind;
@@ -2689,11 +3014,13 @@ export interface components {
     SymbolEventType: SymbolEventType;
     SymbolEventView: SymbolEventView;
     SymbolReferenceMarketView: SymbolReferenceMarketView;
+    TradingDay: TradingDay;
     UnavailablePlanEntryView: UnavailablePlanEntryView;
     UnfilledReason: UnfilledReason;
     UnifiedAll: UnifiedAll;
     UnifiedAny: UnifiedAny;
     UnifiedConditionEvidence: UnifiedConditionEvidence;
+    UnifiedResearchInput: UnifiedResearchInput;
     UnmappedText: UnmappedText;
     UserSupplementView: UserSupplementView;
     ValidationIssue: ValidationIssue;

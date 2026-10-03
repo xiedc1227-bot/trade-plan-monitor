@@ -98,7 +98,7 @@ const emit = defineEmits<Emits>();
               </a>
             </td>
             <td>{{ run.eventStart }} 至 {{ run.eventEnd }}</td>
-            <td class="run-table__number">{{ formatFenAsYuan(run.metrics.finalEquityFen) }}</td>
+            <td class="run-table__number">{{ run.metrics.finalEquityFen === null ? '不可用' : formatFenAsYuan(run.metrics.finalEquityFen) }}</td>
             <td class="run-table__number">{{ run.metrics.totalReturn }}</td>
             <td class="run-table__number">{{ run.fillCount }}</td>
             <td>{{ run.pinned ? "已固定" : "未固定" }}</td>

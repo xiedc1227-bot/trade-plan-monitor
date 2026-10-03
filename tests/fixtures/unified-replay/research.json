@@ -1,0 +1,14 @@
+{
+  "schema_version": "unified-research-input-v1",
+  "started_at": "2026-08-24T09:00:00+08:00",
+  "inventory_known": true,
+  "review": {
+    "content_hash": "cc7744c1ddaa5001b37a6fa369cdba76f5d50ec9f2d851730fa619c251ea8354",
+    "reviewed_at": "2026-08-19T18:00:00+08:00",
+    "confirmed": true,
+    "evidence": "Synthetic explicit reviewed research fixture"
+  },
+  "adjustment_proofs": [],
+  "calendar_extension": [],
+  "operations": []
+}

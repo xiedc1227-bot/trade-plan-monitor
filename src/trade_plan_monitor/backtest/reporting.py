@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from trade_plan_monitor.backtest.reference_projection import (
     project_decision_reference_market,
 )
+from trade_plan_monitor.backtest.research_report import UnifiedReplayReport
 from trade_plan_monitor.backtest.results import (
     BacktestDetailKind,
     BacktestDetailRecord,
@@ -63,7 +64,7 @@ class ReportPersistenceResult(BaseModel):
 
 def persist_report(
     store: BacktestResultStore,
-    report: BacktestRunReport,
+    report: BacktestRunReport | UnifiedReplayReport,
     *,
     run_input: BacktestRunInput | None = None,
 ) -> ReportPersistenceResult:
@@ -71,7 +72,7 @@ def persist_report(
 
     if not isinstance(store, BacktestResultStore):
         raise TypeError("store must be a BacktestResultStore")
-    if not isinstance(report, BacktestRunReport):
+    if not isinstance(report, (BacktestRunReport, UnifiedReplayReport)):
         raise TypeError("report must be a BacktestRunReport")
     if run_input is not None and not isinstance(run_input, BacktestRunInput):
         raise TypeError("run_input must be a BacktestRunInput or None")
@@ -132,11 +133,65 @@ def persist_report(
 
 
 def _summary_for_report(
-    report: BacktestRunReport,
+    report: BacktestRunReport | UnifiedReplayReport,
     *,
     completed_at: datetime,
     run_input: BacktestRunInput | None = None,
 ) -> BacktestRunSummary:
+    if isinstance(report, UnifiedReplayReport):
+        if run_input is None:
+            raise ValueError("current research persistence requires its frozen run input")
+        return BacktestRunSummary(
+            run_id=report.run_id,
+            plan_sha256=report.plan_hash,
+            dataset_hash=report.dataset_hash,
+            status=BacktestRunStatus.COMPLETED,
+            completed_at=completed_at,
+            event_start=report.start,
+            event_end=report.end,
+            symbols=(report.symbol,),
+            coverage={
+                "dailyEquityCount": len(report.daily_equity),
+                "decisionCount": len(report.current_events),
+                "detailCount": len(report.current_events)
+                + len(report.operations)
+                + len(report.daily_equity),
+                "end": report.end,
+                "fillCount": 0,
+                "orderCount": 0,
+                "outcomeCount": len(report.operations),
+                "signalCount": 0,
+                "start": report.start,
+            },
+            assumptions={
+                "adjustmentPolicy": "FROZEN_CERTIFIED_PROOF",
+                "executionConfig": report.execution_config.model_dump(mode="python"),
+                "executionConfigHash": report.execution_config.config_hash,
+                "limitations": report.limitations,
+                "manualEventRisk": False,
+                "reportHash": report.report_hash,
+            },
+            formula_versions={
+                "execution": report.execution_config.formula_version,
+                "indicator": run_input.indicator_formula_version,
+                "runner": run_input.run_formula_version,
+                "report": report.schema_version,
+            },
+            final_metrics=report.metrics.model_dump(mode="python"),
+            blockers=tuple(
+                sorted(
+                    {
+                        code
+                        for item in (
+                            *report.operations,
+                            *report.current_events,
+                            *report.daily_equity,
+                        )
+                        for code in item.blockers
+                    }
+                )
+            ),
+        )
     detail_count = (
         len(report.decisions)
         + len(report.signals)
@@ -233,7 +288,9 @@ def iter_export_summary(
     reference_market = summary.assumptions.get("referenceMarket")
     payload = {
         "schemaVersion": (
-            "backtest-report-summary-v3"
+            "backtest-report-summary-v4"
+            if summary.formula_versions.get("report") == "backtest-report-v3"
+            else "backtest-report-summary-v3"
             if isinstance(reference_market, dict)
             else "backtest-report-summary-v2"
         ),
@@ -371,7 +428,10 @@ def iter_export_fills(
     _require_export_inputs(store, cancelled)
     if cancelled():
         return
-    store.export_summary(run_id)
+    summary = store.export_summary(run_id)
+    if summary.formula_versions.get("report") == "backtest-report-v3":
+        yield from _iter_research_valuation_csv(store, run_id, cancelled)
+        return
     if cancelled():
         return
     yield _v2_csv_header()
@@ -389,6 +449,61 @@ def iter_export_fills(
                 if cancelled():
                     return
                 yield encode_fill(fill)
+    finally:
+        batches.close()
+
+
+def _iter_research_valuation_csv(store, run_id, cancelled):
+    fields = (
+        "schema_version",
+        "run_id",
+        "operation_id",
+        "at",
+        "cause_id",
+        "simulation_id",
+        "side",
+        "quantity",
+        "monitor_price_fen",
+        "monitor_status",
+        "valuation_status",
+        "blockers",
+        "research_price_fen",
+        "notional_fen",
+        "fees_fen",
+        "cash_delta_fen",
+        "cash_after_fen",
+    )
+    stream = StringIO(newline="")
+    writer = csv.writer(stream, lineterminator="\n")
+    writer.writerow(fields)
+    yield stream.getvalue().encode("utf-8")
+    batches = store.iter_export_decision_batches(
+        run_id, cancelled, kind=BacktestDetailKind.EXECUTION_OUTCOME
+    )
+    try:
+        for batch in batches:
+            for record in batch:
+                if cancelled():
+                    return
+                from trade_plan_monitor.backtest.research_report import ResearchOperationOutcome
+
+                operation = ResearchOperationOutcome.model_validate_json(json.dumps(record.payload))
+                if operation.valuation is None:
+                    continue
+                row = {
+                    **operation.model_dump(mode="json"),
+                    **operation.valuation.model_dump(mode="json"),
+                    "run_id": run_id,
+                }
+                row["blockers"] = "|".join(operation.valuation.blockers)
+                row["monitor_status"] = operation.status
+                row["valuation_status"] = operation.valuation.status
+                stream.seek(0)
+                stream.truncate()
+                writer.writerow([row.get(field) for field in fields])
+                yield _bounded_export_chunk(stream.getvalue())
+    except ExportCancelled:
+        return
     finally:
         batches.close()
 
@@ -556,10 +671,32 @@ def _v2_fill_csv_encoder() -> Callable[[BacktestFillRecord], bytes]:
 
 
 def _detail_records(
-    report: BacktestRunReport,
+    report: BacktestRunReport | UnifiedReplayReport,
     *,
     version: str = "v1",
 ) -> Iterator[BacktestDetailRecord]:
+    if isinstance(report, UnifiedReplayReport):
+        for kind, values in (
+            (BacktestDetailKind.DECISION, report.current_events),
+            (BacktestDetailKind.EXECUTION_OUTCOME, report.operations),
+            (BacktestDetailKind.DAILY_EQUITY, report.daily_equity),
+        ):
+            for value in values:
+                identity = (
+                    getattr(value, "event_id", None)
+                    or getattr(value, "operation_id", None)
+                    or value.snapshot_id
+                )
+                at = getattr(value, "at", None) or value.marked_at
+                yield BacktestDetailRecord.from_value(
+                    kind,
+                    value,
+                    run_id=report.run_id,
+                    event_at=at,
+                    detail_id=_scoped_detail_id(report.run_id, kind, identity),
+                    version=version,
+                )
+        return
     for decision in report.decisions:
         yield BacktestDetailRecord.from_value(
             BacktestDetailKind.DECISION,

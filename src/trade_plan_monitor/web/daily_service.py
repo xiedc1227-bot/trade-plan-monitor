@@ -141,83 +141,18 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
                 alert_only_fact = False
                 if operation == "FACT":
                     fact_plan = load_plan_json(details.payload_json)
-                    alert_only_fact = (isinstance(fact_plan, UnifiedTradePlan)
-                        and bool(fact_plan.alert_rules) and not fact_plan.ordinary_rules
-                        and not fact_plan.risk_branches)
-                if (not alert_only_fact
-                    and DailyAccounting(work.daily).legacy_reason(details.symbol)):
+                    alert_only_fact = (
+                        isinstance(fact_plan, UnifiedTradePlan)
+                        and bool(fact_plan.alert_rules)
+                        and not fact_plan.ordinary_rules
+                        and not fact_plan.risk_branches
+                    )
+                if not alert_only_fact and DailyAccounting(work.daily).legacy_reason(
+                    details.symbol
+                ):
                     _conflict("DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED")
                 if operation == "FACT":
-                    if command.trade_date > now.date():
-                        raise ValueError("future evidence is not available")
-                    official = command.official_evidence
-                    if (
-                        official is not None
-                        and not official.published_at <= official.verified_at <= now
-                    ):
-                        raise ValueError(
-                            "official evidence publication/verification is future or inconsistent"
-                        )
-                    if command.signal_id is not None:
-                        signal = work.daily.get(command.signal_id)
-                        if (
-                            signal is None
-                            or signal["symbol"] != details.symbol
-                            or signal["kind"] != "SIGNAL"
-                        ):
-                            raise ValueError("fact signal scope does not exist")
-                    if command.kind not in {
-                        "TRADABILITY",
-                        "FULL_SESSION_SUSPENSION",
-                        "INDEPENDENT_EVENT",
-                        "SIGNAL_INVALIDATION",
-                    }:
-                        head = work.daily.get("evaluation-head-" + details.symbol)
-                        series = (
-                            None
-                            if head is None or head["payload"].get("daily_evidence") is None
-                            else DailySeries.model_validate(head["payload"]["daily_evidence"])
-                        )
-                        daily_match = series is not None and any(
-                            b.trade_date == command.trade_date for b in series.bars
-                        )
-                        minute_match = _minute_reviewed_fact_scope(
-                            details, command, head, now
-                        )
-                        if not daily_match and not minute_match:
-                            raise ValueError(
-                                "qualitative evidence requires its exact completed "
-                                "confirmation period"
-                            )
-                    identity = daily_hash(
-                        "daily-human-fact-v1",
-                        {"symbol": details.symbol, "fact_id": command.fact_id},
-                    )
-                    row = work.daily.save(
-                        identity,
-                        kind="FACT",
-                        symbol=details.symbol,
-                        lineage=details.plan_id,
-                        expected_revision=command.expected_revision,
-                        payload={
-                            "plan_version_id": details.id,
-                            "content_hash": details.content_hash,
-                            "kind": command.kind,
-                            "trade_date": str(command.trade_date),
-                            "signal_id": command.signal_id,
-                            "evidence": command.evidence,
-                            "verified": True,
-                            "satisfied": command.satisfied,
-                            "prior_signal_id": command.signal_id
-                            if command.kind == "INDEPENDENT_EVENT"
-                            else None,
-                            "verified_at": now.isoformat(),
-                            "available_at": now.isoformat(),
-                            "official_evidence": None
-                            if official is None
-                            else official.model_dump(mode="json"),
-                        },
-                    )
+                    row = _record_fact(work, details, command, now)
                 elif operation == "REASSESSMENT":
                     if (
                         details.symbol != command.symbol
@@ -314,9 +249,12 @@ def read_daily(lifecycle, *, symbol, trade_date):
             details = work.plans.get_version_details(active.plan_version_id)
             if details is not None:
                 active_plan = load_plan_json(details.payload_json)
-        alert_only = (isinstance(active_plan, UnifiedTradePlan)
-            and bool(active_plan.alert_rules) and not active_plan.ordinary_rules
-            and not active_plan.risk_branches)
+        alert_only = (
+            isinstance(active_plan, UnifiedTradePlan)
+            and bool(active_plan.alert_rules)
+            and not active_plan.ordinary_rules
+            and not active_plan.risk_branches
+        )
         if accounting.legacy_reason(symbol) and (trade_date is not None or not alert_only):
             reason = "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED"
             if trade_date is not None:
@@ -419,7 +357,7 @@ def _conflict(reason):
     )
 
 
-def _simulate(work, command, now):
+def _simulate(work, command, now, *, identity_factory=None):
     """Recheck current authority and commit its complete effect in this same UOW."""
     from datetime import time
     from uuid import uuid4
@@ -517,8 +455,10 @@ def _simulate(work, command, now):
             evaluated_at=now,
             tradable=tradable,
             risk_blocked=any(r["status"] in {"PENDING", "OBSERVATION", "CONFIRMED"} for r in risks),
-            risk_known=state.get("risk_input_known",
-                state.get("daily_evidence") is not None or not plan.risk_branches),
+            risk_known=state.get(
+                "risk_input_known",
+                state.get("daily_evidence") is not None or not plan.risk_branches,
+            ),
         )
         if checked["executable_qty"] == 0 or any(
             "ORDINARY_CONFLICT_BLOCK_BOTH" in s["blockers"] for s in state["signals"]
@@ -539,7 +479,7 @@ def _simulate(work, command, now):
         quantity, side = sum(quantities.values()), "SELL"
     if quantity != command.quantity:
         raise ValueError("simulation must consume the complete offered quantity")
-    identity = str(uuid4())
+    identity = str(uuid4()) if identity_factory is None else identity_factory()
     position = accounting.simulate(
         symbol=symbol,
         identity=identity,
@@ -620,3 +560,66 @@ def _simulate(work, command, now):
         },
     )
     return result
+
+
+def _record_fact(work, details, command, now, *, evidence_head=None):
+    """Shared scoped fact admission/write; research may provide its frozen current source head."""
+    if command.trade_date > now.date():
+        raise ValueError("future evidence is not available")
+    official = command.official_evidence
+    if official is not None and not official.published_at <= official.verified_at <= now:
+        raise ValueError("official evidence publication/verification is future or inconsistent")
+    if command.signal_id is not None:
+        signal = work.daily.get(command.signal_id)
+        if signal is None or signal["symbol"] != details.symbol or signal["kind"] != "SIGNAL":
+            raise ValueError("fact signal scope does not exist")
+    if command.kind not in {
+        "TRADABILITY",
+        "FULL_SESSION_SUSPENSION",
+        "INDEPENDENT_EVENT",
+        "SIGNAL_INVALIDATION",
+    }:
+        head = (
+            evidence_head
+            if evidence_head is not None
+            else work.daily.get("evaluation-head-" + details.symbol)
+        )
+        series = (
+            None
+            if head is None or head["payload"].get("daily_evidence") is None
+            else DailySeries.model_validate(head["payload"]["daily_evidence"])
+        )
+        daily_match = series is not None and any(
+            b.trade_date == command.trade_date for b in series.bars
+        )
+        minute_match = _minute_reviewed_fact_scope(details, command, head, now)
+        if not daily_match and not minute_match:
+            raise ValueError(
+                "qualitative evidence requires its exact completed confirmation period"
+            )
+    identity = daily_hash(
+        "daily-human-fact-v1",
+        {"symbol": details.symbol, "fact_id": command.fact_id},
+    )
+    row = work.daily.save(
+        identity,
+        kind="FACT",
+        symbol=details.symbol,
+        lineage=details.plan_id,
+        expected_revision=command.expected_revision,
+        payload={
+            "plan_version_id": details.id,
+            "content_hash": details.content_hash,
+            "kind": command.kind,
+            "trade_date": str(command.trade_date),
+            "signal_id": command.signal_id,
+            "evidence": command.evidence,
+            "verified": True,
+            "satisfied": command.satisfied,
+            "prior_signal_id": command.signal_id if command.kind == "INDEPENDENT_EVENT" else None,
+            "verified_at": now.isoformat(),
+            "available_at": now.isoformat(),
+            "official_evidence": None if official is None else official.model_dump(mode="json"),
+        },
+    )
+    return row

@@ -36,6 +36,7 @@
 
 ## 回测规格
 
+- [统一计划历史回放](specifications/backtesting/SPEC-unified-replay.zh-CN.md) ([English](specifications/backtesting/SPEC-unified-replay.md))
 - [backtest-api](specifications/backtesting/SPEC-backtest-api.zh-CN.md) ([English](specifications/backtesting/SPEC-backtest-api.md))
 - [backtest-data](specifications/backtesting/SPEC-backtest-data.zh-CN.md) ([English](specifications/backtesting/SPEC-backtest-data.md))
 - [backtest-engine](specifications/backtesting/SPEC-backtest-engine.zh-CN.md) ([English](specifications/backtesting/SPEC-backtest-engine.md))
@@ -59,6 +60,7 @@
 ## 操作与约定
 
 - [Tushare 真实认证](operations/live-certification.zh-CN.md) ([English](operations/live-certification.md))
+- [当前计划回放使用指南](operations/unified-replay.zh-CN.md) ([English](operations/unified-replay.md))
 
 ## 指南
 
@@ -66,6 +68,7 @@
 
 ## 必要验收依据
 
+- [统一计划回放验证](verification/2026-10-03-unified-replay.zh-CN.md) ([English](verification/2026-10-03-unified-replay.md))
 - [单一计划流程验证](verification/2026-10-03-unified-plan.zh-CN.md) ([English](verification/2026-10-03-unified-plan.md))
 - [回测生产 fake 验收](verification/backtest-acceptance.zh-CN.md) ([English](verification/backtest-acceptance.md))
 

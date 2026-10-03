@@ -379,7 +379,10 @@ class DailyRuntimeEvaluationService:
         return result
 
     def run_inputs(
-        self, *, plan: DailyTradePlan, inputs: DailyRuntimeInputs, expected_activation_revision=None
+        self, *, plan: DailyTradePlan | UnifiedTradePlan, inputs: DailyRuntimeInputs,
+        expected_activation_revision=None,
+        ordinary_authority_ended=False,
+        allow_ineligible_observation=False,
     ):
         inputs = DailyRuntimeInputs.model_validate(inputs.model_dump())
         now = inputs.evaluated_at
@@ -407,7 +410,7 @@ class DailyRuntimeEvaluationService:
                 and active.revision != expected_activation_revision
             ):
                 raise DailyActivationChangedError("daily activation changed during acquisition")
-            ordinary_eligible = _eligible(plan, now.date())
+            ordinary_eligible = _eligible(plan, now.date()) and not ordinary_authority_ended
             historical_risks = (
                 work.daily.list(symbol=plan.symbol, kind="RISK")
                 if not _alert_only(plan)
@@ -419,7 +422,8 @@ class DailyRuntimeEvaluationService:
                 or r["payload"].get("reassessment_id")
                 for r in historical_risks
             )
-            if (not ordinary_eligible and not maintain_risk) or (
+            if (not ordinary_eligible and not maintain_risk and not ordinary_authority_ended
+                and not allow_ineligible_observation) or (
                 self._admission is not None and not self._admission()
             ):
                 raise ValueError("daily runtime commit admission is closed")
@@ -471,6 +475,8 @@ class DailyRuntimeEvaluationService:
                 if series is None
                 else daily_hash("daily-series-v1", series.model_dump(mode="json")),
             }
+            if ordinary_authority_ended:
+                target["ordinary_authority_ended"] = True
             identity = daily_hash("daily-decision-result-v1", target)
             existing = work.daily.get(identity)
             if existing is not None:
@@ -790,7 +796,8 @@ class DailyRuntimeEvaluationService:
                 saved_risks, plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable
             )
             alerts = []
-            if isinstance(plan, UnifiedTradePlan):
+            if (isinstance(plan, UnifiedTradePlan) and not ordinary_authority_ended
+                    and (not allow_ineligible_observation or _eligible(plan, now.date()))):
                 latest_official = next((day for day in reversed(inputs.session_dates)
                     if datetime.combine(day, time(15), now.tzinfo) <= now), None)
                 for rule in plan.alert_rules:

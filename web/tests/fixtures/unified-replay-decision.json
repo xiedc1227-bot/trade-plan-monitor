@@ -1,0 +1,172 @@
+{
+  "detailId": "366f723cae7f37a019b6acab4cc102db3d1569593dd819aa51a6b3b8983647ea",
+  "runId": "c4a870047952ddab5d8e71652a6eee4dcedb4dc5488608ca7597fed4febde636",
+  "eventAt": "2026-08-24T09:35:12.000000+08:00",
+  "kind": "DECISION",
+  "researchDecision": {
+    "schema_version": "unified-research-decision-v1",
+    "event_id": "675b6ed921cd167494f5550ac11a7b7c5c96735b043d72c2e962725577c292ea",
+    "at": "2026-08-24T09:35:12+08:00",
+    "evaluation_id": "c7f5f7a6d4843307e7850b6c41937825ef3e8e34072facbe0547d1fec704e2cb",
+    "official_trade_date": null,
+    "minute_target": "2026-08-24T09:35:00+08:00",
+    "signals": [
+      {
+        "signal_id": "ba4431ea4bffad4a1e8897add068acb11d025f8cb3bbaf0b9e504f0fb9532e56",
+        "rule_id": "low-buy",
+        "side": "BUY",
+        "bucket": "TACTICAL",
+        "lineage": "synthetic-daily",
+        "state": "READY",
+        "planned_qty": 100,
+        "simulated_qty": 0,
+        "confirmed_trade_date": "2026-08-24",
+        "execution_date": "2026-08-24",
+        "evidence_fingerprint": "fadd722d876cdd01009e4e861a9399c25670f1a1991183950156125bbc4ed43d",
+        "evidence": [
+          {
+            "outcome": "SATISFIED",
+            "condition": {
+              "type": "MINUTE_CLOSE_BELOW",
+              "timeframe_minutes": 5,
+              "price_fen": 6500
+            },
+            "bar_ids": [
+              "2026-08-24T09:35:00+08:00"
+            ],
+            "session_dates": [],
+            "basis_id": null,
+            "operands": [
+              "6400",
+              "6500"
+            ],
+            "fact_ids": [],
+            "reason": null,
+            "children": []
+          }
+        ],
+        "plan_version_id": "537cd07f-d9ef-0c1f-556b-8641ce7e741b",
+        "review_id": "120ccbe7-c82d-24ee-5342-c25f3700ba13",
+        "basis_id": "minute-ta-v1",
+        "executable_qty": 100,
+        "blockers": [],
+        "reset_trade_date": null,
+        "risk_invalidated": false,
+        "confirmation_kind": "COMPLETED_BAR_CLOSE",
+        "execution_window": "CURRENT_SESSION",
+        "confirmed_at": "2026-08-24T09:35:00+08:00",
+        "revision": 2
+      }
+    ],
+    "risks": [],
+    "alerts": [],
+    "resulting_signals": [
+      {
+        "signal_id": "ba4431ea4bffad4a1e8897add068acb11d025f8cb3bbaf0b9e504f0fb9532e56",
+        "rule_id": "low-buy",
+        "side": "BUY",
+        "bucket": "TACTICAL",
+        "lineage": "synthetic-daily",
+        "state": "READY",
+        "planned_qty": 100,
+        "simulated_qty": 0,
+        "confirmed_trade_date": "2026-08-24",
+        "execution_date": "2026-08-24",
+        "evidence_fingerprint": "fadd722d876cdd01009e4e861a9399c25670f1a1991183950156125bbc4ed43d",
+        "evidence": [
+          {
+            "outcome": "SATISFIED",
+            "condition": {
+              "type": "MINUTE_CLOSE_BELOW",
+              "timeframe_minutes": 5,
+              "price_fen": 6500
+            },
+            "bar_ids": [
+              "2026-08-24T09:35:00+08:00"
+            ],
+            "session_dates": [],
+            "basis_id": null,
+            "operands": [
+              "6400",
+              "6500"
+            ],
+            "fact_ids": [],
+            "reason": null,
+            "children": []
+          }
+        ],
+        "plan_version_id": "537cd07f-d9ef-0c1f-556b-8641ce7e741b",
+        "review_id": "120ccbe7-c82d-24ee-5342-c25f3700ba13",
+        "basis_id": "minute-ta-v1",
+        "executable_qty": 100,
+        "blockers": [],
+        "reset_trade_date": null,
+        "risk_invalidated": false,
+        "confirmation_kind": "COMPLETED_BAR_CLOSE",
+        "execution_window": "CURRENT_SESSION",
+        "confirmed_at": "2026-08-24T09:35:00+08:00",
+        "revision": 2
+      }
+    ],
+    "resulting_risks": [],
+    "risk_action": {
+      "status": "NONE",
+      "branch": null,
+      "cause_id": null,
+      "cause_revision": null,
+      "core_qty": 0,
+      "tactical_qty": 0,
+      "unavailable_core_qty": 0,
+      "unavailable_tactical_qty": 0,
+      "target_core_qty": null,
+      "target_tactical_qty": null,
+      "blockers": []
+    },
+    "conditions": [
+      {
+        "rule_id": "low-buy",
+        "evidence": {
+          "outcome": "SATISFIED",
+          "condition": {
+            "type": "MINUTE_CLOSE_BELOW",
+            "timeframe_minutes": 5,
+            "price_fen": 6500
+          },
+          "bar_ids": [
+            "2026-08-24T09:35:00+08:00"
+          ],
+          "session_dates": [],
+          "basis_id": null,
+          "operands": [
+            "6400",
+            "6500"
+          ],
+          "fact_ids": [],
+          "reason": null,
+          "children": []
+        }
+      }
+    ],
+    "blockers": [],
+    "inventory_before": {
+      "symbol": "600000.SH",
+      "revision": 1,
+      "known": true,
+      "total_qty": 0,
+      "core_qty": 0,
+      "tactical_qty": 0,
+      "sellable_core": 0,
+      "sellable_tactical": 0
+    },
+    "inventory_after": {
+      "symbol": "600000.SH",
+      "revision": 1,
+      "known": true,
+      "total_qty": 0,
+      "core_qty": 0,
+      "tactical_qty": 0,
+      "sellable_core": 0,
+      "sellable_tactical": 0
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": 5,
+  "execution_mode": "CONDITION_PLAN",
+  "execution_version": "condition-plan-v1",
+  "plan_id": "synthetic-daily-replay",
+  "version": 1,
+  "symbol": "600000.SH",
+  "name": "Synthetic reviewed plan",
+  "market": "SSE",
+  "metadata": {
+    "report_at": null,
+    "reference_price_fen": null
+  },
+  "activation": {
+    "mode": "MANUAL"
+  },
+  "levels": null,
+  "position": {
+    "max_qty": 1000,
+    "core_target_qty": null,
+    "tactical_target_qty": null,
+    "allocation_provenance": null,
+    "allocation_evidence": null
+  },
+  "trading_rules": {
+    "settlement": "NEXT_EXCHANGE_SESSION",
+    "tick_size_fen": 1,
+    "special_state_restrictions": "BLOCK_UNVERIFIED"
+  },
+  "monitoring": {
+    "indicator_formula_version": "daily-ta-v2",
+    "price_basis": "QFQ",
+    "source_requirement": "ONE_VERIFIED_PROVIDER",
+    "comparability_requirement": "CURRENT_QUOTE_BASIS",
+    "macd_min_observations": 60
+  },
+  "ordinary_rules": [
+    {
+      "status": "ENABLED",
+      "side": "BUY",
+      "rule_id": "low-buy",
+      "quantity": 100,
+      "bucket": "TACTICAL",
+      "condition": {
+        "type": "DAILY_PRICE_COMPARE",
+        "field": "close",
+        "offset": 0,
+        "comparator": "LT",
+        "reference": {
+          "mode": "FIXED",
+          "value": "6500",
+          "unit": "FEN",
+          "as_of": "2026-08-20",
+          "source": "Synthetic explicitly reviewed reference"
+        }
+      },
+      "confirmation": {
+        "kind": "OFFICIAL_DAILY_CLOSE"
+      },
+      "execution_window": "NEXT_EXCHANGE_SESSION_ONLY",
+      "zone": null,
+      "validity": {
+        "mode": "PLAN_ACTIVE"
+      },
+      "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+      "independent_signal": {
+        "mode": "REVIEWED_INDEPENDENT_EVENT",
+        "evidence_requirement": "New structure linked to prior signal"
+      }
+    }
+  ],
+  "risk_branches": [],
+  "execution_policy": {
+    "same_signal": "ONE_PLANNED_QUANTITY",
+    "risk_priority": "SEVERE_THEN_ORDINARY",
+    "ordinary_conflict": "BLOCK_BOTH"
+  },
+  "alert_rules": []
+}

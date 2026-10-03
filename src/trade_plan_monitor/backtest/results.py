@@ -973,6 +973,8 @@ class BacktestResultStore:
         self,
         run_id: str,
         cancelled: Callable[[], bool],
+        *,
+        kind: BacktestDetailKind = BacktestDetailKind.DECISION,
     ) -> Iterator[tuple[BacktestDetailRecord, ...]]:
         """Yield published v2 decisions after verifying the complete detail set."""
 
@@ -1018,7 +1020,7 @@ class BacktestResultStore:
                             expected_run_id=normalized_run_id,
                         )
                     ).kind
-                    is BacktestDetailKind.DECISION
+                    is kind
                 )
                 if batch:
                     yield batch

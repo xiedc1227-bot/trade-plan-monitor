@@ -462,6 +462,11 @@ class _ProductionBacktestService:
             ):
                 raise ApiError(ApiErrorCode.CONFLICT)
             plan = load_plan_json(snapshot.plan_json)
+            current = plan.schema_version == 5
+            if current and (snapshot.review_id is None or snapshot.content_hash is None
+                or command.research_input is None
+                or command.research_input.review.content_hash != snapshot.content_hash):
+                raise ApiError(ApiErrorCode.CONFLICT)
             try:
                 manifest = await _run_sync(
                     self._market_store.dataset_manifest,
@@ -474,8 +479,8 @@ class _ProductionBacktestService:
             try:
                 command.validate_initial_lot_limits(
                     dataset_start=manifest.scope.start,
-                    core_target_qty=plan.position.core_target_qty,
-                    tactical_target_qty=plan.position.tactical_target_qty,
+                    core_target_qty=None if current else plan.position.core_target_qty,
+                    tactical_target_qty=None if current else plan.position.tactical_target_qty,
                     max_qty=plan.position.max_qty,
                 )
                 run_input = BacktestRunInput.create(
@@ -502,6 +507,7 @@ class _ProductionBacktestService:
                     ),
                     manual_event_risk=(command.event_risk_assumption == "MANUAL_EVENT_RISK"),
                     plan_version_id=command.plan_version_id,
+                    research_input=command.research_input,
                 )
             except ValueError:
                 raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
@@ -1085,13 +1091,18 @@ class _ProductionBacktestService:
         if export_kind == "SUMMARY_JSON":
             chunks = iter_export_summary(self._result_store, run_id, cancelled)
             schema_version = (
+                "backtest-report-summary-v4"
+                if record.summary.formula_versions.get("report") == "backtest-report-v3"
+                else
                 "backtest-report-summary-v3"
                 if _reference_market_view(record) is not None
                 else "backtest-report-summary-v2"
             )
         else:
             chunks = iter_export_fills(self._result_store, run_id, cancelled)
-            schema_version = "backtest-simulated-fills-v2"
+            schema_version = ("explicit-simulation-valuation-v1"
+                if record.summary.formula_versions.get("report") == "backtest-report-v3"
+                else "backtest-simulated-fills-v2")
         return PreparedBacktestExport(
             run_id=run_id,
             export_kind=export_kind,
@@ -1251,6 +1262,8 @@ def _persisted_run_matches_command(
         raise RuntimeError("stored run request is missing immutable input fields") from None
     if len(public_lots) != len(initial_lots):
         raise RuntimeError("stored run request contains an invalid initial lot")
+    if run_input.get("research_input") is not None:
+        payload["researchInput"] = run_input["research_input"]
     return payload == command.canonical_payload()
 
 
@@ -1484,6 +1497,13 @@ def _detail_view(
 ) -> BacktestDecisionView | BacktestSignalView | BacktestExecutionOutcomeView:
     event_at = format_shanghai_datetime(record.event_at.astimezone(SHANGHAI))
     payload = record.payload
+    from trade_plan_monitor.web.backtest_schemas import ResearchDecisionView, ResearchOperationView
+    current_types = {"unified-research-decision-v1": (ResearchDecisionView, "researchDecision"),
+                     "unified-research-operation-v1": (ResearchOperationView, "researchOperation")}
+    if payload.get("schema_version") in current_types:
+        model, key = current_types[payload["schema_version"]]
+        return model.model_validate({"detailId": record.detail_id, "runId": record.run_id,
+            "kind": record.kind.value, "eventAt": event_at, key: payload})
     if record.kind is BacktestDetailKind.DECISION:
         result = EvaluationResult.model_validate_json(
             json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -1627,6 +1647,9 @@ def _equity_view(record: BacktestDetailRecord) -> dict[str, object]:
         runId=record.run_id,
         markedAt=format_shanghai_datetime(record.event_at.astimezone(SHANGHAI)),
     )
+    if record.payload.get("schema_version") == "unified-research-equity-v1":
+        from trade_plan_monitor.web.backtest_schemas import ResearchEquityView
+        return ResearchEquityView.model_validate(payload).canonical_payload()
     return BacktestEquityPointView.model_validate(payload).canonical_payload()
 
 

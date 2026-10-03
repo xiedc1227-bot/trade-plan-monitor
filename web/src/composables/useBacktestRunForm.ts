@@ -6,6 +6,7 @@ import type {
   BacktestReferenceMarketCoverageView,
   BacktestRunCommand,
 } from "../api/generated";
+import { isResearchInput } from "../api/researchValues";
 import { createBacktestApi, type BacktestApi } from "../api/backtests";
 import {
   isBoardLotQuantity,
@@ -31,6 +32,7 @@ export type BacktestReferenceMarketCoverageState =
   | "FAILED";
 
 export type BacktestRunDraftField =
+  | "researchInputJson"
   | "buySlippageBps"
   | "commissionRate"
   | "datasetHash"
@@ -59,6 +61,7 @@ export interface BacktestInitialLotDraft {
 }
 
 export interface BacktestRunDraft {
+  readonly researchInputJson: string;
   readonly buySlippageBps: string;
   readonly commissionRate: string;
   readonly datasetHash: string;
@@ -97,6 +100,7 @@ function defaultIdempotencyKey(): string {
 
 function emptyDraft(): BacktestRunDraft {
   return Object.freeze({
+    researchInputJson: "",
     buySlippageBps: "",
     commissionRate: "",
     datasetHash: "",
@@ -389,6 +393,16 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
       nextErrors.initialCashFen = "初始现金与 lot 剩余总成本之和不得超过安全整数上限";
     }
 
+    let researchInput: BacktestRunCommand["researchInput"];
+    if (current.researchInputJson.trim()) {
+      try {
+        const parsed: unknown = JSON.parse(current.researchInputJson);
+        if (!isResearchInput(parsed)) throw new Error("invalid research input");
+        researchInput = parsed;
+      } catch {
+        nextErrors.researchInputJson = "请填写完整的研究输入 JSON；服务端将核验审核绑定与证据。";
+      }
+    }
     errors.value = Object.freeze(nextErrors);
     if (
       Object.keys(nextErrors).length > 0 ||
@@ -400,6 +414,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
       return null;
     }
     return deepFreeze({
+      ...(researchInput === undefined ? {} : { researchInput }),
       datasetHash: current.datasetHash,
       eventRiskAssumption: current.eventRiskAssumption,
       executionConfig: {

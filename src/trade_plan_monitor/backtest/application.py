@@ -232,8 +232,12 @@ class BacktestApplicationService:
         buy_slippage_bps: Decimal,
         sell_slippage_bps: Decimal,
         manual_event_risk: bool,
+        research_input_path: str | Path | None = None,
     ) -> BacktestRunCommandResult:
         plan = _load_plan(plan_path)
+        from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
+        research_input = (None if research_input_path is None else
+            UnifiedResearchInput.model_validate_json(Path(research_input_path).read_bytes()))
         initial_cash_fen = _yuan_to_fen(initial_cash_yuan, "initial_cash_yuan", positive=True)
         execution_config = ExecutionConfig(
             commission_rate=commission_rate,
@@ -255,6 +259,7 @@ class BacktestApplicationService:
             initial_lots=(),
             execution_config=execution_config,
             manual_event_risk=manual_event_risk,
+            research_input=research_input,
         )
         result = self._execute_job_sync(BacktestRunJobRequest(run_input=run_input))
         if not isinstance(result, BacktestRunJobResult) or result.run_id != run_input.run_id:
@@ -265,12 +270,20 @@ class BacktestApplicationService:
             raise RuntimeError("completed durable run is missing its verified result")
         json_path = self._report_directory / f"{result.run_id}.json"
         csv_path = self._report_directory / f"{result.run_id}.fills.csv"
-        write_report_files(
-            summary,
-            result_store.list_fills(result.run_id),
-            json_path=json_path,
-            csv_path=csv_path,
-        )
+        if research_input is not None:
+            from trade_plan_monitor.backtest.reporting import (
+                _atomic_write,
+                iter_export_fills,
+                iter_export_summary,
+            )
+            _atomic_write(json_path, b"".join(iter_export_summary(
+                result_store, result.run_id, lambda: False)).decode("utf-8"))
+            _atomic_write(csv_path, b"".join(iter_export_fills(
+                result_store, result.run_id, lambda: False)).decode("utf-8"))
+        else:
+            write_report_files(
+                summary, result_store.list_fills(result.run_id),
+                json_path=json_path, csv_path=csv_path)
         result_store.checkpoint_wal()
         return BacktestRunCommandResult(
             run_id=result.run_id,
@@ -470,6 +483,7 @@ class _BacktestWorkerOperationOwner:
             execution_config=run_input.execution_config,
             manual_event_risk=run_input.manual_event_risk,
             plan_version_id=run_input.plan_version_id,
+            research_input=run_input.research_input,
             cancellation_token=cancellation_token,
         )
         if isinstance(report, BacktestCancellationResult):

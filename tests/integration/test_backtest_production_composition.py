@@ -621,10 +621,13 @@ def test_production_fill_export_uses_the_public_v2_schema_version(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from types import SimpleNamespace
+
     monkeypatch.setattr(
         BacktestResultStore,
         "get_result_run",
-        lambda _store, _run_id: object(),
+        lambda _store, _run_id: SimpleNamespace(summary=SimpleNamespace(formula_versions={
+            "report": "backtest-report-v1"})),
     )
     composition = create_backtest_composition_factory(
         config_path=Path("config/app.yaml"),

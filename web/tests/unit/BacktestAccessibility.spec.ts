@@ -26,6 +26,7 @@ const EMPTY_PLAN_PAGE: PlanVersionPage = {
 
 function draft(): BacktestRunDraft {
   return Object.freeze({
+    researchInputJson: "",
     buySlippageBps: "1",
     commissionRate: "0.0003",
     datasetHash: "d".repeat(64),

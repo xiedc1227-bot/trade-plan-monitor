@@ -85,7 +85,18 @@ function limitationDescription(token: string): string {
       </div>
     </dl>
 
-    <section class="metrics-summary__section" aria-labelledby="metrics-values-title">
+    <section v-if="'schemaVersion' in run.metrics" class="metrics-summary__section" aria-labelledby="research-values-title">
+      <h3 id="research-values-title">明确模拟与研究估值</h3>
+      <p>监测回执应用完整请求数量。滑点和费用仅用于研究估值；现金不足或库存未知时收益不可用。</p>
+      <dl class="metrics-summary__grid">
+        <div><dt>估值有效</dt><dd>{{ run.metrics.valuationValid ? '是' : '否' }}</dd></div>
+        <div><dt>最终权益（元）</dt><dd>{{ run.metrics.finalEquityFen === null ? '不可用' : formatFenAsYuan(run.metrics.finalEquityFen) }}</dd></div>
+        <div><dt>总收益率</dt><dd>{{ run.metrics.totalReturn ?? '不可用' }}</dd></div>
+        <div><dt>明确模拟次数</dt><dd>{{ run.metrics.tradeCount }}</dd></div>
+        <div><dt>阻断请求</dt><dd>{{ run.metrics.blockedCount }}</dd></div>
+      </dl>
+    </section>
+    <section v-else class="metrics-summary__section" aria-labelledby="metrics-values-title">
       <h3 id="metrics-values-title">精确指标</h3>
       <dl class="metrics-summary__grid">
         <div><dt>初始现金（元）</dt><dd>{{ formatFenAsYuan(run.metrics.initialCashFen) }}</dd></div>

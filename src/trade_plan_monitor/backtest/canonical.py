@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -44,6 +45,8 @@ def canonical_value(value: object) -> object:
         return canonical_value(value.model_dump(mode="python", round_trip=True))
     if isinstance(value, Enum):
         return canonical_value(value.value)
+    if isinstance(value, UUID):
+        return str(value)
     if isinstance(value, Decimal):
         return canonical_decimal(value)
     if isinstance(value, datetime):

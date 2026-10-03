@@ -1,3 +1,5 @@
+import { isResearchDetail, isResearchInput } from "./researchValues";
+import type { ResearchMetricsView, ResearchEquityView } from "./generated";
 import type {
   BacktestAssumptionsView,
   BacktestAuthoritativeDecisionView,
@@ -480,6 +482,7 @@ const runResultKeys = exactKeys<BacktestRunJobResultView>()([
   "runId",
 ]);
 const runCommandKeys = exactKeys<BacktestRunCommand>()([
+  "researchInput",
   "datasetHash",
   "eventRiskAssumption",
   "executionConfig",
@@ -2117,7 +2120,16 @@ function isAvailability(value: unknown): value is BacktestResultAvailabilityView
   );
 }
 
-function isMetrics(value: unknown): value is BacktestMetricsView {
+function isMetrics(value: unknown): value is BacktestMetricsView | ResearchMetricsView {
+  if (isRecord(value) && value.schemaVersion === "explicit-simulation-metrics-v1") {
+    return hasExactKeys(value, ["schemaVersion", "initialCashFen", "initialEquityFen", "finalCashFen", "finalEquityFen", "totalReturn", "totalCostFen", "tradeCount", "blockedCount", "valuationValid"]) &&
+      isPositiveFenText(value.initialCashFen) &&
+      (value.initialEquityFen === null || isPositiveFenText(value.initialEquityFen)) &&
+      [value.finalCashFen, value.finalEquityFen].every((item) => item === null || isNonnegativeFenText(item)) &&
+      (value.totalReturn === null || isDecimalText(value.totalReturn)) && isNonnegativeFenText(value.totalCostFen) &&
+      isNonnegativeSafeInteger(value.tradeCount) && isNonnegativeSafeInteger(value.blockedCount) &&
+      typeof value.valuationValid === "boolean" && (value.valuationValid || value.totalReturn === null);
+  }
   if (
     !isRecord(value) ||
     !hasExactKeys(value, metricsKeys) ||
@@ -2436,6 +2448,7 @@ function isDetailPage(value: unknown): value is BacktestDetailPage {
 
 function isDetail(value: unknown): value is BacktestDetailView {
   if (!isRecord(value)) return false;
+  if (isResearchDetail(value)) return isDetailBase(value) && isBoundedItem(value);
   if (value.kind === "SIGNAL") return isSignal(value);
   if (value.kind === "EXECUTION_OUTCOME") return isExecutionOutcome(value);
   return value.kind === "DECISION" && isDecision(value);
@@ -2825,7 +2838,15 @@ function isEquitySeries(value: unknown): value is BacktestEquitySeries {
   return isAscendingUnique(positions) && isBoundedPage(value);
 }
 
-function isEquityPoint(value: unknown): value is BacktestEquityPointView {
+function isEquityPoint(value: unknown): value is BacktestEquityPointView | ResearchEquityView {
+  if (isRecord(value) && value.schemaVersion === "unified-research-equity-v1") {
+    return hasExactKeys(value, ["schemaVersion", "snapshotId", "runId", "markedAt", "markPriceFen", "cashFen", "positionQuantity", "marketValueFen", "equityFen", "valuationValid", "blockers"]) &&
+      isSha256(value.snapshotId) && isSha256(value.runId) && isResponseTime(value.markedAt) &&
+      [value.markPriceFen, value.cashFen, value.marketValueFen, value.equityFen].every((item) => item === null || isNonnegativeFenText(item)) &&
+      (value.positionQuantity === null || isNonnegativeSafeInteger(value.positionQuantity)) &&
+      typeof value.valuationValid === "boolean" && Array.isArray(value.blockers) && value.blockers.every((item) => typeof item === "string") &&
+      (value.valuationValid || value.equityFen === null) && isBoundedItem(value);
+  }
   if (
     !isRecord(value) ||
     !hasExactKeys(value, equityPointKeys) ||
@@ -2930,7 +2951,8 @@ function marketIndexSeriesSearch(query: BacktestMarketIndexSeriesQuery): URLSear
 function normalizeRunCommand(value: unknown): BacktestRunCommand {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, runCommandKeys) ||
+    !hasExactKeys(value, value.researchInput === undefined ? runCommandKeys.filter((key) => key !== "researchInput") : runCommandKeys) ||
+    !(value.researchInput === undefined || isResearchInput(value.researchInput)) ||
     !isSha256(value.datasetHash) ||
     !isPositiveSafeInteger(value.initialCashFen) ||
     !Array.isArray(value.initialLots) ||
@@ -2959,6 +2981,7 @@ function normalizeRunCommand(value: unknown): BacktestRunCommand {
   return {
     datasetHash: value.datasetHash,
     eventRiskAssumption: value.eventRiskAssumption,
+    ...(value.researchInput === undefined ? {} : { researchInput: value.researchInput }),
     executionConfig,
     initialCashFen: value.initialCashFen,
     initialLots,
